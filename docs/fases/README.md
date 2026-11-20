@@ -39,11 +39,11 @@ O resultado tem três partes:
 | [F0](F0-fundacao.md) | Fundação | Repositório, modelo base do `new-sgh`, MariaDB, esteira | Esteira verde com o modelo base sem o legado |
 | [F1](F1-analise-e-modelo.md) | Análise cruzada e modelo próprio | Matriz funcional, princípios, DDL por módulo, catálogos públicos | Toda tabela do SPDATA e do MV com destino; catálogos carregam num banco vazio |
 | [F2](F2-nucleo-e-persistencia.md) | Núcleo e persistência própria | Núcleo, adaptadores MariaDB, acesso próprio, **login pelo navegador**, fluxo vertical | Paciente → atendimento ponta a ponta no MariaDB |
-| [F3](F3-paridade.md) | Paridade funcional | Regras dos gatilhos no domínio, módulo a módulo, telas ligadas | Todos os módulos com contrato de efeito verde |
-| [F4](F4-conector.md) | Conector diferencial | Leitura de imagens, de-para, gravação, pendências, conciliação, diferencial | Carga completa de uma imagem real conciliada e diferencial medido |
+| [F3](F3-cobertura-melhorada.md) | Cobertura funcional melhorada | Tudo o que o SPDATA fazia, redesenhado e melhorado com o MV e as boas práticas; motores primeiro | Lista mínima do SPDATA 100% coberta, melhorias registradas, revisão "sem cara de SPDATA" limpa |
+| [F4](F4-conector.md) | Conector diferencial | Comandos do administrador da plataforma (importar e diferencial num cliente criado zerado), leitura de imagens, de-para, gravação, pendências, conciliação, diferencial | Carga completa de uma imagem real conciliada e diferencial medido |
 | [F5](F5-homologacao.md) | **Ferramentas** de homologação e virada | Painel de conferência por setor, relatórios de conciliação, LGPD (mascaramento, neutralização), comandos do dia 0, dia 1 e dia 2+n, retorno | Ensaio geral completo num banco de teste, cronometrado |
 | [F7](F7-serrano-e-hospital-do-zero.md) | Multi-hospital e hospital do zero | Índice único de pacientes entre hospitais, instalação de hospital novo sem SPDATA | Hospital novo instalável pelo administrador da plataforma |
-| [F8](F8-recursos-novos.md) | Recursos novos | Todos os recursos que o MV tem a mais, com estrutura própria | Cobertura funcional completa contra a matriz da F1 |
+| [F8](F8-recursos-novos.md) | Recursos novos | Módulos sem equivalente no SPDATA (operadora, gestão pública, BI e outros) | Cobertura funcional completa contra a matriz da F1 |
 
 ### Operação de cada hospital (fora da obra, decidida pelo cliente)
 
@@ -59,7 +59,7 @@ ferramentas precisam suportar.
 ## Caminho de construção e paralelismo
 
 ```
-F0 ─► F1 ─┬─► F2 ─► F3 (módulo a módulo) ─┬─► F7 ─► F8 ─► produto completo
+F0 ─► F1 ─┬─► F2 ─► F3 (módulo a módulo, melhorado) ─┬─► F7 ─► F8 ─► produto completo
           │                               │
           └─► F4 (conector) ─► F5 (ferramentas de homologação e virada)
 ```

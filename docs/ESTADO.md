@@ -19,7 +19,7 @@ Atualizado em: 2026-11-20, 19:25. **PAUSADO** para a troca de conta da LLM: reto
 | F0 Fundação | pendente |
 | F1 Análise cruzada e modelo | em andamento (F1.1, primeira rodada concluída) |
 | F2 Núcleo e persistência | pendente |
-| F3 Paridade | pendente |
+| F3 Cobertura funcional melhorada | pendente |
 | F4 Conector | pendente |
 | F5 Homologação | pendente |
 | F6 Virada | pendente |

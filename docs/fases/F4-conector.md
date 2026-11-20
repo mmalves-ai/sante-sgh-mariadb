@@ -11,6 +11,27 @@ rastreio, pendências e conciliação. O desenho completo está no ADR 0001, ite
 
 Roda **em paralelo com a F3**.
 
+## Disparo: sempre pelo administrador da plataforma (dono, 2026-11-20)
+
+O conector **nunca roda sozinho** e **nunca cria cliente**. A ordem é sempre esta:
+
+1. **Criar o cliente zerado.**
+   - O administrador da plataforma usa "criar novo cliente", como para qualquer hospital. A ProntoCardio é
+     criada assim.
+   - O banco nasce vazio, só com os catálogos públicos.
+   - O campo `origem` do cliente só registra a intenção. Não carrega nada.
+2. **Importar do SPDATA (dia 0).**
+   - Comando do administrador da plataforma, na tela de administração e na linha de comando: escolhe o
+     cliente e a imagem do SPDATA e dispara.
+   - A importação traduz e limpa os dados para o modelo próprio (de-para, pendências e conciliação).
+3. **Diferencial (dia 1 a 2+n).** Cada rodada também é disparada pelo administrador, que pode repetir quantas
+   vezes quiser.
+4. **Liberar a gravação.** Decisão do hospital, executada pelo administrador.
+
+Tudo fica registrado em `plataforma.cliente_evento`. Os relatórios de conciliação ficam visíveis na tela de
+administração.
+
+
 ---
 
 ### F4.1 Leitura de imagens
