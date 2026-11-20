@@ -12,8 +12,8 @@ Sistema hospitalar sobre **banco próprio em MariaDB 12.3**, construído a parti
 
 ## Referência: banco Oracle com o dump TSTMV (ambiente de teste do MV)
 
-O MV serve **só como referência de recursos** (ADR 0001). Interessam só os metadados (dicionário); o
-conteúdo das linhas não é usado. Os metadados exportados estão em `referencias/mv-tabelas.tsv`.
+O MV serve **só como referência de recursos** (ADR 0001). **Desde 2026-11-20, o Oracle tem só a estrutura**
+(8.674 tabelas, zero linhas): foi reimportado com `CONTENT=METADATA_ONLY` (`dump/import-metadados.par`). Os metadados exportados estão em `referencias/mv-tabelas.tsv`.
 
 Container Oracle para inspecionar o export `TSTMV_FULL_20261013_01.dmp`: Data Pump FULL, Oracle
 12.1.0.2, banco `cdbtst1`, feito pelo usuário `MV_EXPORT` em 13/10/2026. É um ambiente completo do
@@ -26,8 +26,8 @@ Soul MV (esquemas `DBAMV`, `DBAPS`, `DBAPORTAL`, `DBADW`, `MVBIKE`, `MVINTEGRA`�
 |---|---|
 | `docker-compose.yml` | Container `sante-sgh-oracle`, imagem `gvenzl/oracle-free:23.9-slim` (Oracle 23ai Free), só em `127.0.0.1:1521`, volume `sante-sgh-oracle-data` |
 | `.env` | Senha do `SYSTEM` (`ORACLE_SENHA`) e porta. Permissão 600. Nunca copie para um repositório |
-| `dump/TSTMV_FULL_20261013_01.dmp` e `.sha256` | Dump completo (5,96 GB), montado no container como diretório Oracle `DUMP_DIR` |
-| `dump/ddl.sql` | DDL completo extraído do dump (`impdp ... sqlfile`), para consulta sem banco |
+| `dump/TSTMV_FULL_20261013_01.dmp.sha256` | Hash do dump completo (5,96 GB). **A cópia do `.dmp` foi apagada em 2026-11-20** por decisão do dono (ADR 0002, item 16). O original ficou no cache do VMware |
+| `dump/ddl.sql` | DDL extraído do dump, **sem** `CREATE/ALTER USER` e com as credenciais de *database link* removidas |
 | `dump/import.par`, `dump/import.log` | Parâmetros e log do import |
 | `scripts/criar_tablespaces.sql` | Cria os 21 tablespaces de aplicação com os nomes originais (rodar antes do import) |
 
