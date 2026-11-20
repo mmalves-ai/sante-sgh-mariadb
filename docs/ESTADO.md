@@ -8,7 +8,7 @@ Atualizado em: 2026-11-20.
 |---|---|---|---|
 | F1 | F1.1 Matriz funcional MV × SPDATA × `new-sgh` | rodada 2 concluída e conferida: 3.500 tabelas próprias (F3 1.658, F7 1.105, F8 737); 8.867 do MV e 1.503 do SPDATA com destino (`docs/analise/rodada2/RESUMO.md`). Rodada 1: | 511 funcionalidades (F3 247, F7 109, F8 104, não fazer 51) e cerca de 1.376 entidades propostas (`docs/analise/RESUMO.md`). Aguarda o dono validar as arbitragens D1 a D13. A segunda rodada cobre qualidade e segurança do paciente e o vocabulário único |
 | F0 | F0.1 a F0.3 | concluídos | git e remote (o push automático está bloqueado pelo classificador do Claude Code; o dono libera), modelo base `d3f8b5d` trazido sem o legado (`docs/obra/inventario-modelo-base.md`), MariaDB 12.3.3 em `127.0.0.1:3410` |
-| F1 | F1.3 DDL das 3.500 tabelas | em andamento | Workflow de 87 lotes rodando; validador em `tools/db/validar_migracoes.py` |
+| F1 | F1.3 DDL das 3.500 tabelas | **concluído e conferido** | 3.500 tabelas, 69.578 colunas, 13.503 FKs, 0 erros no validador; conferência de qualidade em `docs/obra/conferencia-modelo.md`; `criar_cliente.py` cria o banco completo (3.505 tabelas) em cerca de 1 min |
 | F2 | plano | pronto | `docs/obra/passagens/F2-plano.md` |
 
 ## Quadro de fases
