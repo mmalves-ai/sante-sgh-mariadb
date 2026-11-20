@@ -1,0 +1,22 @@
+{
+  "name": "dominio-organizacao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-organizacao/src",
+  "tags": ["tipo:dominio", "modulo:organizacao"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-organizacao"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-organizacao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-organizacao/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-organizacao/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

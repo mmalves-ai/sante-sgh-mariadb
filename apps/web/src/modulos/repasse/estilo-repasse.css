@@ -1,0 +1,37 @@
+/* Telas do repasse (M33). WCAG 2.5.8 (axe target-size): os links, os botões e os campos em linha da tabela têm alvo
+   de 24 px; o rótulo só para leitor de tela fica fora da vista; os totais em grade. */
+.tela-repasse .tabela a,
+.tela-repasse .tabela button,
+.tela-repasse .tabela input {
+  display: inline-block;
+  min-height: 24px;
+  min-width: 24px;
+  line-height: 24px;
+}
+.tela-repasse .oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.tela-repasse .totais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.5rem;
+}
+.tela-repasse .totais dd {
+  margin: 0;
+  font-weight: 600;
+}
+.tela-repasse .acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: end;
+}
+.tela-repasse .opcao {
+  display: block;
+  min-height: 24px;
+}

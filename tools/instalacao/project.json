@@ -1,0 +1,18 @@
+{
+  "name": "instalacao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/instalacao/src",
+  "tags": ["tipo:ferramenta", "modulo:config"],
+  "targets": {
+    "lint": {
+      "command": "eslint tools/instalacao"
+    },
+    "typecheck": {
+      "command": "tsc -p tools/instalacao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config tools/instalacao/vitest.config.ts"
+    }
+  }
+}

@@ -1,0 +1,7 @@
+# Gerado por pnpm instalacao:gerar (tools/instalacao); não edite à mão: sante-sgh.target.
+[Unit]
+Description=Sante SGH (api e worker)
+Wants=sante-sgh-api.service sante-sgh-worker.service
+
+[Install]
+WantedBy=multi-user.target

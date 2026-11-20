@@ -1,0 +1,22 @@
+{
+  "name": "dominio-integracao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-integracao/src",
+  "tags": ["tipo:dominio", "modulo:integracao"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-integracao"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-integracao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-integracao/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-integracao/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

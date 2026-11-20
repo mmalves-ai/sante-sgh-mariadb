@@ -1,0 +1,84 @@
+/* Estilo comum das abas do prontuário de uso diário (M23): só tokens do tema. */
+.aba {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+}
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+}
+.form label,
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.form .marca {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+}
+.form input,
+.form select,
+.form textarea {
+  font: inherit;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+.linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: flex-end;
+}
+.tabela {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tabela caption {
+  text-align: start;
+  font-weight: 600;
+}
+.tabela th,
+.tabela td {
+  border-bottom: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  text-align: start;
+  vertical-align: top;
+}
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.cartao {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+}
+.marcador {
+  font-weight: 600;
+  outline: 1px solid var(--sgh-borda-forte);
+  padding: 0 var(--sgh-espaco-1);
+}
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: center;
+}
+h2,
+h3 {
+  margin: 0;
+}

@@ -1,0 +1,12 @@
+# Painéis versionados em infra/observabilidade/grafana/paineis (M09): "Banco e coexistência", "Técnico", "Linha de base da onda 0" (M38) e
+# "Jornadas". Edição pela interface não é salva (allowUiUpdates false): muda-se o JSON no repositório.
+apiVersion: 1
+providers:
+  - name: sgh
+    folder: SGH
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/sgh/paineis

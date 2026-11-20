@@ -1,0 +1,54 @@
+/* Telas da assinatura ICP-Brasil (M49, etapa 1). WCAG 2.5.8 (axe target-size): alvos de 24 px na tabela; blocos em
+   grade simples que quebram em tela estreita. */
+.tela-assinatura {
+  display: grid;
+  gap: 1rem;
+  max-width: 72rem;
+}
+.tela-assinatura .tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-assinatura .tabela th,
+.tela-assinatura .tabela td {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--p-content-border-color);
+  vertical-align: top;
+}
+.tela-assinatura .tabela button,
+.tela-assinatura .tabela input {
+  min-height: 24px;
+  min-width: 24px;
+}
+.tela-assinatura .blocos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+}
+.tela-assinatura .bloco {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.5rem;
+}
+.tela-assinatura .campo {
+  display: grid;
+  gap: 0.25rem;
+}
+.tela-assinatura .acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.tela-assinatura .secundario {
+  color: var(--p-text-muted-color);
+  font-size: 0.9em;
+}
+.tela-assinatura h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}

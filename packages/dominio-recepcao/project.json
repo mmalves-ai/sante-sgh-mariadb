@@ -1,0 +1,22 @@
+{
+  "name": "dominio-recepcao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-recepcao/src",
+  "tags": ["tipo:dominio", "modulo:recepcao"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-recepcao"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-recepcao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-recepcao/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-recepcao/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

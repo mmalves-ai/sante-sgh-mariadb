@@ -1,0 +1,1795 @@
+{
+  "agrupamentos": [
+    {
+      "id": 1,
+      "indice": "apache2",
+      "descricao": "Escala de Glasgow"
+    },
+    {
+      "id": 2,
+      "indice": "apache2",
+      "descricao": "Pontuação A - Variáveis fisiológicas"
+    },
+    {
+      "id": 3,
+      "indice": "apache2",
+      "descricao": "Pontuação B - Faixa etária do paciente"
+    },
+    {
+      "id": 4,
+      "indice": "apache2",
+      "descricao": "Pontuação C - Órgão ou sistema com insuficiência orgânica"
+    },
+    {
+      "id": 5,
+      "indice": "apache2",
+      "descricao": "Categoria Diagnóstica - Cirurgia eletiva"
+    },
+    {
+      "id": 6,
+      "indice": "apache2",
+      "descricao": "Outras causas mal definidas, não classificadas acima - Cirurgia eletiva"
+    },
+    {
+      "id": 7,
+      "indice": "apache2",
+      "descricao": "Categoria Diagnóstica - Cirurgia de urgência"
+    },
+    {
+      "id": 8,
+      "indice": "apache2",
+      "descricao": "Outras causas mal definidas, não classificadas acima - Cirurgia de urgência"
+    },
+    {
+      "id": 9,
+      "indice": "apache2",
+      "descricao": "Categoria Diagnóstica - Não cirúrgico"
+    },
+    {
+      "id": 10,
+      "indice": "apache2",
+      "descricao": "Insuficiência ou falência respiratória"
+    },
+    {
+      "id": 11,
+      "indice": "apache2",
+      "descricao": "Insuficiência ou falência cardiovascular"
+    },
+    {
+      "id": 12,
+      "indice": "apache2",
+      "descricao": "Trauma"
+    },
+    {
+      "id": 13,
+      "indice": "apache2",
+      "descricao": "Sistema Neurológico"
+    },
+    {
+      "id": 14,
+      "indice": "apache2",
+      "descricao": "Causas diversas"
+    },
+    {
+      "id": 15,
+      "indice": "apache2",
+      "descricao": "Outras causas mal definidas, não classificadas acima - Não cirúrgico"
+    },
+    {
+      "id": 16,
+      "indice": "sofa",
+      "descricao": "Escala de Glasgow"
+    },
+    {
+      "id": 17,
+      "indice": "sofa",
+      "descricao": "Respiratório"
+    },
+    {
+      "id": 18,
+      "indice": "sofa",
+      "descricao": "Coagulação"
+    },
+    {
+      "id": 19,
+      "indice": "sofa",
+      "descricao": "Hepático"
+    },
+    {
+      "id": 20,
+      "indice": "sofa",
+      "descricao": "Cardiovascular"
+    },
+    {
+      "id": 21,
+      "indice": "sofa",
+      "descricao": "Renal"
+    }
+  ],
+  "variaveis": [
+    {
+      "id": 1,
+      "agrupamento": 1,
+      "sigla": "AO",
+      "nome": "Abertura Ocular",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 2,
+      "agrupamento": 1,
+      "sigla": "MRV",
+      "nome": "Melhor resposta verbal",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 3,
+      "agrupamento": 1,
+      "sigla": "MRM",
+      "nome": "Melhor resposta motora",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 4,
+      "agrupamento": 2,
+      "sigla": "TEMP",
+      "nome": "Temperatura axilar",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 29.9
+        },
+        {
+          "pontuacao": 3,
+          "de": 30,
+          "ate": 31.9
+        },
+        {
+          "pontuacao": 2,
+          "de": 32,
+          "ate": 33.9
+        },
+        {
+          "pontuacao": 1,
+          "de": 34,
+          "ate": 35.9
+        },
+        {
+          "pontuacao": 0,
+          "de": 36,
+          "ate": 38.4
+        },
+        {
+          "pontuacao": 1,
+          "de": 38.5,
+          "ate": 38.9
+        },
+        {
+          "pontuacao": 3,
+          "de": 39,
+          "ate": 40.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 41,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 5,
+      "agrupamento": 2,
+      "sigla": "PAS",
+      "nome": "PAS",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 6,
+      "agrupamento": 2,
+      "sigla": "PAD",
+      "nome": "PAD",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 7,
+      "agrupamento": 2,
+      "sigla": "PAM",
+      "nome": "PAM",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 49
+        },
+        {
+          "pontuacao": 2,
+          "de": 50,
+          "ate": 69
+        },
+        {
+          "pontuacao": 0,
+          "de": 70,
+          "ate": 109
+        },
+        {
+          "pontuacao": 2,
+          "de": 110,
+          "ate": 129
+        },
+        {
+          "pontuacao": 3,
+          "de": 130,
+          "ate": 159
+        },
+        {
+          "pontuacao": 4,
+          "de": 160,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 8,
+      "agrupamento": 2,
+      "sigla": "FC",
+      "nome": "FC (resposta ventricular)",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 39
+        },
+        {
+          "pontuacao": 3,
+          "de": 40,
+          "ate": 54
+        },
+        {
+          "pontuacao": 2,
+          "de": 55,
+          "ate": 69
+        },
+        {
+          "pontuacao": 0,
+          "de": 70,
+          "ate": 109
+        },
+        {
+          "pontuacao": 2,
+          "de": 110,
+          "ate": 139
+        },
+        {
+          "pontuacao": 3,
+          "de": 140,
+          "ate": 179
+        },
+        {
+          "pontuacao": 4,
+          "de": 180,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 9,
+      "agrupamento": 2,
+      "sigla": "FR",
+      "nome": "FR (sob ventilação ou não)",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 5
+        },
+        {
+          "pontuacao": 2,
+          "de": 6,
+          "ate": 9
+        },
+        {
+          "pontuacao": 1,
+          "de": 10,
+          "ate": 11
+        },
+        {
+          "pontuacao": 0,
+          "de": 12,
+          "ate": 24
+        },
+        {
+          "pontuacao": 1,
+          "de": 25,
+          "ate": 34
+        },
+        {
+          "pontuacao": 3,
+          "de": 35,
+          "ate": 49
+        },
+        {
+          "pontuacao": 4,
+          "de": 50,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 10,
+      "agrupamento": 2,
+      "sigla": "FIO2",
+      "nome": "FiO2",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 11,
+      "agrupamento": 2,
+      "sigla": "PACO2",
+      "nome": "PaCO2 (se FiO2 >= 0,5)",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 12,
+      "agrupamento": 2,
+      "sigla": "PAO2",
+      "nome": "PaO2",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 54
+        },
+        {
+          "pontuacao": 3,
+          "de": 55,
+          "ate": 60
+        },
+        {
+          "pontuacao": 1,
+          "de": 61,
+          "ate": 70
+        },
+        {
+          "pontuacao": 0,
+          "de": 71,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 13,
+      "agrupamento": 2,
+      "sigla": "GRADIENTE",
+      "nome": "Gradiente (A-a)O2 (se FiO2 >= 0,5)",
+      "faixas": [
+        {
+          "pontuacao": 0,
+          "de": 0,
+          "ate": 200
+        },
+        {
+          "pontuacao": 2,
+          "de": 200,
+          "ate": 349
+        },
+        {
+          "pontuacao": 3,
+          "de": 350,
+          "ate": 499
+        },
+        {
+          "pontuacao": 4,
+          "de": 500,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 14,
+      "agrupamento": 2,
+      "sigla": "PH",
+      "nome": "pH Arterial",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 7.14
+        },
+        {
+          "pontuacao": 3,
+          "de": 7.15,
+          "ate": 7.24
+        },
+        {
+          "pontuacao": 2,
+          "de": 7.25,
+          "ate": 7.32
+        },
+        {
+          "pontuacao": 0,
+          "de": 7.33,
+          "ate": 7.49
+        },
+        {
+          "pontuacao": 1,
+          "de": 7.5,
+          "ate": 7.59
+        },
+        {
+          "pontuacao": 3,
+          "de": 7.6,
+          "ate": 7.69
+        },
+        {
+          "pontuacao": 4,
+          "de": 7.7,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 15,
+      "agrupamento": 2,
+      "sigla": "HCO3",
+      "nome": "HCO3 (se pH indisponível)",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 15
+        },
+        {
+          "pontuacao": 3,
+          "de": 15,
+          "ate": 17.9
+        },
+        {
+          "pontuacao": 2,
+          "de": 18,
+          "ate": 21.9
+        },
+        {
+          "pontuacao": 0,
+          "de": 22,
+          "ate": 31.9
+        },
+        {
+          "pontuacao": 1,
+          "de": 32,
+          "ate": 40.9
+        },
+        {
+          "pontuacao": 3,
+          "de": 41,
+          "ate": 51.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 52,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 16,
+      "agrupamento": 2,
+      "sigla": "NASERICO",
+      "nome": "Na sérico",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 110
+        },
+        {
+          "pontuacao": 3,
+          "de": 111,
+          "ate": 119
+        },
+        {
+          "pontuacao": 2,
+          "de": 120,
+          "ate": 129
+        },
+        {
+          "pontuacao": 0,
+          "de": 130,
+          "ate": 149
+        },
+        {
+          "pontuacao": 1,
+          "de": 150,
+          "ate": 154
+        },
+        {
+          "pontuacao": 2,
+          "de": 155,
+          "ate": 159
+        },
+        {
+          "pontuacao": 3,
+          "de": 160,
+          "ate": 179
+        },
+        {
+          "pontuacao": 4,
+          "de": 180,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 17,
+      "agrupamento": 2,
+      "sigla": "KSERICO",
+      "nome": "K sérico",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 2.4
+        },
+        {
+          "pontuacao": 2,
+          "de": 2.5,
+          "ate": 2.9
+        },
+        {
+          "pontuacao": 1,
+          "de": 3,
+          "ate": 3.4
+        },
+        {
+          "pontuacao": 0,
+          "de": 3.5,
+          "ate": 5.4
+        },
+        {
+          "pontuacao": 1,
+          "de": 5.5,
+          "ate": 5.9
+        },
+        {
+          "pontuacao": 3,
+          "de": 6,
+          "ate": 6.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 7,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 18,
+      "agrupamento": 2,
+      "sigla": "CREATCOMFALHA",
+      "nome": "Creatinina com falha renal aguda",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 5
+        },
+        {
+          "pontuacao": 0,
+          "de": 6,
+          "ate": 14
+        },
+        {
+          "pontuacao": 4,
+          "de": 15,
+          "ate": 19
+        },
+        {
+          "pontuacao": 6,
+          "de": 20,
+          "ate": 34
+        },
+        {
+          "pontuacao": 8,
+          "de": 35,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 19,
+      "agrupamento": 2,
+      "sigla": "CREATSEMFALHA",
+      "nome": "Creatinina sem falha renal aguda",
+      "faixas": [
+        {
+          "pontuacao": 2,
+          "de": 0,
+          "ate": 5
+        },
+        {
+          "pontuacao": 0,
+          "de": 6,
+          "ate": 14
+        },
+        {
+          "pontuacao": 2,
+          "de": 15,
+          "ate": 19
+        },
+        {
+          "pontuacao": 3,
+          "de": 20,
+          "ate": 34
+        },
+        {
+          "pontuacao": 4,
+          "de": 35,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 20,
+      "agrupamento": 2,
+      "sigla": "HEMATOCRITO",
+      "nome": "Hematócrito",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 19
+        },
+        {
+          "pontuacao": 2,
+          "de": 20,
+          "ate": 29.9
+        },
+        {
+          "pontuacao": 0,
+          "de": 30,
+          "ate": 45.9
+        },
+        {
+          "pontuacao": 1,
+          "de": 46,
+          "ate": 49.9
+        },
+        {
+          "pontuacao": 2,
+          "de": 50,
+          "ate": 59.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 60,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 21,
+      "agrupamento": 2,
+      "sigla": "LEUCOCITO",
+      "nome": "Leucócitos",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 999
+        },
+        {
+          "pontuacao": 2,
+          "de": 1000,
+          "ate": 2900
+        },
+        {
+          "pontuacao": 0,
+          "de": 3000,
+          "ate": 14900
+        },
+        {
+          "pontuacao": 1,
+          "de": 15000,
+          "ate": 19900
+        },
+        {
+          "pontuacao": 2,
+          "de": 20000,
+          "ate": 39900
+        },
+        {
+          "pontuacao": 4,
+          "de": 40000,
+          "ate": 99999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 22,
+      "agrupamento": 3,
+      "sigla": "IDADE",
+      "nome": "Idade (em anos)",
+      "faixas": [
+        {
+          "pontuacao": 0,
+          "de": 0,
+          "ate": 44
+        },
+        {
+          "pontuacao": 2,
+          "de": 45,
+          "ate": 54
+        },
+        {
+          "pontuacao": 3,
+          "de": 55,
+          "ate": 64
+        },
+        {
+          "pontuacao": 5,
+          "de": 65,
+          "ate": 74
+        },
+        {
+          "pontuacao": 6,
+          "de": 75,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 23,
+      "agrupamento": 4,
+      "sigla": "INSUF",
+      "nome": "Sistema com insuficiência orgânica",
+      "faixas": [
+        {
+          "pontuacao": 2,
+          "de": 1,
+          "ate": 1
+        },
+        {
+          "pontuacao": 5,
+          "de": 2,
+          "ate": 2
+        },
+        {
+          "pontuacao": 5,
+          "de": 3,
+          "ate": 3
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 24,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Politraumatismo",
+      "faixas": [],
+      "pesoCategoria": -1.684
+    },
+    {
+      "id": 25,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Admissão por doença cardiovascular crônica",
+      "faixas": [],
+      "pesoCategoria": -1.376
+    },
+    {
+      "id": 26,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Cirurgia vascular periférica",
+      "faixas": [],
+      "pesoCategoria": -1.315
+    },
+    {
+      "id": 27,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Cirurgia cardíaca valvular",
+      "faixas": [],
+      "pesoCategoria": -1.261
+    },
+    {
+      "id": 28,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Craniotomia por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -1.245
+    },
+    {
+      "id": 29,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Cirurgia renal por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -1.204
+    },
+    {
+      "id": 30,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Transplante renal",
+      "faixas": [],
+      "pesoCategoria": -1.042
+    },
+    {
+      "id": 31,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Trauma de crânio",
+      "faixas": [],
+      "pesoCategoria": -0.955
+    },
+    {
+      "id": 32,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Cirurgia torácica por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -0.802
+    },
+    {
+      "id": 33,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Craniotomia por hemorragia intracraniana",
+      "faixas": [],
+      "pesoCategoria": -0.788
+    },
+    {
+      "id": 34,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Laminectomia/ cirurgia medula",
+      "faixas": [],
+      "pesoCategoria": -0.699
+    },
+    {
+      "id": 35,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Choque hemorrágico",
+      "faixas": [],
+      "pesoCategoria": -0.682
+    },
+    {
+      "id": 36,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Sangramento gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": -0.617
+    },
+    {
+      "id": 37,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Cirurgia gastrointestinal por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -0.248
+    },
+    {
+      "id": 38,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Insuficiência respiratória pós cirurgia",
+      "faixas": [],
+      "pesoCategoria": -0.14
+    },
+    {
+      "id": 39,
+      "agrupamento": 5,
+      "sigla": null,
+      "nome": "Perfuração/ obstrução gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": 0.06
+    },
+    {
+      "id": 40,
+      "agrupamento": 6,
+      "sigla": null,
+      "nome": "Neurológico",
+      "faixas": [],
+      "pesoCategoria": -1.15
+    },
+    {
+      "id": 41,
+      "agrupamento": 6,
+      "sigla": null,
+      "nome": "Cardiovascular",
+      "faixas": [],
+      "pesoCategoria": -0.797
+    },
+    {
+      "id": 42,
+      "agrupamento": 6,
+      "sigla": null,
+      "nome": "Respiratório",
+      "faixas": [],
+      "pesoCategoria": -0.61
+    },
+    {
+      "id": 43,
+      "agrupamento": 6,
+      "sigla": null,
+      "nome": "Gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": -0.613
+    },
+    {
+      "id": 44,
+      "agrupamento": 6,
+      "sigla": null,
+      "nome": "Metabólico/ renal",
+      "faixas": [],
+      "pesoCategoria": -0.196
+    },
+    {
+      "id": 45,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Politraumatismo",
+      "faixas": [],
+      "pesoCategoria": -1.081
+    },
+    {
+      "id": 46,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Admissão por doença cardiovascular crônica",
+      "faixas": [],
+      "pesoCategoria": -0.773
+    },
+    {
+      "id": 47,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Cirurgia vascular periférica",
+      "faixas": [],
+      "pesoCategoria": -0.712
+    },
+    {
+      "id": 48,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Cirurgia cardíaca valvular",
+      "faixas": [],
+      "pesoCategoria": -0.658
+    },
+    {
+      "id": 49,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Craniotomia por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -0.642
+    },
+    {
+      "id": 50,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Cirurgia renal por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -0.601
+    },
+    {
+      "id": 51,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Transplante renal",
+      "faixas": [],
+      "pesoCategoria": -0.439
+    },
+    {
+      "id": 52,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Trauma de crânio",
+      "faixas": [],
+      "pesoCategoria": -0.352
+    },
+    {
+      "id": 53,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Cirurgia torácica por neoplasia",
+      "faixas": [],
+      "pesoCategoria": -0.199
+    },
+    {
+      "id": 54,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Craniotomia por hemorragia intracraniana",
+      "faixas": [],
+      "pesoCategoria": -0.185
+    },
+    {
+      "id": 55,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Laminectomia/ cirurgia medula",
+      "faixas": [],
+      "pesoCategoria": -0.096
+    },
+    {
+      "id": 56,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Choque hemorrágico",
+      "faixas": [],
+      "pesoCategoria": -0.079
+    },
+    {
+      "id": 57,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Sangramento gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": -0.014
+    },
+    {
+      "id": 58,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Cirurgia gastrointestinal por neoplasia",
+      "faixas": [],
+      "pesoCategoria": 0.355
+    },
+    {
+      "id": 59,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Insuficiência respiratória pós- cirurgia",
+      "faixas": [],
+      "pesoCategoria": 0.463
+    },
+    {
+      "id": 60,
+      "agrupamento": 7,
+      "sigla": null,
+      "nome": "Perfuração/ obstrução gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": 0.663
+    },
+    {
+      "id": 61,
+      "agrupamento": 8,
+      "sigla": null,
+      "nome": "Neurológico",
+      "faixas": [],
+      "pesoCategoria": -0.574
+    },
+    {
+      "id": 62,
+      "agrupamento": 8,
+      "sigla": null,
+      "nome": "Cardiovascular",
+      "faixas": [],
+      "pesoCategoria": -0.194
+    },
+    {
+      "id": 63,
+      "agrupamento": 8,
+      "sigla": null,
+      "nome": "Respiratório",
+      "faixas": [],
+      "pesoCategoria": -0.007
+    },
+    {
+      "id": 64,
+      "agrupamento": 8,
+      "sigla": null,
+      "nome": "Gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": -0.01
+    },
+    {
+      "id": 65,
+      "agrupamento": 8,
+      "sigla": null,
+      "nome": "Metabólico/ renal",
+      "faixas": [],
+      "pesoCategoria": 0.407
+    },
+    {
+      "id": 66,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Asma/ alergia",
+      "faixas": [],
+      "pesoCategoria": -2.108
+    },
+    {
+      "id": 67,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "DPOC",
+      "faixas": [],
+      "pesoCategoria": -0.367
+    },
+    {
+      "id": 68,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Edema pulmonal (não cardiogênico)",
+      "faixas": [],
+      "pesoCategoria": -0.251
+    },
+    {
+      "id": 69,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Pós-parada respiratória",
+      "faixas": [],
+      "pesoCategoria": -0.168
+    },
+    {
+      "id": 70,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Aspiração/ envenenamento/ tóxico",
+      "faixas": [],
+      "pesoCategoria": -0.142
+    },
+    {
+      "id": 71,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Embolia pulmonar",
+      "faixas": [],
+      "pesoCategoria": -0.128
+    },
+    {
+      "id": 72,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Infecção pulmonar",
+      "faixas": [],
+      "pesoCategoria": 0
+    },
+    {
+      "id": 73,
+      "agrupamento": 10,
+      "sigla": null,
+      "nome": "Neoplasia do sistema respiratório",
+      "faixas": [],
+      "pesoCategoria": 0.891
+    },
+    {
+      "id": 74,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Hipertensão arterial",
+      "faixas": [],
+      "pesoCategoria": -1.789
+    },
+    {
+      "id": 75,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Arritmia",
+      "faixas": [],
+      "pesoCategoria": -1.368
+    },
+    {
+      "id": 76,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Insuficiência cardíaca congestiva",
+      "faixas": [],
+      "pesoCategoria": -0.424
+    },
+    {
+      "id": 77,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Choque hemorrágico/ hipovolêmico",
+      "faixas": [],
+      "pesoCategoria": 0.493
+    },
+    {
+      "id": 78,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Insuficiência coronariana",
+      "faixas": [],
+      "pesoCategoria": -0.191
+    },
+    {
+      "id": 79,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Sepse",
+      "faixas": [],
+      "pesoCategoria": 0.113
+    },
+    {
+      "id": 80,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Pós- parada cardíaca",
+      "faixas": [],
+      "pesoCategoria": 0.393
+    },
+    {
+      "id": 81,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Choque cardiogênico",
+      "faixas": [],
+      "pesoCategoria": -0.259
+    },
+    {
+      "id": 82,
+      "agrupamento": 11,
+      "sigla": null,
+      "nome": "Aneurisma dissecante de aorta torácica/ abdominal",
+      "faixas": [],
+      "pesoCategoria": 0.731
+    },
+    {
+      "id": 83,
+      "agrupamento": 12,
+      "sigla": null,
+      "nome": "Politraumatismo",
+      "faixas": [],
+      "pesoCategoria": -1.228
+    },
+    {
+      "id": 84,
+      "agrupamento": 12,
+      "sigla": null,
+      "nome": "Trauma de crânio",
+      "faixas": [],
+      "pesoCategoria": -0.517
+    },
+    {
+      "id": 85,
+      "agrupamento": 13,
+      "sigla": null,
+      "nome": "Síndrome comicial",
+      "faixas": [],
+      "pesoCategoria": -0.584
+    },
+    {
+      "id": 86,
+      "agrupamento": 13,
+      "sigla": null,
+      "nome": "Hemorragia intracraniana",
+      "faixas": [],
+      "pesoCategoria": 0.723
+    },
+    {
+      "id": 87,
+      "agrupamento": 14,
+      "sigla": null,
+      "nome": "Intoxicação exógenas",
+      "faixas": [],
+      "pesoCategoria": -3.353
+    },
+    {
+      "id": 88,
+      "agrupamento": 14,
+      "sigla": null,
+      "nome": "Cetoacidose diabética",
+      "faixas": [],
+      "pesoCategoria": -1.507
+    },
+    {
+      "id": 89,
+      "agrupamento": 14,
+      "sigla": null,
+      "nome": "Sangramento gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": 0.334
+    },
+    {
+      "id": 90,
+      "agrupamento": 15,
+      "sigla": null,
+      "nome": "Metabólico/ renal",
+      "faixas": [],
+      "pesoCategoria": -0.885
+    },
+    {
+      "id": 91,
+      "agrupamento": 15,
+      "sigla": null,
+      "nome": "Respiratório",
+      "faixas": [],
+      "pesoCategoria": -0.89
+    },
+    {
+      "id": 92,
+      "agrupamento": 15,
+      "sigla": null,
+      "nome": "Neurológico",
+      "faixas": [],
+      "pesoCategoria": -0.759
+    },
+    {
+      "id": 93,
+      "agrupamento": 15,
+      "sigla": null,
+      "nome": "Cardiovascular",
+      "faixas": [],
+      "pesoCategoria": 0.47
+    },
+    {
+      "id": 94,
+      "agrupamento": 15,
+      "sigla": null,
+      "nome": "Gastrointestinal",
+      "faixas": [],
+      "pesoCategoria": 0.501
+    },
+    {
+      "id": 95,
+      "agrupamento": 16,
+      "sigla": "AO",
+      "nome": "Abertura Ocular",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 96,
+      "agrupamento": 16,
+      "sigla": "MRV",
+      "nome": "Melhor resposta verbal",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 97,
+      "agrupamento": 16,
+      "sigla": "MRM",
+      "nome": "Melhor resposta motora",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 98,
+      "agrupamento": 16,
+      "sigla": "PONTUACAO",
+      "nome": "Pontuação",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 99,
+      "agrupamento": 17,
+      "sigla": "PAO2",
+      "nome": "PaO2/FiO2",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 100
+        },
+        {
+          "pontuacao": 3,
+          "de": 100,
+          "ate": 200
+        },
+        {
+          "pontuacao": 2,
+          "de": 200,
+          "ate": 300
+        },
+        {
+          "pontuacao": 1,
+          "de": 300,
+          "ate": 400
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 100,
+      "agrupamento": 18,
+      "sigla": "PLAQUETAS",
+      "nome": "Plaquetas",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 20
+        },
+        {
+          "pontuacao": 3,
+          "de": 20,
+          "ate": 50
+        },
+        {
+          "pontuacao": 2,
+          "de": 50,
+          "ate": 100
+        },
+        {
+          "pontuacao": 1,
+          "de": 100,
+          "ate": 150
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 101,
+      "agrupamento": 19,
+      "sigla": "BILIRRUBINA",
+      "nome": "Bilirrubina Sérica",
+      "faixas": [
+        {
+          "pontuacao": 1,
+          "de": 1.2,
+          "ate": 1.9
+        },
+        {
+          "pontuacao": 2,
+          "de": 2,
+          "ate": 5.9
+        },
+        {
+          "pontuacao": 3,
+          "de": 6,
+          "ate": 11.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 12,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 102,
+      "agrupamento": 20,
+      "sigla": "PAS",
+      "nome": "PAS",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 103,
+      "agrupamento": 20,
+      "sigla": "PAD",
+      "nome": "PAD",
+      "faixas": [],
+      "pesoCategoria": null
+    },
+    {
+      "id": 104,
+      "agrupamento": 20,
+      "sigla": "PAM",
+      "nome": "PAM",
+      "faixas": [
+        {
+          "pontuacao": 1,
+          "de": 0,
+          "ate": 70
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 105,
+      "agrupamento": 20,
+      "sigla": "DOPAMINA",
+      "nome": "Dopomina",
+      "faixas": [
+        {
+          "pontuacao": 2,
+          "de": 0,
+          "ate": 5
+        },
+        {
+          "pontuacao": 3,
+          "de": 5,
+          "ate": 15
+        },
+        {
+          "pontuacao": 4,
+          "de": 15,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 106,
+      "agrupamento": 20,
+      "sigla": "DOBUTAMINA",
+      "nome": "Dobutamina",
+      "faixas": [
+        {
+          "pontuacao": 2,
+          "de": 0,
+          "ate": 5
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 107,
+      "agrupamento": 20,
+      "sigla": "EPI_NORA",
+      "nome": "EPI/NORA",
+      "faixas": [
+        {
+          "pontuacao": 3,
+          "de": 0,
+          "ate": 0.1
+        },
+        {
+          "pontuacao": 4,
+          "de": 0.1,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 108,
+      "agrupamento": 21,
+      "sigla": "CREATININA",
+      "nome": "Creatinina Sérica",
+      "faixas": [
+        {
+          "pontuacao": 0,
+          "de": 0,
+          "ate": 1.1
+        },
+        {
+          "pontuacao": 1,
+          "de": 1.2,
+          "ate": 1.9
+        },
+        {
+          "pontuacao": 2,
+          "de": 2,
+          "ate": 3.4
+        },
+        {
+          "pontuacao": 3,
+          "de": 3.5,
+          "ate": 4.9
+        },
+        {
+          "pontuacao": 4,
+          "de": 5,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    },
+    {
+      "id": 109,
+      "agrupamento": 21,
+      "sigla": "DEBURINARIO",
+      "nome": "Débito urinário",
+      "faixas": [
+        {
+          "pontuacao": 4,
+          "de": 0,
+          "ate": 200
+        },
+        {
+          "pontuacao": 3,
+          "de": 200,
+          "ate": 999
+        }
+      ],
+      "pesoCategoria": null
+    }
+  ],
+  "glasgow": [
+    {
+      "id": 1,
+      "variavel": 1,
+      "nome": "Nenhuma",
+      "pontuacao": 1
+    },
+    {
+      "id": 2,
+      "variavel": 1,
+      "nome": "Com estímulo doloroso",
+      "pontuacao": 2
+    },
+    {
+      "id": 3,
+      "variavel": 1,
+      "nome": "Com estímulo verbal",
+      "pontuacao": 3
+    },
+    {
+      "id": 4,
+      "variavel": 1,
+      "nome": "Espontâneo",
+      "pontuacao": 4
+    },
+    {
+      "id": 5,
+      "variavel": 2,
+      "nome": "Nenhuma resposta",
+      "pontuacao": 1
+    },
+    {
+      "id": 6,
+      "variavel": 2,
+      "nome": "Sons incompreensíveis",
+      "pontuacao": 2
+    },
+    {
+      "id": 7,
+      "variavel": 2,
+      "nome": "Palavras impróprias",
+      "pontuacao": 3
+    },
+    {
+      "id": 8,
+      "variavel": 2,
+      "nome": "Confuso",
+      "pontuacao": 4
+    },
+    {
+      "id": 9,
+      "variavel": 2,
+      "nome": "Orientado",
+      "pontuacao": 5
+    },
+    {
+      "id": 10,
+      "variavel": 3,
+      "nome": "Nenhuma resposta",
+      "pontuacao": 1
+    },
+    {
+      "id": 11,
+      "variavel": 3,
+      "nome": "Responde em extensão",
+      "pontuacao": 2
+    },
+    {
+      "id": 12,
+      "variavel": 3,
+      "nome": "Responde em flexão",
+      "pontuacao": 3
+    },
+    {
+      "id": 13,
+      "variavel": 3,
+      "nome": "Localiza o estímulo",
+      "pontuacao": 4
+    },
+    {
+      "id": 14,
+      "variavel": 3,
+      "nome": "Localiza e retira os estímulos",
+      "pontuacao": 5
+    },
+    {
+      "id": 15,
+      "variavel": 3,
+      "nome": "Obedece aos comandos",
+      "pontuacao": 6
+    },
+    {
+      "id": 16,
+      "variavel": 95,
+      "nome": "Nenhuma",
+      "pontuacao": 0
+    },
+    {
+      "id": 17,
+      "variavel": 95,
+      "nome": "Espontâneo",
+      "pontuacao": 3
+    },
+    {
+      "id": 18,
+      "variavel": 95,
+      "nome": "Com estímulo verbal",
+      "pontuacao": 2
+    },
+    {
+      "id": 19,
+      "variavel": 95,
+      "nome": "Com estímulo doloroso",
+      "pontuacao": 1
+    },
+    {
+      "id": 20,
+      "variavel": 96,
+      "nome": "Nenhuma resposta",
+      "pontuacao": 0
+    },
+    {
+      "id": 21,
+      "variavel": 96,
+      "nome": "Orientado",
+      "pontuacao": 4
+    },
+    {
+      "id": 22,
+      "variavel": 96,
+      "nome": "Confuso",
+      "pontuacao": 3
+    },
+    {
+      "id": 23,
+      "variavel": 96,
+      "nome": "Palavras impróprias",
+      "pontuacao": 2
+    },
+    {
+      "id": 24,
+      "variavel": 96,
+      "nome": "Sons incompreensíveis",
+      "pontuacao": 1
+    },
+    {
+      "id": 25,
+      "variavel": 97,
+      "nome": "Obedece aos comandos",
+      "pontuacao": 8
+    },
+    {
+      "id": 26,
+      "variavel": 97,
+      "nome": "Localiza e retira os estímulos",
+      "pontuacao": 7
+    },
+    {
+      "id": 27,
+      "variavel": 97,
+      "nome": "Localiza o estímulo",
+      "pontuacao": 6
+    },
+    {
+      "id": 28,
+      "variavel": 97,
+      "nome": "Responde em flexão",
+      "pontuacao": 5
+    },
+    {
+      "id": 29,
+      "variavel": 97,
+      "nome": "Responde em extensão",
+      "pontuacao": 4
+    },
+    {
+      "id": 30,
+      "variavel": 97,
+      "nome": "Nenhuma resposta",
+      "pontuacao": 3
+    }
+  ]
+}

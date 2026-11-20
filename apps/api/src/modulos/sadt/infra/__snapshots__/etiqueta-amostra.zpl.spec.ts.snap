@@ -1,0 +1,16 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`etiqueta da amostra (ZPL) > o código único da amostra no Code 128 e os dois identificadores do paciente 1`] = `
+"^XA
+^CI28
+^PW400
+^LL200
+^LH0,0
+^FO10,10^A0N,24,24^FH_^FDJOSÉ DA SILVA SINTETICO^FS
+^FO10,38^A0N,20,20^FH_^FDNASC. 12/03/1958  PRONT. 501001^FS
+^FO10,62^A0N,20,20^FH_^FDATEND. 31337  K NA^FS
+^FO10,90^BY2^BCN,70,Y,N,N^FDPC000012AU^FS
+^PQ1
+^XZ
+"
+`;

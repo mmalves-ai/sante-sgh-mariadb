@@ -1,0 +1,126 @@
+/* Telas da manutenção e engenharia clínica (M55, etapa 1). No celular (abrir pelo QR), tudo em uma coluna. */
+.tela-manutencao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+}
+.tela-manutencao h1,
+.tela-manutencao h2,
+.tela-manutencao h3 {
+  margin: 0;
+}
+.tela-manutencao .acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: center;
+}
+.tela-manutencao .campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--sgh-espaco-2);
+  align-items: end;
+}
+.tela-manutencao .campos .largo {
+  grid-column: 1 / -1;
+}
+.tela-manutencao .bloco {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  background: var(--sgh-fundo-elevado);
+}
+.tela-manutencao .rolagem {
+  overflow-x: auto;
+}
+.tela-manutencao .tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-manutencao .tabela th,
+.tela-manutencao .tabela td {
+  text-align: start;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+  vertical-align: top;
+}
+.tela-manutencao .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-manutencao .vencido {
+  color: var(--sgh-alerta);
+  font-weight: 600;
+}
+.tela-manutencao .numeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--sgh-espaco-2);
+}
+.tela-manutencao .numero {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+}
+.tela-manutencao .numero strong {
+  display: block;
+  font-size: 1.5em;
+}
+.tela-manutencao dl.ficha {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sgh-espaco-1) var(--sgh-espaco-3);
+  margin: 0;
+}
+.tela-manutencao dl.ficha dt {
+  color: var(--sgh-texto-secundario);
+}
+.tela-manutencao dl.ficha dd {
+  margin: 0;
+}
+.tela-manutencao .etiqueta {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+  border: 1px dashed var(--sgh-borda-forte);
+  padding: var(--sgh-espaco-2);
+  background: var(--sgh-fundo-elevado);
+  color: var(--sgh-texto);
+}
+.tela-manutencao .historico {
+  margin: 0;
+  padding-inline-start: var(--sgh-espaco-3);
+}
+@media (max-width: 40rem) {
+  .tela-manutencao .campos {
+    grid-template-columns: 1fr;
+  }
+  .tela-manutencao dl.ficha {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .tela-manutencao .etiqueta {
+    border: none;
+  }
+}
+.tela-manutencao .qr__fundo {
+  fill: var(--sgh-fundo);
+}
+.tela-manutencao .qr__modulos {
+  fill: var(--sgh-texto);
+}
+
+/* W0-08 (M4): selo do modelo pronto de onde o plano veio. */
+.selo {
+  display: inline-block;
+  margin-left: var(--sgh-espaco-1);
+  padding: 0 var(--sgh-espaco-1);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 4px;
+  background: var(--sgh-fundo-elevado);
+  font-size: 0.85em;
+}

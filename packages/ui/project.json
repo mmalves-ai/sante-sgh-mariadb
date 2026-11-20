@@ -1,0 +1,43 @@
+{
+  "name": "ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/ui/src",
+  "tags": ["tipo:ui", "modulo:plataforma"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/ui && stylelint \"packages/ui/**/*.{css,vue}\" --allow-empty-input"
+    },
+    "typecheck": {
+      "command": "vue-tsc -p packages/ui/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/ui/vitest.config.ts --coverage",
+      "outputs": ["{workspaceRoot}/coverage/packages/ui"]
+    },
+    "build": {
+      "command": "vite build --config packages/ui/catalogo/vite.config.ts",
+      "outputs": ["{projectRoot}/dist/catalogo"]
+    },
+    "catalogo-build": {
+      "command": "vite build --config packages/ui/catalogo/vite.config.ts",
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist/catalogo"],
+      "cache": true
+    },
+    "catalogo": {
+      "command": "vite --config packages/ui/catalogo/vite.config.ts",
+      "continuous": true,
+      "cache": false
+    },
+    "catalogo-visual": {
+      "dependsOn": ["catalogo-build"],
+      "command": "playwright test -c apps/web/playwright.catalogo.config.ts",
+      "cache": false
+    },
+    "contraste": {
+      "command": "node --import ./tools/verificadores/src/caminhos-sgh.ts packages/ui/src/tokens/relatorio.ts",
+      "cache": false
+    }
+  }
+}

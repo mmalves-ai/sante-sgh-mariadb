@@ -1,0 +1,88 @@
+/* Telas da portaria (M50, etapa 5): o mesmo arranjo das telas de trabalho (cartões, grades, barras). */
+.tela-portaria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+}
+.tela-portaria .cartao {
+  border: 1px solid var(--sgh-borda);
+  border-radius: var(--sgh-raio);
+  padding: var(--sgh-espaco-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-portaria .barra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: end;
+}
+.tela-portaria .campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--sgh-espaco-2);
+  align-items: end;
+}
+.tela-portaria .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-portaria .registro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-portaria .rolagem {
+  overflow-x: auto;
+}
+.tela-portaria .grade {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tela-portaria .grade th,
+.tela-portaria .grade td {
+  border-bottom: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  text-align: left;
+  vertical-align: top;
+}
+.tela-portaria .lista {
+  margin: 0;
+  padding-left: var(--sgh-espaco-3);
+}
+.tela-portaria .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-portaria .alerta {
+  color: var(--sgh-alerta);
+}
+.tela-portaria .ok {
+  color: var(--sgh-sucesso);
+}
+.cracha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+  border: 2px solid var(--sgh-borda-forte);
+  padding: var(--sgh-espaco-3);
+  max-width: 22rem;
+}
+.cracha p {
+  margin: 0;
+}
+.cracha__nome {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.cracha__codigo {
+  font-family: var(--sgh-fonte-codigo);
+  font-size: 1.25rem;
+  letter-spacing: 0.1em;
+}
+@media print {
+  .nao-imprimir {
+    display: none;
+  }
+}

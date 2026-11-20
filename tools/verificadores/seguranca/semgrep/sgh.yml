@@ -1,0 +1,11 @@
+rules:
+  - id: sgh-eval-proibido
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: eval() proibido
+    pattern: eval(...)
+  - id: sgh-exec-concatenado
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: child_process.exec com string concatenada
+    pattern: $X.exec("..." + $Y)

@@ -1,0 +1,18 @@
+{
+  "name": "contabil-ferramentas",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/contabil/src",
+  "tags": ["tipo:ferramenta", "modulo:contabil"],
+  "targets": {
+    "lint": {
+      "command": "eslint tools/contabil"
+    },
+    "typecheck": {
+      "command": "tsc -p tools/contabil/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config tools/contabil/vitest.config.ts"
+    }
+  }
+}

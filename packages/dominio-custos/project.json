@@ -1,0 +1,22 @@
+{
+  "name": "dominio-custos",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-custos/src",
+  "tags": ["tipo:dominio", "modulo:custos"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-custos"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-custos/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-custos/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-custos/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

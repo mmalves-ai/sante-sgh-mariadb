@@ -1,0 +1,43 @@
+/* Complemento do estilo das telas do financeiro: as duas colunas da conciliação, o gráfico do fluxo de caixa e o
+   rótulo só para leitor de tela (o campo em linha da tabela).
+   Este arquivo é GLOBAL (vale para a página inteira enquanto estiver carregado): nada de nome genérico como
+   `.barra`, que já virou a barra superior da casca e a fez crescer até o meio da tela. */
+.duas-colunas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: var(--sgh-espaco-3);
+}
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.fluxo-barras {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sgh-espaco-1);
+  height: 10rem;
+  border-bottom: 1px solid var(--sgh-borda, currentColor);
+}
+.fluxo-barra {
+  flex: 1 1 0;
+  min-width: 0.5rem;
+  background: var(--sgh-primaria, currentColor);
+}
+.fluxo-barra--negativa {
+  background: var(--sgh-perigo, currentColor);
+}
+/* WCAG 2.5.8 (axe target-size): os botões, as marcas e os campos em linha da tabela têm alvo de 24 px. */
+.tabela button,
+.tabela input {
+  min-height: 24px;
+  min-width: 24px;
+}
+/* Os botões de gravar dos formulários (fora da tabela) também com o alvo de 24 px (M42: a baixa manual do título). */
+form > button[type='submit'] {
+  min-height: 24px;
+  min-width: 24px;
+}

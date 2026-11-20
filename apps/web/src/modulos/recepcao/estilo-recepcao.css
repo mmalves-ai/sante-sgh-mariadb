@@ -1,0 +1,117 @@
+/* Estilo comum das telas de trabalho da recepção (M19): só os tokens do tema (@sgh/ui), sem cor solta. */
+.tela-recepcao .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-recepcao .filtros,
+.tela-recepcao .acoes-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: flex-end;
+  margin: var(--sgh-espaco-2) 0;
+}
+.tela-recepcao .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-recepcao input[type='number'],
+.tela-recepcao input[type='date'],
+.tela-recepcao select {
+  font: inherit;
+  padding: var(--sgh-espaco-1);
+  border: 1px solid var(--sgh-borda-forte);
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+  min-width: 6rem;
+}
+.tela-recepcao fieldset {
+  border: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-2);
+  margin: var(--sgh-espaco-2) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+}
+.tela-recepcao .painel {
+  border: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-2);
+  margin: var(--sgh-espaco-2) 0;
+}
+.tela-recepcao .senha-grande {
+  font-size: 2rem;
+  margin-right: var(--sgh-espaco-2);
+}
+.tela-recepcao .senhas-no-guiche,
+.tela-recepcao .agendados {
+  list-style: none;
+  padding: 0;
+}
+.tela-recepcao .senhas-no-guiche li,
+.tela-recepcao .agendados li {
+  border-top: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-2) 0;
+}
+.tela-recepcao .agendados li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sgh-espaco-2);
+}
+.tela-recepcao .foto-paciente {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+.tela-recepcao .foto-vazia {
+  display: inline-block;
+  border: 1px dashed var(--sgh-borda);
+}
+.tela-recepcao .marca-ident {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 999px;
+  padding: 0 var(--sgh-espaco-2);
+  font-size: 0.85em;
+}
+.tela-recepcao .marca-ident.sigiloso {
+  font-weight: 600;
+}
+.tela-recepcao .tabela {
+  border-collapse: collapse;
+  width: 100%;
+  margin: var(--sgh-espaco-3) 0;
+}
+.tela-recepcao .tabela caption {
+  text-align: left;
+  font-weight: 700;
+  padding: var(--sgh-espaco-1) 0;
+}
+.tela-recepcao .tabela th,
+.tela-recepcao .tabela td {
+  border-bottom: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  text-align: left;
+  vertical-align: top;
+}
+.tela-recepcao .formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-recepcao .visualmente-oculto,
+.visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.tela-recepcao .barra {
+  height: 0.75rem;
+  background: var(--sgh-primaria);
+  display: inline-block;
+  vertical-align: middle;
+}

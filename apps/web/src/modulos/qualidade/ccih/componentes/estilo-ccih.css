@@ -1,0 +1,47 @@
+/* Telas da CCIH (M48, etapa 3): selos com cor e texto (a cor nunca sozinha), painéis e os botões grandes do tablet. */
+.selo--atencao {
+  border-color: var(--sgh-aviso);
+  background: var(--sgh-aviso-suave);
+}
+.selo--ok {
+  border-color: var(--sgh-sucesso);
+}
+.selo--neutro {
+  border-style: dashed;
+}
+.painel-ccih {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+  padding: var(--sgh-espaco-3);
+  border: 1px solid var(--sgh-borda);
+  border-radius: var(--sgh-raio, 6px);
+}
+.painel-ccih h2,
+.painel-ccih h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.linha-ccih {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  align-items: flex-end;
+}
+.lista-ccih {
+  margin: 0;
+  padding-inline-start: var(--sgh-espaco-4, 1.25rem);
+}
+.abas-ccih {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+}
+.abas-ccih [aria-selected='true'] {
+  font-weight: 600;
+  text-decoration: underline;
+}
+.tablet-ccih .sante-opcoes label,
+.tablet-ccih fieldset label {
+  min-height: 44px;
+}

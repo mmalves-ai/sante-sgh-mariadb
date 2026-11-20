@@ -1,0 +1,75 @@
+/* Telas da contabilidade (M54; o mesmo desenho das telas da gestão de pessoas). WCAG 2.5.8 (axe target-size): alvos de 24 px; blocos em grade simples que quebram
+   em tela estreita. */
+.tela-contabil {
+  display: grid;
+  gap: 1rem;
+  max-width: 72rem;
+}
+.tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tabela th,
+.tabela td {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--p-content-border-color);
+  vertical-align: top;
+}
+.bloco {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.5rem;
+}
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+}
+.acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.secundario {
+  color: var(--p-text-muted-color);
+  font-size: 0.9em;
+}
+.dados {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+.dados dt {
+  font-weight: 600;
+}
+.dados dd {
+  margin: 0;
+}
+.marca {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 24px;
+}
+h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+.rolagem {
+  overflow-x: auto;
+}
+h3,
+h4 {
+  font-size: 1rem;
+  margin: 0;
+}
+.erro {
+  color: var(--p-red-600, currentColor);
+}

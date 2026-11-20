@@ -19,3 +19,37 @@ __pycache__/
 # Dicionários completos de colunas do MV e do SPDATA: estrutura de software de terceiros, só uso local
 referencias/mv-colunas-raw.tsv
 referencias/spdata-colunas-raw.txt
+
+# Herdado do new-sgh (modelo base, commit d3f8b5d)
+!.env.example
+*.swp
+.*.swp
+*.swo
+*~
+.pnpm-store/
+.pnpm-cache/
+.pnpm-state/
+.npm-cache/
+.cache-local/
+.tmp/
+dist/
+coverage/
+out-tsc/
+.nx/
+playwright-report/
+test-results/
+*.tsbuildinfo
+vite.config.*.timestamp-*
+vitest.config.*.timestamp-*
+.seguranca/
+*.fbk
+*.fdb
+.claude/
+packages/legado/src/*/assinaturas/dominios-vistos.json.trava
+packages/legado/src/*/assinaturas/dominios-vistos.json.tmp-*
+infra/zap/relatorio/
+/.ensaio/
+/.janela/
+
+# Capturas de assinatura do legado: regeneráveis do new-sgh (git archive d3f8b5d)
+referencias/assinaturas-legado/

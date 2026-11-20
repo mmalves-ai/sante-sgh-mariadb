@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "analytics": false,
+  "neverConnectToCloud": true,
+  "useDaemonProcess": false,
+  "defaultBase": "main",
+  "namedInputs": {
+    "sharedGlobals": [
+      "{workspaceRoot}/tsconfig.base.json",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/eslint.config.js",
+      "{workspaceRoot}/nx.json"
+    ],
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.spec.ts",
+      "!{projectRoot}/e2e/**/*",
+      "!{projectRoot}/vitest.config.ts",
+      "!{projectRoot}/playwright.config.ts"
+    ]
+  },
+  "targetDefaults": {
+    "lint": { "cache": true, "inputs": ["default"] },
+    "typecheck": { "cache": true, "inputs": ["default", "^default"] },
+    "test": { "cache": true, "inputs": ["default", "^default"] },
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "inputs": ["production", "^production"],
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "e2e": { "cache": false },
+    "serve": { "cache": false, "continuous": true }
+  }
+}

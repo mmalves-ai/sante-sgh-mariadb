@@ -1,0 +1,30 @@
+{
+  "name": "testes",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/testes/src",
+  "tags": ["tipo:testes", "modulo:plataforma"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/testes"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/testes/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/testes/vitest.config.ts"
+    },
+    "build": {
+      "command": "tsc -p packages/testes/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": [
+    "contratos",
+    "dominio-pep",
+    "dominio-agenda",
+    "dominio-recepcao",
+    "legado",
+    "dominio-faturamento",
+    "dominio-pessoas"
+  ]
+}

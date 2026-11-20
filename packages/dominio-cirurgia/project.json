@@ -1,0 +1,22 @@
+{
+  "name": "dominio-cirurgia",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-cirurgia/src",
+  "tags": ["tipo:dominio", "modulo:cirurgia"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-cirurgia"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-cirurgia/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-cirurgia/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-cirurgia/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

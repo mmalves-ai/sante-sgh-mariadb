@@ -1,0 +1,226 @@
+<script setup lang="ts">
+// Apuração do período (ficha do M33, seção 7): `/repasse/apuracao`. Uma apuração por período e empresa num só sistema
+// (regra 10: o período apurado no outro sistema é mostrado e não se grava outra); apurar ou recalcular a aberta, os
+// totais com as parcelas por beneficiário, as pendências por motivo, conferir, aprovar (quem apurou não aprova; regra
+// 9) ou devolver, e os lançamentos de cada beneficiário pela apuração aprovada. O demonstrativo de cada um abre com a
+// memória de cálculo. Os indicadores do repasse com as parcelas impressas.
+import { SanteSelecao } from '@sgh/ui';
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
+import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { RouterLink } from 'vue-router';
+import ErroFaturamento from '../../faturamento/componentes/ErroFaturamento.vue';
+import MensagemFaturamento from '../../faturamento/componentes/MensagemFaturamento.vue';
+import {
+  apurar,
+  decidirApuracao,
+  lancarApuracao,
+  lerApuracao,
+  lerIndicadores,
+  novaChave,
+} from '../api-repasse.js';
+import { opcoes, reais, usarRepasse } from '../usar-repasse.js';
+
+const { t } = useI18n();
+const qc = useQueryClient();
+const { apoio, pode, tem, motivo } = usarRepasse();
+const competencia = ref('');
+const consultada = ref('');
+watch(
+  () => apoio.data.value?.hoje,
+  (h) => {
+    if (h && !competencia.value) {
+      competencia.value = h.slice(0, 7);
+      consultada.value = competencia.value;
+    }
+  },
+  { immediate: true },
+);
+const apuracao = useQuery({
+  queryKey: computed(() => ['repasse', 'apuracao', consultada.value]),
+  queryFn: () => lerApuracao(1, consultada.value),
+  enabled: computed(() => consultada.value !== ''),
+});
+const indicadores = useQuery({ queryKey: ['repasse', 'indicadores'], queryFn: () => lerIndicadores() });
+const eventos = computed(() => opcoes(apoio.data.value?.eventos));
+const evento = ref('');
+watch(eventos, (e) => {
+  if (!evento.value && e[0]) evento.value = e[0].valor;
+});
+const consultar = () => (consultada.value = competencia.value);
+
+const erro = ref<unknown>(null);
+const mensagem = ref<string | null>(null);
+const justificativa = ref('');
+async function agir(fn: () => Promise<{ mensagem: string }>) {
+  erro.value = null;
+  mensagem.value = null;
+  try {
+    mensagem.value = (await fn()).mensagem;
+    await qc.invalidateQueries({ queryKey: ['repasse'] });
+  } catch (e) {
+    erro.value = e;
+  }
+}
+const a = computed(() => apuracao.data.value);
+const fazerApuracao = () =>
+  agir(() => apurar({ empresa: 1, competencia: consultada.value }, novaChave('apurar')));
+const decidir = (acao: 'conferir' | 'aprovar' | 'devolver') =>
+  agir(() =>
+    decidirApuracao(
+      a.value!.id!,
+      { acao, ...(acao === 'devolver' ? { justificativa: justificativa.value } : {}) },
+      novaChave(acao),
+    ),
+  );
+const lancar = () => agir(() => lancarApuracao(a.value!.id!, Number(evento.value), novaChave('lancar')));
+</script>
+
+<template>
+  <section class="tela-agenda tela-repasse" aria-labelledby="ap-titulo" data-testid="tela-rep-apuracao">
+    <h1 id="ap-titulo">{{ t('repasse.apuracao.titulo') }}</h1>
+    <form class="filtros" @submit.prevent="consultar">
+      <span class="campo">
+        <label for="ap-comp">{{ t('repasse.competencia') }}</label>
+        <input id="ap-comp" v-model="competencia" type="month" data-testid="ap-competencia" />
+      </span>
+      <button type="submit" data-testid="ap-consultar">{{ t('repasse.consultar') }}</button>
+    </form>
+    <ErroFaturamento v-if="apuracao.error.value" :erro="apuracao.error.value" />
+    <template v-if="a">
+      <p v-if="a.aviso" role="note" data-testid="ap-aviso">{{ a.aviso }}</p>
+      <p v-if="a.sistema === 'novo'" data-testid="ap-estado">
+        {{ t('repasse.apuracao.titulo') }} {{ a.id }} — {{ t(`repasse.apuracao.estado.${a.estado}`) }}
+        <span class="secundario"> · {{ a.apuradoPor }}{{ a.aprovadoPor ? ` · ${a.aprovadoPor}` : '' }}</span>
+      </p>
+      <div class="acoes">
+        <button
+          v-if="a.sistema !== 'outro-sistema' && (a.estado === null || a.estado === 'aberta')"
+          type="button"
+          :disabled="!pode('apurar', 'repasse.apuracao.apurar')"
+          :title="motivo('apurar') ?? undefined"
+          data-testid="ap-apurar"
+          @click="fazerApuracao"
+        >
+          {{ t('repasse.apuracao.apurar') }}
+        </button>
+        <button
+          v-if="a.estado === 'aberta'"
+          type="button"
+          :disabled="!pode('apurar', 'repasse.apuracao.apurar')"
+          data-testid="ap-conferir"
+          @click="decidir('conferir')"
+        >
+          {{ t('repasse.apuracao.conferir') }}
+        </button>
+        <template v-if="a.estado === 'conferida' && tem('repasse.apuracao.aprovar')">
+          <button type="button" data-testid="ap-aprovar" @click="decidir('aprovar')">
+            {{ t('repasse.apuracao.aprovar') }}
+          </button>
+          <label for="ap-just" class="oculto">{{ t('repasse.justificativa') }}</label>
+          <input id="ap-just" v-model="justificativa" :placeholder="t('repasse.justificativa')" />
+          <button type="button" data-testid="ap-devolver" @click="decidir('devolver')">
+            {{ t('repasse.apuracao.devolver') }}
+          </button>
+        </template>
+        <template v-if="a.estado === 'aprovada' && tem('repasse.lancamento.criar')">
+          <span class="campo">
+            <SanteSelecao
+              v-model="evento"
+              :rotulo="t('repasse.evento')"
+              :opcoes="eventos"
+              data-testid="ap-evento"
+            />
+          </span>
+          <button
+            type="button"
+            :disabled="a.simulacao || !pode('repasse.lancarEvento', 'repasse.lancamento.criar')"
+            :title="a.simulacao ? t('repasse.apuracao.simulacaoSemLancamento') : undefined"
+            data-testid="ap-lancar"
+            @click="lancar"
+          >
+            {{ t('repasse.lancamentos.titulo') }}
+          </button>
+          <p v-if="a.simulacao" role="note" data-testid="ap-lancar-motivo">
+            {{ t('repasse.apuracao.simulacaoSemLancamento') }}
+          </p>
+        </template>
+      </div>
+      <dl v-if="a.sistema === 'novo'" class="totais" data-testid="ap-totais">
+        <div>
+          <dt>{{ t('repasse.apuracao.itens') }}</dt>
+          <dd>{{ a.itens }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.comRepasse') }}</dt>
+          <dd>{{ a.comRepasse }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.pendentes') }}</dt>
+          <dd>{{ a.pendentes }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.baseTotal') }}</dt>
+          <dd>{{ reais(a.base) }}</dd>
+        </div>
+        <div>
+          <dt>{{ t('repasse.apuracao.repasseTotal') }}</dt>
+          <dd>{{ reais(a.valor) }}</dd>
+        </div>
+      </dl>
+      <ul v-if="Object.keys(a.pendenciasPorMotivo).length" data-testid="ap-pendencias">
+        <li v-for="(n, m) in a.pendenciasPorMotivo" :key="m">
+          {{ t(`repasse.apuracao.pendencia.${m}`) }}: {{ n }}
+        </li>
+      </ul>
+      <table v-if="a.porBeneficiario.length" class="tabela" data-testid="ap-beneficiarios">
+        <thead>
+          <tr>
+            <th scope="col">{{ t('repasse.prestador') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.itens') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.baseTotal') }}</th>
+            <th scope="col">{{ t('repasse.valor') }}</th>
+            <th scope="col">{{ t('repasse.apuracao.demonstrativo') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="b in a.porBeneficiario" :key="b.prestador">
+            <td>{{ b.prestador }}</td>
+            <td>{{ b.itens }}</td>
+            <td>{{ reais(b.base) }}</td>
+            <td>{{ reais(b.valor) }}</td>
+            <td>
+              <RouterLink
+                :to="`/repasse/apuracao/${a.id}/${b.prestador}`"
+                :data-testid="`ap-demo-${b.prestador}`"
+              >
+                {{ t('repasse.abrir') }}
+              </RouterLink>
+            </td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>{{ t('repasse.total') }}</td>
+            <td>{{ a.comRepasse }}</td>
+            <td>{{ reais(a.base) }}</td>
+            <td>{{ reais(a.valor) }}</td>
+            <td />
+          </tr>
+        </tfoot>
+      </table>
+    </template>
+    <ErroFaturamento v-if="erro" :erro="erro" />
+    <MensagemFaturamento :texto="mensagem" testid="ap-mensagem" />
+
+    <h2>{{ t('repasse.indicadores') }}</h2>
+    <ul v-if="indicadores.data.value" data-testid="ap-indicadores">
+      <li v-for="i in indicadores.data.value" :key="i.codigo">
+        {{ i.rotulo }}: <strong>{{ i.valor ?? '—' }}{{ i.unidade === '%' ? '%' : ` ${i.unidade}` }}</strong>
+        <span class="secundario"> ({{ i.parcelas }})</span>
+      </li>
+    </ul>
+  </section>
+</template>
+
+<style src="../estilo-repasse.css"></style>

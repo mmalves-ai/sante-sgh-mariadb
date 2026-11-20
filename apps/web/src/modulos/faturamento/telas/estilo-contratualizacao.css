@@ -1,0 +1,92 @@
+/* Tela da contratualização SUS (M55, etapa 5): o mesmo desenho das telas de contratos (grade, barra, campos simples e
+   resumo em lista de definições), com os alvos de toque da casca. */
+.tela-contratualizacao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  max-width: 90rem;
+}
+.tela-contratualizacao section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-contratualizacao .barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sgh-espaco-2);
+}
+.tela-contratualizacao .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-contratualizacao .grade {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-contratualizacao .grade th,
+.tela-contratualizacao .grade td {
+  text-align: left;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+  vertical-align: top;
+}
+.tela-contratualizacao .rolagem {
+  overflow-x: auto;
+}
+.tela-contratualizacao .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-contratualizacao input:not([type='checkbox'], [type='radio']),
+.tela-contratualizacao textarea {
+  min-height: var(--sgh-alvo-minimo);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 4px;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+.tela-contratualizacao textarea {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  min-height: 4rem;
+}
+.tela-contratualizacao fieldset {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-contratualizacao legend {
+  font-weight: 700;
+  padding: 0 var(--sgh-espaco-1);
+}
+.tela-contratualizacao .campo-largo {
+  flex: 1 1 24rem;
+  max-width: 60rem;
+}
+.tela-contratualizacao .resumo-sus {
+  display: grid;
+  grid-template-columns: minmax(12rem, max-content) 1fr;
+  gap: var(--sgh-espaco-1) var(--sgh-espaco-3);
+  margin: 0;
+}
+.tela-contratualizacao .resumo-sus dt {
+  color: var(--sgh-texto-secundario);
+}
+.tela-contratualizacao .resumo-sus dd {
+  margin: 0;
+}
+.tela-contratualizacao .contas {
+  margin: 0;
+  padding-left: var(--sgh-espaco-3);
+  font-size: 0.9em;
+}
+.tela-contratualizacao .formulario-sus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}

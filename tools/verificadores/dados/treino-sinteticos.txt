@@ -1,0 +1,12 @@
+# Lista sintética do ambiente de treino (M37, regra 5): valores de CPF, CNS e telefone VÁLIDOS que a massa do treino
+# usa de propósito (gerados, nunca de pessoa real). O verificador `treino-sem-dado-real` ignora só o que está aqui;
+# qualquer outro CPF, CNS ou telefone válido encontrado falha. Um valor por linha, só dígitos; # comenta.
+# Sessão sintética (portas em memória do cadastro, do prontuário e da recepção): números de teste conhecidos e os da
+# faixa 900000001xx do gerador sintético; nenhum de pessoa cadastrada.
+90000000175
+90000000256
+12345678909
+00000000191
+11144477735
+22255588846
+33366699957

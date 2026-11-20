@@ -1,0 +1,22 @@
+{
+  "name": "dominio-qualidade",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-qualidade/src",
+  "tags": ["tipo:dominio", "modulo:qualidade"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-qualidade"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-qualidade/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-qualidade/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-qualidade/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

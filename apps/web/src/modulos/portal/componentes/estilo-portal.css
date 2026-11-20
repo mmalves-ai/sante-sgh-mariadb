@@ -1,0 +1,69 @@
+/* Portal do paciente (M50, etapa 1): o layout fora da casca interna, legível no celular. Só tokens do tema. */
+.portal-paciente {
+  margin: var(--sgh-espaco-4) auto;
+  padding: var(--sgh-espaco-3);
+  max-width: 60rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+}
+.portal-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sgh-espaco-3);
+  justify-content: space-between;
+}
+.portal-marca {
+  font-weight: 600;
+}
+.portal-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+}
+.portal-vendo {
+  font-weight: 600;
+}
+.portal-painel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  padding: var(--sgh-espaco-3);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 4px;
+}
+.portal-campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.portal-tabela {
+  border-collapse: collapse;
+  width: 100%;
+}
+.portal-tabela th,
+.portal-tabela td {
+  text-align: left;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+}
+.portal-secundario {
+  color: var(--sgh-texto-secundario);
+}
+.portal-codigo {
+  font-family: monospace;
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+}
+@media print {
+  .portal-nao-imprimir {
+    display: none;
+  }
+}
+.portal-qr-fundo {
+  fill: var(--sgh-fundo);
+}
+.portal-qr {
+  fill: var(--sgh-texto);
+}

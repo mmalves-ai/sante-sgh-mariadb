@@ -1,0 +1,119 @@
+/* Telas da anestesia no bloco (M46, etapa 1; o mesmo desenho das telas da beira do leito do M25): grade dos horários, barra de filtros, resumo e campos simples. Alvos de
+   toque com a altura mínima da casca (tablet de 10 polegadas e celular). */
+.tela-anest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  max-width: 80rem;
+}
+.tela-anest .barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sgh-espaco-2);
+}
+.tela-anest .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-anest .alerta {
+  color: var(--sgh-alerta);
+}
+.tela-anest .resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  margin: 0;
+}
+.tela-anest .resumo div {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+}
+.tela-anest .resumo dd {
+  margin: 0;
+  font-weight: 700;
+}
+.tela-anest .grade {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-anest .grade th,
+.tela-anest .grade td {
+  text-align: left;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+  vertical-align: top;
+}
+.tela-anest .grade tr[data-estado='atrasada'] td,
+.tela-anest .grade tr[data-estado='omitida'] td {
+  background: var(--sgh-alerta-suave);
+}
+.tela-anest .rolagem {
+  overflow-x: auto;
+}
+.tela-anest .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-anest input:not([type='checkbox'], [type='radio']),
+.tela-anest textarea {
+  min-height: var(--sgh-alvo-minimo);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 4px;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+.tela-anest textarea {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  min-height: 4rem;
+}
+.tela-anest .cartao {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  background: var(--sgh-fundo-elevado);
+}
+.tela-anest .faixa-rede {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-radius: 4px;
+  background: var(--sgh-aviso-suave);
+  color: var(--sgh-texto);
+}
+.tela-anest .linha {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+  min-height: var(--sgh-alvo-minimo);
+}
+.tela-anest fieldset {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: flex-end;
+}
+.tela-anest legend {
+  font-weight: 700;
+  padding: 0 var(--sgh-espaco-1);
+}
+.tela-anest .marcos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.tela-anest .marcos li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+  min-width: 9rem;
+}
+.tela-anest [data-justificada='false'] {
+  color: var(--sgh-alerta);
+}

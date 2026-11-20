@@ -1,0 +1,22 @@
+{
+  "name": "dominio-atendimento",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-atendimento/src",
+  "tags": ["tipo:dominio", "modulo:atendimento"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-atendimento"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-atendimento/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-atendimento/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-atendimento/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

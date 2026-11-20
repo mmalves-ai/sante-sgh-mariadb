@@ -1,0 +1,38 @@
+# Servidor Firebird 5 só do ensaio do M58-F2 (ficha do M58, seção 5, passos 1 e 2). Descartável: recebe a restauração
+# do backup da cópia de dev (Firebird 3.0.14) e nada mais. Nunca é a cópia de dev nem a produção.
+# Uso: pelo ensaiar.sh desta pasta (subir, backup, restaurar, estado, descer, limpar); não suba à mão.
+#   - só loopback, porta 3355 (as cópias de dev estão em 3351 e 3352; 3050 é a cópia de referência, intocada);
+#   - a senha do SYSDBA vem da mesma variável das cópias (FB_PC_SENHA), lida pelo ensaiar.sh sem imprimir;
+#   - UdfAccess = Restrict UDF (regra 5): o Firebird 4 em diante vem com None; a pasta UDF recebe, só leitura, a
+#     biblioteca ib_udf da imagem 3.0.14 (a mesma que a cópia usa hoje). A vlr_med do fornecedor não está na cópia
+#     (vem da TI) e continua ausente, como hoje.
+name: sgh-ensaio-fb5
+
+services:
+  fb5:
+    image: firebirdsql/firebird:5.0.3-jammy
+    container_name: sgh-ensaio-fb5-${ENSAIO_HOSPITAL:-pc}
+    environment:
+      FIREBIRD_ROOT_PASSWORD: ${FB_PC_SENHA:?o ensaiar.sh passa FB_PC_SENHA}
+      FIREBIRD_CONF_UdfAccess: Restrict UDF
+      # Os tipos novos (hora com fuso, DECFLOAT, INT128) chegam ao cliente como na versão 3 (ADR 0031): o adaptador e
+      # os programas antigos leem CURRENT_TIMESTAMP como TIMESTAMP, sem o fuso.
+      FIREBIRD_CONF_DataTypeCompatibility: '3.0'
+      # ib_udf.so da 3.0.14 pede libncurses.so.5 e libtinfo.so.5, que a imagem 5 não traz: vêm na mesma pasta.
+      LD_LIBRARY_PATH: /opt/firebird/UDF
+      TZ: America/Sao_Paulo
+    ports:
+      - '127.0.0.1:${ENSAIO_FB5_PORTA:-3355}:3050'
+    volumes:
+      - fb5-dados:/var/lib/firebird/data
+      - ${ENSAIO_UDF_DIR:?o ensaiar.sh extrai a pasta UDF}:/opt/firebird/UDF:ro
+    healthcheck:
+      test: ['CMD-SHELL', "bash -c '</dev/tcp/127.0.0.1/3050'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: 'no'
+
+volumes:
+  fb5-dados:
+    name: sgh-ensaio-fb5-${ENSAIO_HOSPITAL:-pc}-dados

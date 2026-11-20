@@ -1,0 +1,22 @@
+{
+  "name": "dominio-hotelaria",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-hotelaria/src",
+  "tags": ["tipo:dominio", "modulo:hotelaria"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-hotelaria"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-hotelaria/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-hotelaria/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-hotelaria/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

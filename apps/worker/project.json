@@ -1,0 +1,25 @@
+{
+  "name": "worker",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/worker/src",
+  "tags": ["tipo:worker", "modulo:plataforma"],
+  "targets": {
+    "lint": {
+      "command": "eslint apps/worker"
+    },
+    "typecheck": {
+      "command": "tsc -p apps/worker/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config apps/worker/vitest.config.ts"
+    },
+    "build": {
+      "command": "vite build --config apps/worker/vite.config.ts"
+    },
+    "serve": {
+      "dependsOn": ["build"],
+      "command": "node --enable-source-maps apps/worker/dist/main.js"
+    }
+  }
+}

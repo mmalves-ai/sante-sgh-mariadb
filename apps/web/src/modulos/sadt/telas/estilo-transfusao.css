@@ -1,0 +1,100 @@
+/* Telas da agência transfusional (M47): listas, cartões dos formulários, barra de filtros e as tarefas dos sinais. Alvos
+   de toque com a altura mínima da casca (o ato à beira do leito roda no tablet). */
+.tela-transfusao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  max-width: 80rem;
+}
+.tela-transfusao .barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sgh-espaco-2);
+}
+.tela-transfusao .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-transfusao .alerta {
+  color: var(--sgh-alerta);
+}
+.tela-transfusao .tabela {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-transfusao .tabela th,
+.tela-transfusao .tabela td {
+  text-align: left;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+  vertical-align: top;
+}
+.tela-transfusao .acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+}
+.tela-transfusao .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-transfusao input:not([type='checkbox'], [type='radio']) {
+  min-height: var(--sgh-alvo-minimo);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 4px;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+.tela-transfusao .marca {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+  min-height: var(--sgh-alvo-minimo);
+}
+.tela-transfusao .cartao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  background: var(--sgh-fundo-elevado);
+}
+.tela-transfusao .tarefas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tela-transfusao .tarefas li {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-radius: 4px;
+  border: 1px solid var(--sgh-borda);
+}
+.tela-transfusao .tarefas li[data-situacao='atrasada'] {
+  background: var(--sgh-alerta-suave);
+}
+.tela-transfusao .tarefas li[data-situacao='devida'] {
+  background: var(--sgh-aviso-suave);
+}
+.tela-transfusao .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* W0-03: a versão anterior (da requisição ou da bolsa) e o registro original com adendo ficam legíveis e esmaecidos. */
+.tela-transfusao .inativa {
+  color: var(--sgh-texto-secundario);
+}
+.tela-transfusao .inativa small {
+  display: block;
+}

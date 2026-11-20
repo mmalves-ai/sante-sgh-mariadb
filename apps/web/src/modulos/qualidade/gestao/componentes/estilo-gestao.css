@@ -1,0 +1,57 @@
+/* Telas da gestão da qualidade (M48, etapa 5): o resumo em cartões, o conteúdo do documento e a matriz GUT. A cor
+   nunca vem sozinha (o texto acompanha). Usa também os estilos da qualidade e da CCIH (selos, painéis, linhas). */
+.tela-gestao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+  max-width: 80rem;
+}
+.resumo-gestao {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  margin: 0;
+}
+.resumo-gestao > div {
+  padding: var(--sgh-espaco-2) var(--sgh-espaco-3);
+  border: 1px solid var(--sgh-borda);
+  border-radius: var(--sgh-raio, 6px);
+}
+.resumo-gestao dt {
+  font-size: var(--sgh-fonte-pequena);
+}
+.resumo-gestao dd {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+.ficha-gestao {
+  display: grid;
+  grid-template-columns: minmax(10rem, max-content) 1fr;
+  gap: var(--sgh-espaco-1) var(--sgh-espaco-3);
+  margin: 0;
+}
+.ficha-gestao dt {
+  font-weight: 600;
+}
+.ficha-gestao dd {
+  margin: 0;
+}
+.conteudo-documento {
+  white-space: pre-wrap;
+  padding: var(--sgh-espaco-3);
+  border: 1px solid var(--sgh-borda);
+  border-radius: var(--sgh-raio, 6px);
+  max-height: 32rem;
+  overflow: auto;
+}
+.hash-gestao {
+  font-family: var(--sgh-fonte-mono, monospace);
+  font-size: var(--sgh-fonte-pequena);
+  word-break: break-all;
+}
+.marcar-gestao {
+  display: flex;
+  gap: var(--sgh-espaco-2);
+  align-items: center;
+}

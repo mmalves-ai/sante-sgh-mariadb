@@ -1,0 +1,22 @@
+{
+  "name": "dominio-config",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-config/src",
+  "tags": ["tipo:dominio", "modulo:config"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-config"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-config/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-config/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-config/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

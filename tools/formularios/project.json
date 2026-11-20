@@ -1,0 +1,11 @@
+{
+  "name": "formularios",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/formularios/src",
+  "tags": ["tipo:ferramenta", "modulo:pep"],
+  "targets": {
+    "lint": { "command": "eslint tools/formularios" },
+    "typecheck": { "command": "tsc -p tools/formularios/tsconfig.json --noEmit" }
+  }
+}

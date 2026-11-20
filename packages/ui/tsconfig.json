@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "preserve",
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "catalogo/**/*.ts",
+    "catalogo/**/*.vue",
+    "vitest.config.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts"
+  ]
+}

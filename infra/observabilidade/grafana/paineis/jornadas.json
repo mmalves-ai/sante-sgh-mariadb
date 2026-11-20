@@ -1,0 +1,454 @@
+{
+  "uid": "sgh-jornadas",
+  "title": "Jornadas",
+  "description": "Jornadas medidas pela linha de base de carga do M09 (k6): login, abrir ficha, listas e painéis automáticos, p95 e volume. As rotas de carga existem só em dev e serão trocadas pelas rotas reais (M05, M15) quando existirem.",
+  "tags": ["sgh", "m09"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Login p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/login\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Abrir ficha p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/ficha/:id\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Listas p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/listas\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Painéis automáticos p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/painel\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Consulta pesada p95",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/relatorio\"}[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "p95 por jornada",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/login\"}[1m])))",
+          "legendFormat": "Login"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/ficha/:id\"}[1m])))",
+          "legendFormat": "Abrir ficha"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/listas\"}[1m])))",
+          "legendFormat": "Listas"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/painel\"}[1m])))",
+          "legendFormat": "Painéis automáticos"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/carga/relatorio\"}[1m])))",
+          "legendFormat": "Consulta pesada"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Volume por jornada",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{rota=\"/api/carga/login\"}[1m]))",
+          "legendFormat": "Login"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{rota=\"/api/carga/ficha/:id\"}[1m]))",
+          "legendFormat": "Abrir ficha"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{rota=\"/api/carga/listas\"}[1m]))",
+          "legendFormat": "Listas"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{rota=\"/api/carga/painel\"}[1m]))",
+          "legendFormat": "Painéis automáticos"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{rota=\"/api/carga/relatorio\"}[1m]))",
+          "legendFormat": "Consulta pesada"
+        }
+      ]
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

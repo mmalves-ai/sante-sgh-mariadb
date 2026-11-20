@@ -1,0 +1,10 @@
+# Registro sintético dos passos do desligamento do estabelecimento de teste (M58). Sem dado pessoal.
+formato: 1
+estabelecimento: aa
+passos:
+  desligamento:
+    ensaio: { data: '2026-10-20', relatorio: 'checklist sintética revista', resultado: aprovado }
+funcoes:
+  - { nome: VLR_MED, resolucao: substituida, referencia: 'sintético: ADR da etapa dois' }
+parceirosAvisados: null
+contratosHalAi: null

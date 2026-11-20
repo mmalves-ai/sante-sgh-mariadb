@@ -1,0 +1,22 @@
+{
+  "name": "dominio-suprimentos",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-suprimentos/src",
+  "tags": ["tipo:dominio", "modulo:suprimentos"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-suprimentos"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-suprimentos/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-suprimentos/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-suprimentos/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

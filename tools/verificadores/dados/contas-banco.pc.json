@@ -1,0 +1,719 @@
+{
+  "formato": 1,
+  "estabelecimento": "pc",
+  "origem": "cópia de dev (catálogo de segurança, leitura)",
+  "resumo": {
+    "contasComPrivilegio": 33,
+    "contasComEscrita": 17,
+    "contasComEscritaAmpla": 10,
+    "maiorAlcanceEscrita": 4315,
+    "naoCatalogadas": 0,
+    "papeisSemPrivilegio": ["MASTER", "SENIOR", "TRAINEE"]
+  },
+  "loginsForaDaLista": 0,
+  "contas": [
+    {
+      "conta": "MASTER",
+      "tipo": "papel",
+      "classe": "papel-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 0,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "SENIOR",
+      "tipo": "papel",
+      "classe": "papel-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 0,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "(aplicacao-sgh)",
+      "tipo": "papel",
+      "classe": "aplicacao-sgh",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 447,
+        "I": 446,
+        "U": 245,
+        "D": 12,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 446,
+      "papeis": []
+    },
+    {
+      "conta": "TRAINEE",
+      "tipo": "papel",
+      "classe": "papel-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 0,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "AUTORIZADOR",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "BHSOFT",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 6,
+        "I": 2,
+        "U": 2,
+        "D": 2,
+        "R": 2,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 2,
+      "papeis": []
+    },
+    {
+      "conta": "BIOSLAB",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 1,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "CM_TECNOLOGIA",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 28,
+        "I": 6,
+        "U": 9,
+        "D": 4,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 11,
+      "papeis": []
+    },
+    {
+      "conta": "CONSULT",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2996,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "CONSULT_DIRETORES",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2942,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "CONSULT_GERENTE",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2941,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "EPIMED",
+      "tipo": "usuario",
+      "classe": "leitura-parceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 3824,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "EXCEL",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2824,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "EXCEL_ADM",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2824,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "EXCEL_FIN",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2884,
+        "I": 2,
+        "U": 2,
+        "D": 2,
+        "R": 2,
+        "X": 0,
+        "M": 1
+      },
+      "objetosComEscrita": 2,
+      "papeis": ["MASTER"]
+    },
+    {
+      "conta": "FIRST",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 25,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 1,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "HAL_AI",
+      "tipo": "usuario",
+      "classe": "sante-api",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 3814,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "IMPORTARDORPEP",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "INTEGRACAOAOL",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "INTEGRARESULTADOS",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "INTEGRAUNIMED",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 0,
+        "I": 0,
+        "U": 1,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 1,
+      "papeis": []
+    },
+    {
+      "conta": "MEDIA_PLUS",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 16,
+        "I": 2,
+        "U": 1,
+        "D": 3,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 4,
+      "papeis": []
+    },
+    {
+      "conta": "PORTAL_PLANO",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "PORTALSERV",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "PUBLIC",
+      "tipo": "usuario",
+      "classe": "publico",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 50,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 5,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "RELATORIO_ALMOXARIFADO",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 41,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "RELATORIO_FARMACIA",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 49,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "RELATORIO_FULL",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 3212,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 3212,
+        "X": 177,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "RELATORIO_LABORATORIO",
+      "tipo": "usuario",
+      "classe": "planilha",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 10,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    },
+    {
+      "conta": "RESULTADOWEB",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "SACMOBILE",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "SGHBACKUP",
+      "tipo": "usuario",
+      "classe": "backup",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "(aplicacao-sgh)",
+      "tipo": "usuario",
+      "classe": "aplicacao-sgh",
+      "quantidade": 1,
+      "existeLogin": true,
+      "ativa": true,
+      "privilegios": {
+        "S": 4315,
+        "I": 4315,
+        "U": 4315,
+        "D": 4315,
+        "R": 4315,
+        "X": 199,
+        "M": 0
+      },
+      "objetosComEscrita": 4315,
+      "papeis": []
+    },
+    {
+      "conta": "TISSWS",
+      "tipo": "usuario",
+      "classe": "servico-legado",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 2648,
+        "I": 2648,
+        "U": 2648,
+        "D": 2648,
+        "R": 2648,
+        "X": 138,
+        "M": 0
+      },
+      "objetosComEscrita": 2648,
+      "papeis": []
+    },
+    {
+      "conta": "TOLIFE",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 4,
+        "I": 1,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 1,
+      "papeis": []
+    },
+    {
+      "conta": "UNIMEDPR",
+      "tipo": "usuario",
+      "classe": "parceiro-terceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 1,
+        "I": 0,
+        "U": 0,
+        "D": 1,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 1,
+      "papeis": []
+    },
+    {
+      "conta": "ZGLOSA",
+      "tipo": "usuario",
+      "classe": "leitura-parceiro",
+      "quantidade": 1,
+      "existeLogin": false,
+      "ativa": null,
+      "privilegios": {
+        "S": 3633,
+        "I": 0,
+        "U": 0,
+        "D": 0,
+        "R": 0,
+        "X": 0,
+        "M": 0
+      },
+      "objetosComEscrita": 0,
+      "papeis": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "dominio-pep",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-pep/src",
+  "tags": ["tipo:dominio", "modulo:pep"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-pep"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-pep/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-pep/vitest.config.ts --coverage",
+      "inputs": ["default", "^default", "{workspaceRoot}/docs/marcos/M09/dfm/**/*"]
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-pep/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

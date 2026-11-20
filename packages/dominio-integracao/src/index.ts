@@ -1,0 +1,20 @@
+// @sgh/dominio-integracao (M34): regras puras das integrações novas — retentativa e fila de mortos, idempotência e
+// ordem, HL7 v2 (pedido e resultado do laboratório de apoio, ACK, MLLP), FHIR R4 nos perfis BR Core fixados com o
+// validador, identificação para a RNDS, retorno do laboratório de apoio, sem canal próprio de mensagem ao paciente e
+// os pacotes aos parceiros que leem o banco. Sem banco, sem HTTP, sem Nest.
+export * from './retentativa.js';
+export * from './idempotencia.js';
+export * from './sem-canal-proprio.js';
+export * from './pacotes-parceiros.js';
+export * from './hl7/mensagem.js';
+export * from './fhir/mapeadores.js';
+export * from './fhir/validador.js';
+export * from './rnds.js';
+export * from './ria.js';
+export * from './apoio.js';
+export * from './fhir/perfis.js';
+// W0-10 (M3): o pacote do titular em FHIR R4/IPS (portabilidade) e o validador do recorte IPS 2.0.0.
+export * from './fhir/ips.js';
+export * from './hl7/canais.js';
+// M58-F4: a fachada da API de integração da Hal-AI (rotas, escopo, erros, motor de dois tempos, painel).
+export * from './fachada/index.js';

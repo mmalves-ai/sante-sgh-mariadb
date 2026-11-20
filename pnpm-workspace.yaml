@@ -1,0 +1,30 @@
+# Projetos Nx definidos por project.json; dependências declaradas só no package.json da raiz.
+packages:
+  - '.'
+# POL-4: store e cache do pnpm dentro do repositório (fora do git).
+storeDir: .pnpm-store
+cacheDir: .pnpm-cache
+saveExact: true
+engineStrict: true
+# Scripts de instalação de dependências: só os listados como permitidos rodam.
+allowBuilds:
+  nx: false
+  # TEC-1 (M02): addon nativo do driver Firebird (node-gyp com o g++ 13.3 e o make 4.3 da VM; cabeçalhos
+  # do Node em npm_config_devdir, dentro do repositório, POL-4).
+  node-firebird-native-api: true
+  # vue-demi (dependência do @tanstack/vue-query): o script só troca a variante Vue 2/3; a padrão já é a 3.
+  vue-demi: false
+  # M04 (BullMQ 6.3.11 → msgpackr): extensão nativa opcional de serialização; sem ela o msgpackr usa a
+  # implementação em JavaScript (nada compila na VM).
+  msgpackr-extract: false
+# Correção de segurança (seguranca:verificar, 2026-10-19): o nx 23.3.0 fixa undici 7.29.0, com
+# vulnerabilidades altas (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3 e outras), corrigidas na 7.29.1.
+# Só ferramenta de desenvolvimento (não vai para a aplicação). Registrado no ADR 0001.
+# 2026-10-24 (M50.1): GHSA-xjj6-f33q-929c / CVE-2026-109869 (negação de serviço por excesso de
+# content-encodings, publicada em 23/10/2026) na 7.29.1, corrigida na 7.30.1.
+overrides:
+  undici: 7.30.1
+# DP-51, condição 3: hora em 24 h no datepicker do OpenVue 1.0.0 (`!!ampm`, PR #663 do OpenVue, ainda
+# não publicado). Sai quando a versão corrigida for publicada; o teste packages/ui/src/correcoes.spec.ts cobre.
+patchedDependencies:
+  openvue@1.0.0: patches/openvue@1.0.0.patch

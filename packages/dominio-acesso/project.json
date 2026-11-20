@@ -1,0 +1,22 @@
+{
+  "name": "dominio-acesso",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-acesso/src",
+  "tags": ["tipo:dominio", "modulo:acesso"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-acesso"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-acesso/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-acesso/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-acesso/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

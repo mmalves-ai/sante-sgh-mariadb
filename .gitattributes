@@ -1,0 +1,16 @@
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.svg binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.pptx binary
+*.docx binary
+*.ico binary
+*.woff2 binary
+*.webp binary
+# M09: XSD oficial da ANS versionado byte a byte (CRLF e ISO-8859-1 originais; conferido por SHA256SUMS).
+packages/dominio-faturamento/src/tiss/xsd/** -text
+# M53.6: XSD oficial do eSocial versionado byte a byte (CRLF e BOM originais; conferido por SHA256SUMS).
+packages/dominio-pessoas/src/esocial/xsd/** -text

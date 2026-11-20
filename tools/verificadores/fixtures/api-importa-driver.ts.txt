@@ -1,0 +1,5 @@
+// Fixture PROIBIDA (M02, regra 1): só @sgh/legado importa o driver Firebird. Copiada para apps/api por
+// `pnpm fronteiras:provar`: o lint da api tem de falhar.
+import { createNativeClient } from 'node-firebird-driver-native';
+
+export const proibido = createNativeClient;

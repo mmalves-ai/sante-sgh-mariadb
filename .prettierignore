@@ -1,0 +1,42 @@
+# Formatação conferida só no código do monorepo; planejamento e material de apoio ficam como estão.
+planejamento/
+marketing/
+entrevistas/
+respostas/
+docs/
+*.md
+pnpm-lock.yaml
+node_modules/
+dist/
+coverage/
+out-tsc/
+.nx/
+.pnpm-store/
+.pnpm-cache/
+.pnpm-state/
+.npm-cache/
+.cache-local/
+.tmp/
+.seguranca/
+playwright-report/
+test-results/
+tools/verificadores/seguranca/semgrep/vendor/
+# Gerados (M02): tipos do catálogo do legado e impressões digitais homologadas.
+packages/legado/src/tipos/
+tools/schema-check/homologado/
+# Arquivo gerado por tools/matriz (o teste confere a igualdade byte a byte com o gerador)
+packages/contratos/src/menu/arvore.ts
+# Gerados pela ferramenta de assinatura (M03): perfis, domínios vistos, resultados e o esquema JSON
+# (o teste esquema.spec.ts confere a igualdade com o gerado do Zod).
+packages/legado/src/*/assinaturas/
+tools/assinatura/resultados/
+tools/assinatura/esquema/
+packages/contratos/src/permissoes/catalogo-legado.json
+# Gerado por pnpm dominios:levantar (M14): levantamento do lote na cópia (só metadados e agregados).
+tools/matriz/dados/levantamento-*.json
+tools/matriz/dados/codigos-em-uso.*.json
+# M60.2: anexo gerado por pnpm instalacao:gerar (conferido byte a byte no verificar).
+docs/implantacao/anexos/variaveis.md
+# Gerado por `pnpm privilegios:gerar` (M59-F1; o teste privilegios.spec.ts confere a igualdade com o gerador).
+packages/legado/src/acesso/privilegios/alcance.*.json
+tools/verificadores/dados/dependencias-gatilhos.*.json

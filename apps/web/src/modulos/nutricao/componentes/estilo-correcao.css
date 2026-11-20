@@ -1,0 +1,99 @@
+/*
+ * W0-05: o visual das correções da nutrição, do serviço social, da oncologia e do lactário, no padrão da ficha de
+ * Usuários e Acessos e da ficha do profissional: o registro num cartão, a situação em pílula (ativo, retificado,
+ * estornado, suspenso, cancelado, revogado, inativo), a versão inativa riscada e visível, com quem, quando e o motivo, e
+ * as ações da linha. Na impressão (a exportação da tela), as ações somem e a versão inativa continua impressa, com a
+ * situação escrita (nunca só pela cor).
+ */
+.tela-correcoes .cartao-registro {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 8px;
+  background: var(--sgh-fundo-elevado);
+  padding: var(--sgh-espaco-2) var(--sgh-espaco-3);
+  display: grid;
+  gap: var(--sgh-espaco-1);
+}
+.tela-correcoes .cartao-registro + .cartao-registro {
+  margin-top: var(--sgh-espaco-2);
+}
+.tela-correcoes .cartao-registro.inativo {
+  background: var(--sgh-fundo-sutil);
+  border-style: dashed;
+}
+.tela-correcoes .cartao-registro p {
+  margin: 0;
+}
+.tela-correcoes .cabeca-registro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  align-items: center;
+}
+.tela-correcoes .pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px var(--sgh-espaco-2);
+  border-radius: 999px;
+  font-size: var(--sgh-fonte-pequena);
+  font-weight: 600;
+  border: 1px solid currentcolor;
+  white-space: nowrap;
+}
+.tela-correcoes .pilula--ok {
+  color: var(--sgh-sucesso);
+}
+.tela-correcoes .pilula--neutra {
+  color: var(--sgh-texto-secundario);
+}
+.tela-correcoes .pilula--aviso {
+  color: var(--sgh-aviso);
+}
+.tela-correcoes .pilula--alerta {
+  color: var(--sgh-alerta);
+}
+.tela-correcoes .riscado {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  color: var(--sgh-texto-secundario);
+}
+.tela-correcoes .nota-correcao {
+  color: var(--sgh-texto-secundario);
+  font-size: var(--sgh-fonte-pequena);
+}
+.tela-correcoes .acoes-registro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-1);
+  align-items: center;
+}
+.tela-correcoes .eventos {
+  margin: 0;
+  padding-inline-start: var(--sgh-espaco-3);
+  font-size: var(--sgh-fonte-pequena);
+}
+.tela-correcoes .barra-impressao {
+  display: flex;
+  justify-content: flex-end;
+}
+.tela-correcoes tr.inativo td {
+  color: var(--sgh-texto-secundario);
+  background: var(--sgh-fundo-sutil);
+}
+.tela-correcoes .painel-aba {
+  display: grid;
+  gap: var(--sgh-espaco-3);
+  min-width: 0;
+}
+@media print {
+  .tela-correcoes .nao-imprimir {
+    display: none !important;
+  }
+  /* Revisão: a impressão (a exportação da tela) junta todas as abas da ficha, com as versões inativas. */
+  .tela-correcoes .painel-aba {
+    display: grid !important;
+  }
+  .tela-correcoes .cartao-registro {
+    break-inside: avoid;
+  }
+}

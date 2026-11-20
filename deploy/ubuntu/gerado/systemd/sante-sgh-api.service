@@ -1,0 +1,41 @@
+# Gerado por pnpm instalacao:gerar (tools/instalacao); não edite à mão: sante-sgh-api.service.
+[Unit]
+Description=Sante SGH: API
+After=network-online.target valkey-server.service redis-server.service
+Wants=network-online.target
+PartOf=sante-sgh.target
+
+[Service]
+Type=simple
+User=sante-sgh
+Group=sante-sgh
+WorkingDirectory=/opt/sante-sgh/atual
+Environment=SGH_ARQUIVO_AMBIENTE=/etc/sante-sgh/sante.env
+Environment=SGH_PROCESSO=api
+Environment=FIREBIRD=/etc/sante-sgh/firebird
+Environment=NODE_ENV=production
+Environment=TZ=UTC
+ExecStart=/opt/sante-sgh/atual/node/bin/node --enable-source-maps /opt/sante-sgh/atual/apps/api/dist/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+ReadWritePaths=/var/lib/sante-sgh /var/log/sante-sgh
+
+[Install]
+WantedBy=sante-sgh.target

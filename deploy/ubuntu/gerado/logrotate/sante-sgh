@@ -1,0 +1,15 @@
+# Gerado por pnpm instalacao:gerar (tools/instalacao); não edite à mão: logrotate/sante-sgh.
+/var/log/sante-sgh/*.log {
+    daily
+    rotate 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    su root sante-sgh
+    create 0640 www-data sante-sgh
+    sharedscripts
+    postrotate
+        [ -s /run/nginx.pid ] && kill -USR1 "$(cat /run/nginx.pid)" || true
+    endscript
+}

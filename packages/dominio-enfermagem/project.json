@@ -1,0 +1,22 @@
+{
+  "name": "dominio-enfermagem",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-enfermagem/src",
+  "tags": ["tipo:dominio", "modulo:enfermagem"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-enfermagem"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-enfermagem/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-enfermagem/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-enfermagem/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

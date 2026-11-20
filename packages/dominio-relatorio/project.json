@@ -1,0 +1,22 @@
+{
+  "name": "dominio-relatorio",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-relatorio/src",
+  "tags": ["tipo:dominio", "modulo:relatorio"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-relatorio"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-relatorio/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-relatorio/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-relatorio/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

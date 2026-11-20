@@ -1,0 +1,5910 @@
+{
+  "pacote": "hl7.fhir.uv.ips",
+  "versao": "2.0.0",
+  "licenca": "CC0-1.0",
+  "sha256": "b3964eba08ee699bc121b905c4290641e54dd34f2cf3b5cd3edeb08a40a66979",
+  "perfis": {
+    "Bundle": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Bundle-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "Bundle",
+      "elementos": [
+        {
+          "id": "Bundle",
+          "caminho": "Bundle",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.id",
+          "caminho": "Bundle.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.meta",
+          "caminho": "Bundle.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Bundle.implicitRules",
+          "caminho": "Bundle.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.language",
+          "caminho": "Bundle.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Bundle.identifier",
+          "caminho": "Bundle.identifier",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Bundle.type",
+          "caminho": "Bundle.type",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "document"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Bundle.timestamp",
+          "caminho": "Bundle.timestamp",
+          "min": 1,
+          "max": "1",
+          "tipos": ["instant"]
+        },
+        {
+          "id": "Bundle.total",
+          "caminho": "Bundle.total",
+          "min": 0,
+          "max": "1",
+          "tipos": ["unsignedInt"]
+        },
+        {
+          "id": "Bundle.link",
+          "caminho": "Bundle.link",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.link.id",
+          "caminho": "Bundle.link.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.link.modifierExtension",
+          "caminho": "Bundle.link.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.link.relation",
+          "caminho": "Bundle.link.relation",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Bundle.link.url",
+          "caminho": "Bundle.link.url",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry",
+          "caminho": "Bundle.entry",
+          "min": 2,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Bundle.entry.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:composition",
+          "caminho": "Bundle.entry",
+          "fatia": "composition",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:composition.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:composition.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:composition.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:composition.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:composition.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Composition"]
+        },
+        {
+          "id": "Bundle.entry:composition.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:composition.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:composition.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:patient",
+          "caminho": "Bundle.entry",
+          "fatia": "patient",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:patient.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:patient.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:patient.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:patient.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:patient.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Patient"]
+        },
+        {
+          "id": "Bundle.entry:patient.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:patient.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:patient.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance",
+          "caminho": "Bundle.entry",
+          "fatia": "allergyintolerance",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["AllergyIntolerance"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:allergyintolerance.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:careplan",
+          "caminho": "Bundle.entry",
+          "fatia": "careplan",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:careplan.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:careplan.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:careplan.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:careplan.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:careplan.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CarePlan"]
+        },
+        {
+          "id": "Bundle.entry:careplan.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:careplan.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:careplan.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression",
+          "caminho": "Bundle.entry",
+          "fatia": "clinicalimpression",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["ClinicalImpression"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:clinicalimpression.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:condition",
+          "caminho": "Bundle.entry",
+          "fatia": "condition",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:condition.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:condition.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:condition.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:condition.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:condition.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Condition"]
+        },
+        {
+          "id": "Bundle.entry:condition.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:condition.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:condition.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:consent",
+          "caminho": "Bundle.entry",
+          "fatia": "consent",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:consent.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:consent.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:consent.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:consent.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:consent.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Consent"]
+        },
+        {
+          "id": "Bundle.entry:consent.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:consent.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:consent.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:device",
+          "caminho": "Bundle.entry",
+          "fatia": "device",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:device.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:device.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:device.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:device.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:device.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Device"]
+        },
+        {
+          "id": "Bundle.entry:device.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:device.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:device.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement",
+          "caminho": "Bundle.entry",
+          "fatia": "deviceusestatement",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["DeviceUseStatement"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:deviceusestatement.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport",
+          "caminho": "Bundle.entry",
+          "fatia": "diagnosticreport",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["DiagnosticReport"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:diagnosticreport.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:documentreference",
+          "caminho": "Bundle.entry",
+          "fatia": "documentreference",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:documentreference.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["DocumentReference"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:documentreference.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:flag",
+          "caminho": "Bundle.entry",
+          "fatia": "flag",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:flag.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:flag.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:flag.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:flag.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:flag.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Flag"]
+        },
+        {
+          "id": "Bundle.entry:flag.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:flag.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:flag.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy",
+          "caminho": "Bundle.entry",
+          "fatia": "imagingstudy",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["ImagingStudy"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:imagingstudy.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunization",
+          "caminho": "Bundle.entry",
+          "fatia": "immunization",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunization.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:immunization.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:immunization.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:immunization.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:immunization.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Immunization"]
+        },
+        {
+          "id": "Bundle.entry:immunization.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunization.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunization.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation",
+          "caminho": "Bundle.entry",
+          "fatia": "immunizationrecommendation",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["ImmunizationRecommendation"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:immunizationrecommendation.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medication",
+          "caminho": "Bundle.entry",
+          "fatia": "medication",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medication.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:medication.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:medication.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:medication.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:medication.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Medication"]
+        },
+        {
+          "id": "Bundle.entry:medication.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medication.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medication.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest",
+          "caminho": "Bundle.entry",
+          "fatia": "medicationrequest",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["MedicationRequest"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationrequest.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement",
+          "caminho": "Bundle.entry",
+          "fatia": "medicationstatement",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["MedicationStatement"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:medicationstatement.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitioner",
+          "caminho": "Bundle.entry",
+          "fatia": "practitioner",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:practitioner.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Practitioner"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitioner.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole",
+          "caminho": "Bundle.entry",
+          "fatia": "practitionerrole",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["PractitionerRole"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:practitionerrole.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:procedure",
+          "caminho": "Bundle.entry",
+          "fatia": "procedure",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:procedure.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:procedure.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:procedure.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:procedure.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:procedure.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Procedure"]
+        },
+        {
+          "id": "Bundle.entry:procedure.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:procedure.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:procedure.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-pregnancy-edd",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-edd.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-pregnancy-outcome",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-outcome.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-pregnancy-status",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-pregnancy-status.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-alcohol-use",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-alcohol-use.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-tobacco-use",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-tobacco-use.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-results-laboratory-pathology",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-laboratory-pathology.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-results-radiology",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-results-radiology.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs",
+          "caminho": "Bundle.entry",
+          "fatia": "observation-vital-signs",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Observation"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:observation-vital-signs.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:organization",
+          "caminho": "Bundle.entry",
+          "fatia": "organization",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:organization.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:organization.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:organization.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:organization.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:organization.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Organization"]
+        },
+        {
+          "id": "Bundle.entry:organization.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:organization.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:organization.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:specimen",
+          "caminho": "Bundle.entry",
+          "fatia": "specimen",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:specimen.id",
+          "caminho": "Bundle.entry.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Bundle.entry:specimen.modifierExtension",
+          "caminho": "Bundle.entry.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Bundle.entry:specimen.link",
+          "caminho": "Bundle.entry.link",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Bundle.entry:specimen.fullUrl",
+          "caminho": "Bundle.entry.fullUrl",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Bundle.entry:specimen.resource",
+          "caminho": "Bundle.entry.resource",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Specimen"]
+        },
+        {
+          "id": "Bundle.entry:specimen.search",
+          "caminho": "Bundle.entry.search",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:specimen.request",
+          "caminho": "Bundle.entry.request",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.entry:specimen.response",
+          "caminho": "Bundle.entry.response",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Bundle.signature",
+          "caminho": "Bundle.signature",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Signature"]
+        }
+      ]
+    },
+    "Composition": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Composition-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "Composition",
+      "elementos": [
+        {
+          "id": "Composition",
+          "caminho": "Composition",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Composition.id",
+          "caminho": "Composition.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.meta",
+          "caminho": "Composition.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Composition.meta.id",
+          "caminho": "Composition.meta.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.meta.versionId",
+          "caminho": "Composition.meta.versionId",
+          "min": 0,
+          "max": "1",
+          "tipos": ["id"]
+        },
+        {
+          "id": "Composition.meta.lastUpdated",
+          "caminho": "Composition.meta.lastUpdated",
+          "min": 0,
+          "max": "1",
+          "tipos": ["instant"]
+        },
+        {
+          "id": "Composition.meta.source",
+          "caminho": "Composition.meta.source",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Composition.meta.profile",
+          "caminho": "Composition.meta.profile",
+          "min": 0,
+          "max": "*",
+          "tipos": ["canonical"]
+        },
+        {
+          "id": "Composition.meta.security",
+          "caminho": "Composition.meta.security",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Composition.meta.tag",
+          "caminho": "Composition.meta.tag",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Composition.implicitRules",
+          "caminho": "Composition.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Composition.language",
+          "caminho": "Composition.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.text",
+          "caminho": "Composition.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.contained",
+          "caminho": "Composition.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Composition.modifierExtension",
+          "caminho": "Composition.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.identifier",
+          "caminho": "Composition.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Composition.status",
+          "caminho": "Composition.status",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.type",
+          "caminho": "Composition.type",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "60591-5"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.category",
+          "caminho": "Composition.category",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.subject",
+          "caminho": "Composition.subject",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.subject.id",
+          "caminho": "Composition.subject.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.subject.reference",
+          "caminho": "Composition.subject.reference",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.subject.type",
+          "caminho": "Composition.subject.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Composition.subject.identifier",
+          "caminho": "Composition.subject.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Composition.subject.display",
+          "caminho": "Composition.subject.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.encounter",
+          "caminho": "Composition.encounter",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.date",
+          "caminho": "Composition.date",
+          "min": 1,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Composition.author",
+          "caminho": "Composition.author",
+          "min": 1,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.title",
+          "caminho": "Composition.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.confidentiality",
+          "caminho": "Composition.confidentiality",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.attester",
+          "caminho": "Composition.attester",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.attester.id",
+          "caminho": "Composition.attester.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.attester.modifierExtension",
+          "caminho": "Composition.attester.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.attester.mode",
+          "caminho": "Composition.attester.mode",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.attester.time",
+          "caminho": "Composition.attester.time",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Composition.attester.party",
+          "caminho": "Composition.attester.party",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.custodian",
+          "caminho": "Composition.custodian",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.relatesTo",
+          "caminho": "Composition.relatesTo",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.relatesTo.id",
+          "caminho": "Composition.relatesTo.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.relatesTo.modifierExtension",
+          "caminho": "Composition.relatesTo.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.relatesTo.code",
+          "caminho": "Composition.relatesTo.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.relatesTo.target[x]",
+          "caminho": "Composition.relatesTo.target[x]",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Identifier", "Reference"]
+        },
+        {
+          "id": "Composition.event",
+          "caminho": "Composition.event",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.event.id",
+          "caminho": "Composition.event.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.event.modifierExtension",
+          "caminho": "Composition.event.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.event.code",
+          "caminho": "Composition.event.code",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.event.period",
+          "caminho": "Composition.event.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Composition.event.detail",
+          "caminho": "Composition.event.detail",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent",
+          "caminho": "Composition.event",
+          "fatia": "careProvisioningEvent",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent.id",
+          "caminho": "Composition.event.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent.modifierExtension",
+          "caminho": "Composition.event.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent.code",
+          "caminho": "Composition.event.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/v3-ActClass",
+                  "code": "PCPR"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent.period",
+          "caminho": "Composition.event.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Composition.event:careProvisioningEvent.detail",
+          "caminho": "Composition.event.detail",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section",
+          "caminho": "Composition.section",
+          "min": 3,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionProblems",
+          "caminho": "Composition.section",
+          "fatia": "sectionProblems",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "11450-4"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.entry:problem",
+          "caminho": "Composition.section.entry",
+          "fatia": "problem",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProblems.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionAllergies",
+          "caminho": "Composition.section",
+          "fatia": "sectionAllergies",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "48765-2"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.entry:allergyOrIntolerance",
+          "caminho": "Composition.section.entry",
+          "fatia": "allergyOrIntolerance",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAllergies.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionMedications",
+          "caminho": "Composition.section",
+          "fatia": "sectionMedications",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "10160-0"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.entry:medicationStatementOrRequest",
+          "caminho": "Composition.section.entry",
+          "fatia": "medicationStatementOrRequest",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedications.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionImmunizations",
+          "caminho": "Composition.section",
+          "fatia": "sectionImmunizations",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "11369-6"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.entry:immunization",
+          "caminho": "Composition.section.entry",
+          "fatia": "immunization",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionImmunizations.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionResults",
+          "caminho": "Composition.section",
+          "fatia": "sectionResults",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionResults.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionResults.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionResults.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionResults.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "30954-2"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionResults.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionResults.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionResults.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionResults.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.entry:results-observation-laboratory-pathology",
+          "caminho": "Composition.section.entry",
+          "fatia": "results-observation-laboratory-pathology",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.entry:results-observation-radiology",
+          "caminho": "Composition.section.entry",
+          "fatia": "results-observation-radiology",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.entry:results-diagnosticReport",
+          "caminho": "Composition.section.entry",
+          "fatia": "results-diagnosticReport",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionResults.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionResults.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx",
+          "caminho": "Composition.section",
+          "fatia": "sectionProceduresHx",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "47519-4"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.entry:procedure",
+          "caminho": "Composition.section.entry",
+          "fatia": "procedure",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionProceduresHx.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices",
+          "caminho": "Composition.section",
+          "fatia": "sectionMedicalDevices",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "46264-8"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.entry:deviceStatement",
+          "caminho": "Composition.section.entry",
+          "fatia": "deviceStatement",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionMedicalDevices.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives",
+          "caminho": "Composition.section",
+          "fatia": "sectionAdvanceDirectives",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "42348-3"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.entry:advanceDirectivesConsent",
+          "caminho": "Composition.section.entry",
+          "fatia": "advanceDirectivesConsent",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAdvanceDirectives.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionAlerts",
+          "caminho": "Composition.section",
+          "fatia": "sectionAlerts",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "104605-1"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.entry:alertsFlag",
+          "caminho": "Composition.section.entry",
+          "fatia": "alertsFlag",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionAlerts.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus",
+          "caminho": "Composition.section",
+          "fatia": "sectionFunctionalStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "47420-5"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.entry:disability",
+          "caminho": "Composition.section.entry",
+          "fatia": "disability",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.entry:functionalAssessment",
+          "caminho": "Composition.section.entry",
+          "fatia": "functionalAssessment",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionFunctionalStatus.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionPastProblems",
+          "caminho": "Composition.section",
+          "fatia": "sectionPastProblems",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "11348-0"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.entry:pastProblem",
+          "caminho": "Composition.section.entry",
+          "fatia": "pastProblem",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPastProblems.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx",
+          "caminho": "Composition.section",
+          "fatia": "sectionPregnancyHx",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "10162-6"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.entry:pregnancyStatus",
+          "caminho": "Composition.section.entry",
+          "fatia": "pregnancyStatus",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.entry:pregnancyOutcome",
+          "caminho": "Composition.section.entry",
+          "fatia": "pregnancyOutcome",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPregnancyHx.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionPatientStory",
+          "caminho": "Composition.section",
+          "fatia": "sectionPatientStory",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "81338-6"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPatientStory.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare",
+          "caminho": "Composition.section",
+          "fatia": "sectionPlanOfCare",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "18776-5"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.entry:carePlan",
+          "caminho": "Composition.section.entry",
+          "fatia": "carePlan",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.entry:immunizationRecommendation",
+          "caminho": "Composition.section.entry",
+          "fatia": "immunizationRecommendation",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionPlanOfCare.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory",
+          "caminho": "Composition.section",
+          "fatia": "sectionSocialHistory",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "29762-2"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.entry:smokingTobaccoUse",
+          "caminho": "Composition.section.entry",
+          "fatia": "smokingTobaccoUse",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.entry:alcoholUse",
+          "caminho": "Composition.section.entry",
+          "fatia": "alcoholUse",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionSocialHistory.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns",
+          "caminho": "Composition.section",
+          "fatia": "sectionVitalSigns",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.id",
+          "caminho": "Composition.section.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.modifierExtension",
+          "caminho": "Composition.section.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.title",
+          "caminho": "Composition.section.title",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.code",
+          "caminho": "Composition.section.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "patternCodeableConcept",
+            "valor": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "8716-3"
+                }
+              ]
+            }
+          },
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.author",
+          "caminho": "Composition.section.author",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.focus",
+          "caminho": "Composition.section.focus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.text",
+          "caminho": "Composition.section.text",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.mode",
+          "caminho": "Composition.section.mode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.orderedBy",
+          "caminho": "Composition.section.orderedBy",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.entry",
+          "caminho": "Composition.section.entry",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.entry:vitalSign",
+          "caminho": "Composition.section.entry",
+          "fatia": "vitalSign",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.emptyReason",
+          "caminho": "Composition.section.emptyReason",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Composition.section:sectionVitalSigns.section",
+          "caminho": "Composition.section.section",
+          "min": 0,
+          "max": "0",
+          "tipos": []
+        }
+      ]
+    },
+    "Patient": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Patient-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "Patient",
+      "elementos": [
+        {
+          "id": "Patient",
+          "caminho": "Patient",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Patient.id",
+          "caminho": "Patient.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.meta",
+          "caminho": "Patient.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Patient.implicitRules",
+          "caminho": "Patient.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.language",
+          "caminho": "Patient.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.text",
+          "caminho": "Patient.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Patient.contained",
+          "caminho": "Patient.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Patient.modifierExtension",
+          "caminho": "Patient.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier",
+          "caminho": "Patient.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.active",
+          "caminho": "Patient.active",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.name",
+          "caminho": "Patient.name",
+          "min": 1,
+          "max": "*",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Patient.name.id",
+          "caminho": "Patient.name.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.name.use",
+          "caminho": "Patient.name.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.name.text",
+          "caminho": "Patient.name.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.family",
+          "caminho": "Patient.name.family",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.given",
+          "caminho": "Patient.name.given",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.prefix",
+          "caminho": "Patient.name.prefix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.suffix",
+          "caminho": "Patient.name.suffix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.period",
+          "caminho": "Patient.name.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.telecom",
+          "caminho": "Patient.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Patient.gender",
+          "caminho": "Patient.gender",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.birthDate",
+          "caminho": "Patient.birthDate",
+          "min": 1,
+          "max": "1",
+          "tipos": ["date"]
+        },
+        {
+          "id": "Patient.deceased[x]",
+          "caminho": "Patient.deceased[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean", "dateTime"]
+        },
+        {
+          "id": "Patient.address",
+          "caminho": "Patient.address",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Patient.maritalStatus",
+          "caminho": "Patient.maritalStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.multipleBirth[x]",
+          "caminho": "Patient.multipleBirth[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean", "integer"]
+        },
+        {
+          "id": "Patient.photo",
+          "caminho": "Patient.photo",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Attachment"]
+        },
+        {
+          "id": "Patient.contact",
+          "caminho": "Patient.contact",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.contact.id",
+          "caminho": "Patient.contact.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.contact.modifierExtension",
+          "caminho": "Patient.contact.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.contact.relationship",
+          "caminho": "Patient.contact.relationship",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.contact.name",
+          "caminho": "Patient.contact.name",
+          "min": 0,
+          "max": "1",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Patient.contact.telecom",
+          "caminho": "Patient.contact.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Patient.contact.address",
+          "caminho": "Patient.contact.address",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Patient.contact.gender",
+          "caminho": "Patient.contact.gender",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.contact.organization",
+          "caminho": "Patient.contact.organization",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.contact.period",
+          "caminho": "Patient.contact.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.communication",
+          "caminho": "Patient.communication",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.communication.id",
+          "caminho": "Patient.communication.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.communication.modifierExtension",
+          "caminho": "Patient.communication.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.communication.language",
+          "caminho": "Patient.communication.language",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.communication.preferred",
+          "caminho": "Patient.communication.preferred",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.generalPractitioner",
+          "caminho": "Patient.generalPractitioner",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.managingOrganization",
+          "caminho": "Patient.managingOrganization",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.link",
+          "caminho": "Patient.link",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.link.id",
+          "caminho": "Patient.link.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.link.modifierExtension",
+          "caminho": "Patient.link.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.link.other",
+          "caminho": "Patient.link.other",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.link.type",
+          "caminho": "Patient.link.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        }
+      ]
+    },
+    "Condition": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Condition-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "Condition",
+      "elementos": [
+        {
+          "id": "Condition",
+          "caminho": "Condition",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Condition.id",
+          "caminho": "Condition.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Condition.meta",
+          "caminho": "Condition.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Condition.implicitRules",
+          "caminho": "Condition.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Condition.language",
+          "caminho": "Condition.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Condition.text",
+          "caminho": "Condition.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Condition.contained",
+          "caminho": "Condition.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Condition.modifierExtension",
+          "caminho": "Condition.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Condition.identifier",
+          "caminho": "Condition.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Condition.clinicalStatus",
+          "caminho": "Condition.clinicalStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.verificationStatus",
+          "caminho": "Condition.verificationStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.category",
+          "caminho": "Condition.category",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.severity",
+          "caminho": "Condition.severity",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.code",
+          "caminho": "Condition.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.bodySite",
+          "caminho": "Condition.bodySite",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.subject",
+          "caminho": "Condition.subject",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.subject.id",
+          "caminho": "Condition.subject.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Condition.subject.reference",
+          "caminho": "Condition.subject.reference",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Condition.subject.type",
+          "caminho": "Condition.subject.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Condition.subject.identifier",
+          "caminho": "Condition.subject.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Condition.subject.display",
+          "caminho": "Condition.subject.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Condition.encounter",
+          "caminho": "Condition.encounter",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.onset[x]",
+          "caminho": "Condition.onset[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime", "Age", "Period", "Range", "string"]
+        },
+        {
+          "id": "Condition.onset[x]:onsetDateTime",
+          "caminho": "Condition.onset[x]",
+          "fatia": "onsetDateTime",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Condition.abatement[x]",
+          "caminho": "Condition.abatement[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime", "Age", "Period", "Range", "string"]
+        },
+        {
+          "id": "Condition.recordedDate",
+          "caminho": "Condition.recordedDate",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Condition.recorder",
+          "caminho": "Condition.recorder",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.asserter",
+          "caminho": "Condition.asserter",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.stage",
+          "caminho": "Condition.stage",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Condition.stage.id",
+          "caminho": "Condition.stage.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Condition.stage.modifierExtension",
+          "caminho": "Condition.stage.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Condition.stage.summary",
+          "caminho": "Condition.stage.summary",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.stage.assessment",
+          "caminho": "Condition.stage.assessment",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.stage.type",
+          "caminho": "Condition.stage.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.evidence",
+          "caminho": "Condition.evidence",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Condition.evidence.id",
+          "caminho": "Condition.evidence.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Condition.evidence.modifierExtension",
+          "caminho": "Condition.evidence.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Condition.evidence.code",
+          "caminho": "Condition.evidence.code",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Condition.evidence.detail",
+          "caminho": "Condition.evidence.detail",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Condition.note",
+          "caminho": "Condition.note",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Annotation"]
+        }
+      ]
+    },
+    "AllergyIntolerance": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/AllergyIntolerance-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "AllergyIntolerance",
+      "elementos": [
+        {
+          "id": "AllergyIntolerance",
+          "caminho": "AllergyIntolerance",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "AllergyIntolerance.id",
+          "caminho": "AllergyIntolerance.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "AllergyIntolerance.meta",
+          "caminho": "AllergyIntolerance.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "AllergyIntolerance.implicitRules",
+          "caminho": "AllergyIntolerance.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "AllergyIntolerance.language",
+          "caminho": "AllergyIntolerance.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "AllergyIntolerance.text",
+          "caminho": "AllergyIntolerance.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "AllergyIntolerance.contained",
+          "caminho": "AllergyIntolerance.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "AllergyIntolerance.modifierExtension",
+          "caminho": "AllergyIntolerance.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "AllergyIntolerance.identifier",
+          "caminho": "AllergyIntolerance.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "AllergyIntolerance.clinicalStatus",
+          "caminho": "AllergyIntolerance.clinicalStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.verificationStatus",
+          "caminho": "AllergyIntolerance.verificationStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.type",
+          "caminho": "AllergyIntolerance.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "AllergyIntolerance.category",
+          "caminho": "AllergyIntolerance.category",
+          "min": 0,
+          "max": "*",
+          "tipos": ["code"]
+        },
+        {
+          "id": "AllergyIntolerance.criticality",
+          "caminho": "AllergyIntolerance.criticality",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "AllergyIntolerance.code",
+          "caminho": "AllergyIntolerance.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.patient",
+          "caminho": "AllergyIntolerance.patient",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "AllergyIntolerance.patient.id",
+          "caminho": "AllergyIntolerance.patient.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "AllergyIntolerance.patient.reference",
+          "caminho": "AllergyIntolerance.patient.reference",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "AllergyIntolerance.patient.type",
+          "caminho": "AllergyIntolerance.patient.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "AllergyIntolerance.patient.identifier",
+          "caminho": "AllergyIntolerance.patient.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "AllergyIntolerance.patient.display",
+          "caminho": "AllergyIntolerance.patient.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "AllergyIntolerance.encounter",
+          "caminho": "AllergyIntolerance.encounter",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "AllergyIntolerance.onset[x]",
+          "caminho": "AllergyIntolerance.onset[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime", "Age", "Period", "Range", "string"]
+        },
+        {
+          "id": "AllergyIntolerance.onset[x]:onsetDateTime",
+          "caminho": "AllergyIntolerance.onset[x]",
+          "fatia": "onsetDateTime",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "AllergyIntolerance.recordedDate",
+          "caminho": "AllergyIntolerance.recordedDate",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "AllergyIntolerance.recorder",
+          "caminho": "AllergyIntolerance.recorder",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "AllergyIntolerance.asserter",
+          "caminho": "AllergyIntolerance.asserter",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "AllergyIntolerance.lastOccurrence",
+          "caminho": "AllergyIntolerance.lastOccurrence",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "AllergyIntolerance.note",
+          "caminho": "AllergyIntolerance.note",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Annotation"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction",
+          "caminho": "AllergyIntolerance.reaction",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.id",
+          "caminho": "AllergyIntolerance.reaction.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.modifierExtension",
+          "caminho": "AllergyIntolerance.reaction.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.substance",
+          "caminho": "AllergyIntolerance.reaction.substance",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.manifestation",
+          "caminho": "AllergyIntolerance.reaction.manifestation",
+          "min": 1,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.description",
+          "caminho": "AllergyIntolerance.reaction.description",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.onset",
+          "caminho": "AllergyIntolerance.reaction.onset",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.severity",
+          "caminho": "AllergyIntolerance.reaction.severity",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.exposureRoute",
+          "caminho": "AllergyIntolerance.reaction.exposureRoute",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "AllergyIntolerance.reaction.note",
+          "caminho": "AllergyIntolerance.reaction.note",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Annotation"]
+        }
+      ]
+    },
+    "MedicationStatement": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/MedicationStatement-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "MedicationStatement",
+      "elementos": [
+        {
+          "id": "MedicationStatement",
+          "caminho": "MedicationStatement",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "MedicationStatement.id",
+          "caminho": "MedicationStatement.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "MedicationStatement.meta",
+          "caminho": "MedicationStatement.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "MedicationStatement.implicitRules",
+          "caminho": "MedicationStatement.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "MedicationStatement.language",
+          "caminho": "MedicationStatement.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "MedicationStatement.text",
+          "caminho": "MedicationStatement.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "MedicationStatement.contained",
+          "caminho": "MedicationStatement.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "MedicationStatement.modifierExtension",
+          "caminho": "MedicationStatement.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "MedicationStatement.identifier",
+          "caminho": "MedicationStatement.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "MedicationStatement.basedOn",
+          "caminho": "MedicationStatement.basedOn",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.partOf",
+          "caminho": "MedicationStatement.partOf",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.status",
+          "caminho": "MedicationStatement.status",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "MedicationStatement.statusReason",
+          "caminho": "MedicationStatement.statusReason",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.category",
+          "caminho": "MedicationStatement.category",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.medication[x]",
+          "caminho": "MedicationStatement.medication[x]",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept", "Reference"]
+        },
+        {
+          "id": "MedicationStatement.subject",
+          "caminho": "MedicationStatement.subject",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.subject.id",
+          "caminho": "MedicationStatement.subject.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "MedicationStatement.subject.reference",
+          "caminho": "MedicationStatement.subject.reference",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "MedicationStatement.subject.type",
+          "caminho": "MedicationStatement.subject.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "MedicationStatement.subject.identifier",
+          "caminho": "MedicationStatement.subject.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "MedicationStatement.subject.display",
+          "caminho": "MedicationStatement.subject.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "MedicationStatement.context",
+          "caminho": "MedicationStatement.context",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.effective[x]",
+          "caminho": "MedicationStatement.effective[x]",
+          "min": 1,
+          "max": "1",
+          "tipos": ["dateTime", "Period"]
+        },
+        {
+          "id": "MedicationStatement.effective[x]:effectiveDateTime",
+          "caminho": "MedicationStatement.effective[x]",
+          "fatia": "effectiveDateTime",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "MedicationStatement.dateAsserted",
+          "caminho": "MedicationStatement.dateAsserted",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "MedicationStatement.informationSource",
+          "caminho": "MedicationStatement.informationSource",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.derivedFrom",
+          "caminho": "MedicationStatement.derivedFrom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.reasonCode",
+          "caminho": "MedicationStatement.reasonCode",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.reasonReference",
+          "caminho": "MedicationStatement.reasonReference",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "MedicationStatement.note",
+          "caminho": "MedicationStatement.note",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Annotation"]
+        },
+        {
+          "id": "MedicationStatement.dosage",
+          "caminho": "MedicationStatement.dosage",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Dosage"]
+        },
+        {
+          "id": "MedicationStatement.dosage.id",
+          "caminho": "MedicationStatement.dosage.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "MedicationStatement.dosage.modifierExtension",
+          "caminho": "MedicationStatement.dosage.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "MedicationStatement.dosage.sequence",
+          "caminho": "MedicationStatement.dosage.sequence",
+          "min": 0,
+          "max": "1",
+          "tipos": ["integer"]
+        },
+        {
+          "id": "MedicationStatement.dosage.text",
+          "caminho": "MedicationStatement.dosage.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "MedicationStatement.dosage.additionalInstruction",
+          "caminho": "MedicationStatement.dosage.additionalInstruction",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.dosage.patientInstruction",
+          "caminho": "MedicationStatement.dosage.patientInstruction",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "MedicationStatement.dosage.timing",
+          "caminho": "MedicationStatement.dosage.timing",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Timing"]
+        },
+        {
+          "id": "MedicationStatement.dosage.asNeeded[x]",
+          "caminho": "MedicationStatement.dosage.asNeeded[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean", "CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.dosage.site",
+          "caminho": "MedicationStatement.dosage.site",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.dosage.route",
+          "caminho": "MedicationStatement.dosage.route",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.dosage.method",
+          "caminho": "MedicationStatement.dosage.method",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "MedicationStatement.dosage.doseAndRate",
+          "caminho": "MedicationStatement.dosage.doseAndRate",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Element"]
+        },
+        {
+          "id": "MedicationStatement.dosage.maxDosePerPeriod",
+          "caminho": "MedicationStatement.dosage.maxDosePerPeriod",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Ratio"]
+        },
+        {
+          "id": "MedicationStatement.dosage.maxDosePerAdministration",
+          "caminho": "MedicationStatement.dosage.maxDosePerAdministration",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Quantity"]
+        },
+        {
+          "id": "MedicationStatement.dosage.maxDosePerLifetime",
+          "caminho": "MedicationStatement.dosage.maxDosePerLifetime",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Quantity"]
+        }
+      ]
+    },
+    "Organization": {
+      "url": "http://hl7.org/fhir/uv/ips/StructureDefinition/Organization-uv-ips",
+      "versao": "2.0.0",
+      "tipo": "Organization",
+      "elementos": [
+        {
+          "id": "Organization",
+          "caminho": "Organization",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Organization.id",
+          "caminho": "Organization.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.meta",
+          "caminho": "Organization.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Organization.implicitRules",
+          "caminho": "Organization.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.language",
+          "caminho": "Organization.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.text",
+          "caminho": "Organization.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Organization.contained",
+          "caminho": "Organization.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Organization.modifierExtension",
+          "caminho": "Organization.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier",
+          "caminho": "Organization.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.active",
+          "caminho": "Organization.active",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.type",
+          "caminho": "Organization.type",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.name",
+          "caminho": "Organization.name",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.alias",
+          "caminho": "Organization.alias",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.telecom",
+          "caminho": "Organization.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Organization.address",
+          "caminho": "Organization.address",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Organization.partOf",
+          "caminho": "Organization.partOf",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.contact",
+          "caminho": "Organization.contact",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Organization.contact.id",
+          "caminho": "Organization.contact.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.contact.modifierExtension",
+          "caminho": "Organization.contact.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.contact.purpose",
+          "caminho": "Organization.contact.purpose",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.contact.name",
+          "caminho": "Organization.contact.name",
+          "min": 0,
+          "max": "1",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Organization.contact.telecom",
+          "caminho": "Organization.contact.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Organization.contact.address",
+          "caminho": "Organization.contact.address",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Organization.endpoint",
+          "caminho": "Organization.endpoint",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        }
+      ]
+    }
+  }
+}

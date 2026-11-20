@@ -1,0 +1,12 @@
+{
+  "name": "verificadores",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "tools/verificadores/src",
+  "tags": ["tipo:ferramenta", "modulo:plataforma"],
+  "targets": {
+    "lint": { "command": "eslint tools/verificadores" },
+    "typecheck": { "command": "tsc -p tools/verificadores/tsconfig.json --noEmit" },
+    "test": { "command": "vitest run --config tools/verificadores/vitest.config.ts" }
+  }
+}

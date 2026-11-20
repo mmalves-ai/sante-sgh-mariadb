@@ -1,0 +1,22 @@
+{
+  "name": "dominio-agenda",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-agenda/src",
+  "tags": ["tipo:dominio", "modulo:agenda"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-agenda"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-agenda/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-agenda/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-agenda/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

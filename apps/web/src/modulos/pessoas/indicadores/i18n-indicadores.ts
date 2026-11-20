@@ -1,0 +1,60 @@
+// Textos do painel de indicadores de pessoas (W0-06, parte 7d; M4 de mercado). Os rótulos, as fórmulas e as fichas
+// técnicas vêm do servidor (o mesmo domínio que faz a conta); aqui ficam os textos da tela.
+export const mensagensIndicadores = {
+  titulo: 'Indicadores de pessoas',
+  subtitulo:
+    'Turnover, absenteísmo, horas extras, horas de enfermagem por paciente-dia, treinamento e acidentes de trabalho, por unidade e setor, com a ficha técnica e as parcelas de cada número',
+  filtro: {
+    inicio: 'Início do período',
+    fim: 'Fim do período',
+    setor: 'Setor',
+    todos: 'Todos os setores',
+    calcular: 'Calcular',
+    invalido: 'Período inválido: {m}',
+  },
+  recorte: 'Período de {inicio} a {fim}; {setor}.',
+  consolidado:
+    'Consolidado: soma dos numeradores dividida pela soma dos denominadores (nunca a média dos setores).',
+  semValor: 'sem valor no período',
+  conta: 'Conta',
+  referencia: 'Referência COFEN',
+  referenciaValor: '{v} h por paciente-dia',
+  razao: 'Realizado ÷ referência',
+  complementos: 'Complementos',
+  ficha: {
+    titulo: 'Ficha técnica',
+    definicao: 'Definição',
+    formula: 'Fórmula',
+    unidade: 'Unidade',
+    numerador: 'Numerador',
+    denominador: 'Denominador',
+    fontes: 'Fontes',
+    norma: 'Norma',
+    interpretacao: 'Interpretação',
+  },
+  parcelas: {
+    titulo: 'Parcelas por setor',
+    legenda: 'Parcelas de {indicador} por unidade e setor',
+    unidade: 'Unidade',
+    setor: 'Setor',
+    numerador: 'Numerador',
+    denominador: 'Denominador',
+    valor: 'Valor',
+    conta: 'Conta',
+    referencia: 'Referência COFEN',
+    total: 'Consolidado',
+    vazio: 'Nenhuma parcela no período.',
+  },
+  cofen: {
+    titulo: 'Horas de enfermagem por paciente-dia (referência do dimensionamento)',
+    texto:
+      'Valores da Resolução COFEN 543/2017 por categoria de cuidado; o parâmetro do estabelecimento pode ajustá-los.',
+    legenda: 'Horas de referência por categoria de cuidado',
+    categoria: 'Categoria de cuidado',
+    horas: 'Horas por paciente-dia',
+    origem: 'Origem',
+    ajustada: 'ajustada no parâmetro',
+    padrao: 'valor da resolução',
+  },
+  avisos: 'Fontes que não puderam ser lidas',
+};

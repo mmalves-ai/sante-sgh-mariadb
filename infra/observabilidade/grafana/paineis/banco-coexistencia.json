@@ -1,0 +1,660 @@
+{
+  "uid": "sgh-banco",
+  "title": "Banco e coexistência",
+  "description": "Coletor MON$ do Firebird (M09): conexões e transações por sistema (novo, SPDATA, sante-api), OIT/OAT, transações longas e alertas. Só agregados, nunca o texto SQL de outra conexão.",
+  "tags": ["sgh", "m09"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "estabelecimento",
+        "label": "Estabelecimento",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "sgh-prometheus"
+        },
+        "query": {
+          "query": "label_values(sgh_firebird_conexoes, estabelecimento)",
+          "refId": "v"
+        },
+        "definition": "label_values(sgh_firebird_conexoes, estabelecimento)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Transação do novo mais longa",
+      "description": "Alerta direto acima do limite (VIGIA_TRANSACAO_LIMITE_MS).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_transacao_novo_mais_longa_seconds{estabelecimento=~\"$estabelecimento\"})"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Limite da transação do novo",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_vigia_transacao_limite_seconds)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Alertas diretos (última coleta)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(sgh_firebird_alertas{estabelecimento=~\"$estabelecimento\"})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Coleta MON$",
+      "description": "Meta: < 200 ms por coleta.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_coleta_duracao_seconds{estabelecimento=~\"$estabelecimento\"})"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Conexões por sistema",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_conexoes{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Transações abertas por sistema",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_transacoes{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Transação mais longa por sistema",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max by (sistema) (sgh_firebird_transacao_mais_longa_seconds{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Transações de escrita abertas",
+      "description": "O MON$ do Firebird 3 não expõe espera de trava; a transação de escrita aberta é o sinal usado.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_transacoes_escrita{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Folga OIT e OAT (próxima − mais antiga)",
+      "description": "Folga grande = coletor de lixo atrasado (transação antiga presa).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_folga_oit{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "próxima − OIT"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_folga_oat{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "próxima − OAT"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Comandos ativos por sistema",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_comandos_ativos{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Comandos parados por sistema",
+      "description": "MON$STATE = 2: cursor aberto que o cliente parou de buscar (segura a transação).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_comandos_parados{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Travas de registro por sistema",
+      "description": "MON$RECORD_LOCKS acumulado das conexões abertas (MON$RECORD_STATS por anexo).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_travas{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Esperas por trava e conflitos por sistema",
+      "description": "MON$RECORD_WAITS e MON$RECORD_CONFLICTS acumulados das conexões abertas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_travas_esperas{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "esperas {{sistema}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_travas_conflitos{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "conflitos {{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "text",
+      "title": "Avisos de colisão",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Os avisos de colisão (registro aberto no SPDATA e no novo ao mesmo tempo) chegam com as operações de gravação (M04 em diante); este painel recebe a série quando existir."
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

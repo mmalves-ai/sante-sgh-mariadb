@@ -1,0 +1,50 @@
+# Regra de alerta das integrações novas (ficha do M34, regra 10; cap-14 §14.5): mensagem na fila de mortos sem tratamento
+# há mais de 4 horas. O worker registra no log, a cada 5 minutos, uma linha `alerta das integrações: fila de mortos sem
+# tratamento` por mensagem (com o estabelecimento, o envio, o parceiro e os minutos; nunca conteúdo); a regra conta essas
+# linhas no Loki e dispara com qualquer uma nos últimos 10 minutos. Provisionada por arquivo (o JSON do repositório manda).
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: sgh-integracoes
+    folder: SGH
+    interval: 1m
+    rules:
+      - uid: sgh-integracoes-mortos-4h
+        title: Fila de mortos das integrações sem tratamento há mais de 4 h
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: sgh-loki
+            model:
+              expr: 'sum(count_over_time({service_name="sgh-worker"} |= "alerta das integrações: fila de mortos sem tratamento" [10m]))'
+              queryType: range
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+              refId: C
+        noDataState: OK
+        execErrState: Error
+        for: 0s
+        annotations:
+          summary: Mensagem das integrações na fila de mortos há mais de 4 horas sem tratamento.
+          description: Abra Administração > Integrações > Monitor de filas e reprocessamento e trate (reprocessar, corrigir ou descartar, com o motivo).
+        labels:
+          severidade: alta
+          area: integracoes

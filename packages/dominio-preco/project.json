@@ -1,0 +1,22 @@
+{
+  "name": "dominio-preco",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-preco/src",
+  "tags": ["tipo:dominio", "modulo:preco"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-preco"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-preco/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-preco/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-preco/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

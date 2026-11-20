@@ -1,0 +1,22 @@
+{
+  "name": "dominio-pessoas",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-pessoas/src",
+  "tags": ["tipo:dominio", "modulo:pessoas"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-pessoas"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-pessoas/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-pessoas/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-pessoas/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

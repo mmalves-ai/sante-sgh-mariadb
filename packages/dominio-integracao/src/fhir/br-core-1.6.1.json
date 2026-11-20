@@ -1,0 +1,4998 @@
+{
+  "pacote": "br.gov.saude.br-core.fhir",
+  "versao": "1.6.1",
+  "licenca": "CC0-1.0",
+  "sha256": "974a20ff4ec49727c75624065826ecfda35b3d368d82a02eadfc0713d537f8c6",
+  "perfis": {
+    "Patient": {
+      "url": "https://br-core.saude.gov.br/fhir/StructureDefinition/br-core-patient",
+      "versao": "1.6.1",
+      "tipo": "Patient",
+      "elementos": [
+        {
+          "id": "Patient",
+          "caminho": "Patient",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Patient.id",
+          "caminho": "Patient.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.meta",
+          "caminho": "Patient.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Patient.implicitRules",
+          "caminho": "Patient.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.language",
+          "caminho": "Patient.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.text",
+          "caminho": "Patient.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Patient.contained",
+          "caminho": "Patient.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Patient.extension",
+          "caminho": "Patient.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:localNascimento",
+          "caminho": "Patient.extension",
+          "fatia": "localNascimento",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:identidadeGenero",
+          "caminho": "Patient.extension",
+          "fatia": "identidadeGenero",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:raca",
+          "caminho": "Patient.extension",
+          "fatia": "raca",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:povoIndigena",
+          "caminho": "Patient.extension",
+          "fatia": "povoIndigena",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:sexoNascimento",
+          "caminho": "Patient.extension",
+          "fatia": "sexoNascimento",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:povoTradicional",
+          "caminho": "Patient.extension",
+          "fatia": "povoTradicional",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.extension:povoItinerante",
+          "caminho": "Patient.extension",
+          "fatia": "povoItinerante",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.modifierExtension",
+          "caminho": "Patient.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier",
+          "caminho": "Patient.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:cns",
+          "caminho": "Patient.identifier",
+          "fatia": "cns",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:cns.id",
+          "caminho": "Patient.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cns.extension",
+          "caminho": "Patient.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cns.use",
+          "caminho": "Patient.identifier.use",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:cns.type",
+          "caminho": "Patient.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.id",
+          "caminho": "Patient.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.extension",
+          "caminho": "Patient.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding",
+          "caminho": "Patient.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.id",
+          "caminho": "Patient.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.extension",
+          "caminho": "Patient.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.system",
+          "caminho": "Patient.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.version",
+          "caminho": "Patient.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.code",
+          "caminho": "Patient.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "HC"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.display",
+          "caminho": "Patient.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.coding.userSelected",
+          "caminho": "Patient.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.identifier:cns.type.text",
+          "caminho": "Patient.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cns.system",
+          "caminho": "Patient.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cns"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cns.value",
+          "caminho": "Patient.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cns.period",
+          "caminho": "Patient.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner",
+          "caminho": "Patient.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.id",
+          "caminho": "Patient.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.extension",
+          "caminho": "Patient.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.reference",
+          "caminho": "Patient.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.type",
+          "caminho": "Patient.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.identifier",
+          "caminho": "Patient.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:cns.assigner.display",
+          "caminho": "Patient.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf",
+          "caminho": "Patient.identifier",
+          "fatia": "cpf",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:cpf.id",
+          "caminho": "Patient.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cpf.extension",
+          "caminho": "Patient.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cpf.use",
+          "caminho": "Patient.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type",
+          "caminho": "Patient.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.id",
+          "caminho": "Patient.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.extension",
+          "caminho": "Patient.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding",
+          "caminho": "Patient.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.id",
+          "caminho": "Patient.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.extension",
+          "caminho": "Patient.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.system",
+          "caminho": "Patient.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.version",
+          "caminho": "Patient.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.code",
+          "caminho": "Patient.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "TAX"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.display",
+          "caminho": "Patient.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.coding.userSelected",
+          "caminho": "Patient.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.identifier:cpf.type.text",
+          "caminho": "Patient.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf.system",
+          "caminho": "Patient.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cpf"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cpf.value",
+          "caminho": "Patient.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf.period",
+          "caminho": "Patient.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner",
+          "caminho": "Patient.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.id",
+          "caminho": "Patient.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.extension",
+          "caminho": "Patient.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.reference",
+          "caminho": "Patient.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.type",
+          "caminho": "Patient.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.identifier",
+          "caminho": "Patient.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:cpf.assigner.display",
+          "caminho": "Patient.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro",
+          "caminho": "Patient.identifier",
+          "fatia": "registroEstrangeiro",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.id",
+          "caminho": "Patient.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.extension",
+          "caminho": "Patient.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.use",
+          "caminho": "Patient.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type",
+          "caminho": "Patient.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.id",
+          "caminho": "Patient.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.extension",
+          "caminho": "Patient.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding",
+          "caminho": "Patient.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.id",
+          "caminho": "Patient.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.extension",
+          "caminho": "Patient.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.system",
+          "caminho": "Patient.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.version",
+          "caminho": "Patient.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.code",
+          "caminho": "Patient.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "RNE"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.display",
+          "caminho": "Patient.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.coding.userSelected",
+          "caminho": "Patient.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.type.text",
+          "caminho": "Patient.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.system",
+          "caminho": "Patient.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/rne"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.value",
+          "caminho": "Patient.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.period",
+          "caminho": "Patient.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner",
+          "caminho": "Patient.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.id",
+          "caminho": "Patient.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.extension",
+          "caminho": "Patient.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.reference",
+          "caminho": "Patient.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.type",
+          "caminho": "Patient.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.identifier",
+          "caminho": "Patient.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:registroEstrangeiro.assigner.display",
+          "caminho": "Patient.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte",
+          "caminho": "Patient.identifier",
+          "fatia": "passaporte",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.id",
+          "caminho": "Patient.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.extension",
+          "caminho": "Patient.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.use",
+          "caminho": "Patient.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type",
+          "caminho": "Patient.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.id",
+          "caminho": "Patient.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.extension",
+          "caminho": "Patient.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding",
+          "caminho": "Patient.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.id",
+          "caminho": "Patient.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.extension",
+          "caminho": "Patient.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.system",
+          "caminho": "Patient.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.version",
+          "caminho": "Patient.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.code",
+          "caminho": "Patient.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "PPN"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.display",
+          "caminho": "Patient.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.coding.userSelected",
+          "caminho": "Patient.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.type.text",
+          "caminho": "Patient.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.system",
+          "caminho": "Patient.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://hl7.org/fhir/sid/passport-BRA"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.value",
+          "caminho": "Patient.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.period",
+          "caminho": "Patient.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner",
+          "caminho": "Patient.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.id",
+          "caminho": "Patient.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.extension",
+          "caminho": "Patient.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.reference",
+          "caminho": "Patient.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.type",
+          "caminho": "Patient.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.identifier",
+          "caminho": "Patient.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Patient.identifier:passaporte.assigner.display",
+          "caminho": "Patient.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.active",
+          "caminho": "Patient.active",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.name",
+          "caminho": "Patient.name",
+          "min": 0,
+          "max": "*",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Patient.name.id",
+          "caminho": "Patient.name.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.name.extension",
+          "caminho": "Patient.name.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.name.use",
+          "caminho": "Patient.name.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.name.text",
+          "caminho": "Patient.name.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.family",
+          "caminho": "Patient.name.family",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.given",
+          "caminho": "Patient.name.given",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.prefix",
+          "caminho": "Patient.name.prefix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.suffix",
+          "caminho": "Patient.name.suffix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.name.period",
+          "caminho": "Patient.name.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.telecom",
+          "caminho": "Patient.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Patient.telecom.id",
+          "caminho": "Patient.telecom.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.telecom.extension",
+          "caminho": "Patient.telecom.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.telecom.system",
+          "caminho": "Patient.telecom.system",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.telecom.value",
+          "caminho": "Patient.telecom.value",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.telecom.use",
+          "caminho": "Patient.telecom.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.telecom.rank",
+          "caminho": "Patient.telecom.rank",
+          "min": 0,
+          "max": "1",
+          "tipos": ["positiveInt"]
+        },
+        {
+          "id": "Patient.telecom.period",
+          "caminho": "Patient.telecom.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.gender",
+          "caminho": "Patient.gender",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.birthDate",
+          "caminho": "Patient.birthDate",
+          "min": 0,
+          "max": "1",
+          "tipos": ["date"]
+        },
+        {
+          "id": "Patient.deceased[x]",
+          "caminho": "Patient.deceased[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean", "dateTime"]
+        },
+        {
+          "id": "Patient.deceased[x]:deceasedBoolean",
+          "caminho": "Patient.deceased[x]",
+          "fatia": "deceasedBoolean",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.deceased[x]:deceasedDateTime",
+          "caminho": "Patient.deceased[x]",
+          "fatia": "deceasedDateTime",
+          "min": 0,
+          "max": "1",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Patient.address",
+          "caminho": "Patient.address",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Patient.address.id",
+          "caminho": "Patient.address.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.address.extension",
+          "caminho": "Patient.address.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.address.extension:aldeia",
+          "caminho": "Patient.address.extension",
+          "fatia": "aldeia",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.address.extension:municipio",
+          "caminho": "Patient.address.extension",
+          "fatia": "municipio",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.address.use",
+          "caminho": "Patient.address.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.address.type",
+          "caminho": "Patient.address.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.address.text",
+          "caminho": "Patient.address.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.line",
+          "caminho": "Patient.address.line",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.city",
+          "caminho": "Patient.address.city",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.district",
+          "caminho": "Patient.address.district",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.state",
+          "caminho": "Patient.address.state",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.postalCode",
+          "caminho": "Patient.address.postalCode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.country",
+          "caminho": "Patient.address.country",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Patient.address.period",
+          "caminho": "Patient.address.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.maritalStatus",
+          "caminho": "Patient.maritalStatus",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.multipleBirth[x]",
+          "caminho": "Patient.multipleBirth[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean", "integer"]
+        },
+        {
+          "id": "Patient.multipleBirth[x]:multipleBirthBoolean",
+          "caminho": "Patient.multipleBirth[x]",
+          "fatia": "multipleBirthBoolean",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.multipleBirth[x]:multipleBirthInteger",
+          "caminho": "Patient.multipleBirth[x]",
+          "fatia": "multipleBirthInteger",
+          "min": 0,
+          "max": "1",
+          "tipos": ["integer"]
+        },
+        {
+          "id": "Patient.photo",
+          "caminho": "Patient.photo",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Attachment"]
+        },
+        {
+          "id": "Patient.contact",
+          "caminho": "Patient.contact",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.contact.id",
+          "caminho": "Patient.contact.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.contact.extension",
+          "caminho": "Patient.contact.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.contact.modifierExtension",
+          "caminho": "Patient.contact.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.contact.relationship",
+          "caminho": "Patient.contact.relationship",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.contact.name",
+          "caminho": "Patient.contact.name",
+          "min": 0,
+          "max": "1",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Patient.contact.telecom",
+          "caminho": "Patient.contact.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Patient.contact.address",
+          "caminho": "Patient.contact.address",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Patient.contact.gender",
+          "caminho": "Patient.contact.gender",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Patient.contact.organization",
+          "caminho": "Patient.contact.organization",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.contact.period",
+          "caminho": "Patient.contact.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Patient.communication",
+          "caminho": "Patient.communication",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.communication.id",
+          "caminho": "Patient.communication.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.communication.extension",
+          "caminho": "Patient.communication.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.communication.modifierExtension",
+          "caminho": "Patient.communication.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.communication.language",
+          "caminho": "Patient.communication.language",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Patient.communication.preferred",
+          "caminho": "Patient.communication.preferred",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Patient.generalPractitioner",
+          "caminho": "Patient.generalPractitioner",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.managingOrganization",
+          "caminho": "Patient.managingOrganization",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.link",
+          "caminho": "Patient.link",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Patient.link.id",
+          "caminho": "Patient.link.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Patient.link.extension",
+          "caminho": "Patient.link.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.link.modifierExtension",
+          "caminho": "Patient.link.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Patient.link.other",
+          "caminho": "Patient.link.other",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Patient.link.type",
+          "caminho": "Patient.link.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        }
+      ]
+    },
+    "Organization": {
+      "url": "https://br-core.saude.gov.br/fhir/StructureDefinition/br-core-organization",
+      "versao": "1.6.1",
+      "tipo": "Organization",
+      "elementos": [
+        {
+          "id": "Organization",
+          "caminho": "Organization",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Organization.id",
+          "caminho": "Organization.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.meta",
+          "caminho": "Organization.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Organization.implicitRules",
+          "caminho": "Organization.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.language",
+          "caminho": "Organization.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.text",
+          "caminho": "Organization.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Organization.contained",
+          "caminho": "Organization.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Organization.extension",
+          "caminho": "Organization.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.extension:subType",
+          "caminho": "Organization.extension",
+          "fatia": "subType",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.modifierExtension",
+          "caminho": "Organization.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier",
+          "caminho": "Organization.identifier",
+          "min": 1,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cnes",
+          "caminho": "Organization.identifier",
+          "fatia": "cnes",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cnes.id",
+          "caminho": "Organization.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnes.extension",
+          "caminho": "Organization.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnes.use",
+          "caminho": "Organization.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type",
+          "caminho": "Organization.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.id",
+          "caminho": "Organization.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.extension",
+          "caminho": "Organization.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding",
+          "caminho": "Organization.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.id",
+          "caminho": "Organization.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.extension",
+          "caminho": "Organization.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.system",
+          "caminho": "Organization.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.version",
+          "caminho": "Organization.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.code",
+          "caminho": "Organization.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "PRN"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.display",
+          "caminho": "Organization.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.coding.userSelected",
+          "caminho": "Organization.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.identifier:cnes.type.text",
+          "caminho": "Organization.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnes.system",
+          "caminho": "Organization.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cnes"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnes.value",
+          "caminho": "Organization.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnes.period",
+          "caminho": "Organization.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner",
+          "caminho": "Organization.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.id",
+          "caminho": "Organization.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.extension",
+          "caminho": "Organization.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.reference",
+          "caminho": "Organization.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.type",
+          "caminho": "Organization.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.identifier",
+          "caminho": "Organization.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cnes.assigner.display",
+          "caminho": "Organization.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf",
+          "caminho": "Organization.identifier",
+          "fatia": "cpf",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cpf.id",
+          "caminho": "Organization.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cpf.extension",
+          "caminho": "Organization.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cpf.use",
+          "caminho": "Organization.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type",
+          "caminho": "Organization.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.id",
+          "caminho": "Organization.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.extension",
+          "caminho": "Organization.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding",
+          "caminho": "Organization.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.id",
+          "caminho": "Organization.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.extension",
+          "caminho": "Organization.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.system",
+          "caminho": "Organization.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.version",
+          "caminho": "Organization.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.code",
+          "caminho": "Organization.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.display",
+          "caminho": "Organization.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.coding.userSelected",
+          "caminho": "Organization.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.identifier:cpf.type.text",
+          "caminho": "Organization.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf.system",
+          "caminho": "Organization.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cpf"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cpf.value",
+          "caminho": "Organization.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf.period",
+          "caminho": "Organization.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner",
+          "caminho": "Organization.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.id",
+          "caminho": "Organization.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.extension",
+          "caminho": "Organization.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.reference",
+          "caminho": "Organization.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.type",
+          "caminho": "Organization.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.identifier",
+          "caminho": "Organization.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cpf.assigner.display",
+          "caminho": "Organization.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj",
+          "caminho": "Organization.identifier",
+          "fatia": "cnpj",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.id",
+          "caminho": "Organization.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.extension",
+          "caminho": "Organization.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.use",
+          "caminho": "Organization.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type",
+          "caminho": "Organization.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.id",
+          "caminho": "Organization.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.extension",
+          "caminho": "Organization.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding",
+          "caminho": "Organization.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.id",
+          "caminho": "Organization.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.extension",
+          "caminho": "Organization.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.system",
+          "caminho": "Organization.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.version",
+          "caminho": "Organization.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.code",
+          "caminho": "Organization.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.display",
+          "caminho": "Organization.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.coding.userSelected",
+          "caminho": "Organization.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.type.text",
+          "caminho": "Organization.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.system",
+          "caminho": "Organization.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cnpj"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.value",
+          "caminho": "Organization.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.period",
+          "caminho": "Organization.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner",
+          "caminho": "Organization.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.id",
+          "caminho": "Organization.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.extension",
+          "caminho": "Organization.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.reference",
+          "caminho": "Organization.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.type",
+          "caminho": "Organization.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.identifier",
+          "caminho": "Organization.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:cnpj.assigner.display",
+          "caminho": "Organization.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei",
+          "caminho": "Organization.identifier",
+          "fatia": "dsei",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:dsei.id",
+          "caminho": "Organization.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:dsei.extension",
+          "caminho": "Organization.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:dsei.use",
+          "caminho": "Organization.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type",
+          "caminho": "Organization.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.id",
+          "caminho": "Organization.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.extension",
+          "caminho": "Organization.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding",
+          "caminho": "Organization.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.id",
+          "caminho": "Organization.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.extension",
+          "caminho": "Organization.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.system",
+          "caminho": "Organization.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.version",
+          "caminho": "Organization.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.code",
+          "caminho": "Organization.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.display",
+          "caminho": "Organization.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.coding.userSelected",
+          "caminho": "Organization.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.identifier:dsei.type.text",
+          "caminho": "Organization.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei.system",
+          "caminho": "Organization.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/dsei"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:dsei.value",
+          "caminho": "Organization.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei.period",
+          "caminho": "Organization.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner",
+          "caminho": "Organization.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.id",
+          "caminho": "Organization.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.extension",
+          "caminho": "Organization.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.reference",
+          "caminho": "Organization.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.type",
+          "caminho": "Organization.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.identifier",
+          "caminho": "Organization.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:dsei.assigner.display",
+          "caminho": "Organization.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase",
+          "caminho": "Organization.identifier",
+          "fatia": "poloBase",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.id",
+          "caminho": "Organization.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.extension",
+          "caminho": "Organization.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.use",
+          "caminho": "Organization.identifier.use",
+          "min": 0,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type",
+          "caminho": "Organization.identifier.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.id",
+          "caminho": "Organization.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.extension",
+          "caminho": "Organization.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding",
+          "caminho": "Organization.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.id",
+          "caminho": "Organization.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.extension",
+          "caminho": "Organization.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.system",
+          "caminho": "Organization.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.version",
+          "caminho": "Organization.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.code",
+          "caminho": "Organization.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.display",
+          "caminho": "Organization.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.coding.userSelected",
+          "caminho": "Organization.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.type.text",
+          "caminho": "Organization.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.system",
+          "caminho": "Organization.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/polo-base"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.value",
+          "caminho": "Organization.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.period",
+          "caminho": "Organization.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner",
+          "caminho": "Organization.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.id",
+          "caminho": "Organization.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.extension",
+          "caminho": "Organization.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.reference",
+          "caminho": "Organization.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.type",
+          "caminho": "Organization.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.identifier",
+          "caminho": "Organization.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Organization.identifier:poloBase.assigner.display",
+          "caminho": "Organization.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.active",
+          "caminho": "Organization.active",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Organization.type",
+          "caminho": "Organization.type",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.name",
+          "caminho": "Organization.name",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.alias",
+          "caminho": "Organization.alias",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.telecom",
+          "caminho": "Organization.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Organization.address",
+          "caminho": "Organization.address",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Organization.address.id",
+          "caminho": "Organization.address.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.address.extension",
+          "caminho": "Organization.address.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.address.extension:aldeia",
+          "caminho": "Organization.address.extension",
+          "fatia": "aldeia",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.address.extension:municipio",
+          "caminho": "Organization.address.extension",
+          "fatia": "municipio",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.address.use",
+          "caminho": "Organization.address.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.address.type",
+          "caminho": "Organization.address.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Organization.address.text",
+          "caminho": "Organization.address.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.line",
+          "caminho": "Organization.address.line",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.city",
+          "caminho": "Organization.address.city",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.district",
+          "caminho": "Organization.address.district",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.state",
+          "caminho": "Organization.address.state",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.postalCode",
+          "caminho": "Organization.address.postalCode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.country",
+          "caminho": "Organization.address.country",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Organization.address.period",
+          "caminho": "Organization.address.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Organization.partOf",
+          "caminho": "Organization.partOf",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Organization.contact",
+          "caminho": "Organization.contact",
+          "min": 0,
+          "max": "*",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Organization.contact.id",
+          "caminho": "Organization.contact.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Organization.contact.extension",
+          "caminho": "Organization.contact.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.contact.modifierExtension",
+          "caminho": "Organization.contact.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Organization.contact.purpose",
+          "caminho": "Organization.contact.purpose",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Organization.contact.name",
+          "caminho": "Organization.contact.name",
+          "min": 0,
+          "max": "1",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Organization.contact.telecom",
+          "caminho": "Organization.contact.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Organization.contact.address",
+          "caminho": "Organization.contact.address",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Organization.endpoint",
+          "caminho": "Organization.endpoint",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Reference"]
+        }
+      ]
+    },
+    "Practitioner": {
+      "url": "https://br-core.saude.gov.br/fhir/StructureDefinition/br-core-practitioner",
+      "versao": "1.6.1",
+      "tipo": "Practitioner",
+      "elementos": [
+        {
+          "id": "Practitioner",
+          "caminho": "Practitioner",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Practitioner.id",
+          "caminho": "Practitioner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.meta",
+          "caminho": "Practitioner.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Practitioner.implicitRules",
+          "caminho": "Practitioner.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.language",
+          "caminho": "Practitioner.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.text",
+          "caminho": "Practitioner.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Practitioner.contained",
+          "caminho": "Practitioner.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Practitioner.extension",
+          "caminho": "Practitioner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.modifierExtension",
+          "caminho": "Practitioner.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier",
+          "caminho": "Practitioner.identifier",
+          "min": 1,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:cns",
+          "caminho": "Practitioner.identifier",
+          "fatia": "cns",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "HC"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cns"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:cns.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf",
+          "caminho": "Practitioner.identifier",
+          "fatia": "cpf",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "TAX"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "https://saude.gov.br/fhir/sid/cpf"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:cpf.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico",
+          "caminho": "Practitioner.identifier",
+          "fatia": "identificadorMedico",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "MD"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorMedico.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico",
+          "caminho": "Practitioner.identifier",
+          "fatia": "identificadorFarmaceutico",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "RPH"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorFarmaceutico.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo",
+          "caminho": "Practitioner.identifier",
+          "fatia": "identificadorOdontologo",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "DDS"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOdontologo.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro",
+          "caminho": "Practitioner.identifier",
+          "fatia": "identificadorEnfermeiro",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "RN"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorEnfermeiro.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais",
+          "caminho": "Practitioner.identifier",
+          "fatia": "identificadorOutrosProfissionais",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.id",
+          "caminho": "Practitioner.identifier.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.extension",
+          "caminho": "Practitioner.identifier.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.use",
+          "caminho": "Practitioner.identifier.use",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "official"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type",
+          "caminho": "Practitioner.identifier.type",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.id",
+          "caminho": "Practitioner.identifier.type.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.extension",
+          "caminho": "Practitioner.identifier.type.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding",
+          "caminho": "Practitioner.identifier.type.coding",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.id",
+          "caminho": "Practitioner.identifier.type.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.extension",
+          "caminho": "Practitioner.identifier.type.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.system",
+          "caminho": "Practitioner.identifier.type.coding.system",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedUri",
+            "valor": "http://terminology.hl7.org/CodeSystem/v2-0203"
+          },
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.version",
+          "caminho": "Practitioner.identifier.type.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.code",
+          "caminho": "Practitioner.identifier.type.coding.code",
+          "min": 1,
+          "max": "1",
+          "fixo": {
+            "tipo": "fixedCode",
+            "valor": "RI"
+          },
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.display",
+          "caminho": "Practitioner.identifier.type.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.coding.userSelected",
+          "caminho": "Practitioner.identifier.type.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.type.text",
+          "caminho": "Practitioner.identifier.type.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.system",
+          "caminho": "Practitioner.identifier.system",
+          "min": 1,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.value",
+          "caminho": "Practitioner.identifier.value",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.period",
+          "caminho": "Practitioner.identifier.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner",
+          "caminho": "Practitioner.identifier.assigner",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.id",
+          "caminho": "Practitioner.identifier.assigner.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.extension",
+          "caminho": "Practitioner.identifier.assigner.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.reference",
+          "caminho": "Practitioner.identifier.assigner.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.type",
+          "caminho": "Practitioner.identifier.assigner.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.identifier",
+          "caminho": "Practitioner.identifier.assigner.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.identifier:identificadorOutrosProfissionais.assigner.display",
+          "caminho": "Practitioner.identifier.assigner.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.active",
+          "caminho": "Practitioner.active",
+          "min": 1,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.name",
+          "caminho": "Practitioner.name",
+          "min": 0,
+          "max": "*",
+          "tipos": ["HumanName"]
+        },
+        {
+          "id": "Practitioner.name.id",
+          "caminho": "Practitioner.name.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.name.extension",
+          "caminho": "Practitioner.name.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.name.use",
+          "caminho": "Practitioner.name.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.name.text",
+          "caminho": "Practitioner.name.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.name.family",
+          "caminho": "Practitioner.name.family",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.name.given",
+          "caminho": "Practitioner.name.given",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.name.prefix",
+          "caminho": "Practitioner.name.prefix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.name.suffix",
+          "caminho": "Practitioner.name.suffix",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.name.period",
+          "caminho": "Practitioner.name.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.telecom",
+          "caminho": "Practitioner.telecom",
+          "min": 0,
+          "max": "*",
+          "tipos": ["ContactPoint"]
+        },
+        {
+          "id": "Practitioner.address",
+          "caminho": "Practitioner.address",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Address"]
+        },
+        {
+          "id": "Practitioner.address.id",
+          "caminho": "Practitioner.address.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.address.extension",
+          "caminho": "Practitioner.address.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.address.extension:aldeia",
+          "caminho": "Practitioner.address.extension",
+          "fatia": "aldeia",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.address.extension:municipio",
+          "caminho": "Practitioner.address.extension",
+          "fatia": "municipio",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.address.use",
+          "caminho": "Practitioner.address.use",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.address.type",
+          "caminho": "Practitioner.address.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.address.text",
+          "caminho": "Practitioner.address.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.line",
+          "caminho": "Practitioner.address.line",
+          "min": 0,
+          "max": "*",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.city",
+          "caminho": "Practitioner.address.city",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.district",
+          "caminho": "Practitioner.address.district",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.state",
+          "caminho": "Practitioner.address.state",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.postalCode",
+          "caminho": "Practitioner.address.postalCode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.country",
+          "caminho": "Practitioner.address.country",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.address.period",
+          "caminho": "Practitioner.address.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.gender",
+          "caminho": "Practitioner.gender",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.birthDate",
+          "caminho": "Practitioner.birthDate",
+          "min": 0,
+          "max": "1",
+          "tipos": ["date"]
+        },
+        {
+          "id": "Practitioner.photo",
+          "caminho": "Practitioner.photo",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Attachment"]
+        },
+        {
+          "id": "Practitioner.qualification",
+          "caminho": "Practitioner.qualification",
+          "min": 0,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Practitioner.qualification.id",
+          "caminho": "Practitioner.qualification.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.qualification.extension",
+          "caminho": "Practitioner.qualification.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.qualification.modifierExtension",
+          "caminho": "Practitioner.qualification.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.qualification.identifier",
+          "caminho": "Practitioner.qualification.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Practitioner.qualification.code",
+          "caminho": "Practitioner.qualification.code",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Practitioner.qualification.code.id",
+          "caminho": "Practitioner.qualification.code.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.qualification.code.extension",
+          "caminho": "Practitioner.qualification.code.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding",
+          "caminho": "Practitioner.qualification.code.coding",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Coding"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.id",
+          "caminho": "Practitioner.qualification.code.coding.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.extension",
+          "caminho": "Practitioner.qualification.code.coding.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.system",
+          "caminho": "Practitioner.qualification.code.coding.system",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.version",
+          "caminho": "Practitioner.qualification.code.coding.version",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.code",
+          "caminho": "Practitioner.qualification.code.coding.code",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.display",
+          "caminho": "Practitioner.qualification.code.coding.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.qualification.code.coding.userSelected",
+          "caminho": "Practitioner.qualification.code.coding.userSelected",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Practitioner.qualification.code.text",
+          "caminho": "Practitioner.qualification.code.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Practitioner.qualification.period",
+          "caminho": "Practitioner.qualification.period",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Period"]
+        },
+        {
+          "id": "Practitioner.qualification.issuer",
+          "caminho": "Practitioner.qualification.issuer",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Practitioner.communication",
+          "caminho": "Practitioner.communication",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        }
+      ]
+    },
+    "Immunization": {
+      "url": "https://br-core.saude.gov.br/fhir/StructureDefinition/br-core-immunization",
+      "versao": "1.6.1",
+      "tipo": "Immunization",
+      "elementos": [
+        {
+          "id": "Immunization",
+          "caminho": "Immunization",
+          "min": 0,
+          "max": "*",
+          "tipos": []
+        },
+        {
+          "id": "Immunization.id",
+          "caminho": "Immunization.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.meta",
+          "caminho": "Immunization.meta",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Meta"]
+        },
+        {
+          "id": "Immunization.implicitRules",
+          "caminho": "Immunization.implicitRules",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Immunization.language",
+          "caminho": "Immunization.language",
+          "min": 0,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Immunization.text",
+          "caminho": "Immunization.text",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Narrative"]
+        },
+        {
+          "id": "Immunization.contained",
+          "caminho": "Immunization.contained",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Resource"]
+        },
+        {
+          "id": "Immunization.extension",
+          "caminho": "Immunization.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.modifierExtension",
+          "caminho": "Immunization.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.identifier",
+          "caminho": "Immunization.identifier",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Immunization.status",
+          "caminho": "Immunization.status",
+          "min": 1,
+          "max": "1",
+          "tipos": ["code"]
+        },
+        {
+          "id": "Immunization.statusReason",
+          "caminho": "Immunization.statusReason",
+          "min": 0,
+          "max": "0",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.vaccineCode",
+          "caminho": "Immunization.vaccineCode",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.patient",
+          "caminho": "Immunization.patient",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.patient.id",
+          "caminho": "Immunization.patient.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.patient.extension",
+          "caminho": "Immunization.patient.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.patient.reference",
+          "caminho": "Immunization.patient.reference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.patient.type",
+          "caminho": "Immunization.patient.type",
+          "min": 0,
+          "max": "1",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Immunization.patient.identifier",
+          "caminho": "Immunization.patient.identifier",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Identifier"]
+        },
+        {
+          "id": "Immunization.patient.display",
+          "caminho": "Immunization.patient.display",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.encounter",
+          "caminho": "Immunization.encounter",
+          "min": 0,
+          "max": "0",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.occurrence[x]",
+          "caminho": "Immunization.occurrence[x]",
+          "min": 1,
+          "max": "1",
+          "tipos": ["dateTime", "string"]
+        },
+        {
+          "id": "Immunization.recorded",
+          "caminho": "Immunization.recorded",
+          "min": 0,
+          "max": "0",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Immunization.primarySource",
+          "caminho": "Immunization.primarySource",
+          "min": 0,
+          "max": "1",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Immunization.reportOrigin",
+          "caminho": "Immunization.reportOrigin",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.location",
+          "caminho": "Immunization.location",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.manufacturer",
+          "caminho": "Immunization.manufacturer",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.lotNumber",
+          "caminho": "Immunization.lotNumber",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.expirationDate",
+          "caminho": "Immunization.expirationDate",
+          "min": 0,
+          "max": "1",
+          "tipos": ["date"]
+        },
+        {
+          "id": "Immunization.site",
+          "caminho": "Immunization.site",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.route",
+          "caminho": "Immunization.route",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.doseQuantity",
+          "caminho": "Immunization.doseQuantity",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Quantity"]
+        },
+        {
+          "id": "Immunization.performer",
+          "caminho": "Immunization.performer",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Immunization.performer.id",
+          "caminho": "Immunization.performer.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.performer.extension",
+          "caminho": "Immunization.performer.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.performer.modifierExtension",
+          "caminho": "Immunization.performer.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.performer.function",
+          "caminho": "Immunization.performer.function",
+          "min": 1,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.performer.actor",
+          "caminho": "Immunization.performer.actor",
+          "min": 1,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.note",
+          "caminho": "Immunization.note",
+          "min": 0,
+          "max": "0",
+          "tipos": ["Annotation"]
+        },
+        {
+          "id": "Immunization.reasonCode",
+          "caminho": "Immunization.reasonCode",
+          "min": 0,
+          "max": "1",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.reasonReference",
+          "caminho": "Immunization.reasonReference",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.isSubpotent",
+          "caminho": "Immunization.isSubpotent",
+          "min": 0,
+          "max": "0",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Immunization.subpotentReason",
+          "caminho": "Immunization.subpotentReason",
+          "min": 0,
+          "max": "0",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.education",
+          "caminho": "Immunization.education",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Immunization.education.id",
+          "caminho": "Immunization.education.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.education.extension",
+          "caminho": "Immunization.education.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.education.modifierExtension",
+          "caminho": "Immunization.education.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.education.documentType",
+          "caminho": "Immunization.education.documentType",
+          "min": 0,
+          "max": "0",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.education.reference",
+          "caminho": "Immunization.education.reference",
+          "min": 0,
+          "max": "0",
+          "tipos": ["uri"]
+        },
+        {
+          "id": "Immunization.education.publicationDate",
+          "caminho": "Immunization.education.publicationDate",
+          "min": 0,
+          "max": "0",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Immunization.education.presentationDate",
+          "caminho": "Immunization.education.presentationDate",
+          "min": 0,
+          "max": "0",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Immunization.programEligibility",
+          "caminho": "Immunization.programEligibility",
+          "min": 0,
+          "max": "0",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.fundingSource",
+          "caminho": "Immunization.fundingSource",
+          "min": 0,
+          "max": "0",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.reaction",
+          "caminho": "Immunization.reaction",
+          "min": 0,
+          "max": "0",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Immunization.reaction.id",
+          "caminho": "Immunization.reaction.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.reaction.extension",
+          "caminho": "Immunization.reaction.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.reaction.modifierExtension",
+          "caminho": "Immunization.reaction.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.reaction.date",
+          "caminho": "Immunization.reaction.date",
+          "min": 0,
+          "max": "0",
+          "tipos": ["dateTime"]
+        },
+        {
+          "id": "Immunization.reaction.detail",
+          "caminho": "Immunization.reaction.detail",
+          "min": 0,
+          "max": "0",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.reaction.reported",
+          "caminho": "Immunization.reaction.reported",
+          "min": 0,
+          "max": "0",
+          "tipos": ["boolean"]
+        },
+        {
+          "id": "Immunization.protocolApplied",
+          "caminho": "Immunization.protocolApplied",
+          "min": 1,
+          "max": "1",
+          "tipos": ["BackboneElement"]
+        },
+        {
+          "id": "Immunization.protocolApplied.id",
+          "caminho": "Immunization.protocolApplied.id",
+          "min": 0,
+          "max": "1",
+          "tipos": ["http://hl7.org/fhirpath/System.String"]
+        },
+        {
+          "id": "Immunization.protocolApplied.extension",
+          "caminho": "Immunization.protocolApplied.extension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.protocolApplied.extension:pesquisaClinica",
+          "caminho": "Immunization.protocolApplied.extension",
+          "fatia": "pesquisaClinica",
+          "min": 0,
+          "max": "1",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.protocolApplied.modifierExtension",
+          "caminho": "Immunization.protocolApplied.modifierExtension",
+          "min": 0,
+          "max": "*",
+          "tipos": ["Extension"]
+        },
+        {
+          "id": "Immunization.protocolApplied.series",
+          "caminho": "Immunization.protocolApplied.series",
+          "min": 0,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.protocolApplied.authority",
+          "caminho": "Immunization.protocolApplied.authority",
+          "min": 0,
+          "max": "0",
+          "tipos": ["Reference"]
+        },
+        {
+          "id": "Immunization.protocolApplied.targetDisease",
+          "caminho": "Immunization.protocolApplied.targetDisease",
+          "min": 0,
+          "max": "*",
+          "tipos": ["CodeableConcept"]
+        },
+        {
+          "id": "Immunization.protocolApplied.doseNumber[x]",
+          "caminho": "Immunization.protocolApplied.doseNumber[x]",
+          "min": 1,
+          "max": "1",
+          "tipos": ["string"]
+        },
+        {
+          "id": "Immunization.protocolApplied.seriesDoses[x]",
+          "caminho": "Immunization.protocolApplied.seriesDoses[x]",
+          "min": 0,
+          "max": "1",
+          "tipos": ["positiveInt", "string"]
+        }
+      ]
+    }
+  }
+}

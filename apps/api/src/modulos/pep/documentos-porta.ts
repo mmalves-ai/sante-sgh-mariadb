@@ -1,0 +1,283 @@
+// Porta do prontuário de uso diário (M23): o que as telas do painel, do cabeçalho, da linha do tempo, das alergias,
+// dos problemas, dos exames, dos resultados, dos documentos, da alta, dos anexos, do parecer e das assinaturas leem e
+// gravam, independente de onde (a API não escreve SQL; fronteira):
+//   - `legado`: leituras READ ONLY pelos repositórios de @sgh/legado; gravações no banco do estabelecimento pelo
+//     EXECUTOR (as 8 receitas do M23, com a trilha dupla e as SGH_ da prova na mesma transação) e as só do novo pela
+//     transação SGH_ do núcleo (com a SGH_TRILHA junto); em dev sobre a cópia compartilhada, o executor só de leitura
+//     recusa as gravações com o motivo;
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com pacientes, atendimentos, exames, resultados e documentos
+//     SINTÉTICOS; o que se grava é o que o adaptador gravaria, em memória;
+//   - `indisponivel`: fora de dev/ci sem o núcleo: 503 (falha fechada).
+import type {
+  AlergiaLegadaLida,
+  AnexoLido,
+  AtendimentoPepLido,
+  CabecalhoDocumentoLido,
+  CienciaLida,
+  ContextoOperacao,
+  ContextoSgh,
+  DocumentoLegadoLido,
+  DocumentoResumoLido,
+  DocumentoSghLido,
+  EventoLido,
+  ExameCatalogoLido,
+  FichaImpressao,
+  FluxoLido,
+  LiberacaoConsultada,
+  CompletudePainelLida,
+  EpisodioLido,
+  LinhaPainelLida,
+  RecortePainel,
+  SupervisaoLida,
+  PacientePepLido,
+  PedidoLido,
+  ProblemaLido,
+  ProblemaNovo,
+  ProfissionalDoRegistro,
+  ResultadoLido,
+  RetratosAtuais,
+  SumarioLido,
+  TcleLido,
+} from '@sgh/legado';
+
+export const PORTA_DOCUMENTOS = Symbol('PORTA_DOCUMENTOS');
+
+export interface ContextoDocs {
+  readonly rede: string;
+  readonly hospital: string;
+}
+
+/** Profissional da sessão com a ocupação (código CBO 2002 de cada CBO) para a matriz ação × categoria. */
+export interface ProfissionalPep extends ProfissionalDoRegistro {
+  /** CBO (TBCBOPRO.ID) → código CBO 2002 (TBCBOSUS.COD) e conselho ativo. */
+  readonly ocupacoes: readonly { cbo: number; codigo: string; conselhoAtivo: boolean }[];
+}
+
+export interface PortaDocumentos {
+  readonly destino: 'legado' | 'memoria';
+  // ── Leituras ───────────────────────────────────────────────────────────────────────────────────────
+  agora(c: ContextoDocs): Promise<string>;
+  profissional(c: ContextoDocs, login: string): Promise<ProfissionalPep | null>;
+  /** Código CBO 2002 de um CBO (TBCBOPRO.ID) do autor de um registro (sigilo da categoria). */
+  ocupacaoDoCbo(c: ContextoDocs, cbo: number): Promise<string | null>;
+  painel(
+    c: ContextoDocs,
+    f: { unidade: number | null; busca: string | null } & RecortePainel,
+  ): Promise<{ linhas: LinhaPainelLida[]; limitado: boolean }>;
+  /** O episódio do atendimento para montar o sumário de alta (motivo, procedimentos, exames; regra 13). */
+  episodio(c: ContextoDocs, atendimento: number): Promise<EpisodioLido>;
+  /** O que os alertas de completude das linhas do painel precisam, de uma vez (regra 14). */
+  completudePainel(
+    c: ContextoDocs,
+    pacientes: readonly number[],
+    atendimentos: readonly number[],
+    desde: Date,
+  ): Promise<CompletudePainelLida>;
+  unidades(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
+  preferenciasLegado(
+    c: ContextoDocs,
+    login: string,
+  ): Promise<{ unidade: number | null; campos: { campo: string; exibir: boolean; ordem: number | null }[] }>;
+  paciente(c: ContextoDocs, id: number): Promise<PacientePepLido | null>;
+  nomes(c: ContextoDocs, ids: readonly number[]): Promise<Map<number, string>>;
+  atendimentos(c: ContextoDocs, paciente: number): Promise<AtendimentoPepLido[]>;
+  retratos(c: ContextoDocs, atendimento: number, paciente: number): Promise<RetratosAtuais | null>;
+  eventos(
+    c: ContextoDocs,
+    paciente: number,
+    periodo: { de: string; ate: string },
+    tipos: ReadonlySet<string>,
+    limite: number,
+  ): Promise<EventoLido[]>;
+  lerReceita(c: ContextoDocs, id: number): Promise<DocumentoLegadoLido | null>;
+  lerAtestado(c: ContextoDocs, id: number): Promise<DocumentoLegadoLido | null>;
+  lerExameExterno(
+    c: ContextoDocs,
+    id: number,
+  ): Promise<(DocumentoLegadoLido & { elementos: { elemento: string; tipo: string }[] }) | null>;
+  documentoDaTrilha(
+    c: ContextoDocs,
+    tipoAto: number,
+    origem: number,
+  ): Promise<{ id: number; situacao: number; xml: string } | null>;
+  documentos(
+    c: ContextoDocs,
+    paciente: number,
+    familia: 'receita' | 'atestado',
+  ): Promise<DocumentoResumoLido[]>;
+  fichas(c: ContextoDocs): Promise<FichaImpressao[]>;
+  modelosEmUso(c: ContextoDocs, desde: string): Promise<{ nome: string; usos: number }[]>;
+  cabecalhoDocumento(
+    c: ContextoDocs,
+    retratos: { readonly htPaciente: number; readonly htAtendimento: number },
+    cbo: number,
+    situacao: number,
+    tipoAto: number,
+  ): Promise<CabecalhoDocumentoLido>;
+  alergias(c: ContextoDocs, paciente: number): Promise<AlergiaLegadaLida[]>;
+  catalogoAlergias(c: ContextoDocs): Promise<{
+    agentes: { id: number; nome: string; tipo: string | null }[];
+    principios: { id: number; nome: string }[];
+  }>;
+  registrosParaAlergia(
+    c: ContextoDocs,
+    atendimento: number,
+    cbos: readonly number[],
+  ): Promise<{ registro: number; modelo: string; dataHora: string | null }[]>;
+  versaoAlergias(c: ContextoDocs, paciente: number): Promise<string>;
+  catalogoExames(c: ContextoDocs, termo: string | null): Promise<ExameCatalogoLido[]>;
+  examesPorId(c: ContextoDocs, ids: readonly number[]): Promise<ExameCatalogoLido[]>;
+  kits(c: ContextoDocs): Promise<{ id: number; nome: string; exames: number[] }[]>;
+  pedidos(c: ContextoDocs, paciente: number): Promise<PedidoLido[]>;
+  resultados(c: ContextoDocs, paciente: number): Promise<ResultadoLido[]>;
+  examesExternos(
+    c: ContextoDocs,
+    paciente: number,
+  ): Promise<{ id: number; nome: string; em: string | null; elementos: string[] }[]>;
+  anexos(c: ContextoDocs, paciente: number): Promise<AnexoLido[]>;
+  arquivoAnexo(c: ContextoDocs, id: number): Promise<{ paciente: number; pdf: Buffer } | null>;
+  tiposTermo(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
+  tiposAnexo(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
+  tcleHerdado(c: ContextoDocs, atendimento: number): Promise<string | null>;
+  tempos(
+    c: ContextoDocs,
+    paciente: number,
+  ): Promise<
+    {
+      id: number;
+      quando: string | null;
+      situacao: string | null;
+      profissional: string | null;
+      gravadoEm: string | null;
+    }[]
+  >;
+  historicoPareceres(
+    c: ContextoDocs,
+    paciente: number | null,
+  ): Promise<{ pedidos: number; respostas: number; encaminhamentos: number }>;
+  especialidades(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
+  especialidadesDoCbo(c: ContextoDocs, cbos: readonly number[]): Promise<number[]>;
+  documentosSgh(c: ContextoDocs, paciente: number): Promise<DocumentoSghLido[]>;
+  documentoSgh(c: ContextoDocs, id: number): Promise<DocumentoSghLido | null>;
+  documentoSghDaOrigem(c: ContextoDocs, tabela: string, id: number): Promise<DocumentoSghLido | null>;
+  pendencias(c: ContextoDocs, login: string): Promise<DocumentoSghLido[]>;
+  /** Regra 3: os registros de residentes que aguardam a coassinatura deste preceptor. */
+  coassinaturas(c: ContextoDocs, preceptor: string): Promise<SupervisaoLida[]>;
+  supervisao(c: ContextoDocs, id: number): Promise<SupervisaoLida | null>;
+  /** A coassinatura (ou a recusa) no novo, com a trilha (sem o campo de supervisão do legado). */
+  coassinarNoNovo(
+    c: ContextoSgh,
+    x: { id: number; decisao: 'coassinado' | 'recusado'; motivo?: string | null },
+  ): Promise<{ registro: number; paciente: number }>;
+  registrosSemAssinatura(
+    c: ContextoDocs,
+    login: string,
+  ): Promise<{ registro: number; hash: string; em: string; paciente: number; atendimento: number | null }[]>;
+  problemas(c: ContextoDocs, paciente: number): Promise<ProblemaLido[]>;
+  tcles(c: ContextoDocs, paciente: number): Promise<TcleLido[]>;
+  sumarios(c: ContextoDocs, atendimento: number): Promise<SumarioLido[]>;
+  transferencias(
+    c: ContextoDocs,
+    atendimento: number,
+  ): Promise<{ id: number; destino: string; em: string; documento: number | null }[]>;
+  obito(
+    c: ContextoDocs,
+    paciente: number,
+  ): Promise<{ em: string; numero: string | null; documento: number | null; atendimento: number } | null>;
+  ciencias(c: ContextoDocs, paciente: number): Promise<CienciaLida[]>;
+  fila(
+    c: ContextoDocs,
+    f: { especialidade?: number; categoria?: string; situacao?: string; paciente?: number },
+  ): Promise<FluxoLido[]>;
+  fluxo(c: ContextoDocs, id: number): Promise<FluxoLido | null>;
+  /** O passo 0 do executor (a operação grava agora para este login?), sem gravar. */
+  podeGravar(c: ContextoDocs, operacao: string, login: string): Promise<LiberacaoConsultada>;
+  // ── Gravações no banco do estabelecimento (executor) ────────────────────────────────────────────────
+  executar(
+    c: ContextoDocs,
+    operacao: string,
+    entrada: unknown,
+    ctx: ContextoOperacao,
+  ): Promise<Record<string, unknown>>;
+  // ── Gravações só do novo (transação SGH_ com a trilha) ──────────────────────────────────────────────
+  gravarProblema(c: ContextoSgh, p: ProblemaNovo): Promise<number>;
+  registrarCiencia(
+    c: ContextoSgh,
+    x: {
+      paciente: number;
+      exame: number;
+      chave: string;
+      resultado: number | null;
+      elemento: string | null;
+      conduta: string;
+      escalonadoPara: string | null;
+    },
+  ): Promise<number>;
+  aceitarParecer(c: ContextoSgh, parecer: number): Promise<{ paciente: number }>;
+  cancelarParecer(c: ContextoSgh, parecer: number, motivo: string): Promise<void>;
+  emitirTcle(
+    c: ContextoSgh,
+    t: {
+      paciente: number;
+      atendimento: number;
+      tipo: number | null;
+      procedimento: string;
+      cbo: number | null;
+      hashConteudo: string;
+      comoSuporte?: boolean;
+    },
+  ): Promise<{ id: number; documento: number }>;
+  mudarSituacaoTcle(
+    c: ContextoSgh,
+    m: { paciente: number; versao: number; situacao: 'assinado' | 'revogado'; motivo: string | null },
+  ): Promise<number>;
+  salvarRascunhoSumario(
+    c: ContextoSgh,
+    s: { paciente: number; atendimento: number; versao: number; conteudo: string; hashConteudo: string },
+  ): Promise<number>;
+  registrarTransferencia(
+    c: ContextoSgh,
+    t: {
+      paciente: number;
+      atendimento: number;
+      destino: string;
+      motivo: string;
+      conteudo: string;
+      cbo: number | null;
+      hashConteudo: string;
+      comoSuporte?: boolean;
+    },
+  ): Promise<{ id: number; documento: number }>;
+  registrarObito(
+    c: ContextoSgh,
+    o: {
+      paciente: number;
+      atendimento: number;
+      dataHora: Date;
+      numero: string | null;
+      causas: string;
+      cbo: number | null;
+      hashConteudo: string;
+      comoSuporte?: boolean;
+    },
+  ): Promise<{ id: number; documento: number }>;
+  assinar(
+    c: ContextoSgh,
+    itens: readonly { documento: number; hash: string }[],
+    comoSuporte?: boolean,
+  ): Promise<{ assinados: number[]; recusados: { documento: number; motivo: string }[] }>;
+  documentoDoRegistroClinico(
+    c: ContextoSgh,
+    r: { registro: number; paciente: number; atendimento: number | null; hash: string },
+  ): Promise<number>;
+  registrarEventoDocumento(
+    c: ContextoSgh,
+    ev: {
+      documento: number;
+      tipo: 'visualizado' | 'impresso' | 'segunda-via' | 'exportado';
+      justificativa?: string | null;
+    },
+  ): Promise<void>;
+  /** A leitura incremental do parecer do outro sistema (o ciclo da vigia), com a marca e a trilha. */
+  trazerPedidosDoLegado(c: ContextoDocs): Promise<number>;
+}

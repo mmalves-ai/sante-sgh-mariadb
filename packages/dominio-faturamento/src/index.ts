@@ -1,0 +1,17 @@
+// Regras puras do faturamento. M09: estrutura da mensagem TISS 04.03.00, guias de prova, hash do epílogo e
+// validação no XSD oficial (cap-12 §12.2; DP-37, DP-47.7). O gerador a partir da conta é do M31.
+// M30: as regras da conta do paciente (situação, grupo do item, fechamento e reabertura, explicador de preço, vigência,
+// pacote, réguas de data, particular, escopo por convênio e faturabilidade), que moram em
+// `@sgh/contratos/regras-faturamento` (o adaptador do legado também as confere); aqui ficam os testes e a cobertura.
+export * from './tiss/md5.js';
+export * from './tiss/xml.js';
+export * from './tiss/lote.js';
+export * from './tiss/validacao.js';
+export * from '@sgh/contratos/regras-faturamento';
+export * from './tiss/montagem.js';
+export * from './tiss/montador.js';
+export * from './tiss/demonstrativo.js';
+// M56.6: o lado da operadora própria (o lote recebido e o demonstrativo de análise da conta).
+export * from './tiss/operadora.js';
+// M51: faturamento SUS próprio (competência SUS, crítica prévia, CIHA; BPA, APAC e AIH nas etapas 2 a 4).
+export * from './sus/index.js';

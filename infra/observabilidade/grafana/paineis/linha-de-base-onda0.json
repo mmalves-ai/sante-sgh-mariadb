@@ -1,0 +1,903 @@
+{
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "annotations": {
+    "list": []
+  },
+  "uid": "sgh-linha-de-base-onda0",
+  "title": "Linha de base da onda 0",
+  "description": "Ficha do M38 (regra 4; cap-10 §10.11): CPU, disco, transações, conexões por sistema, OIT/OAT, consultas lentas e as operações-chave do outro sistema, antes e depois da liberação (a série \"antes\" é a mesma janela deslocada por $comparar), e os SLIs da onda 0. Só métricas agregadas; nenhum dado de paciente.",
+  "tags": ["sgh", "onda0", "linha-de-base"],
+  "templating": {
+    "list": [
+      {
+        "name": "estabelecimento",
+        "label": "Estabelecimento",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "sgh-prometheus"
+        },
+        "query": {
+          "query": "label_values(sgh_firebird_conexoes, estabelecimento)",
+          "refId": "v"
+        },
+        "definition": "label_values(sgh_firebird_conexoes, estabelecimento)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      },
+      {
+        "name": "comparar",
+        "label": "Comparar com",
+        "type": "custom",
+        "query": "7d,1d,14d,28d",
+        "current": {
+          "text": "7d",
+          "value": "7d"
+        },
+        "options": [
+          {
+            "text": "7d",
+            "value": "7d",
+            "selected": true
+          },
+          {
+            "text": "1d",
+            "value": "1d",
+            "selected": false
+          },
+          {
+            "text": "14d",
+            "value": "14d",
+            "selected": false
+          },
+          {
+            "text": "28d",
+            "value": "28d",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "name": "servidor_banco",
+        "label": "Servidor do banco",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "sgh-prometheus"
+        },
+        "query": {
+          "query": "label_values(node_uname_info, instance)",
+          "refId": "s"
+        },
+        "definition": "label_values(node_uname_info, instance)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      },
+      {
+        "name": "volume_banco",
+        "label": "Volume do banco",
+        "type": "custom",
+        "query": "/,/var/lib/firebird,/dados",
+        "current": {
+          "text": "/",
+          "value": "/"
+        },
+        "options": [
+          {
+            "text": "/",
+            "value": "/",
+            "selected": true
+          },
+          {
+            "text": "/var/lib/firebird",
+            "value": "/var/lib/firebird",
+            "selected": false
+          },
+          {
+            "text": "/dados",
+            "value": "/dados",
+            "selected": false
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Servidor do banco (CPU e disco; node_exporter no servidor do banco, montado no deploy: DP-15)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "CPU do servidor do banco (antes × depois)",
+      "description": "Uso de CPU do servidor do Firebird; a série \"antes\" é a mesma janela deslocada pelo período de comparação (linha de base da onda).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$servidor_banco\"}[5m]))",
+          "legendFormat": "agora"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$servidor_banco\"}[5m] offset $comparar))",
+          "legendFormat": "antes"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Disco do servidor do banco: ocupação e espera de E/S",
+      "description": "Ocupação do volume do banco e o tempo de E/S (antes × depois).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "1 - max(node_filesystem_avail_bytes{instance=~\"$servidor_banco\",mountpoint=~\"$volume_banco\"} / node_filesystem_size_bytes{instance=~\"$servidor_banco\",mountpoint=~\"$volume_banco\"})",
+          "legendFormat": "ocupação"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(node_disk_io_time_seconds_total{instance=~\"$servidor_banco\"}[5m]))",
+          "legendFormat": "E/S agora"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(node_disk_io_time_seconds_total{instance=~\"$servidor_banco\"}[5m] offset $comparar))",
+          "legendFormat": "E/S antes"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "Banco: transações, conexões por sistema e OIT/OAT (coletor MON$ do M09)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Conexões por sistema",
+      "description": "Sante SGH (novo), SPDATA e sante-api, pela marca da conexão.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_conexoes{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Transações abertas por sistema (antes × depois)",
+      "description": "Transações abertas por sistema e a mesma janela antes da liberação.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 10,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_transacoes{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_transacoes{estabelecimento=~\"$estabelecimento\"} offset $comparar)",
+          "legendFormat": "{{sistema}} antes"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Folga OIT e OAT (antes × depois)",
+      "description": "Próxima transação menos a mais antiga de interesse e a mais antiga ativa: o lixo que o coletor ainda não limpa.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_folga_oit{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "OIT"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_folga_oat{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "OAT"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_folga_oit{estabelecimento=~\"$estabelecimento\"} offset $comparar)",
+          "legendFormat": "OIT antes"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Transação mais longa por sistema",
+      "description": "A transação do novo acima do limite é alerta direto (cap-14 §14.6).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 18,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max by (sistema) (sgh_firebird_transacao_mais_longa_seconds{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "{{sistema}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_vigia_transacao_limite_seconds)",
+          "legendFormat": "limite do novo"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "Consultas lentas",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Consultas do Sante SGH ao Firebird: p95 e p99 por estabelecimento",
+      "description": "Consultas canceladas pelo limite do adaptador aparecem em \"por resultado\".",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, sgh_estabelecimento) (rate(sgh_firebird_consulta_duracao_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{sgh_estabelecimento}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le, sgh_estabelecimento) (rate(sgh_firebird_consulta_duracao_seconds_bucket[5m])))",
+          "legendFormat": "p99 {{sgh_estabelecimento}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Comandos ativos e parados por sistema",
+      "description": "Comandos em execução e os parados (esperando) no MON$STATEMENTS, por sistema.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 27,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_comandos_ativos{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "ativos {{sistema}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (sistema) (sgh_firebird_comandos_parados{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "parados {{sistema}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "row",
+      "title": "Operações-chave do outro sistema e SLIs da onda 0 (antes × depois; limite de piora acordado com a TI: proposta 10%, a aprovar)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Operações-chave do SPDATA: transação mais longa e esperas por trava (antes × depois)",
+      "description": "Piora acima do limite acordado recolhe a onda (regra 4; compararLinhaDeBase).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_transacao_mais_longa_seconds{estabelecimento=~\"$estabelecimento\",sistema=\"spdata\"})",
+          "legendFormat": "transação mais longa agora"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_firebird_transacao_mais_longa_seconds{estabelecimento=~\"$estabelecimento\",sistema=\"spdata\"} offset $comparar)",
+          "legendFormat": "transação mais longa antes"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(sgh_firebird_travas_esperas{estabelecimento=~\"$estabelecimento\",sistema=\"spdata\"})",
+          "legendFormat": "esperas por trava agora"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(sgh_firebird_travas_esperas{estabelecimento=~\"$estabelecimento\",sistema=\"spdata\"} offset $comparar)",
+          "legendFormat": "esperas por trava antes"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Abrir prontuário p95 (meta < 1,5 s)",
+      "description": "SLI da onda 0 (cap-14 §14.5).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 6,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1.5
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/pep/prontuario/:paciente\"}[5m])))",
+          "legendFormat": "abrir prontuário p95"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Login p95 (meta < 2 s)",
+      "description": "SLI da onda 0 (cap-14 §14.5).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 36,
+        "w": 6,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/sessao\",metodo=\"POST\"}[5m])))",
+          "legendFormat": "login p95"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Painel de leitos e busca de paciente p95 (metas 300 ms)",
+      "description": "Ciclo do painel ao vivo e busca do cadastro.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.3
+              }
+            ]
+          },
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/internacao/leitos/painel\"}[5m])))",
+          "legendFormat": "painel de leitos p95"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket{rota=\"/api/cadastros/pacientes\"}[5m])))",
+          "legendFormat": "busca de paciente p95"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Erros 5xx e alertas diretos",
+      "description": "Erros da API e os alertas diretos da última coleta (transação longa, schema reprovado, divergência de assinatura).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{classe=\"5xx\"}[5m]))",
+          "legendFormat": "5xx por s"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(sgh_firebird_alertas{estabelecimento=~\"$estabelecimento\"})",
+          "legendFormat": "alertas diretos"
+        }
+      ]
+    }
+  ]
+}

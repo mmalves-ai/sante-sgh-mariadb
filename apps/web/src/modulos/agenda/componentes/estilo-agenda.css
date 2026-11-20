@@ -1,0 +1,90 @@
+.tela-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+  max-width: 80rem;
+}
+.tela-agenda .filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  align-items: flex-end;
+}
+.tela-agenda .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-agenda .campo label {
+  font-weight: 600;
+}
+.tela-agenda .campo input,
+.tela-agenda .campo select,
+.tela-agenda .campo textarea {
+  font: inherit;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 6px;
+  background: var(--sgh-fundo-elevado);
+  color: var(--sgh-texto);
+}
+.tela-agenda .campo input:focus-visible,
+.tela-agenda .campo select:focus-visible,
+.tela-agenda .campo textarea:focus-visible {
+  outline: 2px solid var(--sgh-foco);
+}
+.tela-agenda .tabela {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tela-agenda .tabela caption {
+  text-align: start;
+  font-weight: 600;
+  padding-bottom: var(--sgh-espaco-1);
+}
+.tela-agenda .tabela th,
+.tela-agenda .tabela td {
+  border-bottom: 1px solid var(--sgh-borda);
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  text-align: start;
+  vertical-align: top;
+}
+.tela-agenda .acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: center;
+}
+.tela-agenda .painel {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 8px;
+  padding: var(--sgh-espaco-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-agenda .painel h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.tela-agenda .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-agenda .cartoes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--sgh-espaco-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.tela-agenda .cartoes li {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  display: flex;
+  flex-direction: column;
+}
+.tela-agenda .cartoes strong {
+  font-size: 1.3rem;
+}

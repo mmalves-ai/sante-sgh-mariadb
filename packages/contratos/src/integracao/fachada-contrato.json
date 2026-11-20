@@ -1,0 +1,3745 @@
+{
+  "versao": "0.23.0",
+  "operacoes": [
+    {
+      "superficie": "saude",
+      "metodo": "GET",
+      "caminho": "/health",
+      "resumo": "Liveness (não toca no banco)",
+      "parametros": [],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "status": "string",
+          "uptime": "number"
+        }
+      }
+    },
+    {
+      "superficie": "saude",
+      "metodo": "GET",
+      "caminho": "/health/db",
+      "resumo": "Readiness — prova a conexão ao Firebird",
+      "parametros": [],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "status": "string",
+          "db": "string",
+          "result": {
+            "ok": "number"
+          },
+          "charset": {
+            "banco": "string",
+            "colunaObs": "string",
+            "conexao": "string",
+            "efetivo": "string"
+          }
+        },
+        "503": {
+          "status": "string",
+          "db": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/convenios",
+      "resumo": "Lista/pesquisa convênios",
+      "parametros": [
+        {
+          "nome": "ativo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "convenios": [
+            {
+              "codigo": "number",
+              "nome": "string",
+              "ativo": "boolean",
+              "permiteAtendimento": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/convenios/{codigo}",
+      "resumo": "Um convênio pelo código",
+      "parametros": [
+        {
+          "nome": "codigo",
+          "em": "path",
+          "obrigatorio": true,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "codigo": "number",
+          "nome": "string",
+          "ativo": "boolean",
+          "permiteAtendimento": "number"
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/medicos",
+      "resumo": "Médicos por nome OU por especialidade",
+      "parametros": [
+        {
+          "nome": "nome",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "especialidade",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "atende": "boolean",
+          "medicos": [
+            {
+              "medico": "string",
+              "atende": "boolean",
+              "agendas": [
+                {
+                  "tipo": "string",
+                  "agenda": "string",
+                  "especialidade": "string",
+                  "vigencia": {
+                    "inicio": "string",
+                    "fim": "string"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/especialidades",
+      "resumo": "Lista as especialidades das consultas (discovery)",
+      "parametros": [
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "especialidades": [
+            {
+              "especialidade": "string",
+              "totalMedicos": "number",
+              "totalAgendas": "number",
+              "medicos": ["string"]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/pacientes",
+      "resumo": "Busca por telefone, CPF e/ou nome",
+      "parametros": [
+        {
+          "nome": "telefone",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "cpf",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "nome",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "pacientes": [
+            {
+              "id": "number",
+              "prontuario": "number",
+              "nome": "string",
+              "nascimento": "string",
+              "cpf": "string",
+              "convenio": "number",
+              "celular": "string",
+              "telefone": "null",
+              "ativo": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/pacientes",
+      "resumo": "Cadastrar paciente (find-or-create por CPF)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["nome", "nascimento", "sexo", "cpf"],
+        "campos": [
+          "nome",
+          "nascimento",
+          "sexo",
+          "cpf",
+          "telefone",
+          "fone",
+          "convenio",
+          "cep",
+          "numero",
+          "complemento",
+          "endereco",
+          "bairro",
+          "cidade",
+          "uf",
+          "mae",
+          "cns",
+          "email",
+          "nacionalidade"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "criado": "boolean",
+          "avisos": [],
+          "paciente": {
+            "id": "number",
+            "prontuario": "number",
+            "nome": "string",
+            "nascimento": "string",
+            "cpf": "string",
+            "convenio": "number",
+            "celular": "string",
+            "telefone": "null",
+            "ativo": "boolean"
+          }
+        },
+        "201": {
+          "criado": "boolean",
+          "avisos": [],
+          "paciente": {
+            "id": "number",
+            "prontuario": "number",
+            "nome": "string",
+            "nascimento": "string",
+            "cpf": "string",
+            "convenio": "number",
+            "celular": "string",
+            "telefone": "null",
+            "ativo": "boolean"
+          }
+        },
+        "400": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/pacientes/{id}",
+      "resumo": "Um paciente por RICADPAC.ID",
+      "parametros": [
+        {
+          "nome": "id",
+          "em": "path",
+          "obrigatorio": true,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "id": "number",
+          "prontuario": "number",
+          "nome": "string",
+          "nascimento": "string",
+          "cpf": "string",
+          "convenio": "number",
+          "celular": "string",
+          "telefone": "null",
+          "ativo": "boolean"
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/exames/catalogo",
+      "resumo": "Agendas de exame ativas (\"o exame é feito aqui?\")",
+      "parametros": [
+        {
+          "nome": "ato",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer",
+          "valores": [15, 16, 21, 24, 25, 26, 27, 42]
+        },
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "exames": [
+            {
+              "agendaId": "number",
+              "agenda": "string",
+              "procedimento": "string",
+              "medico": "string",
+              "modalidade": "string",
+              "categoria": {
+                "codigo": "number",
+                "nome": "string"
+              },
+              "vigencia": {
+                "inicio": "string",
+                "fim": "string"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/exames/disponibilidade",
+      "resumo": "Horários livres (por agenda exata OU por busca/ato)",
+      "parametros": [
+        {
+          "nome": "agenda",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "ato",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer",
+          "valores": [15, 16, 21, 24, 25, 26, 27, 42]
+        },
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "agenda": "string",
+          "de": "string",
+          "ate": "string",
+          "total": "number",
+          "horarios": [
+            {
+              "agenda": "string",
+              "data": "string",
+              "hora": "string",
+              "horaRaw": "string",
+              "exame": "string",
+              "crm": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/exames/agendamentos",
+      "resumo": "Exames MARCADOS — por telefone OU por período",
+      "parametros": [
+        {
+          "nome": "telefone",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "cpf",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "pacienteId",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "data",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "agenda",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "medico",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "exame",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "de": "string",
+          "ate": "string",
+          "truncado": "boolean",
+          "observacao": "string",
+          "agendamentos": [
+            {
+              "tipo": "string",
+              "agenda": "string",
+              "procedimento": "string",
+              "medico": "string",
+              "data": "string",
+              "hora": "string",
+              "horaRaw": "string",
+              "exame": "string",
+              "crm": "number",
+              "convenio": "number",
+              "situacaoRaw": "null",
+              "paciente": {
+                "id": "number",
+                "prontuario": "number",
+                "nome": "string",
+                "celular": "string",
+                "telefone": "null",
+                "contato": "string",
+                "homonimos": "number"
+              },
+              "requerConfirmacao": "boolean"
+            }
+          ]
+        },
+        "400": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/exames/agendamentos",
+      "resumo": "Agendar exame (grava SIPACAGI)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "data", "hora", "exame", "pacienteNome", "convenio"],
+        "campos": [
+          "agenda",
+          "data",
+          "hora",
+          "exame",
+          "crm",
+          "pacienteNome",
+          "convenio",
+          "validarConvenio",
+          "retorno"
+        ]
+      },
+      "respostas": {
+        "201": {
+          "agendado": "boolean",
+          "agenda": "string",
+          "data": "string",
+          "hora": "string",
+          "exame": "string",
+          "crm": "number",
+          "paciente": "string",
+          "convenio": "number"
+        },
+        "409": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/exames/agendamentos/cancelar",
+      "resumo": "Cancelar exame (libera o slot)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "data", "hora", "exame"],
+        "campos": ["agenda", "data", "hora", "exame", "crm"]
+      },
+      "respostas": {
+        "200": {
+          "cancelado": "boolean",
+          "agenda": "string",
+          "data": "string",
+          "hora": "string",
+          "exame": "string",
+          "pacienteAnterior": "string"
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/exames/agendamentos/remarcar",
+      "resumo": "Remarcar exame (cancelar + agendar, atômico)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["atual", "novo"],
+        "campos": ["atual", "novo", "pacienteNome", "convenio", "validarConvenio", "retorno"]
+      },
+      "respostas": {
+        "200": {
+          "remarcado": "boolean",
+          "de": {
+            "agenda": "string",
+            "data": "string",
+            "hora": "string",
+            "exame": "string",
+            "crm": "number"
+          },
+          "para": {
+            "agenda": "string",
+            "data": "string",
+            "hora": "string",
+            "exame": "string",
+            "crm": "number"
+          },
+          "paciente": "string",
+          "convenio": "number"
+        },
+        "409": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/exames/valor",
+      "resumo": "Valor do exame por nome + convênio",
+      "parametros": [
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "convenio",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "busca": "string",
+          "convenio": {
+            "codigo": "number",
+            "nome": "string",
+            "ativo": "boolean",
+            "tabelaHonorario": "number"
+          },
+          "total": "number",
+          "itens": [
+            {
+              "codigo": "number",
+              "nome": "string",
+              "valor": "number",
+              "componentes": {
+                "custoOperacional": "number",
+                "filme": "number",
+                "anestesia": "number",
+                "outros": "number"
+              },
+              "valorTotal": "number",
+              "vigencia": "string",
+              "situacao": "string"
+            }
+          ]
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/exames/cobertura",
+      "resumo": "Cobertura por convênio (parcial — só situação do convênio)",
+      "parametros": [
+        {
+          "nome": "convenio",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "integer"
+        },
+        {
+          "nome": "exame",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "agenda",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "coberturaPorExame": "boolean",
+          "motivo": "string",
+          "convenio": {
+            "codigo": "number",
+            "nome": "string",
+            "ativo": "boolean",
+            "permiteAtendimento": "number"
+          },
+          "convenioAtende": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/consultas/catalogo",
+      "resumo": "Agendas de consulta ativas",
+      "parametros": [
+        {
+          "nome": "busca",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "convenio",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "consultas": [
+            {
+              "agendaId": "number",
+              "agenda": "string",
+              "especialidade": "string",
+              "medico": "string",
+              "duracaoMin": "number",
+              "vigencia": {
+                "inicio": "string",
+                "fim": "string"
+              },
+              "medicoCadastro": "string",
+              "crm": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/consultas/disponibilidade",
+      "resumo": "Horários livres (por agenda exata OU por especialidade)",
+      "parametros": [
+        {
+          "nome": "agenda",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "especialidade",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "agenda": "string",
+          "de": "string",
+          "ate": "string",
+          "total": "number",
+          "horarios": [
+            {
+              "data": "string",
+              "hora": "string",
+              "horaRaw": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/consultas/valor",
+      "resumo": "Valor da consulta por médico (FCCODCON)",
+      "parametros": [
+        {
+          "nome": "medico",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "convenio",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "disponivel": "boolean",
+          "medico": "string",
+          "convenio": {
+            "codigo": "number",
+            "nome": "string",
+            "ativo": "boolean"
+          },
+          "total": "number",
+          "itens": [
+            {
+              "medico": "string",
+              "crm": "number",
+              "valor": "number"
+            }
+          ]
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/consultas/agendamentos",
+      "resumo": "Consultas MARCADAS — por telefone OU por período",
+      "parametros": [
+        {
+          "nome": "telefone",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "cpf",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "pacienteId",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "data",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "agenda",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "medico",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "especialidade",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "atendido",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "de": "string",
+          "ate": "string",
+          "truncado": "boolean",
+          "agendamentos": [
+            {
+              "tipo": "string",
+              "agendamentoId": "number",
+              "agenda": "string",
+              "especialidade": "string",
+              "medico": "string",
+              "data": "string",
+              "hora": "string",
+              "horaRaw": "string",
+              "convenio": "number",
+              "atendido": "boolean",
+              "paciente": {
+                "id": "number",
+                "prontuario": "number",
+                "nome": "string",
+                "celular": "string",
+                "telefone": "null",
+                "contato": "string"
+              }
+            }
+          ]
+        },
+        "400": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/consultas/agendamentos",
+      "resumo": "Agendar consulta (REPACAGI + REPACAGD)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "data", "hora", "pacienteId", "convenio"],
+        "campos": [
+          "agenda",
+          "data",
+          "hora",
+          "pacienteId",
+          "convenio",
+          "validarConvenio",
+          "retorno",
+          "observacao"
+        ]
+      },
+      "respostas": {
+        "201": {
+          "agendado": "boolean",
+          "agenda": "string",
+          "data": "string",
+          "hora": "string",
+          "pacienteId": "number",
+          "convenio": "number",
+          "agendamentoId": "number"
+        },
+        "409": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/consultas/agendamentos/cancelar",
+      "resumo": "Cancelar consulta (auditoria RECANAGE + libera slot)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agendamentoId"],
+        "campos": ["agendamentoId", "motivo"]
+      },
+      "respostas": {
+        "200": {
+          "cancelado": "boolean",
+          "agendamentoId": "number",
+          "protocolo": "number"
+        },
+        "404": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "POST",
+      "caminho": "/consultas/agendamentos/remarcar",
+      "resumo": "Remarcar consulta (cancelar + agendar, atômico)",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agendamentoId", "novo"],
+        "campos": ["agendamentoId", "novo", "convenio", "validarConvenio", "motivo", "observacao"]
+      },
+      "respostas": {
+        "200": {
+          "remarcado": "boolean",
+          "agendamentoAnterior": "number",
+          "protocoloCancelamento": "number",
+          "novo": {
+            "agenda": "string",
+            "data": "string",
+            "hora": "string",
+            "crm": "number",
+            "agendamentoId": "number"
+          },
+          "convenio": "number"
+        },
+        "409": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "atendimento",
+      "metodo": "GET",
+      "caminho": "/agendamentos",
+      "resumo": "Consultas + exames MARCADOS — por telefone OU por período",
+      "parametros": [
+        {
+          "nome": "telefone",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "cpf",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "pacienteId",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "data",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "tipo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["consulta", "exame"]
+        },
+        {
+          "nome": "medico",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "especialidade",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "atendido",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "totalConsultas": "number",
+          "totalExames": "number",
+          "de": "string",
+          "ate": "string",
+          "truncado": "boolean",
+          "agendamentos": [
+            {
+              "tipo": "string",
+              "agendamentoId": "number",
+              "agenda": "string",
+              "especialidade": "string",
+              "medico": "string",
+              "data": "string",
+              "hora": "string",
+              "horaRaw": "string",
+              "convenio": "number",
+              "atendido": "boolean",
+              "paciente": {
+                "id": "number",
+                "prontuario": "number",
+                "nome": "string",
+                "celular": "string",
+                "telefone": "null",
+                "contato": "string"
+              }
+            }
+          ]
+        },
+        "400": {
+          "status": "string",
+          "codigo": "string",
+          "message": "string"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/receita",
+      "resumo": "Receita agregada por dimensão",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": [
+            "convenio",
+            "procedimento",
+            "especialidade",
+            "natureza",
+            "tipoConta",
+            "mes",
+            "diaSemana"
+          ]
+        },
+        {
+          "nome": "base",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["competencia", "lancamento"]
+        },
+        {
+          "nome": "tipoConta",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["I", "E"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "de": "string",
+          "ate": "string",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "base": "string",
+          "agrupadoPor": "string",
+          "total": "number",
+          "itens": "number",
+          "linhas": [
+            {
+              "chave": "number",
+              "rotulo": "string",
+              "itens": "number",
+              "receita": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/receita/serie",
+      "resumo": "Série mensal com crescimento",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "linhas": [
+            {
+              "mes": "string",
+              "contas": "number",
+              "receita": "number",
+              "ticketMedio": "number",
+              "variacaoMesAnterior": "number",
+              "variacaoAnoAnterior": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/glosa",
+      "resumo": "Glosa por motivo, categoria, convênio ou procedimento",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["motivo", "categoria", "convenio", "procedimento"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "cobrado": "number",
+          "baixado": "number",
+          "pago": "number",
+          "glosa": "number",
+          "percentualGlosa": "number",
+          "maturacao": {
+            "percentualBaixado": "number"
+          },
+          "linhas": [
+            {
+              "chave": "number",
+              "rotulo": "string",
+              "itens": "number",
+              "glosa": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/glosa/recurso",
+      "resumo": "Glosa COM o lado do recurso: contestado, recuperado, perdido",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": [
+            "motivo",
+            "categoria",
+            "convenio",
+            "procedimento",
+            "natureza",
+            "faixaValor",
+            "tempestividade",
+            "faturador",
+            "mes"
+          ]
+        },
+        {
+          "nome": "cruzadoCom",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": [
+            "motivo",
+            "categoria",
+            "convenio",
+            "procedimento",
+            "natureza",
+            "faixaValor",
+            "tempestividade",
+            "faturador",
+            "mes"
+          ]
+        },
+        {
+          "nome": "base",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["glosados", "conciliados"]
+        },
+        {
+          "nome": "protocolo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["todos", "mesmoDia", "atraso"]
+        },
+        {
+          "nome": "motivo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "convenio",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "ordenarPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["glosa", "contestado", "recuperado", "perdido", "naoContestado", "itens", "chave"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "cobrado": "number",
+          "baixado": "number",
+          "pago": "number",
+          "glosa": "number",
+          "contestado": "number",
+          "recuperado": "number",
+          "perdido": "number",
+          "naoContestado": "number",
+          "percentualContestado": "number",
+          "percentualExito": "number",
+          "percentualGlosa": "number",
+          "itensConciliados": "number",
+          "itensGlosados": "number",
+          "itensContestados": "number",
+          "maturacao": {
+            "percentualBaixado": "number"
+          },
+          "linhas": [
+            {
+              "chave": "number",
+              "rotulo": "string",
+              "itens": "number",
+              "glosa": "number",
+              "contestado": "number",
+              "recuperado": "number",
+              "perdido": "number",
+              "naoContestado": "number",
+              "percentualContestado": "number",
+              "percentualExito": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/glosa/oportunidade",
+      "resumo": "Quanto daria para recuperar, e por qual caminho",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "lente",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["todas", "cobertura", "tempestividade", "padronizacao"]
+        },
+        {
+          "nome": "exitoMinimo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "number"
+        },
+        {
+          "nome": "minimoItensContestados",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "minimoItensPorOperador",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "minimoOperadoresPorCelula",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "apenasMesmoDia",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "lente": "string",
+          "totalOportunidade": "number",
+          "criterios": {
+            "exitoMinimo": "number",
+            "minimoItensContestados": "number"
+          },
+          "semDuplaContagem": "boolean",
+          "cobertura": {
+            "total": "number",
+            "linhas": [
+              {
+                "chave": "number",
+                "rotulo": "string",
+                "naoContestado": "number",
+                "percentualExito": "number",
+                "recuperacaoAdicional": "number"
+              }
+            ],
+            "cauda": {
+              "motivos": "number",
+              "valor": "number"
+            }
+          }
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/glosa/ciclo",
+      "resumo": "Prazos do ciclo e maturação da safra",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["nenhum", "mes", "convenio", "motivo"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "apresentacaoAteConciliacaoDias": "number",
+          "recursoAteRetornoDias": "number",
+          "percentualComRetorno": "number",
+          "avisos": ["string"],
+          "linhas": [
+            {
+              "chave": "number",
+              "rotulo": "string",
+              "cobrado": "number",
+              "baixado": "number",
+              "percentualBaixado": "number",
+              "contestado": "number",
+              "recuperado": "number",
+              "percentualRecuperado": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/recebimento",
+      "resumo": "Prazo de recebimento e maturação por safra",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "porConvenio": [
+            {
+              "convenio": "number",
+              "nome": "string",
+              "cobrado": "number",
+              "pago": "number",
+              "diasMediosRecebimento": "number"
+            }
+          ],
+          "safras": [
+            {
+              "mes": "string",
+              "cobrado": "number",
+              "baixado": "number",
+              "percentualBaixado": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/faturamento",
+      "resumo": "Backlog de contas e tempo até o fechamento",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "situacao": [
+            {
+              "situacao": "string",
+              "descricao": "string",
+              "contas": "number",
+              "valor": "number"
+            }
+          ],
+          "diasMediosAltaAteFechamento": "number",
+          "agingContasAbertas": [
+            {
+              "faixa": "string",
+              "contas": "number",
+              "valor": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/tiss",
+      "resumo": "Lotes TISS e retorno de protocolo",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "lotes": "number",
+          "comProtocolo": "number",
+          "semProtocolo": "number",
+          "percentualComProtocolo": "number"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/contas-a-pagar",
+      "resumo": "Contas a pagar por fornecedor",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "linhas": [
+            {
+              "fornecedor": "number",
+              "nome": "string",
+              "titulos": "number",
+              "valor": "number",
+              "pago": "number",
+              "vencidoEmAberto": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/ocupacao",
+      "resumo": "Ocupação da grade",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "tipo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["consulta", "exame"]
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["agenda", "especialidade"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "slots": "number",
+          "ocupados": "number",
+          "livres": "number",
+          "ocupacao": "number",
+          "linhas": [
+            {
+              "chave": "string",
+              "slots": "number",
+              "ocupados": "number",
+              "livres": "number",
+              "ocupacao": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/absenteismo",
+      "resumo": "Faltas, por seis dimensões",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["agenda", "especialidade", "diaSemana", "hora", "antecedencia", "retorno"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "marcados": "number",
+          "compareceu": "number",
+          "faltou": "number",
+          "absenteismo": "number",
+          "linhas": [
+            {
+              "chave": "string",
+              "marcados": "number",
+              "compareceu": "number",
+              "faltou": "number",
+              "absenteismo": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/funil",
+      "resumo": "Funil: ofertado → marcado → atendido",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "slotsOfertados": "number",
+          "nuncaPreenchidos": "number",
+          "marcados": "number",
+          "cancelados": "number",
+          "compareceu": "number",
+          "faltou": "number",
+          "ocupacao": "number",
+          "taxaCancelamento": "number",
+          "absenteismo": "number",
+          "conversaoSlotEmAtendimento": "number"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/serie",
+      "resumo": "Série: agendados × realizados",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["dia", "semana", "mes"]
+        },
+        {
+          "nome": "tipo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["ambos", "consulta", "exame"]
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "de": "string",
+          "ate": "string",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "agrupadoPor": "string",
+          "tipo": "string",
+          "periodos": "number",
+          "totais": {
+            "consultas": {
+              "slotsOfertados": "number",
+              "nuncaPreenchidos": "number",
+              "marcados": "number",
+              "cancelados": "number",
+              "compareceu": "number",
+              "faltou": "number",
+              "absenteismo": "number"
+            },
+            "exames": {
+              "slotsOfertados": "number",
+              "nuncaPreenchidos": "number",
+              "marcados": "number",
+              "cancelados": "number",
+              "compareceu": "number",
+              "faltou": "number",
+              "absenteismo": "number",
+              "aviso": "string"
+            }
+          },
+          "linhas": [
+            {
+              "periodo": "string",
+              "consultas": {
+                "slotsOfertados": "number",
+                "nuncaPreenchidos": "number",
+                "marcados": "number",
+                "cancelados": "number",
+                "compareceu": "number",
+                "faltou": "number",
+                "absenteismo": "number"
+              },
+              "exames": {
+                "slotsOfertados": "number",
+                "nuncaPreenchidos": "number",
+                "marcados": "number",
+                "cancelados": "number",
+                "compareceu": "number",
+                "faltou": "number",
+                "absenteismo": "number"
+              }
+            }
+          ],
+          "serie": [
+            {
+              "periodo": "string",
+              "medida": "string",
+              "valor": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/cancelamentos",
+      "resumo": "Volume de cancelamentos",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "tipo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["consulta", "exame"]
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["agenda", "especialidade"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "linhas": [
+            {
+              "chave": "string",
+              "cancelados": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/agenda/overbooking",
+      "resumo": "Onde abrir vaga extra",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "minimoAgendamentos",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "celulas": [
+            {
+              "diaSemana": "string",
+              "hora": "string",
+              "marcados": "number",
+              "faltou": "number",
+              "absenteismo": "number",
+              "vagasExtrasSugeridas": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/acesso/lead-time",
+      "resumo": "Fila: dias até o primeiro horário livre",
+      "parametros": [
+        {
+          "nome": "tipo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["consulta", "exame"]
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["especialidade", "agenda"]
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "linhas": [
+            {
+              "especialidade": "string",
+              "agendas": "number",
+              "slotsLivres": "number",
+              "esperaMinimaDias": "number",
+              "esperaMediaDias": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/producao/medicos",
+      "resumo": "Produção por médico",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "linhas": [
+            {
+              "crm": "number",
+              "medico": "string",
+              "atendimentos": "number",
+              "pacientes": "number",
+              "receita": "number",
+              "ticketMedio": "number",
+              "semValorizacao": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/producao/especialidades",
+      "resumo": "Produção por especialidade",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "linhas": [
+            {
+              "codigo": "number",
+              "especialidade": "string",
+              "atendimentos": "number",
+              "medicos": "number",
+              "pacientes": "number",
+              "receita": "number",
+              "ticketMedio": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/exames",
+      "resumo": "Volume de exames por modalidade ou tipo",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["modalidade", "exame"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "linhas": [
+            {
+              "chave": "number",
+              "rotulo": "string",
+              "procedimentos": "number",
+              "requisicoes": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/exames/tat",
+      "resumo": "Tempo de liberação do laudo",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "examesLiberados": "number",
+          "horasMedias": "number"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/cirurgias",
+      "resumo": "Volume cirúrgico, duração e uso de sala",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["porte", "sala", "urgencia", "contaminacao"]
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "realizadas": "number",
+          "agendadas": "number",
+          "agendadasRealizadas": "number",
+          "conversaoAgendaEmCirurgia": "number",
+          "semAgenda": "number",
+          "linhas": [
+            {
+              "chave": "string",
+              "rotulo": "string",
+              "cirurgias": "number",
+              "minutosTotais": "number",
+              "duracaoMediaMin": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/internacao/permanencia",
+      "resumo": "Tempo médio de permanência",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["clinica", "especialidade"]
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "linhas": [
+            {
+              "chave": "string",
+              "rotulo": "string",
+              "altas": "number",
+              "diariasMedias": "number",
+              "noitesMedias": "number"
+            }
+          ],
+          "prolongadas": {
+            "altas": "number",
+            "maisDe10Dias": "number",
+            "maisDe30Dias": "number",
+            "maiorPermanencia": "number"
+          }
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/internacao/leitos",
+      "resumo": "Ocupação de leitos e giro",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "diasNoPeriodo": "number",
+          "internacoesNoPeriodo": "number",
+          "saidas": "number",
+          "linhas": [
+            {
+              "acomodacao": "string",
+              "leitosAtivos": "number",
+              "pacienteDias": "number",
+              "taxaOcupacao": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/internacao/censo",
+      "resumo": "Quantos internados numa data",
+      "parametros": [
+        {
+          "nome": "data",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "data": "string",
+          "internados": "number",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/internacao/indicadores",
+      "resumo": "Reinternação, mortalidade e caráter",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "altas": "number",
+          "reinternacao30Dias": "number",
+          "taxaReinternacao30Dias": "number",
+          "obitos": "number",
+          "taxaMortalidade": "number",
+          "internacoes": "number",
+          "urgencia": "number",
+          "eletivo": "number",
+          "percentualUrgencia": "number"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/casuistica",
+      "resumo": "Diagnósticos mais frequentes (CID)",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "origem",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["internacao", "ambulatorio"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "origem": "string",
+          "linhas": [
+            {
+              "cid": "string",
+              "descricao": "string",
+              "casos": "number",
+              "permanenciaMedia": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/pacientes/perfil",
+      "resumo": "Perfil de quem foi atendido",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "agrupadoPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["faixaEtaria", "sexo", "municipio", "bairro"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "linhas": [
+            {
+              "chave": "string",
+              "atendimentos": "number",
+              "pacientes": "number",
+              "participacao": "number"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/pacientes/fidelizacao",
+      "resumo": "Novos, recorrentes e frequência",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "preciso",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "pacientes": "number",
+          "novos": "number",
+          "recorrentes": "number",
+          "percentualNovos": "number",
+          "atendimentos": "number",
+          "atendimentosPorPaciente": "number"
+        }
+      }
+    },
+    {
+      "superficie": "gestao",
+      "metodo": "GET",
+      "caminho": "/gestao/qualidade-dados",
+      "resumo": "O que este banco NÃO responde",
+      "parametros": [],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "naoDisponivel": [
+            {
+              "assunto": "string",
+              "porque": "string"
+            }
+          ],
+          "cuidados": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "GET",
+      "caminho": "/acoes/status",
+      "resumo": "A superfície de ações está ligada?",
+      "parametros": [],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "habilitada": "boolean",
+          "propostasPendentes": "number",
+          "validadePropostaMinutos": "number",
+          "acoesDisponiveis": [
+            {
+              "acao": "string",
+              "rotas": ["string"],
+              "resumo": "string",
+              "reversivel": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/cobertura/convenio",
+      "resumo": "Propor: ligar ou desligar um convênio numa agenda",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "convenio", "operacao"],
+        "campos": ["agenda", "convenio", "operacao", "tipo"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "acao": "string",
+          "aplicada": "boolean",
+          "expiraEm": "string",
+          "validadeMinutos": "number",
+          "agenda": "string",
+          "agendaId": "number",
+          "convenio": {
+            "codigo": "number",
+            "nome": "string",
+            "ativo": "boolean"
+          },
+          "operacao": "string",
+          "efeito": {
+            "tabela": "string",
+            "antes": "string",
+            "depois": "string"
+          },
+          "impacto": {
+            "agendamentosFuturosComEsteConvenio": "number"
+          },
+          "reversao": {
+            "descricao": "string"
+          },
+          "comoConfirmar": {
+            "metodo": "string",
+            "rota": "string",
+            "corpo": {
+              "propostaId": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/faturamento/lote/protocolo",
+      "resumo": "Propor: registrar o protocolo de um lote TISS",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["lote", "operacao", "protocolo"],
+        "campos": ["lote", "operacao", "protocolo"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/glosa/recurso",
+      "resumo": "Propor: recorrer de uma glosa, item a item",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["item"],
+        "campos": ["item", "dataProtocolo", "valor", "quantidade", "reverter", "restaurar"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/glosa/retorno",
+      "resumo": "Propor: baixar o retorno de um recurso de glosa",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["item"],
+        "campos": [
+          "item",
+          "desfecho",
+          "dataRetorno",
+          "demonstrativo",
+          "valor",
+          "quantidade",
+          "motivo",
+          "reverter",
+          "restaurar"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/cotacao/vencedor",
+      "resumo": "Propor: escolher o fornecedor vencedor de um item cotado",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["ano", "doc", "seq", "item", "operacao"],
+        "campos": [
+          "ano",
+          "doc",
+          "seq",
+          "item",
+          "operacao",
+          "fornecedor",
+          "comprada",
+          "vencedores",
+          "compradaAnterior"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/precos/vigencia",
+      "resumo": "Propor: criar uma vigência de preço",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["tab", "data"],
+        "campos": ["tab", "cod", "codigos", "data", "valor", "percentual"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/precos/vigencia/remover",
+      "resumo": "Propor: desfazer uma vigência de preço criada",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["tab", "data", "itens"],
+        "campos": ["tab", "data", "itens"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/convenios/situacao",
+      "resumo": "Propor: suspender ou reativar um convênio",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["convenio", "operacao"],
+        "campos": ["convenio", "operacao"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/faturamento/fechar-conta",
+      "resumo": "Propor: fechar uma conta já emitida",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["conta"],
+        "campos": ["conta", "dataFechamento"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/faturamento/reabrir-conta",
+      "resumo": "Propor: reabrir uma conta fechada",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["conta"],
+        "campos": ["conta", "reverter", "restaurar"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/financeiro/titulo-a-pagar",
+      "resumo": "Propor: lançar um título a pagar",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["forn", "doc", "serie"],
+        "campos": [
+          "forn",
+          "doc",
+          "parc",
+          "tipo",
+          "serie",
+          "valor",
+          "valorDocumento",
+          "vencimento",
+          "emissao",
+          "entrada",
+          "datado",
+          "nf",
+          "referente",
+          "obs",
+          "classificacao",
+          "reverter",
+          "titulo"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/agenda/encaixe",
+      "resumo": "Propor: abrir um encaixe em agenda lotada",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "data", "hora", "pacienteId", "convenio"],
+        "campos": ["agenda", "crm", "data", "hora", "pacienteId", "convenio", "duracao", "observacao"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/agenda/encaixe/desfazer",
+      "resumo": "Propor: desfazer um encaixe",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "data", "hora", "agendamentoId"],
+        "campos": ["agenda", "crm", "data", "hora", "agendamentoId", "motivo"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/agenda/grade",
+      "resumo": "Propor: gerar os slots de uma agenda",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["agenda", "de", "ate"],
+        "campos": [
+          "agenda",
+          "crm",
+          "de",
+          "ate",
+          "diasDaSemana",
+          "horaInicio",
+          "horaFim",
+          "duracaoMinutos",
+          "intervalo",
+          "incluirFeriados",
+          "reverter",
+          "desfazer"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/cirurgia/agendar",
+      "resumo": "Propor: marcar uma cirurgia no mapa do centro cirúrgico",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["sala", "dataHora"],
+        "campos": [
+          "sala",
+          "dataHora",
+          "duracao",
+          "paciente",
+          "cirurgiao",
+          "especialidade",
+          "procedimento",
+          "convenio",
+          "anestesia",
+          "atendimento",
+          "prontuario",
+          "registro",
+          "identidade",
+          "cpf",
+          "nascimento",
+          "observacao",
+          "justificativa",
+          "celular",
+          "email",
+          "reverter",
+          "id",
+          "trilha"
+        ]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "aplicada": "boolean"
+        }
+      }
+    },
+    {
+      "superficie": "acoes",
+      "metodo": "POST",
+      "caminho": "/acoes/confirmar",
+      "resumo": "Segundo tempo: aplicar uma proposta",
+      "parametros": [],
+      "corpo": {
+        "obrigatorios": ["propostaId"],
+        "campos": ["propostaId"]
+      },
+      "respostas": {
+        "200": {
+          "propostaId": "string",
+          "acao": "string",
+          "aplicada": "boolean",
+          "aplicadaEm": "string",
+          "agenda": "string",
+          "convenio": {
+            "codigo": "number",
+            "nome": "string"
+          },
+          "operacao": "string",
+          "linhasAfetadas": "number",
+          "conveniosAceitosAgora": "number",
+          "reversao": {
+            "corpo": {
+              "agenda": "string",
+              "convenio": "number",
+              "operacao": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/panorama",
+      "resumo": "Todos os agregados do período em uma chamada",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "de": "string",
+          "ate": "string",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "totais": {
+            "internacoes": "number",
+            "pacientesDistintos": "number",
+            "medicosSolicitantesDistintos": "number",
+            "comEvolucaoMedica": "number",
+            "semEvolucaoMedica": "number",
+            "soRegistroNaoMedico": "number",
+            "semRegistroAlgum": "number",
+            "percentualSemEvolucaoMedica": "number",
+            "comPassagemUti": "number",
+            "utiDireto": "number",
+            "utiDepois": "number",
+            "percentualComPassagemUti": "number",
+            "evolucoesNoPeriodo": "number",
+            "evolucoesMedicasNoPeriodo": "number"
+          },
+          "timingUti": {
+            "internacoesComUti": "number",
+            "comEvolucaoMedicaAnteriorAUti": "number",
+            "semEvolucaoMedicaAnteriorAUti": "number",
+            "percentualSemRegistroAnterior": "number",
+            "evolucoesMedicasEmEpisodiosComUti": "number",
+            "evolucoesAnterioresAUti": "number",
+            "percentualEvolucoesAnteriores": "number",
+            "leitura": "string"
+          },
+          "altasPorDia": [
+            {
+              "data": "string",
+              "altas": "number"
+            }
+          ],
+          "nivelCuidado": [
+            {
+              "chave": "string",
+              "rotulo": "string",
+              "internacoes": "number",
+              "percentual": "number"
+            }
+          ],
+          "desfecho": [
+            {
+              "chave": "string",
+              "rotulo": "string",
+              "internacoes": "number",
+              "percentual": "number",
+              "motivos": [
+                {
+                  "codigo": "number",
+                  "nome": "string",
+                  "internacoes": "number"
+                }
+              ]
+            }
+          ],
+          "cidCapitulo": [
+            {
+              "capitulo": "string",
+              "rotulo": "string",
+              "internacoes": "number",
+              "percentual": "number"
+            }
+          ],
+          "cidMaisFrequentes": [
+            {
+              "cid": "string",
+              "descricao": "string",
+              "internacoes": "number"
+            }
+          ],
+          "permanencia": {
+            "minimo": "number",
+            "p25": "number",
+            "mediana": "number",
+            "p75": "number",
+            "p90": "number",
+            "maximo": "number",
+            "media": "number",
+            "faixas": [
+              {
+                "faixa": "string",
+                "internacoes": "number"
+              }
+            ],
+            "porNivelCuidado": [
+              {
+                "chave": "string",
+                "rotulo": "string",
+                "internacoes": "number",
+                "mediana": "number",
+                "media": "number"
+              }
+            ]
+          },
+          "sinalizadores": [
+            {
+              "codigo": "string",
+              "rotulo": "string",
+              "gravidade": "string",
+              "regra": "string",
+              "internacoes": "number",
+              "denominador": "number",
+              "percentual": "number"
+            }
+          ],
+          "avisos": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/internacoes",
+      "resumo": "Uma linha por internação, com sinalizadores",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "sinalizador",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": [
+            "sem_evolucao_medica",
+            "so_registro_nao_medico",
+            "sem_registro_algum",
+            "uti_sem_registro_anterior",
+            "cid_administrativo",
+            "cid_z_com_uti",
+            "obito_sem_evolucao_medica",
+            "evasao_apos_uti",
+            "transferencia_sem_evolucao",
+            "alta_sem_evolucao_no_dia",
+            "densidade_baixa",
+            "permanencia_prolongada_sem_registro",
+            "uti_direta_cid_sintomatico"
+          ]
+        },
+        {
+          "nome": "nivelCuidado",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["uti_direto", "uti_depois", "apartamento", "enfermaria", "nao_classificado"]
+        },
+        {
+          "nome": "desfecho",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": [
+            "alta_domiciliar",
+            "obito",
+            "transferencia_externa",
+            "internacao_domiciliar",
+            "evasao",
+            "encerramento_administrativo",
+            "ainda_internado",
+            "nao_classificado"
+          ]
+        },
+        {
+          "nome": "cidCapitulo",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "medico",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "especialidade",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string"
+        },
+        {
+          "nome": "comUti",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "semEvolucaoMedica",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "boolean"
+        },
+        {
+          "nome": "ordenarPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["alta", "entrada", "permanencia", "evolucoesMedicas", "sinalizadores"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "offset",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "de": "string",
+          "ate": "string",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "totalPeriodo": "number",
+          "total": "number",
+          "devolvidas": "number",
+          "offset": "number",
+          "truncado": "boolean",
+          "proximoOffset": "number",
+          "filtros": {
+            "sinalizador": "null",
+            "nivelCuidado": "null",
+            "desfecho": "null",
+            "cidCapitulo": "null",
+            "medico": "null",
+            "especialidade": "null",
+            "comUti": "null",
+            "semEvolucaoMedica": "null"
+          },
+          "ordenadoPor": "string",
+          "internacoes": [
+            {
+              "episodio": "number",
+              "atendimentoId": "number",
+              "entrada": "string",
+              "alta": "string",
+              "horaAlta": "string",
+              "permanenciaDias": "number",
+              "permanenciaDiarias": "number",
+              "clinica": "string",
+              "clinicaRotulo": "string",
+              "especialidade": "string",
+              "paciente": {
+                "id": "number",
+                "prontuario": "number",
+                "nome": "string",
+                "nascimento": "string",
+                "convenio": "string"
+              },
+              "medicoSolicitante": {
+                "id": "number",
+                "nome": "string",
+                "crm": "string",
+                "ocupacao": "string"
+              },
+              "nivelCuidado": "string",
+              "nivelCuidadoRotulo": "string",
+              "acomodacaoEntrada": "string",
+              "trechosUti": "number",
+              "entradaUti": "string",
+              "desfecho": "string",
+              "desfechoRotulo": "string",
+              "motivoAltaCodigo": "number",
+              "motivoAltaNome": "string",
+              "cid": "string",
+              "cidDescricao": "string",
+              "cidCapitulo": "string",
+              "cidCapituloRotulo": "string",
+              "evolucoesTotais": "number",
+              "evolucoesMedicas": "number",
+              "evolucoesNaoMedicas": "number",
+              "primeiraEvolucaoMedica": "string",
+              "ultimaEvolucaoMedica": "string",
+              "horasEntreUltimaEvolucaoMedicaEAlta": "number",
+              "evolucoesMedicasAntesDaUti": "number",
+              "evolucaoMedicaAntesDaUti": "boolean",
+              "sinalizadores": ["string"]
+            }
+          ],
+          "avisos": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/internacoes/{episodio}",
+      "resumo": "Um episódio inteiro: dados, trajetória de leito e lista de evoluções",
+      "parametros": [
+        {
+          "nome": "episodio",
+          "em": "path",
+          "obrigatorio": true,
+          "tipo": "integer"
+        },
+        {
+          "nome": "limiteEvolucoes",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "internacao": {
+            "episodio": "number",
+            "atendimentoId": "number",
+            "entrada": "string",
+            "alta": "string",
+            "horaAlta": "string",
+            "permanenciaDias": "number",
+            "permanenciaDiarias": "number",
+            "clinica": "string",
+            "clinicaRotulo": "string",
+            "especialidade": "string",
+            "paciente": {
+              "id": "number",
+              "prontuario": "number",
+              "nome": "string",
+              "nascimento": "string",
+              "convenio": "string"
+            },
+            "medicoSolicitante": {
+              "id": "number",
+              "nome": "string",
+              "crm": "string",
+              "ocupacao": "string"
+            },
+            "nivelCuidado": "string",
+            "nivelCuidadoRotulo": "string",
+            "acomodacaoEntrada": "string",
+            "trechosUti": "number",
+            "entradaUti": "string",
+            "desfecho": "string",
+            "desfechoRotulo": "string",
+            "motivoAltaCodigo": "number",
+            "motivoAltaNome": "string",
+            "cid": "string",
+            "cidDescricao": "string",
+            "cidCapitulo": "string",
+            "cidCapituloRotulo": "string",
+            "evolucoesTotais": "number",
+            "evolucoesMedicas": "number",
+            "evolucoesNaoMedicas": "number",
+            "primeiraEvolucaoMedica": "string",
+            "ultimaEvolucaoMedica": "string",
+            "horasEntreUltimaEvolucaoMedicaEAlta": "number",
+            "evolucoesMedicasAntesDaUti": "number",
+            "evolucaoMedicaAntesDaUti": "boolean",
+            "sinalizadores": ["string"]
+          },
+          "trajetoriaLeito": [
+            {
+              "ordem": "number",
+              "entrada": "string",
+              "saida": "string",
+              "tipoAcomodacao": "string",
+              "tipoAcomodacaoId": "number",
+              "uti": "boolean",
+              "leito": "string",
+              "setor": "string"
+            }
+          ],
+          "evolucoes": [
+            {
+              "id": "number",
+              "dataHora": "string",
+              "papel": "string",
+              "categoriaAutor": "string",
+              "autorNome": "string",
+              "autorCrm": "string",
+              "autorOcupacao": "string",
+              "autorCbo": "string",
+              "tipo": "string",
+              "caracteresRtf": "number",
+              "suspensa": "boolean"
+            }
+          ],
+          "evolucoesTruncadas": "boolean",
+          "evolucoesTotaisNaLista": "number",
+          "cids": [
+            {
+              "papel": "string",
+              "cid": "string",
+              "descricao": "string"
+            }
+          ],
+          "avisos": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/internacoes/{episodio}/evolucoes",
+      "resumo": "O texto da evolução, já convertido de RTF",
+      "parametros": [
+        {
+          "nome": "episodio",
+          "em": "path",
+          "obrigatorio": true,
+          "tipo": "integer"
+        },
+        {
+          "nome": "papeis",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["ambos", "admissao", "ultima", "todas"]
+        },
+        {
+          "nome": "categoria",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["medica", "todas"]
+        },
+        {
+          "nome": "formato",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["texto", "secoes", "ambos"]
+        },
+        {
+          "nome": "maxCaracteres",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "episodio": "number",
+          "paciente": {
+            "id": "number",
+            "prontuario": "number",
+            "nome": "string"
+          },
+          "alta": "string",
+          "nivelCuidado": "string",
+          "nivelCuidadoRotulo": "string",
+          "evolucoesTotais": "number",
+          "evolucoesMedicas": "number",
+          "fonte": "string",
+          "papeis": "string",
+          "categoria": "string",
+          "formato": "string",
+          "trechos": [
+            {
+              "id": "number",
+              "papel": "string",
+              "dataHora": "string",
+              "categoriaAutor": "string",
+              "autorNome": "string",
+              "autorCrm": "string",
+              "autorOcupacao": "string",
+              "autorCbo": "string",
+              "tipo": "string",
+              "texto": "string",
+              "caracteres": "number",
+              "truncado": "boolean",
+              "secoes": [
+                {
+                  "rotulo": "string",
+                  "valor": "null",
+                  "secao": "boolean"
+                }
+              ]
+            }
+          ],
+          "fidelidade": "string",
+          "avisos": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/medicos",
+      "resumo": "Quadro por médico: volume, UTI e taxa de registro",
+      "parametros": [
+        {
+          "nome": "de",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "ate",
+          "em": "query",
+          "obrigatorio": true,
+          "tipo": "string"
+        },
+        {
+          "nome": "papel",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["solicitante", "autor"]
+        },
+        {
+          "nome": "minimoInternacoes",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        },
+        {
+          "nome": "ordenarPor",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "string",
+          "valores": ["internacoes", "taxaRegistro", "semEvolucaoMedica", "comUti", "nome"]
+        },
+        {
+          "nome": "limite",
+          "em": "query",
+          "obrigatorio": false,
+          "tipo": "integer"
+        }
+      ],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "de": "string",
+          "ate": "string",
+          "dadosCompletosAte": "string",
+          "parcial": "boolean",
+          "papel": "string",
+          "totais": {
+            "medicos": "number",
+            "medicosNoCorte": "number",
+            "internacoes": "number",
+            "taxaRegistroDaCasa": "number"
+          },
+          "total": "number",
+          "devolvidas": "number",
+          "truncado": "boolean",
+          "linhas": [
+            {
+              "medicoId": "number",
+              "nome": "string",
+              "crm": "string",
+              "ocupacao": "string",
+              "internacoes": "number",
+              "comEvolucaoMedica": "number",
+              "comUti": "number",
+              "utiDireto": "number",
+              "semEvolucaoMedica": "number",
+              "taxaRegistro": "number",
+              "permanenciaMedia": "number",
+              "sinalizadores": [
+                {
+                  "codigo": "string",
+                  "internacoes": "number"
+                }
+              ]
+            }
+          ],
+          "avisos": ["string"]
+        }
+      }
+    },
+    {
+      "superficie": "auditoria",
+      "metodo": "GET",
+      "caminho": "/auditoria/sinalizadores",
+      "resumo": "O vocabulário fechado desta API",
+      "parametros": [],
+      "corpo": null,
+      "respostas": {
+        "200": {
+          "total": "number",
+          "capitulosCid": [
+            {
+              "capitulo": "string",
+              "rotulo": "string"
+            }
+          ],
+          "sinalizadores": [
+            {
+              "codigo": "string",
+              "rotulo": "string",
+              "gravidade": "string",
+              "regra": "string"
+            }
+          ],
+          "niveisCuidado": [
+            {
+              "chave": "string",
+              "rotulo": "string"
+            }
+          ],
+          "desfechos": [
+            {
+              "chave": "string",
+              "rotulo": "string"
+            }
+          ],
+          "avisos": ["string"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Wrapper local do pnpm (POL-4): nada global, nada fora do repositório.
+# Uso: ./pnpm <comando>   (ex.: ./pnpm install, ./pnpm verificar)
+set -euo pipefail
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PNPM_VERSAO="12.14.0"
+
+# shellcheck source=tools/ambiente.sh
+source "$RAIZ/tools/ambiente.sh"
+# shellcheck source=tools/limite-vm.sh
+source "$RAIZ/tools/limite-vm.sh" "$@"
+
+# --loglevel=error só no npx: cala o aviso do npm sobre a chave store-dir do .npmrc (é do pnpm).
+exec "${SGH_LIMITE_PREFIXO[@]}" npx --yes --loglevel=error "pnpm@$PNPM_VERSAO" "$@"

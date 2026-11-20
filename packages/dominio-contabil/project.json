@@ -1,0 +1,22 @@
+{
+  "name": "dominio-contabil",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-contabil/src",
+  "tags": ["tipo:dominio", "modulo:contabil"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-contabil"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-contabil/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-contabil/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-contabil/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

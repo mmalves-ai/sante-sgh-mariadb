@@ -1,0 +1,83 @@
+/* Base visual do Sante SGH: só variáveis de token (nenhuma cor solta; stylelint confere). */
+html {
+  font-family: var(--sgh-fonte-texto);
+  font-size: var(--sgh-fonte-base);
+  font-variant-numeric: tabular-nums;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+body {
+  margin: 0;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+  line-height: 1.4;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--sgh-fonte-titulo);
+}
+a {
+  color: var(--sgh-link);
+}
+code,
+kbd,
+.sgh-codigo {
+  font-family: var(--sgh-fonte-codigo);
+}
+/* Botão cru (<button> sem SanteBotao): com a cara do SanteBotao secundário, pelas variáveis do próprio tema
+   do OpenVue. :where() zera a especificidade, então qualquer estilo da tela prevalece. Os botões do próprio
+   OpenVue (classes p-*) ficam de fora: o estilo deles mora numa camada (@layer), que perde para esta regra
+   fora de camada qualquer que seja a especificidade. */
+:where(button:not([class^='p-'], [class*=' p-'])) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sgh-espaco-1);
+  min-height: var(--sgh-alvo-minimo);
+  padding: var(--p-button-padding-y, 0.5rem) var(--p-button-padding-x, 1rem);
+  font: inherit;
+  color: var(--p-button-secondary-color, var(--sgh-texto));
+  background: var(--p-button-secondary-background, var(--sgh-fundo));
+  border: 1px solid var(--p-button-secondary-border-color, var(--sgh-texto));
+  border-radius: var(--p-button-border-radius, 6px);
+  cursor: pointer;
+}
+:where(button:not([class^='p-'], [class*=' p-'])):hover:not(:disabled) {
+  color: var(--p-button-secondary-hover-color, var(--sgh-texto));
+  background: var(--p-button-secondary-hover-background, var(--sgh-fundo));
+  border-color: var(--p-button-secondary-hover-border-color, var(--sgh-texto));
+}
+:where(button:not([class^='p-'], [class*=' p-'])):active:not(:disabled) {
+  background: var(--p-button-secondary-active-background, var(--sgh-fundo));
+}
+:where(button:not([class^='p-'], [class*=' p-'])):disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+/* Foco sempre visível, na cor primária. */
+:focus-visible {
+  outline: 2px solid var(--sgh-foco);
+  outline-offset: 2px;
+}
+.sgh-visualmente-oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media print {
+  html,
+  body {
+    background: var(--sgh-fundo);
+    color: var(--sgh-texto);
+  }
+  .sgh-nao-imprimir {
+    display: none !important;
+  }
+}

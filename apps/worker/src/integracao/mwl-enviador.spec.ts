@@ -1,0 +1,140 @@
+// M47 (etapa 3), regras 8 e 9: o envio do item da lista de trabalho DICOM ao destino em loopback (o simulador de
+// modalidade atrás de um HTTP local): o JSON do DICOM com o número de acesso, a chave de idempotência que não muda no
+// reenvio (o simulador atualiza, não duplica), o destino fora do loopback recusado fora de produção e a falha do destino
+// como erro de entrega (a retentativa e a fila de mortos são as do M34). Leituras do núcleo dubladas; dados sintéticos.
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { SimuladorModalidade } from '@sgh/dominio-sadt';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+const estado = { ligada: true, suspenso: false };
+
+vi.mock('@sgh/legado', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  lerChavesLiberacao: async () =>
+    estado.ligada
+      ? [{ chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: true }]
+      : [{ chave: 'imagem.worklist', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: false }],
+  lerPrerequisitos: async () => [
+    { recurso: 'imagem.worklist', tipo: 'contrato', situacao: 'cumprido', validade: '2099-12-31' },
+    { recurso: 'imagem.worklist', tipo: 'aprovacao', situacao: 'cumprido', validade: '2099-12-31' },
+  ],
+  itensMwlDosExames: async (_l: unknown, _h: string, ids: number[]) =>
+    ids.includes(501) ? [{ id: 7, exame: 501, accession: 'PC000000007', modalidade: 'CT' }] : [],
+  examesSadtPorId: async (_l: unknown, _h: string, ids: number[]) =>
+    ids.includes(501)
+      ? [
+          {
+            id: 501,
+            ato: 25,
+            paciente: {
+              id: 900001,
+              prontuario: 1001,
+              nome: 'Paciente Sintético Um',
+              nascimento: '1980-01-02',
+              sexo: 'M',
+            },
+            exame: { id: 1, codigo: 'TC', nome: 'TOMOGRAFIA SINTÉTICA' },
+            chave: { data: '2026-10-25', reg: 1, conta: 1, atend: 'E', ato: 25, exame: 'TC', sequencia: 0 },
+            pedidoEm: '2026-10-25T09:30',
+            urgente: false,
+            solicitante: 'Médico Sintético',
+            estado: estado.suspenso ? 'suspenso' : 'a-receber',
+          },
+        ]
+      : [],
+}));
+
+const { criarEnviador } = await import('./enviadores.js');
+const { ErroEntrega } = await import('./entrega.js');
+
+const sim = new SimuladorModalidade();
+const recebidos: { chave: string | undefined; tipo: string | undefined }[] = [];
+let servidor: Server;
+let base = '';
+let falhar = false;
+
+beforeAll(async () => {
+  servidor = createServer((req, res) => {
+    let corpo = '';
+    req.on('data', (d: Buffer) => (corpo += d.toString('utf8')));
+    req.on('end', () => {
+      if (falhar) {
+        res.writeHead(503).end();
+        return;
+      }
+      recebidos.push({
+        chave: req.headers['idempotency-key'] as string | undefined,
+        tipo: req.headers['content-type'],
+      });
+      const r = sim.receber(JSON.parse(corpo) as Record<string, unknown>);
+      res.writeHead(201, { 'x-recibo': `${r.situacao}-${r.accession}` }).end();
+    });
+  });
+  await new Promise<void>((ok) => servidor.listen(0, '127.0.0.1', ok));
+  base = `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/mwl`;
+});
+afterAll(() => new Promise<void>((ok) => servidor.close(() => ok())));
+
+const parceiro = { codigo: 'pacs', tipo: 'api', canal: null } as never;
+const envio = (idFato: string | null) =>
+  ({
+    id: '1',
+    tipoEvento: 'imagem.mwl',
+    chaveEvento: 'h'.repeat(64),
+    idFato,
+    chaveOrdem: 'exame:501',
+  }) as never;
+const enviador = (destino: string | null, ambiente = 'dev') =>
+  criarEnviador({
+    ambiente,
+    produto: 'SGH',
+    hostMllp: '127.0.0.1',
+    simuladorRnds: null,
+    destinoApi: () => destino,
+    ler: (_h, fn) => fn({} as never),
+    agora: () => new Date('2026-10-25T12:00:00Z'),
+  });
+
+describe('envio do item da lista de trabalho DICOM (M47.3)', () => {
+  it('o JSON do DICOM chega ao simulador; o reenvio leva a mesma chave e o simulador atualiza o item', async () => {
+    const a = await enviador(base)(parceiro, envio('501'), 'pc');
+    expect(a.recibo).toBe('criado-PC000000007');
+    const item = JSON.parse(a.conteudo) as Record<string, { Value?: unknown[] }>;
+    expect(item['00080050']?.Value).toEqual(['PC000000007']);
+    expect(item['00100020']?.Value).toEqual(['1001']);
+    const b = await enviador(base)(parceiro, envio('501'), 'pc');
+    expect(b.recibo).toBe('atualizado-PC000000007');
+    expect(sim.itens()).toHaveLength(1);
+    expect(recebidos).toEqual([
+      { chave: 'pc-PC000000007', tipo: 'application/dicom+json' },
+      { chave: 'pc-PC000000007', tipo: 'application/dicom+json' },
+    ]);
+  });
+
+  it('sem o item, sem o exame ou com destino fora do loopback fora de produção: erro de entrega (nada enviado)', async () => {
+    await expect(enviador(base)(parceiro, envio('999'), 'pc')).rejects.toBeInstanceOf(ErroEntrega);
+    await expect(enviador(base)(parceiro, envio(null), 'pc')).rejects.toThrow('sem o exame');
+    await expect(enviador('https://pacs.hospital.com.br/mwl')(parceiro, envio('501'), 'pc')).rejects.toThrow(
+      'fora do loopback',
+    );
+    await expect(enviador(null)(parceiro, envio('501'), 'pc')).rejects.toThrow('sem destino');
+  });
+
+  it('o destino que falha devolve o código (a retentativa e a fila de mortos seguem as do M34)', async () => {
+    falhar = true;
+    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('HTTP 503');
+    falhar = false;
+  });
+
+  it('recolhida a chave imagem.worklist ou suspenso o exame: erro de entrega com o motivo, nada chega ao PACS', async () => {
+    const antes = recebidos.length;
+    estado.ligada = false;
+    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('lista de trabalho desligada');
+    estado.ligada = true;
+    estado.suspenso = true;
+    await expect(enviador(base)(parceiro, envio('501'), 'pc')).rejects.toThrow('exame suspenso');
+    estado.suspenso = false;
+    expect(recebidos).toHaveLength(antes);
+  });
+});

@@ -1,0 +1,15 @@
+{
+  "descricao": "Exceções aprovadas de vulnerabilidade alta ou crítica (OSV). Cada item: id, pacote, motivo, aprovadoPor (papel), data, validoAte.",
+  "osv": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "aliases": ["CVE-2026-93687"],
+      "pacote": "braces@3.0.3",
+      "motivo": "Negação de serviço por padrões de glob muito aninhados, sem versão corrigida publicada (3.0.3 é a última). Entra só pelo stylelint (dependência de desenvolvimento: micromatch → fast-glob/globby → stylelint); não vai para o sistema em produção e só recebe padrões da configuração do próprio repositório, nunca de usuário.",
+      "aprovadoPor": "dono do projeto (responsável técnico, DP-2)",
+      "data": "2026-10-19",
+      "validoAte": "2026-11-18",
+      "revisar": "trocar ou remover a exceção quando houver versão corrigida do braces, ou se o braces passar a entrar em dependência de produção"
+    }
+  ]
+}

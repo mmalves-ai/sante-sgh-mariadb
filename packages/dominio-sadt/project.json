@@ -1,0 +1,22 @@
+{
+  "name": "dominio-sadt",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-sadt/src",
+  "tags": ["tipo:dominio", "modulo:sadt"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-sadt"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-sadt/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-sadt/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-sadt/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

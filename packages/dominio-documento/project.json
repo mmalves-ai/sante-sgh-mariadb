@@ -1,0 +1,23 @@
+{
+  "name": "dominio-documento",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-documento/src",
+  "tags": ["tipo:dominio", "modulo:documento"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-documento"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-documento/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-documento/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-documento/tsconfig.lib.json",
+      "dependsOn": ["^build"]
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

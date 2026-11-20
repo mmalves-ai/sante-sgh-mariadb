@@ -1,0 +1,6 @@
+# Estabelecimento sintético (testes): decisão pendente, só a ficha do primeiro passo.
+formato: 1
+estabelecimento: aa
+decisao: { situacao: pendente }
+passos:
+  imutabilidade-por-linha: { ficha: docs/adr/0033-retrocompatibilidade-e-evolucao-do-modelo.md }

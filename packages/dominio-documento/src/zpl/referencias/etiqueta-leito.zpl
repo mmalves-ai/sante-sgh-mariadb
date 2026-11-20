@@ -1,0 +1,10 @@
+^XA
+^CI28
+^PW800
+^LL400
+^LH0,0
+^FO20,20^A0N,40,40^FH_^FDLEITO INT-1 101 02^FS
+^FO20,72^A0N,26,26^FH_^FDSOLICITAR LIMPEZA: APONTE A CAMERA^FS
+^FO20,110^BQN,2,6^FDQA,https://sante.exemplo.invalid/higienizacao/solicitacoes?leito=INT-1%7C101%7C02&origem=qrcode^FS
+^PQ1
+^XZ

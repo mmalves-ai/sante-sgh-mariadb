@@ -1,0 +1,5 @@
+// FIXTURE DE IMPORTAÇÃO PROIBIDA (M00, regra 3): o web não pode importar o adaptador do legado.
+// Usada por `pnpm fronteiras:provar`; nunca fica dentro de apps/web.
+import { ADAPTADOR_LEGADO } from '@sgh/legado';
+
+export const proibido = ADAPTADOR_LEGADO;

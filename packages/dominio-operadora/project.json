@@ -1,0 +1,22 @@
+{
+  "name": "dominio-operadora",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-operadora/src",
+  "tags": ["tipo:dominio", "modulo:operadora"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-operadora"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-operadora/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-operadora/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-operadora/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

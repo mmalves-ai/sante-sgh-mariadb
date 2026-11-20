@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Gancho pre-commit (M00): gitleaks no que está preparado para o commit e ESLint nos arquivos alterados.
+# Instalado pelo `./pnpm install` (core.hooksPath=.githooks). Imagem fixada por tag e digest; repositório só leitura.
+set -euo pipefail
+RAIZ="$(git rev-parse --show-toplevel)"
+cd "$RAIZ"
+# Em worktree (.git é um arquivo que aponta para <repo>/.git/worktrees/<nome>), o diretório git comum fica
+# fora de RAIZ: monta os dois nos MESMOS caminhos, só leitura, para o git do contêiner achar o repositório.
+COMUM="$(cd "$(git rev-parse --git-common-dir)" && pwd -P)"
+MONTAGENS=(-v "$RAIZ:$RAIZ:ro")
+case "$COMUM/" in
+  "$RAIZ"/*) ;;
+  *) MONTAGENS+=(-v "$COMUM:$COMUM:ro") ;;
+esac
+
+# Falha fechada: qualquer erro do gitleaks (inclusive "não é um repositório git") bloqueia o commit.
+mkdir -p "$RAIZ/.tmp"
+LOG="$(mktemp "$RAIZ/.tmp/sgh-gitleaks.XXXXXX")"
+trap 'rm -f "$LOG"' EXIT
+if ! docker run --rm --name "sgh-precommit-gitleaks-$$" --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  "${MONTAGENS[@]}" -w "$RAIZ" ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+  git "$RAIZ" --pre-commit --staged --config "$RAIZ/tools/verificadores/seguranca/gitleaks.toml" \
+  --redact --no-banner --log-level warn 2>"$LOG"; then
+  cat "$LOG" >&2
+  echo "pre-commit: gitleaks encontrou segredo ou não conseguiu varrer; commit bloqueado." >&2
+  exit 1
+fi
+if grep -q 'ERR' "$LOG"; then
+  cat "$LOG" >&2
+  echo "pre-commit: gitleaks não conseguiu varrer o que está preparado; commit bloqueado." >&2
+  exit 1
+fi
+cat "$LOG" >&2
+
+mapfile -t ARQUIVOS < <(git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.vue' '*.js' '*.mjs')
+if ((${#ARQUIVOS[@]})); then
+  "$RAIZ/pnpm" exec eslint --no-warn-ignored "${ARQUIVOS[@]}"
+fi

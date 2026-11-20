@@ -1,0 +1,22 @@
+{
+  "name": "dominio-faturamento",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-faturamento/src",
+  "tags": ["tipo:dominio", "modulo:faturamento"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-faturamento"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-faturamento/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-faturamento/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-faturamento/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

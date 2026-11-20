@@ -1,0 +1,22 @@
+{
+  "name": "dominio-repasse",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-repasse/src",
+  "tags": ["tipo:dominio", "modulo:repasse"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-repasse"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-repasse/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-repasse/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-repasse/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

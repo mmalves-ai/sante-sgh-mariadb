@@ -1,0 +1,285 @@
+// E2E @M26 (ficha, seção 10): a jornada J4 inteira — o médico pede o potássio no prontuário → a coleta lê a pulseira e
+// a amostra nasce com o código único (a etiqueta vai à fila da estação) → o laboratório recebe o pedido → digita o
+// valor crítico → libera confirmando o crítico (o aviso sai na hora) → registra a comunicação → emite o laudo (PDF/A
+// como arquivo do navegador) → o médico dá a ciência no prontuário e o painel mostra "Com ciência"; o laudo de imagem
+// pelo médico laudador; o orçamento convertido em lançamento; o portal do paciente (protocolo e nascimento) e o do
+// médico externo (autocadastro aprovado, segundo fator, só os pedidos dele). axe sem violação séria em cada tela. O PDF/A
+// do laudo vem do serviço de emissão (provado na integração da API, com o veraPDF); aqui, a tela baixa o arquivo. Sessão
+// real sobre a fonte sintética de dev e as portas em MEMÓRIA (exames, resultados e amostras SINTÉTICOS; nada vai à
+// cópia).
+import { createHmac } from 'node:crypto';
+import { expect, type Page, test } from '@playwright/test';
+import { semViolacaoAxe, vigiarExternas } from './ajuda.js';
+import { escolher } from './combos.js';
+
+const SENHA = 'Sintetico#2026';
+
+async function entrar(page: Page, login: string): Promise<void> {
+  await page.goto('/entrar');
+  await page.getByTestId('campo-login').fill(login);
+  await page.getByTestId('campo-senha').fill(SENHA);
+  await page.getByTestId('botao-entrar').click();
+  await expect(page).toHaveURL(/\/inicio/);
+}
+
+async function sair(page: Page): Promise<void> {
+  await page.context().clearCookies();
+}
+
+/** O código do aplicativo autenticador (TOTP de 30 s, 6 dígitos, SHA-1), como o do celular do médico. */
+function totp(segredoBase32: string, agora = Date.now()): string {
+  const ALF = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const c of segredoBase32.replace(/=+$/, '').toUpperCase())
+    bits += ALF.indexOf(c).toString(2).padStart(5, '0');
+  const bytes = Buffer.from((bits.match(/.{8}/g) ?? []).map((b) => parseInt(b, 2)));
+  const passo = Buffer.alloc(8);
+  passo.writeBigUInt64BE(BigInt(Math.floor(agora / 1000 / 30)));
+  const h = createHmac('sha1', bytes).update(passo).digest();
+  const o = h[h.length - 1]! & 0xf;
+  const n = ((h[o]! & 0x7f) << 24) | (h[o + 1]! << 16) | (h[o + 2]! << 8) | h[o + 3]!;
+  return String(n % 1_000_000).padStart(6, '0');
+}
+
+test.describe('SADT, laudos e portal de resultados @M26 @fase2', () => {
+  test.setTimeout(240_000);
+
+  test('J4: pedido no prontuário → coleta → recebimento → resultado crítico → liberação → laudo → ciência; axe', async ({
+    page,
+  }) => {
+    const externas = vigiarExternas(page);
+    // O médico pede o potássio no prontuário do paciente internado.
+    await entrar(page, 'SINT.MEDICO');
+    await page.goto('/pep/paciente/1001/exames');
+    await page.getByTestId('incluir-exame-502').click();
+    await page.getByTestId('enviar-pedido').click();
+    await expect(page.getByTestId('aba-exames-conteudo')).toContainText('Pedido enviado.');
+    await sair(page);
+
+    // Coleta: o grupo do potássio (internado: a pulseira lida); a amostra com o código único.
+    await entrar(page, 'SINT.BIOMEDICO');
+    await page.goto('/sadt/coleta');
+    await expect(page.getByTestId('tela-sadt-coleta')).toBeVisible();
+    await semViolacaoAxe(page, '/sadt/coleta');
+    const grupo = page.locator('[data-testid^="coleta-grupo-"]').filter({ hasText: 'POTÁSSIO' }).first();
+    await expect(grupo).toBeVisible();
+    const indice = (await grupo.getAttribute('data-testid'))!.replace('coleta-grupo-', '');
+    await page.getByTestId(`coleta-pulseira-${indice}`).fill('P1003|A31338');
+    await page.getByTestId(`coleta-conferido-${indice}`).check();
+    await page.getByTestId(`coleta-coletar-${indice}`).click();
+    await expect(page.getByTestId('recusa-sadt')).toContainText('pulseira lida não é do paciente');
+    await page.getByTestId(`coleta-pulseira-${indice}`).fill('P1001|A31337');
+    await page.getByTestId(`coleta-coletar-${indice}`).click();
+    await expect(page.getByTestId('coleta-mensagem')).toContainText(/Amostra [0-9A-Z]{10} coletada/);
+    const codigo = /Amostra ([0-9A-Z]{10})/.exec(
+      (await page.getByTestId('coleta-mensagem').textContent()) ?? '',
+    )![1]!;
+
+    // Rastreio: a amostra recebida no laboratório.
+    await page.goto('/sadt/amostras');
+    await page.getByTestId('amostra-codigo').fill(codigo);
+    await page.getByTestId('amostra-achar').click();
+    await escolher(page.getByTestId(`amostra-estado-${codigo}`), 'recebida');
+    await page.getByTestId(`amostra-mudar-${codigo}`).click();
+    await expect(page.getByTestId('amostra-mensagem')).toContainText('Recebida no laboratório');
+    await semViolacaoAxe(page, '/sadt/amostras');
+
+    // Recebimento do pedido do prontuário no setor.
+    await page.goto('/sadt/exames');
+    await expect(page.getByTestId('tela-sadt-exames')).toBeVisible();
+    const linha = page
+      .locator('[data-testid^="sadt-exame-"]')
+      .filter({ hasText: 'POTÁSSIO' })
+      .filter({ hasText: 'Pedido do prontuário' })
+      .first();
+    const id = Number((await linha.getAttribute('data-testid'))!.replace('sadt-exame-', ''));
+    await page.getByTestId(`sadt-selecionar-${id}`).check();
+    await escolher(page.getByTestId('sadt-prestador'), { indice: 1 });
+    await page.getByTestId('sadt-receber').click();
+    await expect(page.getByTestId('sadt-mensagem')).toContainText('Pedido recebido');
+    await expect(page.getByTestId(`sadt-estado-${id}`)).toContainText('Recebido');
+    await semViolacaoAxe(page, '/sadt/exames');
+
+    // Digitação: o valor crítico destacado enquanto digita.
+    await page.goto(`/sadt/resultados/digitacao?exame=${id}`);
+    await expect(page.getByTestId('digitacao-ficha')).toBeVisible();
+    await page.getByTestId('digitacao-valor-0').fill('7,2');
+    await expect(page.getByTestId('digitacao-marca-0')).toContainText('Valor crítico');
+    await page.getByTestId('digitacao-gravar').click();
+    await expect(page.getByTestId('digitacao-mensagem')).toContainText('Resultado digitado');
+    await semViolacaoAxe(page, '/sadt/resultados/digitacao');
+
+    // Liberação: o crítico pede a confirmação; o aviso sai ao responsável.
+    await page.goto('/sadt/resultados/liberacao');
+    await expect(page.getByTestId(`liberacao-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`liberacao-liberar-${id}`)).toBeDisabled();
+    await page.getByTestId(`liberacao-confirmar-${id}`).check();
+    await page.getByTestId(`liberacao-liberar-${id}`).click();
+    await expect(page.getByTestId('liberacao-mensagem')).toContainText('aviso do valor crítico');
+    await semViolacaoAxe(page, '/sadt/resultados/liberacao');
+    // Os liberados (filtrados pela data; o de outro dia também se retifica); a retificação mostra as versões.
+    await expect(page.getByTestId('liberados-data')).toBeVisible();
+    await page.getByTestId(`liberados-retificar-${id}`).click();
+    await expect(page.getByTestId('retificar-versoes')).toContainText('Versão 1');
+    await page.getByRole('button', { name: 'Cancelar' }).click();
+    // Os indicadores (TAT com o pedido, a coleta e a liberação) pelo caminho da tela, e a volta.
+    await page.getByTestId('liberacao-ir-indicadores').click();
+    await expect(page.getByTestId('tabela-tat')).toContainText('Pedido à coleta');
+    await page.goBack();
+
+    // Painel do valor crítico (pelo caminho da liberação): o aviso, a comunicação registrada.
+    await page.getByTestId('liberacao-ir-criticos').click();
+    await expect(page.getByTestId(`aviso-situacao-${id}`)).toContainText('Aguardando ciência');
+    await page.getByTestId(`aviso-destinatario-${id}`).fill('Enfermeira do plantão');
+    await page.getByTestId(`aviso-comunicar-${id}`).click();
+    await expect(page.getByTestId('criticos-mensagem')).toContainText('Comunicação registrada');
+    await semViolacaoAxe(page, '/sadt/valores-criticos');
+
+    // Laudo: emitido em PDF/A (o arquivo do navegador por blob:).
+    await page.goto('/sadt/laudos/emissao');
+    const atendimento = page
+      .locator('[data-testid^="laudo-atendimento-"]')
+      .filter({ hasText: 'POTÁSSIO' })
+      .first();
+    const at = (await atendimento.getAttribute('data-testid'))!.replace('laudo-atendimento-', '');
+    // O conversor de PDF do servidor não roda no E2E (sem serviço externo; o PDF/A e o veraPDF são provados na integração
+    // da API): a resposta da emissão é um laudo SINTÉTICO no formato do contrato; aqui se prova a tela baixar o arquivo
+    // pelo endereço blob:.
+    await page.route('**/api/sadt/laudos', async (rota) => {
+      if (rota.request().method() !== 'POST') return rota.fallback();
+      await rota.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          impressao: 0,
+          codigo: '0b1c2d3e-4f50-4617-8899-aabbccddeeff',
+          exames: 1,
+          segundaVia: false,
+          pdf: Buffer.from('%PDF-1.4\n% SINTETICO\n%%EOF\n').toString('base64'),
+          hash: 'a'.repeat(64),
+          mensagem: 'Laudo emitido (0b1c2d3e-4f50-4617-8899-aabbccddeeff).',
+        }),
+      });
+    });
+    const download = page.waitForEvent('download');
+    await page.getByTestId(`laudo-emitir-${at}`).click();
+    await expect(page.getByTestId('laudos-mensagem')).toContainText('Laudo emitido');
+    // O código impresso se confere no balcão (o código interceptado acima não existe na memória: "não encontrado").
+    await page.getByTestId('laudos-codigo').fill('0b1c2d3e-4f50-4617-8899-aabbccddeeff');
+    await page.getByTestId('laudos-codigo').press('Enter');
+    await expect(page.getByTestId('laudos-codigo-resultado')).toContainText('Código não encontrado');
+    expect((await download).suggestedFilename()).toMatch(/^laudo-[0-9a-f-]{36}\.pdf$/);
+    await semViolacaoAxe(page, '/sadt/laudos/emissao');
+    await sair(page);
+
+    // A ciência do crítico no prontuário; o painel mostra "Com ciência".
+    await entrar(page, 'SINT.MEDICO');
+    await page.goto('/pep/paciente/1001/resultados');
+    await expect(page.getByTestId(`resultado-${id}`)).toContainText('Valor crítico');
+    await page.getByTestId(`conduta-${id}`).fill('Repetido o exame e iniciada a correção');
+    await page.getByTestId(`ciencia-${id}`).click();
+    await expect(page.getByTestId(`resultado-${id}`)).toContainText('Ciência de');
+    await sair(page);
+    await entrar(page, 'SINT.BIOMEDICO');
+    await page.goto('/sadt/valores-criticos');
+    await expect(page.getByTestId(`aviso-situacao-${id}`)).toContainText('Com ciência');
+    expect(externas).toEqual([]);
+  });
+
+  test('laudo de imagem privativo de médico; orçamento convertido; axe', async ({ page }) => {
+    await entrar(page, 'SINT.LAUDADOR');
+    await page.goto('/sadt/laudos');
+    await expect(page.getByTestId('tela-sadt-laudo-editor')).toBeVisible();
+    await page.locator('[data-testid^="editor-abrir-"]').first().click();
+    await expect(page.getByTestId('editor-ficha')).toBeVisible();
+    await escolher(page.getByTestId('editor-modelo'), { indice: 1 });
+    await expect(page.getByTestId('editor-texto')).toHaveValue(/sem alterações/i);
+    await page.getByTestId('editor-assinar').click();
+    await expect(page.getByTestId('editor-mensagem')).toContainText('Resultado liberado');
+    await semViolacaoAxe(page, '/sadt/laudos');
+    // Métodos gráficos: o laudo estruturado leva as variáveis do exame junto com o texto.
+    await escolher(
+      page.getByTestId('tela-sadt-laudo-editor').getByRole('combobox', { name: 'Setor' }),
+      'metodosGraficos',
+    );
+    await page.locator('[data-testid^="editor-abrir-"]').first().click();
+    await expect(page.getByTestId('editor-variaveis')).toBeVisible();
+    await page.getByTestId('editor-var-1').fill('72');
+    await page.getByTestId('editor-var-2').fill('160');
+    await page.getByTestId('editor-texto').fill('Ritmo sinusal, sem alterações (sintético).');
+    await page.getByTestId('editor-salvar').click();
+    await expect(page.getByTestId('editor-mensagem')).toBeVisible();
+    await expect(page.getByTestId('editor-var-1')).toHaveValue('72');
+    await semViolacaoAxe(page, '/sadt/laudos');
+    await sair(page);
+
+    await entrar(page, 'SINT.RECEPCAO.SADT');
+    await page.goto('/sadt/orcamentos');
+    const orc = page.locator('[data-testid^="orcamento-situacao-"]').filter({ hasText: 'Em aberto' }).first();
+    const id = (await orc.getAttribute('data-testid'))!.replace('orcamento-situacao-', '');
+    await page.getByTestId(`orcamento-atendimento-${id}`).fill('10031');
+    await page.getByTestId(`orcamento-executante-busca-${id}`).fill('BIOM');
+    await page.getByTestId(`orcamento-executante-buscar-${id}`).click();
+    await page.getByTestId(`orcamento-converter-${id}`).click();
+    await expect(page.getByTestId('orcamento-mensagem')).toContainText('Orçamento convertido');
+    await expect(page.getByTestId(`orcamento-situacao-${id}`)).toContainText('Convertido');
+    await semViolacaoAxe(page, '/sadt/orcamentos');
+  });
+
+  test('portal: o paciente pelo protocolo e o médico externo pelo autocadastro aprovado e o segundo fator; axe', async ({
+    page,
+  }) => {
+    // O protocolo do paciente externo emitido na recepção do diagnóstico.
+    await entrar(page, 'SINT.RECEPCAO.SADT');
+    await page.goto('/sadt/atendimentos');
+    await page.getByTestId('requisicao-protocolo-31338').click();
+    const texto = (await page.getByTestId('requisicao-protocolo').textContent()) ?? '';
+    const protocolo = /protocolo do portal: ([0-9A-Z]{10})/i.exec(texto)![1]!;
+    await semViolacaoAxe(page, '/sadt/atendimentos');
+    await sair(page);
+
+    await page.goto('/resultados');
+    await expect(page.getByTestId('tela-portal')).toBeVisible();
+    await semViolacaoAxe(page, '/resultados');
+    await page.getByTestId('portal-protocolo').fill(protocolo);
+    await page.getByTestId('portal-nascimento').fill('1990-07-01');
+    await page.getByTestId('portal-entrar').click();
+    await expect(page.getByTestId('portal-sessao')).toContainText('CINTHYA');
+    await expect(page.getByTestId('portal-laudos')).toBeVisible();
+    await page.locator('[data-testid^="portal-abrir-"]').first().click();
+    await expect(page.getByTestId('portal-laudo')).toBeVisible();
+    await semViolacaoAxe(page, '/resultados (laudo)');
+    await page.getByTestId('portal-sair').click();
+
+    // O médico externo pede o acesso; a recepção aprova; ele entra com a senha e o código do autenticador.
+    await page.goto('/medico/cadastro');
+    await page.getByTestId('medico-nome').fill('Medica Solicitante Portal');
+    await page.getByTestId('medico-uf').fill('SP');
+    await page.getByTestId('medico-numero').fill('12345');
+    await page.getByTestId('medico-email').fill('medica.portal@exemplo.invalid');
+    await page.getByTestId('medico-senha').fill('senha-longa-sintetica');
+    await page.getByTestId('medico-aceite').check();
+    await semViolacaoAxe(page, '/medico/cadastro');
+    await page.getByTestId('medico-enviar').click();
+    const otpauth = (await page.getByTestId('medico-otpauth').locator('code').textContent()) ?? '';
+    const segredo = new URL(otpauth).searchParams.get('secret')!;
+
+    await entrar(page, 'SINT.RECEPCAO.SADT');
+    await page.goto('/sadt/solicitantes/autocadastro');
+    await escolher(page.getByTestId('autocadastro-candidato-12345'), { indice: 1 });
+    await page.getByTestId('autocadastro-aprovar-12345').click();
+    await expect(page.getByTestId('autocadastro-mensagem')).toContainText('aprovado');
+    await semViolacaoAxe(page, '/sadt/solicitantes/autocadastro');
+    await sair(page);
+
+    await page.goto('/resultados');
+    await escolher(page.getByTestId('portal-perfil'), 'medicoExterno');
+    await page.getByTestId('portal-uf').fill('SP');
+    await page.getByTestId('portal-numero').fill('12345');
+    await page.getByTestId('portal-senha').fill('senha-longa-sintetica');
+    await page.getByTestId('portal-codigo').fill(totp(segredo));
+    await page.getByTestId('portal-entrar').click();
+    await expect(page.getByTestId('portal-sessao')).toBeVisible();
+    await expect(page.getByTestId('portal-laudos')).toContainText('CINTHYA');
+  });
+});

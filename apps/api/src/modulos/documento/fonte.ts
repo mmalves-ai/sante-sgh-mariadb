@@ -1,0 +1,96 @@
+// Montagem do módulo documento a partir do ambiente (S3, Gotenberg, Valkey e chave do QZ Tray). Nada aqui
+// vai a log. Em dev, a chave do QZ Tray é de teste, gerada no processo (a da Rede vem no deploy).
+import { randomUUID, type webcrypto } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import {
+  ArmazemMemoria,
+  type ArmazemIdempotencia,
+  type DestinoFila,
+  gerarParDeChavesQz,
+  importarChavePrivadaQz,
+  type TrabalhoZpl,
+} from '@sgh/dominio-documento';
+import type { Configuracao } from '../../configuracao.js';
+import { registrarConversaoPdf } from '../../telemetria.js';
+import { EmissaoService, politicaRetencao } from './aplicacao/emissao.service.js';
+import { RegistroEmissoesMemoria } from './infra/registro.js';
+import { ClienteS3 } from './infra/s3.js';
+import { ArmazemValkey, FilaZplValkey } from './infra/valkey.js';
+
+type CryptoKey = webcrypto.CryptoKey;
+
+export const FONTE_DOCUMENTO = Symbol('FONTE_DOCUMENTO');
+
+export interface FonteDocumento {
+  readonly emissao: EmissaoService;
+  readonly armazem: ArmazemIdempotencia;
+  readonly destino: DestinoFila & { readonly enviados: () => number };
+  readonly chaveQz: () => Promise<CryptoKey>;
+  /** Certificado público do QZ Tray (PEM), para o setCertificatePromise da estação; null sem arquivo. */
+  readonly certificadoQz: () => string | null;
+  readonly novoId: () => string;
+}
+
+export function criarFonteDocumento(
+  cfg: Configuracao,
+  env: NodeJS.ProcessEnv = process.env,
+  opcoes: { readonly certificadoSbis?: (estabelecimento: string) => Promise<string | null> } = {},
+): FonteDocumento {
+  const segredo = env['S3_SEGREDO']?.trim();
+  const s3 = new ClienteS3({
+    endpoint: env['S3_ENDPOINT']?.trim() || 'http://127.0.0.1:9318',
+    regiao: env['S3_REGIAO']?.trim() || 'us-east-1',
+    acesso: segredo ? env['S3_ACESSO']?.trim() : undefined,
+    segredo: segredo || undefined,
+  });
+  const nomes = new Map<string, string>();
+  for (const cod of (env['ESTABELECIMENTOS'] ?? '')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)) {
+    nomes.set(cod, env[`FB_${cod.toUpperCase()}_NOME`]?.trim() || cod);
+  }
+  const emissao = new EmissaoService({
+    s3,
+    bucket: env['S3_BUCKET_DOCUMENTOS']?.trim() || `sgh-${cfg.rede ?? 'rede'}-documentos`,
+    gotenbergUrl: env['GOTENBERG_URL']?.trim() || 'http://127.0.0.1:3318',
+    registro: new RegistroEmissoesMemoria(),
+    retencao: politicaRetencao(cfg.ambiente, env),
+    produto: cfg.produtoNome,
+    baseUrlValidacao: env['DOCUMENTO_URL_VALIDACAO']?.trim() || `http://127.0.0.1:${cfg.portaApi}`,
+    nomeEstabelecimento: (c) => nomes.get(c) ?? c,
+    aoConverter: (ms) => registrarConversaoPdf(ms / 1000),
+    ...(opcoes.certificadoSbis ? { certificadoSbis: opcoes.certificadoSbis } : {}),
+  });
+  const valkey = env['VALKEY_URL']?.trim();
+  const fila = valkey ? new FilaZplValkey(valkey) : null;
+  let enviados = 0;
+  let chave: Promise<CryptoKey> | null = null;
+  const caminhoChave = env['QZ_CHAVE_PRIVADA_ARQUIVO']?.trim();
+  return {
+    emissao,
+    armazem: valkey ? new ArmazemValkey(valkey) : new ArmazemMemoria(),
+    // Fila zpl: com Valkey, o trabalho entra na lista da estação (o QZ Tray da estação consome e imprime;
+    // leitura física no deploy). Sem Valkey (dev mínimo), só contado.
+    destino: {
+      enviar: async (t: TrabalhoZpl & { id: string }) => {
+        if (fila) await fila.enviar(t);
+        enviados++;
+      },
+      enviados: () => enviados,
+    },
+    chaveQz: () =>
+      (chave ??= caminhoChave
+        ? importarChavePrivadaQz(readFileSync(caminhoChave, 'utf8'))
+        : gerarParDeChavesQz().then((p) => p.privateKey)),
+    certificadoQz: () => {
+      const caminho = env['QZ_CERTIFICADO_ARQUIVO']?.trim();
+      if (!caminho) return null;
+      const pem = readFileSync(caminho, 'utf8');
+      if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----\s*$/.test(pem.trim() + '\n'))
+        throw new Error('QZ_CERTIFICADO_ARQUIVO não é um certificado PEM.');
+      return pem;
+    },
+    novoId: () => randomUUID(),
+  };
+}

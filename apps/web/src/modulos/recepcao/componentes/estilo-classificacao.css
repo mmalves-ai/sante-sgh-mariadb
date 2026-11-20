@@ -1,0 +1,82 @@
+/* Classificação de risco (M44): a cor nunca aparece sozinha (o nome vai escrito ao lado); as cores são as da paleta
+   clínica de @sgh/ui (cap-03 §3.3), com o contraste conferido no claro e no escuro. */
+.risco-marca {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-weight: 700;
+  border: 1px solid var(--sgh-borda-forte);
+}
+.risco-vermelho {
+  background: var(--sgh-clinica-risco-vermelho-fundo);
+  color: var(--sgh-clinica-risco-vermelho-texto);
+}
+.risco-laranja {
+  background: var(--sgh-clinica-risco-laranja-fundo);
+  color: var(--sgh-clinica-risco-laranja-texto);
+}
+.risco-amarelo {
+  background: var(--sgh-clinica-risco-amarelo-fundo);
+  color: var(--sgh-clinica-risco-amarelo-texto);
+}
+.risco-verde {
+  background: var(--sgh-clinica-risco-verde-fundo);
+  color: var(--sgh-clinica-risco-verde-texto);
+}
+.risco-azul {
+  background: var(--sgh-clinica-risco-azul-fundo);
+  color: var(--sgh-clinica-risco-azul-texto);
+}
+.risco-sem {
+  background: var(--sgh-fundo-elevado);
+  color: var(--sgh-texto);
+}
+.risco-faixa-vermelho {
+  border-left: 8px solid var(--sgh-clinica-risco-vermelho-fundo);
+}
+.risco-faixa-laranja {
+  border-left: 8px solid var(--sgh-clinica-risco-laranja-fundo);
+}
+.risco-faixa-amarelo {
+  border-left: 8px solid var(--sgh-clinica-risco-amarelo-fundo);
+}
+.risco-faixa-verde {
+  border-left: 8px solid var(--sgh-clinica-risco-verde-fundo);
+}
+.risco-faixa-azul {
+  border-left: 8px solid var(--sgh-clinica-risco-azul-fundo);
+}
+.tela-tablet {
+  max-width: 48rem;
+}
+.tela-tablet .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+  margin-bottom: var(--sgh-espaco-2);
+}
+.tela-tablet input[type='text'],
+.tela-tablet input:not([type]),
+.tela-tablet textarea {
+  min-height: 2.75rem;
+  font-size: 1.1rem;
+  padding: var(--sgh-espaco-1);
+}
+.tela-tablet .grade-sinais {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--sgh-espaco-2);
+}
+.tela-tablet .discriminador {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-2);
+  min-height: 2.75rem;
+  padding: var(--sgh-espaco-1) 0;
+}
+.tela-tablet .discriminador input {
+  width: 1.5rem;
+  height: 1.5rem;
+}

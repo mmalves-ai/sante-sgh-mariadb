@@ -1,0 +1,58 @@
+/* Telas das especialidades sob demanda e do lactário (M45, etapa 6). */
+.tela-agenda .formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-agenda .grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--sgh-espaco-2);
+  align-items: end;
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+}
+.tela-agenda fieldset legend {
+  font-weight: 600;
+}
+.tela-agenda .itens {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+}
+.tela-agenda .registro {
+  border-bottom: 1px solid var(--sgh-borda);
+  padding-bottom: var(--sgh-espaco-2);
+}
+.tela-agenda .registro p {
+  margin: var(--sgh-espaco-1) 0;
+}
+.tela-agenda .alertas,
+.tela-agenda .alerta-texto {
+  color: var(--sgh-alerta);
+  font-weight: 600;
+}
+.tela-agenda .lista-simples {
+  margin: 0;
+  padding-inline-start: var(--sgh-espaco-3);
+}
+.tela-agenda .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-agenda .chip {
+  display: inline-block;
+  margin-inline-start: var(--sgh-espaco-1);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 999px;
+  font-size: var(--sgh-fonte-pequena);
+}
+.tela-agenda .grafico {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--sgh-borda);
+  background: var(--sgh-fundo-elevado);
+}

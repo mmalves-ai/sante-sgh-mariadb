@@ -20,6 +20,25 @@ services:
       timeout: 10s
       retries: 40
       start_period: 60s
+  mariadb:
+    image: mariadb:12.3.3
+    container_name: sante-sgh-mariadb
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MARIADB_PORTA:-3410}:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_SENHA}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_uca1400_ai_ci", "--default-time-zone=+00:00"]
+    volumes:
+      - sante-sgh-mariadb-data:/var/lib/mysql
+      - ./db:/db:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 volumes:
   sante-sgh-oracle-data:
     name: sante-sgh-oracle-data
+  sante-sgh-mariadb-data:
+    name: sante-sgh-mariadb-data

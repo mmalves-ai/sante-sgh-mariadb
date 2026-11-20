@@ -1,0 +1,22 @@
+{
+  "name": "dominio-manutencao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-manutencao/src",
+  "tags": ["tipo:dominio", "modulo:manutencao"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-manutencao"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-manutencao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-manutencao/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-manutencao/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

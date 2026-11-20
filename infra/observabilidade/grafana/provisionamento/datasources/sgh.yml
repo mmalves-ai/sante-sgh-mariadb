@@ -1,0 +1,22 @@
+# Fontes de dados do Grafana do projeto (M09): Prometheus, Tempo e Loki do contêiner sgh-otel, pela rede
+# interna sgh-rede (nada publicado além do OTLP em 127.0.0.1:3331).
+apiVersion: 1
+datasources:
+  - name: Prometheus (sgh)
+    uid: sgh-prometheus
+    type: prometheus
+    access: proxy
+    url: http://sgh-otel:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+  - name: Tempo (sgh)
+    uid: sgh-tempo
+    type: tempo
+    access: proxy
+    url: http://sgh-otel:3200
+  - name: Loki (sgh)
+    uid: sgh-loki
+    type: loki
+    access: proxy
+    url: http://sgh-otel:3100

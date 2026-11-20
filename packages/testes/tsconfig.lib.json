@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "sourceMap": true,
+    "paths": {
+      "@sgh/legado": ["../legado/dist/index.d.ts"],
+      "@sgh/contratos": ["../contratos/dist/index.d.ts"],
+      "@sgh/dominio-pep": ["../dominio-pep/dist/index.d.ts"],
+      "@sgh/dominio-agenda": ["../dominio-agenda/dist/index.d.ts"],
+      "@sgh/dominio-recepcao": ["../dominio-recepcao/dist/index.d.ts"],
+      "@sgh/dominio-faturamento": ["../dominio-faturamento/dist/index.d.ts"],
+      "@sgh/contratos/regras-faturamento": ["../contratos/dist/faturamento/regras/index.d.ts"],
+      "@sgh/contratos/regras-financeiro": ["../contratos/dist/financeiro/regras/index.d.ts"],
+      "@sgh/dominio-pessoas": ["../dominio-pessoas/dist/index.d.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/**/*.spec-util.ts"]
+}

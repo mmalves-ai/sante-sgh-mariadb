@@ -1,0 +1,185 @@
+# Serviços locais de desenvolvimento do projeto (M01; convencoes.md §10).
+# Sobe e desce só por `./pnpm infra:subir` e `./pnpm infra:descer` (com --env-file .env.sante e a
+# conferência prévia das portas). Tudo em 127.0.0.1, fora das portas ocupadas; containers, rede e volumes
+# com prefixo sgh- (POL-4); imagens por tag exata e digest; healthcheck em todos; descer preserva volumes.
+# O Firebird NÃO entra aqui: a cópia de dev é a compartilhada de ../banco-dev (redesante-fb-<cod>; desvio
+# do M01 de 2026-10-19). Nenhum serviço fala com fora: telemetria, checagem de versão e download de
+# plugins desligados (Grafana); Chromium do Gotenberg só abre file:///tmp, sem webhook nem download por URL.
+name: sgh
+
+services:
+  valkey:
+    image: valkey/valkey:9.0.3-alpine@sha256:e1095c6c76ee982cb2d1e07edbb7fb2a53606630a1d810d5a47c9f646b708bf5
+    container_name: sgh-valkey
+    command: ['valkey-server', '--appendonly', 'yes', '--save', '60', '1000']
+    ports:
+      - '127.0.0.1:63718:6379'
+    volumes:
+      - valkey-dados:/data
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [rede]
+
+  # S3 compatível PROVISÓRIO (a edição definitiva sai do spike do M09): SeaweedFS, API S3 em 9318 e a
+  # interface web do filer em 9319 como console. Sem credencial no M01 (só loopback).
+  s3:
+    image: chrislusf/seaweedfs:4.03@sha256:d24be3bc1d6e8e305c095c446cb9a00d40e3afdac82fb2a1cc96f2d42c4a8e80
+    container_name: sgh-s3
+    # Teto de disco: 32 volumes de 64 MB, sem pré-alocação (2 GB no máximo). Com -volume.max=0 o SeaweedFS
+    # calcula o limite pelo disco livre e chegou a pré-alocar 140 GB na VM compartilhada (2026-10-20).
+    command:
+      [
+        'server',
+        '-dir=/data',
+        '-s3',
+        '-s3.port=8333',
+        '-filer',
+        '-filer.port=8888',
+        '-volume.max=32',
+        '-master.volumeSizeLimitMB=64',
+        '-master.volumePreallocate=false',
+      ]
+    # Cada bucket (coleção) cresce 1 volume por vez, não 7: com o teto de 32, o padrão de 7 lotava após
+    # quatro buckets de teste `sgh-teste-m09-*` (500 InternalError "No writable volumes", 2026-10-20).
+    environment:
+      WEED_MASTER_VOLUME_GROWTH_COPY_1: '1'
+    ports:
+      - '127.0.0.1:9318:8333'
+      - '127.0.0.1:9319:8888'
+    volumes:
+      - s3-dados:/data
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8333/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
+    networks: [rede]
+
+  gotenberg:
+    image: gotenberg/gotenberg:8.28.0@sha256:f172b1ce5ec7516ab9452d33bfe3f198d778d3de39655825aa550f4a33946666
+    container_name: sgh-gotenberg
+    command:
+      - gotenberg
+      - --api-port=3000
+      - --log-level=warn
+      - --chromium-allow-list=^file:///tmp/.*
+      - --api-disable-download-from
+      - --webhook-disable
+    ports:
+      - '127.0.0.1:3318:3000'
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
+    networks: [rede]
+
+  # Mailpit: o único destino de e-mail fora de produção (PREMAILCFG da cópia e SMTP_URL do projeto).
+  mailpit:
+    image: axllent/mailpit:v1.30.0@sha256:0059ef81e492a7192af3816281eed6859eb078bd7bdc58b76757c13e10e53a7d
+    container_name: sgh-mailpit
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 'true'
+      MP_SMTP_AUTH_ALLOW_INSECURE: 'true'
+      MP_DISABLE_VERSION_CHECK: 'true'
+      MP_MAX_MESSAGES: '100'
+      TZ: America/Sao_Paulo
+    ports:
+      - '127.0.0.1:8325:8025'
+      - '127.0.0.1:1325:1025'
+    volumes:
+      - mailpit-dados:/data
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [rede]
+
+  # Observabilidade (M09; ADR 0001 §observabilidade): coletor OpenTelemetry + Prometheus + Tempo + Loki numa
+  # imagem só (grafana/otel-lgtm, para desenvolvimento). Recebe OTLP/HTTP em 127.0.0.1:3331 (API e worker);
+  # o Grafana do projeto (abaixo) lê Prometheus, Tempo e Loki pela rede interna. O Grafana embutido e o
+  # Pyroscope não são publicados; telemetria e checagem de versão desligadas; obi (eBPF) desligado.
+  otel:
+    image: grafana/otel-lgtm:0.34.0@sha256:b966ea107831d526d9eb8fe4d2d86c9e5731392fad9dce8296bcf2072031f07c
+    container_name: sgh-otel
+    environment:
+      ENABLE_OBI: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+    ports:
+      - '127.0.0.1:3331:4318'
+    volumes:
+      - otel-dados:/data
+    healthcheck:
+      test: ['CMD', 'test', '-f', '/tmp/ready']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    restart: unless-stopped
+    networks: [rede]
+
+  grafana:
+    image: grafana/grafana:12.4.2@sha256:83749231c3835e390a3144e5e940203e42b9589761f20ef3169c716e734ad505
+    container_name: sgh-grafana
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+      GF_PLUGINS_PUBLIC_KEY_RETRIEVAL_DISABLED: 'true'
+      GF_SNAPSHOTS_EXTERNAL_ENABLED: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
+      GF_SECURITY_DISABLE_GRAVATAR: 'true'
+      # M09: painéis provisionados por arquivo (versionados) e leitura anônima só em loopback (Viewer); a
+      # troca da senha padrão do administrador fica com o dono (pendência do M01, registrada no M09).
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      TZ: America/Sao_Paulo
+    ports:
+      - '127.0.0.1:3330:3000'
+    volumes:
+      - grafana-dados:/var/lib/grafana
+      - ../observabilidade/grafana/provisionamento:/etc/grafana/provisioning:ro
+      - ../observabilidade/grafana/paineis:/etc/sgh/paineis:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:3000/api/health']
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 20s
+    restart: unless-stopped
+    networks: [rede]
+
+networks:
+  rede:
+    name: sgh-rede
+
+volumes:
+  valkey-dados:
+    name: sgh-valkey-dados
+  s3-dados:
+    name: sgh-s3-dados
+  mailpit-dados:
+    name: sgh-mailpit-dados
+  grafana-dados:
+    name: sgh-grafana-dados
+  otel-dados:
+    name: sgh-otel-dados

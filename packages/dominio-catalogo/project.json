@@ -1,0 +1,22 @@
+{
+  "name": "dominio-catalogo",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-catalogo/src",
+  "tags": ["tipo:dominio", "modulo:catalogo"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-catalogo"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-catalogo/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-catalogo/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-catalogo/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

@@ -1,0 +1,29 @@
+# gitleaks: regras padrão + exceções revisadas (falsos positivos), cada uma com o motivo.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Falsos positivos revisados no M00 (2026-10-19)"
+paths = [
+  # Regras do Semgrep vendorizadas trazem exemplos de padrões de segredo.
+  '''tools/verificadores/seguranca/semgrep/vendor/.*''',
+  # Páginas públicas do site do hospital capturadas como referência visual do marketing: os "authToken" e
+  # "fileKey" são identificadores públicos do construtor do site, embutidos em qualquer visita à página.
+  '''marketing/imagens/referencia-prontocardio/paginas/.*\.html''',
+]
+
+[[allowlists]]
+# "API: `apps/api/...`" no checklist do roteiro casa com a regra generic-api-key, mas é um caminho de pasta.
+description = "Caminho de pasta no checklist do roteiro"
+regexTarget = "match"
+regexes = ['''^API: `apps/api/src/modulos/''']
+
+[[allowlists]]
+# M02 (2026-10-19): impressão digital homologada do schema (`pnpm schema:verificar --homologar`): nomes de
+# objeto do catálogo e hashes SHA-256 em hexadecimal, que casam com regras de token. Só o achado que é
+# hexadecimal de 16 a 64 caracteres, e só nesses arquivos: qualquer outro segredo ali continua acusado.
+description = "Hashes da impressão digital homologada"
+condition = "AND"
+paths = ['''(^|/)tools/schema-check/homologado/[a-z0-9]+\.json$''']
+regexTarget = "secret"
+regexes = ['''^[0-9a-f]{16,64}$''']

@@ -1,0 +1,22 @@
+{
+  "name": "dominio-internacao",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-internacao/src",
+  "tags": ["tipo:dominio", "modulo:internacao"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-internacao"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-internacao/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-internacao/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-internacao/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

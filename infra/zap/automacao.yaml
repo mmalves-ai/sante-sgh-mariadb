@@ -1,0 +1,45 @@
+# Varredura dinâmica noturna autenticada (ZAP Automation Framework; ficha do M36, "Outros testes" › Segurança).
+# Roda contra a HOMOLOGAÇÃO (DP-15: o servidor é montado no deploy); nunca contra produção nem contra o dev do dono.
+# Execução (TI, na infraestrutura da Rede): docker run --rm -v "$PWD/infra/zap:/zap/wrk" -e ZAP_ALVO -e ZAP_USUARIO
+#   -e ZAP_SENHA -e ZAP_ESTABELECIMENTO ghcr.io/zaproxy/zaproxy:2.16.1 zap.sh -cmd -autorun /zap/wrk/automacao.yaml
+# O usuário é sintético (SINT.ADMIN da sessão de homologação); a senha vem do ambiente do processo, nunca do arquivo.
+# O relatório sai em infra/zap/relatorio/ (fora do git) e o resumo entra em docs/marcos/M36/evidencias.md; os
+# achados altos vão para docs/seguranca/pentest/matriz-achados.yaml.
+env:
+  contexts:
+    - name: sante
+      urls: ['${ZAP_ALVO}']
+      includePaths: ['${ZAP_ALVO}/.*']
+      # DELETE /api/sessao encerra a sessão: fora da varredura para não deslogar o usuário sintético
+      excludePaths: ['${ZAP_ALVO}/api/sessao$']
+      authentication:
+        method: json
+        parameters:
+          loginPageUrl: '${ZAP_ALVO}/entrar'
+          loginRequestUrl: '${ZAP_ALVO}/api/sessao'
+          loginRequestBody: '{"estabelecimento":"${ZAP_ESTABELECIMENTO}","login":"{%username%}","senha":"{%password%}"}'
+        verification:
+          method: response
+          loggedInRegex: '"usuario"'
+      users:
+        - name: sintetico
+          credentials:
+            username: '${ZAP_USUARIO}'
+            password: '${ZAP_SENHA}'
+  parameters:
+    failOnError: true
+    progressToStdout: true
+jobs:
+  - type: spider
+    parameters: { context: sante, user: sintetico, maxDuration: 20 }
+  - type: spiderAjax
+    parameters: { context: sante, user: sintetico, maxDuration: 20 }
+  - type: passiveScan-wait
+    parameters: { maxDuration: 10 }
+  - type: activeScan
+    parameters: { context: sante, user: sintetico, maxRuleDurationInMins: 5, maxScanDurationInMins: 120 }
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /zap/wrk/relatorio
+      reportFile: zap-noturno

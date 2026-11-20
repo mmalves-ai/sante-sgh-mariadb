@@ -1,0 +1,22 @@
+{
+  "name": "dominio-financeiro",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-financeiro/src",
+  "tags": ["tipo:dominio", "modulo:financeiro"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-financeiro"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-financeiro/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-financeiro/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-financeiro/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "contratos",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/contratos/src",
+  "tags": ["tipo:contratos", "modulo:plataforma"],
+  "targets": {
+    "lint": { "command": "eslint packages/contratos" },
+    "typecheck": { "command": "tsc -p packages/contratos/tsconfig.json --noEmit" },
+    "test": { "command": "vitest run --config packages/contratos/vitest.config.ts" },
+    "build": { "command": "tsc -p packages/contratos/tsconfig.lib.json" }
+  }
+}

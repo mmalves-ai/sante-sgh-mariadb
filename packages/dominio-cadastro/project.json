@@ -1,0 +1,22 @@
+{
+  "name": "dominio-cadastro",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-cadastro/src",
+  "tags": ["tipo:dominio", "modulo:cadastro"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-cadastro"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-cadastro/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-cadastro/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-cadastro/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

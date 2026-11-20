@@ -1,0 +1,55 @@
+/* Telas do NSP (M48, etapa 1): a situação do prazo regulatório com cor e texto (a cor nunca sozinha). */
+.prazo {
+  display: inline-block;
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 999px;
+  font-size: var(--sgh-fonte-pequena);
+  white-space: nowrap;
+}
+.prazo--vencido {
+  border-color: var(--sgh-perigo);
+  background: var(--sgh-alerta-suave);
+  font-weight: 600;
+}
+.prazo--venceEmBreve {
+  border-color: var(--sgh-aviso);
+  background: var(--sgh-aviso-suave);
+}
+.prazo--cumprido {
+  border-color: var(--sgh-sucesso);
+}
+.selo {
+  display: inline-block;
+  margin-inline-start: var(--sgh-espaco-1);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda);
+  border-radius: 999px;
+  font-size: var(--sgh-fonte-pequena);
+}
+.selo--grave {
+  border-color: var(--sgh-perigo);
+  font-weight: 600;
+}
+.secundario {
+  color: var(--sgh-texto-secundario);
+  font-size: var(--sgh-fonte-pequena);
+}
+.painel-nsp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-3);
+  padding: var(--sgh-espaco-3);
+  border: 1px solid var(--sgh-borda);
+  border-radius: var(--sgh-raio, 6px);
+}
+.painel-nsp h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.linha-nsp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  align-items: flex-end;
+}

@@ -1,0 +1,44 @@
+// OpenTelemetry do worker (M09; cap-09 §9.11): rastros e métricas por OTLP/HTTP para o coletor do Compose
+// (OTEL_EXPORTER_URL, só loopback fora de produção pela trava de saídas). Sem a chave, nada é exportado (a
+// API de telemetria fica no-op). O worker exporta as métricas do coletor MON$ (painel "Banco e
+// coexistência") e a saúde dos serviços (painel "Técnico"); mesmo código da API (os apps não se importam).
+import { metrics, trace } from '@opentelemetry/api';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { resourceFromAttributes } from '@opentelemetry/resources';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { BasicTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+
+export interface Telemetria {
+  encerrar(): Promise<void>;
+}
+
+export function iniciarTelemetria(servico: string, env: NodeJS.ProcessEnv = process.env): Telemetria | null {
+  const url = env['OTEL_EXPORTER_URL']?.trim().replace(/\/+$/, '');
+  if (!url) return null;
+  const resource = resourceFromAttributes({
+    'service.name': servico,
+    'deployment.environment.name': env['AMBIENTE'] ?? 'dev',
+    'sgh.rede': env['REDE_PADRAO'] ?? '',
+  });
+  const rastros = new BasicTracerProvider({
+    resource,
+    spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter({ url: `${url}/v1/traces` }))],
+  });
+  const medidor = new MeterProvider({
+    resource,
+    readers: [
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: `${url}/v1/metrics` }),
+        exportIntervalMillis: Number(env['OTEL_INTERVALO_MS'] ?? 10_000),
+      }),
+    ],
+  });
+  trace.setGlobalTracerProvider(rastros);
+  metrics.setGlobalMeterProvider(medidor);
+  return {
+    async encerrar() {
+      await Promise.allSettled([rastros.shutdown(), medidor.shutdown()]);
+    },
+  };
+}

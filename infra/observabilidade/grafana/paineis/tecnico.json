@@ -1,0 +1,457 @@
+{
+  "uid": "sgh-tecnico",
+  "title": "Técnico",
+  "description": "Saúde do sistema (M09): latência e erros por rota da API, consultas ao Firebird, serviços (Gotenberg, S3) e SLOs.",
+  "tags": ["sgh", "m09"],
+  "timezone": "America/Sao_Paulo",
+  "schemaVersion": 41,
+  "version": 1,
+  "editable": false,
+  "refresh": "15s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "API p95 (5 min)",
+      "description": "SLO provisório: p95 < 500 ms (meta definitiva na homologação, M36).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_http_duracao_seconds_bucket[5m])))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros 5xx (5 min)",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum(rate(sgh_http_duracao_seconds_count{classe=\"5xx\"}[5m])) / clamp_min(sum(rate(sgh_http_duracao_seconds_count[5m])), 1e-9)"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Gotenberg",
+      "description": "1 = respondendo.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_servico_disponivel{servico=\"gotenberg\"})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "S3",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"]
+        },
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "max(sgh_servico_disponivel{servico=\"s3\"})"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Latência p95 por rota",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, rota) (rate(sgh_http_duracao_seconds_bucket[5m])))",
+          "legendFormat": "{{rota}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Requisições por rota",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (rota) (rate(sgh_http_duracao_seconds_count[1m]))",
+          "legendFormat": "{{rota}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Consultas ao Firebird p95 por estabelecimento",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le, sgh_estabelecimento) (rate(sgh_firebird_consulta_duracao_seconds_bucket[5m])))",
+          "legendFormat": "{{sgh_estabelecimento}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Consultas ao Firebird por resultado",
+      "description": "",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "sum by (resultado) (rate(sgh_firebird_consulta_duracao_seconds_count[1m]))",
+          "legendFormat": "{{resultado}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Conversão PDF/A no Gotenberg (p50 e p95)",
+      "description": "Duração de cada conversão HTML → PDF/A-2b (métrica sgh.gotenberg.conversao.duracao da API).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "sgh-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 24,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sgh_gotenberg_conversao_duracao_seconds_bucket[5m])))",
+          "legendFormat": "p50"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "sgh-prometheus"
+          },
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sgh_gotenberg_conversao_duracao_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "text",
+      "title": "Filas",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "As filas BullMQ (pdf, zpl, tiss-lote) entram com o outbox do M04; no M09 a fila zpl é a reserva idempotente no Valkey mais a lista por estação (sgh:<rede>:<estabelecimento>:zpl:fila:<estacao>)."
+      }
+    }
+  ],
+  "annotations": {
+    "list": []
+  }
+}

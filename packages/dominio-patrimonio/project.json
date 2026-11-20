@@ -1,0 +1,22 @@
+{
+  "name": "dominio-patrimonio",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/dominio-patrimonio/src",
+  "tags": ["tipo:dominio", "modulo:patrimonio"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/dominio-patrimonio"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/dominio-patrimonio/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/dominio-patrimonio/vitest.config.ts --coverage"
+    },
+    "build": {
+      "command": "tsc -p packages/dominio-patrimonio/tsconfig.lib.json"
+    }
+  },
+  "implicitDependencies": ["contratos"]
+}

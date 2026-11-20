@@ -1,0 +1,132 @@
+/* Telas do OPME (M46, etapa 3): o mesmo desenho das telas do bloco (grade, barra de filtros, cartões e campos simples),
+   com os alvos de toque da casca (o tablet da sala e o computador de suprimentos). */
+.tela-opme {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-2);
+  max-width: 80rem;
+}
+.tela-opme .barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sgh-espaco-2);
+}
+.tela-opme .secundario {
+  color: var(--sgh-texto-secundario);
+}
+.tela-opme .alerta {
+  color: var(--sgh-alerta);
+}
+.tela-opme .resumo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-3);
+  margin: 0;
+}
+.tela-opme .resumo div {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+}
+.tela-opme .resumo dd {
+  margin: 0;
+  font-weight: 700;
+}
+.tela-opme .grade {
+  width: 100%;
+  border-collapse: collapse;
+}
+.tela-opme .grade th,
+.tela-opme .grade td {
+  text-align: left;
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-bottom: 1px solid var(--sgh-borda);
+  vertical-align: top;
+}
+.tela-opme .grade tr[data-estado='atrasada'] td,
+.tela-opme .grade tr[data-estado='omitida'] td {
+  background: var(--sgh-alerta-suave);
+}
+.tela-opme .rolagem {
+  overflow-x: auto;
+}
+.tela-opme .campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+}
+.tela-opme input:not([type='checkbox'], [type='radio']),
+.tela-opme textarea {
+  min-height: var(--sgh-alvo-minimo);
+  padding: 0 var(--sgh-espaco-2);
+  border: 1px solid var(--sgh-borda-forte);
+  border-radius: 4px;
+  background: var(--sgh-fundo);
+  color: var(--sgh-texto);
+}
+.tela-opme textarea {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  min-height: 4rem;
+}
+.tela-opme .cartao {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  background: var(--sgh-fundo-elevado);
+}
+.tela-opme .faixa-rede {
+  padding: var(--sgh-espaco-1) var(--sgh-espaco-2);
+  border-radius: 4px;
+  background: var(--sgh-aviso-suave);
+  color: var(--sgh-texto);
+}
+.tela-opme .linha {
+  display: flex;
+  align-items: center;
+  gap: var(--sgh-espaco-1);
+  min-height: var(--sgh-alvo-minimo);
+}
+.tela-opme fieldset {
+  border: 1px solid var(--sgh-borda);
+  border-radius: 6px;
+  padding: var(--sgh-espaco-2);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  align-items: flex-end;
+}
+.tela-opme legend {
+  font-weight: 700;
+  padding: 0 var(--sgh-espaco-1);
+}
+.tela-opme .marcos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sgh-espaco-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.tela-opme .marcos li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sgh-espaco-1);
+  min-width: 9rem;
+}
+.tela-opme [data-justificada='false'] {
+  color: var(--sgh-alerta);
+}
+.tela-opme .abas {
+  display: flex;
+  gap: var(--sgh-espaco-1);
+}
+.tela-opme .abas [aria-selected='true'] {
+  font-weight: 700;
+}
+.tela-opme pre.zpl {
+  max-height: 12rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+}

@@ -1,0 +1,209 @@
+// Rotas da conta do paciente, dos lançamentos e da auditoria de contas (M30; ficha, seção 7). Cada rota exige a permissão
+// de leitura do catálogo (M06); o servidor confere de novo (e o escopo por convênio) e as ações aparecem só com a
+// permissão de agir e a funcionalidade liberada.
+import type { RouteRecordRaw } from 'vue-router';
+
+export const rotasFaturamento: RouteRecordRaw[] = [
+  {
+    path: '/faturamento/contas',
+    name: 'faturamento.contas',
+    component: () => import('./telas/ContasTela.vue'),
+    props: { destino: 'conta' },
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/lancamentos',
+    name: 'faturamento.lancamentos',
+    component: () => import('./telas/ContasTela.vue'),
+    props: { destino: 'lancamentos' },
+    meta: { permissao: 'faturamento.item.ler' },
+  },
+  {
+    path: '/faturamento/auditoria',
+    name: 'faturamento.auditoria',
+    component: () => import('./telas/ContasTela.vue'),
+    props: { destino: 'auditoria' },
+    meta: { permissao: 'faturamento.auditoria.ler' },
+  },
+  {
+    path: '/faturamento/contas-sus',
+    name: 'faturamento.contasSus',
+    component: () => import('./telas/ContasTela.vue'),
+    props: { destino: 'sigtap' },
+    meta: { permissao: 'faturamento.item.ler' },
+  },
+  {
+    path: '/faturamento/contas/:id(\\d+)',
+    name: 'faturamento.conta',
+    component: () => import('./telas/ContaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+  {
+    path: '/faturamento/contas/:id(\\d+)/lancamentos',
+    name: 'faturamento.contaLancamentos',
+    component: () => import('./telas/LancamentosTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.item.ler' },
+  },
+  {
+    path: '/faturamento/contas/:id(\\d+)/auditoria',
+    name: 'faturamento.contaAuditoria',
+    component: () => import('./telas/AuditoriaTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.auditoria.ler' },
+  },
+  {
+    path: '/faturamento/contas/:id(\\d+)/sigtap',
+    name: 'faturamento.contaSigtap',
+    component: () => import('./telas/SigtapTela.vue'),
+    props: true,
+    meta: { permissao: 'faturamento.item.ler' },
+  },
+  {
+    path: '/faturamento/lancamento-automatico',
+    name: 'faturamento.lancamentoAutomatico',
+    component: () => import('./telas/LancamentoAutomaticoTela.vue'),
+    meta: { permissao: 'faturamento.lancamento.ler' },
+  },
+  {
+    path: '/faturamento/pendencias-tipos',
+    name: 'faturamento.pendenciasTipos',
+    component: () => import('./telas/PendenciasTiposTela.vue'),
+    meta: { permissao: 'faturamento.pendencia.ler' },
+  },
+  {
+    path: '/faturamento/pacotes',
+    name: 'faturamento.pacotes',
+    component: () => import('./telas/PacotesTela.vue'),
+    meta: { permissao: 'faturamento.pacote.ler' },
+  },
+  {
+    path: '/faturamento/regras-faturabilidade',
+    name: 'faturamento.regras',
+    component: () => import('./telas/RegrasTela.vue'),
+    meta: { permissao: 'faturamento.regra.ler' },
+  },
+  {
+    path: '/faturamento/simulador',
+    name: 'faturamento.simulador',
+    component: () => import('./telas/SimuladorTela.vue'),
+    meta: { permissao: 'faturamento.preco.simular' },
+  },
+  {
+    path: '/faturamento/particular/orcamentos',
+    name: 'faturamento.orcamentos',
+    component: () => import('./telas/OrcamentosTela.vue'),
+    meta: { permissao: 'faturamento.orcamento.ler' },
+  },
+  {
+    path: '/faturamento/particular/caixa',
+    name: 'faturamento.caixa',
+    component: () => import('./telas/CaixaTela.vue'),
+    meta: { permissao: 'faturamento.recibo.ler' },
+  },
+  {
+    path: '/faturamento/particular/pagamentos',
+    name: 'faturamento.pagamentos',
+    component: () => import('./telas/PagamentosTela.vue'),
+    meta: { permissao: 'faturamento.pagamento.ler' },
+  },
+  {
+    path: '/cirurgia/notas-sala',
+    name: 'cirurgia.notasSala',
+    component: () => import('./telas/NotasSalaTela.vue'),
+    meta: { permissao: 'cirurgia.nota.ler' },
+  },
+  {
+    path: '/cirurgia/cirurgias/:id(\\d+)/nota-sala',
+    name: 'cirurgia.notaSala',
+    component: () => import('./telas/NotaSalaTela.vue'),
+    props: true,
+    meta: { permissao: 'cirurgia.nota.ler' },
+  },
+  // M51 (etapa 1): competência SUS e críticas (todos os instrumentos; BPA, APAC e AIH desligados, DP-35) e a CIHA.
+  {
+    path: '/faturamento/sus/competencias',
+    name: 'faturamento.susCompetencias',
+    component: () => import('./telas/CompetenciasSusTela.vue'),
+    meta: { permissao: 'faturamento.sus.ler' },
+  },
+  {
+    path: '/faturamento/sus/ciha',
+    name: 'faturamento.susCiha',
+    component: () => import('./telas/CihaTela.vue'),
+    meta: {
+      permissao: 'faturamento.sus.ler',
+      menu: 'Faturamento > Faturamento SUS > CIHA (comunicação de informação hospitalar)',
+    },
+  },
+  // M51 (etapa 2): o BPA (desligado por estabelecimento até haver contrato SUS, DP-35) e os médicos solicitantes SUS.
+  {
+    path: '/faturamento/sus/bpa',
+    name: 'faturamento.susBpa',
+    component: () => import('./telas/BpaTela.vue'),
+    meta: {
+      permissao: 'faturamento.sus.ler',
+      menu: 'Faturamento > Faturamento SUS > BPA (produção ambulatorial)',
+    },
+  },
+  // M51 (etapa 3): a APAC (desligada por estabelecimento até haver contrato SUS, DP-35).
+  {
+    path: '/faturamento/sus/apac',
+    name: 'faturamento.susApac',
+    component: () => import('./telas/ApacTela.vue'),
+    meta: {
+      permissao: 'faturamento.sus.ler',
+      menu: 'Faturamento > Faturamento SUS > APAC (laudos e autorizações)',
+    },
+  },
+  {
+    path: '/faturamento/sus/solicitantes',
+    name: 'faturamento.susSolicitantes',
+    component: () => import('./telas/SolicitantesSusTela.vue'),
+    meta: {
+      permissao: 'faturamento.susSolicitante.ler',
+      menu: 'Faturamento > Faturamento SUS > Médicos solicitantes SUS',
+    },
+  },
+  // M51 (etapa 4): a AIH, o retorno do gestor e os leitos de UTI habilitados (desligados por estabelecimento até haver
+  // contrato SUS, DP-35).
+  {
+    path: '/faturamento/sus/aih',
+    name: 'faturamento.susAih',
+    component: () => import('./telas/AihTela.vue'),
+    meta: {
+      permissao: 'faturamento.sus.ler',
+      menu: 'Faturamento > Faturamento SUS > AIH (internação, SIH)',
+    },
+  },
+  // M55 (etapa 5): a contratualização SUS (contratos com o gestor, incentivos, metas, apuração e o painel produção ×
+  // meta com o repasse estimado; desligada por estabelecimento até haver contrato SUS, DP-13 e DP-35).
+  {
+    path: '/faturamento/sus/contratualizacao',
+    name: 'faturamento.susContratualizacao',
+    component: () => import('./telas/ContratualizacaoTela.vue'),
+    meta: {
+      permissao: 'faturamento.contratualizacao.ler',
+      menu: 'Faturamento > Faturamento SUS > Contratualização SUS (metas e incentivos)',
+    },
+  },
+  {
+    path: '/faturamento/sus/retorno',
+    name: 'faturamento.susRetorno',
+    component: () => import('./telas/RetornoSusTela.vue'),
+    meta: { permissao: 'faturamento.sus.ler' },
+  },
+  {
+    path: '/faturamento/sus/cadastros/leitos-uti',
+    name: 'faturamento.susLeitosUti',
+    component: () => import('./telas/LeitosUtiSusTela.vue'),
+    meta: { permissao: 'faturamento.susLeitoUti.ler' },
+  },
+  {
+    path: '/inicio/faturamento',
+    name: 'inicio.faturamento',
+    component: () => import('./telas/WorklistFaturamentoTela.vue'),
+    meta: { permissao: 'faturamento.conta.ler' },
+  },
+];
