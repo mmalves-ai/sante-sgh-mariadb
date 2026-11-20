@@ -56,3 +56,6 @@ referencias/assinaturas-legado/
 
 # Cache das fontes oficiais dos catálogos (regenerável por catalogos/baixar.py)
 catalogos/cache/
+
+# Permissões locais do Claude Code
+.claude/settings.local.json
