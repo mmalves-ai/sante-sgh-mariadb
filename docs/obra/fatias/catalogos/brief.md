@@ -23,7 +23,7 @@ nas tabelas de destino do banco de um cliente.
   - Se a tabela não tiver chave única onde precisa, **não altere o DDL**: registre na `observacao`, e o
     orquestrador ajusta centralmente.
 - **Lotes** de até 1.000 linhas por `INSERT`. Escape correto de texto: aspas, barra invertida, UTF-8.
-- **Codificação:** os arquivos do DATASUS são **latin-1**; converta para UTF-8.
+- **Codificação:** os arquivos do DATASUS são **cp1252 (superconjunto do latin-1)**; converta para UTF-8.
 - **Colunas preenchidas:**
   - auditoria: `criado_em = UTC_TIMESTAMP(3)`, `versao = 1`;
   - `versao_fonte` com a versão do registro (por exemplo, a competência do SIGTAP);

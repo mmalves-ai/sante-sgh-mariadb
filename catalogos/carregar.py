@@ -4,7 +4,7 @@ uso: python3 -I catalogos/carregar.py <codigo_cliente> [fonte ...]
      fontes, na ordem de dependência: ibge, bcb, cid10, sigtap   (sem argumento: todas)
 
 Cada fonte é um módulo em catalogos/carregadores/<fonte>.py com a função carregar(banco: str) -> dict
-{tabela: linhas}. Os carregadores são idempotentes (rodar de novo não duplica). A carga fica registrada
+{tabela: linhas}; a lista AVISOS do módulo, se houver, é impressa e gravada no evento. Os carregadores são idempotentes (rodar de novo não duplica). A carga fica registrada
 em plataforma.cliente_evento (tipo catalogo_carregado).
 """
 import importlib.util
@@ -37,8 +37,12 @@ def main():
         mod = importlib.util.module_from_spec(esp)
         esp.loader.exec_module(mod)
         res = mod.carregar(banco)
+        avisos = list(getattr(mod, "AVISOS", []))
+        reg = {"fonte": f, "linhas": res, "avisos": avisos}
         print(json.dumps({"fonte": f, "linhas": res}, ensure_ascii=False))
-        det = json.dumps({"fonte": f, "linhas": res}, ensure_ascii=False).replace("'", "''")
+        for a in avisos:
+            print(f"  aviso {f}: {a}")
+        det = json.dumps(reg, ensure_ascii=False).replace("'", "''")
         sql("plataforma", f"INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, criado_em) "
                           f"VALUES ({cliente_id}, 'catalogo_carregado', '{det}', UTC_TIMESTAMP(3), UTC_TIMESTAMP(3));")
 

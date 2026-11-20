@@ -493,7 +493,7 @@ CREATE TABLE ocupacao_cbo (
 ) COMMENT='Classificação oficial de ocupações, usada na profissão do paciente e no registro do profissional';
 
 
-## Leiautes dos arquivos (posição fixa, latin-1)
+## Leiautes dos arquivos (posição fixa, cp1252)
 ### rl_excecao_compatibilidade_layout.txt
 Coluna,Tamanho,Inicio,Fim,Tipo
 CO_PROCEDIMENTO_RESTRICAO,10,1,10,VARCHAR2
