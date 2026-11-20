@@ -53,3 +53,6 @@ infra/zap/relatorio/
 
 # Capturas de assinatura do legado: regeneráveis do new-sgh (git archive d3f8b5d)
 referencias/assinaturas-legado/
+
+# Cache das fontes oficiais dos catálogos (regenerável por catalogos/baixar.py)
+catalogos/cache/
