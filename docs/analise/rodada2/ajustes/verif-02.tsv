@@ -1,0 +1,6 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+situacao_atendimento	ACEITA	situacao_atendimento	REC	dominio	F3	Situações possíveis do atendimento (aberto, em triagem, em atendimento, alta, cancelado), indicando as que encerram ou contam como triagem
+tipo_endereco	ACEITA	tipo_endereco	CAD	dominio	F3	Finalidade do endereço da pessoa (residencial, comercial, cobrança, correspondência)
+tipo_deficiencia	ACEITA	tipo_deficiencia	CAD	dominio	F7	Tipos de deficiência declarados no cadastro (física, auditiva, visual, intelectual, múltipla), conforme a lei de inclusão
+paciente_deficiencia	ACEITA	paciente_deficiencia	CAD	vinculo	F7	Deficiências declaradas pelo paciente, com informante, data e necessidade de apoio no atendimento
+plano_fonte_pagadora	ACEITA	plano_fonte_pagadora	CAD	principal	F3	Planos e categorias de cada fonte pagadora, com registro na agência, acomodação e situação

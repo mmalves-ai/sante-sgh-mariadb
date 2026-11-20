@@ -1,0 +1,380 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	LOG_CONTABIL_CONTA	MECANISMO	historico_entidade:lancamento_contabil	N	FIN	F7	
+DBAMV	LOG_CONTABIL_LCTO	MECANISMO	historico_entidade:lancamento_contabil	N	FIN	F7	
+DBAMV	LOG_CONTAGEM_USUARIO	MECANISMO	historico_entidade:inventario_estoque_contagem	N	SUP	F3	
+DBAMV	LOG_CONTA_CANCELADA	MECANISMO	historico_entidade:conta_hospitalar	N	FAT	F3	cancelamento de conta com motivo e justificativa
+DBAMV	LOG_CONTA_COMPET	MECANISMO	historico_entidade:conta_hospitalar	N	FAT	F3	troca de remessa e competencia da conta
+DBAMV	LOG_CONTA_FINAN	MECANISMO	historico_entidade:conta_bancaria	N	FIN	F3	
+DBAMV	LOG_CONTROLE_EMAIL	TABELA	envio_email	N	ADM	F3	envio do pedido de compra ao fornecedor por e-mail
+DBAMV	LOG_CONTROLE_IMPRESSAO_ETIQU	MECANISMO	historico_entidade:etiqueta_identificacao	N	SUP	F3	
+DBAMV	LOG_CONVENIO_ESTADO	MECANISMO	historico_entidade:importacao_tabela	N	FAT	F3	mensagens da carga de tabela de preco
+DBAMV	LOG_CON_PAG_CON_REC	MECANISMO	trilha_auditoria	N	FIN	F3	alteracao campo a campo de titulos a pagar e a receber
+DBAMV	LOG_COTA_RESSUPRIMENTO	MECANISMO	historico_entidade:parametro_reposicao	N	SUP	F3	
+DBAMV	LOG_CREDENCIADO	MECANISMO	historico_entidade:profissional	N	CAD	F3	ativacao e inativacao do credenciamento
+DBAMV	LOG_CULTURA	MECANISMO	historico_entidade:resultado_cultura	N	SADT	F7	
+DBAMV	LOG_DADOS_NOTA	MECANISMO	historico_entidade:conta_hospitalar_item	N	FAT	F3	rastreio de preco e fornecedor do item lancado
+DBAMV	LOG_DANFE	MECANISMO	integracao	N	SUP	F3	leitura do XML da nota eletronica
+DBAMV	LOG_DESCARACTERIZACAO_PACO	TABELA	descaracterizacao_pacote	N	FAT	F3	
+DBAMV	LOG_DESCRICAO_CIRURGIA	MECANISMO	historico_entidade:descricao_cirurgica	N	CC	F3	
+DBAMV	LOG_DESTINO_ROMANEIO	MECANISMO	trilha_auditoria	N	SUP	F3	alteracao de cadastro do romaneio
+DBAMV	LOG_DIARIA_ACOMPANHANTE	MECANISMO	historico_entidade:diaria_lancada	N	INT	F3	
+DBAMV	LOG_DIARIA_AUTOMATICA	MECANISMO	historico_entidade:diaria_lancada	N	INT	F3	
+DBAMV	LOG_DIARIA_UTI_SUS	MECANISMO	historico_entidade:diaria_uti_sus	N	SUS	F7	
+DBAMV	LOG_DOCUMENTO_CLINICO	TABELA	documento_prontuario_evento	N	PEP	F3	
+DBAMV	LOG_DOC_ORFAO_PACIENTE	NAO		N	PEP		tecnico do fornecedor sem equivalente
+DBAMV	LOG_ENVIO_EMAIL_SMS_PRE_AGE	TABELA	envio_notificacao	N	ADM	F8	aviso ao paciente do pre-agendamento cirurgico
+DBAMV	LOG_ENVIO_PLANSERV	MECANISMO	integracao	N	FAT	F3	envio a convenio especifico para casar o retorno
+DBAMV	LOG_ERRO	MECANISMO	framework	N	SIS	F3	erro de tela
+DBAMV	LOG_ERRO_ARQMAG_CONTA	MECANISMO	integracao	N	FAT	F3	erro na geracao do arquivo de remessa
+DBAMV	LOG_ERRO_ARQMAG_ITEM	MECANISMO	integracao	N	FAT	F3	erro na geracao do arquivo de remessa
+DBAMV	LOG_ERRO_ARQMAG_REMESSA	MECANISMO	integracao	N	FAT	F3	erro na geracao do arquivo de remessa
+DBAMV	LOG_ERRO_ENT_PRO	MECANISMO	historico_entidade:nota_entrada	N	SUP	F3	erros do processamento da entrada
+DBAMV	LOG_ERRO_MGCE	MECANISMO	historico_entidade:ciclo_esterilizacao	N	CC	F7	
+DBAMV	LOG_ERRO_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT	F3	carga da tabela oficial
+DBAMV	LOG_ESCALA_CENTRAL	MECANISMO	historico_entidade:agenda_escala	N	AGE	F3	
+DBAMV	LOG_ESCALA_CENTRAL_CONVENIO	MECANISMO	historico_entidade:agenda_fonte_pagadora	N	AGE	F3	
+DBAMV	LOG_ESCALA_CENTRAL_HORARIO	MECANISMO	historico_entidade:horario_agenda	N	AGE	F3	
+DBAMV	LOG_ESCALA_CENTRAL_ITEM_AGENDA	MECANISMO	historico_entidade:agenda_item_agendavel	N	AGE	F8	
+DBAMV	LOG_ESCALA_CENTRAL_SER_TIPO	MECANISMO	historico_entidade:agenda_servico	N	AGE	F3	
+DBAMV	LOG_ESCALA_CENTRAL_USUARIO	MECANISMO	historico_entidade:agenda_usuario	N	AGE	F3	
+DBAMV	LOG_ESTORNO_PAGTO_IMP_FCCT	MECANISMO	historico_entidade:titulo_pagar	N	FIN	F3	estorno de titulo de imposto gerado no pagamento
+DBAMV	LOG_ETIQUETA_CME	MECANISMO	historico_entidade:pacote_esteril	N	CC	F7	
+DBAMV	LOG_EVENTOS	MECANISMO	trilha_auditoria	N	ADM	F3	mensagens exibidas ao usuario
+DBAMV	LOG_EVE_SIASUS	MECANISMO	historico_entidade:producao_ambulatorial_sus_item	N	SUS	F7	
+DBAMV	LOG_EXCLUSAO_AGENDAMENTO	TABELA	cancelamento_marcacao	N	AGE	F3	
+DBAMV	LOG_EXCLUSAO_EXA_LAB	TABELA	cancelamento_marcacao	N	AGE	F3	exame excluido da marcacao
+DBAMV	LOG_EXCLUSAO_EXA_RX	TABELA	cancelamento_marcacao	N	AGE	F3	exame excluido da marcacao
+DBAMV	LOG_EXCLUSAO_PACIENTE	TABELA	registro_excluido	N	ADM	F3	copia do cadastro excluido com valores anteriores
+DBAMV	LOG_EXCLUSAO_PSSD	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	
+DBAMV	LOG_EXCLUSAO_SAC_SOLIC	MECANISMO	historico_entidade:manifestacao_ouvidoria	N	QUA	F7	
+DBAMV	LOG_EXCL_ATENDIME	TABELA	cancelamento_atendimento	N	REC	F3	
+DBAMV	LOG_EXCL_MOV_INT	MECANISMO	historico_entidade:ocupacao_leito	N	INT	F3	cancelamento de movimentacao de leito
+DBAMV	LOG_EXC_EXA_RX	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	
+DBAMV	LOG_EXC_ITPED_RX	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	
+DBAMV	LOG_EXC_LAUDO_RX	MECANISMO	historico_entidade:laudo_diagnostico	N	SADT	F3	
+DBAMV	LOG_EXC_PED_LAB	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	
+DBAMV	LOG_EXC_PED_RX	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	
+DBAMV	LOG_EXECUCAO_COTA_RESSUPRIMEN	TABELA	execucao_rotina	N	SIS	F3	execucao do ressuprimento automatico
+DBAMV	LOG_EXECUCAO_SCRIPT	MECANISMO	framework	N	SIS	F3	execucao de script do produto
+DBAMV	LOG_EXEC_GUIA_EXAMES	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_EXPORTACAO_LAUDO_SUS	MECANISMO	integracao	N	SUS	F3	
+DBAMV	LOG_EXPORT_ATENDIME	MECANISMO	integracao	N	REC	F3	
+DBAMV	LOG_FALHA_ARQMAG	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_FALHA_ARQMAG_RPS	MECANISMO	integracao	N	FIN	F3	falha no arquivo de nota de servico
+DBAMV	LOG_FALHA_COMUNICACAO	MECANISMO	integracao	N	AGE	F3	
+DBAMV	LOG_FALHA_EXPORTACAO_LAUDO_SUS	MECANISMO	integracao	N	SUS	F3	
+DBAMV	LOG_FALHA_IMPORTACAO	TABELA	pendencia_conta	N	FAT	F3	item que falhou ao entrar na conta fica pendente
+DBAMV	LOG_FALHA_IMPORTACAO_FFAS	TABELA	critica_sus	N	SUS	F7	
+DBAMV	LOG_FALHA_IMP_TROCA_CHAVE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAMV	LOG_FATURA_CEDIMAT	MECANISMO	trilha_auditoria	N	FAT	F3	impressao de fatura
+DBAMV	LOG_FECHAMENTO_MASSIVO	TABELA	pendencia_conta	N	FAT	F3	conta que falhou no fechamento automatico
+DBAMV	LOG_FFAS_CANCEL_GLOSA_BPA	MECANISMO	historico_entidade:rejeicao_sus	N	SUS	F7	
+DBAMV	LOG_FFAS_FALHA_IMPORTACAO_APAC	TABELA	critica_sus	N	SUS	F7	
+DBAMV	LOG_FFAS_FALHA_IMPORTACAO_BPA	TABELA	critica_sus	N	SUS	F7	
+DBAMV	LOG_FFAS_GRAVA_CAMPOS	MECANISMO	historico_entidade:producao_ambulatorial_sus_item	N	SUS	F7	
+DBAMV	LOG_FFCV_POPULA_CAMPOS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAMV	LOG_FICHA_PRE_ANEST	MECANISMO	historico_entidade:avaliacao_pre_anestesica	N	CC	F3	
+DBAMV	LOG_FILA_ESPERA_FSCC	TABELA	lista_espera_historico	N	AGE	F3	fila de espera cirurgica
+DBAMV	LOG_FNFI	MECANISMO	trilha_auditoria	N	FIN	F3	alteracao campo a campo no financeiro
+DBAMV	LOG_FOTO_PESSOA	MECANISMO	historico_entidade:paciente	N	CAD	F3	foto no armazenamento de objetos
+DBAMV	LOG_FPO	MECANISMO	historico_entidade:programacao_orcamentaria_sus	N	SUS	F7	carga da programacao orcamentaria
+DBAMV	LOG_FRACIONAMENTO	TABELA	sobra_fracionamento	S	SUP	F7	
+DBAMV	LOG_FSCC_WORKFLOW	TABELA	pendencia_agendamento_cirurgico	N	CC	F3	
+DBAMV	LOG_FUNC_FNFI_USU	MECANISMO	trilha_auditoria	N	ADM	F3	alteracao de permissoes financeiras do usuario
+DBAMV	LOG_GERACAO_CIHA	MECANISMO	historico_entidade:remessa_ciha	N	SUS	F3	
+DBAMV	LOG_GERACAO_MAPA	MECANISMO	historico_entidade:ordem_separacao	N	SUP	F8	
+DBAMV	LOG_GERACAO_REPASSE	MECANISMO	historico_entidade:apuracao_repasse	N	FAT	F3	
+DBAMV	LOG_GERAL_FCCT	TABELA	execucao_rotina	N	SIS	F3	
+DBAMV	LOG_GERA_PSND	MECANISMO	historico_entidade:planejamento_cardapio	N	HOT	F8	
+DBAMV	LOG_GERA_SOLICITACAO	MECANISMO	historico_entidade:solicitacao_limpeza	N	HOT	F3	solicitacoes geradas na admissao
+DBAMV	LOG_GERA_SOLIC_TURNO	TABELA	execucao_rotina	N	SIS	F3	geracao de solicitacoes por turno
+DBAMV	LOG_GERMES_CULTURA	MECANISMO	historico_entidade:isolado_microbiano	N	SADT	F7	
+DBAMV	LOG_GLOSA_AIH	MECANISMO	historico_entidade:rejeicao_sus	N	SUS	F7	
+DBAMV	LOG_GUIA	TABELA	guia_historico	N	FAT	F3	
+DBAMV	LOG_GUIA_OBS	TABELA	guia_historico	N	FAT	F3	
+DBAMV	LOG_HRITPRE_MED	TABELA	horario_administracao_evento	N	PEP	F3	
+DBAMV	LOG_HRITPRE_MED_PREPARO_COMP	TABELA	horario_administracao_evento	N	PEP	F3	
+DBAMV	LOG_HRITPRE_MED_TRATAMENTO	TABELA	horario_administracao_evento	N	PEP	F3	
+DBAMV	LOG_HRITPRE_VOL_TRATAMENTO	TABELA	horario_administracao_evento	N	PEP	F3	
+DBAMV	LOG_IMPORTACAO_CONTABIL	MECANISMO	historico_entidade:lote_contabil	N	FIN	F7	
+DBAMV	LOG_IMPORTACAO_CUSTOS	MECANISMO	integracao	N	FIN	F3	
+DBAMV	LOG_IMPORTACAO_LAUDO_SUS	MECANISMO	integracao	N	SUS	F3	
+DBAMV	LOG_IMPORTADA_RET_COB	TABELA	retorno_cobranca_item	N	FIN	F7	
+DBAMV	LOG_IMPRESSAO_ETIQUETA	MECANISMO	historico_entidade:etiqueta_identificacao	N	SUP	F3	
+DBAMV	LOG_IMPRESSAO_LAUDO_AMOSTRA	TABELA	emissao_laudo	N	SADT	F3	
+DBAMV	LOG_INATIVA_REGRA_QUEBRA_CONTA	MECANISMO	historico_entidade:regra_criacao_conta	N	FAT	F8	
+DBAMV	LOG_INTEGRA_BENNER	MECANISMO	integracao	N	FIN	F3	
+DBAMV	LOG_INTEGRA_CENTRAL_TELEFONICA	MECANISMO	integracao	N	HOT	F3	
+DBAMV	LOG_INTEGRA_CONTAB	MECANISMO	integracao	N	FIN	F3	
+DBAMV	LOG_INTEGRA_FFAS	TABELA	critica_sus	N	SUS	F7	
+DBAMV	LOG_IPASGO	TABELA	importacao_tabela	N	FAT	F3	
+DBAMV	LOG_IPE_MM	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_ITCALC_CUSTO	MECANISMO	historico_entidade:apuracao_custo	N	FIN	F7	
+DBAMV	LOG_ITCOB_PRE_AMBU_REG_LANC	TABELA	conta_hospitalar_item_memoria	N	FAT	F3	valores antes das regras de lancamento
+DBAMV	LOG_ITCOB_PRE_REG_LANC	TABELA	conta_hospitalar_item_memoria	N	FAT	F3	valores antes das regras de lancamento
+DBAMV	LOG_ITCULTURA	MECANISMO	historico_entidade:resultado_sensibilidade	N	SADT	F7	
+DBAMV	LOG_ITEM_AGENDA	MECANISMO	historico_entidade:agendamento_cirurgico	N	CC	F3	
+DBAMV	LOG_ITEM_CONTRATO_SUS	MECANISMO	historico_entidade:meta_contratual_sus	N	SUS	F7	
+DBAMV	LOG_ITEM_COTA_RESSUPRIMENTO	MECANISMO	historico_entidade:parametro_reposicao	N	SUP	F3	
+DBAMV	LOG_ITEM_FCCT	TABELA	execucao_rotina_etapa	N	SIS	F3	
+DBAMV	LOG_ITEM_GUIA_OPME	MECANISMO	historico_entidade:guia_fonte_pagadora_opme	N	FAT	F7	
+DBAMV	LOG_ITLAN_MED_REG_LANC	TABELA	conta_hospitalar_item_memoria	N	FAT	F3	valores antes das regras de lancamento
+DBAMV	LOG_ITPRE_FAT	TABELA	lancamento_origem_evento	N	FAT	F3	
+DBAMV	LOG_ITPRE_MED_TRATAMENTO	TABELA	prescricao_evento	N	PEP	F3	
+DBAMV	LOG_ITREG_AMB_REG_LANC	TABELA	conta_hospitalar_item_memoria	N	FAT	F3	valores antes das regras de lancamento
+DBAMV	LOG_ITREG_FAT_REG_LANC	TABELA	conta_hospitalar_item_memoria	N	FAT	F3	valores antes das regras de lancamento
+DBAMV	LOG_ITREPASSE_MEDICO_CD	MECANISMO	historico_entidade:apuracao_repasse_item	N	FAT	F3	
+DBAMV	LOG_IT_AV_PRODUTOS	MECANISMO	historico_entidade:agendamento_cirurgico_material	N	CC	F3	
+DBAMV	LOG_IT_SAME_PROTOCOLOS	MECANISMO	historico_entidade:protocolo_tramite	N	HOT	F3	
+DBAMV	LOG_LABORATOR	MECANISMO	historico_entidade:fabricante	N	SUP	F3	
+DBAMV	LOG_LAUDO_SIA_APAC	MECANISMO	integracao	N	SUS	F3	
+DBAMV	LOG_LEITURA_AMOSTRA	MECANISMO	integracao	N	SADT	F3	interface de equipamento
+DBAMV	LOG_LEITURA_PEDIDO	MECANISMO	integracao	N	SADT	F3	interface de equipamento
+DBAMV	LOG_MEIO_MAG	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_MEIO_MAGNETICO_APAC	MECANISMO	historico_entidade:remessa_apac	N	SUS	F7	
+DBAMV	LOG_MOTIVO_GLOSA	MECANISMO	historico_entidade:motivo_glosa	N	FAT	F3	
+DBAMV	LOG_MOTORISTA_ROMANEIO	MECANISMO	trilha_auditoria	N	SUP	F3	alteracao de cadastro do romaneio
+DBAMV	LOG_MOT_PEND	TABELA	guia_historico	N	FAT	F3	
+DBAMV	LOG_MOVIMENTO_EXAME	TABELA	item_exame_evento	N	SADT	F3	
+DBAMV	LOG_MOV_CARDAPIO	MECANISMO	historico_entidade:mapa_dieta	N	HOT	F3	
+DBAMV	LOG_MOV_CC_RPA	MECANISMO	historico_entidade:movimento_paciente_bloco	N	CC	F3	
+DBAMV	LOG_MOV_CENTRO_CIRURGICO	MECANISMO	historico_entidade:movimento_paciente_bloco	N	CC	F3	
+DBAMV	LOG_MOV_FATURA	MECANISMO	historico_entidade:competencia_sus	N	SUS	F7	
+DBAMV	LOG_MVTO_APLIC_DIRETA	MECANISMO	historico_entidade:movimento_estoque	N	SUP	F3	
+DBAMV	LOG_MVTO_CME	MECANISMO	historico_entidade:movimento_material_esteril	N	CC	F7	
+DBAMV	LOG_MVTO_CONSIGNADO	MECANISMO	historico_entidade:saldo_consignado	N	SUP	F7	
+DBAMV	LOG_MVTO_INSTRUMENTAL	MECANISMO	historico_entidade:caixa_instrumental	N	CC	F7	
+DBAMV	LOG_NATUREZA_DESPESA	MECANISMO	historico_entidade:insumo	N	SUP	F3	
+DBAMV	LOG_NOTA_ALTERADA	MECANISMO	historico_entidade:nota_entrada_item	N	SUP	F3	
+DBAMV	LOG_OCORRENCIA_DIETA	MECANISMO	historico_entidade:ocorrencia_entrega_refeicao	N	HOT	F8	
+DBAMV	LOG_OPERACAO_ATENDIMENTO	MECANISMO	historico_entidade:atendimento	N	REC	F3	
+DBAMV	LOG_OPERA_AGENDA_CENTRAL	MECANISMO	historico_entidade:bloqueio_agenda	N	AGE	F3	
+DBAMV	LOG_OPERA_AGENDA_TURMA	MECANISMO	historico_entidade:turma_encontro	N	AGE	F8	
+DBAMV	LOG_ORCA_AJUSTE_NF	MECANISMO	historico_entidade:ajuste_orcamento_nota	N	FIN	F8	
+DBAMV	LOG_ORCA_AJUSTE_NF_RAT	MECANISMO	historico_entidade:ajuste_orcamento_nota	N	FIN	F8	
+DBAMV	LOG_ORCA_CONTROLE_MOV	MECANISMO	historico_entidade:reserva_orcamentaria	N	FIN	F8	
+DBAMV	LOG_PACIENTE_ATENDIME	TABELA	paciente_versao	N	CAD	F3	
+DBAMV	LOG_PACIENTE_PROGRAMA_SAUDE	MECANISMO	historico_entidade:programa_cuidado_paciente	N	PEP	F8	
+DBAMV	LOG_PAGTO_REPASSE_ACRES_DESC	TABELA	ajuste_repasse	N	FAT	F7	
+DBAMV	LOG_PAR_MED	MECANISMO	historico_entidade:interconsulta_resposta	N	PEP	F3	
+DBAMV	LOG_PEP_PALM	NAO		N	PEP		obsoleto
+DBAMV	LOG_PLANO_CONTAS	MECANISMO	historico_entidade:conta_contabil	N	FIN	F7	
+DBAMV	LOG_PLANO_CONTAS_SPED	MECANISMO	historico_entidade:vinculo_conta_referencial	N	FIN	F7	
+DBAMV	LOG_PLANO_ESTR	MECANISMO	historico_entidade:plano_contas	N	FIN	F7	
+DBAMV	LOG_PRESCRICAO	TABELA	prescricao_evento	N	PEP	F3	
+DBAMV	LOG_PRESTADOR	TABELA	profissional_versao	N	CAD	F3	
+DBAMV	LOG_PRESTADOR_VINCULO	TABELA	profissional_provisorio_uso	N	CAD	F8	
+DBAMV	LOG_PRE_MED_TRATAMENTO	TABELA	prescricao_evento	N	PEP	F3	
+DBAMV	LOG_PRE_REMESSA_FFCV	MECANISMO	historico_entidade:pre_remessa	N	FAT	F8	
+DBAMV	LOG_PROCESSA_SCNES	MECANISMO	historico_entidade:remessa_cnes	N	CAD	F7	
+DBAMV	LOG_PROC_INSTR_REG_BPA	MECANISMO	historico_entidade:procedimento_sigtap_registro	N	SUS	F3	
+DBAMV	LOG_PROIB_RET	MECANISMO	historico_entidade:restricao_cobertura_fonte_pagadora	N	FAT	F7	
+DBAMV	LOG_PRO_FAT_EMPRESA	TABELA	transferencia_conta_item	N	FAT	F3	
+DBAMV	LOG_QUEBRA_CONTA	MECANISMO	historico_entidade:conta_hospitalar	N	FAT	F3	
+DBAMV	LOG_RASTREABILIDADE	MECANISMO	trilha_auditoria	N	FAT	F3	
+DBAMV	LOG_REAGENDAMENTO	TABELA	marcacao_horario_historico	N	AGE	F3	
+DBAMV	LOG_RECIBO	MECANISMO	historico_entidade:recibo	N	FIN	F3	
+DBAMV	LOG_REPASSE	MECANISMO	historico_entidade:apuracao_repasse	N	FAT	F3	
+DBAMV	LOG_REPASSE_CONTROLE	NAO		N	FAT		tecnico do fornecedor sem equivalente
+DBAMV	LOG_REPASSE_PAGAMENTO	MECANISMO	historico_entidade:apuracao_repasse	N	FAT	F3	
+DBAMV	LOG_REPROVACAO_LIMPEZA	TABELA	inspecao_limpeza	N	HOT	F7	
+DBAMV	LOG_REP_RESULTADO	MECANISMO	historico_entidade:apuracao_repasse_item	N	FAT	F3	
+DBAMV	LOG_RES_EXA	TABELA	resultado_exame_versao	N	SADT	F3	
+DBAMV	LOG_RETORNO_ARQMAG_IPE	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_RETORNO_FATURA	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_RETORNO_PLANSERV	MECANISMO	integracao	N	FAT	F3	
+DBAMV	LOG_SALDO_TELA	TABELA	recalculo_saldo_estoque	N	SUP	F3	
+DBAMV	LOG_SIMPRO	TABELA	importacao_tabela	N	FAT	F3	
+DBAMV	LOG_SOLCOM_OPME	MECANISMO	historico_entidade:solicitacao_opme	N	SUP	F7	
+DBAMV	LOG_SOLIC_AGEN_ITEM_AGEN	TABELA	marcacao_horario_historico	N	AGE	F3	
+DBAMV	LOG_STATUS_APROVACAO_AVISO	MECANISMO	historico_entidade:agendamento_cirurgico	N	CC	F3	
+DBAMV	LOG_STATUS_LAUDO_SIA_APAC	MECANISMO	historico_entidade:laudo_apac	N	SUS	F7	
+DBAMV	LOG_SUBSTANCIA	MECANISMO	historico_entidade:principio_ativo	N	SUP	F3	
+DBAMV	LOG_TASK	MECANISMO	framework	N	SIS	F3	
+DBAMV	LOG_TAXA_MANUSEIO_OPME	MECANISMO	historico_entidade:taxa_manuseio_implante	N	SUP	F7	
+DBAMV	LOG_TEMP_SOLICITACAO	TABELA	substituicao_dispensacao	N	SUP	F3	
+DBAMV	LOG_TRANSFERENCIA	MECANISMO	historico_entidade:atendimento	N	REC	F3	
+DBAMV	LOG_TRANSF_CONTA	MECANISMO	historico_entidade:conta_aih	N	SUS	F7	
+DBAMV	LOG_TRANSF_PACIENTE	MECANISMO	historico_entidade:atendimento	N	REC	F3	troca do paciente do atendimento
+DBAMV	LOG_TRANSF_REMESSA_FFCV	MECANISMO	historico_entidade:fatura_fonte_pagadora	N	FAT	F3	
+DBAMV	LOG_TRANSF_SAME	MECANISMO	historico_entidade:prontuario_estabelecimento	N	CAD	F3	
+DBAMV	LOG_TRANSPORTADORA_ROMANEIO	MECANISMO	trilha_auditoria	N	SUP	F3	alteracao de cadastro do romaneio
+DBAMV	LOG_TROCPAC_REGS_PAC_DEST	TABELA	unificacao_cadastro_item	N	CAD	F3	
+DBAMV	LOG_TROCPAC_REVERSAO	TABELA	unificacao_cadastro	N	CAD	F3	
+DBAMV	LOG_TROCPAC_SUBSTITUICAO	TABELA	unificacao_cadastro_item	N	CAD	F3	
+DBAMV	LOG_UNIFICA_PACIENTE_INTEGRA	TABELA	unificacao_cadastro	N	CAD	F3	
+DBAMV	LOG_USUARIO_PERMITIDO_PRODUTO	MECANISMO	historico_entidade:usuario_estoque_classificacao	N	SUP	F3	
+DBAMV	LOG_VEICULO_ROMANEIO	MECANISMO	trilha_auditoria	N	SUP	F3	alteracao de cadastro do romaneio
+DBAMV	LOG_VERSAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	LOG_VINC_LOTE_DANFE	MECANISMO	integracao	N	SUP	F3	vinculo de lote da nota eletronica lida
+DBAMV	LOG_VINC_PROD_DANFE	MECANISMO	integracao	N	SUP	F3	vinculo de produto da nota eletronica lida
+DBAMV	LOG_WEB_ITPED_LAB	TABELA	acesso_resultado_portal	N	INTG	F3	
+DBAPORTAL	AUDITORIA	TABELA	auditoria_interna	N	QUA	F8	
+DBAPORTAL	AUDITORIA_RESPONSAVEL	TABELA	auditoria_interna_auditor	N	QUA	F8	
+DBAPORTAL	HIST_GEST_COMPETENCIA	MECANISMO	trilha_auditoria	N	QUA	F3	
+DBAPORTAL	LOG_ACESSO_BSC	TABELA	evento_sessao	N	ADM	F3	
+DBAPORTAL	LOG_CARGA_KPI	TABELA	carga_data_mart	N	REL	F3	
+DBAPORTAL	LOG_EXECUCAO_CARGA	TABELA	carga_data_mart_etapa	N	REL	F3	
+DBAPORTAL	LOG_KPI_CONNECTION	TABELA	carga_data_mart_etapa	N	REL	F3	
+DBAPORTAL	LOG_PORTAL	MECANISMO	framework	N	SIS	F3	
+DBAPORTAL	LOG_SISTEMA	MECANISMO	framework	N	SIS	F3	
+DBASGU	HIST_ALT	MECANISMO	framework	N	SIS	F3	historico de versoes do produto
+DBASGU	LOG_ACESSO_MV2000	TABELA	evento_sessao	N	ADM	F3	
+DBASGU	LOG_SENHA	TABELA	historico_senha	N	ADM	F3	
+GCMMV	LOG	MECANISMO	integracao	N	SIS	F3	sincronismo do plano de execucao
+MVBIKE	LOG_CONTROLE_EXECUCAO_OBJ	TABELA	carga_data_mart_etapa	N	REL	F3	
+MVBIKE	LOG_GERAL	TABELA	carga_data_mart_etapa	N	REL	F3	
+MVBIKE	LOG_PKG_ACELERADOR	NAO		N	REL		tecnico do fornecedor sem equivalente
+MVBIKE	LOG_PROCESSAMENTO	TABELA	carga_data_mart_etapa	N	REL	F3	
+MVCONT	LOG_ORCA_AJUSTE_NF	NAO		N	FIN		duplicado de historico de ajuste_orcamento_nota (mesmo log no esquema contabil)
+MVCONT	LOG_ORCA_AJUSTE_NF_RAT	NAO		N	FIN		duplicado de historico de ajuste_orcamento_nota (mesmo log no esquema contabil)
+MVCONT	LOG_ORCA_CONTROLE_MOV	NAO		N	FIN		duplicado de historico de reserva_orcamentaria (mesmo log no esquema contabil)
+CARTORIO	DOCUMENT	TABELA	documento_assinado	N	ADM	F3	conteudo binario vai para arquivo
+CARTORIO	SIGNATURE	TABELA	assinatura_documento	N	ADM	F3	
+CARTORIO	STATUS	TABELA	situacao_assinatura_documento	N	PEP	F3	
+DBACP	ACAO	TABELA	acao_sistema	N	ADM	F3	
+DBACP	ACESSO_PORTLET_UNIVERSAL	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	AUCTIONITEM	NAO		N	SIS		sem valor de negocio
+DBACP	AUTH_CHAVE	TABELA	vinculo_identidade_externa	N	ADM	F7	
+DBACP	CABECALHO	MECANISMO	framework	N	SIS	F3	cabecalho visual do portal
+DBACP	CABECALHO_LINKS	MECANISMO	framework	N	SIS	F3	cabecalho visual do portal
+DBACP	CLOB_TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	COLUNA	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	COLUNA_SQL	TABELA	relatorio_coluna	N	REL	F3	
+DBACP	COMENTARIO_PORTLET_UNIVERSAL	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	CONTROLE_CHAVE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	CONTROLE_VERSAO	MECANISMO	framework	N	SIS	F3	controle de versao do produto
+DBACP	CONTROLE_VERSAO_HISTORICO	MECANISMO	framework	N	SIS	F3	controle de versao do produto
+DBACP	DASH_RESPOSTA_PARAMETRO	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBACP	DATABASECHANGELOG	MECANISMO	framework	N	SIS	F3	controle de versao do esquema
+DBACP	DATABASECHANGELOGLOCK	MECANISMO	framework	N	SIS	F3	trava do controle de versao do esquema
+DBACP	DATA_SOURCE_SQL	MECANISMO	framework	N	SIS	F3	fonte de dados da ferramenta de BI
+DBACP	DEBUG_KPI	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	DETALHE_FILTRO_DINAMICO	TABELA	analise_salva	N	REL	F8	
+DBACP	DETALHE_PORTLET_UNIVERSAL	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	FILTRO_DINAMICO	TABELA	analise_salva	N	REL	F8	
+DBACP	FILTRO_METRICA	MECANISMO	datamart	N	REL	F3	
+DBACP	FORMATACAO_CONDICIONAL	TABELA	faixa_indicador	N	REL	F3	
+DBACP	FORMATACAO_CRITERIO	TABELA	faixa_indicador	N	REL	F3	
+DBACP	FUNCAO_MODULO	TABELA	acao_sistema	N	ADM	F3	
+DBACP	FUNCAO_PERMISSAO_PAPEL	TABELA	perfil_acao	N	ADM	F3	
+DBACP	FUNCAO_PERMISSAO_USUARIO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBACP	FUNCIONALIDADE	TABELA	acao_sistema	N	ADM	F3	
+DBACP	FUNCIONALIDADE_PAPEL	TABELA	perfil_acao	N	ADM	F3	
+DBACP	FUNCIONALIDADE_SISTEMA_LICENCA	TABELA	funcionalidade_sistema	N	ADM	F3	
+DBACP	GRUPO_FUNCIONALIDADE	TABELA	modulo_sistema	N	ADM	F3	
+DBACP	GRUPO_PORTLET	TABELA	tipo_bloco_pagina	N	REL	F8	
+DBACP	GSTMOB_ATALHO_FAVR	TABELA	favorito_usuario	N	ADM	F3	
+DBACP	GSTMOB_LOG_ACESSO	TABELA	evento_sessao	N	ADM	F3	
+DBACP	GSTMOB_MODULO	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	GSTMOB_PAPEL_MODULO	TABELA	modelo_pagina_inicial_perfil	N	REL	F8	
+DBACP	GSTMOB_USUARIO_ACESSO	TABELA	dispositivo_usuario	S	ADM	F8	
+DBACP	ICONE_PORTLET_UNIVERSAL	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	IMAGEM_LINK	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	imagem vai para arquivo
+DBACP	LINKS	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	LISTA_VALORES	MECANISMO	framework	N	SIS	F3	lista de valores de tela
+DBACP	MAPA_OBJETO	MECANISMO	datamart	N	REL	F3	
+DBACP	MAPA_OBJETO_HIERARQUIA	MECANISMO	datamart	N	REL	F3	
+DBACP	MASCARA	MECANISMO	framework	N	SIS	F3	mascara de formatacao
+DBACP	MICROSTRATEGY_DATA_SOURCE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	MODULO_PERMISSAO_PAPEL	TABELA	perfil_acao	N	ADM	F3	
+DBACP	MODULO_PERMISSAO_USUARIO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBACP	MODULO_SISTEMA	TABELA	modulo_sistema	N	ADM	F3	
+DBACP	MONTAGEM_OBJETO	TABELA	analise_salva	N	REL	F8	
+DBACP	NI_CONSOLIDADORA	TABELA	regra_consolidacao_notificacao	N	ADM	F8	
+DBACP	NI_HISTORICO_EXECUCAO	TABELA	envio_notificacao	N	ADM	F8	
+DBACP	NI_NOTIFICACAO_INTELIGENTE	TABELA	regra_alerta;regra_consolidacao_notificacao	N	ADM	F3	
+DBACP	NI_NOTIFICACAO_RESPOSTA	TABELA	resposta_notificacao	N	ADM	F8	
+DBACP	NI_REGRA_ENVIO	TABELA	canal_notificacao;regra_alerta_destinatario	N	ADM	F8	
+DBACP	NI_REG_ENVIO	TABELA	envio_notificacao	N	ADM	F8	
+DBACP	NI_REG_NOTIFICACAO	TABELA	envio_notificacao	N	ADM	F8	
+DBACP	NI_USUARIO_ENVIO	TABELA	regra_alerta_destinatario;preferencia_canal_usuario	N	ADM	F7	
+DBACP	OBJETO_OLAP	MECANISMO	datamart	N	REL	F3	
+DBACP	PAGINA	TABELA	modelo_pagina_inicial	N	REL	F8	
+DBACP	PAGINA_CONFIGURACAO	TABELA	modelo_pagina_inicial	N	REL	F8	
+DBACP	PAINEL_FILTROS	TABELA	painel_gerencial	N	REL	F3	
+DBACP	PAINEL_PREFERENCIAS_USUARIO	TABELA	preferencia_usuario	N	ADM	F3	
+DBACP	PAINEL_TEMA	TABELA	painel_gerencial	N	REL	F3	
+DBACP	PAPEL	TABELA	perfil_acesso	N	ADM	F3	
+DBACP	PASTA	TABELA	modelo_pagina_inicial	N	REL	F8	
+DBACP	PASTA_CONFIGURACAO	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PLAN_CAMPO	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_CAMPO_PLANILHA	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_CONFIGURACOES	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_DATAMART	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_DATAMART_PAPEL	TABELA	analise_salva_permissao	N	REL	F8	
+DBACP	PLAN_FILTROS_PLANILHA	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_GRUPO_PERSONALIZADO	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_HISTORICO_ALTERACAO	MECANISMO	historico_entidade:analise_salva	N	REL	F8	
+DBACP	PLAN_ITEM_PERSONALIZADO	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_OBJETO_OLAP_PAPEL	TABELA	analise_salva_permissao	N	REL	F8	
+DBACP	PLAN_PARAMETROS_QUERY	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_PARAMETRO_MAPEADA	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_PLANILHA_DINAMICA	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_PLANILHA_PAPEL	TABELA	analise_salva_permissao	N	REL	F8	
+DBACP	PLAN_PROMPT	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_PROMPT_PLANILHA	TABELA	analise_salva	N	REL	F8	
+DBACP	PLAN_PROMPT_USUARIO	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBACP	PLAN_SUBGRUPO_PERSONALIZADO	TABELA	analise_salva	N	REL	F8	
+DBACP	PORTLET	TABELA	tipo_bloco_pagina	N	REL	F8	
+DBACP	PORTLET_CONFIGURACAO	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PORTLET_FORUM	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	PORTLET_HTML	TABELA	tipo_bloco_pagina	N	REL	F8	
+DBACP	PORTLET_IMAGEM	TABELA	tipo_bloco_pagina	N	REL	F8	imagem vai para arquivo
+DBACP	PORTLET_JSP	MECANISMO	framework	N	SIS	F3	
+DBACP	PORTLET_LINK	TABELA	tipo_bloco_pagina	N	REL	F8	
+DBACP	PORTLET_LINK_PARAM	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PORTLET_LOG	MECANISMO	trilha_auditoria	N	REL	F3	
+DBACP	PORTLET_MICROSTRATEGY	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	PORTLET_PAPEL	TABELA	modelo_pagina_inicial_perfil	N	REL	F8	
+DBACP	PORTLET_PARAM_PLANILHA	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PORTLET_PARAM_PLANILHA_MAPEADA	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PORTLET_PLANILHA_DINAMICA	TABELA	modelo_pagina_inicial_bloco	N	REL	F8	
+DBACP	PORTLET_SELO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	PORTLET_SQL	TABELA	relatorio	N	REL	F3	
+DBACP	PORTLET_UNIVERSAL	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	PORTLET_UNIV_SIST_HOMOLG	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	QUEST_SX_PLAN1	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	SD_APL_LOGS	MECANISMO	trilha_auditoria	N	REL	F3	
+DBACP	SD_CAMPOS_ARGUMENTO	MECANISMO	framework	N	SIS	F3	
+DBACP	SD_CARGA	MECANISMO	framework	N	SIS	F3	rotina de carga da simulacao
+DBACP	SD_CARGA_TP_ATENDIME	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_CENARIO	TABELA	cenario_simulacao_receita	N	REL	F8	
+DBACP	SD_CENARIO_PAPEL	TABELA	cenario_simulacao_receita	N	REL	F8	
+DBACP	SD_CENARIO_PARAMETRO	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_CONFIGURACAO	MECANISMO	parametro	N	REL	F3	
+DBACP	SD_CONFIGURACAO_AD	TABELA	provedor_identidade	N	ADM	F7	
+DBACP	SD_CONVERSAO_PROCEDIMENTO	TABELA	regra_conversao_procedimento	N	REL	F8	
+DBACP	SD_CONVERSAO_PROCEDIMENTO_PCT	TABELA	regra_conversao_procedimento	N	REL	F8	
+DBACP	SD_CONVERSAO_TAB_PRECO	TABELA	regra_conversao_tabela_preco	N	REL	F8	
+DBACP	SD_FILA_JOB	TABELA	simulacao_receita	N	REL	F8	
+DBACP	SD_INCONSISTENCIA_TT	TABELA	simulacao_receita_inconsistencia	N	REL	F8	
+DBACP	SD_INCONSISTENCIA_TT_PCT	TABELA	simulacao_receita_inconsistencia	N	REL	F8	
+DBACP	SD_LOGS	MECANISMO	trilha_auditoria	N	REL	F3	
+DBACP	SD_OBJETIVO_CENARIO	TABELA	cenario_simulacao_receita	N	REL	F8	
+DBACP	SD_OBJ_CEN_TIP_SIM	TABELA	cenario_simulacao_receita	N	REL	F8	
+DBACP	SD_PARAMETRO_CARGA	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_PARAM_RESPOSTA	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_REGRA_CONVENIO	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_SETOR_UNIDADE	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_SIMULACAO	TABELA	simulacao_receita	N	REL	F8	
+DBACP	SD_SIMULACAO_CONVERSAO	TABELA	simulacao_receita_resultado	N	REL	F8	
+DBACP	SD_STATUS	TABELA	simulacao_receita	N	REL	F8	
+DBACP	SD_TIPO_SIMULACAO	TABELA	simulacao_receita	N	REL	F8	
+DBACP	SD_TROCA_TABELA_PARAMETRO	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBACP	SD_UNIDADE_PRODUCAO	TABELA	simulacao_receita_resultado	N	REL	F8	
+DBACP	SD_USUARIO_LOGADO	TABELA	ultimo_acesso_usuario	N	ADM	F3	
+DBACP	SELO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	SERVICO_EXTERNO	TABELA	sistema_externo;credencial_integracao	N	INTG	F3	
+DBACP	SISTEMA	TABELA	modulo_sistema	N	ADM	F3	
+DBACP	SISTEMA_HOMOLOG_PORTLET_UNIV	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	SISTEMA_LICENCA	TABELA	funcionalidade_sistema	N	ADM	F3	
+DBACP	SISTEMA_PERMISSAO_PAPEL	TABELA	perfil_acao	N	ADM	F3	
+DBACP	SISTEMA_PERMISSAO_USUARIO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBACP	TIPO_LICENCA	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBACP	TIPO_PORTLET	TABELA	tipo_bloco_pagina	N	REL	F8	
+DBACP	TIPO_USUARIO	TABELA	perfil_acesso	N	ADM	F3	
+DBACP	USUARIO_LOGADO	TABELA	ultimo_acesso_usuario	N	ADM	F3	
+DBACP	USUARIO_PERMISSAO_ATIVIDADE	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBACP	USUARIO_PORTAL	TABELA	usuario;preferencia_usuario	N	ADM	F3	
+DBACP	USUARIO_PORTAL_ACAO	TABELA	usuario_acao_excecao	N	ADM	F3	

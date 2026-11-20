@@ -1,0 +1,18 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+tipo_registro_classificacao_risco	ACEITA	tipo_registro_classificacao_risco	PEP	dominio	F3	Tipos de registro na linha do tempo da classificação de risco (classificação inicial, reclassificação, correção)
+ficha_antimicrobiano	ACEITA	ficha_antimicrobiano	PEP	principal	F3	Justificativa de uso do antimicrobiano: indicação, sítio, cultura, tempo previsto e reavaliação
+manifestacao_alergica	ACEITA	manifestacao_alergica	PEP	dominio	F3	Manifestações clínicas da reação alérgica (urticária, broncoespasmo, anafilaxia)
+gravidade_reacao_adversa	ACEITA	gravidade_reacao_adversa	PEP	dominio	F3	Graus de gravidade da reação adversa a medicamento
+alergia_paciente_manifestacao	ACEITA	alergia_paciente_manifestacao	PEP	vinculo	F3	Manifestações observadas em cada alergia do paciente
+tipo_parto	ACEITA	tipo_parto	PEP	dominio	F3	Tipos de parto (normal, cesárea, fórceps)
+condicao_recem_nascido	ACEITA	condicao_recem_nascido	PEP	dominio	F3	Condição do recém-nascido ao nascer (vivo, natimorto)
+registro_nascimento	ACEITA	registro_nascimento	PEP	principal	F3	Nascimento: tipo de parto, Apgar, peso, sexo, condição e o vínculo com o paciente criado
+declaracao_nascido_vivo	ACEITA	declaracao_nascido_vivo	PEP	principal	F7	Declaração de nascido vivo com número, situação e cancelamento
+partograma	ACEITA	partograma	PEP	principal	F7	Partograma do trabalho de parto, com início, situação e desfecho
+partograma_registro	ACEITA	partograma_registro	PEP	item	F7	Registro horário do partograma (dilatação, altura, batimento fetal, contração)
+balanco_hidrico	ACEITA	balanco_hidrico_paciente	PEP	principal	F3	Balanço hídrico do paciente por dia de referência e setor, com turnos, horário de fechamento e situação
+doenca_cronica	ACEITA	condicao_cronica	PEP	dominio	F7	Doença crônica por CID que marca o paciente para acompanhamento e alertas
+painel_clinico	ACEITA	painel_resumo_clinico	PEP	configuracao	F8	Painel clínico do paciente por setor ou profissional, com período, frequência e atualização automática
+painel_clinico_grupo	ACEITA	painel_resumo_clinico_grupo	PEP	item	F8	Grupo de informações do painel clínico (documentos, sinais vitais, escalas, prescrição), com ordem
+painel_clinico_item	ACEITA	painel_resumo_clinico_item	PEP	item	F8	Informação exibida no grupo do painel clínico (sinal vital, escala, tipo de prescrição), com destaque e ordem
+tipo_grupo_painel_clinico	ACEITA	tipo_grupo_painel_resumo_clinico	PEP	dominio	F8	Tipos de grupo do painel clínico, com identificador e detalhamento exibido

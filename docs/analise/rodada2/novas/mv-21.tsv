@@ -1,0 +1,19 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+classificacao_resultado_cultura	SADT	dominio	F7	Conclusões possíveis de uma cultura (positiva, negativa, contaminada, sem crescimento), com sigla e grupo de classificação	DBAMV TIPO_RESULTADO_CULTURA
+tipo_desconto_repasse	FAT	dominio	F7	Tipos de desconto aplicáveis ao repasse do profissional (adiantamento, taxa, multa, custo), com situação	DBAMV TIP_DESCONTO_REP
+frequencia_administracao_setor	PEP	vinculo	F7	Setores onde uma frequência de administração pode ou não ser usada	DBAMV TIP_FRE_SETOR
+item_prescritivel_setor	PEP	configuracao	F3	Regras do item prescritível por estabelecimento, setor ou sala: padronização, público aceito, uso restrito, bloqueio e posologia padrão	DBAMV TIP_PRESC_SETOR, TIP_PRESC_PAD_SETOR, TIP_PRESC_SETOR_RESTRITO, TIP_PRESC_SALA, TIP_PRESC_BLOQUEIO_EMPRESA
+item_prescritivel_dispositivo	PEP	vinculo	F7	Dispositivos de infusão ou administração compatíveis com o item prescritível	DBAMV TIP_PRESC_DISPOSITIVO
+item_prescritivel_via	PEP	vinculo	F3	Vias de administração aceitas para o item prescritível, com marca de uso frequente	DBAMV TIP_PRESC_FOR_APL
+item_prescritivel_frequencia	PEP	vinculo	F3	Frequências aceitas para o item prescritível, com marca de uso frequente	DBAMV TIP_PRESC_TIP_FRE
+item_prescritivel_sinonimo	PEP	item	F3	Palavras-chave e nomes alternativos que ajudam a achar o item na prescrição, com a origem do termo	DBAMV TIP_PRESC_PESQUISA
+item_prescritivel_conflito	PEP	vinculo	F7	Par de itens que não podem ser prescritos juntos para o mesmo paciente	DBAMV TIP_PRESC_PROIBICAO
+categoria_profissional	CAD	dominio	F3	Categoria do profissional (médico, enfermeiro, técnico, fisioterapeuta), com conselho e o que pode registrar: prescrição, evolução, parecer, laudo	DBAMV TIP_PRESTA
+regra_atuacao_categoria_profissional	PEP	configuracao	F3	O que cada categoria profissional pode prescrever ou aprazar: tipos de item e horários padrão permitidos	DBAMV TIP_PRESTA_TIP_ESQ, TIP_FRE_TIP_PRESTA_HR_PADRAO (mesmo nome proposto em outro lote)
+categoria_orcamentaria	FIN	dominio	F7	Natureza da verba orçamentária (custeio, investimento, pessoal) usada nas linhas do orçamento	DBAMV TIPO_VERBA_ORCAMENTARIA (mesmo nome proposto em outro lote)
+portador_documento	HOT	dominio	F3	Pessoa autorizada a levar prontuários e documentos entre setores	DBAMV TRANSPORTADOR (mesmo nome proposto em outro lote)
+regra_transferencia_conta	FAT	configuracao	F7	Regra de transferência ou espelhamento de conta entre estabelecimentos, com de-para de fonte pagadora, origem e setor	DBAMV TRANSFERE_EMPRESA_CONVENIO, TRANSFERE_EMPRESA_ORI_ATE, TRANSFERE_EMPRESA_SETOR, TIP_SETOR_ESPELHAMENTO
+solicitacao_autorizacao_diagnostico	FAT	item	F7	Diagnósticos principal e secundários informados no pedido de autorização à operadora	DBAMV TISS_ITSOL_CID_GUIA
+protocolo_recebimento_guia	FAT	item	F3	Guias e procedimentos do protocolo ou da consulta de situação, com valores informados, liberados, glosados e motivo de recusa	DBAMV TISS_RETORNO_PROTOCOLO_GUIA, _PROCED, _PRC_GLS, TISS_RETORNO_STATUS_GUIA, _PROCED, _GLOSA
+topografia_tumor	PEP	catalogo_publico	F8	Localizações topográficas da classificação internacional de doenças para oncologia, usadas no diagnóstico do tumor	DBAMV TOPOGRAFIA
+tipo_embalagem_esteril	CC	dominio	F7	Tipos de embalagem usados no preparo de material para esterilização (papel grau cirúrgico, tecido, contêiner)	DBAMV TP_EMBALAGEM

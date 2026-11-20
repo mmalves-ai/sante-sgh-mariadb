@@ -1,0 +1,98 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+SPDATA	CRPERIOD	NAO		N	SIS		sem valor de negocio: período sentinela de linha única
+SPDATA	DIPERMPS	TABELA	usuario_escopo;perfil_acao	N	ADM	F7	permissão por posto e setor de exame vira recorte de acesso do usuário no RBAC
+SPDATA	FPCON	TABELA	evento_sessao	N	ADM	F3	conceito coberto pelo evento de sessão; 5 linhas antigas (2010-2018) não migram
+SPDATA	GEHISUSU	NAO		N	SIS		obsoleto: duas linhas de 2004 sem uso
+SPDATA	GETRUFA	NAO		N	SIS		sem valor de negocio: verdadeiro/falso vira campo booleano
+SPDATA	HTALTESTRUTBD	MECANISMO	framework	N	SIS	F3	alteração de estrutura do banco é controle de versão do produto (migrações da plataforma)
+SPDATA	HTTBHOSPIT	MECANISMO	historico_entidade:estabelecimento	N	CAD	F3	alterações do cadastro do hospital viram o histórico do estabelecimento
+SPDATA	IBE$VERSION_HISTORY	NAO		N	SIS		tecnico do fornecedor sem equivalente: versionamento da ferramenta de banco
+SPDATA	OLD_TBMEDICO	NAO		N	CAD		duplicado de profissional: cadastro antigo com 1 linha residual
+SPDATA	PELEIAUTEREP	NAO		N	RH		sem valor de negocio: leiaute de relógio de ponto só com identificador
+SPDATA	PNCONFIGPORTAL	TABELA	painel_tv;painel_tv_bloco;tipo_painel_tv	N	REL	F3	painéis operacionais (UTI, farmácia, mapa cirúrgico, laboratório)
+SPDATA	PREMAILCFG	TABELA	servidor_email	N	ADM	F3	credencial vai para o cofre, só a referência fica na tabela
+SPDATA	PREMAILMODULO	TABELA	finalidade_email	N	ADM	F3	
+SPDATA	PRJUSTIF_IMP_EXPORTACAO	TABELA	exportacao_documento	N	ADM	F3	
+SPDATA	PRTERMOACEITE	TABELA	aceite_termo_uso	N	ADM	F3	
+SPDATA	PRTERMOCAD	TABELA	termo_uso_versao	N	ADM	F3	
+SPDATA	PRTIPO_JUSTIF_EXPORTACAO	TABELA	tipo_justificativa_exportacao	N	ADM	F3	
+SPDATA	REEXCATE	TABELA	cancelamento_atendimento;registro_excluido;motivo_exclusao_registro	N	REC	F3	exclusão de atendimento vira cancelamento com cópia do registro
+SPDATA	REPACAGD_EXCLUSAO	TABELA	cancelamento_marcacao;registro_excluido	N	AGE	F3	marcação excluída vira cancelamento com cópia do registro
+SPDATA	RIALTA_EXCLUSAO	TABELA	cancelamento_alta;registro_excluido	N	INT	F3	alta cancelada com retrato dos dados anteriores
+SPDATA	RIEXCINT	TABELA	cancelamento_internacao;registro_excluido	N	INT	F3	internação excluída com justificativa e retrato
+SPDATA	RPMATRIZ_GUT_DESCRICAO	TABELA	grau_priorizacao_gut	N	ADM	F3	
+SPDATA	RPMATRIZ_GUT_TIPO	TABELA	dimensao_priorizacao_gut	N	ADM	F3	
+SPDATA	SILANEXATMP	NAO		N	SADT		sem valor de negocio: temporária de lançamento de exames (2020-2021)
+SPDATA	TBAGEUSE	TABELA	usuario_tipo_agenda	N	ADM	F3	
+SPDATA	TBAGRUPRELAT	TABELA	agrupamento_relatorio	N	REL	F3	
+SPDATA	TBAGRUPRELAT_TBEDITREL	TABELA	agrupamento_relatorio_item	N	REL	F3	
+SPDATA	TBALERTA	TABELA	regra_alerta	N	ADM	F3	
+SPDATA	TBALERTA_TBOPCOES_TBEVENTOS	TABELA	alerta_gatilho	N	ADM	F3	
+SPDATA	TBBASEDADOS	NAO		N	SIS		tecnico do fornecedor sem equivalente: nomes de bancos locais para log de backup
+SPDATA	TBBTNOPREL	TABELA	relatorio_tela	N	REL	F3	
+SPDATA	TBCABTRILHA	TABELA	evento_auditoria	N	ADM	F3	cabeçalho da trilha de auditoria exigida pela certificação
+SPDATA	TBCENARIO	TABELA	cenario_alerta	N	ADM	F3	
+SPDATA	TBCFGLOGIN	TABELA	politica_senha;termo_uso_versao	N	ADM	F3	política de senha e sessão; exigência de termo de aceite
+SPDATA	TBCTRPRTUSU	TABELA	usuario_tipo_prontuario	N	ADM	F3	
+SPDATA	TBDIASEMANA	NAO		N	SIS		sem valor de negocio: lista fixa de dias da semana vira enumeração no código
+SPDATA	TBDICIONARIO_TBUSERS	TABELA	dicionario_usuario	N	ADM	F3	
+SPDATA	TBDIGITAR	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	opções viram o modo do campo (opcional, obrigatório, oculto)
+SPDATA	TBDIGITAR_CNSCADPAC	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	regra do campo CNS no cadastro de paciente
+SPDATA	TBDIGITAR_FILIACAO	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	regra dos campos de filiação no cadastro de paciente
+SPDATA	TBEDITORTXT	NAO		N	SIS		tecnico do fornecedor sem equivalente: editores de texto do desktop
+SPDATA	TBEDITPARAM	TABELA	relatorio_parametro	N	REL	F3	
+SPDATA	TBEDITPESQ	TABELA	relatorio_parametro_pesquisa	N	REL	F3	
+SPDATA	TBEDITQRP	TABELA	relatorio_versao	N	REL	F3	leiaute antigo guardado como referência anexa da versão
+SPDATA	TBEDITREL	TABELA	relatorio;relatorio_versao;triagem_relatorio_legado	N	REL	F3	cada relatório passa pela triagem antes de entrar no catálogo
+SPDATA	TBEDITREL_AGENDA	TABELA	agendamento_relatorio;agendamento_relatorio_destinatario	N	REL	F3	
+SPDATA	TBEDITREL_AGENDA_LOG	TABELA	envio_relatorio	N	REL	F3	
+SPDATA	TBEDITREL_AGENDA_SITUACAO	TABELA	envio_relatorio	N	REL	F3	situação vira campo do envio
+SPDATA	TBEDITREL_GRUUSU	TABELA	relatorio_permissao	N	REL	F3	permissão por perfil
+SPDATA	TBEDITREL_PRMODELOREL	TABELA	relatorio_modelo_documento	N	REL	F3	
+SPDATA	TBEDITREL_TBUSERS	TABELA	relatorio_permissao	N	REL	F3	permissão por usuário
+SPDATA	TBEVENTOS	TABELA	acao_sistema;tipo_acao_auditavel	N	ADM	F3	
+SPDATA	TBGRUUSU	TABELA	perfil_acesso	N	ADM	F3	
+SPDATA	TBHISTSENHA	TABELA	historico_senha	N	ADM	F3	
+SPDATA	TBLANTRALERTA	TABELA	evento_auditoria_alerta	N	ADM	F3	
+SPDATA	TBLANTRILHASGH	TABELA	evento_auditoria_registro	N	ADM	F3	
+SPDATA	TBLEITORBIOME	TABELA	modelo_leitor_biometrico	N	ADM	F3	
+SPDATA	TBLGPDANONMOT	TABELA	base_legal_tratamento	N	ADM	F3	
+SPDATA	TBLGPDANONUSERFUNCAO	TABELA	funcao_responsavel_lgpd;encarregado_dados	N	ADM	F3	
+SPDATA	TBLOCAL_TBUSERS	TABELA	usuario_local_atendimento	N	ADM	F3	
+SPDATA	TBMENSAG	TABELA	mensagem_interna;mensagem_interna_destinatario	N	ADM	F3	
+SPDATA	TBMODULO	TABELA	modulo_sistema	N	ADM	F3	
+SPDATA	TBMOVTERMSTATUS	TABELA	consentimento_titular_historico;consentimento_titular	N	ADM	F3	situação do termo vira campo e linha do tempo do consentimento
+SPDATA	TBNVLCRITICID	TABELA	nivel_criticidade_auditoria	N	ADM	F3	
+SPDATA	TBOPCAOREL	TABELA	relatorio_tela;categoria_relatorio	N	REL	F3	
+SPDATA	TBOPCOES	TABELA	tela_sistema;acao_sistema	N	ADM	F3	
+SPDATA	TBPAPEL	TABELA	papel_seguranca	N	ADM	F3	
+SPDATA	TBPAPEL_TBOPCOES	TABELA	papel_seguranca_acao	N	ADM	F3	
+SPDATA	TBPARAMOPREL	TABELA	relatorio_tela_parametro	N	REL	F3	
+SPDATA	TBPERMISSAO_SUS	TABELA	usuario_permissao_sus	N	ADM	F3	
+SPDATA	TBPERUSU	TABELA	perfil_acao	N	ADM	F3	
+SPDATA	TBPROCBACKUP	TABELA	verificacao_backup	N	ADM	F3	tipo de processo vira campo da verificação
+SPDATA	TBSCRSAC	NAO		N	SIS		obsoleto: controle de execução de scripts de 2005
+SPDATA	TBSGHCONEXAO	TABELA	ultimo_acesso_usuario	N	ADM	F3	
+SPDATA	TBSGHLOG	NAO		N	SIS		tecnico do fornecedor sem equivalente: log de erro SQL do executável; fica no dump
+SPDATA	TBSGHSCR	MECANISMO	framework	N	SIS	F3	controle de scripts de atualização do banco é versão do produto (migrações)
+SPDATA	TBSGHVERSAO	MECANISMO	framework	N	SIS	F3	versão de executável por estação é controle de versão do produto
+SPDATA	TBSITBACKUP	TABELA	verificacao_backup	N	ADM	F3	situação vira campo da verificação
+SPDATA	TBTERMCONREVTP	TABELA	tipo_termo_lgpd	N	ADM	F3	
+SPDATA	TBTESTE_ID	NAO		N	SIS		sem valor de negocio: tabela de teste do fornecedor
+SPDATA	TBTIPOREPRE	TABELA	consentimento_titular	N	ADM	F3	signatário (titular ou representante) vira campo do consentimento
+SPDATA	TBTPACAOAUDIT	TABELA	tipo_acao_auditavel	N	ADM	F3	
+SPDATA	TBTPCONSTRUT	TABELA	cadastro_empregador	N	RH	F7	indicativo de construtora vira campo do empregador no eSocial
+SPDATA	TBTPCOOPERAT	TABELA	cadastro_empregador	N	RH	F7	indicativo de cooperativa vira campo do empregador no eSocial
+SPDATA	TBTPEMP	TABELA	estabelecimento	N	CAD	F3	matriz ou filial vira campo do estabelecimento
+SPDATA	TBTPMINISTCER	TABELA	orgao_certificador;certificacao_estabelecimento	N	ADM	F3	
+SPDATA	TBTPPERM_RICADPAC	TABELA	restricao_prontuario;restricao_prontuario_autorizado	N	ADM	F3	modo restrito ou consentido vira campo da restrição
+SPDATA	TBUNIUSE	TABELA	usuario_unidade	N	ADM	F3	
+SPDATA	TBUSERCON	TABELA	usuario_fonte_pagadora	N	ADM	F3	modelo antigo, mesclado com o vínculo atual de convênios
+SPDATA	TBUSERMODULO	NAO		N	SIS		sem valor de negocio: sessão aberta é estado transitório; a sessão nova nasce na plataforma
+SPDATA	TBUSERS	TABELA	usuario;credencial_usuario;usuario_perfil;usuario_situacao_historico	N	ADM	F3	
+SPDATA	TBUSERSCOMPL	TABELA	preferencia_usuario	N	ADM	F3	
+SPDATA	TBUSERS_TBALERTA	TABELA	assinatura_alerta	N	ADM	F3	
+SPDATA	TBUSERS_TBCONVEN	TABELA	usuario_fonte_pagadora	N	ADM	F3	
+SPDATA	TBUSERS_TBPAPEL	TABELA	usuario_papel_seguranca	N	ADM	F3	
+SPDATA	TBUSUCPL	TABELA	usuario_acao_excecao;usuario_vinculo_profissional	N	ADM	F3	
+SPDATA	ZNOPERA	NAO		N	SADT		obsoleto: domínio de zoonoses sem movimento; recriar só se o módulo for implantado

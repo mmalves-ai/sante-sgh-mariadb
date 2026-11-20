@@ -1,0 +1,62 @@
+funcionalidade	decisao	entidades_rodada1
+Painel de pacientes do profissional: lista de trabalho por unidade ou leito, filtros salvos, colunas escolhidas e pacien	F3: é a port	painel_filtro_usuario, painel_coluna_usuario, paciente_acompanhado
+Parâmetros e preferências do prontuário por estabelecimento, setor e usuário	F3: a tolerâ	parametro_prontuario, preferencia_prontuario_usuario
+Controle e trilha de acesso ao prontuário: vínculo assistencial, quebra de vidro com justificativa, aceite do termo de u	F3: obrigaçã	acesso_prontuario_evento, quebra_sigilo_justificativa, termo_uso_aceite, restricao_sigilo_paciente
+Prontuário de acesso restrito (paciente sigiloso), com pedido de acesso, autorização por equipe, senha do paciente e con	F8: valor re	—
+Equipe assistencial do paciente: quem cuida, com função e especialidade, usada para liberar o acesso e as pendências	F3: o contro	equipe_assistencial_paciente, equipe_assistencial_membro
+Construtor de modelos de documento clínico: campos, opções, regras de habilitar e calcular, layout de tela e de impressã	F3: os 67 mo	modelo_documento_clinico, modelo_documento_versao, modelo_campo, modelo_campo_opcao, modelo_regra, modelo_layout, tipo_documento_clinico
+Registro clínico em modelo (evolução, anamnese, admissão, sumários), com rascunho, correção ligada ao original e suspens	F3: é o maio	registro_assistencial, registro_assistencial_resposta, registro_assistencial_versao, registro_assistencial_rascunho
+Exame físico estruturado por sistema e região do corpo	F8: o constr	—
+Nota clínica no formato subjetivo, objetivo, avaliação e plano, codificada pela CIAP	F8: útil no 	—
+Escalas, índices prognósticos e questionários pontuados, com faixas versionadas e reavaliação	F3: os índic	escala_clinica, escala_clinica_versao, escala_clinica_faixa, aplicacao_escala, aplicacao_escala_item
+"Alergias e intolerâncias do paciente, com o princípio ativo, ""nega alergias"" e o histórico de mudanças"	F3: alimenta	alergeno, alergeno_principio_ativo, alergia_paciente, alergia_paciente_evento
+Lista de problemas e diagnósticos do atendimento (principal e secundários, situação e quem é o sujeito do cuidado)	F3: o CID do	problema_paciente, problema_paciente_versao, cid_atendimento
+Notas e lembretes livres sobre o paciente	F8: sem uso 	—
+Reações adversas a medicamento no paciente, com gravidade, item prescrito envolvido e evolução	F7: a farmac	reacao_adversa_paciente, reacao_adversa_evento
+Medicamentos de uso contínuo e reconciliação na admissão, na transferência e na alta	F7: meta de 	medicamento_uso_previo, reconciliacao_medicamentosa, reconciliacao_item
+Prescrição médica eletrônica: vigência, itens por tipo (medicamento, solução, dieta, cuidado, ventilação, hemocomponente	F3: é o cora	prescricao, prescricao_item, prescricao_item_medicamento, prescricao_item_solucao, prescricao_item_componente, prescricao_item_dieta, prescricao_item_cuidado, prescricao_item_ventilacao, prescricao_item_hemocomponente, prescricao_evento
+"Catálogo de itens prescritíveis, frequências, vias, unidades, condições ""se necessário"" e a grade de horários por unidad"	F3: sem o ca	item_prescritivel, frequencia_administracao, via_de_uso, unidade_prescricao, grade_horario_unidade, condicao_se_necessario
+Protocolos de prescrição, kits de medicamentos e de soluções e favoritos do prescritor	F3: os 377 p	protocolo_prescricao, protocolo_prescricao_item, kit_prescricao, kit_prescricao_item, favorito_prescritor
+Apoio à decisão na prescrição: alergia, dose máxima, duplicidade, interação, ajuste renal, via e forma, alta vigilância,	F3: o SPDATA	regra_alerta_clinico, regra_alerta_versao, decisao_alerta, interacao_medicamentosa, limite_dose_principio
+Avaliação farmacêutica da prescrição, com intervenção tipificada e troca de item	F3: a farmác	avaliacao_farmaceutica, intervencao_farmaceutica, tipo_intervencao_farmaceutica
+Controle de antimicrobianos e auditoria da prescrição pelo controle de infecção	F7: programa	ficha_antimicrobiano, auditoria_prescricao_ccih
+Oncologia: protocolo de quimioterapia, ciclos com dose calculada, sessões, reações e acompanhamento do tumor	F8: a Rede S	—
+Prescrição dietética e terapia nutricional enteral e parenteral	F3: a dieta 	terapia_nutricional (a dieta prescrita fica em prescricao_item_dieta)
+Aprazamento, checagem e administração à beira do leito: horários previstos, dupla checagem, não administrado com motivo 	F3: maior vo	horario_administracao, horario_administracao_evento, administracao_dupla_checagem, motivo_nao_administracao
+Glicemia capilar com escala de insulina por faixa	F3: em uso n	escala_insulina, escala_insulina_faixa
+Sinais vitais e medidas antropométricas, com limites de alerta, instrumento, posição e local da aferição	F3: o conect	afericao, afericao_valor, parametro_vital, limite_parametro_vital
+Balanço hídrico: ganhos, perdas por tipo e intensidade, fechamento parcial e de 24 horas	F3: usado na	balanco_lancamento, balanco_fechamento, tipo_ganho_perda
+Processo de enfermagem: histórico, diagnóstico, resultados esperados, intervenções e avaliação, com terminologia padroni	F7: a resolu	processo_enfermagem, diagnostico_enfermagem_paciente, plano_intervencao_enfermagem, avaliacao_resultado_enfermagem, terminologia_enfermagem
+Dispositivos invasivos: inserção, local, troca e retirada de cateter, sonda e via aérea	F3: os dias 	dispositivo_invasivo_paciente, local_acesso_invasivo
+Passagem de plantão com aceite de quem recebe	F3: a tela j	passagem_turno, passagem_turno_paciente
+Parecer, interconsulta e encaminhamento para outra especialidade	F3: em uso, 	interconsulta, interconsulta_resposta, encaminhamento_paciente
+Receituário: receita simples, de controle especial e de antimicrobiano, com modelo e via	F3: em uso	receita_medica, receita_medica_item, modelo_receita
+Atestados, declarações e requerimentos ao paciente	F3: em uso	documento_emitido, documento_emitido_versao
+Termo de consentimento: modelo por procedimento e o termo do paciente ou do responsável, com revogação	F3: o SPDATA	termo_consentimento_modelo, termo_consentimento_paciente
+Alta médica e sumário de alta, com seções configuráveis, motivo e modalidade	F3: em uso	alta_medica, sumario_alta, sumario_alta_secao
+Pedido de transporte do paciente na alta ou na transferência	F8: logístic	—
+Declaração de óbito, com cancelamento	F3: obrigató	declaracao_obito
+Anexos e documentos digitalizados no prontuário	F3: em uso	anexo_prontuario, tipo_anexo
+Resultados de exames no prontuário: grupos comparativos, tendência, faixa de normalidade e ciência do valor crítico	F3: o médico	ciencia_resultado_critico, painel_resultado_grupo
+Linha do tempo e trilha documental do prontuário: cada documento, versão e mudança de situação, com fluxo por tipo	F3: é a espi	documento_prontuario, documento_prontuario_evento
+Assinatura digital ICP-Brasil e pendências de assinatura, com política por tipo de documento	F3: o prontu	assinatura_documento, pendencia_assinatura, politica_assinatura_tipo, certificado_profissional
+Impressão, cópia e exportação do prontuário, com cabeçalho por tipo de documento e registro de quem recebeu a cópia	F3: o pacien	solicitacao_copia_prontuario, modelo_impressao, regra_cabecalho_impressao
+Obrigatoriedade de documentos por diagnóstico, idade ou setor, com a pendência mostrada ao profissional	F7: a acredi	regra_obrigatoriedade_documento, pendencia_prontuario
+Avisos clínicos ao profissional: regra por evento, por setor, especialidade ou tipo de profissional, e o canal (interno 	F3: o aviso 	regra_aviso_clinico, aviso_clinico
+Protocolos clínicos gerenciados (sepse, dor torácica, AVC): critérios de entrada, etapas, metas de tempo, saída e descar	F7: a acredi	protocolo_gerenciado, protocolo_gerenciado_criterio, protocolo_gerenciado_etapa, inclusao_protocolo_paciente, inclusao_protocolo_evento
+Registro das vacinas aplicadas, com envio à rede nacional	F7: a vacina	vacina_aplicada, vacina_aplicada_envio
+Ficha anestésica: técnica, agentes, eventos e sinais do intraoperatório	F3: em uso. 	registro_anestesico, registro_anestesico_evento
+Notificação compulsória de agravos, com a ficha do agravo e os prazos	F3: a lista 	agravo_notificavel, notificacao_agravo, notificacao_agravo_resposta
+Recursos de enfermagem próprios do new-sgh: contenção, lesão de pele, time de resposta rápida, profilaxia de TEV, classi	F7: são meta	contencao_paciente, lesao_pele_paciente, acionamento_resposta_rapida
+Oftalmologia: exames, acuidade visual e prescrição de lentes	F8: sem uso 	—
+Obstetrícia e recém-nascido: partograma e registro do nascimento	F8: o Pronto	—
+Curvas de crescimento e gráficos clínicos de referência	F8: valor na	—
+Atenção primária e gestão de crônicos: programas de saúde, família, equipe de referência, plano de cuidado e risco	F8: valor re	—
+Atenção domiciliar: áreas, escala dos profissionais, chamados e agenda de visitas	F8: linha de	—
+Pesquisa clínica: critérios de elegibilidade, triagem automática e acompanhamento dos pacientes incluídos	F8: interess	—
+Doação e transplante de órgãos: doador, receptor, preservação e sintomas depois do transplante	F8: só para 	—
+Reuso de dialisador na hemodiálise	F8: só para 	—
+Evolução administrativa do caso (anotações não clínicas da equipe)	F8: o serviç	—
+Replicação do prontuário entre bases de unidades diferentes	NAO: mecanis	—
+Integrações técnicas e tabelas de conversão do prontuário com sistemas de terceiros	NAO: técnico	—
+Infraestrutura do fornecedor: agendador de tarefas, temporárias, correções e migração entre editores	NAO: sem val	—

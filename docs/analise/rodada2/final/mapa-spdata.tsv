@@ -1,0 +1,1504 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+SPDATA	AGCADAGENDA	TABELA	agenda_servico;agenda_recurso	N	AGE	F3	
+SPDATA	AGCADEIRA	TABELA	recurso_agendavel;agenda_recurso	N	AGE	F3	
+SPDATA	AGCADMOTIVO	TABELA	motivo_marcacao	N	AGE	F3	
+SPDATA	AGCOMPLEXIDADE	TABELA	complexidade_sessao	N	AGE	F3	
+SPDATA	AGDIASINDISP	TABELA	bloqueio_agenda	N	AGE	F3	sem dados reais (linha fictícia); conceito coberto por bloqueio_agenda
+SPDATA	AGDURACAO	TABELA	duracao_sessao	N	AGE	F3	
+SPDATA	AGGRPFASEEVOL	TABELA	fase_tratamento	N	AGE	F3	
+SPDATA	AGPARAM	MECANISMO	parametro	N	AGE	F3	
+SPDATA	AGTPAGENDA	TABELA	categoria_agenda	N	AGE	F3	
+SPDATA	ATCABECATEND	TABELA	atendimento	N	REC	F3	
+SPDATA	ATCABECATEND_TBSENHAATEND	TABELA	atendimento_senha	N	REC	F3	
+SPDATA	ATCONTA	TABELA	atendimento_conta	N	REC	F3	
+SPDATA	ATPARAMGERAL	TABELA	regra_campo_cadastro	N	CAD	F3	
+SPDATA	CCAGENDA	TABELA	agendamento_cirurgico;agendamento_cirurgico_equipe	N	CC	F3	
+SPDATA	CCAGENDA_EXC_CANC	TABELA	suspensao_cirurgia;registro_excluido	N	CC	F3	cópia de agenda excluída/cancelada segue o padrão das demais exclusões (internação, alta, cirurgia)
+SPDATA	CCCADCIR	TABELA	ato_cirurgico;ficha_anestesica;lancamento_ficha_anestesica	N	CC	F3	
+SPDATA	CCCADCIR_EXCLUSAO	TABELA	registro_excluido	N	ADM	F3	cirurgia excluída é cópia de registro excluído, como as demais cópias de exclusão; não é trilha
+SPDATA	CCHISAGE	TABELA	reagendamento_cirurgico	N	CC	F3	
+SPDATA	CCLANCIR	TABELA	ato_cirurgico_procedimento;participante_cirurgia;uso_gas_medicinal	N	CC	F3	
+SPDATA	CCPARAM	TABELA	configuracao_usuario_bloco	N	CC	F3	
+SPDATA	CCPROEXT	TABELA	agendamento_cirurgico_procedimento	N	CC	F3	
+SPDATA	CCSALAS	TABELA	sala_cirurgica	N	CC	F3	
+SPDATA	CCSALAS_TBUSERS	TABELA	permissao_sala_usuario	N	CC	F3	
+SPDATA	CCTIPOLOCALBLC	TABELA	local_bloco	N	CC	F3	
+SPDATA	CCTIPOMOVIMENTACAOPAC	TABELA	tipo_movimento_bloco	N	CC	F3	
+SPDATA	CCTPURGENCIA	TABELA	carater_cirurgia	N	CC	F3	
+SPDATA	CDACOMODTIPO	TABELA	tipo_acomodacao_plano	N	SGO	F3	domínio de acomodação contratada do plano
+SPDATA	CDDIAVENCCOB	TABELA	dia_vencimento_permitido	N	SGO	F3	dias permitidos para vencimento da mensalidade
+SPDATA	CDFAIXAETATP	TABELA	faixa_etaria_modelo	N	SGO	F3	tipo de faixa vira atributo do modelo de faixa etária de preço
+SPDATA	CDGUIASTATUS	TABELA	situacao_guia_plano	N	SGO	F3	situações da guia de autorização
+SPDATA	CDINCIDECOMIS	TABELA	incidencia_comissao	N	SGO	F3	base de incidência da comissão de venda
+SPDATA	CDMOTIVOBAIXA	TABELA	motivo_cancelamento_contrato	N	SGO	F3	motivo de baixa do contrato; só linha padrão hoje
+SPDATA	CDMOTIVOSOLCART	TABELA	motivo_solicitacao_cartao	N	SGO	F3	motivos de emissão e segunda via do cartão
+SPDATA	CDMOTMOVIMCAD	TABELA	motivo_movimento_cadastral	N	SGO	F3	motivos de inclusão, suspensão e exclusão por tipo de movimento
+SPDATA	CDMSGCOBRANCA	TABELA	mensagem_cobranca	N	SGO	F3	mensagens da cobrança com prioridade
+SPDATA	CDMSGLINHA	TABELA	mensagem_cobranca	N	SGO	F3	posição de linha vira atributo da mensagem de cobrança
+SPDATA	CDORIGEMCOBR	TABELA	origem_cobranca_plano	N	SGO	F3	origens de cobrança unificadas
+SPDATA	CDORIGEMGUIA	TABELA	origem_guia_plano	N	SGO	F3	origens de guia unificadas
+SPDATA	CDPARDIGOBG	TABELA	documento_emitido_operadora	N	SGO	F3	opção de obrigatoriedade vira regra do documento emitido
+SPDATA	CDPGTOBALCAOCP	TABELA	forma_pagamento_coparticipacao	N	SGO	F3	formas de pagamento da coparticipação unificadas
+SPDATA	CDPGTOCOOPART	TABELA	forma_pagamento_coparticipacao	N	SGO	F3	modo de cobrança da coparticipação unificado
+SPDATA	CDPLANOCLASSIF	TABELA	classificacao_plano	N	SGO	F3	classificação regulatória do plano
+SPDATA	CDSTATUSCAD	TABELA	situacao_cadastral_beneficiario	N	SGO	F3	situações cadastrais do beneficiário
+SPDATA	CDSTATUSSOLCART	TABELA	situacao_solicitacao_cartao	N	SGO	F3	situações da solicitação de cartão
+SPDATA	CDTPACUMULPOR	TABELA	nivel_acumulo_limite	N	SGO	F3	critério de acúmulo unificado com o da operadora
+SPDATA	CDTPCOBRANCA	TABELA	forma_cobranca_plano	N	SGO	F3	formas de cobrança do plano
+SPDATA	CDTPCONTRATO	TABELA	tipo_contrato_plano	N	SGO	F3	tipo de contrato pessoa física ou jurídica
+SPDATA	CDTPCONTRCAIXA	TABELA	movimento_caixa	N	FIN	F3	tipo de controle vira natureza do movimento na sessão de caixa; conferir conteúdo na carga
+SPDATA	CDTPCOPART	TABELA	regra_coparticipacao	N	SGO	F3	percentual ou valor fixo vira forma de cálculo da regra de coparticipação
+SPDATA	CDTPCTRCONTRAT	TABELA	tipo_contrato_plano	N	SGO	F3	controle contratual fundido no tipo de contrato
+SPDATA	CDTPDESCACR	TABELA	lancamento_programado_contrato	N	SGO	F3	desconto ou acréscimo vira sinal do lançamento programado
+SPDATA	CDTPDESPCTAPG	TABELA	termo_terminologia	N	INTG	F3	grupos de despesa assistencial da ANS como lista fixa da terminologia
+SPDATA	CDTPDESPCTAPGCM	TABELA	classe_despesa_assistencial	N	SGO	F3	classificação complementar da despesa assistencial
+SPDATA	CDTPEMISSAO	TABELA	forma_emissao_documento	N	SGO	F3	formas de emissão de cobrança e cartão
+SPDATA	CDTPENDERECO	TABELA	endereco_pessoa	N	CAD	F3	tipo vira finalidade do endereço da pessoa
+SPDATA	CDTPEVTCTAREC	TABELA	tipo_lancamento_fatura	N	SGO	F3	evento gerador de valor a receber
+SPDATA	CDTPFRANQUIA	TABELA	tipo_franquia	N	SGO	F3	tipos de franquia
+SPDATA	CDTPGUIA	TABELA	tipo_guia_plano	N	SGO	F3	tipos de guia unificados
+SPDATA	CDTPLANCAMEN	TABELA	tipo_lancamento_fatura	N	SGO	F3	tipos de lançamento do beneficiário
+SPDATA	CDTPMOVVALOR	TABELA	tipo_movimentacao_valor	N	SGO	F3	tipos de alteração de valor
+SPDATA	CDTPPERIODO	TABELA	unidade_prazo	N	SGO	F3	unidade de período unificada
+SPDATA	CDTPRETCONS	TABELA	regra_retorno_consulta	N	AGE	F3	tipo de retorno vira critério da regra de retorno
+SPDATA	CDVENDATPREP	TABELA	papel_venda	N	SGO	F3	papéis comerciais na venda
+SPDATA	CHAREA	TABELA	area_higienizavel	N	HOT	F3	
+SPDATA	CHAREA_CHPROFISLIMP	TABELA	escala_higienizacao	N	HOT	F3	
+SPDATA	CHCRITICIDADE	TABELA	criticidade_area	N	HOT	F3	
+SPDATA	CHEXECLIMPEZA	TABELA	execucao_limpeza	N	HOT	F3	
+SPDATA	CHOCORRENCIA	TABELA	tipo_ocorrencia_limpeza	N	HOT	F3	
+SPDATA	CHPARAM	MECANISMO	parametro	N	HOT	F3	
+SPDATA	CHPROFISLIMP	TABELA	profissional_higienizacao	N	HOT	F3	
+SPDATA	CHPROFLIMPTEL	TABELA	profissional_higienizacao_telefone	N	HOT	F3	
+SPDATA	CHSITUACAO	TABELA	situacao_limpeza	N	HOT	F3	
+SPDATA	CHSOLICITLIMP	TABELA	solicitacao_limpeza	N	HOT	F3	
+SPDATA	CHSOLICITLIMP_TBLEITO	TABELA	solicitacao_limpeza_local	N	HOT	F3	
+SPDATA	CHTPLIMPEZA	TABELA	modalidade_limpeza	N	HOT	F3	
+SPDATA	CHTPLIMPEZA_GEITENS	TABELA	material_modalidade_limpeza	N	HOT	F3	
+SPDATA	CMESCORE	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMINCENTIVO	TABELA	incentivo_contratual_sus	N	SUS	F3	só a linha padrão, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMPERIODO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMREDEASSIST	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTIPOCOMPLEXIDADESP	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPAFERICAO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPCONTRATO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPDADOS	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPINDICADOR	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPITEMINDIC	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPORCAMENTO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	COINDICATVPRE	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	COINDICNATPJ	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	CONIRE	TABELA	registro_empresa_junta	N	FIN	F3	vira registro_empresa_junta
+SPDATA	COPARAM	MECANISMO	parametro	N	FIN	F3	parâmetros da contabilidade (plano vigente, competência, integrações) viram parâmetros do estabelecimento
+SPDATA	COPERIODESCRIT	TABELA	periodo_escrituracao	N	FIN	F3	vira periodo_escrituracao
+SPDATA	COSPEDHSTSEMP	TABELA	situacao_especial_empresa	N	FIN	F3	vira situacao_especial_empresa
+SPDATA	COSPEDSITEMP	TABELA	codigo_fiscal_oficial;situacao_especial_empresa	N	FIN	F3	código oficial carregado no catálogo de códigos; usado em situacao_especial_empresa
+SPDATA	COSPEDTPDOC	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	COTIPOITEM	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	tipo de item oficial da escrituração, carregado no catálogo de códigos fiscais
+SPDATA	COTIPOPLANOCONTAREFERENCIAL	TABELA	plano_referencial	N	FIN	F3	código oficial carregado em plano_referencial
+SPDATA	COTIPOSOLICITACAOSENHA	TABELA	regra_bloqueio_periodo_contabil	N	FIN	F3	vira regra_bloqueio_periodo_contabil
+SPDATA	COTPSUBSTECD	TABELA	codigo_fiscal_oficial;arquivo_sped_contabil	N	FIN	F3	motivo oficial de escrituração substituta, usado no arquivo da escrituração contábil
+SPDATA	COTP_ORIGEM_LANCAMENTO	TABELA	origem_lancamento_contabil	N	FIN	F3	vira origem_lancamento_contabil
+SPDATA	CRPERIOD	NAO		N	SIS		sem valor de negocio: período sentinela de linha única
+SPDATA	CTCTARECEITANCI	TABELA	conta_receita_custeio	N	FIN	F3	vira conta_receita_custeio
+SPDATA	CTPARAM	MECANISMO	parametro	N	FIN	F3	parâmetros do custeio (competência, ocupação, receitas) viram parâmetros do estabelecimento
+SPDATA	CTTIPODADO	TABELA	tipo_dado_estatistico	N	FIN	F3	vira tipo_dado_estatistico
+SPDATA	CTWGRUPOEXPORTACAO	TABELA	grupo_exportacao_custo;exportacao_custo	N	FIN	F3	destinos de exportação de custos
+SPDATA	CTWTPREGRA	TABELA	criterio_rateio	N	FIN	F3	vira criterio_rateio
+SPDATA	CVPARAM	MECANISMO	parametro	N	HOT	F3	
+SPDATA	CVTERMINALFAB	TABELA	fabricante_terminal_acesso	N	HOT	F3	
+SPDATA	CVTPIDENTIFIC	TABELA	forma_identificacao_visitante	N	HOT	F3	
+SPDATA	CVTPSITACESSO	TABELA	situacao_acesso_visitante	N	HOT	F3	
+SPDATA	CVTPTERMINAL	TABELA	modelo_terminal_acesso	N	HOT	F3	
+SPDATA	CVTPVISITADO	TABELA	tipo_visitado	N	HOT	F3	
+SPDATA	CVTPVISITANTE	TABELA	tipo_visitante	N	HOT	F3	
+SPDATA	DIPARAM	NAO		N	PEP		sem valor de negocio: parâmetros de diálise sem uso; recriar no mecanismo de parâmetros se houver demanda
+SPDATA	DIPERMPS	TABELA	usuario_escopo;perfil_acao	N	ADM	F3	recorte por posto e setor de exame está em uso no SPDATA: paridade F3
+SPDATA	DMCADLEIAUTE	TABELA	codigo_fiscal_oficial;declaracao_dmed	N	FIN	F3	código de leiaute da declaração por ano-calendário
+SPDATA	ESATVCOMERCIAL	TABELA	atividade_cprb	N	FIN	F3	código oficial carregado em atividade_cprb
+SPDATA	ESSERIE_R4000_GRUPOS	MECANISMO	integracao	N	FIN	F3	estrutura do leiaute XML da série R-4000 é do motor de integração que gera o evento_reinf
+SPDATA	ESSERIE_R4000_TAGS	MECANISMO	integracao	N	FIN	F3	tags do leiaute XML da série R-4000 são do motor de integração que gera o evento_reinf
+SPDATA	ESTPAJUSTE	TABELA	atividade_cprb	N	FIN	F3	código oficial carregado em atividade_cprb
+SPDATA	ESTPCODAJUSTE	TABELA	codigo_fiscal_oficial;apuracao_cprb	N	FIN	F3	códigos oficiais de ajuste da base da contribuição sobre receita, usados na apuração
+SPDATA	FACSEPRO	TABELA	procedimento_sigtap_servico	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	FAHEMOACEVASC	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOCARTRAT	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOCONTRAN	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOSITTRAN	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAMEDSOL	TABELA	solicitante_externo	N	CAD	F3	solicitante do SUS é o mesmo solicitante externo, só com CNS; tabela duplicada fundida
+SPDATA	FAPARAM	TABELA	competencia_sus	N	SUS	F3	competência vira tabela; demais opções do BPA vão para o mecanismo de parâmetros
+SPDATA	FAPARAMA	TABELA	competencia_sus	N	SUS	F3	competência vira tabela; demais opções da APAC vão para o mecanismo de parâmetros
+SPDATA	FAPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	FCCODCON	TABELA	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora	N	FAT	F3	código do médico no convênio; conta bancária vai para conta_bancaria_profissional
+SPDATA	FCCPSCON	TABELA	codigo_prestador_fonte_pagadora	N	FAT	F3	
+SPDATA	FCCRECUN	TABELA	regra_credito_producao	N	FAT	F3	
+SPDATA	FCCTAAUD	TABELA	auditoria_conta;auditoria_conta_versao	N	FAT	F3	retrato pré e pós auditoria vira versão da conta
+SPDATA	FCCTAEXT	TABELA	conta_hospitalar	N	FAT	F3	
+SPDATA	FCCTAEXT_FCTISSLOTEPROT	TABELA	lote_tiss_conta	N	FAT	F3	
+SPDATA	FCCTRLANCIHA	TABELA	equivalencia_sigtap_item;registro_ciha_procedimento	N	SUS	F3	
+SPDATA	FCDIAEXT	TABELA	conta_hospitalar_segurado	N	FAT	F3	
+SPDATA	FCDIAINT	TABELA	conta_hospitalar_segurado	N	FAT	F3	
+SPDATA	FCEMPAUDPLANSERV	TABELA	empresa_auditoria_externa	N	FAT	F3	
+SPDATA	FCFAIPAC	TABELA	conta_hospitalar_periodo	N	FAT	F3	
+SPDATA	FCFECMES	TABELA	fechamento_competencia_fonte_pagadora	N	FAT	F3	
+SPDATA	FCGUIAS	TABELA	guia_fonte_pagadora	N	FAT	F3	
+SPDATA	FCHORATE	TABELA	horario_normal_tabela	N	FAT	F3	
+SPDATA	FCINTEGRPA	TABELA	producao_repasse	N	FAT	F3	
+SPDATA	FCIRREGULARID	TABELA	pendencia_conta	N	FAT	F3	histórico 2020-2022 migra como pendência resolvida
+SPDATA	FCLANAUD	TABELA	auditoria_conta_item	N	FAT	F3	
+SPDATA	FCLANEXT	TABELA	conta_hospitalar_item;glosa_item	N	FAT	F3	glosa e recurso do item saem do item e vão para glosa_item
+SPDATA	FCLANEXTSEQITEM	TABELA	conta_hospitalar_item_autorizacao	N	FAT	F3	
+SPDATA	FCORCAME	TABELA	orcamento_particular	N	FAT	F3	
+SPDATA	FCORCPAD	TABELA	modelo_orcamento	N	FAT	F3	
+SPDATA	FCORLAME	TABELA	modelo_orcamento_item	N	FAT	F3	
+SPDATA	FCPARAM	TABELA	competencia_faturamento	N	FAT	F3	competência vira tabela; numeração, NFS-e e integrações vão para o mecanismo de parâmetros
+SPDATA	FCPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	preferências soltas do faturista vão para parâmetro por usuário
+SPDATA	FCPORANE	TABELA	valor_porte_anestesico	N	FAT	F3	
+SPDATA	FCPROCUNIBHMED	TABELA	tabela_preco;preco_procedimento	N	FAT	F3	tabela de procedimentos da operadora
+SPDATA	FCRECIBO	TABELA	recibo	N	FIN	F3	
+SPDATA	FCREFUND	TABELA	preco_procedimento	N	FAT	F3	itens de tabelas de preço de referência
+SPDATA	FCTISSLOTEPROT	TABELA	lote_tiss;protocolo_recebimento;recurso_glosa	N	FAT	F3	
+SPDATA	FCTPMOTGLOSA	TABELA	grupo_motivo_glosa	N	FAT	F3	
+SPDATA	FCTPPGTONFSE	TABELA	nota_fatura	N	FAT	F3	condição de pagamento vira atributo enumerado da nota da fatura
+SPDATA	FGTBTPCREDOR	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHCLASSIFDIAG	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHJUSTPACDESC	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHLEITOUTI	TABELA	leito_uti_habilitado	N	SUS	F3	
+SPDATA	FHLEITOUTITP	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FIPARAM	TABELA	competencia_sus	N	SUS	F3	competência vira tabela; demais opções da AIH vão para o mecanismo de parâmetros
+SPDATA	FIPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	FPADMESOCIAL	TABELA	codigo_esocial;vinculo_trabalho	N	RH	F3	código oficial carregado em codigo_esocial; vinculo_trabalho
+SPDATA	FPAFAST_COD	TABELA	codigo_esocial;afastamento	N	RH	F3	códigos oficiais de afastamento carregados no catálogo de códigos; usados no afastamento
+SPDATA	FPAFAST_RAIS	TABELA	codigo_esocial;afastamento	N	RH	F3	código oficial carregado no catálogo de códigos; usado em afastamento
+SPDATA	FPAGEACIDTRAB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPAGENSITDOEN	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPAGENTQUIMIC	TABELA	indicador_biologico	N	RH	F3	código oficial carregado em indicador_biologico
+SPDATA	FPALIQRATCNAE	TABELA	aliquota_rat_cnae;aliquota_rat_estabelecimento	N	RH	F3	alíquota RAT oficial por CNAE
+SPDATA	FPASOEXAMEORD	TABELA	codigo_esocial;exame_ocupacional	N	RH	F3	código oficial carregado no catálogo de códigos; usado em exame_ocupacional
+SPDATA	FPASOINDRESUL	TABELA	codigo_esocial;exame_ocupacional	N	RH	F3	código oficial carregado no catálogo de códigos; usado em exame_ocupacional
+SPDATA	FPASOINTEXAME	TABELA	codigo_esocial;exame_ocupacional	N	RH	F3	código oficial carregado no catálogo de códigos; usado em exame_ocupacional
+SPDATA	FPASORESULTADO	TABELA	codigo_esocial;aso	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aso
+SPDATA	FPASOTIPO	TABELA	codigo_esocial;aso	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aso
+SPDATA	FPBANCOPIS	TABELA	codigo_esocial;documento_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em documento_colaborador
+SPDATA	FPBR_PDH	TABELA	codigo_esocial;deficiencia_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em deficiencia_colaborador
+SPDATA	FPCATAGTGERDOE	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATCAUSACD	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATCODACTRAB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATCORPOATG	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATEGTRAB	TABELA	categoria_trabalhador	N	RH	F3	código oficial carregado em categoria_trabalhador
+SPDATA	FPCATEGTRAB_FPCLASSIFTRIB	TABELA	compatibilidade_codigo_esocial	N	RH	F3	código oficial carregado em compatibilidade_codigo_esocial
+SPDATA	FPCATEGTRAB_FPLOTACAOTRIB	TABELA	compatibilidade_codigo_esocial	N	RH	F3	código oficial carregado em compatibilidade_codigo_esocial
+SPDATA	FPCATEG_FGTS	TABELA	categoria_trabalhador	N	RH	F3	código oficial carregado em categoria_trabalhador
+SPDATA	FPCATFATRISCO	TABELA	fator_risco_ocupacional	N	RH	F3	código oficial carregado em fator_risco_ocupacional
+SPDATA	FPCATLDOCORPO	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATNATLESAO	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATSITGERACD	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPCATTIPO	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	FPCATTPEMIS	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	FPCATTPLOCACD	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	FPCATTPREG	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	FPCAT_SEFIP	TABELA	categoria_trabalhador	N	RH	F3	código oficial carregado em categoria_trabalhador
+SPDATA	FPCAUSA_AFASTAMENTO	TABELA	codigo_esocial;desligamento	N	RH	F3	código oficial carregado no catálogo de códigos; usado em desligamento
+SPDATA	FPCBO	TABELA	ocupacao_cbo	N	CAD	F3	
+SPDATA	FPCLASSIFSERV	TABELA	classificacao_servico_retencao	N	FIN	F3	código oficial carregado em classificacao_servico_retencao
+SPDATA	FPCLASSIFTRIB	TABELA	codigo_esocial;cadastro_empregador	N	RH	F3	tabela 08 oficial carregada como código; o empregador aponta para ela
+SPDATA	FPCODALIQFPAS	TABELA	aliquota_terceiros;encargo_folha	N	RH	F3	alíquotas de terceiros por FPAS
+SPDATA	FPCODSIGLALIQ	TABELA	aliquota_terceiros	N	RH	F3	código oficial carregado em aliquota_terceiros
+SPDATA	FPCOD_GPS	TABELA	codigo_receita_federal	N	FIN	F3	código oficial carregado em codigo_receita_federal
+SPDATA	FPCOD_TERC	TABELA	aliquota_terceiros	N	RH	F3	código oficial carregado em aliquota_terceiros
+SPDATA	FPCON	TABELA	evento_sessao	N	ADM	F3	conceito coberto pelo evento de sessão; 5 linhas antigas (2010-2018) não migram
+SPDATA	FPCONDFUNC	TABELA	situacao_colaborador	N	RH	F3	vira situacao_colaborador
+SPDATA	FPCOND_TRAB_IMIGRANTE	TABELA	codigo_esocial;estrangeiro_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em estrangeiro_colaborador
+SPDATA	FPCOR	TABELA	codigo_esocial;colaborador	N	RH	F3	raça/cor com código oficial do eSocial, usada no colaborador
+SPDATA	FPDESCNATLES	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPDOSE_VACINA	TABELA	vacina_colaborador;vacina_ocupacional	N	RH	F3	dose aplicada vira coluna da vacina do colaborador
+SPDATA	FPECIV	TABELA	estado_civil;codigo_esocial	N	CAD	F3	estado civil com código oficial reaproveita o domínio do cadastro-base
+SPDATA	FPEDITREL_VERSAOESOCIAL	NAO		N	RH		tecnico do fornecedor sem equivalente: liga relatório do editor SQL legado a versão do eSocial
+SPDATA	FPEMPSOFTWARE	NAO		N	RH		tecnico do fornecedor sem equivalente: identificação da software house do legado
+SPDATA	FPEPC	TABELA	codigo_esocial;risco_funcao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em risco_funcao
+SPDATA	FPESOCADMESTAT	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCAPRENDIZ	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCARQXSD	TABELA	leiaute_esocial	N	RH	F3	código oficial carregado em leiaute_esocial
+SPDATA	FPESOCAUTORIA	TABELA	codigo_esocial;processo_trabalhista	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_trabalhista
+SPDATA	FPESOCCADRESEV	TABELA	codigo_retorno_esocial;retorno_esocial	N	RH	F3	código oficial carregado em codigo_retorno_esocial; retorno_esocial
+SPDATA	FPESOCCADRESLT	TABELA	codigo_retorno_esocial	N	RH	F3	código oficial carregado em codigo_retorno_esocial
+SPDATA	FPESOCCLASSE	TABELA	tipo_evento_esocial	N	RH	F3	código oficial carregado em tipo_evento_esocial
+SPDATA	FPESOCCONTDEF	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCDEPEND	TABELA	regra_validacao_esocial	N	RH	F3	código oficial carregado em regra_validacao_esocial
+SPDATA	FPESOCDESONER	TABELA	codigo_esocial;cadastro_empregador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em cadastro_empregador
+SPDATA	FPESOCDICEVT	NAO		N	RH		tecnico do fornecedor sem equivalente: dicionário interno de registros XML por evento
+SPDATA	FPESOCDICEVT_FPESOCDICOPCAO	NAO		N	RH		tecnico do fornecedor sem equivalente: liga registro do evento à tela desktop de origem
+SPDATA	FPESOCDICOPCAO	NAO		N	RH		tecnico do fornecedor sem equivalente: caminhos de menu do desktop legado
+SPDATA	FPESOCEMPTRAB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCENTEDUC	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCENVIOREINFINFO	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	FPESOCEVENTO	TABELA	tipo_evento_esocial	N	RH	F3	código oficial carregado em tipo_evento_esocial
+SPDATA	FPESOCIAL_FMTRREBEEX	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCINDAVISO	TABELA	codigo_esocial;aviso_previo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aviso_previo
+SPDATA	FPESOCINDEVTPER	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCINDPROC	TABELA	codigo_esocial;processo_tributario	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_tributario
+SPDATA	FPESOCINDSUSP	TABELA	codigo_esocial;suspensao_processo_tributario	N	RH	F3	código oficial carregado no catálogo de códigos; usado em suspensao_processo_tributario
+SPDATA	FPESOCMOTAFAS	TABELA	codigo_esocial;motivo_afastamento;afastamento	N	RH	F3	tabela 18 oficial com vigência; motivo interno aponta para o código oficial
+SPDATA	FPESOCMOTREM	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCORIRETIF	TABELA	codigo_esocial;evento_esocial	N	RH	F3	código oficial carregado no catálogo de códigos; usado em evento_esocial
+SPDATA	FPESOCPARAMS1210	MECANISMO	parametro	N	RH	F7	opções de geração do evento de pagamentos viram parâmetro do estabelecimento
+SPDATA	FPESOCPEND	NAO		N	RH		sem valor de negocio: pendências nunca autorizadas; o conceito fica em evento_esocial
+SPDATA	FPESOCPENDDET	NAO		N	RH		sem valor de negocio: detalhes de pendência gerados por gatilho e nunca enviados; conceito em evento_esocial
+SPDATA	FPESOCPTOELET	TABELA	codigo_esocial;relogio_ponto	N	RH	F3	código oficial carregado no catálogo de códigos; usado em relogio_ponto
+SPDATA	FPESOCREGEVE	TABELA	regra_validacao_esocial	N	RH	F3	código oficial carregado em regra_validacao_esocial
+SPDATA	FPESOCSITEMP	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCSITENVEVE	MECANISMO	integracao	N	RH	F7	resumo do último envio por evento e empresa é controle do motor de integração (nada a migrar)
+SPDATA	FPESOCSMAPATAG	NAO		N	RH		tecnico do fornecedor sem equivalente: mapa de tags XML para propriedades do código
+SPDATA	FPESOCTIPOEVENTPERIODIC	TABELA	tipo_evento_esocial	N	RH	F3	código oficial carregado em tipo_evento_esocial
+SPDATA	FPESOCTPAMB	TABELA	ponto_integracao	N	INTG	F3	ambiente e endereço de serviço viram ponto de integração; carga de referência
+SPDATA	FPESOCTPAPURIR	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCTPAVISO	TABELA	codigo_esocial;aviso_previo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aviso_previo
+SPDATA	FPESOCTPJORTRAB	TABELA	codigo_esocial;regime_jornada	N	RH	F3	código oficial carregado no catálogo de códigos; usado em regime_jornada
+SPDATA	FPESOCTPPROVI	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCTPRESP	TABELA	codigo_retorno_esocial	N	RH	F3	código oficial carregado em codigo_retorno_esocial
+SPDATA	FPESOCTPSEGMAS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPESOCTRABTEMP	TABELA	codigo_esocial;tipo_contrato_temporario	N	RH	F3	código oficial carregado no catálogo de códigos; usado em tipo_contrato_temporario
+SPDATA	FPESOCTVERSAOESOCIAL	TABELA	leiaute_esocial	N	RH	F3	código oficial carregado em leiaute_esocial
+SPDATA	FPEVENTO	TABELA	rubrica;formula_rubrica	N	RH	F3	rubricas da folha com fórmula versionada por vigência
+SPDATA	FPEXPAGNOCIVO	TABELA	codigo_esocial;risco_funcao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em risco_funcao
+SPDATA	FPFORMATRIBRENDEXT	TABELA	codigo_fiscal_oficial;beneficiario_exterior	N	FIN	F3	forma de tributação oficial de rendimento no exterior, usada no beneficiário no exterior
+SPDATA	FPFPAS	TABELA	fpas	N	RH	F3	código oficial carregado em fpas
+SPDATA	FPFPAS_FPCLASSIFTRIB	TABELA	compatibilidade_codigo_esocial	N	RH	F3	código oficial carregado em compatibilidade_codigo_esocial
+SPDATA	FPGRAUEXPAGNOC	TABELA	codigo_esocial;risco_funcao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em risco_funcao
+SPDATA	FPGRUPONATRENDIMENTO	TABELA	grupo_natureza_rendimento	N	FIN	F3	código oficial carregado em grupo_natureza_rendimento
+SPDATA	FPGRUPORISCO	TABELA	fator_risco_ocupacional	N	RH	F3	código oficial carregado em fator_risco_ocupacional
+SPDATA	FPGRUPOTRAB	TABELA	categoria_trabalhador	N	RH	F3	código oficial carregado em categoria_trabalhador
+SPDATA	FPHSTDIAAFAST	TABELA	codigo_esocial;tabela_legal_vigencia	N	RH	F3	código oficial carregado no catálogo de códigos; usado em tabela_legal_vigencia
+SPDATA	FPINDAQUIRURAL	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPINDICATADM	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPINDICDECPRO	TABELA	codigo_esocial;processo_tributario	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_tributario
+SPDATA	FPINDICNIF	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPINFOBENEFRENDEXT	TABELA	codigo_fiscal_oficial;beneficiario_exterior	N	FIN	F3	código oficial carregado no catálogo de códigos; usado em beneficiario_exterior
+SPDATA	FPINTAGRUP	TABELA	depara_folha_financeiro	N	RH	F3	vira depara_folha_financeiro
+SPDATA	FPINTROTINA	TABELA	depara_folha_financeiro;regra_contabilizacao	N	RH	F3	rotinas de integração da folha com financeiro e contabilidade
+SPDATA	FPITENSNATRENDIMENTO	TABELA	natureza_rendimento	N	FIN	F3	código oficial carregado em natureza_rendimento
+SPDATA	FPITENSNATREND_DEDUTIVEL	TABELA	natureza_rendimento_deducao	N	FIN	F3	código oficial carregado em natureza_rendimento_deducao
+SPDATA	FPITENSNATREND_RENDISENTO	TABELA	natureza_rendimento_isencao	N	FIN	F3	código oficial carregado em natureza_rendimento_isencao
+SPDATA	FPLOCPRESTRAB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPLOTACAOTRIB	TABELA	codigo_esocial;lotacao_tributaria	N	RH	F3	código oficial carregado no catálogo de códigos; usado em lotacao_tributaria
+SPDATA	FPLOTACAOTRIB_FPCLASSIFTRIB	TABELA	compatibilidade_codigo_esocial	N	RH	F3	código oficial carregado em compatibilidade_codigo_esocial
+SPDATA	FPLOTTRIBCAD	TABELA	lotacao_tributaria	N	RH	F3	vira lotacao_tributaria
+SPDATA	FPMATANALISE	TABELA	indicador_biologico	N	RH	F3	código oficial carregado em indicador_biologico
+SPDATA	FPMATBIOLOGIC	TABELA	indicador_biologico	N	RH	F3	código oficial carregado em indicador_biologico
+SPDATA	FPMOTAFAST	TABELA	motivo_afastamento;afastamento	N	RH	F3	motivos de afastamento do hospital, com código oficial em codigo_esocial
+SPDATA	FPMOTDESLIG	TABELA	codigo_esocial;desligamento	N	RH	F3	código oficial carregado no catálogo de códigos; usado em desligamento
+SPDATA	FPMOTESTABILI	TABELA	codigo_esocial;estabilidade_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em estabilidade_colaborador
+SPDATA	FPMOT_ADM	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPMTCANCELAVI	TABELA	codigo_esocial;aviso_previo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aviso_previo
+SPDATA	FPNATJURIDICA	TABELA	natureza_juridica	N	CAD	F3	
+SPDATA	FPNATRUBRICA	TABELA	natureza_rubrica	N	RH	F3	código oficial carregado em natureza_rubrica
+SPDATA	FPNATUR_REND	TABELA	natureza_rendimento	N	FIN	F3	código oficial carregado em natureza_rendimento
+SPDATA	FPNIVELESTAG	TABELA	codigo_esocial;estagio_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em estagio_colaborador
+SPDATA	FPOCOR_SEFIP	TABELA	codigo_esocial;risco_funcao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em risco_funcao
+SPDATA	FPPARAM	TABELA	cadastro_empregador	N	RH	F3	dados do contribuinte alimentam o R-1000 da EFD-REINF, obrigação vigente da Rede (F3)
+SPDATA	FPPARAMVIG	MECANISMO	historico_entidade:cadastro_empregador	N	RH	F3	segue cadastro_empregador, que passa a F3 pela EFD-REINF
+SPDATA	FPPARAM_USUARIO	TABELA	contexto_trabalho_usuario	N	FIN	F3	vira contexto_trabalho_usuario
+SPDATA	FPPROCESSOTEOR	TABELA	codigo_esocial;processo_trabalhista	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_trabalhista
+SPDATA	FPPROCTRAB_ESOCIAL_CR	TABELA	codigo_esocial;processo_trabalhista	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_trabalhista
+SPDATA	FPPTCORPATING	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPREMESSA	TABELA	competencia_folha	N	RH	F3	vira competencia_folha
+SPDATA	FPRESC_CAGED	TABELA	codigo_esocial;tipo_rescisao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em tipo_rescisao
+SPDATA	FPRESC_CAUSA	TABELA	codigo_esocial;desligamento	N	RH	F3	código oficial carregado no catálogo de códigos; usado em desligamento
+SPDATA	FPRESC_RAIS	TABELA	codigo_esocial;tipo_rescisao	N	RH	F3	código oficial carregado em codigo_esocial; tipo_rescisao
+SPDATA	FPRESC_SEFIP	TABELA	codigo_esocial;tipo_rescisao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em tipo_rescisao
+SPDATA	FPRESP	TABELA	responsavel_legal_empregador	N	RH	F3	vira responsavel_legal_empregador
+SPDATA	FPRET_RAIS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPRISCOCUP	TABELA	fator_risco_ocupacional	N	RH	F3	código oficial carregado em fator_risco_ocupacional
+SPDATA	FPRUBRICAFGTS	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICAFGTS_FPEVENTO	TABELA	incidencia_rubrica	N	RH	F3	vira incidencia_rubrica
+SPDATA	FPRUBRICAINSS	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICAINSS_FPEVENTO	TABELA	incidencia_rubrica	N	RH	F3	vira incidencia_rubrica
+SPDATA	FPRUBRICAIRRF	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICAIRRF_FPEVENTO	TABELA	incidencia_rubrica	N	RH	F3	vira incidencia_rubrica
+SPDATA	FPRUBRICAIRRF_GRUPO	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICAPISPASEP	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICASIND	TABELA	codigo_incidencia_rubrica	N	RH	F3	código oficial carregado em codigo_incidencia_rubrica
+SPDATA	FPRUBRICASIND_FPEVENTO	TABELA	incidencia_rubrica	N	RH	F3	vira incidencia_rubrica
+SPDATA	FPSAQUE	TABELA	codigo_esocial;rescisao	N	RH	F3	código oficial carregado no catálogo de códigos; usado em rescisao
+SPDATA	FPSENTENCAINSS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPSITGERACID	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPSIT_FUNC	TABELA	situacao_colaborador	N	RH	F3	vira situacao_colaborador
+SPDATA	FPSUBRISCOCUP	TABELA	fator_risco_ocupacional	N	RH	F3	código oficial carregado em fator_risco_ocupacional
+SPDATA	FPTEMPO_RESID_TRAB_IMIGRANTE	TABELA	codigo_esocial;estrangeiro_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em estrangeiro_colaborador
+SPDATA	FPTIPOAVISO	TABELA	codigo_esocial;aviso_previo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aviso_previo
+SPDATA	FPTIPOINDCPRB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTIPORESC	TABELA	tipo_rescisao	N	RH	F3	vira tipo_rescisao
+SPDATA	FPTIPO_CONTRATO	TABELA	codigo_esocial;vinculo_trabalho	N	RH	F3	código oficial carregado no catálogo de códigos; usado em vinculo_trabalho
+SPDATA	FPTIPO_TRABALHADOR	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPACESSORIA	TABELA	assessoria_externa	N	RH	F3	vira assessoria_externa
+SPDATA	FPTPACIDTRANS	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	FPTPARQESOC	TABELA	leiaute_esocial	N	RH	F3	código oficial carregado em leiaute_esocial
+SPDATA	FPTPAVISORESC	TABELA	codigo_esocial;aviso_previo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aviso_previo
+SPDATA	FPTPCONDIFER	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPCONTRIB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPDEFICIEN	TABELA	codigo_esocial;deficiencia_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em deficiencia_colaborador
+SPDATA	FPTPDEPENDENT	TABELA	codigo_esocial;dependente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em dependente
+SPDATA	FPTPDEPENDENTREINF	TABELA	codigo_esocial;dependente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em dependente
+SPDATA	FPTPDESCINSS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPDESFOCPRB	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPESTABELEC	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPEVENTOAUT	TABELA	lancamento_automatico_rubrica	N	RH	F3	tipo de lançamento automático vira coluna da configuração de lançamento automático
+SPDATA	FPTPEVENTOAUT_TBEMPHOS	TABELA	lancamento_automatico_rubrica	N	RH	F3	vira lancamento_automatico_rubrica
+SPDATA	FPTPFATORELEV	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPFERIAS	TABELA	tipo_ferias;programacao_ferias	N	RH	F3	domínio de tipo de férias
+SPDATA	FPTPFOLHAESOC	TABELA	codigo_esocial;tipo_folha	N	RH	F3	código oficial carregado no catálogo de códigos; usado em tipo_folha
+SPDATA	FPTPINCCONT	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPINSCRICAO	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPISENMULTA	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPJORINTERM	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPLOTACAO	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPOBRA	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPOBRIGAECD	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPONUS	TABELA	codigo_esocial;cessao_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em cessao_colaborador
+SPDATA	FPTPONUSREMUN	TABELA	codigo_esocial;cessao_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em cessao_colaborador
+SPDATA	FPTPPENSAOALI	TABELA	codigo_esocial;pensao_alimenticia	N	RH	F3	código oficial carregado no catálogo de códigos; usado em pensao_alimenticia
+SPDATA	FPTPPRESTSERV	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPPROCESSO	TABELA	codigo_esocial;processo_trabalhista	N	RH	F3	código oficial carregado no catálogo de códigos; usado em processo_trabalhista
+SPDATA	FPTPREGIMEPRE	TABELA	codigo_esocial;vinculo_trabalho	N	RH	F3	código oficial carregado no catálogo de códigos; usado em vinculo_trabalho
+SPDATA	FPTPREGIMETRA	TABELA	codigo_esocial;vinculo_trabalho	N	RH	F3	código oficial carregado no catálogo de códigos; usado em vinculo_trabalho
+SPDATA	FPTPREGJORNAD	TABELA	codigo_esocial;regime_jornada	N	RH	F3	código oficial carregado no catálogo de códigos; usado em regime_jornada
+SPDATA	FPTPREINTEG	TABELA	codigo_esocial;reintegracao_colaborador	N	RH	F3	código oficial carregado no catálogo de códigos; usado em reintegracao_colaborador
+SPDATA	FPTPRESCDIRET	TABELA	codigo_esocial;trabalhador_sem_vinculo	N	RH	F3	código oficial carregado no catálogo de códigos; usado em trabalhador_sem_vinculo
+SPDATA	FPTPRETINSS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPSITESPEC	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTPTEL	TABELA	tipo_telefone;telefone_colaborador	N	CAD	F3	tipo de telefone usa o domínio comum do cadastro-base
+SPDATA	FPTPVALE	TABELA	beneficio	N	RH	F3	vira beneficio
+SPDATA	FPTP_ADM_CAG	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTP_ADM_RAIS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTP_ARQ_EMPREGADORWEB	TABELA	codigo_esocial;obrigacao_trabalhista	N	RH	F3	código oficial carregado no catálogo de códigos; usado em obrigacao_trabalhista
+SPDATA	FPTP_EST_FISICO	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	FPTP_EVENTO	TABELA	tipo_rubrica	N	RH	F3	vira tipo_rubrica
+SPDATA	FPTP_EVENTO_SIND	TABELA	sindicato;convencao_coletiva	N	RH	F3	tipos de evento ligados ao sindicato e à convenção
+SPDATA	FPTP_FOLHA	TABELA	tipo_folha	N	RH	F3	vira tipo_folha
+SPDATA	FPTP_FUNC	TABELA	tipo_colaborador;vinculo_trabalho	N	RH	F3	tipos de colaborador usados no vínculo de trabalho
+SPDATA	FPTP_REFER	TABELA	tipo_referencia_rubrica	N	RH	F3	vira tipo_referencia_rubrica
+SPDATA	FPTP_SAL	TABELA	codigo_esocial;historico_salarial	N	RH	F3	código oficial carregado no catálogo de códigos; usado em historico_salarial
+SPDATA	FPTP_SERV_NF_TO	TABELA	dado_fiscal_titulo_pagar	N	FIN	F3	vira dado_fiscal_titulo_pagar
+SPDATA	FPTP_TREINAMENTO_CAPACITACAO	TABELA	codigo_esocial;curso	N	RH	F3	código oficial carregado no catálogo de códigos; usado em curso
+SPDATA	FPVACINA	TABELA	vacina_ocupacional	N	RH	F3	vira vacina_ocupacional
+SPDATA	FPVALE	TABELA	beneficio;beneficio_colaborador	N	RH	F3	vales-benefício por tipo
+SPDATA	FPVINC_RAIS	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	GDPRONTCADOPER	TABELA	operacao_movimento_prontuario	N	HOT	F3	
+SPDATA	GDPRONTMOVIM	TABELA	movimento_prontuario	N	HOT	F3	
+SPDATA	GEANTIMI	TABELA	liberacao_antimicrobiano;ficha_antimicrobiano	N	SUP	F3	
+SPDATA	GEARMLOC	TABELA	saldo_estoque_mensal	N	SUP	F3	
+SPDATA	GEATUALIZASALDO	TABELA	recalculo_saldo_estoque	N	SUP	F3	
+SPDATA	GEBARRAS	TABELA	insumo_codigo_barras	N	SUP	F3	
+SPDATA	GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	N	PEP	F3	fichas em uso na Rede (45); paridade com GEANTIMI, que já é F3
+SPDATA	GECADBAL	TABELA	inventario_estoque	N	SUP	F3	
+SPDATA	GECADDEV	TABELA	documento_estoque;devolucao_dispensacao	N	SUP	F3	
+SPDATA	GECADDISPENSACAO	TABELA	dispensacao	N	SUP	F3	
+SPDATA	GECADNFS	TABELA	nota_entrada;escrituracao_entrada	N	SUP	F3	
+SPDATA	GECADPED	TABELA	pedido_compra;cotacao;processo_licitatorio	N	SUP	F3	
+SPDATA	GECADSAI	TABELA	documento_estoque;requisicao_material	N	SUP	F3	
+SPDATA	GECADTER	TABELA	terceiro_destinatario	N	SUP	F3	
+SPDATA	GECADTRA	TABELA	documento_estoque	N	SUP	F3	
+SPDATA	GECAPELAMP	TABELA	capela_manipulacao	N	SUP	F3	módulo sem uso no hospital; estrutura mantida
+SPDATA	GECAPELAMP_GEGRUPOMP	TABELA	capela_manipulacao_grupo	N	SUP	F3	
+SPDATA	GECOMPRA	TABELA	nota_entrada_item;pedido_compra_item;insumo_fornecedor	N	SUP	F3	histórico derivado das entradas e pedidos
+SPDATA	GECONITL	TABELA	saldo_estoque_mensal	N	SUP	F3	
+SPDATA	GECTRLENTREGADOCSAIDA	TABELA	entrega_setor;entrega_setor_item	N	SUP	F3	
+SPDATA	GECTRVMM	TABELA	movimento_lote;lote_insumo	N	SUP	F3	modelo antigo de lote por documento
+SPDATA	GEDESCOM	TABELA	destino_entrega_compra	N	SUP	F3	
+SPDATA	GEDESPDS	TABELA	pedido_compra_item;processo_licitatorio_item	N	SUP	F3	descrição de serviço vira texto do item
+SPDATA	GEDIASEMANA	NAO		N	SUP		sem valor de negocio: dia da semana é enumeração fixa no código
+SPDATA	GEDISPHOR	TABELA	dose_dispensada;etiqueta_identificacao	N	SUP	F3	
+SPDATA	GEESTINI	TABELA	inventario_estoque	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GEFECMES	TABELA	fechamento_estoque	N	SUP	F3	
+SPDATA	GEGERSEQ	TABELA	sequencia_documento_estoque	N	SUP	F3	
+SPDATA	GEGRUPOMP	TABELA	grupo_manipulacao	N	SUP	F3	módulo sem uso no hospital; estrutura mantida
+SPDATA	GEGRUPOS	TABELA	grupo_insumo	N	SUP	F3	
+SPDATA	GEHISUSU	NAO		N	SIS		obsoleto: duas linhas de 2004 sem uso
+SPDATA	GEHORMED	TABELA	horario_padrao_medicacao	N	SUP	F3	
+SPDATA	GEINFVENEXT	TABELA	documento_estoque;terceiro_destinatario	N	SUP	F3	
+SPDATA	GEINTAPOIOCOT	TABELA	vinculo_pedido_compra_portal;vinculo_portal_cotacao	N	INTG	F3	pedido de compra ligado à cotação no portal externo
+SPDATA	GEITEACAODOSE	TABELA	acao_dose	N	SUP	F3	
+SPDATA	GEITEMKITRAS	TABELA	kit_rastreavel_item;kit_rastreavel_lote	N	SUP	F3	
+SPDATA	GEITEMKITRAS_GELANDEV	TABELA	reposicao_kit_rastreavel;movimento_kit_rastreavel	N	SUP	F3	
+SPDATA	GEITEMKITRAS_GELANSAI	TABELA	movimento_kit_rastreavel	N	SUP	F3	
+SPDATA	GEITENS	TABELA	insumo;item_prescritivel;parametro_clinico_item;dado_fiscal_item	N	SUP	F3	
+SPDATA	GEITENS_TBPRINC	TABELA	insumo_principio_ativo	N	SUP	F3	
+SPDATA	GEKITITE	TABELA	kit_material_item	N	SUP	F3	
+SPDATA	GEKITKPI	TABELA	kit_material_item	N	SUP	F3	
+SPDATA	GEKITRAS	TABELA	kit_rastreavel	N	SUP	F3	
+SPDATA	GEKITS	TABELA	kit_material	N	SUP	F3	
+SPDATA	GEKONCDC	TABELA	consumo_centro_custo	N	SUP	F3	
+SPDATA	GELANBAL	TABELA	inventario_estoque_item;inventario_estoque_divergencia	N	SUP	F3	
+SPDATA	GELANDEV	TABELA	documento_estoque_item;devolucao_dispensacao_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELANDISPENSACAO	TABELA	dispensacao_item	N	SUP	F3	
+SPDATA	GELANESI	TABELA	inventario_estoque_item	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GELANNFS	TABELA	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada	N	SUP	F3	
+SPDATA	GELANPAC	TABELA	documento_estoque_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELANPED	TABELA	pedido_compra_item;cotacao_item;cotacao_resposta_item	N	SUP	F3	
+SPDATA	GELANPEDENTREGA	TABELA	pedido_compra_entrega	N	SUP	F3	
+SPDATA	GELANSAI	TABELA	movimento_estoque;atendimento_requisicao	N	SUP	F3	
+SPDATA	GELANSAIREQ	TABELA	requisicao_material_item	N	SUP	F3	
+SPDATA	GELANTRA	TABELA	documento_estoque_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELIMLOC	TABELA	parametro_reposicao	N	SUP	F3	
+SPDATA	GELOCARM	TABELA	local_estoque	N	SUP	F3	
+SPDATA	GELOCUSU	TABELA	local_estoque_usuario	N	SUP	F3	
+SPDATA	GENIVELSERV	TABELA	nivel_servico	N	SUP	F3	
+SPDATA	GENOMCOM	TABELA	apresentacao_comercial	N	SUP	F3	
+SPDATA	GEPADRAO_DATAMATRIX_QRCODE	TABELA	padrao_leitura_codigo	N	SUP	F3	
+SPDATA	GEPARAM	MECANISMO	parametro	N	SUP	F3	parâmetros soltos por usuário e empresa
+SPDATA	GEPORTALCOMPRAS	TABELA	portal_cotacao	N	SUP	F3	portais de cotação configurados
+SPDATA	GEQTDELOTEVALLOTEDOCSAIDA	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALBAL	TABELA	inventario_estoque_lote	N	SUP	F3	
+SPDATA	GERASVALDEVLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALESTINI	TABELA	inventario_estoque_lote	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GERASVALFINAL	TABELA	saldo_lote	N	SUP	F3	
+SPDATA	GERASVALINICIAL	TABELA	saldo_lote	N	SUP	F3	
+SPDATA	GERASVALNFS	TABELA	movimento_lote	N	SUP	F3	há datas inválidas a sanear
+SPDATA	GERASVALSAIDLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALTRANSFLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GEREFER	TABELA	categoria_contabil_insumo	N	SUP	F3	
+SPDATA	GESALCON	TABELA	saldo_consignado	N	SUP	F3	
+SPDATA	GESALDOKITRAS	TABELA	kit_rastreavel_item;kit_rastreavel_lote	N	SUP	F3	
+SPDATA	GESALDOS	TABELA	saldo_estoque_mensal;custo_medio_historico	N	SUP	F3	
+SPDATA	GESITUACAOPED	TABELA	situacao_pedido_compra	N	SUP	F3	
+SPDATA	GESUBGRU	TABELA	subgrupo_insumo	N	SUP	F3	
+SPDATA	GETABDCB	TABELA	principio_ativo	N	SUP	F3	
+SPDATA	GETABFUN	TABELA	pessoa_fisica;conta_bancaria_credor;regra_retencao	N	CAD	F3	
+SPDATA	GETABVIA	TABELA	via_de_uso	N	PEP	F3	
+SPDATA	GETPLANCTO	TABELA	tipo_movimento_estoque	N	SUP	F3	
+SPDATA	GETPSALDO	TABELA	saldo_estoque;saldo_consignado	N	SUP	F3	lista fixa vira atributo do saldo
+SPDATA	GETRUFA	NAO		N	SIS		sem valor de negocio: verdadeiro/falso vira campo booleano
+SPDATA	GEULTDOCGER	TABELA	sequencia_documento_estoque	N	SUP	F3	
+SPDATA	GEUNIPRESC	TABELA	insumo_unidade;unidade_prescricao;parametro_clinico_item	N	SUP	F3	
+SPDATA	GEUSERS	TABELA	local_estoque_usuario;usuario_estoque_centro_custo;usuario_estoque_classificacao	N	SUP	F3	
+SPDATA	GEUSERS_TBCENCUS	TABELA	usuario_estoque_centro_custo	N	SUP	F3	
+SPDATA	GEUSERS_TBCLASSI	TABELA	usuario_estoque_classificacao	N	SUP	F3	
+SPDATA	GEVALMEM	TABELA	lote_insumo	N	SUP	F3	datas inválidas a sanear
+SPDATA	GEVIASITEM	TABELA	insumo_via	N	SUP	F3	
+SPDATA	GPCOEFICIENTE_DEPREC	TABELA	coeficiente_turno	N	FIN	F3	
+SPDATA	GPORIGEM	TABELA	origem_bem	N	FIN	F3	
+SPDATA	GPPARAMG	MECANISMO	parametro	N	SUP	F7	módulo sem uso; parâmetros de depreciação e integração
+SPDATA	GPPARAMU	TABELA	contexto_trabalho_usuario	N	FIN	F3	
+SPDATA	GPTP_RESPONSAVEL	TABELA	tipo_responsavel_bem;responsavel_bem	S	FIN	F3	
+SPDATA	HTALTESTRUTBD	MECANISMO	framework	N	SIS	F3	alteração de estrutura do banco é controle de versão do produto (migrações da plataforma)
+SPDATA	HTATENDALTA	TABELA	alta_medica	N	PEP	F3	
+SPDATA	HTATENDIMENTO	MECANISMO	historico_entidade:atendimento	N	REC	F3	
+SPDATA	HTATENDRESP	MECANISMO	historico_entidade:responsavel_paciente	N	CAD	F3	
+SPDATA	HTCABECFORMULCOMP	TABELA	modelo_documento_versao	N	PEP	F3	
+SPDATA	HTCHKGERAL	TABELA	horario_administracao_evento	N	PEP	F3	
+SPDATA	HTCIAP	TABELA	termo_terminologia_vigencia	N	INTG	F3	
+SPDATA	HTCID	TABELA	termo_terminologia_vigencia	N	INTG	F3	
+SPDATA	HTCONVEN	TABELA	fonte_pagadora_versao	N	CAD	F3	
+SPDATA	HTFORMULCOMP	TABELA	modelo_layout	N	PEP	F3	
+SPDATA	HTLEITO	MECANISMO	historico_entidade:leito_hospitalar	N	INT	F3	
+SPDATA	HTNOTEXAMESEXO	MECANISMO	historico_entidade:exame_item	N	SADT	F3	alertas de restrição por sexo; regra em restricao_exame
+SPDATA	HTPACIENTE	TABELA	paciente_versao	N	CAD	F3	
+SPDATA	HTPACTELEFONE	TABELA	paciente_versao	N	CAD	F3	
+SPDATA	HTPARAMORIGEMCABIMP	TABELA	cabecalho_impressao_documento	N	PEP	F3	configuração viva (79 linhas, migrar-crud) da origem do cabeçalho por documento; não é histórico
+SPDATA	HTPRINC	MECANISMO	historico_entidade:principio_ativo	N	SUP	F3	
+SPDATA	HTPROCTO	MECANISMO	historico_entidade:item_faturavel	N	FAT	F3	
+SPDATA	HTPROFIS	TABELA	profissional_versao	N	CAD	F3	
+SPDATA	HTPROFISTEL	TABELA	profissional_versao	N	CAD	F3	
+SPDATA	HTPRONTUNIF	TABELA	unificacao_cadastro;unificacao_cadastro_item	N	CAD	F3	
+SPDATA	HTPROSUS	TABELA	procedimento_sigtap	N	SUS	F3	histórico por competência vem da carga oficial
+SPDATA	HTTBCBOPRO	MECANISMO	historico_entidade:inscricao_conselho	N	CAD	F3	
+SPDATA	HTTBCBOPRO_TBUNIDAD	MECANISMO	historico_entidade:lotacao_profissional	N	CAD	F3	
+SPDATA	HTTBHOSPIT	MECANISMO	historico_entidade:estabelecimento	N	CAD	F3	alterações do cadastro do hospital viram o histórico do estabelecimento
+SPDATA	IBE$VERSION_HISTORY	NAO		N	SIS		tecnico do fornecedor sem equivalente: versionamento da ferramenta de banco
+SPDATA	INTEGRA_BI	MECANISMO	datamart	N	REL	F3	fila de exclusões do ETL legado; o data mart é gerado do modelo e não migra
+SPDATA	MFADIFOR	TABELA	adiantamento	N	FIN	F3	vira adiantamento
+SPDATA	MFADIFOR_TBCBOPRO	TABELA	beneficiario_adiantamento	N	FIN	F3	vira beneficiario_adiantamento
+SPDATA	MFBORDER	TABELA	bordero_pagamento;item_bordero	N	FIN	F3	borderô com os títulos incluídos
+SPDATA	MFCABECLANC	TABELA	grupo_lancamento_financeiro	N	FIN	F3	vira grupo_lancamento_financeiro
+SPDATA	MFCABECRENEGO	TABELA	renegociacao;titulo_renegociado	N	FIN	F3	renegociação de títulos com os títulos de origem
+SPDATA	MFCCCONV	TABELA	credito_fonte_pagadora;aplicacao_credito_fonte_pagadora;demonstrativo_pagamento	N	FIN	F3	crédito de convênio em conta e sua aplicação nos títulos e demonstrativos
+SPDATA	MFCONPAG	TABELA	titulo_pagar;parcela_pagar;baixa_titulo;prorrogacao_parcela;tipo_documento_financeiro	N	FIN	F3	título a pagar com parcelas, baixas e prorrogações
+SPDATA	MFCONPAG_TBCBOPRO	TABELA	beneficiario_titulo_pagar	N	FIN	F3	vira beneficiario_titulo_pagar
+SPDATA	MFCTAREC	TABELA	titulo_receber;parcela_receber;recebimento	N	FIN	F3	título a receber com parcelas e recebimentos
+SPDATA	MFCTAUSU	TABELA	permissao_conta_bancaria	N	FIN	F3	contas bancárias permitidas por usuário
+SPDATA	MFDESACR	TABELA	ajuste_titulo;retencao_titulo	N	FIN	F3	descontos e acréscimos viram ajuste; retenções de imposto viram retenção do título
+SPDATA	MFLANCTO	TABELA	movimento_bancario;transferencia_bancaria;baixa_titulo;recebimento;tipo_lancamento_bancario	N	FIN	F3	lançamento bancário vira movimento, transferência ou baixa conforme a natureza
+SPDATA	MFLANGSI	TABELA	rateio_lancamento;reclassificacao_lancamento	N	FIN	F3	rateio por natureza financeira e centro de custo
+SPDATA	MFPAGADF	TABELA	compensacao_adiantamento	N	FIN	F3	vira compensacao_adiantamento
+SPDATA	MFPARAM	MECANISMO	parametro	N	FIN	F3	parâmetros do financeiro por empresa (operações, alíquotas, contas padrão) viram parâmetros do estabelecimento
+SPDATA	MFPARAM_MFTIPOLANC	TABELA	tipo_lancamento_estabelecimento	N	FIN	F3	vira tipo_lancamento_estabelecimento
+SPDATA	MFPARUSU	TABELA	contexto_trabalho_usuario	N	FIN	F3	vira contexto_trabalho_usuario
+SPDATA	MFREFDES	TABELA	tipo_ajuste_titulo;regra_retencao	N	FIN	F3	códigos de desconto/acréscimo e retenções com código de receita
+SPDATA	MFSALATU	TABELA	saldo_diario_conta	N	FIN	F3	vira saldo_diario_conta
+SPDATA	MFSALDOS	TABELA	saldo_diario_conta	N	FIN	F3	vira saldo_diario_conta
+SPDATA	MFTIPODOC	TABELA	finalidade_transferencia	N	FIN	F3	código oficial carregado em finalidade_transferencia
+SPDATA	MFTIPOLANC	TABELA	tipo_credor	N	FIN	F3	vira tipo_credor
+SPDATA	MFTIPOLANC_TBOPCOES	TABELA	permissao_tipo_lancamento	N	FIN	F3	vira permissao_tipo_lancamento
+SPDATA	MFTIPOTED	TABELA	finalidade_transferencia	N	FIN	F3	código oficial carregado em finalidade_transferencia
+SPDATA	MFTPAPURACAO	TABELA	tributo	N	FIN	F3	vira tributo
+SPDATA	MFTPCOBRANCA	TABELA	tipo_cobranca	N	FIN	F3	vira tipo_cobranca
+SPDATA	MFTPCONTRIBUICAO	TABELA	tributo;regra_retencao	N	FIN	F3	tipos de contribuição retida sobre pagamentos
+SPDATA	MFTPPGTOBANCO	TABELA	forma_pagamento_banco	N	FIN	F3	código oficial carregado em forma_pagamento_banco
+SPDATA	MOPARAM	MECANISMO	parametro	N	FIN	F7	parâmetro do orçamento (linha única, módulo sem uso) vira parâmetro do estabelecimento
+SPDATA	NFSECLASSIFICACAO_TRIBUTARIA	TABELA	classificacao_tributaria_ibs_cbs	N	FIN	F3	código oficial carregado em classificacao_tributaria_ibs_cbs
+SPDATA	NFSEEMPDESENT	TABELA	codigo_fiscal_oficial;municipio_provedor_nota	N	FIN	F3	código oficial carregado no catálogo de códigos; usado em municipio_provedor_nota
+SPDATA	NFSEEMPDESENV	TABELA	provedor_nota_municipal;nota_servico	N	FIN	F3	padrões e provedores de nota de serviço municipal
+SPDATA	NFSEPARUSU	TABELA	contexto_trabalho_usuario;configuracao_nota_servico	N	FIN	F3	competência e retenção padrão do usuário na nota de serviço
+SPDATA	OLD_TBMEDICO	NAO		N	CAD		duplicado de profissional: cadastro antigo com 1 linha residual
+SPDATA	PEJUSTIF	TABELA	justificativa_ponto	N	RH	F3	vira justificativa_ponto
+SPDATA	PELEIAUTEREP	NAO		N	RH		sem valor de negocio: leiaute de relógio de ponto só com identificador
+SPDATA	PEPARAM	MECANISMO	parametro	N	RH	F7	parâmetros do ponto (adicional noturno, tolerâncias, horas extras) viram parâmetros do estabelecimento
+SPDATA	PEPARAM_USUARIO	TABELA	contexto_trabalho_usuario	N	FIN	F3	vira contexto_trabalho_usuario
+SPDATA	PEPERIOD_JUSTIF	TABELA	abrangencia_justificativa	N	RH	F3	vira abrangencia_justificativa
+SPDATA	PETPINTERVALO	TABELA	tipo_intervalo;horario_jornada	N	RH	F3	tipos de intervalo da jornada
+SPDATA	PETP_INTEGR_EVENTO	TABELA	integracao_ponto_folha	N	RH	F3	vira integracao_ponto_folha
+SPDATA	PETP_MOVIM	TABELA	tipo_movimento_ponto	N	RH	F3	vira tipo_movimento_ponto
+SPDATA	PFPORTALOPCAO	TABELA	funcao_portal_prestador	S	SGO	F3	
+SPDATA	PFTPATEND	TABELA	tipo_prestador_rede	N	SGO	F3	
+SPDATA	PNCONFIG	TABELA	painel_chamada	N	REC	F3	
+SPDATA	PNCONFIGPORTAL	TABELA	painel_tv;painel_tv_bloco;tipo_painel_tv	N	REL	F3	painéis operacionais (UTI, farmácia, mapa cirúrgico, laboratório)
+SPDATA	PNTIPO	TABELA	tipo_painel	N	REC	F3	
+SPDATA	POBANCOHRTP	TABELA	regra_banco_horas	N	RH	F3	vira regra_banco_horas
+SPDATA	POCLASSIFMARC	TABELA	classificacao_marcacao	N	RH	F3	domínio da classificação da marcação de ponto
+SPDATA	PODIA	TABELA	horario_jornada	N	RH	F3	vira horario_jornada
+SPDATA	POPROGSIT	TABELA	escala	N	RH	F3	vira escala
+SPDATA	POPROSITUACAO	TABELA	apuracao_ponto	N	RH	F3	vira apuracao_ponto
+SPDATA	POREPHOMOLOGADO	TABELA	tipo_relogio_ponto;relogio_ponto	N	RH	F3	tipo de relógio homologado é domínio usado no relógio de ponto
+SPDATA	POTPCONTTEMP	TABELA	tipo_contrato_temporario	N	RH	F3	vira tipo_contrato_temporario
+SPDATA	POTPHORA	TABELA	tipo_hora;apuracao_ponto_item	N	RH	F3	tipos de hora apurada no ponto
+SPDATA	POTPINIBANCO	TABELA	regra_banco_horas	N	RH	F3	vira regra_banco_horas
+SPDATA	POTPJORNADA	TABELA	regime_jornada	N	RH	F3	vira regime_jornada
+SPDATA	POTPTRABFOLGA	TABELA	regime_jornada	N	RH	F3	vira regime_jornada
+SPDATA	PRAGRAVOPERGUNTA	TABELA	agravo_pergunta	N	PEP	F3	
+SPDATA	PRAGRAVOTPARQUETIPO	TABELA	agravo_notificavel	N	PEP	F3	
+SPDATA	PRAGRUPBALANCO	TABELA	grupo_balanco_hidrico	N	PEP	F3	
+SPDATA	PRAGRUP_PRFILTROCLASSIF	TABELA	classificacao_filtro_painel	N	PEP	F3	
+SPDATA	PRALERGIAPAC	TABELA	alergia_paciente;alergia_paciente_evento	N	PEP	F3	
+SPDATA	PRALERGIAPACTMP	TABELA	registro_assistencial_rascunho	N	PEP	F3	
+SPDATA	PRALERGIAPACTMP_TBPRINC	TABELA	registro_assistencial_rascunho	N	PEP	F3	
+SPDATA	PRALERGIAPAC_TBPRINC	TABELA	alergia_paciente_principio	N	PEP	F3	
+SPDATA	PRASSINANTE	TABELA	tipo_assinante	N	PEP	F3	
+SPDATA	PRASSINATURA_CAB	TABELA	documento_prontuario	N	PEP	F3	
+SPDATA	PRASSINATURA_DOC	TABELA	documento_prontuario_evento;assinatura_documento;documento_assinado	N	PEP	F3	
+SPDATA	PRASSINAT_DOC_PRCHKGERAL	TABELA	documento_prontuario	N	PEP	F3	
+SPDATA	PRASS_DOC_PREXAMEASS	TABELA	documento_prontuario	N	PEP	F3	
+SPDATA	PRATESTREQIMP	TABELA	documento_emitido	N	PEP	F3	
+SPDATA	PRBHINTENSIDADE	TABELA	intensidade_perda	N	PEP	F3	
+SPDATA	PRBHTIPOFECHAMENTO	TABELA	tipo_fechamento_balanco	N	PEP	F3	
+SPDATA	PRBHTPELIMINA	TABELA	tipo_ganho_perda	N	PEP	F3	
+SPDATA	PRCABEARQINTEGRAQT	TABELA	esquema_mensagem	N	INTG	F3	campos do arquivo de quimioterapia viram leiaute no motor de integração
+SPDATA	PRCABEC_MONITORIZACAO	TABELA	monitorizacao_paciente	N	PEP	F3	
+SPDATA	PRCABEVOL	TABELA	registro_assistencial	N	PEP	F3	
+SPDATA	PRCABEVOLTMP	TABELA	registro_assistencial_rascunho	N	PEP	F3	
+SPDATA	PRCABNEXODATA	TABELA	envio_prescricao_plataforma	N	INTG	F3	retorno da receita digital; uma linha de 2022
+SPDATA	PRCAB_IDENTIFIC_PAC	TABELA	identificacao_paciente_documento	N	PEP	F3	
+SPDATA	PRCADRESP	TABELA	modelo_campo_opcao	N	PEP	F3	
+SPDATA	PRCAMPOSLOCALIZACAOPACIENTE	TABELA	coluna_painel_paciente	N	PEP	F3	
+SPDATA	PRCARACTDIE	TABELA	caracteristica_dieta	N	HOT	F3	
+SPDATA	PRCARACTLAN	TABELA	prescricao_item_dieta_caracteristica	N	PEP	F3	
+SPDATA	PRCARACT_TBDIETAS	TABELA	modalidade_dieta_caracteristica	S	HOT	F3	
+SPDATA	PRCHKGERAL	TABELA	horario_administracao	N	PEP	F3	
+SPDATA	PRCONTEVOL	MECANISMO	arquivo	N	PEP	F3	
+SPDATA	PRDADOSENVIOOPERADORA	TABELA	formato_envio_operadora	N	PEP	F3	
+SPDATA	PREMAILCFG	TABELA	servidor_email	N	ADM	F3	credencial vai para o cofre, só a referência fica na tabela
+SPDATA	PREMAILMODULO	TABELA	finalidade_email	N	ADM	F3	
+SPDATA	PREMAILOPCAO	MECANISMO	parametro	N	PEP	F3	
+SPDATA	PREVOLESPEC	TABELA	modelo_especialidade	N	PEP	F3	
+SPDATA	PREVOLPAC	TABELA	registro_assistencial_resposta	N	PEP	F3	
+SPDATA	PREVOLPACTMP	TABELA	registro_assistencial_rascunho	N	PEP	F3	
+SPDATA	PREVOLTIPOACO	TABELA	modelo_acomodacao	N	PEP	F3	
+SPDATA	PREVOLUCAO	TABELA	modelo_documento_clinico	N	PEP	F3	
+SPDATA	PREXAMEASSINATURA	TABELA	requisicao_exame;documento_prontuario	N	SADT	F3	
+SPDATA	PREXTRATOITEM_PRCHKGERAL	TABELA	horario_administracao_evento	N	PEP	F3	
+SPDATA	PREXTRATOITEM_SUBST	TABELA	substituicao_dispensacao	N	SUP	F3	
+SPDATA	PREXTRATOITEM_TBSITFARM	TABELA	liberacao_farmaceutica_item	N	SUP	F3	
+SPDATA	PRFAVORITO	TABELA	painel_filtro_usuario	N	PEP	F3	
+SPDATA	PRFAVORITO_EXIBIR	TABELA	painel_coluna_usuario	N	PEP	F3	
+SPDATA	PRFA_CAD_MODO_RESPIR	TABELA	modo_ventilatorio	N	CC	F3	
+SPDATA	PRFA_CAD_POSICAO_CIR	TABELA	posicao_cirurgica	N	CC	F3	
+SPDATA	PRFA_TIPO_SINAL	TABELA	tipo_sinal_monitorado	N	CC	F3	
+SPDATA	PRFA_UTILIZACAO	TABELA	utilizacao_item_prescricao	N	PEP	F3	
+SPDATA	PRFICHAREL	TABELA	modelo_impressao_clinica	N	PEP	F3	
+SPDATA	PRFILTROCLASSIF	TABELA	classificacao_filtro_painel	N	PEP	F3	
+SPDATA	PRFILTROUSUARIO	TABELA	filtro_resultado_usuario	N	PEP	F3	
+SPDATA	PRFINALIDADETRAT	TABELA	intencao_tratamento_oncologico	S	PEP	F3	
+SPDATA	PRFORMULA	TABELA	formula_calculo_dose	N	PEP	F3	
+SPDATA	PRFORMULCOMP	TABELA	modelo_layout	N	PEP	F3	
+SPDATA	PRFREQUENCIA	TABELA	frequencia_administracao	N	PEP	F3	
+SPDATA	PRGEDIMP	TABELA	anexo_prontuario	N	PEP	F3	
+SPDATA	PRGLASGOW	TABELA	escala_clinica;escala_clinica_variavel;escala_clinica_opcao	N	PEP	F3	
+SPDATA	PRHEMOTLAN	TABELA	hemocomponente	N	SADT	F3	
+SPDATA	PRHORPAD	TABELA	horario_refeicao	N	HOT	F3	
+SPDATA	PRHRRELATIVA	TABELA	frequencia_horario_relativo	N	PEP	F3	
+SPDATA	PRINDICEAGRUPAMENTO	TABELA	escala_clinica	N	PEP	F3	
+SPDATA	PRINDICEPONTUACAO	TABELA	escala_clinica_opcao;escala_clinica_faixa	N	PEP	F3	
+SPDATA	PRINDICEVARIAVEL	TABELA	escala_clinica_variavel	N	PEP	F3	
+SPDATA	PRINFOPERGOPERADORA	TABELA	informacao_clinica_operadora	N	PEP	F3	
+SPDATA	PRINTEGRACAOESTOQUE	TABELA	dispensacao_item;horario_administracao	N	SUP	F3	vínculo horário prescrito x saída vira chave do item dispensado
+SPDATA	PRITEMNAOPAD	TABELA	item_nao_padronizado	N	PEP	F3	
+SPDATA	PRITEMNAOPAD_GETABVIA	TABELA	item_nao_padronizado_via	N	PEP	F3	
+SPDATA	PRITEMNAOPAD_TBPRINC	TABELA	item_nao_padronizado_principio	N	PEP	F3	
+SPDATA	PRITEMRECEITA	TABELA	receita_medica_item	N	PEP	F3	
+SPDATA	PRITEM_GEITENS	TABELA	parametro_clinico_item	N	PEP	F3	
+SPDATA	PRITENSESQ	TABELA	prescricao_item_solucao_etapa;prescricao_item_solucao_componente	N	PEP	F3	
+SPDATA	PRITENSGERAL	TABELA	prescricao_item_material	N	PEP	F3	
+SPDATA	PRITENSGLICEMIA	TABELA	prescricao_item_glicemia	N	PEP	F3	
+SPDATA	PRITENSKITMED	TABELA	kit_prescricao_item	N	PEP	F3	
+SPDATA	PRJUSTIF_IMP_EXPORTACAO	TABELA	exportacao_documento	N	ADM	F3	
+SPDATA	PRKITMED	TABELA	kit_prescricao	N	PEP	F3	
+SPDATA	PRKITSOL	TABELA	kit_prescricao	N	PEP	F3	
+SPDATA	PRKITSOLITENS	TABELA	kit_prescricao_item	N	PEP	F3	
+SPDATA	PRLANCAMENTOEXAME	TABELA	exame_lancado_prontuario	N	PEP	F3	
+SPDATA	PRLANCEXAMEESTRUTURADO	TABELA	exame_lancado_valor	N	PEP	F3	
+SPDATA	PRLANCNEXODATA	TABELA	envio_prescricao_plataforma	N	INTG	F3	documento enviado à receita digital; linha de teste não migra
+SPDATA	PRLANCREGISTROTEMPO	TABELA	registro_tempo_evento	N	PEP	F3	
+SPDATA	PRLANGERAL	TABELA	prescricao_item	N	PEP	F3	
+SPDATA	PRLANIMAGTMP	NAO		N	PEP		sem valor de negocio: rascunho único de imagem anotada sem uso real (matriz: descartar)
+SPDATA	PRLAYIMPPRESC	TABELA	configuracao_impressao_prescricao	N	PEP	F3	
+SPDATA	PRLOCALINVASIVO	TABELA	local_acesso_invasivo	N	PEP	F3	
+SPDATA	PRLOCAL_ASSISTENCIA	TABELA	local_assistencia	N	PEP	F3	
+SPDATA	PRLOCPACDEFAULT	TABELA	preferencia_usuario;configuracao_setor_prontuario	N	ADM	F3	
+SPDATA	PRMANCHESTER	TABELA	nivel_prioridade;discriminador_classificacao_risco	N	PEP	F3	
+SPDATA	PRMAQBUSCAPRESC	NAO		N	PEP		tecnico do fornecedor sem equivalente: índice de busca regenerável pela busca textual do sistema
+SPDATA	PRMAQUINABUSCA	NAO		N	PEP		tecnico do fornecedor sem equivalente: índice invertido regenerável no motor de busca próprio
+SPDATA	PRMODELOREL	TABELA	tipo_modelo_impressao	N	PEP	F3	
+SPDATA	PRMODOVENT	TABELA	modo_ventilacao_mecanica	N	PEP	F3	modos de ventilação mecânica da prescrição (VMI/VNI), lista distinta dos modos respiratórios da anestesia
+SPDATA	PROFTEXAME	TABELA	tipo_exame_oftalmologico	N	PEP	F3	
+SPDATA	PROFTGABARITO	TABELA	gabarito_acuidade_visual	N	PEP	F3	
+SPDATA	PROFTGRADUACAO	TABELA	gabarito_acuidade_visual	N	PEP	F3	
+SPDATA	PROFTGRUPEXAME	TABELA	grupo_exame_oftalmologico	N	PEP	F3	
+SPDATA	PROFTTPACUID	TABELA	tipo_acuidade_visual	N	PEP	F3	
+SPDATA	PROFTTPARQUIV	TABELA	tipo_anexo	N	PEP	F3	
+SPDATA	PROPCAOPERIODO	TABELA	periodo_consulta_sumario_alta	S	PEP	F3	
+SPDATA	PROXIGENOTERAPIA	TABELA	tipo_oxigenoterapia	N	PEP	F3	
+SPDATA	PRPADEVOL	TABELA	modelo_campo	N	PEP	F3	
+SPDATA	PRPADRECEITA	TABELA	modelo_receita;modelo_receita_item	N	PEP	F3	
+SPDATA	PRPARAM	MECANISMO	parametro	N	PEP	F3	
+SPDATA	PRPARAMORIGEMCABIMP	TABELA	cabecalho_impressao_documento	N	PEP	F3	
+SPDATA	PRPARAMSUMARIOALTA	TABELA	componente_sumario_alta	N	PEP	F3	
+SPDATA	PRPARAM_CHECAGEM	MECANISMO	parametro	N	PEP	F3	
+SPDATA	PRPARAM_PRESCFUTURA	MECANISMO	parametro	N	PEP	F3	
+SPDATA	PRPAREVOLIMG	TABELA	imagem_anotacao_modelo	N	PEP	F3	
+SPDATA	PRPARINTEGEST	TABELA	regra_integracao_prescricao	N	SUP	F3	
+SPDATA	PRPAROFTALMO	MECANISMO	parametro	N	PEP	F3	
+SPDATA	PRPARRECMED	TABELA	modelo_impressao_clinica	N	PEP	F3	
+SPDATA	PRPARTAMPADPRESC	TABELA	configuracao_impressao_prescricao	N	PEP	F3	
+SPDATA	PRPARVARCAD	TABELA	variavel_calculo_dose	N	PEP	F3	
+SPDATA	PRPARVARUNIRESP	TABELA	unidade_medida	N	SUP	F3	
+SPDATA	PRPERGUNTA	TABELA	modelo_campo	N	PEP	F3	
+SPDATA	PRPLANPRESC	TABELA	planejamento_prescricao	N	PEP	F3	
+SPDATA	PRPRESC	TABELA	prescricao	N	PEP	F3	
+SPDATA	PRPRESCDIETA	TABELA	prescricao_item_dieta	N	PEP	F3	
+SPDATA	PRPRESCHEMO	TABELA	prescricao_item_hemocomponente	N	PEP	F3	
+SPDATA	PRPRESCMED	TABELA	prescricao_item_medicamento	N	PEP	F3	
+SPDATA	PRPRESCPROCED	TABELA	prescricao_item_procedimento	N	PEP	F3	
+SPDATA	PRPRESCSOL	TABELA	prescricao_item_solucao	N	PEP	F3	
+SPDATA	PRPRESCVI	TABELA	prescricao_item_ventilacao	N	PEP	F3	
+SPDATA	PRPRESCVNI	TABELA	prescricao_item_ventilacao	N	PEP	F3	
+SPDATA	PRPRESC_AUTOPREENCHIDO	TABELA	prescricao_item	N	PEP	F3	
+SPDATA	PRPRESC_PRPROTGERAL	TABELA	prescricao_protocolo_aplicado	N	PEP	F3	
+SPDATA	PRPROCESSOPEP	TABELA	fluxo_situacao_documento	N	PEP	F3	
+SPDATA	PRPROTGERAL	TABELA	protocolo_prescricao;protocolo_prescricao_item	N	PEP	F3	
+SPDATA	PRPROTGERALESP	TABELA	protocolo_prescricao_especialidade	N	PEP	F3	
+SPDATA	PRREAV_MEDICA	TABELA	motivo_reavaliacao_medica	N	PEP	F3	
+SPDATA	PRRECEITA	TABELA	receita_medica	N	PEP	F3	
+SPDATA	PRRESPOSTA	TABELA	modelo_campo_opcao	N	PEP	F3	
+SPDATA	PRSAE_CLASSIF_META	TABELA	classificacao_meta_enfermagem	N	PEP	F3	
+SPDATA	PRSAE_LIKERT	TABELA	escala_resultado_enfermagem	N	PEP	F3	
+SPDATA	PRSENECESSARIO	TABELA	condicao_se_necessario	N	PEP	F3	
+SPDATA	PRSENECESSARIO_PRPRESCMED	TABELA	prescricao_item_se_necessario	N	PEP	F3	
+SPDATA	PRSENECESSARIO_PRPRESCPROCED	TABELA	prescricao_item_se_necessario	N	PEP	F3	
+SPDATA	PRSINAIS	TABELA	parametro_vital	N	PEP	F3	
+SPDATA	PRSITAPRAZAM	TABELA	situacao_aprazamento	N	PEP	F3	
+SPDATA	PRSITCHECAGEM	TABELA	situacao_checagem	N	PEP	F3	
+SPDATA	PRSITDOCUMENTO	TABELA	situacao_documento_prontuario	N	PEP	F3	
+SPDATA	PRSITDOCUMENTOASSINADO	TABELA	situacao_assinatura_documento	N	PEP	F3	
+SPDATA	PRSITEXAME	TABELA	situacao_procedimento_prescrito	N	PEP	F3	
+SPDATA	PRSITUACAOCHECAGEM	TABELA	situacao_checagem	N	PEP	F3	
+SPDATA	PRSUMARIO_ALTA_COMP	TABELA	componente_sumario_alta	N	PEP	F3	
+SPDATA	PRTERMOACEITE	TABELA	aceite_termo_uso	N	ADM	F3	
+SPDATA	PRTERMOCAD	TABELA	termo_uso_versao	N	ADM	F3	
+SPDATA	PRTIPODOCANEXO	TABELA	tipo_anexo	N	PEP	F3	
+SPDATA	PRTIPONOTIFICACAO	TABELA	configuracao_alerta_prescricao	N	PEP	F3	
+SPDATA	PRTIPOPERGPAR	TABELA	destino_campo_estruturado	N	PEP	F3	
+SPDATA	PRTIPOPRESENTEADMISSAO	TABELA	presenca_admissao	N	PEP	F3	
+SPDATA	PRTIPO_JUSTIF_EXPORTACAO	TABELA	tipo_justificativa_exportacao	N	ADM	F3	
+SPDATA	PRTIPO_PROFISSIONAL	TABELA	funcao_equipe_cirurgica	N	CC	F3	
+SPDATA	PRTPALERTA	TABELA	tipo_alerta_clinico	N	PEP	F3	
+SPDATA	PRTPASSINATURA	TABELA	tipo_documento_clinico	N	PEP	F3	
+SPDATA	PRTPASSINATURA_PRSITDOC	TABELA	fluxo_situacao_documento	N	PEP	F3	
+SPDATA	PRTPASSINATURA_TBOID	TABELA	tipo_documento_clinico	N	PEP	F3	
+SPDATA	PRTPATEND	TABELA	regime_atendimento	N	REC	F3	
+SPDATA	PRTPCOMP	TABELA	tipo_documento_clinico	N	PEP	F3	
+SPDATA	PRTPDOCUMENTO	TABELA	tipo_exigencia_assinatura	N	PEP	F3	
+SPDATA	PRTPINFOPERGOPERADORA	TABELA	grupo_informacao_clinica_operadora	N	PEP	F3	
+SPDATA	PRTPINFUSAO	TABELA	tipo_infusao	N	PEP	F3	
+SPDATA	PRTPLAN	TABELA	tipo_item_prescricao	N	PEP	F3	
+SPDATA	PRTPLAN_GETABVIA	TABELA	tipo_item_prescricao_via	N	PEP	F3	
+SPDATA	PRTPLAN_PRFREQUENCIA	TABELA	tipo_item_prescricao_frequencia	N	PEP	F3	
+SPDATA	PRTPLAN_PRTPINFUSAO	TABELA	tipo_item_prescricao_infusao	N	PEP	F3	
+SPDATA	PRTPNOTALEMB	TABELA	tipo_nota_paciente	N	PEP	F3	
+SPDATA	PRTPNOTIFEMAIL	TABELA	canal_notificacao	N	ADM	F3	domínio vivo no SPDATA (migrar-crud): paridade exige o destino em F3
+SPDATA	PRTPPERGUNTA	TABELA	tipo_campo_modelo	N	PEP	F3	
+SPDATA	PRTPPROT	TABELA	tipo_protocolo_oncologico	N	PEP	F3	
+SPDATA	PRTPRECMED	TABELA	tipo_receita	N	PEP	F3	
+SPDATA	PRTPREFEIC	TABELA	refeicao_do_dia	N	HOT	F3	
+SPDATA	PRTPREQUISICAO	TABELA	regra_requisicao_farmacia	N	PEP	F3	
+SPDATA	PRTPRESPOSTA	TABELA	resposta_informacao_operadora	N	PEP	F3	
+SPDATA	PRTPTCLE	TABELA	situacao_termo_consentimento	N	PEP	F3	
+SPDATA	PRUNIDINFUSAO	TABELA	unidade_infusao	N	PEP	F3	
+SPDATA	PRUNIDRESPOSTA	TABELA	unidade_resposta	N	PEP	F3	
+SPDATA	PRUNITPLAN	TABELA	tipo_item_prescricao_unidade	N	PEP	F3	
+SPDATA	PRVALIDARMEDDUPLICPRESC	TABELA	regra_duplicidade_terapeutica	N	PEP	F3	
+SPDATA	PRVELOCINFUSAO	TABELA	prescricao_item_velocidade	N	PEP	F3	
+SPDATA	PRVIAADMIN	TABELA	via_dieta	N	HOT	F3	
+SPDATA	PRVIAAEREA	TABELA	via_aerea	N	PEP	F3	
+SPDATA	PSATVASS	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	conceito coberto; linha placeholder de 1899 não migra
+SPDATA	PSBENCPL	TABELA	beneficiario_plano	N	SGO	F7	conceito coberto; linha placeholder não migra
+SPDATA	PSBENEFI	TABELA	beneficiario_plano	N	SGO	F7	conceito coberto; linha placeholder não migra
+SPDATA	PSBENTMP	NAO		N	SGO		tecnico do fornecedor sem equivalente: tabela de trabalho com linha placeholder de 1899
+SPDATA	PSCOPARTTPGUIAQNDO	TABELA	condicao_cobranca_coparticipacao	N	SGO	F3	condições que disparam coparticipação na guia
+SPDATA	PSCRITICA	TABELA	critica_autorizacao	N	SGO	F3	críticas automáticas de autorização
+SPDATA	PSDOCIMPNOMESOCIAL	TABELA	documento_emitido_operadora	N	SGO	F3	regra de nome social por documento emitido
+SPDATA	PSEMPEMITEOBS	TABELA	documento_emitido_operadora	N	SGO	F3	público da observação vira regra do documento emitido
+SPDATA	PSFORNEMEMSIT	TABELA	situacao_fornecimento	N	SGO	F3	situações de fornecimento ao beneficiário
+SPDATA	PSGRUPOCLASSIF	TABELA	segmentacao_assistencial	N	SGO	F3	grupos ANS de classificação viram segmentação assistencial
+SPDATA	PSMOTIVO	TABELA	motivo_movimento_cadastral	N	SGO	F3	motivo de baixa de beneficiário unificado
+SPDATA	PSNATUREZAPS	TABELA	natureza_prestador_rede	N	SGO	F3	natureza da rede com código ANS
+SPDATA	PSORIGEMCOBR	TABELA	origem_cobranca_plano	N	SGO	F3	origens de cobrança unificadas
+SPDATA	PSORIGEMGUIA	TABELA	origem_guia_plano	N	SGO	F3	origens de guia unificadas
+SPDATA	PSPLNASS	TABELA	beneficiario_plano	N	SGO	F7	plano do beneficiário; linha placeholder de 1899 não migra
+SPDATA	PSPRCANS	TABELA	termo_terminologia;terminologia	N	INTG	F3	classificação ANS de procedimentos como terminologia mantida
+SPDATA	PSREEMBOLSOTP	TABELA	modalidade_reembolso	N	SGO	F3	tipos de reembolso
+SPDATA	PSSIBCAMPOALT	TABELA	termo_terminologia	N	INTG	F3	campos retificáveis do cadastro ANS como lista fixa
+SPDATA	PSTIPMEN	TABELA	origem_cobranca_plano	N	SGO	F3	tipo de mensalidade fundido na origem de cobrança
+SPDATA	PSTIPOGUIA	TABELA	tipo_guia_plano	N	SGO	F3	tipos de guia unificados
+SPDATA	PSTPACUMULPOR	TABELA	nivel_acumulo_limite	N	SGO	F3	nível de acúmulo do limite
+SPDATA	PSTPPERIODO	TABELA	unidade_prazo	N	SGO	F3	periodicidade do limite unificada
+SPDATA	PSTPRETORNO	TABELA	regra_retorno_consulta	N	AGE	F3	critério de retorno vira atributo da regra de retorno
+SPDATA	PSTPSMESRECOL	TABELA	taxa_saude_suplementar_vigencia	N	SGO	F3	meses de recolhimento da taxa por vigência
+SPDATA	PSTPSVIGENCIA	TABELA	taxa_saude_suplementar_vigencia;apuracao_taxa_saude_suplementar	N	SGO	F3	valores da taxa por vigência
+SPDATA	PSVENDAS	TABELA	proposta_adesao;comissao_venda;vendedor_plano	N	SGO	F8	conceito coberto; linha placeholder de 1899 não migra
+SPDATA	REAGECRI	TABELA	geracao_grade;geracao_grade_periodo	N	AGE	F3	
+SPDATA	REAGENDA	TABELA	agenda_servico	N	AGE	F3	
+SPDATA	REAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	N	AGE	F3	
+SPDATA	REAGENDA_TBESPEC	TABELA	agenda_especialidade	N	AGE	F3	
+SPDATA	REALTA	TABELA	atendimento;atendimento_situacao_historico	N	REC	F3	
+SPDATA	RECADATE	TABELA	atendimento;atendimento_procedimento;cobertura_atendimento	N	REC	F3	
+SPDATA	RECANAGE	TABELA	cancelamento_marcacao	N	AGE	F3	
+SPDATA	RECONFIC	TABELA	regra_impressao_ficha	N	REC	F3	
+SPDATA	RECONTAS	TABELA	conta_hospitalar	N	FAT	F3	
+SPDATA	RECTRAGE	TABELA	agenda_escala	N	AGE	F3	
+SPDATA	REESPFIC	TABELA	regra_impressao_ficha	N	REC	F3	
+SPDATA	REEXCATE	TABELA	cancelamento_atendimento;registro_excluido;motivo_exclusao_registro	N	REC	F3	exclusão de atendimento vira cancelamento com cópia do registro
+SPDATA	REGRPFIC	TABELA	regra_impressao_ficha	N	REC	F3	
+SPDATA	RELEITO	TABELA	leito_observacao	N	INT	F3	
+SPDATA	RELOCLEITO	TABELA	local_observacao	N	INT	F3	
+SPDATA	REMODFIC	TABELA	modelo_ficha_impressa	N	REC	F3	
+SPDATA	REOCUPLEITO	TABELA	ocupacao_leito_observacao	N	INT	F3	
+SPDATA	REPACAGD	TABELA	marcacao_horario	N	AGE	F3	
+SPDATA	REPACAGD_EXCLUSAO	TABELA	cancelamento_marcacao;registro_excluido	N	AGE	F3	marcação excluída vira cancelamento com cópia do registro
+SPDATA	REPACAGI	TABELA	horario_agenda	N	AGE	F3	
+SPDATA	REPACAGN	TABELA	pre_cadastro	N	CAD	F3	
+SPDATA	REPARAM	MECANISMO	parametro	N	REC	F3	
+SPDATA	REPARATE	TABELA	regra_heranca_campo	N	REC	F3	
+SPDATA	REPROEXT	TABELA	conta_hospitalar_item	N	FAT	F3	
+SPDATA	RESEGUR	TABELA	titular_cobertura	N	CAD	F3	
+SPDATA	RESITAGE	TABELA	situacao_marcacao	N	AGE	F3	
+SPDATA	RETIPAGE	TABELA	canal_marcacao	N	AGE	F3	
+SPDATA	RETITFIC	TABELA	modelo_ficha_impressa	N	REC	F3	
+SPDATA	RETPAGEN	NAO		N	AGE		duplicado de categoria_agenda
+SPDATA	RETPINDATEND	TABELA	tipo_indicacao	N	REC	F3	
+SPDATA	RETPLEITO	TABELA	tipo_leito_observacao	N	INT	F3	
+SPDATA	RETPPROTOLIFE	TABELA	perfil_prioridade_externa	N	INTG	F3	perfis de prioridade enviados à triagem externa
+SPDATA	RETP_INTEG_AGENDA_ONLINE	TABELA	modo_agendamento_online	N	AGE	F3	
+SPDATA	REUNIFIC	TABELA	regra_impressao_ficha	N	REC	F3	
+SPDATA	RIACOMOD	TABELA	acomodacao	N	INT	F3	
+SPDATA	RIALTA_EXCLUSAO	TABELA	cancelamento_alta;registro_excluido	N	INT	F3	alta cancelada com retrato dos dados anteriores
+SPDATA	RIBLOCOS	TABELA	bloco_internacao	N	INT	F3	
+SPDATA	RICADINT	TABELA	internacao	N	INT	F3	
+SPDATA	RICADPAC	TABELA	paciente;pessoa_fisica;documento_pessoa;endereco_pessoa;telefone_pessoa;prontuario_estabelecimento	N	CAD	F3	
+SPDATA	RICADPAC_TBCONVEN	TABELA	cobertura_paciente	N	CAD	F3	
+SPDATA	RICBOFMRPUSP	TABELA	ocupacao_cbo	N	CAD	F3	ocupacao legada com dados: de-para para a ocupacao oficial na migracao do paciente (o catalogo ja a cita)
+SPDATA	RICGUIAS	TABELA	guia_fonte_pagadora	N	FAT	F3	
+SPDATA	RICONFIC	TABELA	regra_documento_internacao	N	INT	F3	
+SPDATA	RICONTAS	TABELA	conta_hospitalar;conta_hospitalar_periodo	N	FAT	F3	
+SPDATA	RICTRLOC	TABELA	ocupacao_leito	N	INT	F3	
+SPDATA	RIESPFIC	TABELA	regra_documento_internacao	N	INT	F3	
+SPDATA	RIEXCINT	TABELA	cancelamento_internacao;registro_excluido	N	INT	F3	internação excluída com justificativa e retrato
+SPDATA	RILEITOS	TABELA	leito_hospitalar;reserva_leito	N	INT	F3	
+SPDATA	RIMODFIC	TABELA	modelo_documento_internacao	N	INT	F3	
+SPDATA	RIMOTIVO	NAO		N	INT		obsoleto: inativa pelo fornecedor, 3 valores sem referencia ativa
+SPDATA	RIPARAM	MECANISMO	parametro	N	INT	F3	
+SPDATA	RIPREINT	TABELA	agendamento_internacao	N	INT	F3	
+SPDATA	RIPROCFMRPUSP	NAO		N			obsoleto: tabela de procedimento legada; procedimento usa terminologia oficial
+SPDATA	RIPROEXT	TABELA	conta_hospitalar_item	N	FAT	F3	
+SPDATA	RIPROTOC	NAO		N	HOT		obsoleto: registro unico legado; o negocio fica em protocolo_tramite e movimento_prontuario
+SPDATA	RISETOR	TABELA	setor_tramite	N	HOT	F3	
+SPDATA	RISITREGLEITO	TABELA	situacao_pedido_leito	N	INT	F3	
+SPDATA	RITITFIC	TABELA	titulo_documento_internacao	N	INT	F3	
+SPDATA	RITRANSF	TABELA	transferencia_leito	N	INT	F3	
+SPDATA	RITRFCLI	TABELA	troca_internacao	N	INT	F3	
+SPDATA	RITRFCON	TABELA	troca_internacao	N	INT	F3	
+SPDATA	RITRFESP	TABELA	troca_internacao	N	INT	F3	
+SPDATA	RITRFMED	TABELA	troca_internacao	N	INT	F3	
+SPDATA	RPCODIGO_RECEITA	TABELA	codigo_receita_federal	N	FIN	F3	código oficial carregado em codigo_receita_federal
+SPDATA	RPDEDUTIVEL	TABELA	tipo_deducao_irrf	N	FAT	F3	
+SPDATA	RPEMPCALCIMP	TABELA	empresa_calculo_cumulativo_rpa	N	FAT	F3	
+SPDATA	RPEVENTO	TABELA	evento_repasse	N	FAT	F3	
+SPDATA	RPEVENTOESOC	TABELA	evento_repasse_incidencia	N	FAT	F3	
+SPDATA	RPINTEVE	TABELA	evento_repasse_contabil	N	FAT	F3	
+SPDATA	RPLANEVE	TABELA	lancamento_repasse	N	FAT	F3	
+SPDATA	RPLANEVE_COMPOSICAOBASE	TABELA	lancamento_repasse_base	N	FAT	F3	
+SPDATA	RPLANEVE_TBCBOPRO	TABELA	lancamento_repasse	N	FAT	F3	profissional beneficiário é coluna do lançamento
+SPDATA	RPLANRPA	TABELA	rpa_lancamento	N	FAT	F3	
+SPDATA	RPMATRIZ_GUT_DESCRICAO	TABELA	grau_priorizacao_gut	N	ADM	F3	
+SPDATA	RPMATRIZ_GUT_TIPO	TABELA	dimensao_priorizacao_gut	N	ADM	F3	
+SPDATA	RPPARAM	MECANISMO	parametro	N	FAT	F3	numeração, modelo, contabilização e IRRF do RPA
+SPDATA	RPPARUSUEMP	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	RPRENDISENTO	TABELA	tipo_rendimento_isento	N	FAT	F3	
+SPDATA	RPRPA	TABELA	rpa;rpa_retencao	N	FAT	F3	
+SPDATA	RPRPA_TBCBOPRO	TABELA	rpa	N	FAT	F3	profissional beneficiário é coluna do RPA
+SPDATA	RPTIPOPRESTADOR	TABELA	tipo_prestador_repasse	N	FAT	F3	
+SPDATA	SDCFOP	TABELA	cfop	N	FIN	F3	código oficial carregado em cfop
+SPDATA	SDCSTCOFINS	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	situação tributária oficial da COFINS com vigência, no catálogo de códigos fiscais
+SPDATA	SDCSTPIS	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	situação tributária oficial do PIS com vigência, no catálogo de códigos fiscais
+SPDATA	SDGECADNFS	TABELA	escrituracao_entrada	N	FIN	F3	vira escrituracao_entrada
+SPDATA	SDGEITENS	TABELA	dado_fiscal_item	N	FIN	F3	vira dado_fiscal_item
+SPDATA	SDGELANNFS	TABELA	escrituracao_item_entrada	N	FIN	F3	vira escrituracao_item_entrada
+SPDATA	SDGENERO	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	gênero oficial do item, no catálogo de códigos fiscais
+SPDATA	SDINDICCONDPJ	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	SDINDICTPOPER	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	SDITEMSERVICO	TABELA	servico_lc116	N	FIN	F3	código oficial carregado em servico_lc116
+SPDATA	SDMFCONPAG	TABELA	dado_fiscal_titulo_pagar	N	FIN	F3	vira dado_fiscal_titulo_pagar
+SPDATA	SDNATCREDITO	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	natureza oficial da base de crédito, no catálogo de códigos fiscais
+SPDATA	SDNATRECEITA	TABELA	codigo_fiscal_oficial;apuracao_pis_cofins	N	FIN	F3	natureza da receita cumulativa ou não, código oficial usado na apuração
+SPDATA	SDNATRETFONTE	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	SDPARAM	MECANISMO	parametro	N	FIN	F3	competência de processamento da escrituração vira parâmetro; caminho do validador local não se aplica
+SPDATA	SDTIPODOCTO	TABELA	codigo_fiscal_oficial;tabela_fiscal_oficial	N	FIN	F3	modelos oficiais de documento fiscal com vigência, no catálogo de códigos fiscais
+SPDATA	SHBOLSA	TABELA	bolsa_hemocomponente	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHBOLSAHIST	TABELA	movimento_bolsa	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHCLIENT	TABELA	servico_hemoterapia_fornecedor	N	SADT	F3	só placeholder; recurso a construir
+SPDATA	SHCONDUTA	TABELA	conduta_reacao_transfusional	N	SADT	F3	só placeholder
+SPDATA	SHDOACAO	TABELA	doacao_sangue	N	SADT	F8	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHESTFINAL	TABELA	destino_final_bolsa	N	SADT	F3	só placeholder
+SPDATA	SHEXAME	TABELA	tipo_teste_imuno_hematologico	N	SADT	F3	só placeholder
+SPDATA	SHINTER	TABELA	tipo_reacao_transfusional	N	SADT	F3	só placeholder
+SPDATA	SHLOCAL	TABELA	local_guarda_hemocomponente	N	SADT	F3	só placeholder
+SPDATA	SHMOTDEV	TABELA	motivo_devolucao_bolsa	N	SADT	F3	só placeholder
+SPDATA	SHMOV	TABELA	tipo_movimento_bolsa	N	SADT	F3	
+SPDATA	SHPARAM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	só placeholder
+SPDATA	SHPERGUN	TABELA	pergunta_triagem_doador	N	SADT	F3	só placeholder
+SPDATA	SHREACAO	TABELA	tipo_reacao_transfusional	N	SADT	F3	só placeholder
+SPDATA	SHREQUISICAO	TABELA	requisicao_transfusao	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHRESPOSTA	TABELA	pergunta_triagem_doador;resposta_triagem_doador	N	SADT	F3	opções de resposta ficam na pergunta; só placeholder
+SPDATA	SHTECNIC	TABELA	profissional;ato_transfusional	N	CAD	F3	só placeholder
+SPDATA	SHTPTRANSF	TABELA	tipo_transfusao	N	SADT	F3	
+SPDATA	SIAGECRI	TABELA	geracao_grade;geracao_grade_periodo	N	AGE	F3	
+SPDATA	SIAGENDA	TABELA	agenda_servico	N	AGE	F3	
+SPDATA	SIAGENDA_TBCONVEN	TABELA	agenda_fonte_pagadora	N	AGE	F3	
+SPDATA	SIASSLAUDO_IMPRESSAO	TABELA	emissao_laudo	N	SADT	F3	
+SPDATA	SIASSLAUDO_IMP_SILANEXA	TABELA	emissao_laudo_exame	N	SADT	F3	
+SPDATA	SICADATE	TABELA	requisicao_exame;guia_fonte_pagadora	N	SADT	F3	
+SPDATA	SICADATE_EXCLUSAO	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	cópia de exclusão vira histórico da requisição
+SPDATA	SICANAGE	TABELA	cancelamento_marcacao	N	AGE	F3	
+SPDATA	SICOLETE	TABELA	dispositivo_coleta	S	SADT	F3	
+SPDATA	SICTRAGE	TABELA	agenda_escala	N	AGE	F3	
+SPDATA	SICTRPSR	TABELA	grupo_resposta	N	SADT	F3	
+SPDATA	SIESPEC	TABELA	especialidade_diagnostica	N	SADT	F3	
+SPDATA	SIEXAORC	TABELA	orcamento_particular_item	N	FAT	F3	
+SPDATA	SIFORMUL	TABELA	formula_calculo	N	SADT	F3	
+SPDATA	SIHISTVLREF	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIHISTVLREFELEMENTO	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIHISTVLREFEXAME	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIKITEXA	TABELA	kit_exame	N	SADT	F3	
+SPDATA	SIKITHISTEXA	TABELA	kit_exame_versao	N	SADT	F3	
+SPDATA	SIKITHISTITE	TABELA	kit_exame_versao_item	S	SADT	F3	
+SPDATA	SIKITITE	TABELA	kit_exame_item	N	SADT	F3	
+SPDATA	SILANEXA	TABELA	exame_item	N	SADT	F3	
+SPDATA	SILANEXATMP	NAO		N	SADT		sem valor de negocio: temporária de lançamento de exames (2020-2021)
+SPDATA	SILIBERACAOEXAME	TABELA	liberacao_exame;liberacao_resultado_portal;acesso_resultado_portal	N	SADT	F3	
+SPDATA	SIMATERI	TABELA	material_biologico;de_para_material_apoio	N	SADT	F3	
+SPDATA	SIMATHP	TABELA	material_laboratorio_apoio;de_para_material_apoio	N	INTG	F3	de-para de material com o laboratório de apoio
+SPDATA	SIMETODO	TABELA	metodo_analitico	N	SADT	F3	
+SPDATA	SIMODULO	TABELA	setor_diagnostico	N	SADT	F3	
+SPDATA	SIMODULO_SIWEBATOS	TABELA	setor_publicado_portal	N	INTG	F3	
+SPDATA	SIOBSERV	TABELA	texto_padrao_resultado	N	SADT	F3	
+SPDATA	SIORCAME	TABELA	orcamento_particular	N	FAT	F3	
+SPDATA	SIPACAGD	TABELA	marcacao_horario;marcacao_horario_item	N	AGE	F3	
+SPDATA	SIPACAGD_EXCLUSAO	TABELA	registro_excluido	N	ADM	F3	
+SPDATA	SIPACAGI	TABELA	horario_agenda	N	AGE	F3	
+SPDATA	SIPACAGN	TABELA	pre_cadastro	N	CAD	F3	
+SPDATA	SIPACSMODALID	TABELA	modalidade_imagem	N	SADT	F3	
+SPDATA	SIPACSVISIMG	TABELA	visualizador_imagem	N	SADT	F3	
+SPDATA	SIPARANA	TABELA	configuracao_setor_diagnostico	N	SADT	F3	
+SPDATA	SIPAREND	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor; campos obsoletos caem
+SPDATA	SIPARGER	TABELA	configuracao_setor_diagnostico	N	SADT	F3	
+SPDATA	SIPARHEM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARLAB	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor;interface_equipamento	N	SADT	F3	senha gerencial não migra
+SPDATA	SIPAROUT	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARRX	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor	N	SADT	F3	
+SPDATA	SIPARTM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARULT	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPOSRES	TABELA	resposta_padrao	N	SADT	F3	
+SPDATA	SIRECIPI	TABELA	recipiente_coleta	N	SADT	F3	
+SPDATA	SIREFCON	TABELA	equivalencia_item_fonte_pagadora	N	FAT	F3	
+SPDATA	SIRES01	TABELA	resultado_exame;resultado_analito;resultado_exame_versao	N	SADT	F3	HTML/PDF do laudo vai para arquivo
+SPDATA	SIRES01_DELETE	MECANISMO	historico_entidade:resultado_exame	N	SADT	F3	cópia de exclusão vira histórico do resultado
+SPDATA	SIRESOBS	TABELA	resultado_observacao	N	SADT	F3	
+SPDATA	SIRESPAD	TABELA	modelo_resultado;modelo_laudo	N	SADT	F3	
+SPDATA	SIRESVAR	TABELA	resultado_variavel_formula	N	SADT	F3	
+SPDATA	SISTATUS_AMOSTRA	TABELA	situacao_amostra	N	SADT	F3	
+SPDATA	SITABELE	TABELA	analito;exame_analito;faixa_referencia;unidade_resultado	N	SADT	F3	
+SPDATA	SITABPRO	TABELA	exame;exame_equivalencia_codigo;exame_material	N	SADT	F3	
+SPDATA	SITBELHP	TABELA	elemento_exame_laboratorio_apoio;de_para_analito_apoio	N	INTG	F3	de-para de elemento de exame com o apoio
+SPDATA	SITBEXEQ	TABELA	equivalencia_exame_equipamento;de_para_exame_equipamento	N	INTG	F3	equivalência de exame por interface
+SPDATA	SITBEXHP	TABELA	exame_laboratorio_apoio	N	SADT	F3	catálogo de exames do apoio
+SPDATA	SITBGRAN	TABELA	secao_laudo_estruturado;grandeza_laudo	N	SADT	F3	
+SPDATA	SITECNIC	TABELA	profissional;responsavel_laudo_setor	N	CAD	F3	
+SPDATA	SITPEQV	TABELA	interface_equipamento;credencial_integracao;equipamento_analitico	N	SADT	F3	senhas não migram em claro: vão ao cofre por referência
+SPDATA	SITPEQVMODELO	TABELA	modelo_comunicacao	N	SADT	F3	modelos de comunicação de interface
+SPDATA	SITPEQV_SITPEQVMODELO	TABELA	interface_equipamento	N	SADT	F3	modelo vira atributo da configuração da interface
+SPDATA	SIVARFORMULA	TABELA	variavel_formula	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL	TABELA	perfil_portal_resultado	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL_SIPACSMODALID	TABELA	perfil_portal_modalidade	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL_TBUSERS	TABELA	perfil_portal_usuario	N	SADT	F3	
+SPDATA	SIWEBPARDATA	TABELA	perfil_portal_resultado	N	SADT	F3	lista fixa vira atributo do perfil
+SPDATA	SIWEBPARLAUDO	TABELA	modelo_impressao_laudo	N	SADT	F3	layout binário é refeito, não migra
+SPDATA	SIWEBPARPERFIL	TABELA	perfil_portal_resultado	N	SADT	F3	
+SPDATA	SIWEBPARTPATU	TABELA	perfil_portal_resultado	N	SADT	F3	lista fixa vira atributo do perfil
+SPDATA	SIWEBVISULIMG	TABELA	visualizador_imagem	N	SADT	F3	
+SPDATA	SIWSETIQUETA	TABELA	modelo_etiqueta_amostra_biologica;etiqueta_amostra_apoio	N	SADT	F3	leiaute de etiqueta devolvido pelo apoio
+SPDATA	SIWSLANCETQTA	TABELA	etiqueta_amostra_apoio	N	INTG	F3	etiqueta devolvida por exame
+SPDATA	SPMOTLIG	TABELA	motivo_contato_beneficiario	N	SGO	F3	motivo de contato com a central
+SPDATA	SPORIGEM_ATEND	TABELA	origem_protocolo	N	SGO	F3	origens do protocolo de atendimento
+SPDATA	SPVINCULOTITULAR	TABELA	vinculo_solicitante_protocolo	N	SGO	F3	vínculo do solicitante com o titular
+SPDATA	STEMITENTE	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	STFIL_PREV	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	STLOCAL	TABELA	codigo_esocial;comunicacao_acidente	N	RH	F3	código oficial carregado no catálogo de códigos; usado em comunicacao_acidente
+SPDATA	STRESULT	TABELA	codigo_esocial;exame_ocupacional	N	RH	F3	código oficial carregado no catálogo de códigos; usado em exame_ocupacional
+SPDATA	STTPASO	TABELA	codigo_esocial;aso	N	RH	F3	código oficial carregado no catálogo de códigos; usado em aso
+SPDATA	STTPMEDIDAS	TABELA	codigo_esocial;medida_controle_risco	N	RH	F3	código oficial carregado no catálogo de códigos; usado em medida_controle_risco
+SPDATA	STTP_CAT	TABELA	codigo_esocial	N	RH	F3	código oficial carregado em codigo_esocial
+SPDATA	TBACAOFLUXOSENHA	TABELA	acao_fluxo_senha	N	REC	F3	
+SPDATA	TBACAOGRAUGRA	TABELA	acao_gravidade_interacao	N	PEP	F3	
+SPDATA	TBACOMODLEITO	TABELA	acomodacao	N	INT	F3	
+SPDATA	TBAGEBAN	TABELA	agencia_bancaria	N	FIN	F3	vira agencia_bancaria
+SPDATA	TBAGEUSE	TABELA	usuario_tipo_agenda	N	ADM	F3	
+SPDATA	TBAGRUPRELAT	TABELA	agrupamento_relatorio	N	REL	F3	
+SPDATA	TBAGRUPRELAT_TBEDITREL	TABELA	agrupamento_relatorio_item	N	REL	F3	
+SPDATA	TBALERGIA	TABELA	alergeno	N	PEP	F3	
+SPDATA	TBALERGIA_TBPRINC	TABELA	alergeno_principio_ativo	N	PEP	F3	
+SPDATA	TBALERTA	TABELA	regra_alerta	N	ADM	F3	
+SPDATA	TBALERTA_TBOPCOES_TBEVENTOS	TABELA	alerta_gatilho	N	ADM	F3	
+SPDATA	TBALTARN	TABELA	desfecho_recem_nascido	N	INT	F3	
+SPDATA	TBALTSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBANESTESIA	TABELA	tipo_anestesia	N	CC	F3	
+SPDATA	TBAPACS	TABELA	compatibilidade_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBASSOCI	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBATIVID	TABELA	atividade_economica	N	SUP	F3	
+SPDATA	TBATOAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBATRIBCOMPL	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBATRIBPRO	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBBANCOS	TABELA	banco;carteira_cobranca;contrato_cobranca_bancaria;leiaute_bancario	N	FIN	F3	bancos e carteiras com leiautes de cobrança se dividem em banco, carteira, contrato e leiaute
+SPDATA	TBBASEDADOS	NAO		N	SIS		tecnico do fornecedor sem equivalente: nomes de bancos locais para log de backup
+SPDATA	TBBTNOPREL	TABELA	relatorio_tela	N	REL	F3	
+SPDATA	TBCABTRILHA	TABELA	evento_auditoria	N	ADM	F3	cabeçalho da trilha de auditoria exigida pela certificação
+SPDATA	TBCADGRUPOATEN	TABELA	grupo_atendimento	N	REC	F3	
+SPDATA	TBCADPAG	TABELA	forma_recebimento;meio_recebimento_particular	N	FIN	F3	formas de pagamento e recebimento
+SPDATA	TBCAPACIDADE_CIVIL	TABELA	capacidade_civil	N	CAD	F3	
+SPDATA	TBCARATERATEND	TABELA	dominio_sus	N	SUS	F3	caráter usado nos instrumentos públicos; na TISS vale carater_atendimento_tiss
+SPDATA	TBCATEGO	TABELA	categoria_fornecimento	N	SUP	F3	
+SPDATA	TBCATFOR	TABELA	empresa_fornecedora_categoria	N	SUP	F3	
+SPDATA	TBCBARAAGENTE	TABELA	alergeno	N	PEP	F3	
+SPDATA	TBCBARACATEGORIA	TABELA	categoria_alergeno	S	PEP	F3	
+SPDATA	TBCBARACLASSIFREACAO	TABELA	tipo_alergia	N	PEP	F3	
+SPDATA	TBCBARANOTIFICACAO	TABELA	acao_alerta_alergia	N	PEP	F3	
+SPDATA	TBCBARAORIGEMINFO	TABELA	origem_informacao_alergia	S	PEP	F3	
+SPDATA	TBCBARAREACAOADVERSA	TABELA	manifestacao_alergica	N	PEP	F3	carga CBARA com dados na base de origem da Rede (28 reacoes): paridade
+SPDATA	TBCBARASEVERIDADE	TABELA	gravidade_reacao_adversa	N	PEP	F3	carga CBARA com dados na base de origem da Rede (Rede usa no registro de alergia): paridade
+SPDATA	TBCBOANS	TABELA	termo_terminologia	N	INTG	F3	CBO da terminologia TISS com vigência
+SPDATA	TBCBOANS_TBVERSAOTISS	TABELA	termo_versao_tiss	N	FAT	F3	
+SPDATA	TBCBOPRO	TABELA	inscricao_conselho	N	CAD	F3	
+SPDATA	TBCBOPRO_TBCONVEN	TABELA	profissional_fonte_pagadora	N	CAD	F3	
+SPDATA	TBCBOPRO_TBUNIDAD	TABELA	lotacao_profissional	N	CAD	F3	
+SPDATA	TBCBOSUS	TABELA	ocupacao_cbo	N	CAD	F3	
+SPDATA	TBCBOSUS_TBESPEC	TABELA	especialidade_ocupacao	N	CAD	F3	
+SPDATA	TBCENARIO	TABELA	cenario_alerta	N	ADM	F3	
+SPDATA	TBCENCUS	TABELA	centro_custo;classificacao_centro_custo	N	FIN	F3	
+SPDATA	TBCEP	TABELA	logradouro_cep;bairro	N	CAD	F3	
+SPDATA	TBCEPPARAMCAB	MECANISMO	integracao	N	INTG	F3	leiaute posicional da carga de CEP fica no motor de integração
+SPDATA	TBCEPPARAMPOS	MECANISMO	integracao	N	INTG	F3	posições do leiaute da carga de CEP ficam no motor de integração
+SPDATA	TBCFGLOGIN	TABELA	politica_senha;termo_uso_versao	N	ADM	F3	política de senha e sessão; exigência de termo de aceite
+SPDATA	TBCIAP	TABELA	termo_terminologia	N	INTG	F3	
+SPDATA	TBCID10	TABELA	termo_terminologia;agravo_notificavel_cid	N	INTG	F3	
+SPDATA	TBCIDMORF	TABELA	correspondencia_cid_morfologia	S	PEP	F3	
+SPDATA	TBCIDPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCIDSEC	TABELA	procedimento_sigtap_cid	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCLASER	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCLASSC	TABELA	classe_fonte_pagadora	S	CAD	F3	
+SPDATA	TBCLASSI	TABELA	classificacao_despesa	N	FAT	F3	
+SPDATA	TBCLASSIFALERGIA	TABELA	categoria_alergeno	S	PEP	F3	
+SPDATA	TBCLASSIFCREPLS	TABELA	termo_terminologia	N	INTG	F3	classificação de prestador da ANS como lista fixa
+SPDATA	TBCLASSINTMED	TABELA	classificacao_interacao	N	PEP	F3	
+SPDATA	TBCLIENT	TABELA	cliente_financeiro	N	FIN	F3	vira cliente_financeiro
+SPDATA	TBCLINICA	TABELA	clinica_assistencial	N	CAD	F3	
+SPDATA	TBCLSERV	TABELA	servico_classificacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCLSPRO	TABELA	procedimento_sigtap_servico	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCODATI	TABELA	codigo_prestador_fonte_pagadora;credencial_fonte_pagadora	N	FAT	F3	senhas de portal vão para o cofre, nunca para coluna
+SPDATA	TBCODATI_TBUSERS	TABELA	usuario_codigo_prestador	N	FAT	F3	
+SPDATA	TBCODSER	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMCID	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMHAB	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMPLEXIDADE_HOSPITALAR	TABELA	complexidade_estabelecimento	N	CAD	F3	
+SPDATA	TBCOMPLEXSUS	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCOMPRO	TABELA	procedimento_sigtap_opm	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCOMREG	TABELA	compatibilidade_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCONSBRASINATIVO	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONSIDCALCVLR	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONSPROF	TABELA	conselho_classe	N	CAD	F3	
+SPDATA	TBCONSPROF_TBSIGLACONSPROF	TABELA	sigla_conselho	N	CAD	F3	
+SPDATA	TBCONTAB	NAO		N	FIN		obsoleto: conta contábil de teste; o plano de contas real vai para conta_contabil
+SPDATA	TBCONVCOBTXPA	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVCONSMAT	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVEN	TABELA	fonte_pagadora;configuracao_tiss_fonte_pagadora;fonte_pagadora_estabelecimento	N	CAD	F3	
+SPDATA	TBCONVEN_TBTISSPARDEF	TABELA	valor_padrao_campo_tiss	N	FAT	F3	
+SPDATA	TBCONVMEDREQATD	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVPERCTAPAC	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCOOPER	TABELA	cooperativa_medica	N	FAT	F3	
+SPDATA	TBCOR	TABELA	classificacao_raca_cor	N	CAD	F3	
+SPDATA	TBCOSPPROF	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBCRECOO	TABELA	membro_cooperativa	N	FAT	F3	
+SPDATA	TBCREMED	TABELA	credenciamento_cobranca;profissional_fonte_pagadora	N	FAT	F3	
+SPDATA	TBCREPRS	TABELA	credenciamento_cobranca	N	FAT	F3	
+SPDATA	TBCSEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCTABAN	TABELA	conta_bancaria;remessa_bancaria	N	FIN	F3	contas bancárias da empresa; sequências de remessa ficam na remessa bancária
+SPDATA	TBCTRDTH	TABELA	tabela_preco;preco_diaria_taxa	N	FAT	F3	
+SPDATA	TBCTRMEM	TABELA	tabela_preco;preco_negociado_matmed	N	FAT	F3	
+SPDATA	TBCTRPRTUSU	TABELA	usuario_tipo_prontuario	N	ADM	F3	
+SPDATA	TBCTRTAT	TABELA	tipo_atendimento_tabela	N	FAT	F3	
+SPDATA	TBCTRTHM	TABELA	tabela_preco;preco_procedimento	N	FAT	F3	
+SPDATA	TBDDD	TABELA	area_ddd	N	CAD	F3	
+SPDATA	TBDDDREGIAO	TABELA	area_ddd	N	CAD	F3	
+SPDATA	TBDESFECHO_INTERNACAO	TABELA	desfecho_internacao	N	INT	F3	
+SPDATA	TBDIASEMANA	NAO		N	SIS		sem valor de negocio: lista fixa de dias da semana vira enumeração no código
+SPDATA	TBDICIONARIO_TBUSERS	TABELA	dicionario_usuario	N	ADM	F3	
+SPDATA	TBDIETAS	TABELA	modalidade_dieta	N	HOT	F3	
+SPDATA	TBDIGITAL_ESPECIALIDADE	TABELA	mapeamento_codigo_externo	N	INTG	F3	especialidades do parceiro como equivalência de código
+SPDATA	TBDIGITAL_INTEG_FIELD	TABELA	assinatura_evento_parceiro	N	INTG	F3	campos monitorados por tipo de integração
+SPDATA	TBDIGITAL_INTEG_TYPE	TABELA	tipo_evento_publicado;envio_rnds	N	INTG	F3	tipos de integração viram fatos publicáveis
+SPDATA	TBDIGITAL_VIAACESSO	TABELA	via_de_uso	N	PEP	F3	
+SPDATA	TBDIGITAR	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	opções viram o modo do campo (opcional, obrigatório, oculto)
+SPDATA	TBDIGITAR_CNSCADPAC	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	regra do campo CNS no cadastro de paciente
+SPDATA	TBDIGITAR_FILIACAO	TABELA	regra_obrigatoriedade_campo	N	ADM	F3	regra dos campos de filiação no cadastro de paciente
+SPDATA	TBDISPON	TABELA	empresa_fornecedora	N	SUP	F3	lista fixa vira atributo do fornecedor
+SPDATA	TBDISPONIBILSERV	TABELA	termo_terminologia	N	INTG	F3	disponibilidade do serviço da ANS como lista fixa
+SPDATA	TBDRS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBDTHCDC	TABELA	diaria_taxa_centro_custo	N	FAT	F3	
+SPDATA	TBECIV	TABELA	estado_civil	N	CAD	F3	
+SPDATA	TBEDITORTXT	NAO		N	SIS		tecnico do fornecedor sem equivalente: editores de texto do desktop
+SPDATA	TBEDITPARAM	TABELA	relatorio_parametro	N	REL	F3	
+SPDATA	TBEDITPESQ	TABELA	relatorio_parametro_pesquisa	N	REL	F3	
+SPDATA	TBEDITQRP	TABELA	relatorio_versao	N	REL	F3	leiaute antigo guardado como referência anexa da versão
+SPDATA	TBEDITREL	TABELA	relatorio;relatorio_versao;triagem_relatorio_legado	N	REL	F3	cada relatório passa pela triagem antes de entrar no catálogo
+SPDATA	TBEDITREL_AGENDA	TABELA	agendamento_relatorio;agendamento_relatorio_destinatario	N	REL	F3	
+SPDATA	TBEDITREL_AGENDA_LOG	TABELA	envio_relatorio	N	REL	F3	
+SPDATA	TBEDITREL_AGENDA_SITUACAO	TABELA	envio_relatorio	N	REL	F3	situação vira campo do envio
+SPDATA	TBEDITREL_GRUUSU	TABELA	relatorio_permissao	N	REL	F3	permissão por perfil
+SPDATA	TBEDITREL_PRMODELOREL	TABELA	relatorio_modelo_documento	N	REL	F3	
+SPDATA	TBEDITREL_TBUSERS	TABELA	relatorio_permissao	N	REL	F3	permissão por usuário
+SPDATA	TBEMIREF	TABELA	referencia_emissao_matmed	N	FAT	F3	
+SPDATA	TBEMIREFMATMED	TABELA	referencia_emissao_matmed_excecao	N	FAT	F3	
+SPDATA	TBEMISSORA	NAO		N			sem valor de negocio: lista de emissoras sem uso nem chave estrangeira
+SPDATA	TBEMPHOS	TABELA	mantenedora	N	CAD	F3	
+SPDATA	TBEMPHOSLOGO	TABELA	logotipo_estabelecimento	N	CAD	F3	
+SPDATA	TBENDPOINT	TABELA	ponto_integracao	N	INTG	F3	endereços externos por identificação
+SPDATA	TBENDPOINTINTERNALSERVICE	NAO		N	INTG		tecnico do fornecedor sem equivalente: endereços de serviços internos do fornecedor
+SPDATA	TBENDPOINTURI	TABELA	operacao_ponto_integracao	N	INTG	F3	rotas por ponto de integração
+SPDATA	TBENTCON	TABELA	calendario_entrega_fatura	N	FAT	F3	
+SPDATA	TBENVCOBEMAIL	TABELA	preferencia_envio_cobranca	N	SGO	F3	opções de envio da cobrança
+SPDATA	TBESCOLARIDADE	TABELA	nivel_escolaridade	N	CAD	F3	
+SPDATA	TBESFERA_ADM	TABELA	esfera_administrativa	N	CAD	F3	
+SPDATA	TBESPEC	TABELA	especialidade_medica	N	CAD	F3	
+SPDATA	TBESPLEI	TABELA	especialidade_leito	N	INT	F3	
+SPDATA	TBESPPRO	TABELA	especialidade_procedimento	N	CAD	F3	
+SPDATA	TBESTADOCONFIRMACAO	TABELA	situacao_confirmacao	N	AGE	F3	
+SPDATA	TBETNIA	TABELA	povo_indigena	N	CAD	F3	
+SPDATA	TBEVENTOS	TABELA	acao_sistema;tipo_acao_auditavel	N	ADM	F3	
+SPDATA	TBFABOPM	TABELA	fabricante	N	SUP	F3	fabricante único do cadastro de insumos
+SPDATA	TBFAEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBFAETAR	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBFATORRH	TABELA	fator_rh	S	SADT	F3	
+SPDATA	TBFERIAD	TABELA	dia_nao_util	N	CAD	F3	
+SPDATA	TBFINCODRECOL	TABELA	codigo_receita_federal;guia_recolhimento	N	FIN	F3	códigos de receita federal usados nas guias de recolhimento
+SPDATA	TBFLUXOATEND	TABELA	evento_senha	N	REC	F3	
+SPDATA	TBFONTE_ORCAMENTARIA_SUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBFONTE_PAGADORA	TABELA	classe_fonte_pagadora	S	CAD	F3	
+SPDATA	TBFORMA_ASSINATURA_ICP	TABELA	formato_assinatura_icp;politica_assinatura	N	INTG	F3	
+SPDATA	TBFORMULAPAGTO	TABELA	regra_via_acesso	N	FAT	F3	
+SPDATA	TBFORNEC	TABELA	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor	N	SUP	F3	
+SPDATA	TBFORNECTEL	TABELA	empresa_fornecedora_contato	N	SUP	F3	
+SPDATA	TBFORSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBGENERO_SOCIAL	TABELA	identidade_de_genero	N	CAD	F3	
+SPDATA	TBGERASENHA	TABELA	gerador_senha	N	REC	F3	
+SPDATA	TBGERSEQ	TABELA	sequencia_prontuario	N	CAD	F3	
+SPDATA	TBGRAUGRAVINT	TABELA	gravidade_interacao	N	PEP	F3	
+SPDATA	TBGRAUPARTPROC	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBGRAU_INST	TABELA	nivel_escolaridade	N	CAD	F3	
+SPDATA	TBGRUAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBGRUATE	TABELA	dominio_sus	N	SUS	F3	grupo de atendimento ainda exigido no BPA
+SPDATA	TBGRUCONVEN	TABELA	grupo_fonte_pagadora	N	CAD	F3	
+SPDATA	TBGRUDES	TABELA	grupo_natureza_financeira;subgrupo_natureza_financeira;centro_custo	N	FIN	F3	grupos do plano gerencial com centro de custo
+SPDATA	TBGRUHAB	TABELA	habilitacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBGRUPOPRIORIDADE	TABELA	grupo_prioridade_legal	N	REC	F3	
+SPDATA	TBGRUPOUNIDADEMEDIDA	TABELA	grupo_unidade_medida	N	SUP	F3	
+SPDATA	TBGRUPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBGRUSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBGRUUSU	TABELA	perfil_acesso	N	ADM	F3	
+SPDATA	TBGUICHE	TABELA	guiche_recepcao	N	REC	F3	
+SPDATA	TBHABILI	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBHABSUS	TABELA	habilitacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBHISTBR	TABELA	preco_referencia_matmed	N	FAT	F3	
+SPDATA	TBHISTSENHA	TABELA	historico_senha	N	ADM	F3	
+SPDATA	TBHISTTABDTH	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABMM	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABTHME	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABTHMI	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHORARIODOSE	TABELA	horario_padrao_dose	N	PEP	F3	
+SPDATA	TBHORMED	TABELA	grade_horario_unidade	N	PEP	F3	
+SPDATA	TBHORMED_RIBLOCOS	TABELA	grade_horario_unidade	N	PEP	F3	
+SPDATA	TBHORMED_TBUNIDAD	TABELA	grade_horario_unidade	N	PEP	F3	
+SPDATA	TBHOSPIT	TABELA	estabelecimento	N	CAD	F3	credenciais vão para o cofre de segredos da integração, não para a tabela
+SPDATA	TBIDENTIFICACAOENDPOINT	TABELA	sistema_externo	N	INTG	F3	catálogo de serviços integrados
+SPDATA	TBIMUNIDADE_ISSQN	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	TBINCPRO	TABELA	procedimento_sigtap_incremento	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBINDICADOR_OPERA_NF	TABELA	classificacao_tributaria_ibs_cbs	N	FIN	F3	código oficial carregado em classificacao_tributaria_ibs_cbs
+SPDATA	TBINDICE	TABELA	indice_cobranca;valor_indice	N	FAT	F3	
+SPDATA	TBINDNIF	TABELA	codigo_fiscal_oficial;beneficiario_exterior	N	FIN	F3	indicador oficial de identificação fiscal no exterior, usado no beneficiário no exterior
+SPDATA	TBINDPRO	TABELA	valor_indice_item	N	FAT	F3	
+SPDATA	TBINFBANCO	TABELA	credencial_integracao	N	INTG	F3	segredo não migra; recriar só a referência no cofre
+SPDATA	TBINTCRC	TABELA	regra_contabil_receita;depara_conta_externa;regra_contabilizacao	N	FAT	F3	conta contábil de receita por fonte pagadora e item vira regra de contabilização da receita
+SPDATA	TBINTIMP	TABELA	aliquota_tributo_vigencia	N	FIN	F3	vira aliquota_tributo_vigencia
+SPDATA	TBIRREGCTRCTA	TABELA	tipo_pendencia_conta	N	FAT	F3	
+SPDATA	TBIRREGULARID	TABELA	tipo_pendencia_conta;tipo_pendencia_prontuario	N	FAT	F3	
+SPDATA	TBIRREGULARID_TBMODULO	TABELA	tipo_pendencia_conta_modulo	N	FAT	F3	
+SPDATA	TBISENCAOONUS	TABELA	termo_terminologia	N	INTG	F3	isenção de ônus da ANS como lista fixa
+SPDATA	TBITEATE	TABELA	tipo_atendimento_tabela	N	FAT	F3	
+SPDATA	TBITEDES	TABELA	natureza_financeira	N	FIN	F3	vira natureza_financeira
+SPDATA	TBITEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBKITPRO	TABELA	kit_cuidado_enfermagem;kit_cuidado_enfermagem_item	N	PEP	F3	
+SPDATA	TBLABORA	TABELA	fabricante	N	SUP	F3	
+SPDATA	TBLANC_DIAG_MANTER	TABELA	diagnostico_atendimento	N	PEP	F3	
+SPDATA	TBLANC_DIAG_STATUS	TABELA	situacao_problema	N	PEP	F3	
+SPDATA	TBLANC_DIAG_SUJ_CUID	TABELA	sujeito_cuidado	N	PEP	F3	
+SPDATA	TBLANTRALERTA	TABELA	evento_auditoria_alerta	N	ADM	F3	
+SPDATA	TBLANTRILHASGH	TABELA	evento_auditoria_registro	N	ADM	F3	
+SPDATA	TBLEITO	TABELA	leito_hospitalar	N	INT	F3	
+SPDATA	TBLEITORBIOME	TABELA	modelo_leitor_biometrico	N	ADM	F3	
+SPDATA	TBLEITO_CHPROFISLIMP	TABELA	leito_profissional_higienizacao	N	HOT	F3	
+SPDATA	TBLGPDANONMOT	TABELA	base_legal_tratamento	N	ADM	F3	
+SPDATA	TBLGPDANONUSERFUNCAO	TABELA	funcao_responsavel_lgpd;encarregado_dados	N	ADM	F3	
+SPDATA	TBLISTADIAGNOSTICOESTADO	TABELA	certeza_diagnostico	N	PEP	F3	
+SPDATA	TBLISTADIAGNOSTICOSITUACAO	TABELA	situacao_problema	N	PEP	F3	
+SPDATA	TBLISTADIAGNOSTICOTIPO	TABELA	tipo_diagnostico	N	PEP	F3	
+SPDATA	TBLISTAPROBLEMACLASSIF	TABELA	classificacao_problema	N	PEP	F3	
+SPDATA	TBLOCAL	TABELA	local_atendimento	N	REC	F3	
+SPDATA	TBLOCALENCATE	TABELA	local_atendimento_encaminhamento	N	REC	F3	
+SPDATA	TBLOCALHORA	TABELA	local_atendimento_horario	N	REC	F3	
+SPDATA	TBLOCALPESATE	TABELA	local_atendimento_visibilidade	N	REC	F3	
+SPDATA	TBLOCAL_TBUSERS	TABELA	usuario_local_atendimento	N	ADM	F3	
+SPDATA	TBLOCCON	TABELA	local_cobranca	N	FAT	F3	
+SPDATA	TBLOCPRI	TABELA	dominio_sus	N	SUS	F3	localização do tumor do laudo oncológico
+SPDATA	TBLOCSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBMATMED	TABELA	item_referencia_matmed;equivalencia_matmed_fonte_pagadora	N	FAT	F3	
+SPDATA	TBMEDESP	TABELA	profissional_especialidade	N	CAD	F3	
+SPDATA	TBMEDSOL	TABELA	solicitante_externo	N	CAD	F3	
+SPDATA	TBMEDSOLWEBCAD	TABELA	pedido_vinculo_profissional_externo	N	INTG	F3	autocadastro de solicitante aguardando vínculo
+SPDATA	TBMEDSOL_CODCON	TABELA	solicitante_externo_fonte_pagadora	N	CAD	F3	
+SPDATA	TBMENSAG	TABELA	mensagem_interna;mensagem_interna_destinatario	N	ADM	F3	
+SPDATA	TBMOCOBP	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMODALI	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMODALIDADE_ASSIST	TABELA	modalidade_assistencial	N	PEP	F3	
+SPDATA	TBMODSUS	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMODULO	TABELA	modulo_sistema	N	ADM	F3	
+SPDATA	TBMODULO_RECEPCAO	TABELA	modulo_recepcao	N	REC	F3	
+SPDATA	TBMOTALT	TABELA	motivo_saida_hospitalar	N	INT	F3	
+SPDATA	TBMOTCANCMOD	TABELA	modulo_recepcao	N	REC	F3	
+SPDATA	TBMOTCANCTP	TABELA	motivo_cancelamento_operacao_escopo	N	REC	F3	
+SPDATA	TBMOTCOB	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMOTEXC	TABELA	motivo_cancelamento_operacao	N	REC	F3	
+SPDATA	TBMOTGLO	TABELA	motivo_glosa	N	FAT	F3	
+SPDATA	TBMOTIVOMP	TABELA	motivo_situacao_prescricao	N	PEP	F3	
+SPDATA	TBMOVTERMSTATUS	TABELA	consentimento_titular_historico;consentimento_titular	N	ADM	F3	situação do termo vira campo e linha do tempo do consentimento
+SPDATA	TBMUIBGE	TABELA	municipio_ibge;regra_retencao	N	CAD	F3	
+SPDATA	TBNACION	TABELA	nacionalidade	N	CAD	F3	
+SPDATA	TBNACIONSPED	TABELA	nacionalidade	N	CAD	F3	
+SPDATA	TBNATOPE	TABELA	natureza_operacao	N	FIN	F3	vira natureza_operacao
+SPDATA	TBNIVEL	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBNIVSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBNUMDOSE	TABELA	horario_padrao_dose	N	PEP	F3	
+SPDATA	TBNVLCRITICID	TABELA	nivel_criticidade_auditoria	N	ADM	F3	
+SPDATA	TBOBSREC	TABELA	bandeira_cartao	N	FIN	F3	
+SPDATA	TBOCUPAC	TABELA	ocupacao_cbo	N	CAD	F3	
+SPDATA	TBOID	TABELA	oid_icp	N	ADM	F3	
+SPDATA	TBOPCAOREL	TABELA	relatorio_tela;categoria_relatorio	N	REL	F3	
+SPDATA	TBOPCOES	TABELA	tela_sistema;acao_sistema	N	ADM	F3	
+SPDATA	TBOPERSCHEMA	TABELA	operacao_ponto_integracao	N	INTG	F3	operações de serviço web
+SPDATA	TBORGAOEMIS	TABELA	orgao_emissor_documento	N	CAD	F3	
+SPDATA	TBORGAOPUBLICO	TABELA	orgao_arrecadador	N	FIN	F3	vira orgao_arrecadador
+SPDATA	TBORIGEM	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBORIGEMRECEBIMENTO	TABELA	origem_recebimento	N	FIN	F3	vira origem_recebimento
+SPDATA	TBPACTHM	TABELA	pacote;pacote_item_incluso;pacote_contrato	N	FAT	F3	
+SPDATA	TBPAISES	TABELA	pais_referencia	N	CAD	F3	
+SPDATA	TBPAPEL	TABELA	papel_seguranca	N	ADM	F3	
+SPDATA	TBPAPEL_TBOPCOES	TABELA	papel_seguranca_acao	N	ADM	F3	
+SPDATA	TBPARAMOPREL	TABELA	relatorio_tela_parametro	N	REL	F3	
+SPDATA	TBPARENTE	TABELA	tipo_parentesco	N	CAD	F3	
+SPDATA	TBPERMEM	TABELA	regra_percentual_cobranca;preco_negociado_matmed	N	FAT	F3	
+SPDATA	TBPERMISSAO_SUS	TABELA	usuario_permissao_sus	N	ADM	F3	
+SPDATA	TBPERTHM	TABELA	regra_percentual_cobranca;acrescimo_horario_especial	N	FAT	F3	
+SPDATA	TBPERUSU	TABELA	perfil_acao	N	ADM	F3	
+SPDATA	TBPESQUIPLANO	TABELA	situacao_posse_plano	S	CAD	F3	
+SPDATA	TBPESSOA	TABELA	pessoa_fisica;pessoa_juridica	N	CAD	F3	
+SPDATA	TBPORMED	TABELA	valor_porte_medico	N	FAT	F3	
+SPDATA	TBPORTE_HOSPITALAR	TABELA	porte_estabelecimento	N	CAD	F3	
+SPDATA	TBPRAPAC	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPREPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPRESER	TABELA	prestador_terceiro	N	FAT	F3	
+SPDATA	TBPRESSE	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBPRESTP	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPRESUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBPRINC	TABELA	principio_ativo;classe_terapeutica	N	SUP	F3	
+SPDATA	TBPRINC_VALIDACAO	TABELA	referencia_dose	N	PEP	F3	
+SPDATA	TBPROAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPROBOCINTMED	TABELA	probabilidade_interacao	N	PEP	F3	
+SPDATA	TBPROCBACKUP	TABELA	verificacao_backup	N	ADM	F3	tipo de processo vira campo da verificação
+SPDATA	TBPROCED	TABELA	procedencia	N	REC	F3	
+SPDATA	TBPROCEDPADRAO	TABELA	procedencia	N	REC	F3	
+SPDATA	TBPROCTO	TABELA	tabela_preco;preco_procedimento	N	FAT	F3	
+SPDATA	TBPROENF	TABELA	cuidado_enfermagem	N	PEP	F3	
+SPDATA	TBPROFIS	TABELA	profissional;profissional_dado_fiscal;conta_bancaria_profissional	N	CAD	F3	
+SPDATA	TBPROHAB	TABELA	procedimento_sigtap_habilitacao	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROLEI	TABELA	procedimento_sigtap_leito	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROLOC	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPRONIV	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROREG	TABELA	procedimento_sigtap_registro	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROREGCOMP	TABELA	procedimento_sigtap_registro	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROSUS	TABELA	procedimento_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBRECEPCAO	TABELA	ponto_recepcao	N	REC	F3	
+SPDATA	TBREFCANCMODTP	TABELA	motivo_cancelamento_operacao_escopo	N	REC	F3	
+SPDATA	TBREFERENCIA	TABELA	tipo_validacao_dose;limite_dose_principio	N	PEP	F3	
+SPDATA	TBREFMEMTUSS	TABELA	equivalencia_matmed_tuss	N	FAT	F3	
+SPDATA	TBREFUNI	TABELA	equivalencia_matmed_fonte_pagadora	N	FAT	F3	
+SPDATA	TBREGIMEATEND	TABELA	regime_atendimento_rede	N	SGO	F3	regime ambulatorial ou hospitalar no contrato
+SPDATA	TBREGSUS	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBREGUL_ENDPOINT	TABELA	ponto_integracao;central_reguladora	N	INTG	F3	endereços dos serviços da regulação estadual
+SPDATA	TBREGUL_SERVICO	TABELA	servico_regulacao	N	INT	F3	dado vivo no SPDATA (42 serviços da regulação estadual): paridade F3
+SPDATA	TBREGUL_SISTEMA	TABELA	central_reguladora;sistema_externo	N	INT	F3	dado vivo no SPDATA (2 sistemas de regulação); endpoints já são F3: paridade F3
+SPDATA	TBREGUL_TABELAS	TABELA	tabela_codigo_regulacao	N	INTG	F3	tabelas de códigos da regulação
+SPDATA	TBREGUL_VLR_TABELAS	TABELA	valor_codigo_regulacao	N	INTG	F3	valores das tabelas da regulação
+SPDATA	TBRELIG	TABELA	crenca_religiosa	N	CAD	F3	
+SPDATA	TBREPGER	TABELA	regra_repasse;regra_repasse_item	N	FAT	F3	
+SPDATA	TBREPGER_TBCBOPRO	TABELA	regra_repasse_profissional	N	FAT	F3	
+SPDATA	TBRPATPREPASSE	TABELA	tipo_prestador_repasse;favorecido_repasse	N	FAT	F3	
+SPDATA	TBSAFEWEB_FORMA_ASSIN_ICP	TABELA	formato_assinatura_icp;provedor_assinatura_formato	N	INTG	F3	formatos de assinatura por provedor
+SPDATA	TBSAFEWEB_SITAUTORIZA	TABELA	autorizacao_assinatura_nuvem	N	INTG	F3	situação vira atributo da autorização em nuvem
+SPDATA	TBSAFEWEB_TIPOATENDIMENTO	TABELA	autorizacao_assinatura_nuvem	N	INTG	F3	tipo de atendimento vira atributo da autorização
+SPDATA	TBSCRSAC	NAO		N	SIS		obsoleto: controle de execução de scripts de 2005
+SPDATA	TBSEGUIA	TABELA	sequencial_guia	N	FAT	F3	
+SPDATA	TBSENHAATEND	TABELA	senha_emitida	N	REC	F3	
+SPDATA	TBSENHAATEND_REPACAGD	TABELA	senha_emitida_marcacao	N	REC	F3	
+SPDATA	TBSENHAATEND_SIPACAGD	TABELA	senha_emitida_marcacao	N	REC	F3	
+SPDATA	TBSERSUS	TABELA	servico_classificacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSERVICO_NFSE_ITENS	TABELA	servico_lc116	N	FIN	F3	código oficial carregado em servico_lc116
+SPDATA	TBSEXO	TABELA	sexo	N	CAD	F3	
+SPDATA	TBSEXO_PIXPDQ	TABELA	termo_terminologia;sexo	N	INTG	F3	códigos de sexo do padrão de identificação
+SPDATA	TBSGHCONEXAO	TABELA	ultimo_acesso_usuario	N	ADM	F3	
+SPDATA	TBSGHINTEGRADOR_PARAM	TABELA	assinatura_evento_parceiro	N	INTG	F3	liga e desliga vira situação da assinatura de eventos
+SPDATA	TBSGHINTEGRADOR_TABELA	TABELA	tipo_evento_publicado	N	INTG	F3	entidades replicadas viram fatos publicáveis
+SPDATA	TBSGHLOG	NAO		N	SIS		tecnico do fornecedor sem equivalente: log de erro SQL do executável; fica no dump
+SPDATA	TBSGHSCR	MECANISMO	framework	N	SIS	F3	controle de scripts de atualização do banco é versão do produto (migrações)
+SPDATA	TBSGHVERSAO	MECANISMO	framework	N	SIS	F3	versão de executável por estação é controle de versão do produto
+SPDATA	TBSIGLACONSPROF	TABELA	sigla_conselho	N	CAD	F3	
+SPDATA	TBSIPAC	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBSIPANSATO	TABELA	termo_terminologia	N	INTG	F3	grupos de eventos do SIP como terminologia
+SPDATA	TBSIPANSPROC	TABELA	termo_equivalencia	N	INTG	F3	procedimento por grupo SIP com vigência
+SPDATA	TBSIPHOS	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBSITAGE	TABELA	situacao_marcacao	N	AGE	F3	
+SPDATA	TBSITBACKUP	TABELA	verificacao_backup	N	ADM	F3	situação vira campo da verificação
+SPDATA	TBSITCONJUGAL	TABELA	situacao_convivio_familiar	N	CAD	F3	
+SPDATA	TBSITUACAOFARMACIA	TABELA	situacao_farmaceutica	N	SUP	F3	
+SPDATA	TBSITUACAOMP	TABELA	situacao_prescricao	N	PEP	F3	
+SPDATA	TBSMSTPAGENDA	TABELA	regra_envio_mensagem_paciente	N	INTG	F3	periodicidade do envio agendado
+SPDATA	TBSMSTPERRO	TABELA	codigo_retorno_mensageria	N	INTG	F3	códigos de erro do provedor de mensagens
+SPDATA	TBSMSTPRETMSG	TABELA	codigo_retorno_mensageria	N	INTG	F3	situações de retorno da mensagem
+SPDATA	TBSRVCON	TABELA	tipo_servico_contratado	N	FAT	F3	
+SPDATA	TBSTATUSCREPLS	TABELA	situacao_movimento_rede	N	SGO	F3	situações do movimento de credenciamento
+SPDATA	TBSTATUSGUICHE	TABELA	ocupacao_guiche	N	REC	F3	
+SPDATA	TBSTATUSPROCEDIMENTO	TABELA	situacao_procedimento_prescrito	N	PEP	F3	
+SPDATA	TBSTATUSPROCESSA	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	situação de processamento vira opção do campo adicional da operadora
+SPDATA	TBSUBDES	TABELA	regra_desconto_grupo	N	FAT	F3	
+SPDATA	TBSUBSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUBTIPFINANC	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSCBO	TABELA	procedimento_sigtap_cbo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSCEP	TABELA	logradouro_cep	N	CAD	F3	
+SPDATA	TBSUSCID	TABELA	procedimento_sigtap_cid	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSOPM	TABELA	procedimento_sigtap_opm	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBTABATO	TABELA	grupo_ato	N	FAT	F3	
+SPDATA	TBTABBCO	TABELA	banco	N	FIN	F3	código oficial carregado em banco
+SPDATA	TBTABDTH	TABELA	preco_diaria_taxa;item_faturavel	N	FAT	F3	
+SPDATA	TBTABELA_CAMPO	TABELA	campo_autopreenchido_prescricao	N	PEP	F3	
+SPDATA	TBTABENC	TABELA	tipo_encaminhamento	N	PEP	F3	
+SPDATA	TBTABIRR	TABELA	tabela_legal_vigencia;faixa_tabela_legal	N	RH	F3	faixas de tabelas legais por vigência
+SPDATA	TBTABSIA	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBTABTHM	TABELA	preco_procedimento;item_faturavel	N	FAT	F3	
+SPDATA	TBTABTHMTUSS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTERMCONREVTP	TABELA	tipo_termo_lgpd	N	ADM	F3	
+SPDATA	TBTESTE_ID	NAO		N	SIS		sem valor de negocio: tabela de teste do fornecedor
+SPDATA	TBTIPATE	TABELA	dominio_sus	N	SUS	F3	tipo de atendimento exigido no BPA
+SPDATA	TBTIPCOPART	TABELA	coparticipacao_contrato	N	FAT	F3	
+SPDATA	TBTIPFINANC	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBTIPLEI	TABELA	especialidade_leito	N	INT	F3	especialidade de leito vem da classificação nacional
+SPDATA	TBTIPLGR	TABELA	especie_logradouro	N	CAD	F3	
+SPDATA	TBTIPOACOMOD	TABELA	categoria_acomodacao	N	INT	F3	
+SPDATA	TBTIPOATEUNIDADE	TABELA	perfil_unidade	N	CAD	F3	
+SPDATA	TBTIPOCARTAO	TABELA	taxa_administradora	N	FIN	F3	débito ou crédito vira coluna da taxa da administradora de cartão
+SPDATA	TBTIPOCERTIFICADO	TABELA	tipo_certificado;provedor_assinatura_nuvem	N	ADM	F3	
+SPDATA	TBTIPOCOBRANCASGO	TABELA	origem_cobranca_plano	N	SGO	F3	tipos de cobrança fundidos na origem de cobrança
+SPDATA	TBTIPOLANCVLR	TABELA	tipo_valor_integracao	N	FIN	F3	vira tipo_valor_integracao
+SPDATA	TBTIPOOID	TABELA	oid_icp	N	ADM	F3	
+SPDATA	TBTIPOPAGFOR	TABELA	forma_pagamento_credor	N	FIN	F3	vira forma_pagamento_credor
+SPDATA	TBTIPOPERMISSAO	TABELA	regra_bloqueio_periodo_contabil	N	FIN	F3	vira regra_bloqueio_periodo_contabil
+SPDATA	TBTIPOREPRE	TABELA	consentimento_titular	N	ADM	F3	signatário (titular ou representante) vira campo do consentimento
+SPDATA	TBTIPOTAXACARTAO	TABELA	taxa_administradora	N	FIN	F3	vira taxa_administradora
+SPDATA	TBTIPOTELEFONE	TABELA	tipo_telefone	N	CAD	F3	
+SPDATA	TBTIPO_ATENDIMENTO	TABELA	modulo_recepcao	N	REC	F3	
+SPDATA	TBTIPO_PROCEDIMENTO	TABELA	tipo_lancamento	N	FAT	F3	
+SPDATA	TBTIPPLANO	TABELA	coparticipacao_contrato;plano_fonte_pagadora;acomodacao_plano_fonte_pagadora	N	FAT	F3	plano_fonte_pagadora está em F7 mas a paridade exige
+SPDATA	TBTIPPLCONV	TABELA	diaria_por_plano_local	N	FAT	F3	
+SPDATA	TBTIPPRO	TABELA	tipo_servico_faturavel	N	FAT	F3	
+SPDATA	TBTISS	TABELA	regra_apresentacao_tiss;configuracao_tiss_fonte_pagadora	N	FAT	F3	
+SPDATA	TBTISSCAPACFUN	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCARATE	TABELA	carater_atendimento_tiss	N	REC	F3	
+SPDATA	TBTISSCATDESP	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCOBERTESPECIAL	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCONSPROF	TABELA	conselho_classe	N	CAD	F3	
+SPDATA	TBTISSDIAGIMG	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSEMIEXP	TABELA	regra_apresentacao_tiss	N	FAT	F3	opção enumerada da regra
+SPDATA	TBTISSESTTUMOR	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSETAPAAUTORIZ	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSFINTRAT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSFORMAENV	TABELA	forma_envio_tuss	N	FAT	F3	
+SPDATA	TBTISSFORMAENVPAD	TABELA	endpoint_tiss_fonte_pagadora	N	FAT	F3	forma de envio vira atributo enumerado do canal
+SPDATA	TBTISSFORMAPG	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSGERSPSADTPS	TABELA	regra_apresentacao_tiss	N	FAT	F3	opção enumerada da regra
+SPDATA	TBTISSGRPPROC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSIDENTBENEFI	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSINDACID	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSLCEVENTO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSMETAST	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSMOTAUSENCODVALID	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSNODULO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSOPFABRIC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSPARDEF	TABELA	regra_montagem_guia	N	FAT	F3	
+SPDATA	TBTISSPOSPROF	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBTISSREFIND	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSREGIMEATEND	TABELA	regime_atendimento	N	REC	F3	
+SPDATA	TBTISSREGINT	TABELA	regime_atendimento_internacao	N	INT	F3	
+SPDATA	TBTISSREMUNERAOPERPS	TABELA	termo_terminologia;remuneracao_capitacao	N	INTG	F3	modelos de remuneração do prestador como lista fixa
+SPDATA	TBTISSSAUDEOCUPAC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSCHEMA	TABELA	transacao_tiss_webservice	N	INTG	F3	transações e esquemas da troca TISS
+SPDATA	TBTISSSITCANC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSITPROT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSITSOLIC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTERMO	TABELA	terminologia	N	INTG	F3	
+SPDATA	TBTISSTERMO_TBTPLANC	TABELA	terminologia_tipo_lancamento	N	FAT	F3	
+SPDATA	TBTISSTPCONSUL	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPDEBCRE	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPDEMONS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPFAT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPGUIA	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPGUIA_TBTISSPARDEF	TABELA	regra_montagem_guia_tipo	N	FAT	F3	
+SPDATA	TBTISSTPINTER	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPQUIMIO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTUMOR	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSUNIDMED	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSURLWSSGH	TABELA	transacao_tiss_webservice;endpoint_tiss_fonte_pagadora	N	INTG	F3	endereço por transação TISS
+SPDATA	TBTISSVIAACES	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSVIAADMIN	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSWEBSERV	TABELA	endpoint_tiss_fonte_pagadora;credencial_fonte_pagadora	N	FAT	F3	endereço por fonte pagadora; credencial vai ao cofre
+SPDATA	TBTPACAOAUDIT	TABELA	tipo_acao_auditavel	N	ADM	F3	
+SPDATA	TBTPACOMTISS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia; a categoria do hospital guarda o código
+SPDATA	TBTPALERGIA	TABELA	tipo_alergia	N	PEP	F3	
+SPDATA	TBTPAPAC	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBTPAUTORIDADE	TABELA	autoridade_notificacao	N	PEP	F3	
+SPDATA	TBTPCLASSIFUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPCONSTRUT	TABELA	cadastro_empregador	N	RH	F3	indicativo de construtora é campo do R-1000 da EFD-REINF (F3), não só do eSocial
+SPDATA	TBTPCONTA	TABELA	tipo_conta_bancaria;aplicacao_financeira	N	FIN	F3	tipo de conta: corrente, aplicação ou poupança
+SPDATA	TBTPCONTRATOCREPLS	TABELA	tipo_contrato_rede	N	SGO	F3	contratação direta ou indireta
+SPDATA	TBTPCOOPERAT	TABELA	cadastro_empregador	N	RH	F3	indicativo de cooperativa é campo do R-1000 da EFD-REINF (F3), não só do eSocial
+SPDATA	TBTPDIETA	TABELA	via_dieta	N	HOT	F3	
+SPDATA	TBTPDOCUMENTO	TABELA	tipo_documento_identificacao	N	CAD	F3	
+SPDATA	TBTPDOCUMENTO_PIXPDQ	TABELA	termo_terminologia	N	INTG	F3	tipos de certidão do padrão de identificação
+SPDATA	TBTPEMAILPLS	TABELA	modelo_comunicacao_beneficiario	N	SGO	F3	modelos de e-mail ao beneficiário
+SPDATA	TBTPEMP	TABELA	estabelecimento	N	CAD	F3	matriz ou filial vira campo do estabelecimento
+SPDATA	TBTPESTABELECIMENTO	TABELA	tipo_estabelecimento	N	CAD	F3	
+SPDATA	TBTPEXPIPERGS	TABELA	mapeamento_codigo_externo	N	INTG	F3	tipo de prestador para exportação vira equivalência de código externo
+SPDATA	TBTPFASEUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPFAVORECIDO	TABELA	contrato_rede_prestador_clausula;termo_terminologia	N	SGO	F3	favorecido da cláusula contratual
+SPDATA	TBTPFORMAREAJ	TABELA	contrato_rede_prestador_clausula;termo_terminologia	N	SGO	F3	forma de reajuste da cláusula contratual
+SPDATA	TBTPINTMED	TABELA	tipo_interacao	N	PEP	F3	
+SPDATA	TBTPLANC	TABELA	tipo_lancamento	N	FAT	F3	
+SPDATA	TBTPMINISTCER	TABELA	orgao_certificador;certificacao_estabelecimento	N	ADM	F3	
+SPDATA	TBTPNATOPENF	TABELA	natureza_operacao	N	FIN	F3	vira natureza_operacao
+SPDATA	TBTPNOTAGRAVO	TABELA	periodicidade_notificacao	N	PEP	F3	
+SPDATA	TBTPNOTIFCID10	TABELA	tipo_notificacao_agravo	S	PEP	F3	
+SPDATA	TBTPNOTIFICACAOALERGIA	TABELA	acao_alerta_alergia	N	PEP	F3	
+SPDATA	TBTPOBRIGAMAT	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBTPOCORBANCOPGTO	TABELA	ocorrencia_bancaria;retorno_bancario_item	N	FIN	F3	ocorrências de retorno bancário por banco
+SPDATA	TBTPPARTO	TABELA	tipo_parto	N	PEP	F3	domínio com dados (migrar-crud) e RN já é F3 em internacao_recem_nascido: paridade F3
+SPDATA	TBTPPERFILUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPPERM_RICADPAC	TABELA	restricao_prontuario;restricao_prontuario_autorizado	N	ADM	F3	modo restrito ou consentido vira campo da restrição
+SPDATA	TBTPPRESTADOR	TABELA	tipo_prestador_rede	N	SGO	F3	tipos de prestador credenciado
+SPDATA	TBTPPROFPROC	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBTPRN	TABELA	condicao_recem_nascido	N	PEP	F3	domínio com dados (migrar-crud) ligado ao RN da internação: paridade F3
+SPDATA	TBTPSANGUINEO	TABELA	grupo_sanguineo	S	SADT	F3	
+SPDATA	TBTPSITUACAOMP	TABELA	regra_transicao_situacao_prescricao	N	PEP	F3	
+SPDATA	TBTPSURTO	TABELA	tipo_surto_infeccao	N	QUA	F3	dominio SINAN com dados na base de origem da Rede, usado na notificacao de agravo: paridade
+SPDATA	TBTPTRATUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPTRIBUTO	TABELA	tributo_folha	N	RH	F3	vira tributo_folha
+SPDATA	TBTPUNIDTEMPO	TABELA	unidade_prazo	N	SGO	F3	unidade de prazo unificada
+SPDATA	TBTPVALIDINTERACAO	TABELA	forma_validacao_interacao	N	PEP	F3	
+SPDATA	TBTPVIGCONTRATO	TABELA	contrato_rede_prestador;termo_terminologia	N	SGO	F3	tipo de vigência vira atributo do contrato com prestador
+SPDATA	TBTPWEBSERV	TABELA	padrao_troca	N	INTG	F3	padrão do serviço web
+SPDATA	TBTP_ATEND_TISS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTP_ENV_LISTA_AVAL_FARM	TABELA	regra_envio_avaliacao_farmaceutica	N	SUP	F3	
+SPDATA	TBTRIBUTACAO_ISSQN	TABELA	codigo_fiscal_oficial	N	FIN	F3	código oficial carregado em codigo_fiscal_oficial
+SPDATA	TBUF	TABELA	unidade_federativa	N	CAD	F3	
+SPDATA	TBULTSENHATEND	NAO		N			sem valor de negocio: contador diário reconstruível das senhas emitidas
+SPDATA	TBUNICON	TABELA	unidade_medida;insumo_unidade	N	SUP	F3	
+SPDATA	TBUNIDAD	TABELA	unidade_assistencial	N	CAD	F3	
+SPDATA	TBUNIDADEMEDIDA	TABELA	unidade_prescricao;unidade_resultado	N	PEP	F3	
+SPDATA	TBUNIDMEDIDA_PRINC_VALID	TABELA	tipo_validacao_dose_unidade	S	PEP	F3	
+SPDATA	TBUNID_IDADE	TABELA	unidade_idade	S	CAD	F3	
+SPDATA	TBUNIMEN	TABELA	unidade_mensuracao_custo	N	FIN	F3	vira unidade_mensuracao_custo
+SPDATA	TBUNIUSE	TABELA	usuario_unidade	N	ADM	F3	
+SPDATA	TBUSERCON	TABELA	usuario_fonte_pagadora	N	ADM	F3	modelo antigo, mesclado com o vínculo atual de convênios
+SPDATA	TBUSERMODULO	NAO		N	SIS		sem valor de negocio: sessão aberta é estado transitório; a sessão nova nasce na plataforma
+SPDATA	TBUSERS	TABELA	usuario;credencial_usuario;usuario_perfil;usuario_situacao_historico	N	ADM	F3	
+SPDATA	TBUSERSCOMPL	TABELA	preferencia_usuario	N	ADM	F3	
+SPDATA	TBUSERS_TBALERTA	TABELA	assinatura_alerta	N	ADM	F3	
+SPDATA	TBUSERS_TBCONVEN	TABELA	usuario_fonte_pagadora	N	ADM	F3	
+SPDATA	TBUSERS_TBPAPEL	TABELA	usuario_papel_seguranca	N	ADM	F3	
+SPDATA	TBUSUCPL	TABELA	usuario_acao_excecao;usuario_vinculo_profissional	N	ADM	F3	
+SPDATA	TBVERSAOBRASIN	TABELA	edicao_referencia_matmed	N	FAT	F3	
+SPDATA	TBVERSAOCBARA	TABELA	versao_classificacao_clinica	S	PEP	F3	
+SPDATA	TBVERSAOCIAP	TABELA	versao_classificacao_clinica	S	PEP	F3	
+SPDATA	TBVERSAOCID	TABELA	versao_classificacao_clinica	S	PEP	F3	
+SPDATA	TBVERSAOTISS	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVERSAOTISSMONIT	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVERSAOTISSPAD	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVIDAAS_FORMA_ASSIN_ICP	TABELA	formato_assinatura_icp;provedor_assinatura_formato	N	INTG	F3	formatos de assinatura por provedor
+SPDATA	TBVLRDTH	TABELA	preco_diaria_taxa_valor	N	FAT	F3	
+SPDATA	TBVLRMEM	TABELA	preco_referencia_matmed	N	FAT	F3	
+SPDATA	TBVLRPAI	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBVLRSIA	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBVLRSUS	TABELA	procedimento_sigtap_valor	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBVLRTHM	TABELA	preco_procedimento_valor	N	FAT	F3	
+SPDATA	TBVULNERABILIDADE_SOCIAL	TABELA	condicao_vulnerabilidade	N	CAD	F3	
+SPDATA	ZNOPERA	NAO		N	SADT		obsoleto: domínio de zoonoses sem movimento; recriar só se o módulo for implantado

@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	TIPO_QUALIFICACAO_PLANO	TABELA	atributo_qualificacao_rede	N	SGO	F7	
+DBAMV	TIPO_REFEICAO	TABELA	refeicao_do_dia	N	HOT	F3	
+DBAMV	TIPO_REFEICAO_DIETA	TABELA	refeicao_do_dia	N	HOT	F3	
+DBAMV	TIPO_REFEICAO_HORARIO	TABELA	horario_refeicao	N	HOT	F3	
+DBAMV	TIPO_REGISTRO	TABELA	tipo_documento_identificacao	N	CAD	F3	tipos de certidão civil com código do cartão nacional
+DBAMV	TIPO_REJEICAO	TABELA	motivo_rejeicao_reprocessamento	N	CC	F7	
+DBAMV	TIPO_REMESSA	TABELA	fatura_fonte_pagadora	N	FAT	F3	tipo da remessa vira coluna enumerada da fatura
+DBAMV	TIPO_REPOSITORIO	TABELA	tipo_certificado	N	ADM	F3	
+DBAMV	TIPO_RESERVA_HORARIOS_SCMA	TABELA	bloqueio_sala_cirurgica	N	CC	F3	tipo de reserva e se impede marcação viram atributos do bloqueio
+DBAMV	TIPO_RESULTADO_ANTIMICROB	TABELA	ponto_corte_antimicrobiano	N	SADT	F7	interpretação sensível/intermediário/resistente
+DBAMV	TIPO_RESULTADO_CULTURA	TABELA	classificacao_resultado_cultura	S	SADT	F7	
+DBAMV	TIPO_SAC_CHAMADO	TABELA	tipo_manifestacao_ouvidoria	N	QUA	F8	
+DBAMV	TIPO_SAC_CHAMADO_NIVEL	TABELA	prazo_manifestacao_ouvidoria	N	QUA	F8	nível de prioridade da manifestação
+DBAMV	TIPO_SAC_SITUACAO	TABELA	manifestacao_ouvidoria	N	QUA	F7	situação enumerada na manifestação
+DBAMV	TIPO_SAIDA_CFOP	TABELA	natureza_operacao	N	FIN	F3	
+DBAMV	TIPO_SEGURADORA_CONVENIO	TABELA	fonte_pagadora	N	CAD	F3	tipo de seguradora vira atributo da fonte pagadora
+DBAMV	TIPO_SEXO	TABELA	sexo	N	CAD	F3	
+DBAMV	TIPO_SITUACAO_NOTA_FISCAL	TABELA	nota_servico;evento_nota_servico	N	FIN	F3	
+DBAMV	TIPO_SOLICITACAO	TABELA	motivo_solicitacao_prontuario	N	HOT	F3	
+DBAMV	TIPO_SOLICITACAO_AMBULANCIA	TABELA	chamado_ambulancia	N	INT	F8	
+DBAMV	TIPO_VERBA_ORCAMENTARIA	TABELA	categoria_orcamentaria	S	FIN	F7	
+DBAMV	TIPO_VINCULO	TABELA	tipo_vinculo_trabalho	N	CAD	F3	
+DBAMV	TIPO_VINCULO_CNES	TABELA	tipo_vinculo_trabalho	N	CAD	F3	
+DBAMV	TIPO_VINCULO_SUS	TABELA	tipo_vinculo_trabalho	N	CAD	F3	
+DBAMV	TIP_ACOM	TABELA	categoria_acomodacao	N	INT	F3	
+DBAMV	TIP_ACOM_SETOR	TABELA	custo_diaria_unidade	N	FIN	F8	fator de custo da acomodação por setor
+DBAMV	TIP_ACOM_UNID_INT	TABELA	capacidade_unidade_internacao	N	INT	F3	
+DBAMV	TIP_ACOM_UTI_SUS	TABELA	dominio_sus;capacidade_leito_sus	N	SUS	F3	
+DBAMV	TIP_ACO_MEIO_MAG	TABELA	mapeamento_codigo_externo	N	INTG	F3	de-para de acomodação para arquivo magnético da fonte pagadora
+DBAMV	TIP_ANEST	TABELA	tipo_anestesia	N	CC	F3	
+DBAMV	TIP_ANEST_AVISO_CIRURGIA	TABELA	agendamento_cirurgico;ficha_anestesica_tecnica	N	CC	F3	
+DBAMV	TIP_APLICA	TABELA	aplicacao_financeira	N	FIN	F7	tipo de aplicação financeira vira atributo
+DBAMV	TIP_ATE	TABELA	categoria_atendimento	N	REC	F3	
+DBAMV	TIP_ATE_APAC	TABELA	tipo_laudo_apac	N	SUS	F7	
+DBAMV	TIP_ATE_CID	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	compatibilidade de CID vem da tabela unificada
+DBAMV	TIP_ATE_LAUDO_APAC	TABELA	tipo_laudo_apac	N	SUS	F7	
+DBAMV	TIP_ATE_MEIO_MAG	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	TIP_ATE_SSM_ALT	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	alteração de código por portaria vem da tabela unificada
+DBAMV	TIP_ATE_TAB_SIASUS	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	
+DBAMV	TIP_ATIV	TABELA	categoria_fornecimento	N	SUP	F3	ramo de atividade de produto e fornecedor
+DBAMV	TIP_COMUN	TABELA	tipo_telefone	N	CAD	F3	meio de contato com indicação de envio de SMS
+DBAMV	TIP_CONTA_CORRENTE	TABELA	tipo_conta_bancaria	N	FIN	F3	
+DBAMV	TIP_DESCONTO_REP	TABELA	tipo_desconto_repasse	S	FAT	F7	
+DBAMV	TIP_DETALHE	TABELA	tipo_ajuste_titulo;regra_retencao	N	FIN	F3	
+DBAMV	TIP_DETALHE_CONTA	TABELA	regra_contabilizacao_item	N	FIN	F7	
+DBAMV	TIP_DETALHE_CST	TABELA	regra_retencao	N	FIN	F3	
+DBAMV	TIP_DETALHE_EMP_TRANSACAO	TABELA	regra_contabilizacao_item	N	FIN	F7	
+DBAMV	TIP_DETALHE_GRU_FAT	TABELA	classificacao_despesa	N	FAT	F3	
+DBAMV	TIP_DETCON_PAG	TABELA	retencao_titulo	N	FIN	F3	
+DBAMV	TIP_DETCON_REC	TABELA	retencao_titulo	N	FIN	F3	
+DBAMV	TIP_DETMOV_CONCOR	TABELA	movimento_bancario	N	FIN	F3	
+DBAMV	TIP_DET_INCIDENCIA	TABELA	regra_retencao	N	FIN	F3	
+DBAMV	TIP_DET_RECCON_REC	TABELA	retencao_titulo;regra_retencao	N	FIN	F3	
+DBAMV	TIP_DET_TIP_DOC	TABELA	regra_retencao	N	FIN	F3	
+DBAMV	TIP_DEV_FISCAL	TABELA	motivo_devolucao_fornecedor	N	SUP	F7	
+DBAMV	TIP_DOC	TABELA	tipo_documento_financeiro;tipo_entrada_estoque	N	FIN	F3	
+DBAMV	TIP_DOC_SEQ	TABELA	sequencia_documento_estoque	N	SUP	F3	
+DBAMV	TIP_EMP	TABELA	empresa_fornecedora	N	SUP	F3	enquadramento da empresa na licitação vira atributo do fornecedor
+DBAMV	TIP_ESQ	TABELA	tipo_item_prescricao	N	PEP	F3	
+DBAMV	TIP_ESQ_EXCECAO	MECANISMO	framework	N	PEP	F3	campos exibidos por formulário do prontuário
+DBAMV	TIP_FRE	TABELA	frequencia_administracao	N	PEP	F3	
+DBAMV	TIP_FRE_SETOR	TABELA	frequencia_administracao_setor	S	PEP	F7	
+DBAMV	TIP_FRE_TIP_PRESTA_HR_PADRAO	TABELA	regra_atuacao_categoria_profissional	S	PEP	F3	
+DBAMV	TIP_INT_MEIO_MAG	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	TIP_LAVAGEM	TABELA	metodo_esterilizacao	N	CC	F7	
+DBAMV	TIP_MAR	TABELA	tipo_marcacao	N	AGE	F3	
+DBAMV	TIP_MAR_PERFIL_AGENDAMENTO	TABELA	perfil_marcacao_escopo	N	AGE	F8	
+DBAMV	TIP_MOR	TABELA	declaracao_obito	N	PEP	F3	tipo de morte enumerado na declaração
+DBAMV	TIP_MOR_RN	TABELA	desfecho_recem_nascido	N	INT	F3	
+DBAMV	TIP_ORI_MEIO_MAG	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	TIP_PAREN	TABELA	tipo_parentesco	N	CAD	F3	
+DBAMV	TIP_PARTO	TABELA	tipo_parto	N	PEP	F8	
+DBAMV	TIP_PRESC	TABELA	item_prescritivel	N	PEP	F3	
+DBAMV	TIP_PRESC_ALERTAS	TABELA	configuracao_alerta_prescricao;item_prescritivel	N	PEP	F3	
+DBAMV	TIP_PRESC_BLOQUEIO_EMPRESA	TABELA	item_prescritivel_setor	S	PEP	F3	
+DBAMV	TIP_PRESC_DISPOSITIVO	TABELA	item_prescritivel_dispositivo	S	PEP	F7	
+DBAMV	TIP_PRESC_FOR_APL	TABELA	item_prescritivel_via	S	PEP	F3	
+DBAMV	TIP_PRESC_PAD_SETOR	TABELA	item_prescritivel_setor	S	PEP	F3	
+DBAMV	TIP_PRESC_PAGU_OBJETO	MECANISMO	framework	N	PEP	F3	itens oferecidos por formulário do prontuário
+DBAMV	TIP_PRESC_PESQUISA	TABELA	item_prescritivel_sinonimo	S	PEP	F3	palavras-chave de busca do item
+DBAMV	TIP_PRESC_PROIBICAO	TABELA	item_prescritivel_conflito	S	PEP	F7	
+DBAMV	TIP_PRESC_SALA	TABELA	item_prescritivel_setor	S	PEP	F3	
+DBAMV	TIP_PRESC_SETOR	TABELA	item_prescritivel_setor	S	PEP	F3	
+DBAMV	TIP_PRESC_SETOR_RESTRITO	TABELA	item_prescritivel_setor	S	PEP	F3	
+DBAMV	TIP_PRESC_SUBSTITUICAO	TABELA	substituicao_insumo	N	SUP	F8	
+DBAMV	TIP_PRESC_TIP_FRE	TABELA	item_prescritivel_frequencia	S	PEP	F3	
+DBAMV	TIP_PRESC_VALIDADE_INFUSAO	TABELA	estabilidade_insumo	N	SUP	F7	
+DBAMV	TIP_PRESTA	TABELA	categoria_profissional	S	CAD	F3	
+DBAMV	TIP_PRESTA_EMAIL	TABELA	regra_alerta_destinatario	N	ADM	F7	aviso de parecer por e-mail por categoria profissional
+DBAMV	TIP_PRESTA_SMS	TABELA	regra_alerta_destinatario	N	ADM	F7	aviso de parecer por SMS por categoria profissional
+DBAMV	TIP_PRESTA_TIP_ESQ	TABELA	regra_atuacao_categoria_profissional	S	PEP	F3	
+DBAMV	TIP_RES	TABELA	motivo_saida_hospitalar	N	INT	F3	
+DBAMV	TIP_SETOR_ESPELHAMENTO	TABELA	regra_transferencia_conta	S	FAT	F7	
+DBAMV	TIP_SETOR_MEIO_MAG	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	TIP_SITUACAO	TABELA	atendimento_situacao_historico	N	REC	F3	situações do paciente no atendimento
+DBAMV	TIP_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT	F3	
+DBAMV	TISS_CAB_PROTOCOLO	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_CNPJ	TABELA	codigo_prestador_fonte_pagadora	N	FAT	F3	
+DBAMV	TISS_COMUNICACAO_BENEFICIARIO	TABELA	comunicacao_beneficiario	N	FAT	F7	
+DBAMV	TISS_CONFIG_ATEND	TABELA	valor_padrao_campo_tiss;regra_montagem_guia	N	FAT	F3	
+DBAMV	TISS_CONF_SERVICO_CONV	TABELA	endpoint_tiss_fonte_pagadora;regra_apresentacao_tiss_item	N	FAT	F3	
+DBAMV	TISS_CONV_IMPREME_AUT_GUIA	TABELA	regra_apresentacao_tiss	N	FAT	F3	
+DBAMV	TISS_CONV_IMPRESSAO_GUIA	TABELA	regra_apresentacao_tiss	N	FAT	F3	
+DBAMV	TISS_ENVIO_DOCUMENTOS	TABELA	envio_documento_tiss	N	FAT	F7	
+DBAMV	TISS_GUIA	TABELA	guia_tiss	N	FAT	F3	
+DBAMV	TISS_GUIA_JUSTIFICA_GLOSA	TABELA	recurso_glosa;recurso_glosa_item	N	FAT	F3	
+DBAMV	TISS_GUIA_REAPRESENTACAO	TABELA	recurso_glosa	N	FAT	F3	
+DBAMV	TISS_ITEM_RECIBO_COMUNIC_BENFC	TABELA	comunicacao_beneficiario_recibo	N	FAT	F7	
+DBAMV	TISS_ITEM_SOLICITA_STATUS_AUT	TABELA	consulta_situacao_autorizacao	N	FAT	F7	
+DBAMV	TISS_ITGUIA	TABELA	guia_tiss_procedimento	N	FAT	F3	
+DBAMV	TISS_ITGUIA_CID	TABELA	guia_tiss_diagnostico	N	FAT	F3	
+DBAMV	TISS_ITGUIA_DECLARACAO	TABELA	guia_tiss_diagnostico	N	FAT	F3	declarações de nascido vivo e óbito do resumo de internação
+DBAMV	TISS_ITGUIA_EQU	TABELA	guia_tiss_profissional	N	FAT	F3	
+DBAMV	TISS_ITGUIA_OBITO	TABELA	guia_tiss_diagnostico	N	FAT	F3	
+DBAMV	TISS_ITGUIA_OP	TABELA	guia_tiss_opme	N	FAT	F3	
+DBAMV	TISS_ITGUIA_OP_SOL	TABELA	guia_tiss_opme	N	FAT	F3	
+DBAMV	TISS_ITGUIA_OUT	TABELA	guia_tiss_despesa	N	FAT	F3	
+DBAMV	TISS_ITSOL_CANCELA_GUIA	TABELA	cancelamento_guia_item	N	FAT	F7	
+DBAMV	TISS_ITSOL_CID_GUIA	TABELA	solicitacao_autorizacao_diagnostico	S	FAT	F7	
+DBAMV	TISS_ITSOL_GUIA	TABELA	solicitacao_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_ITSOL_GUIA_TRAT_ANTERIOR	TABELA	solicitacao_autorizacao_anexo_clinico	N	FAT	F7	
+DBAMV	TISS_ITSOL_OP_GUIA	TABELA	solicitacao_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_ITSOL_PROTOCOLO	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_LOG	MECANISMO	integracao	N	INTG	F3	log de mensagens trocadas
+DBAMV	TISS_LOTE	TABELA	lote_tiss	N	FAT	F3	
+DBAMV	TISS_LOTE_GUIA	TABELA	lote_tiss_conta	N	FAT	F3	
+DBAMV	TISS_MENSAGEM	TABELA	troca_tiss_prestador	N	INTG	F3	
+DBAMV	TISS_NR_GUIA	TABELA	sequencial_guia	N	FAT	F3	
+DBAMV	TISS_PROC_EQU	TABELA	guia_tiss_profissional	N	FAT	F3	
+DBAMV	TISS_PROTOCOLO	TABELA	protocolo_recebimento	N	FAT	F3	
+DBAMV	TISS_RECIBO_COMUNICACAO_BENFC	TABELA	comunicacao_beneficiario_recibo	N	FAT	F7	
+DBAMV	TISS_RETORNO_CANCELA_GUIA	TABELA	cancelamento_guia	N	FAT	F7	
+DBAMV	TISS_RETORNO_CANCELA_ITGUIA	TABELA	cancelamento_guia_item	N	FAT	F7	
+DBAMV	TISS_RETORNO_DEMON_CONTA	TABELA	demonstrativo_analise_conta	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CONTA_GUIA	TABELA	demonstrativo_analise_conta_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CONTA_LOTE	TABELA	demonstrativo_analise_conta	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CONTA_PRC_G	TABELA	demonstrativo_analise_conta_item;glosa_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CONTA_PROC	TABELA	demonstrativo_analise_conta_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CTA_GLOSA_G	TABELA	demonstrativo_analise_conta;glosa	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_CTA_LOTE_G	TABELA	demonstrativo_analise_conta;glosa	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG	TABELA	demonstrativo_pagamento	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG_DA	TABELA	demonstrativo_deducao	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG_DT	TABELA	demonstrativo_pagamento_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG_DT_DA	TABELA	demonstrativo_deducao	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG_LOTE	TABELA	demonstrativo_pagamento_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DEMON_PAG_RESUMO	TABELA	demonstrativo_pagamento_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_DOCUMENTOS	TABELA	envio_documento_tiss_item	N	FAT	F7	
+DBAMV	TISS_RETORNO_ELEG	TABELA	consulta_elegibilidade	N	FAT	F7	
+DBAMV	TISS_RETORNO_ELEG_G	TABELA	consulta_elegibilidade	N	FAT	F7	motivos de negativa da elegibilidade
+DBAMV	TISS_RETORNO_GLOSA_GUIA	TABELA	recurso_glosa	N	FAT	F3	
+DBAMV	TISS_RETORNO_GLOSA_ITEM	TABELA	recurso_glosa_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_GLOSA_RECIBO	TABELA	recurso_glosa	N	FAT	F3	
+DBAMV	TISS_RETORNO_PROTOCOLO	TABELA	protocolo_recebimento	N	FAT	F3	
+DBAMV	TISS_RETORNO_PROTOCOLO_GLOSA	TABELA	protocolo_recebimento	N	FAT	F3	
+DBAMV	TISS_RETORNO_PROTOCOLO_GUIA	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_PROTOCOLO_PRC_GLS	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_PROTOCOLO_PROCED	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_PROTO_GUIA_GLS	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_RECURSO	TABELA	recurso_glosa;recurso_glosa_item	N	FAT	F3	
+DBAMV	TISS_RETORNO_SOLICITACAO	TABELA	resposta_autorizacao	N	FAT	F7	
+DBAMV	TISS_RETORNO_SOLICITACAO_PROCE	TABELA	resposta_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_RETORNO_SOLICITACAO_PR_GL	TABELA	resposta_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_RETORNO_SOL_CABEC_GL	TABELA	resposta_autorizacao	N	FAT	F7	
+DBAMV	TISS_RETORNO_STATUS	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_GLOSA	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_GUIA	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_GUIA_GLS	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_LOTE	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_LOTE_GLS	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_PROCED	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RETORNO_STATUS_PROC_GLS	TABELA	protocolo_recebimento_guia	S	FAT	F3	
+DBAMV	TISS_RET_SOL_PROCE_QUIMIO	TABELA	resposta_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_RET_SOL_QUIMIO	TABELA	resposta_autorizacao;solicitacao_autorizacao_anexo_clinico	N	FAT	F7	
+DBAMV	TISS_RET_SOL_QUIMIO_GL	TABELA	resposta_autorizacao_item	N	FAT	F7	
+DBAMV	TISS_SOLICITA_STATUS_AUTORIZ	TABELA	consulta_situacao_autorizacao	N	FAT	F7	
+DBAMV	TISS_SOL_CANCELA_GUIA	TABELA	cancelamento_guia	N	FAT	F7	
+DBAMV	TISS_SOL_DEMON	TABELA	solicitacao_demonstrativo	N	FAT	F7	
+DBAMV	TISS_SOL_ELEG	TABELA	consulta_elegibilidade	N	FAT	F7	
+DBAMV	TISS_SOL_GUIA	TABELA	solicitacao_autorizacao	N	FAT	F7	
+DBAMV	TISS_SOL_PROTOCOLO	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_STATUS_PROTOCOLO	TABELA	protocolo_recebimento_situacao	N	FAT	F3	
+DBAMV	TISS_VERSAO	TABELA	versao_padrao_tiss	N	FAT	F3	
+DBAMV	TISS_VERSAO_CBOS	TABELA	termo_versao_tiss	N	FAT	F3	ocupação por versão do padrão, ligada à especialidade
+DBAMV	TISS_VERSAO_MOT_ALT	TABELA	motivo_saida_hospitalar;motivo_encerramento_atendimento	N	INT	F3	
+DBAMV	TISS_VERSAO_SERVICO	TABELA	transacao_tiss_webservice	N	INTG	F3	
+DBAMV	TITULO_BANCARIO	TABELA	titulo_pagar	N	FIN	F3	boleto de fornecedor recebido para pagamento (DDA)
+DBAMV	TOPOGRAFIA	TABELA	topografia_tumor	S	PEP	F8	
+DBAMV	TOPOGRAFIA_EXAME	TABELA	local_anatomico_coleta	N	SADT	F7	
+DBAMV	TP_ATENDIMENTO_CONFIGURACAO	MECANISMO	parametro	N	FAT	F3	tipos de atendimento que verificam preço no lançamento
+DBAMV	TP_CREDENCIADO_MEIOMAG	TABELA	codigo_prestador_fonte_pagadora	N	FAT	F3	
+DBAMV	TP_EMBALAGEM	TABELA	tipo_embalagem_esteril	S	CC	F7	
+DBAMV	TP_ENTRADA	TABELA	peca_enxoval	N	HOT	F8	tipo de entrada de roupa no estoque do enxoval
+DBAMV	TP_INDICACAO_AGENDA	TABELA	tipo_indicacao	N	REC	F3	
+DBAMV	TP_INSTRUMENTAL	TABELA	produto_reprocessavel	N	CC	F7	
+DBAMV	TP_PECAS	TABELA	peca_enxoval	N	HOT	F8	
+DBAMV	TP_PROTO	TABELA	versao_padrao_tiss	N	FAT	F3	
+DBAMV	TP_PRO_FAT_MEIO_MAG	TABELA	equivalencia_item_fonte_pagadora	N	FAT	F3	
+DBAMV	TRAJETO	TABELA	rota_ambulancia	N	INT	F8	
+DBAMV	TRANSFERENCIA_CIRURGIA	TABELA	reagendamento_cirurgico	N	CC	F3	
+DBAMV	TRANSFERENCIA_COTA	TABELA	transferencia_cota_sus	N	SUS	F7	
+DBAMV	TRANSFERE_CONTAS	TABELA	transferencia_conta	N	FAT	F3	
+DBAMV	TRANSFERE_EMPRESA_CONVENIO	TABELA	regra_transferencia_conta	S	FAT	F7	
+DBAMV	TRANSFERE_EMPRESA_ORI_ATE	TABELA	regra_transferencia_conta	S	FAT	F7	
+DBAMV	TRANSFERE_EMPRESA_SETOR	TABELA	regra_transferencia_conta	S	FAT	F7	
+DBAMV	TRANSF_HOCA	MECANISMO	historico_entidade:internacao_domiciliar	N	INT	F8	troca de endereço e área do paciente em atenção domiciliar
+DBAMV	TRANSPORTADOR	TABELA	portador_documento	S	HOT	F3	
+DBAMV	TRANSPORTADORA_ROMANEIO	TABELA	empresa_fornecedora	N	SUP	F3	transportadora é papel do fornecedor
+DBAMV	TRANSPORTADORA_VEICULO	TABELA	veiculo_entrega	N	SUP	F8	
+DBAMV	TRANSPORTE_PACIENTE	TABELA	solicitacao_transporte_paciente	N	INT	F8	
+DBAMV	TRATAMENTO	TABELA	tratamento_oncologico	N	PEP	F8	
+DBAMV	TRATAMENTO_REALIZADO	TABELA	dominio_sus	N	SUS	F3	tratamento realizado informado no laudo oncológico
+DBAMV	TRIAGEM	TABELA	classificacao_risco	N	PEP	F3	
+DBAMV	TRIAGEM_ATENDIMENTO	TABELA	classificacao_risco	N	PEP	F3	
+DBAMV	TRIAGEM_ATENDIMENTO_HISTORICO	TABELA	reclassificacao_risco	N	PEP	F3	
+DBAMV	TRIAGEM_ATENDIMENTO_HIST_ALERG	TABELA	alergia_paciente	N	PEP	F3	
+DBAMV	TRIAG_ATENDIME_HIST_PAGU_AVAL	TABELA	aplicacao_escala	N	PEP	F3	
+DBAMV	TRIAG_ATND_HIS_SACR_PRG_AVAL	TABELA	classificacao_risco_resposta	N	PEP	F3	
+DBAMV	TRIA_ATND_HIS_IT_COL_SIN_VIT	TABELA	classificacao_risco_afericao	N	PEP	F3	
+DBAMV	TRIBUTO_MUNICIPAL	TABELA	regra_iss_municipio	N	FIN	F3	
+DBAMV	TRIBUTO_SERVICO_NOTA_FISCAL	TABELA	configuracao_nota_servico;regra_retencao	N	FIN	F3	
+DBAMV	TRM_INFO_SAUD	TABELA	tipo_termo_lgpd	N	ADM	F3	
+DBAMV	TROCA_ESPECIE	TABELA	movimento_caixa	N	FIN	F3	

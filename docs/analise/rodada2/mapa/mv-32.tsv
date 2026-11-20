@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	REST_CONT_ESP_PROCED_QT	TABELA	limite_utilizacao_periodo	N	SGO	F7	quantidade máxima por período
+DBAPS	REST_CONT_EXC_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_FX_ETARIA	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_GRUPO	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_GRU_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_PRESTADOR	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_PROC_FXETARIA	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_PROC_QT	TABELA	limite_utilizacao_periodo	N	SGO	F7	quantidade máxima por período
+DBAPS	REST_PLANO_ESPEC	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_ESP_PROCED_QT	TABELA	limite_utilizacao_periodo	N	SGO	F7	quantidade máxima por período
+DBAPS	REST_PLANO_EXC_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_FX_ETARIA	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_GR	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_GRUCAR_QTDE	TABELA	carencia_plano;limite_utilizacao_periodo	N	SGO	F7	quantidade por grupo de carência e dias
+DBAPS	REST_PLANO_GRU_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_PRESTADOR	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_PREST_ESP	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_PROCED	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_PROCED_QT	TABELA	limite_utilizacao_periodo	N	SGO	F7	quantidade máxima por período
+DBAPS	REST_PLANO_PROC_FXETARIA	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_PLANO_VOLUME_TOTAL	TABELA	limite_utilizacao_periodo	N	SGO	F7	quantidade máxima por período
+DBAPS	REST_PRES_END_REDE_REFERENC	TABELA	rede_assistencial_local;restricao_prestador_rede	N	SGO	F7	prestador e endereço por rede e plano, com divulgação
+DBAPS	REST_PRES_END_REDE_REF_PLANO	TABELA	rede_assistencial_local;restricao_prestador_rede	N	SGO	F7	prestador e endereço por rede e plano, com divulgação
+DBAPS	REST_PRES_EXC_PLAN_CON	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	REST_PRES_EXC_PROCED	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	REST_PRES_GRU_DIREITO	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	REST_PRES_GRU_PROCED	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	REST_PRES_PLANO	TABELA	rede_assistencial_local;restricao_prestador_rede	N	SGO	F7	prestador e endereço por rede e plano, com divulgação
+DBAPS	REST_PRES_PLANO_CATEG	TABELA	rede_assistencial_local;restricao_prestador_rede	N	SGO	F7	prestador e endereço por rede e plano, com divulgação
+DBAPS	REST_PRES_PLANO_ENDERECO	TABELA	rede_assistencial_local;restricao_prestador_rede	N	SGO	F7	prestador e endereço por rede e plano, com divulgação
+DBAPS	REST_PRES_PROCED	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	RETORNO_PROCEDIMENTO	TABELA	regra_retorno_consulta	N	AGE	F3	prazo de retorno por prestador, procedimento e especialidade
+DBAPS	REVISAO_PRODUCAO	TABELA	limite_producao_prestador;lote_pagamento_rede	N	SGO	F8	execução da revisão sobre o pagamento
+DBAPS	REVISAO_PRODUCAO_REGRA	TABELA	limite_producao_prestador	N	SGO	F8	
+DBAPS	REVISAO_PROD_QTD_ATEND	TABELA	limite_producao_prestador	N	SGO	F8	
+DBAPS	REVISAO_PROD_QTD_ATEND_FAIXA	TABELA	limite_producao_prestador_faixa	S	SGO	F8	
+DBAPS	ROL_ANS	TABELA	rol_procedimento_ans	N	SGO	F7	
+DBAPS	ROL_UNIMED	TABELA	tabela_referencia_procedimento;tabela_referencia_procedimento_item	N	INTG	F3	rol de referência de cooperativa com valor e porte
+DBAPS	RPC_CONTRATO	TABELA	envio_ans_item	N	SGO	F7	comunicado de reajuste coletivo por contrato
+DBAPS	RPC_ENVIO	TABELA	envio_ans	N	SGO	F7	comunicado de reajuste coletivo
+DBAPS	RPS_CABECALHO_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	críticas do registro de prestadores
+DBAPS	RPS_CAMPO_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	críticas do registro de prestadores
+DBAPS	RPS_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	críticas do registro de prestadores
+DBAPS	RPS_PRESTADOR_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	críticas do registro de prestadores
+DBAPS	RPS_PRESTADOR_EXCECAO	TABELA	movimento_rede_ans	N	SGO	F7	tipos de prestador fora do registro
+DBAPS	RUAS_MONTEVIDE	NAO		N	SGO		sem valor de negocio: base de ruas de cidade estrangeira de um cliente
+DBAPS	SALDO_MENSAL_PROVISORIO	TABELA	saldo_contabil_mensal;provisao_tecnica_competencia	N	FIN	F7	saldo prévio do balancete
+DBAPS	SEFIP_CONFIGURACOES	NAO		N	SGO		obsoleto: arquivo previdenciário substituído por eSocial, EFD-Reinf e DCTFWeb
+DBAPS	SEFIP_CONTRATO	NAO		N	SGO		obsoleto: arquivo previdenciário substituído por eSocial, EFD-Reinf e DCTFWeb
+DBAPS	SEFIP_CONTRATO_PRESTADOR	NAO		N	SGO		obsoleto: arquivo previdenciário substituído por eSocial, EFD-Reinf e DCTFWeb
+DBAPS	SEFIP_ENVIO	NAO		N	SGO		obsoleto: arquivo previdenciário substituído por eSocial, EFD-Reinf e DCTFWeb
+DBAPS	SEGMENTACAO_SIP_ITEM_ASSIS	TABELA	item_assistencial_ans_criterio;segmentacao_assistencial	S	SGO	F7	
+DBAPS	SEQUENCE_PROTOCOLO_ANS	NAO		N	SGO		tecnico do fornecedor sem equivalente: contador; número vem de protocolo_beneficiario
+DBAPS	SEQ_CEDAE_PRD	NAO		N	SGO		tecnico do fornecedor sem equivalente: nome de sequência
+DBAPS	SEQ_PTU_ITGUIA	NAO		N	SGO		tecnico do fornecedor sem equivalente: contador por guia
+DBAPS	SERVICO	TABELA	servico_adicional_plano	N	SGO	F7	
+DBAPS	SERVICOS_CONTRATO	TABELA	servico_adicional_contrato	N	SGO	F7	
+DBAPS	SERVICOS_CONTRATO_ORIG	NAO		N	SGO		copia/backup de servicos por contrato
+DBAPS	SERVICOS_PLANO	TABELA	servico_adicional_plano	N	SGO	F7	
+DBAPS	SERVICOS_SAC	TABELA	servico_atendimento_operadora	N	SGO	F7	
+DBAPS	SERVICOS_USUARIOS	TABELA	servico_adicional_contrato	N	SGO	F7	serviço opcional por beneficiário
+DBAPS	SERVICO_CALL_CENTER	TABELA	servico_atendimento_operadora	N	SGO	F7	
+DBAPS	SERV_CALCEN_PRAZO_VALOR	TABELA	servico_atendimento_operadora	N	SGO	F7	prazo e valor por vigência
+DBAPS	SERV_CAL_CEN_DEP_OPER	TABELA	servico_atendimento_operadora;departamento_operadora	N	SGO	F7	
+DBAPS	SERV_CAL_CEN_MOT_ATEND	TABELA	servico_atendimento_operadora;motivo_contato_beneficiario	N	SGO	F7	
+DBAPS	SERV_CAL_CEN_TIP_ATEND	TABELA	servico_atendimento_operadora;motivo_contato_beneficiario	N	SGO	F7	
+DBAPS	SERV_USUARIO	TABELA	protocolo_beneficiario	N	SGO	F7	atendimento do serviço de atendimento ao cliente
+DBAPS	SIB	TABELA	envio_ans	N	SGO	F7	envio do cadastro de beneficiários
+DBAPS	SIB_ANEXO	MECANISMO	arquivo	N	SGO	F7	arquivo do envio; metadado em envio_ans
+DBAPS	SIB_DEPENDENCIA	TABELA	grau_dependencia	N	SGO	F7	
+DBAPS	SIB_DEVOLUCAO	TABELA	envio_ans_retorno	N	SGO	F7	
+DBAPS	SIB_DEVOLUCAO_USUARIO	TABELA	envio_ans_retorno	N	SGO	F7	
+DBAPS	SIB_EXCLUSAO_MANUAL	TABELA	envio_ans_item;conferencia_cadastral_ans_item	N	SGO	F7	
+DBAPS	SIB_MUDANCA_CONTRATUAL_MANUAL	TABELA	envio_ans_item;conferencia_cadastral_ans_item	N	SGO	F7	
+DBAPS	SIB_USUARIO	TABELA	envio_ans_item	N	SGO	F7	
+DBAPS	SIB_USUARIO_ANS	TABELA	conferencia_cadastral_ans_item;conferencia_cadastral_ans	N	SGO	F7	
+DBAPS	SIMULACAO_PRECO	TABELA	simulacao_preco	N	SGO	F8	
+DBAPS	SINCRONIZACAO_CONTA_MEDICA	MECANISMO	integracao	N	INTG	F7	cópia de contas e lotes entre empresas
+DBAPS	SINCRONIZACAO_CONTA_MED_ERRO	MECANISMO	integracao	N	INTG	F7	cópia de contas e lotes entre empresas
+DBAPS	SINCRONIZACAO_FATURA	MECANISMO	integracao	N	INTG	F7	cópia de contas e lotes entre empresas
+DBAPS	SINCRONIZACAO_LOTE	MECANISMO	integracao	N	INTG	F7	cópia de contas e lotes entre empresas
+DBAPS	SINISTRALIDADE_CONTRATO	MECANISMO	datamart	N	REL	F7	sinistralidade apurada por contrato
+DBAPS	SIP_BENEFICIARIO	TABELA	envio_ans_item	N	SGO	F7	envio trimestral de produção assistencial
+DBAPS	SIP_CONTA_MEDICA	TABELA	envio_ans_item	N	SGO	F7	envio trimestral de produção assistencial
+DBAPS	SIP_CONTA_MEDICA_CAUSA	TABELA	envio_ans_item	N	SGO	F7	envio trimestral de produção assistencial
+DBAPS	SIP_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	
+DBAPS	SIP_INCONSISTENCIA	TABELA	envio_ans_retorno	N	SGO	F7	
+DBAPS	SIP_INFORMACAO	TABELA	envio_ans_item	N	SGO	F7	envio trimestral de produção assistencial
+DBAPS	SIP_INFORMACAO_CONTA_MEDICA	TABELA	envio_ans_item	N	SGO	F7	envio trimestral de produção assistencial
+DBAPS	SIP_INFORMACAO_ERRO	TABELA	envio_ans_retorno	N	SGO	F7	
+DBAPS	SIP_ITASSIST_ESPEC	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITASSIST_ITDESPESA	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITASSIST_PROCED	TABELA	item_assistencial_ans_criterio;termo_equivalencia	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSIST	TABELA	item_assistencial_ans	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTC_REG_INTC	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTENCIAL_CID	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTENCIAL_FAIX_ETA	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTENCIAL_PERMANE	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTENCIAL_TIP_GUIA	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSISTENCIAL_TIP_ITNC	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSIST_COMP	TABELA	item_assistencial_ans	S	SGO	F7	
+DBAPS	SIP_ITEM_ASSIST_GRU_CAR	TABELA	item_assistencial_ans_criterio	S	SGO	F7	
+DBAPS	SIP_OCORRENCIA	TABELA	envio_ans	N	SGO	F7	
+DBAPS	SIP_PERIODO	TABELA	envio_ans	N	SGO	F7	período trimestral com fechamento
+DBAPS	SISTEMA_TERCEIRO	TABELA	sistema_externo	N	INTG	F3	
+DBAPS	SITUACAO_ESPEC_PRESTADOR	TABELA	prestador_rede_historico;especialidade_atendida_rede	N	SGO	F7	
+DBAPS	SLA_AUTORIZACAO	TABELA	prazo_atendimento_regulatorio	N	SGO	F7	
+DBAPS	SLA_CALL_CENTER	TABELA	servico_atendimento_operadora;prazo_atendimento_regulatorio	N	SGO	F7	
+DBAPS	SMS_AVULSO	TABELA	pedido_mensagem_paciente	N	INTG	F3	mensagem avulsa
+DBAPS	SMS_ENVIO	TABELA	pedido_mensagem_paciente	N	INTG	F3	
+DBAPS	SMS_MODELO	TABELA	modelo_comunicacao_beneficiario	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB	TABELA	solicitacao_portal_beneficiario	N	SGO	F8	
+DBAPS	SOLICITACAO_WEB_DESLIGA_LOTE	TABELA	movimentacao_lote_contratante_item	N	SGO	F8	
+DBAPS	SOLICITACAO_WEB_EMAIL_LOG	MECANISMO	integracao	N	INTG	F7	tentativas de envio de e-mail
+DBAPS	SOLICITACAO_WEB_OBS_HISTORICO	MECANISMO	historico_entidade:solicitacao_portal_beneficiario	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PRESTADOR	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PREST_AUTORI	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PREST_ENDERECO	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PREST_END_AUT	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PREST_ESPEC	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SOLICITACAO_WEB_PREST_QUALI	TABELA	pedido_web_prestador	N	SGO	F7	
+DBAPS	SPED_PIS_COFINS_REG_0111	TABELA	arquivo_efd_contribuicoes	N	FIN	F3	registro gerado do arquivo
+DBAPS	SPED_PIS_COFINS_REG_0150	TABELA	arquivo_efd_contribuicoes	N	FIN	F3	registro gerado do arquivo
+DBAPS	SPED_PIS_COFINS_REG_0200	TABELA	arquivo_efd_contribuicoes	N	FIN	F3	registro gerado do arquivo
+DBAPS	SPED_PIS_COFINS_REG_A100	TABELA	arquivo_efd_contribuicoes	N	FIN	F3	registro gerado do arquivo
+DBAPS	SPED_PIS_COFINS_REG_A170	TABELA	apuracao_pis_cofins;arquivo_efd_contribuicoes	N	FIN	F7	
+DBAPS	SQLN_EXPLAIN_PLAN	NAO		N	SGO		tecnico do fornecedor sem equivalente: plano de execução do banco
+DBAPS	STATUS_CANCELAMENTO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	STATUS_PROTOCOLO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	STATUS_PROTOCOLO_TISS	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	STATUS_SOLICITACAO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	SUBGRUPO_DESPESA	TABELA	classe_despesa_assistencial	N	SGO	F7	
+DBAPS	SUSPENSAO_PRESTADOR	TABELA	suspensao_prestador_rede	N	SGO	F7	
+DBAPS	SUSPENSAO_REATIVACAO_LOG	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	
+DBAPS	SUSPENSAO_USUARIO	TABELA	suspensao_atendimento_beneficiario	N	SGO	F7	
+DBAPS	SUSPENSAO_USUARIO_EXCECAO	TABELA	suspensao_atendimento_beneficiario	N	SGO	F7	
+DBAPS	SUSPENSAO_USUARIO_EX_REC	TABELA	suspensao_atendimento_beneficiario	N	SGO	F7	
+DBAPS	SUSPENSAO_USUARIO_ITEM	TABELA	suspensao_atendimento_beneficiario	N	SGO	F7	
+DBAPS	SUSPENSAO_USUARIO_REGRA	TABELA	regra_suspensao_atendimento	N	SGO	F7	
+DBAPS	SW_ATEND_CALL_CENTER	TABELA	protocolo_beneficiario	N	SGO	F7	
+DBAPS	SW_IMPORTA_ARQUIVO	TABELA	movimentacao_lote_contratante	N	SGO	F8	arquivo importado; binário no armazenamento
+DBAPS	SW_REATIVACAO_BENEFICIARIO	TABELA	solicitacao_portal_beneficiario	N	SGO	F8	
+DBAPS	SW_SOLICITACAO_ITREEMBOLSO	TABELA	pedido_reembolso_item	N	SGO	F7	
+DBAPS	SW_SOLICITACAO_REEMBOLSO	TABELA	pedido_reembolso	N	SGO	F7	
+DBAPS	TABELA	TABELA	tabela_remuneracao_rede	N	SGO	F7	
+DBAPS	TABELA_PRECO	TABELA	tabela_preco_plano	N	SGO	F7	
+DBAPS	TABELA_REEMBOLSO_MUNICIPIO	TABELA	tabela_reembolso_referencia	N	SGO	F7	
+DBAPS	TABELA_REEMBOLSO_PADRAO	TABELA	tabela_reembolso_referencia	N	SGO	F7	
+DBAPS	TABELA_REFERENCIA_REEMBOLSO	TABELA	tabela_reembolso_referencia	N	SGO	F7	
+DBAPS	TAG	TABELA	modelo_comunicacao_beneficiario	N	SGO	F7	marcadores substituíveis nos modelos de mensagem
+DBAPS	TAXA_MANUTENCAO	TABELA	lancamento_avulso_prestador	N	SGO	F7	taxa de inscrição e manutenção
+DBAPS	TBSENHA2	TABELA	pedido_autorizacao_plano	N	SGO	F7	senha pré-gerada para prestador
+DBAPS	TECNICA_UTILIZADA	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TELEFONE_REPRES_OPERADORA	TABELA	responsavel_operadora;canal_atendimento_operadora	N	SGO	F7	
+DBAPS	TERMO_ADESAO_EXCLUSAO	TABELA	documento_emitido_operadora	N	SGO	F7	textos dos termos de adesão e exclusão
+DBAPS	TETO_AGRUP_PROCED	TABELA	teto_coparticipacao	N	SGO	F7	
+DBAPS	TETO_FAIXA_SINISTRA	TABELA	teto_coparticipacao	N	SGO	F7	
+DBAPS	TIMBRE_EXCECAO	NAO		N	SGO		sem valor de negocio: selo tributário de outro país, sem equivalente no Brasil
+DBAPS	TIMBRE_GRUPO_PROCEDIMENTO	NAO		N	SGO		sem valor de negocio: selo tributário de outro país, sem equivalente no Brasil
+DBAPS	TIPO_ACAO_JUDICIAL	TABELA	acao_judicial_cobranca	N	SGO	F8	
+DBAPS	TIPO_ACOMODACAO	TABELA	tipo_acomodacao_plano	N	SGO	F7	
+DBAPS	TIPO_AGENDA	TABELA	tipo_compromisso_operadora	S	SGO	F8	
+DBAPS	TIPO_ARQUIVO_SOLICITACAO_WEB	TABELA	regra_arquivo_prestador	N	SGO	F7	
+DBAPS	TIPO_ATENDIMENTO	TABELA	tipo_guia_plano	N	SGO	F7	
+DBAPS	TIPO_ATENDIMENTO_INTERMEDIARIA	TABELA	tipo_guia_plano	N	SGO	F7	tipo de atendimento do intercâmbio com vigência
+DBAPS	TIPO_ATENDIMENTO_TISS	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_BEM_IMOB	TABELA	tipo_ativo_garantidor	S	SGO	F7	
+DBAPS	TIPO_BEM_INVEST	TABELA	tipo_ativo_garantidor	S	SGO	F7	
+DBAPS	TIPO_CONSULTA	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_CONTATO	TABELA	tipo_telefone	N	CAD	F3	
+DBAPS	TIPO_DEMONSTRATIVO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_DOCUMENTO	TABELA	regra_arquivo_prestador	N	SGO	F7	
+DBAPS	TIPO_DOENCA	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_ENDERECO	TABELA	endereco_pessoa	N	CAD	F3	finalidade do endereço
+DBAPS	TIPO_FATURAMENTO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_GUIA_RADAR	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_HORA	TABELA	tipo_hora	N	RH	F3	
+DBAPS	TIPO_HORA_PERMISSAO	MECANISMO	parametro	N	SGO	F7	usuários que lançam cada tipo de hora
+DBAPS	TIPO_IDENT_RADAR	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_IMPORTA_ARQUIVO	TABELA	movimentacao_lote_contratante	N	SGO	F8	
+DBAPS	TIPO_INTERLOCUTOR	TABELA	vinculo_solicitante_protocolo	N	SGO	F7	
+DBAPS	TIPO_INTERNACAO	TABELA	modalidade_internacao	N	INT	F3	
+DBAPS	TIPO_LOGRADOURO	TABELA	especie_logradouro	N	CAD	F3	
+DBAPS	TIPO_MSG_COBRANCA	TABELA	mensagem_cobranca	N	SGO	F7	
+DBAPS	TIPO_NOTA_DEBITO	TABELA	tipo_lancamento_fatura	N	SGO	F7	
+DBAPS	TIPO_OBSERVACAO_CONTRATO	TABELA	tipo_observacao_operadora	S	SGO	F7	
+DBAPS	TIPO_OBSERVACAO_PRESTADOR	TABELA	tipo_observacao_operadora	S	SGO	F7	
+DBAPS	TIPO_OBSERVACAO_USUARIO	TABELA	tipo_observacao_operadora	S	SGO	F7	
+DBAPS	TIPO_PAGAMENTO	TABELA	forma_cobranca_plano	N	SGO	F7	
+DBAPS	TIPO_PROCESSO_DE_PARA	TABELA	tipo_mapeamento_codigo	N	INTG	F3	
+DBAPS	TIPO_REEMBOLSO	TABELA	tipo_reembolso	N	SGO	F7	
+DBAPS	TIPO_SAIDA_GUIA_CONSULTA	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIPO_SAIDA_GUIA_SADT	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TIP_ACOMODACAO	TABELA	tipo_acomodacao_plano	N	SGO	F7	
+DBAPS	TIP_ATEND_CALL_CENTER	TABELA	motivo_contato_beneficiario	N	SGO	F7	
+DBAPS	TIP_DETCON_PAG	TABELA	lote_pagamento_rede_item	N	SGO	F7	detalhamento do título a pagar da rede
+DBAPS	TIP_EMPRESA	TABELA	contratante_plano	N	SGO	F7	
+DBAPS	TIP_PLANO	TABELA	classificacao_plano	N	SGO	F7	
+DBAPS	TIP_PRESTADOR	TABELA	tipo_prestador_rede	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO	TABELA	pedido_autorizacao_plano	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_ANEXO	TABELA	pedido_autorizacao_plano_anexo	S	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_ANEXO_PROC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_DIAGNOST_CID	TABELA	pedido_autorizacao_plano_anexo	S	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_DROGA_SOLIC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_GLOSA	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_PROC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_PROC_COMP	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	TISS_AUTORIZACAO_PROC_GLOSA	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	TISS_AUTORIZA_ANEXO_PROC_GLOSA	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	TISS_CANCELA_GUIA	TABELA	cancelamento_guia_recebido	N	SGO	F7	
+DBAPS	TISS_CANCELA_GUIA_GUIAS	TABELA	cancelamento_guia_recebido	N	SGO	F7	
+DBAPS	TISS_COMUNICACAO_INTERNACAO	TABELA	comunicacao_internacao_recebida	N	SGO	F7	
+DBAPS	TISS_DEBITO_CREDITO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	terminologia do padrão TISS com vigência
+DBAPS	TISS_DEMNSTRV_RETORNO	TABELA	troca_tiss_operadora	N	SGO	F7	pedido de demonstrativo pelo prestador
+DBAPS	TISS_DEMNSTRV_RETORNO_PROTO	TABELA	troca_tiss_operadora	N	SGO	F7	
+DBAPS	TISS_DEM_ANA	TABELA	demonstrativo_analise_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT	TABELA	demonstrativo_analise_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT	TABELA	demonstrativo_analise_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT_GUI	TABELA	demonstrativo_analise_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT_GUI_GLOS	TABELA	demonstrativo_analise_emitido;glosa_conta_recebida	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT_GUI_PR	TABELA	demonstrativo_analise_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT_GUI_PR_GL	TABELA	demonstrativo_analise_emitido;glosa_conta_recebida	N	SGO	F7	
+DBAPS	TISS_DEM_ANA_FAT_LOT_MOT_GLOSA	TABELA	demonstrativo_analise_emitido;glosa_conta_recebida	N	SGO	F7	
+DBAPS	TISS_DEM_PGT	TABELA	demonstrativo_pagamento_emitido	N	SGO	F7	
+DBAPS	TISS_DEM_PGT_DEB_CRE	TABELA	demonstrativo_pagamento_emitido_item	N	SGO	F7	
+DBAPS	TISS_DEM_PGT_ITEM	TABELA	demonstrativo_pagamento_emitido_item	N	SGO	F7	

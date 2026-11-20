@@ -1,0 +1,362 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+exame	SADT	principal	F3	Catálogo único de exames de laboratório, imagem e métodos gráficos, com sigla, setor, prazo, tipo de resultado e vínculo ao procedimento cobrável	func: catálogo de exames; MV: EXA_LAB, EXA_RX, EXA_LAB_MANUAL, EXA_RX_MANUAL; SPDATA: SITABPRO; dep: procedimento (06), termo_terminologia (08)
+setor_diagnostico	SADT	principal	F3	Setor executante do diagnóstico (laboratório, raio X, tomografia, ultrassom, eco, endoscopia, hemodinâmica) por estabelecimento	func: catálogo de exames; MV: SET_EXA, SET_EXA_PADRAO; SPDATA: SIMODULO; dep: estabelecimento, unidade_assistencial (02)
+especialidade_diagnostica	SADT	dominio	F3	Subdivisão técnica do setor executante, como bioquímica, hematologia, urinálise ou especialidade de imagem, usada no mapa e no laudo	func: catálogo de exames; MV: ESPECIALID_EXA_RX; SPDATA: SIESPEC
+exame_setor_executante	SADT	vinculo	F3	Setores que executam cada exame, com setor padrão, horário especial e prazo próprio por setor	func: catálogo de exames; MV: EXA_LAB_SET_EXA, SET_EXA_PADRAO_HOR_ESP, EXA_LAB_ORI_SET
+material_biologico	SADT	dominio	F3	Material biológico coletado ou recebido (sangue total, soro, urina, liquor, swab, fragmento) com código de troca de mensagem	func: catálogo de exames; MV: MATERIAL_COLETA; SPDATA: SIMATERI
+exame_material	SADT	vinculo	F3	Materiais aceitos para cada exame, com material padrão, volume mínimo, recipiente, conservação e estabilidade da amostra	func: catálogo de exames; MV: EXA_LAB_MATERIAL, EXA_LAB_SET_EXA_MAT_PADRAO, SET_EXA_MATERIAL, EXA_LAB_TUBO_COLETA
+recipiente_coleta	SADT	dominio	F3	Tubo ou frasco de coleta, com cor da tampa, aditivo, volume e ordem de coleta	func: catálogo de exames; MV: TUBO_COLETA; SPDATA: SIRECIPI
+metodo_analitico	SADT	dominio	F3	Método analítico empregado no exame ou analito (enzimático, imunoensaio, citometria), impresso no laudo	func: catálogo de exames; SPDATA: SIMETODO
+orientacao_preparo	SADT	dominio	F3	Texto de orientação ao paciente para o preparo do exame (jejum, suspensão de medicamento, dieta, bexiga cheia)	func: catálogo de exames; MV: ORIENTACAO_EXAME
+exame_orientacao_preparo	SADT	vinculo	F3	Orientações de preparo aplicáveis a cada exame, com ordem de impressão e público (adulto, criança, gestante)	func: catálogo de exames; MV: ORIENTACAO_EXAME, EXA_LAB_MATERIAL_ORI
+exame_equivalencia_codigo	SADT	vinculo	F3	Códigos do exame em terminologias externas (procedimento cobrável, código universal de exame, código de equipamento) com vigência	func: catálogo de exames; dep: termo_terminologia (08), procedimento (06)
+exame_secundario	SADT	vinculo	F3	Exame que acompanha ou deriva de outro (secundário, correlacionado ou incluído), lançado junto ao principal	func: catálogo de imagem e laboratório; MV: EXA_LAB_SECUNDARIO, EXA_RX_SECUNDARIO, EXA_LAB_CORRELACIONADOS
+local_anatomico_coleta	SADT	dominio	F7	Sítio anatômico da coleta (ferida, cateter, região do corpo), exigido em cultura e anatomia patológica	func: catálogo de exames; MV: EXA_LAB_LOCAL_ANATOMICO_COLETA
+pergunta_solicitacao_exame	SADT	configuracao	F7	Pergunta obrigatória ou opcional feita na solicitação do exame (data da última menstruação, uso de anticoagulante, peso)	func: catálogo de exames; MV: EXA_LAB_SET_EXA_PERG, EXA_RX_SET_EXA_PERG
+resposta_solicitacao_exame	SADT	item	F7	Resposta dada à pergunta da solicitação para um exame pedido, levada à coleta e ao laudo	func: requisição de exames; MV: EXA_LAB_SET_EXA_PERG_RESP, EXA_RX_SET_EXA_PERG_RESP
+procedimento_operacional_exame	SADT	principal	F7	Procedimento operacional padrão do exame ou da bancada, com versão, aprovação e documento anexo	func: catálogo de exames; MV: POP; dep: arquivo (mecanismo)
+unidade_resultado	SADT	dominio	F3	Unidade de medida do resultado numérico (mg/dL, mmol/L, células/mm3), com fator de conversão entre unidades	func: analitos; MV: VAL_EXA; SPDATA: SITABELE
+modalidade_imagem	SADT	dominio	F3	Modalidade de aquisição de imagem (radiografia, tomografia, ressonância, ultrassom, mamografia) com código do padrão de imagem	func: catálogo de imagem; MV: MODALIDADE_EXAME; SPDATA: SIPACSMODALID
+exame_lateralidade	SADT	configuracao	F3	Exames que exigem lateralidade e os lados aceitos (direito, esquerdo, bilateral), cobrados conforme o lado	func: catálogo de imagem; MV: EXA_RX_LATERALIDADE
+analito	SADT	principal	F3	Campo de resultado medido ou informado (glicose, hemoglobina, leucócitos), com tipo, casas decimais, unidade e método	func: analitos; MV: VAL_EXA, LIS_EXA; SPDATA: SITABELE
+exame_analito	SADT	vinculo	F3	Analitos que compõem cada exame, com ordem, obrigatoriedade, layout no laudo e se é calculado	func: analitos; MV: LIS_EXA; SPDATA: SITABELE
+faixa_referencia	SADT	configuracao	F3	Faixa de normalidade e de alerta por analito, sexo, idade, material e método	func: analitos; MV: VAL_REFERENCIA; SPDATA: SIHISTVLREFEXAME
+faixa_referencia_versao	SADT	historico	F3	Versões das faixas de referência com vigência, para o laudo emitido guardar a faixa da época	func: analitos; MV: VAL_REFERENCIA_TEMP; SPDATA: SIHISTVLREF, SIHISTVLREFELEMENTO, SIHISTVLREFEXAME
+formula_calculo	SADT	configuracao	F3	Fórmula de analito calculado (depuração, índice, relação) ou de grandeza de imagem	func: analitos; MV: FORMULA_EXAME_LABORATORIAL, FORMULA_EXAME_IMAGEM; SPDATA: SIFORMUL
+variavel_formula	SADT	item	F3	Variável de entrada de uma fórmula, ligada a analito, dado do paciente (peso, altura) ou valor digitado	func: analitos; SPDATA: SIVARFORMULA
+grupo_resposta	SADT	dominio	F3	Conjunto de respostas fechadas para resultado qualitativo (positivo e negativo, reagente e não reagente, cruzes)	func: analitos; MV: RESPOSTA; SPDATA: SICTRPSR
+resposta_padrao	SADT	item	F3	Resposta possível de um grupo de respostas, com ordem e indicação de anormalidade	func: analitos; MV: RESPOSTA_POSSIVEL; SPDATA: SIPOSRES
+texto_padrao_resultado	SADT	dominio	F3	Observação ou nota padronizada inserida no resultado (amostra hemolisada, repetido e confirmado)	func: analitos; MV: MENSAGEM_PADRAO, EXA_LAB_TEXTOS_PAD; SPDATA: SIOBSERV
+modelo_resultado	SADT	configuracao	F3	Modelo de apresentação do resultado de laboratório por exame, com cabeçalho, disposição dos analitos e notas fixas	func: analitos; SPDATA: SIRESPAD
+requisicao_exame	SADT	principal	F3	Atendimento de diagnóstico que agrupa os exames pedidos para o paciente, com solicitante, origem, fonte pagadora e prioridade	func: requisição de exames; MV: PED_LAB, PED_RX, PED_LAB_PRESTADOR_EXTERNO, PED_RX_PRESTADOR_EXTERNO; SPDATA: SICADATE; dep: atendimento, paciente (02), prescricao (03), conta_hospitalar (06); orçamento (SIORCAME, SIEXAORC) vai a orcamento_particular (06)
+item_exame	SADT	item	F3	Exame pedido dentro da requisição, unidade de execução com situação própria até o resultado e o laudo	func: requisição de exames; MV: ITPED_LAB, ITPED_RX; SPDATA: SILANEXA
+item_exame_evento	SADT	historico	F3	Linha do tempo do exame pedido: solicitado, coletado, recebido, em análise, resultado, liberado, cancelado, com autor e motivo	func: requisição de exames; MV: LOG_EXC_PED_LAB, LOG_EXC_PED_RX, MOVIMENTACAO_STANDBY_EXAME; SPDATA: SICADATE_EXCLUSAO
+motivo_cancelamento_exame	SADT	dominio	F3	Motivo para cancelar ou excluir exame pedido (pedido em duplicidade, recusa do paciente, amostra inviável)	func: requisição de exames; MV: LOG_EXC_PED_LAB; SPDATA: SICADATE_EXCLUSAO
+kit_exame	SADT	principal	F3	Kit ou bateria de exames pedidos juntos (perfil lipídico, rotina pré-operatória, check-up)	func: requisição de exames; MV: AGRUPAMENTO_EXAME; SPDATA: SIKITEXA
+kit_exame_versao	SADT	historico	F3	Versão do kit de exames com vigência, preservando a composição usada em cada pedido	func: requisição de exames; SPDATA: SIKITHISTEXA, SIKITHISTITE
+kit_exame_item	SADT	item	F3	Exame que compõe um kit, com material e setor sugeridos	func: requisição de exames; SPDATA: SIKITITE
+restricao_exame	SADT	configuracao	F3	Regra clínica que bloqueia ou alerta a solicitação do exame por sexo, idade, material, horário ou setor	func: restrições clínicas; MV: BLOQUEIO_EXAME, BLOQUEIO_EXAME_MATERIAL, RESTRICAO_EXAME_MATERIAL, RESTRICAO_HORARIO, RESTRICAO_EXAME_PSSD; SPDATA: HTNOTEXAMESEXO
+excecao_restricao_exame	SADT	configuracao	F3	Exceção à restrição do exame por setor, estabelecimento ou perfil de solicitante, com justificativa	func: restrições clínicas; MV: EXCECAO_SOLICITACAO_EXA_LAB, BLOQUEIO_EXAME_SETOR, BLOQUEIO_EXAME_EMPRESA
+cota_exame	SADT	configuracao	F8	Quantidade máxima de um exame ou grupo por período, por fonte pagadora, unidade ou setor solicitante	func: cotas e bloqueios; MV: COTA_EXA_LAB, COTA_EXA_RX, COTA_EXA_UNID; dep: fonte_pagadora (06), unidade_assistencial (02)
+bloqueio_exame_resultado	SADT	configuracao	F8	Regra que bloqueia novo pedido conforme o último resultado do paciente (valor e janela de dias)	func: cotas e bloqueios; MV: BLOQUEIO_EXAME_ULT_RESULT, EXAME_PROTOCOLO
+intervalo_repeticao_exame	SADT	configuracao	F8	Intervalo mínimo entre dois pedidos do mesmo exame ou de exames incompatíveis no mesmo dia	func: cotas e bloqueios; MV: EXA_RX_PROIB_MESMO_DIA
+liberacao_excecao_exame	SADT	historico	F8	Liberação justificada de pedido barrado por cota, intervalo ou último resultado, com quem autorizou	func: cotas e bloqueios; MV: BLOQUEIO_EXAME_CONVENIO; dep: restricao_cobertura_pagador (06)
+amostra_biologica	SADT	principal	F3	Amostra identificada por código com dígito, com material, recipiente, coletor, data da coleta e local atual	func: coleta e amostra; MV: AMOSTRA, AMOSTRA_ANALISE; SPDATA: SIWSETIQUETA; coletor (SICOLETE) é profissional (02)
+amostra_biologica_exame	SADT	vinculo	F3	Exames pedidos atendidos por cada amostra ou sub-amostra	func: coleta e amostra; MV: AMOSTRA_EXA_LAB; SPDATA: SIWSLANCETQTA
+amostra_biologica_evento	SADT	historico	F3	Passagens da amostra: coletada, enviada, recebida, triada, aliquotada, analisada, rejeitada, descartada	func: coleta e amostra; MV: RECEPCAO_AMOSTRA; SPDATA: SISTATUS_AMOSTRA
+situacao_amostra	SADT	dominio	F3	Situações possíveis da amostra no rastreio, com as passagens válidas entre elas	func: coleta e amostra; SPDATA: SISTATUS_AMOSTRA
+ponto_coleta	SADT	principal	F3	Posto ou sala de coleta, interno ou externo, com horário e setor de laboratório que recebe	func: coleta e amostra; MV: POSTO_COLETA
+ponto_coleta_setor	SADT	vinculo	F7	Setores ou unidades atendidos por cada posto de coleta	func: coleta e amostra; MV: POSTO_COLETA_SETOR
+motivo_nova_coleta	SADT	dominio	F3	Motivo de recoleta (hemólise, coágulo, volume insuficiente, identificação incorreta)	func: coleta e amostra; MV: MOTIVO_RECOLETA
+nova_coleta	SADT	principal	F3	Pedido de recoleta de amostra, com motivo, exames afetados, quem pediu e a amostra nova gerada	func: coleta e amostra; MV: MOTIVO_RECOLETA
+modelo_etiqueta_amostra_biologica	SADT	configuracao	F3	Layout da etiqueta da amostra por setor ou recipiente, com código de barras e dados impressos	func: coleta e amostra; MV: ETIQUETA_PSSD; SPDATA: SIWSETIQUETA
+regra_subamostra	SADT	configuracao	F7	Regra que gera sub-amostras ou alíquotas a partir da amostra primária conforme exames e setores	func: coleta e amostra; MV: REGRA_GERACAO_SUB_AMOSTRA, EXA_LAB_GERACAO_SUB_AMOSTRA
+lote_transporte_amostra	SADT	principal	F7	Remessa de amostras de um posto ou setor ao laboratório, com responsável, temperatura e conferência na chegada	func: coleta e amostra; MV: RECEPCAO_AMOSTRA, AMOSTRA_LOTE_AUTOMATICO
+lote_transporte_amostra_item	SADT	item	F7	Amostra incluída na remessa, com situação na conferência (recebida, faltante, rejeitada)	func: coleta e amostra; MV: RECEPCAO_AMOSTRA
+bancada_analitica	SADT	dominio	F3	Bancada ou estação de trabalho do laboratório, ligada ao setor e aos equipamentos	func: mapa de trabalho; MV: BANCADA
+modelo_mapa_bancada	SADT	configuracao	F3	Modelo do mapa de trabalho de uma bancada, com colunas, ordenação e filtros	func: mapa de trabalho; MV: MODELO_MAPA_TRABALHO
+modelo_mapa_bancada_exame	SADT	item	F3	Exames e analitos que entram em cada modelo de mapa de trabalho	func: mapa de trabalho; MV: MODELO_MAPA_TRABALHO_EXA_LAB
+lote_trabalho	SADT	principal	F7	Corrida ou lote de trabalho gerado para uma bancada, com data, analista e equipamento	func: mapa de trabalho; MV: LOTE_TRABALHO, LOTE_BANCADA
+lote_trabalho_item	SADT	item	F7	Exame ou amostra incluída no lote de trabalho, com posição e situação (processado, retido, repetir)	func: mapa de trabalho; MV: LOTE_BANCADA, MOVIMENTACAO_STANDBY_EXAME
+equipamento_guarda_amostra	SADT	principal	F8	Geladeira, freezer ou armário onde amostras e lâminas são guardadas, com faixa de temperatura	func: soroteca; MV: SOROTECA_CONGELADOR
+rack_amostra	SADT	principal	F8	Rack ou caixa de armazenamento, com linhas, colunas e o equipamento onde está	func: soroteca; MV: SOROTECA_RACK, RACK_AMOSTRA
+guarda_amostra	SADT	principal	F8	Amostra ou lâmina guardada, com posição no rack, data de entrada e prazo de descarte	func: soroteca; MV: SOROTECA_ACERVO
+movimento_guarda_amostra	SADT	historico	F8	Entrada, retirada, devolução e descarte da amostra guardada, com motivo e responsável	func: soroteca; MV: SOROTECA_MOVIMENTO
+motivo_retirada_amostra	SADT	dominio	F8	Motivo de retirada ou descarte de amostra guardada (reteste, pesquisa, prazo vencido)	func: soroteca; MV: SOROTECA_MOTIVO
+regra_descarte_amostra	SADT	configuracao	F8	Prazo de guarda e descarte por exame, resultado ou fonte pagadora	func: soroteca; MV: SOROTECA_REGRA_EXP_RES, SOROTECA_REGRA_EXP_CON, SOROTECA_COMP_REGRA_EXP_RES; SOROTECA_CONFIG vai a parametro
+resultado_exame	SADT	principal	F3	Resultado do exame pedido, digitado ou importado, com situação, conferente, liberador e data de liberação	func: resultado e liberação; MV: RES_EXA, RES_EXA_LAB_MANUAL; SPDATA: SIRES01; exclusões (SIRES01_DELETE, LOG_RES_EXA) vão a historico_entidade:resultado_exame
+resultado_analito	SADT	item	F3	Valor de cada analito no resultado, com unidade, faixa aplicada, sinal de anormal e de crítico	func: resultado e liberação; MV: RES_EXA; SPDATA: SIRES01
+resultado_variavel_formula	SADT	item	F3	Valor informado para variável de fórmula no momento do resultado, para refazer o cálculo	func: resultado e liberação; SPDATA: SIRESVAR
+resultado_observacao	SADT	item	F3	Observação livre ou padronizada anexada ao resultado	func: resultado e liberação; SPDATA: SIRESOBS
+resultado_exame_versao	SADT	historico	F3	Versão anterior de resultado já liberado que foi retificado, com motivo e quem retificou	func: resultado e liberação; MV: LOG_RES_EXA; SPDATA: SIRES01_DELETE
+liberacao_exame	SADT	historico	F3	Conferência e liberação do exame (técnica e clínica), com responsável, assinatura e publicação no portal	func: resultado e liberação; MV: ASSINATURA_DIGITAL_DIAGN, FILA_CARTORIO_DIGITAL; SPDATA: SILIBERACAOEXAME; dep: assinatura_documento (01)
+regra_valor_critico	SADT	configuracao	F3	Faixa de valor crítico por analito, idade e setor, com prazo e cadeia de comunicação	func: resultado e liberação; MV: VAL_REFERENCIA
+aviso_valor_critico	SADT	principal	F3	Aviso gerado por resultado crítico, com quem foi comunicado, leitura confirmada e prazo	func: resultado e liberação; MV: NOTIFICACAO_ATRASO_LAB
+aviso_valor_critico_tentativa	SADT	historico	F3	Cada tentativa de contato do aviso crítico, com canal, destinatário e resultado, para o escalonamento	func: resultado e liberação; MV: NOTIFICACAO_ATRASO_EXA_LAB
+material_controle_qualidade	SADT	principal	F7	Material de controle interno da qualidade, com fabricante, lote, nível e validade	func: resultado e liberação (complemento); sem equivalente nas origens; exigência sanitária do laboratório clínico
+regra_controle_qualidade	SADT	configuracao	F7	Média, desvio e regras de aceitação do controle por analito, equipamento e nível	func: resultado e liberação (complemento); sem equivalente nas origens
+corrida_controle_qualidade	SADT	principal	F7	Corrida de controle executada no equipamento, com aprovação ou rejeição e ação corretiva	func: resultado e liberação (complemento); sem equivalente nas origens
+resultado_controle_qualidade	SADT	item	F7	Valor obtido por analito na corrida de controle e regra violada, quando houver	func: resultado e liberação (complemento); sem equivalente nas origens
+regra_autoliberacao	SADT	configuracao	F8	Regra que libera o resultado sem revisão ou o retém para revisão, por exame e setor	func: autoliberação; MV: REGRA_CONTROLE_RESULTADO
+condicao_autoliberacao	SADT	item	F8	Condição de uma regra de autoliberação (faixa, delta contra o anterior, analito relacionado, origem)	func: autoliberação; MV: CONDICAO_CONTROLE_RESULTADO
+limite_delta_analito	SADT	configuracao	F8	Variação máxima aceita entre resultados seguidos do mesmo analito e janela de tempo da comparação	func: autoliberação; MV: CONDICAO_CONTROLE_RESULTADO
+curva_exame	SADT	configuracao	F8	Configuração de exame em curva (tempos de coleta, amostras e analito medido)	func: autoliberação; MV: CONFIGURACAO_CURVA
+curva_exame_ponto	SADT	item	F8	Ponto previsto da curva, com tempo e material	func: autoliberação; MV: PONTO_CURVA
+resultado_curva_ponto	SADT	item	F8	Valor medido em cada ponto da curva para o exame pedido	func: autoliberação; MV: PONTO_CURVA_ITPED_LAB
+substancia_interferente	SADT	configuracao	F8	Substância ou condição que interfere no resultado do analito, com efeito esperado e alerta	func: autoliberação; MV: SUBSTANCIA_INTERFERENCIA_RES
+avaliacao_regra_resultado	SADT	historico	F8	Resultado da aplicação das regras a um exame: liberado automaticamente ou retido, com a regra que decidiu	func: autoliberação; MV: REGRA_CONTROLE_RESULTADO
+microrganismo	SADT	dominio	F7	Microrganismo identificável em cultura, com gênero, espécie, grupo e código de troca	func: microbiologia; MV: GERMES
+antimicrobiano	SADT	dominio	F7	Antimicrobiano testado no antibiograma, com classe e princípio ativo correspondente	func: microbiologia; MV: ANTIMICROB; dep: principio_ativo
+classe_antimicrobiano	SADT	dominio	F7	Classe farmacológica do antimicrobiano (betalactâmico, carbapenêmico, glicopeptídeo)	func: microbiologia; MV: ANTIMICROB
+painel_antibiograma	SADT	configuracao	F7	Painel de antimicrobianos testados por grupo de microrganismo e material	func: microbiologia; MV: GERME_ANTIMICROBIANO
+painel_antibiograma_item	SADT	item	F7	Antimicrobiano do painel, com ordem e se aparece no laudo	func: microbiologia; MV: GERME_ANTIMICROBIANO
+ponto_corte_antimicrobiano	SADT	configuracao	F7	Ponto de corte por microrganismo e antimicrobiano que converte concentração inibitória ou halo em sensível, intermediário ou resistente, com norma e versão	func: microbiologia; MV: ANTIMICROB_MIC, TIPO_RESULTADO_ANTIMICROB
+resultado_cultura	SADT	principal	F7	Resultado estruturado da cultura, com material, sítio, crescimento e conclusão	func: microbiologia; MV: CULTURA, CULTURAS, CULTURA_MANUAL; SPDATA: SIRES01 (cultura em texto)
+leitura_cultura	SADT	historico	F7	Leituras parciais da cultura por dia de incubação, com achado e ação tomada	func: microbiologia; MV: ANALISE_CULTURA, ANALISE_CULTURA_ACAO
+isolado_microbiano	SADT	item	F7	Microrganismo isolado na cultura, com contagem e marcadores de resistência	func: microbiologia; MV: GERMES_CULTURA, GERMES_CULT_MANUAL
+resultado_sensibilidade	SADT	item	F7	Teste de sensibilidade de um isolado a um antimicrobiano, com valor medido e interpretação	func: microbiologia; MV: ANTIMICROB_MIC
+microrganismo_notificacao	SADT	configuracao	F7	Microrganismo ou perfil de resistência que exige aviso ao controle de infecção ou notificação	func: microbiologia; MV: GERMES_REG_INF, GERME_REGULACAO; dep: regra_alerta (01), auditoria_prescricao_ccih (03)
+equipamento_analitico	SADT	principal	F3	Equipamento de análise do laboratório, com fabricante, modelo, série, bancada e situação	func: interface com equipamentos; SPDATA: SITPEQV (INTG)
+modelo_comunicacao	SADT	dominio	F3	Protocolo e modelo de comunicação com o equipamento (serial, rede, padrão de mensagem, unidirecional ou bidirecional)	func: interface com equipamentos; MV: CONFIG_INTERFACE_LIS; SPDATA: SITPEQVMODELO
+interface_equipamento	SADT	configuracao	F3	Configuração da interface de um equipamento: modelo de comunicação, endereço, envio de lista e recepção de resultado	func: interface com equipamentos; MV: CONFIG_INTERFACE_LIS, AMOSTRA_INTERFACE; SPDATA: SITPEQV_SITPEQVMODELO; mensagens vão a integracao
+de_para_exame_equipamento	SADT	vinculo	F3	Código de cada exame no equipamento	func: interface com equipamentos; SPDATA: SITBEXEQ
+de_para_analito_equipamento	SADT	vinculo	F3	Código de cada analito no equipamento, com fator de conversão e casas decimais	func: interface com equipamentos; MV: IMV_RESULTADO_PSSD
+laboratorio_apoio	SADT	principal	F3	Laboratório externo que recebe exames, com contrato, canal de envio e prazo	func: laboratório de apoio; MV: LABORATORIO; dep: empresa_fornecedora
+exame_apoio	SADT	configuracao	F3	Exame do catálogo do apoio ligado ao exame próprio, com código, material e prazo do apoio	func: laboratório de apoio; MV: EXA_LAB_LABORATORIO, EXA_RX_LABORATORIO; SPDATA: SITBEXHP (INTG)
+de_para_analito_apoio	SADT	vinculo	F3	Código do analito no laboratório de apoio	func: laboratório de apoio; SPDATA: SITBELHP (INTG)
+de_para_material_apoio	SADT	vinculo	F3	Código do material biológico no laboratório de apoio	func: laboratório de apoio; SPDATA: SIMATHP (INTG)
+remessa_apoio	SADT	principal	F3	Lote de amostras enviadas ao laboratório de apoio, com data, transporte e protocolo	func: laboratório de apoio; MV: REMESSA_AMOSTRA, ETIQUETA_AMOSTRA_LAB_APOIO
+remessa_apoio_item	SADT	item	F3	Amostra e exame enviados na remessa, com situação de retorno do resultado	func: laboratório de apoio; MV: REMESSA_AMOSTRA
+laudo_diagnostico	SADT	principal	F3	Laudo de imagem ou método gráfico do exame, com texto, laudista, revisor e situação	func: laudo de imagem; MV: LAUDO_RX, IT_LAUDO_RX_CHAR, IT_LAUDO_RX_BIN; SPDATA: SIRESPAD; anexo (LAUDO_ARQ) vai a arquivo
+laudo_diagnostico_versao	SADT	historico	F3	Versões do laudo (rascunho, assinado, retificado), preservando o texto de cada assinatura	func: laudo de imagem; MV: LAUDO_RX
+modelo_laudo	SADT	configuracao	F3	Modelo de texto de laudo por exame e laudista, com campos variáveis	func: laudo de imagem; MV: TEX_RX; SPDATA: SIRESPAD
+palavra_chave_laudo	SADT	dominio	F8	Palavra-chave atribuída ao laudo para busca de casos e ensino	func: laudo de imagem; MV: PALAVRAS_CHAVE_LAUDO
+laudo_palavra_chave	SADT	vinculo	F8	Palavras-chave atribuídas a cada laudo	func: laudo de imagem; MV: PALAVRAS_CHAVE_LAUDO
+emissao_laudo	SADT	principal	F3	Emissão ou impressão do laudo, com número, código de autenticação e quem retirou	func: laudo de imagem; SPDATA: SIASSLAUDO_IMPRESSAO
+emissao_laudo_exame	SADT	item	F3	Exames incluídos em cada emissão de laudo	func: laudo de imagem; SPDATA: SIASSLAUDO_IMP_SILANEXA
+modelo_impressao_laudo	SADT	configuracao	F3	Layout de impressão do laudo por setor, com ordem dos exames e assinaturas	func: entrega de resultados; MV: ORDEM_IMPRESSAO_LAUDO, ORDEM_IMPRESSAO_LAUDO_SETOR; SPDATA: SIWEBPARLAUDO
+secao_laudo_estruturado	SADT	configuracao	F3	Seção do laudo estruturado (câmaras cardíacas, valvas, função) que agrupa grandezas	func: laudo estruturado; SPDATA: SITBGRAN
+grandeza_laudo	SADT	configuracao	F3	Grandeza medida no laudo estruturado (diâmetro, fração de ejeção, gradiente), com unidade e fórmula	func: laudo estruturado; SPDATA: SITBGRAN
+faixa_referencia_grandeza	SADT	configuracao	F7	Valores de referência da grandeza por sexo, idade e superfície corporal	func: laudo estruturado; MV: VALOR_REFERENCIA_ECOCARD
+valor_grandeza_laudo	SADT	item	F3	Valor medido de cada grandeza no laudo do paciente	func: laudo estruturado; SPDATA: SITBGRAN
+registro_hemodinamica	SADT	principal	F3	Registro do procedimento de hemodinâmica: via de acesso, contraste, radiação, tempos e equipe	func: laudo estruturado; MV: CIRURGIA_EXAME_HEMODINAMICA; SPDATA: SIPARHEM
+registro_hemodinamica_achado	SADT	item	F7	Achado do cateterismo por vaso ou segmento, com grau de lesão e conduta	func: laudo estruturado; MV: CIRURGIA_EXAME_HEMODINAMICA
+laudo_mama	SADT	principal	F7	Laudo estruturado de mamografia, com composição da mama, categoria final e recomendação	func: mamografia e anatomia patológica; MV: LAUDO_MAMOGRAFIA, LAUDO_MAMOGRAFIA_CONCLUSAO
+achado_mama	SADT	item	F7	Achado radiológico da mamografia por mama e quadrante, com tipo e categoria	func: mamografia e anatomia patológica; MV: LAUDO_MAMOGRAFIA_ACHADO_RAD
+categoria_achado_mama	SADT	dominio	F7	Categoria de avaliação do achado mamográfico e conduta recomendada	func: mamografia e anatomia patológica; MV: LAUDO_MAMOGRAFIA_ACHADO_RAD
+laudo_anatomopatologico	SADT	principal	F7	Laudo de citopatologia ou histopatologia, com macroscopia, microscopia, diagnóstico e topografia	func: mamografia e anatomia patológica; MV: LAUDO_CITOPATOLOGICO, LAUDO_HISTOPATOLOGICO; SPDATA: SIPARANA; dep: termo_terminologia (08)
+amostra_anatomopatologica	SADT	item	F7	Peça, fragmento, bloco ou lâmina do exame anatomopatológico, com identificação e processamento	func: mamografia e anatomia patológica; MV: LAUDO_HISTOPATOLOGICO
+grau_histologico	SADT	dominio	F7	Grau histológico ou de diferenciação usado no laudo anatomopatológico	func: mamografia e anatomia patológica; MV: GRAU_HISTOPATOLOGICO
+escala_execucao	SADT	principal	F3	Escala do executante por setor do diagnóstico, com vigência e capacidade	func: escala de execução; MV: ESCALA_EXA_RX, SESCALA, SESCALA_EXA_LAB; SPDATA: SICTRAGE (AGE); dep: profissional (02)
+escala_execucao_dia	SADT	item	F3	Dia da semana e horário de cada escala do executante	func: escala de execução; MV: ESCALA_DIA_EXA_RX, SESC_DIA, SESC_DIA_EXA_LAB, EXA_RX_IT_ESCALA_DIA
+escala_execucao_exame	SADT	vinculo	F3	Exames atendidos em cada escala, com limite por turno	func: escala de execução; MV: SESCALA_EXA_LAB; dep: prioridade em grupo_prioridade_legal (02), PRIORID_PACIENTE_PED_RX
+item_lista_trabalho_imagem	SADT	principal	F3	Item da lista de trabalho de imagem enviado à modalidade, com número de acesso e situação	func: integração com PACS; MV: ITPED_RX_MICRODATA_SITUACAO; mensagem vai a integracao
+evento_status_imagem	SADT	historico	F3	Mudanças de situação do exame de imagem recebidas da modalidade (iniciado, concluído, cancelado)	func: integração com PACS; MV: IMVMICRODATA_RETORNO
+estudo_imagem	SADT	principal	F3	Estudo de imagem arquivado ligado ao exame, com identificador do estudo, séries e endereço para visualização	func: integração com PACS; MV: IMV_LAUDO_PSDI
+visualizador_imagem	SADT	configuracao	F3	Visualizador de imagens configurado, com endereço, modalidades atendidas e forma de abertura	func: integração com PACS; SPDATA: SIPACSVISIMG, SIWEBVISULIMG
+prazo_entrega_exame	SADT	configuracao	F3	Prazo de entrega do resultado por exame, setor e prioridade, com dias e horários de corte	func: entrega de resultados; MV: PERIODO_ENTREGA_EXA_LAB, ENTREGA_EXA_LAB_SETOR, ENTREGA_EXA_LAB_SET_EXA, ENTREGA_EXA_RX_SETOR, ENTREGA_EXA_RX_SET_EXA
+entrega_resultado	SADT	principal	F3	Protocolo de entrega de resultados ao paciente ou responsável, com quem retirou e documento	func: entrega de resultados; MV: ENTREGA_EXAME_SADT
+entrega_resultado_item	SADT	item	F3	Exame ou laudo entregue em cada protocolo	func: entrega de resultados; MV: ENTREGA_EXAME_SADT
+perfil_portal_resultado	SADT	configuracao	F3	Perfil de acesso ao portal de resultados (paciente, médico externo, empresa), com permissões e filtro de data	func: portal de resultados; MV: PLAUDOS_CONFIGURACOES; SPDATA: SIWEBCADPERFIL, SIWEBPARPERFIL, SIWEBPARDATA, SIWEBPARTPATU; acesso vai a trilha_auditoria
+perfil_portal_setor	SADT	vinculo	F3	Setores do diagnóstico cujos resultados cada perfil do portal vê	func: portal de resultados; SPDATA: SIMODULO_SIWEBATOS
+perfil_portal_modalidade	SADT	vinculo	F3	Modalidades de imagem liberadas para cada perfil do portal	func: portal de resultados; SPDATA: SIWEBCADPERFIL_SIPACSMODALID
+perfil_portal_usuario	SADT	vinculo	F3	Usuários ligados a cada perfil do portal de resultados	func: portal de resultados; SPDATA: SIWEBCADPERFIL_TBUSERS; dep: usuario (01)
+exame_restricao_portal	SADT	configuracao	F3	Exames que não são publicados no portal ou só depois de entrega presencial	func: portal de resultados; MV: EXA_PROIBIDO_WEB
+consumo_padrao_exame	SADT	configuracao	F8	Insumos e kits consumidos por padrão em cada exame (contraste, seringa, filme), para baixa e lançamento automáticos	func: consumo padrão; MV: EXA_RX_FORMULA; dep: insumo, kit_material
+consumo_padrao_exame_item	SADT	item	F8	Insumo ou kit do consumo padrão, com quantidade e se é ajustável na execução	func: consumo padrão; MV: EXA_RX_FORMULA
+item_exame_insumo	SADT	item	F8	Insumo efetivamente consumido na execução do exame, com lote, gerando baixa no estoque e item na conta	func: consumo padrão; MV: ITPED_RX_PRODUTO, ITPED_RX_KIT; dep: movimento_estoque, conta_hospitalar_item (06)
+item_exame_equipe	SADT	item	F8	Profissionais que participaram da execução do exame e sua função, base para produção e repasse	func: consumo padrão; MV: ITPED_RX_EQUIPE; dep: profissional (02), repasse (06)
+servico_hemoterapia_fornecedor	SADT	principal	F7	Serviço de hemoterapia que fornece hemocomponentes ou atende a agência, com contrato e contato	func: agência transfusional; SPDATA: SHCLIENT; dep: empresa_fornecedora
+hemocomponente	SADT	dominio	F7	Tipo de hemocomponente ou hemoderivado (concentrado de hemácias, plaquetas, plasma, crioprecipitado) com validade e conservação	func: agência transfusional; MV: SANGUE_DERIVADOS, SANGUE_DERIVADOS_COMP, SANGUE_DERIVADOS_PRO_FAT
+requisicao_transfusao	SADT	principal	F7	Requisição de transfusão com indicação, urgência, dados clínicos e médico solicitante	func: agência transfusional; MV: SOLIC_SANGUE; SPDATA: SHREQUISICAO; dep: prescricao_item_hemocomponente (03)
+requisicao_transfusao_item	SADT	item	F7	Hemocomponente e quantidade pedidos na requisição, com procedimento especial (irradiado, filtrado)	func: agência transfusional; MV: IT_SOLIC_SANGUE, IT_SOLIC_SANGUE_COMP
+amostra_pre_transfusional	SADT	principal	F7	Amostra do receptor para os testes pré-transfusionais, com coletor e validade	func: agência transfusional; MV: SOLIC_SANGUE
+tipo_teste_imuno_hematologico	SADT	dominio	F7	Teste imuno-hematológico realizado (tipagem, pesquisa de anticorpos, Coombs direto)	func: agência transfusional; SPDATA: SHEXAME
+teste_imuno_hematologico	SADT	item	F7	Resultado de teste imuno-hematológico na amostra do receptor ou na bolsa	func: agência transfusional; SPDATA: SHEXAME
+bolsa_hemocomponente	SADT	principal	F7	Bolsa recebida, com número, hemocomponente, grupo sanguíneo, volume, validade e situação	func: agência transfusional; MV: SANGUE_DERIVADOS; SPDATA: SHBOLSA; grupo e fator (TBTPSANGUINEO, TBFATORRH) são lista fixa, com o tipo do paciente no 02
+local_guarda_hemocomponente	SADT	dominio	F7	Geladeira, freezer ou agitador onde bolsas ficam guardadas, com faixa de temperatura	func: agência transfusional; SPDATA: SHLOCAL
+tipo_movimento_bolsa	SADT	dominio	F7	Tipo de movimento da bolsa (entrada, reserva, liberação, devolução, descarte, transferência)	func: agência transfusional; SPDATA: SHMOV
+movimento_bolsa	SADT	historico	F7	Movimentos da bolsa com data, local, responsável e motivo	func: agência transfusional; SPDATA: SHBOLSAHIST
+motivo_devolucao_bolsa	SADT	dominio	F7	Motivo de devolução ou descarte da bolsa (vencida, violada, temperatura, não usada)	func: agência transfusional; SPDATA: SHMOTDEV
+destino_final_bolsa	SADT	dominio	F7	Destino final da bolsa (transfundida, descartada, devolvida ao fornecedor)	func: agência transfusional; SPDATA: SHESTFINAL
+estoque_minimo_hemocomponente	SADT	configuracao	F7	Estoque mínimo de bolsas por hemocomponente e grupo sanguíneo, com aviso de reposição	func: agência transfusional; MV: SANGUE_AVISO
+prova_compatibilidade	SADT	item	F7	Prova cruzada entre a amostra do receptor e a bolsa, com resultado e responsável	func: agência transfusional; MV: SOLIC_SANGUE
+tipo_transfusao	SADT	dominio	F7	Modalidade da transfusão (rotina, urgência, emergência, programada)	func: agência transfusional; SPDATA: SHTPTRANSF
+ato_transfusional	SADT	principal	F7	Instalação da bolsa no paciente, com dupla checagem, horários de início e fim e volume	func: agência transfusional; MV: SOLIC_SANGUE; dep: checagem de administração (03); SHTECNIC vai a profissional (02); SHPARAM vai a parametro
+monitoramento_transfusao	SADT	item	F7	Sinais vitais e observações durante a transfusão nos tempos previstos	func: agência transfusional; dep: parametro_vital (03)
+tipo_reacao_transfusional	SADT	dominio	F7	Tipo de reação ou intercorrência transfusional, com gravidade e obrigação de notificar	func: agência transfusional; SPDATA: SHREACAO, SHINTER
+conduta_reacao_transfusional	SADT	dominio	F7	Conduta padrão diante da reação transfusional	func: agência transfusional; SPDATA: SHCONDUTA
+reacao_transfusional	SADT	principal	F7	Reação ocorrida no ato transfusional, com tipo, gravidade, conduta, investigação e notificação	func: agência transfusional; SPDATA: SHREACAO; dep: notificacao de evento adverso (QUA)
+doacao_sangue	SADT	principal	F8	Coleta de sangue de doador no próprio serviço, com triagem, aptidão e bolsa gerada	func: agência transfusional (complemento); SPDATA: SHDOACAO; dep: pessoa ou paciente (02)
+pergunta_triagem_doador	SADT	configuracao	F8	Pergunta da triagem clínica do doador, com resposta que torna inapto	func: agência transfusional (complemento); SPDATA: SHPERGUN
+resposta_triagem_doador	SADT	item	F8	Resposta do doador a cada pergunta da triagem	func: agência transfusional (complemento); SPDATA: SHRESPOSTA
+regra_busca_ativa	SADT	configuracao	F8	Regra que abre busca ativa para resultado alterado ou cultura positiva liberada depois da alta	func: busca ativa; MV: FAIXA_PANICO_CULTURA_DILIG, DILIGENC
+busca_ativa_resultado	SADT	principal	F8	Caso de busca ativa do paciente por resultado pendente ou alterado, com equipe, prazo e desfecho	func: busca ativa; MV: DILIGENCIAMENTO_DIAGN, SOLICITACAO_DILIGENCIA_DIAGN
+busca_ativa_resultado_exame	SADT	item	F8	Exames que motivaram o caso de busca ativa	func: busca ativa; MV: EXAME_DILIGENCIA_DIAGN
+busca_ativa_contato	SADT	historico	F8	Tentativas de contato do caso de busca ativa, com canal, resultado e orientação dada	func: busca ativa; MV: SOLICITACAO_DILIGENCIA_DIAGN
+equipe_busca_ativa	SADT	vinculo	F8	Profissionais responsáveis pela busca ativa por setor ou tipo de exame	func: busca ativa; MV: DILIGENCIAMENTO_DIAGN
+configuracao_setor_diagnostico	SADT	configuracao	F3	Regras estruturadas por estabelecimento e setor do diagnóstico: numeração, responsável técnico, obrigatoriedades e impressão	func: parâmetros do diagnóstico; MV: CONFIG_SADT, CONFIG_PSSD; SPDATA: SIPARGER, SIPARLAB, SIPARRX, SIPAROUT, SIPARHEM, SIPARTM, SIPARULT, SIPAREND, SIPARANA; chaves soltas vão a parametro
+responsavel_laudo_setor	SADT	vinculo	F3	Profissionais habilitados a liberar resultado ou assinar laudo por setor e exame	func: parâmetros do diagnóstico; SPDATA: SIPARLAB, SIPARRX, SITECNIC; dep: profissional (02)
+insumo	SUP	principal	F3	Material ou medicamento estocável, com tipo, grupo, unidade de estoque, controle de lote, classe de risco e situação	func: cadastro de produto; MV: PRODUTO; SPDATA: GEITENS, GEREFER
+grupo_insumo	SUP	dominio	F3	Grupo do insumo (medicamento, material médico, dieta, limpeza, expediente)	func: cadastro de produto; MV: ESPECIE; SPDATA: GEGRUPOS
+subgrupo_insumo	SUP	dominio	F3	Subgrupo do insumo dentro do grupo	func: cadastro de produto; MV: CLASSE, SUB_CLAS; SPDATA: GESUBGRU
+categoria_contabil_insumo	SUP	dominio	F3	Categoria contábil que define a conta de estoque e de consumo do insumo	func: cadastro de produto; MV: ESTOQUE_PL_CONTAS, NATUREZA_DESPESA; dep: plano de contas (07)
+classe_terapeutica	SUP	dominio	F7	Classe terapêutica do medicamento em hierarquia, usada em relatório, padronização e substituição	func: cadastro de produto; MV: ESPECIE_CARACTERISTICA
+lista_controle_especial	SUP	catalogo_publico	F3	Listas oficiais de substâncias sob controle especial, com exigência de receita e de escrituração	func: medicamentos controlados; fonte oficial sanitária
+unidade_medida	SUP	dominio	F3	Unidade de medida de estoque, compra e consumo (caixa, ampola, frasco, comprimido)	func: cadastro de produto; MV: UNI_PRO; SPDATA: TBUNICON
+grupo_unidade_medida	SUP	dominio	F3	Agrupamento das unidades de medida (massa, volume, contagem) para conversão	func: cadastro de produto; SPDATA: TBGRUPOUNIDADEMEDIDA
+insumo_unidade	SUP	vinculo	F3	Unidades em que o insumo é comprado, estocado e consumido, com fator de conversão	func: cadastro de produto; MV: UNI_PRO; SPDATA: GEUNIPRESC (parte de estoque); dep: unidade_prescricao (03)
+fabricante	SUP	principal	F3	Fabricante ou laboratório produtor do insumo, com documento e situação sanitária	func: cadastro de produto; MV: LAB_PRO, LABORATOR; SPDATA: TBLABORA
+apresentacao_comercial	SUP	principal	F3	Nome comercial e apresentação do insumo por fabricante, com embalagem e quantidade por embalagem	func: cadastro de produto; MV: LAB_PRO; SPDATA: GENOMCOM
+registro_sanitario	SUP	item	F3	Registro sanitário da apresentação comercial, com número, validade e situação	func: cadastro de produto; MV: PRODUTO_REGISTRO_ANVISA
+principio_ativo	SUP	catalogo_publico	F3	Princípio ativo pela denominação comum oficial, base para prescrição, alergia e interação	func: cadastro de produto; SPDATA: GETABDCB, TBPRINC; dep: alergeno_principio_ativo, limite_dose_principio (03)
+insumo_principio_ativo	SUP	vinculo	F3	Princípios ativos do medicamento, com concentração e unidade	func: cadastro de produto; SPDATA: GEITENS_TBPRINC
+insumo_via	SUP	vinculo	F3	Vias de uso permitidas para o medicamento	func: cadastro de produto; MV: VIA_ADMINISTRACAO; SPDATA: GEVIASITEM, GETABVIA; dep: via_de_uso (03)
+insumo_codigo_barras	SUP	item	F3	Códigos de barras do insumo por embalagem, com quantidade representada	func: cadastro de produto; SPDATA: GEBARRAS
+insumo_fornecedor	SUP	vinculo	F3	Código e unidade do insumo no fornecedor, para casar a nota eletrônica com o cadastro	func: cadastro de produto; MV: PRODUTO_FORNECEDOR
+estabilidade_insumo	SUP	configuracao	F7	Estabilidade do medicamento depois de aberto, diluído ou reconstituído, por condição de guarda	func: cadastro de produto; MV: PRODUTO_ESTABILIDADE
+insumo_estabelecimento	SUP	configuracao	F7	Situação do insumo em cada estabelecimento da rede: padronizado, ativo, local padrão e observações	func: cadastro de produto; MV: PRODUTO_DIRETO; dep: estabelecimento (02)
+insumo_referencia_preco	SUP	vinculo	F3	Vínculo do insumo com o item das referências de preço de material e medicamento, por edição	func: referência de preço; SPDATA: TBCTRMEM, TBMATMED; dep: item_referencia_matmed (06)
+solicitacao_cadastro_insumo	SUP	principal	F8	Pedido de inclusão ou alteração de insumo, com justificativa, parecer da comissão e insumo criado	func: governança do cadastro; MV: SOLICITACAO_CADASTRO_PRODUTO, PRODUTO_ITSOLICITACAO_CADASTRO, LIBERACAO_PRODUTO; aprovação no pedido_aprovacao (01); alteração (MODIFICA_PRODUTO) vai a historico_entidade:insumo
+unificacao_insumo	SUP	principal	F8	Unificação de insumos duplicados em um cadastro único da rede, com o insumo que permanece	func: governança do cadastro; MV: PRODUTO_UNIFICADO, PRODUTO_UNIFICADO_MGES, ESPECIE_CLASSE_SUBCLASSE_UNIF
+unificacao_insumo_item	SUP	item	F8	Insumo absorvido na unificação e a transferência de saldos e históricos	func: governança do cadastro; MV: PRODUTO_UNIFICADO, PRODUTO_ANTIGO_NOVO
+substituicao_insumo	SUP	vinculo	F8	Insumo substituto ou equivalente terapêutico, com regra e necessidade de aviso ao prescritor	func: governança do cadastro; MV: SUBSTITUICAO_PRODUTOS
+local_estoque	SUP	principal	F3	Local de estoque (almoxarifado, farmácia central, satélite, carrinho), com tipo, setor e centro de custo	func: locais de estoque; MV: ESTOQUE; SPDATA: GELOCARM; dep: centro_custo (07); chaves de GEPARAM e CONFIG_ESTOQUE vão a parametro
+local_estoque_setor	SUP	vinculo	F3	Setores atendidos por cada local de estoque, para roteamento de requisição e dispensação	func: locais de estoque; MV: ESTOQUE, CLASSE_LOCAL
+local_estoque_usuario	SUP	vinculo	F3	Usuários que movimentam cada local de estoque e as operações permitidas	func: locais de estoque; MV: USU_ESTOQUE; SPDATA: GELOCUSU, GEUSERS; dep: perfil e permissão (01); GETABFUN vai a profissional (02)
+usuario_estoque_classificacao	SUP	vinculo	F3	Grupos de insumo que cada usuário pode movimentar	func: locais de estoque; MV: USUARIOS_ESPECIE; SPDATA: GEUSERS_TBCLASSI
+usuario_estoque_centro_custo	SUP	vinculo	F3	Centros de custo para os quais o usuário pode requisitar ou dar saída	func: locais de estoque; SPDATA: GEUSERS_TBCENCUS
+endereco_armazem	SUP	principal	F8	Endereço físico do armazém em níveis (área, rua, prédio, andar, posição), com capacidade	func: endereçamento; MV: ENDERECO_NIVEL_1 a ENDERECO_NIVEL_8
+insumo_endereco	SUP	vinculo	F8	Endereços onde cada insumo é guardado em cada local, com endereço preferencial	func: endereçamento; MV: ENDERECAMENTO
+reserva_endereco	SUP	principal	F8	Reserva de endereço para recebimento ou separação programada	func: endereçamento; MV: RESERVA_ENDERECO_PRODUTO
+ordem_separacao	SUP	principal	F8	Ordem de separação de requisições ou dispensações, com separador e situação	func: endereçamento; MV: SEPARACAO
+ordem_separacao_item	SUP	item	F8	Insumo, lote, endereço e quantidade a separar e separada	func: endereçamento; MV: SEPARACAO
+movimento_estoque	SUP	principal	F3	Razão do estoque: cada entrada ou saída por insumo, lote, local e documento de origem, com quantidade e custo	func: documentos de movimentação; MV: MVTO_ESTOQUE, ITMVTO_ESTOQUE, ITMVTO_ESTOQUE_CUSTO, ITMVTO_ESTOQUE_SOMA_SAIDA; SPDATA: GELANPAC, GELANSAI, GELANTRA, GELANDEV (via documentos)
+documento_estoque	SUP	principal	F3	Documento interno de estoque (transferência, devolução interna, movimento direto, acerto, saída a terceiro), com numeração e situação	func: documentos de movimentação; MV: MVTO_ESTOQUE, ESTOQUE_TRANSFERENCIA, DEV_CENTRALIZADA, MVTO_ESTOQUE_CONCLUSAO; SPDATA: GECADTRA, GECADDEV, GECADSAI
+documento_estoque_item	SUP	item	F3	Insumo, lote, quantidade e custo de cada linha do documento interno	func: documentos de movimentação; MV: ITMVTO_ESTOQUE, ITMVTO_ESTOQUE_TRANSF; SPDATA: GELANTRA, GELANDEV, GELANPAC
+tipo_movimento_estoque	SUP	dominio	F3	Tipo de movimento de estoque, com sentido, efeito no custo e conta contábil	func: documentos de movimentação; SPDATA: GETPLANCTO
+motivo_ajuste_estoque	SUP	dominio	F3	Motivo de acerto, perda ou baixa de estoque (vencimento, avaria, quebra, furto)	func: documentos de movimentação; MV: MOTIVO_ACERTO_ESTOQUE
+sequencia_documento_estoque	SUP	configuracao	F3	Numeração sequencial dos documentos de estoque por tipo e estabelecimento	func: documentos de movimentação; SPDATA: GEGERSEQ, GEULTDOCGER
+requisicao_material	SUP	principal	F3	Pedido de insumos de um setor ou para um paciente a um local de estoque, com urgência e situação	func: requisição ao estoque; MV: SOLSAI_PRO, REQUISICAO_PRODUTO; SPDATA: GECADSAI
+requisicao_material_item	SUP	item	F3	Insumo e quantidade pedidos, atendidos e pendentes	func: requisição ao estoque; MV: ITSOLSAI_PRO; SPDATA: GELANSAIREQ
+atendimento_requisicao	SUP	item	F3	Atendimento parcial ou total de item da requisição, ligado ao movimento de saída	func: requisição ao estoque; MV: ITSOLSAI_PRO_ATENDIDO, HRITSOLSAI_PRO; SPDATA: GELANSAI
+motivo_nao_atendimento	SUP	dominio	F3	Motivo de não atender item de requisição (sem saldo, não padronizado, cota excedida)	func: requisição ao estoque; MV: ITSOLSAI_PRO_ATENDIDO
+terceiro_destinatario	SUP	principal	F3	Pessoa ou empresa externa que recebe saída de estoque (empréstimo, venda, doação)	func: requisição ao estoque; SPDATA: GECADTER, GEINFVENEXT
+romaneio_entrega	SUP	principal	F8	Romaneio de entrega entre unidades, com veículo, motorista, horários e conferência	func: requisição ao estoque (logística entre unidades); MV: ROMANEIO_SOLICITACAO, ROMANEIO, DESTINO_ROMANEIO, MOTORISTA, FRETE
+romaneio_entrega_item	SUP	item	F8	Documento ou volume transportado no romaneio, com situação na entrega	func: logística entre unidades; MV: ROMANEIO
+veiculo_entrega	SUP	dominio	F8	Veículo usado nas entregas entre unidades	func: logística entre unidades; MV: VEICULO_ROMANEIO, TRANSPORTADOR
+dispensacao	SUP	principal	F3	Dispensação da farmácia para um paciente a partir da prescrição, por período ou horário	func: dispensação; MV: CONSUMO_PACIENTE, SOLSAI_PRO_KARDEX; SPDATA: GECADDISPENSACAO; dep: prescricao (03), atendimento (02)
+dispensacao_item	SUP	item	F3	Insumo dispensado ligado ao item prescrito, com quantidade, lote e situação	func: dispensação; MV: ITCONSUMO_PACIENTE; SPDATA: GELANDISPENSACAO, PRINTEGRACAOESTOQUE; dep: prescricao_item (03)
+dose_dispensada	SUP	item	F3	Dose individual com horário previsto e etiqueta própria, lida na checagem da administração	func: dispensação; SPDATA: GEDISPHOR
+acao_dose	SUP	dominio	F3	Ação registrada sobre a dose (dispensada, administrada, suspensa, devolvida)	func: dispensação; SPDATA: GEITEACAODOSE
+entrega_setor	SUP	principal	F3	Entrega dos itens dispensados na unidade, com quem entregou, quem recebeu e horário	func: dispensação; SPDATA: GECTRLENTREGADOCSAIDA
+entrega_setor_item	SUP	item	F3	Dispensação ou dose incluída na entrega ao setor	func: dispensação; SPDATA: GECTRLENTREGADOCSAIDA
+devolucao_dispensacao	SUP	principal	F3	Devolução à farmácia de doses ou itens não usados pelo paciente, com motivo e conferência	func: dispensação; MV: CONSUMO_PACIENTE; SPDATA: GECADDEV
+devolucao_dispensacao_item	SUP	item	F3	Item ou dose devolvida, com lote, quantidade e condição de reaproveitamento	func: dispensação; SPDATA: GELANDEV
+regra_integracao_prescricao	SUP	configuracao	F3	Regra que liga prescrição e estoque por centro de custo e setor: local que atende, antecedência e forma de dispensar	func: dispensação; SPDATA: PRPARINTEGEST; MV: CONFIGURACAO_FARMACIA_MOBILE
+horario_padrao_medicacao	SUP	configuracao	F3	Horários padrão de administração por frequência, usados para gerar as doses	func: dispensação; SPDATA: GEHORMED; GEDIASEMANA é lista fixa do sistema
+regra_envio_avaliacao_farmaceutica	SUP	configuracao	F3	Regra que envia prescrições à fila do farmacêutico por setor, tipo de item ou risco	func: avaliação farmacêutica; MV: PW_CONFIG_AVAL_FARMACIA_DIA; SPDATA: TBTP_ENV_LISTA_AVAL_FARM; dep: avaliacao_farmaceutica (03)
+situacao_farmaceutica	SUP	dominio	F3	Situação farmacêutica do item prescrito (liberado, suspenso, aguardando, substituído)	func: avaliação farmacêutica; SPDATA: TBSITUACAOFARMACIA
+liberacao_farmaceutica_item	SUP	historico	F3	Situação farmacêutica por item e horário da prescrição, com farmacêutico e data, que libera a dispensação	func: avaliação farmacêutica; MV: PW_AVALIACAO_ITPRE_MED; SPDATA: PREXTRATOITEM_TBSITFARM; dep: prescricao_item, avaliacao_farmaceutica (03)
+substituicao_dispensacao	SUP	historico	F3	Troca do insumo prescrito por outro equivalente na dispensação, com motivo e farmacêutico	func: avaliação farmacêutica; SPDATA: PREXTRATOITEM_SUBST
+liberacao_antimicrobiano	SUP	historico	F3	Liberação da dispensação do antimicrobiano restrito após análise da ficha, com prazo de uso	func: antimicrobianos; MV: AUDIT_ANTIMICROBIANO, EMPRESA_ANTIMICROB; SPDATA: GEANTIMI; dep: ficha_antimicrobiano (03); GECADANTIMI vai a ficha_antimicrobiano (03)
+livro_controlado	SUP	principal	F3	Livro de escrituração de controlados por estabelecimento e lista, com período e responsável técnico	func: medicamentos controlados; MV: TERMO_LIVRO_PSICOTROPICO
+termo_livro_controlado	SUP	item	F3	Termo de abertura ou encerramento do livro, com numeração de páginas e assinatura	func: medicamentos controlados; MV: TERMO_LIVRO_PSICOTROPICO
+lancamento_controlado	SUP	item	F3	Lançamento no livro de entrada, saída, perda ou ajuste do controlado, ligado ao movimento de estoque	func: medicamentos controlados; dep: movimento_estoque
+receita_controlada	SUP	principal	F7	Receita ou notificação de controlado retida na dispensação, com número, prescritor e paciente	func: medicamentos controlados; dep: profissional, paciente (02)
+envio_controlado_nacional	SUP	principal	F3	Arquivo de escrituração enviado ao sistema nacional de controlados, com período, protocolo e retorno	func: medicamentos controlados; transmissão vai a integracao
+envio_controlado_nacional_item	SUP	item	F3	Lançamento incluído em cada envio ao sistema nacional, com situação de aceite	func: medicamentos controlados
+regra_fracionamento_insumo	SUP	configuracao	F7	Regra que transforma um insumo em doses fracionadas (insumo de origem, insumo resultante, rendimento, validade)	func: unitarização; MV: PRODUTO_FRACIONADO, PRODUTO_FRACIONAMENTO, FRACIONAMENTO
+ordem_unitarizacao	SUP	principal	F7	Ordem de fracionamento ou unitarização, com farmacêutico, área e situação	func: unitarização; MV: ORDEM_UNITARIZACAO_PRODUTO
+ordem_unitarizacao_item	SUP	item	F7	Insumo e lote de origem consumidos e doses produzidas na ordem	func: unitarização; MV: ORDEM_UNITARIZACAO_PRODUTO, LOTE_AMPOLA
+dose_unitarizada	SUP	principal	F7	Dose unitarizada com identificador único, lote de origem, validade nova e etiqueta	func: unitarização; MV: ETIQUETA_UNITARIZACAO
+capela_manipulacao	SUP	principal	F7	Capela ou área limpa de manipulação, com classificação e situação	func: manipulação; SPDATA: GECAPELAMP
+grupo_manipulacao	SUP	dominio	F7	Grupo de preparação (quimioterapia, nutrição parenteral, antibiótico) que define a área	func: manipulação; SPDATA: GEGRUPOMP
+capela_manipulacao_grupo	SUP	vinculo	F7	Grupos de preparação que cada capela pode manipular	func: manipulação; SPDATA: GECAPELAMP_GEGRUPOMP
+formula_padrao_manipulacao	SUP	configuracao	F7	Fórmula ou kit padrão de manipulação ou produção interna, com rendimento	func: manipulação; MV: ORDEM_PRODUCAO, PREPARACAO_LOTE
+formula_padrao_manipulacao_item	SUP	item	F7	Insumo da fórmula padrão, com quantidade por rendimento	func: manipulação; MV: PREPARACAO_LOTE
+ordem_manipulacao	SUP	principal	F7	Ordem de manipulação ou produção, ligada à prescrição ou à reposição de estoque	func: manipulação; MV: MANIPULA, ORDEM_PRODUCAO; dep: prescricao_item_solucao (03)
+ordem_manipulacao_insumo	SUP	item	F7	Insumo e lote consumidos na ordem de manipulação	func: manipulação; MV: ITMANIPULA
+conferencia_manipulacao	SUP	historico	F7	Dupla conferência farmacêutica da manipulação (cálculo, insumo, rótulo), com responsável	func: manipulação; MV: MANIPULA
+lote_produzido	SUP	principal	F7	Lote do produto manipulado ou do kit montado, com validade e rótulo	func: manipulação; MV: MVTO_KIT_PRODUZIDO
+kit_material	SUP	principal	F3	Kit padrão de insumos por procedimento, cirurgia ou rotina	func: kits; MV: KIT_ESTOQUE; SPDATA: GEKITS
+kit_material_item	SUP	item	F3	Insumo e quantidade do kit padrão	func: kits; MV: ITKIT_ESTOQUE; SPDATA: GEKITITE, GEKITKPI
+kit_material_procedimento	SUP	vinculo	F7	Procedimentos ou cirurgias que usam cada kit padrão	func: kits; MV: CIRURGIA_KIT, ITEM_PROCEDIMENTO_MATERIAL; dep: procedimento (06)
+kit_rastreavel	SUP	principal	F3	Kit rastreável ou carrinho de emergência com lacre, local, responsável e situação	func: kits; MV: DOCUMENTO_KIT; SPDATA: GEKITRAS
+kit_rastreavel_item	SUP	item	F3	Insumo previsto no kit rastreável, com quantidade padrão e saldo atual	func: kits; SPDATA: GEITEMKITRAS, GESALDOKITRAS
+kit_rastreavel_lote	SUP	item	F3	Saldo do kit rastreável por lote e validade, para alertar vencimento dentro do kit	func: kits; SPDATA: GESALDOKITRAS
+movimento_kit_rastreavel	SUP	historico	F3	Consumo do kit para paciente e reposição, com lote, quantidade e documento	func: kits; MV: ITMVTO_KITS; SPDATA: GEITEMKITRAS_GELANSAI, GEITEMKITRAS_GELANDEV
+reposicao_kit_rastreavel	SUP	principal	F3	Reposição do kit rastreável depois do uso, com novo lacre e conferência	func: kits; SPDATA: GEITEMKITRAS_GELANDEV
+conferencia_kit_rastreavel	SUP	historico	F7	Conferência periódica do kit ou carrinho (lacre, validade, itens), com responsável e pendências	func: kits; MV: DOCUMENTO_KIT
+lote_insumo	SUP	principal	F3	Lote do insumo com fabricante, validade, data de fabricação e situação	func: lote e validade; MV: LOTE; SPDATA: GEVALMEM; correção de validade vai a historico_entidade:lote_insumo
+movimento_lote	SUP	item	F3	Quantidade de cada lote em cada movimento de estoque	func: lote e validade; MV: ITMVTO_ESTOQUE; SPDATA: GECTRVMM, GERASVALNFS, GERASVALSAIDLOTE, GERASVALTRANSFLOTE, GERASVALDEVLOTE, GEQTDELOTEVALLOTEDOCSAIDA
+saldo_lote	SUP	principal	F3	Saldo de cada lote por local, com saldo inicial e final do mês	func: lote e validade; SPDATA: GERASVALFINAL, GERASVALINICIAL
+bloqueio_lote	SUP	principal	F7	Bloqueio, quarentena ou recolhimento de lote por alerta sanitário ou do fabricante, com abrangência e destino	func: lote e validade; MV: HIST_LOTE_VALIDADE
+padrao_leitura_codigo	SUP	configuracao	F3	Padrão de leitura de código bidimensional e de barras (campos de produto, lote, validade e série)	func: lote e identificação; MV: MODELO_CODIGO_BARRAS_QR_CODE; SPDATA: GEPADRAO_DATAMATRIX_QRCODE
+etiqueta_identificacao	SUP	principal	F3	Etiqueta com identificador único por unidade ou embalagem, ligada ao insumo, lote e local	func: lote e identificação; MV: ETIQUETA_ESTOQUE, ETIQUETA_BARRA, IDENTIFICADOR_ETIQUETA
+inventario_estoque	SUP	principal	F3	Inventário ou balanço de um local (geral, rotativo, inicial), com data de corte e situação	func: inventário; MV: INVENTARIO; SPDATA: GECADBAL, GEESTINI
+inventario_estoque_contagem	SUP	item	F3	Rodada de contagem do inventário (cega, recontagem), com contador	func: inventário; MV: CONTAGEM, SEQUENCIA_CONTAGEM
+inventario_estoque_item	SUP	item	F3	Quantidade contada por insumo em cada rodada e saldo do sistema na data de corte	func: inventário; MV: ITCONTAGEM; SPDATA: GELANBAL, GELANESI
+inventario_estoque_lote	SUP	item	F3	Quantidade contada por lote e validade no inventário	func: inventário; SPDATA: GERASVALBAL, GERASVALESTINI
+inventario_estoque_divergencia	SUP	item	F3	Diferença apurada entre contagem e saldo, com justificativa e ajuste gerado	func: inventário; MV: DIVERGENCIA_QUANT_PROD
+regra_contagem_rotativa	SUP	configuracao	F7	Frequência da contagem rotativa por classe de valor ou criticidade do insumo e local	func: inventário; MV: VERIFICACAO_ROTATIVA_SALDO
+saldo_estoque	SUP	principal	F3	Saldo atual de cada insumo por local, com quantidade, reserva e custo médio	func: saldo e custo; MV: ESTOQUE_PRODUTO
+saldo_estoque_mensal	SUP	historico	F3	Saldo e valor de cada insumo por local e mês, com entradas e saídas do período	func: saldo e custo; SPDATA: GESALDOS, GEARMLOC, GECONITL
+custo_medio_historico	SUP	historico	F3	Evolução do custo médio do insumo por estabelecimento a cada entrada	func: saldo e custo; MV: CUSTO_MEDIO_MENSAL, VALOR_INICIAL_PRODUTO
+fechamento_estoque	SUP	principal	F3	Fechamento mensal do estoque por estabelecimento, com reabertura justificada	func: saldo e custo; SPDATA: GEFECMES
+recalculo_saldo_estoque	SUP	historico	F3	Recálculo auditado de saldo e custo, com período, insumos atingidos, diferenças e responsável	func: saldo e custo; SPDATA: GEATUALIZASALDO
+consumo_centro_custo	SUP	historico	F3	Consumo mensal valorizado por centro de custo e insumo, para apropriação de custo	func: saldo e custo; MV: ITMVTO_SETOR; SPDATA: GEKONCDC; dep: centro_custo (07)
+regra_contabil_estoque	SUP	configuracao	F3	Conta contábil por tipo de movimento, categoria contábil do insumo e estabelecimento	func: saldo e custo; MV: ESTOQUE_PL_CONTAS; dep: plano de contas (07)
+parametro_reposicao	SUP	configuracao	F3	Estoque mínimo, máximo, ponto de pedido e cobertura por insumo e local	func: reposição; MV: INDICE_COBERTURA_PRODUTO, PRAZO_DISPONIBILIDADE_ESTOQUE; SPDATA: GELIMLOC
+nivel_servico	SUP	dominio	F3	Nível de serviço desejado que define o estoque de segurança	func: reposição; SPDATA: GENIVELSERV
+cota_consumo_setor	SUP	configuracao	F3	Cota de consumo ou ressuprimento por setor e insumo por período	func: reposição; MV: COTA_SETOR, COTA_RESSUPRIMENTO, ITEM_COTA_RESSUPRIMENTO
+sugestao_compra	SUP	principal	F3	Sugestão de compra gerada pelo ponto de pedido, com data e comprador	func: reposição; dep: solicitacao_compra
+sugestao_compra_item	SUP	item	F3	Insumo, consumo médio, saldo e quantidade sugerida	func: reposição
+solicitacao_compra	SUP	principal	F3	Pedido interno de compra de um setor, com justificativa, urgência e situação da aprovação	func: solicitação de compra; MV: SOL_COM; SPDATA: GECADPED; aprovação em pedido_aprovacao e decisao_aprovacao (01)
+solicitacao_compra_item	SUP	item	F3	Insumo ou serviço solicitado, quantidade e data necessária	func: solicitação de compra; MV: ITSOL_COM, REGRA_PARCELA_ITSOL_COM
+solicitacao_compra_rateio	SUP	item	F3	Rateio do custo da solicitação entre centros de custo ou setores	func: solicitação de compra; MV: RATEIO_SOL_COM; dep: centro_custo (07)
+cotacao	SUP	principal	F3	Processo de coleta de preços para uma ou mais solicitações, com prazo de resposta e comprador	func: cotação; MV: COLETA, SOL_COM_FORNECEDOR
+cotacao_item	SUP	item	F3	Insumo ou serviço a cotar, com quantidade e especificação	func: cotação; MV: COLETA
+cotacao_fornecedor	SUP	item	F3	Fornecedor convidado na cotação, com condição de pagamento, prazo de entrega e frete	func: cotação; MV: SOL_COM_FORNECEDOR, FORNEC_COTACAO_PROCES_CPR; SPDATA: GELANPED
+cotacao_resposta_item	SUP	item	F3	Preço e marca respondidos por fornecedor e item, com indicação de vencedor e motivo	func: cotação; MV: MELHOR_FORNECEDOR; SPDATA: GELANPED
+portal_cotacao	SUP	configuracao	F3	Portal externo de cotação configurado, com credenciais no cofre e regras de publicação	func: cotação; SPDATA: GEPORTALCOMPRAS (INTG); canal vai a integracao
+vinculo_portal_cotacao	SUP	vinculo	F3	Identificador da cotação, do item e do fornecedor no portal externo	func: cotação; SPDATA: GEINTAPOIOCOT (INTG)
+comprador_grupo_insumo	SUP	vinculo	F8	Comprador responsável por grupo ou subgrupo de insumo, para distribuir cotações	func: cotação; MV: COTADOR, ESPECIE_COTADOR
+pedido_compra	SUP	principal	F3	Ordem de compra ao fornecedor, com condição de pagamento, frete, autorização e situação	func: pedido de compra; MV: ORD_COM; SPDATA: GECADPED, GEDESPDS; histórico por item (GECOMPRA, PRODUTO_ULTIMAS_COMPRAS) sai da consulta sobre pedido e nota
+pedido_compra_item	SUP	item	F3	Insumo ou serviço comprado, preço, quantidade pedida, recebida e cancelada	func: pedido de compra; MV: ITORD_PRO; SPDATA: GELANPED
+pedido_compra_entrega	SUP	item	F3	Entrega programada do item do pedido, com data e quantidade	func: pedido de compra; SPDATA: GELANPEDENTREGA
+pedido_compra_acompanhamento	SUP	historico	F7	Contatos com o fornecedor sobre o pedido, com previsão de entrega e pendências	func: pedido de compra; MV: ACOMPANHAMENTO_ORDEM_COMPRA
+situacao_pedido_compra	SUP	dominio	F3	Situação do pedido de compra (aberto, autorizado, parcial, recebido, cancelado)	func: pedido de compra; SPDATA: GESITUACAOPED
+destino_entrega_compra	SUP	dominio	F3	Endereço ou local de entrega do pedido de compra	func: pedido de compra; SPDATA: GEDESCOM
+motivo_cancelamento_compra	SUP	dominio	F3	Motivo de cancelamento de pedido ou item de compra	func: pedido de compra; MV: JUSTIFICA_CANCELAMENTO_ORD_CPR
+nota_entrada	SUP	principal	F3	Nota fiscal de entrada de insumos, com emitente, chave, totais, tipo de entrada e situação	func: recebimento; MV: ENT_PRO, MVTO_ESTOQUE_NFE; SPDATA: GECADNFS; XML vai a arquivo; título a pagar (07)
+nota_entrada_item	SUP	item	F3	Item da nota com insumo, quantidade, unidade, custo, lote e item do pedido	func: recebimento; MV: ITENT_PRO, ITMVTO_ESTOQUE_NFE; SPDATA: GELANNFS
+nota_entrada_imposto	SUP	item	F3	Imposto destacado por item da nota (base, alíquota, valor), que compõe ou não o custo	func: recebimento; MV: ITENT_PRO_IMPOSTO, ITMVTO_ESTOQUE_IMPOSTO; dep: dado_fiscal_item (07)
+tipo_entrada_estoque	SUP	dominio	F3	Tipo de entrada (compra, doação, bonificação, consignação, empréstimo), com efeito no custo e no financeiro	func: recebimento; MV: MODELO_ENTRADA_PRODUTO, DOA_PRO
+conferencia_recebimento	SUP	principal	F3	Conferência física da entrega contra nota e pedido, com conferente e divergências	func: recebimento; MV: CONFERENCIA_ENTRADA
+conferencia_recebimento_item	SUP	item	F3	Quantidade, lote e validade conferidos por item e a divergência apontada	func: recebimento; MV: CONFERENCIA_ENTRADA
+devolucao_fornecedor	SUP	principal	F7	Devolução de insumos ao fornecedor com nota fiscal, motivo e abatimento no contas a pagar	func: devolução ao fornecedor; MV: ORDEM_DEVOLUCAO, DEV_FOR_ITCON_PAG
+devolucao_fornecedor_item	SUP	item	F7	Insumo, lote e quantidade devolvidos, ligado ao item da nota de entrada	func: devolução ao fornecedor; MV: ITORDEM_DEVOLUCAO
+motivo_devolucao_fornecedor	SUP	dominio	F7	Motivo da devolução ao fornecedor (avaria, divergência, vencimento, recolhimento) e tipo fiscal	func: devolução ao fornecedor; MV: TIP_DEV_FISCAL
+nota_credito_debito_fornecedor	SUP	principal	F7	Nota de crédito ou débito com o fornecedor gerada por devolução ou diferença de preço	func: devolução ao fornecedor; MV: NOTA_CRE_DEB_SUPRI
+empresa_fornecedora	SUP	principal	F3	Fornecedor de bens e serviços, com documento, dados fiscais, endereço e situação, compartilhado com o financeiro	func: fornecedores; MV: FORNECEDOR, FORNECEDOR_LOGRADOURO; SPDATA: TBFORNEC, TBDISPON; dep: conta_bancaria_credor (07)
+empresa_fornecedora_contato	SUP	item	F3	Contato do fornecedor (telefone, e-mail, representante) por finalidade	func: fornecedores; SPDATA: TBFORNECTEL
+categoria_fornecimento	SUP	dominio	F3	Categoria do que o fornecedor fornece (medicamento, material, serviço, equipamento)	func: fornecedores; SPDATA: TBCATEGO
+empresa_fornecedora_categoria	SUP	vinculo	F3	Categorias de fornecimento de cada fornecedor	func: fornecedores; MV: FORNECEDOR_CATEGORIA; SPDATA: TBCATFOR
+atividade_economica	SUP	catalogo_publico	F3	Classificação oficial de atividade econômica atribuída ao fornecedor	func: fornecedores; SPDATA: TBATIVID
+empresa_fornecedora_autorizacao	SUP	item	F3	Autorização ou licença sanitária do fornecedor, com número, validade e alerta de vencimento	func: fornecedores; MV: FORNECEDOR_ANVISA
+fabricante_fornecedor	SUP	vinculo	F7	Fabricantes que o fornecedor distribui como representante autorizado	func: fornecedores; MV: LABORATOR_FORNECEDOR
+avaliacao_fornecedor	SUP	principal	F3	Avaliação periódica do fornecedor (entrega, qualidade, preço), com nota e parecer	func: fornecedores; MV: HISTORICO_ISO_AVALIACAO
+ocorrencia_fornecedor	SUP	principal	F3	Ocorrência registrada contra o fornecedor (atraso, avaria, não conformidade), com tratativa	func: fornecedores; MV: NOTIFICACAO_FORNECEDOR
+questionario_homologacao	SUP	configuracao	F8	Questionário de homologação de fornecedor por categoria, com pesos e nota mínima	func: homologação de fornecedor; MV: ISO_
+questionario_homologacao_pergunta	SUP	item	F8	Pergunta do questionário de homologação, com peso e respostas pontuadas	func: homologação de fornecedor; MV: ISO_
+homologacao_fornecedor	SUP	principal	F8	Homologação do fornecedor por questionário, com nota, ranking, exceção aprovada e validade	func: homologação de fornecedor; MV: ISO_
+homologacao_fornecedor_resposta	SUP	item	F8	Resposta e pontuação do fornecedor em cada pergunta	func: homologação de fornecedor; MV: ISO_
+saldo_consignado	SUP	principal	F7	Saldo de material consignado por fornecedor, insumo, lote e local	func: consignação; MV: EST_CONSIG_FORN; SPDATA: GESALCON, GETPSALDO; dep: consignacao_material (04)
+remessa_consignada	SUP	principal	F7	Entrada de material consignado enviado pelo fornecedor, com nota de remessa	func: consignação; MV: EST_CONSIG_FORN
+remessa_consignada_item	SUP	item	F7	Insumo, lote, série e quantidade da remessa consignada	func: consignação; MV: EST_CONSIG_FORN
+reposicao_consignada	SUP	principal	F7	Consumo de consignado que gera pedido de compra e reposição ao fornecedor	func: consignação; MV: LOG_MVTO_CONSIGNADO
+faixa_percentual_consignado	SUP	configuracao	F7	Percentual sobre o consumo de consignado por faixa de valor e fornecedor	func: consignação; MV: PERCENTUAL_CONSIGNADO, FAIXA_PERCENTUAL_CONSIGNADO
+solicitacao_opme	SUP	principal	F7	Solicitação de órteses, próteses e materiais especiais ligada à cirurgia, com médico e justificativa	func: OPME; MV: PRE_OC, CONF_FLUXO_GUIA_OPME; dep: aviso de cirurgia (04), solicitacao_autorizacao (06)
+solicitacao_opme_item	SUP	item	F7	Material especial solicitado, quantidade, fornecedores e cotação	func: OPME; MV: OPMENEXO_ITEM, PRODUTOS_NOVOS_OPME
+autorizacao_opme	SUP	principal	F7	Resposta da operadora ao pedido de material especial, com itens e valores autorizados	func: OPME; MV: VAL_OPME_IT_GUIA; dep: resposta_autorizacao (06)
+consumo_opme	SUP	principal	F7	Material especial usado em sala, com lote, série, etiqueta e quem registrou	func: OPME; MV: OPMENEXO_LOTE
+rastreio_implante	SUP	principal	F7	Implante no paciente com registro sanitário, lote, série, local anatômico e cirurgia, para recolhimento	func: OPME; MV: OPMENEXO_LOTE
+conciliacao_opme	SUP	principal	F7	Conciliação entre o autorizado, o usado, o faturado e o reposto do material especial	func: OPME; MV: LOG_CONCILIACAO_OPME; dep: conta_hospitalar_item (06)
+taxa_manuseio_implante	SUP	configuracao	F7	Taxa de manuseio ou comercialização do material especial por fonte pagadora e faixa	func: OPME; MV: TAXA_MANUSEIO_OPME; dep: limite_opme_procedimento (06)
+modalidade_licitacao	SUP	dominio	F7	Modalidade de contratação pública (pregão, concorrência, dispensa, inexigibilidade)	func: compras públicas; MV: MODALIDADE_LICITACAO
+fonte_recurso	SUP	dominio	F7	Fonte do recurso público que financia a compra	func: compras públicas; MV: FONTE_RECURSO
+pesquisa_preco	SUP	principal	F7	Pesquisa de preços para estimar o valor da contratação pública, com fontes e método	func: compras públicas; MV: ITEM_COLETA_
+pesquisa_preco_item	SUP	item	F7	Preço coletado por item e fonte na pesquisa de preços	func: compras públicas; MV: ITEM_COLETA_
+processo_licitatorio	SUP	principal	F7	Processo de contratação pública, com modalidade, objeto, datas, fonte de recurso e situação	func: compras públicas; MV: LICITACAO, PREGAO
+processo_licitatorio_item	SUP	item	F7	Item ou lote do processo, com quantidade e valor estimado	func: compras públicas; MV: ITEM_PREGAO
+proposta_licitacao	SUP	principal	F7	Proposta de fornecedor no processo, com habilitação e classificação	func: compras públicas; MV: PROPOSTA_PREGAO
+proposta_licitacao_item	SUP	item	F7	Preço e marca propostos por item e o resultado (vencedor, desclassificado)	func: compras públicas; MV: PROPOSTA_PREGAO
+lance_licitacao	SUP	historico	F7	Lances da disputa por item, com fornecedor, valor e hora	func: compras públicas; MV: PREGAO
+ata_registro_preco	SUP	principal	F7	Ata de registro de preços com vigência e fornecedores registrados	func: compras públicas; MV: REGISTRO_PRECO
+ata_registro_preco_item	SUP	item	F7	Item registrado na ata, com preço, quantidade e saldo	func: compras públicas; MV: ITEM_REGISTRO_PRECO
+adesao_ata_registro_preco	SUP	principal	F7	Adesão a ata de outro órgão, com quantidades e autorização	func: compras públicas; MV: ADESAO_PROCESSO_PREGAO
+empenho	SUP	principal	F7	Nota de empenho que reserva o recurso para a compra pública, com fonte e valor	func: compras públicas; MV: NOTA_EMPENHO, PEDIDO_EMPENHO
+empenho_item	SUP	item	F7	Item empenhado ligado ao item do pedido de compra	func: compras públicas; MV: NOTA_EMPENHO
+ponto_consumo_gas	SUP	dominio	F8	Ponto de consumo de gás medicinal (régua, leito, sala) ligado ao setor	func: gases medicinais; MV: MVTO_GASES
+consumo_gas_medicinal	SUP	principal	F8	Consumo de gás medicinal por paciente ou setor, com gás, fluxo, início e fim, gerando item na conta	func: gases medicinais; MV: MVTO_GASES; dep: conta_hospitalar_item (06)

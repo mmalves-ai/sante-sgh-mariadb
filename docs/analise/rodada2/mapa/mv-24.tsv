@@ -1,0 +1,209 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPORTAL	REG_OCORRENCIA_RELACIONADO	TABELA	notificacao_incidente_relacionada	N	QUA	F7	
+DBAPORTAL	REG_PESSOA	TABELA	analise_incidente_participante	N	QUA	F7	pessoas envolvidas ou cientes do evento, com leitura
+DBAPORTAL	REPOSITORIO_DOCTO	TABELA	pasta_documento_qualidade	N	QUA	F8	
+DBAPORTAL	REPOSITORIO_DOCTO_FLUXO_DOC	TABELA	pasta_documento_qualidade;documento_qualidade_aprovacao	N	QUA	F8	responsáveis padrão do fluxo de aprovação por pasta
+DBAPORTAL	REPOSITORIO_DOCUMENTO_PAPEL	TABELA	pasta_documento_qualidade	N	QUA	F8	perfis com leitura, publicação e liberação na pasta
+DBAPORTAL	RESPOSTA_ESCOLHIDA	TABELA	notificacao_incidente_resposta	N	QUA	F7	
+DBAPORTAL	RESPOSTA_ORGANIZACAO	TABELA	campo_tipo_incidente	N	QUA	F7	opção de resposta habilitada por estabelecimento
+DBAPORTAL	RESPOSTA_ORGANIZACAO_TEMP	NAO		N	QUA		copia/backup
+DBAPORTAL	RESPOSTA_PARAM	TABELA	campo_tipo_incidente	N	QUA	F7	argumento da opção de resposta por tipo de evento
+DBAPORTAL	RESPOSTA_PERGUNTA	TABELA	campo_tipo_incidente	N	QUA	F7	opções de resposta do campo
+DBAPORTAL	RESPOSTA_PERGUNTA_ORGANIZACAO	TABELA	campo_tipo_incidente	N	QUA	F7	opções de resposta próprias do estabelecimento
+DBAPORTAL	RESP_PERGUNTA_ORGANIZACAO_TEMP	NAO		N	QUA		copia/backup
+DBAPORTAL	RESULTADO	NAO		N	REL		tecnico do fornecedor sem equivalente (área de cálculo temporária do indicador)
+DBAPORTAL	RES_FAT	MECANISMO	datamart	N	REL	F3	resumo de contas faturadas por período
+DBAPORTAL	REUNIAO	TABELA	reuniao_analise_critica;reuniao_analise_critica_participante	N	REL	F8	
+DBAPORTAL	RISCO	TABELA	risco_institucional	N	QUA	F8	
+DBAPORTAL	RISCO_DOCUMENTO	TABELA	documento_qualidade_referencia	N	QUA	F8	
+DBAPORTAL	RISCO_DOCUMENTO_ANEXO	MECANISMO	arquivo	N	QUA	F8	anexo do risco; metadado em risco_institucional
+DBAPORTAL	SCR_TIPO_PROTOCOLO	TABELA	protocolo_classificacao_risco	N	PEP	F3	
+DBAPORTAL	SEGURANCA_AUTOMATION	MECANISMO	framework	N	SIS	F3	permissão sobre automações do portal
+DBAPORTAL	SEGURANCA_CARGA	MECANISMO	framework	N	SIS	F3	permissão sobre cargas de dados do portal
+DBAPORTAL	SEGURANCA_ESTRATEGIA	TABELA	usuario_escopo	N	ADM	F7	acesso por mapa estratégico
+DBAPORTAL	SEGURANCA_IVM	TABELA	usuario_escopo	N	ADM	F7	acesso por indicador
+DBAPORTAL	SEGURANCA_IVM_CORP	TABELA	usuario_escopo	N	ADM	F7	acesso aos indicadores corporativos
+DBAPORTAL	SENIORIDADE	TABELA	faixa_salarial	N	RH	F8	nível de senioridade do cargo
+DBAPORTAL	SE_CONFIGURACAO	NAO		N	SIS		tecnico do fornecedor sem equivalente (servidor de BI e caminhos do produto)
+DBAPORTAL	SE_CONFIG_EXEC	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SISTEMA_INTEGRACAO	TABELA	sistema_externo	N	INTG	F3	
+DBAPORTAL	SITE	NAO		N	SIS		tecnico do fornecedor sem equivalente (licença do produto)
+DBAPORTAL	SQLN_EXPLAIN_PLAN	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_ANB	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_PROFILES	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_RUNS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_SESS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_UNITS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	SQLN_PROF_UNIT_HASH	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	ST_AGE_CIR	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_ATENDIME	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_AVISO_CIRURGIA	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_CIRURGIA_AVISO	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_EVE_SIASUS	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_ITREG_AMB	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_ITREG_FAT	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_REG_AMB	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_REG_FAT	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	ST_TRANSFERENCIA_CIRURGIA	MECANISMO	integracao	N	INTG	F3	captura de mudanças para replicação
+DBAPORTAL	SUBDIVISAO_SETOR	TABELA	setor_funcional	N	CAD	F3	subdivisão vira nível da hierarquia de setores
+DBAPORTAL	TABELA	NAO		N	SIS		sem valor de negocio (tabela de teste com colunas A, B, C)
+DBAPORTAL	TABELA_PERGUNTA	MECANISMO	framework	N	SIS	F3	lista de opções alimentada por consulta no editor de formulário
+DBAPORTAL	TABELA_PERGUNTA_ORGANIZACAO	MECANISMO	framework	N	SIS	F3	lista de opções por estabelecimento no editor de formulário
+DBAPORTAL	TB_RESUMO_INDICADORES	MECANISMO	datamart	N	REL	F3	resumo mês anterior x atual
+DBAPORTAL	TELEFONE	TABELA	telefone_pessoa	N	CAD	F3	telefone do usuário do portal
+DBAPORTAL	TEMA_ESTRATEGICO	TABELA	tema_estrategico	N	REL	F8	
+DBAPORTAL	TEMA_OBJETIVO	TABELA	objetivo_estrategico	N	REL	F8	tema vira coluna do objetivo
+DBAPORTAL	TIPO_CATEGORIA_DOCTO	TABELA	tipo_documento_qualidade	N	QUA	F8	
+DBAPORTAL	TIPO_DOCTO	TABELA	tipo_documento_qualidade	N	QUA	F8	prazos e bloqueios de revisão e aprovação por tipo
+DBAPORTAL	TIPO_FLUXO_OCORRENCIA	TABELA	fluxo_tratamento_incidente_etapa	S	QUA	F7	
+DBAPORTAL	TIPO_LICENCA_SE	NAO		N	SIS		tecnico do fornecedor sem equivalente (licença do produto)
+DBAPORTAL	TIPO_MENSAGEM	TABELA	finalidade_email	N	ADM	F3	
+DBAPORTAL	TIPO_OCORRENCIA	TABELA	tipo_incidente	N	QUA	F7	
+DBAPORTAL	ULTIMA_AUTENTICAO	MECANISMO	integracao	N	INTG	F3	última importação por estabelecimento, com erro
+DBAPORTAL	USUARIO_CALENDARIO	TABELA	calendario_expediente_usuario	S	ADM	F8	
+DBAPORTAL	USUARIO_PERMISSAO_INDICADOR	TABELA	usuario_escopo	N	ADM	F7	permissão por indicador, setor, meta e mapa
+DBAPORTAL	USUARIO_PORTAL_MSG_NOTICIA	TABELA	comunicado_destinatario	N	ADM	F3	
+DBAPORTAL	USUARIO_PORTAL_TELEFONE	TABELA	telefone_pessoa	N	CAD	F3	
+DBAPORTAL	USUARIO_SISTEMA_LICENCA	NAO		N	SIS		tecnico do fornecedor sem equivalente (licença do produto)
+DBAPORTAL	VALORES_REFERENCIA	TABELA	meta_indicador	N	REL	F3	valor de referência do indicador por setor e data
+DBAPORTAL	VL_CONFIGURACAO	MECANISMO	parametro	N	ADM	F3	valor de configuração por usuário
+DBAPORTAL	VM_PENDENCIAS	MECANISMO	datamart	N	REL	F3	visão de pendências por atendimento
+DBAPORTAL	WORKFLOW_OCORRENCIA	TABELA	fluxo_tratamento_incidente	S	QUA	F7	
+MVCONT	ALCA_APROVADOR	TABELA	aprovador_etapa	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_APROVADOR_MOB	TABELA	aprovador_etapa	N	FIN	F8	identificador do celular para aprovar; mesmo destino da cópia em DBAMV
+MVCONT	ALCA_APROVADOR_STAT	MECANISMO	historico_entidade:aprovador_etapa	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_DEMANDA	TABELA	pedido_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_DEMANDA_AGRP	TABELA	pedido_aprovacao;agrupador_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PARAMETRO	MECANISMO	parametro	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PERMISSAO	TABELA	alcada_aprovacao_nivel	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PERMISSAO_AGRP	TABELA	alcada_aprovacao_nivel;agrupador_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PONTO	TABELA	tipo_documento_aprovacao;alcada_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PONTO_AGRP	TABELA	agrupador_aprovacao	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PONTO_RESP	TABELA	resposta_padrao_aprovacao	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_PONTO_STAT	MECANISMO	historico_entidade:alcada_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ALCA_RUBRICA	TABELA	decisao_aprovacao	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA	TABELA	versao_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_CRONOGRAMA	TABELA	cronograma_orcamento	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_EMP	TABELA	versao_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_ITEM	TABELA	linha_orcamento;valor_orcado_mes	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_ITEM_ESTATISTICO	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_ITEM_IND_REALI	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_MOVIMENTO	TABELA	remanejamento_orcamentario	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_ORCA	TABELA	consolidacao_orcamento	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_PARECER	TABELA	aprovacao_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	BASE_ORCA_REALIZADO	TABELA	saldo_contabil_centro_mensal;reserva_orcamentaria	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_APONTA_PROD	TABELA	item_apontamento_producao	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_ARQUIVO	MECANISMO	arquivo	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_AUDITORIA	MECANISMO	trilha_auditoria	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_AUDITORIA_ITEM	MECANISMO	trilha_auditoria	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO	TABELA	contrato_fornecedor	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_ARQU	TABELA	anexo_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_EVEN	TABELA	evento_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_FORM	TABELA	mensagem_interna	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_ITEM	TABELA	contrato_fornecedor_item	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_NOTA	TABELA	medicao_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_PARC	TABELA	parcela_contrato_fornecedor	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_PERI	TABELA	contrato_fornecedor_item;reajuste_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_PROJ	TABELA	rateio_contrato;apropriacao_projeto	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_RATE	TABELA	rateio_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_SLA	TABELA	sla_contrato	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_STAT	MECANISMO	historico_entidade:contrato_fornecedor	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_SUPR	TABELA	contrato_fornecedor_grupo_insumo	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_TEXT	TABELA	clausula_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_UNEG	TABELA	parte_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_USUA	TABELA	gestor_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_CONTRATO_VINC	TABELA	aditivo_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_COTACAO	TABELA	cotacao	N	SUP	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_DATA	TABELA	tipo_evento_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_DATA_EMPR	TABELA	tipo_evento_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_EVENTO	TABELA	evento_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_FORNECEDOR	TABELA	empresa_fornecedora	N	SUP	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_FORUM	TABELA	mensagem_interna	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_FORUM_USUA	TABELA	mensagem_interna_destinatario	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_GESTAO	TABELA	gestor_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_INDICADOR	TABELA	indice_reajuste	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_INDICADOR_VAL	TABELA	indice_reajuste_valor	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_ITCOTACAO	TABELA	cotacao_fornecedor	N	SUP	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_ITLOTE_APONTAMENTO	TABELA	item_apontamento_producao	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_LOTE	TABELA	grupo_lancamento_financeiro;parcela_contrato_fornecedor	N	FIN	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_LOTE_APONTAMENTO	TABELA	apontamento_producao_contrato	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MENSAGEM	TABELA	mensagem_interna	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MENSAGEM_LIDA	TABELA	mensagem_interna_destinatario	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MENSAGERIA	TABELA	mensagem_interna	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MENSAGERIA_ANEX	MECANISMO	arquivo	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MENSAGERIA_DEST	TABELA	mensagem_interna_destinatario	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MODELO_EMPR	TABELA	parte_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MODULO_NOTA	MECANISMO	framework	N	SIS	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MOTIVO	TABELA	motivo_situacao_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_MOTIVO_EMPR	TABELA	motivo_situacao_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_OCORRENCIA	TABELA	ocorrencia_contrato	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_ORD_COM_SERV	TABELA	pedido_compra;contrato_fornecedor_item	N	SUP	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_PARADA	MECANISMO	framework	N	SIS	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_STATUS	TABELA	situacao_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_STATUS_EMPR	TABELA	situacao_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TAGS	TABELA	modelo_texto_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TEXTO	TABELA	modelo_texto_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TIPO	TABELA	tipo_contrato_fornecedor	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TIPO_DOCUMENTO	TABELA	tipo_documento_financeiro	N	FIN	F3	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TIPO_EMPR	TABELA	tipo_contrato_fornecedor	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	GCTO_TIPO_EVENTO	TABELA	tipo_evento_contrato	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	INDICADOR_ORCAMENTARIO	TABELA	indicador_orcamentario	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	INDICADOR_ORCAMENTARIO_SETOR	TABELA	indicador_orcamentario;valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_AJUSTE_NF	TABELA	ajuste_orcamento_nota	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_AJUSTE_NF_RATEIO	TABELA	ajuste_orcamento_nota	N	FIN	F8	rateio por centro vira linhas do ajuste; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA	TABELA	conta_orcamentaria	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA_COMP	TABELA	conta_orcamentaria_composicao	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA_EMPR	TABELA	conta_orcamentaria_estabelecimento	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA_IND	TABELA	conta_orcamentaria_indicador	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA_PECA	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTA_USUA	TABELA	responsavel_orcamento	N	FIN	F7	gestor da conta com permissões; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE	TABELA	versao_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_CONCLUSAO	TABELA	aprovacao_orcamento	N	FIN	F7	conclusão do preenchimento por setor; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_CONTA	TABELA	linha_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_CONTA_AUX	TABELA	linha_orcamento	N	FIN	F7	subitem da linha (fornecedor, contrato); mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_ESTATISTICO	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_ESTAT_SETOR	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_IND	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_IND_MOV	TABELA	valor_estatistico_orcado	N	FIN	F8	valores mensais com base histórica; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_IND_SETOR	TABELA	valor_estatistico_orcado	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_MOV	TABELA	valor_orcado_mes	N	FIN	F7	orçado x realizado mensal; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_MOV_AUX	TABELA	valor_orcado_mes	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_PECA	TABELA	versao_orcamento_peca	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_PENDENCIAS	TABELA	aprovacao_orcamento	N	FIN	F7	pendência de envio e aprovação por setor; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_PLANO_PEND	TABELA	aprovacao_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_CONTROLE_SETOR	TABELA	linha_orcamento	N	FIN	F7	linha por centro de custo; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_EXCECAO	TABELA	regra_controle_orcamentario	N	FIN	F8	itens excluídos do controle; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_EXIBE_INFO	NAO		N	FIN		tecnico do fornecedor sem equivalente
+MVCONT	ORCA_EXTERNO	TABELA	realizado_orcamento_origem	S	FIN	F7	carga externa de realizado; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_EXTERNO_LOG	MECANISMO	integracao	N	FIN	F7	erros da carga externa de realizado
+MVCONT	ORCA_EXTERNO_LOTE	MECANISMO	integracao	N	FIN	F7	lote de carga externa; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_GRUPO_INDICADOR	TABELA	grupo_indicador_orcamentario	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_INDICADOR_COMP	TABELA	indicador_orcamentario	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_LOGS	MECANISMO	trilha_auditoria	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_MOTIVO	TABELA	motivo_movimento_orcamento	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_NOTA_EXPLICATIVA	TABELA	nota_explicativa	N	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PECA	TABELA	modelo_peca_orcamentaria	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PECA_ITEM	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PECA_ITEM_SETOR	TABELA	modelo_peca_orcamentaria_setor	S	FIN	F8	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PECA_VARIAVEIS	TABELA	premissa_orcamento	N	FIN	F7	variável usada nas fórmulas; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PERFIL	TABELA	perfil_acesso	N	ADM	F3	permissões do orçamento viram ações do perfil; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PERFIL_USUARIO	TABELA	usuario_perfil	N	ADM	F3	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PERFIL_USUA_CONTA	TABELA	responsavel_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PERFIL_USUA_PROV	TABELA	usuario_perfil	N	ADM	F3	perfil provisório com vigência; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PERFIL_USUA_SETOR	TABELA	responsavel_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PLANO	TABELA	plano_orcamentario	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PLANO_EMPR	TABELA	plano_orcamentario_estabelecimento	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_PLANO_ESTR	TABELA	conta_orcamentaria	S	FIN	F7	hierarquia do plano vira hierarquia da conta; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_RATEIO	TABELA	criterio_rateio	N	FIN	F7	critério de distribuição do orçado entre setores; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_RATEIO_DESTINO	TABELA	destino_criterio_rateio	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_RATEIO_ORIGEM	TABELA	criterio_rateio	N	FIN	F7	conta e setor de origem do critério; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_RATEIO_USUARIO	TABELA	responsavel_orcamento	N	FIN	F7	usuário que aplica o rateio; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_REALIZADO	TABELA	realizado_orcamento	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_REALIZADO_ITEM	TABELA	realizado_orcamento	S	FIN	F7	colunas mensais viram linhas por mês; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_REALIZADO_MOV	TABELA	realizado_orcamento_origem	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_TIPO_CENTRO	TABELA	classificacao_centro_custo	N	FIN	F3	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_TIPO_CONTA	TABELA	tipo_conta_orcamentaria	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_TIPO_EXTERNO	TABELA	tipo_origem_realizado	S	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_VARIAVEL	TABELA	premissa_orcamento	N	FIN	F7	mesmo destino da cópia em DBAMV
+MVCONT	ORCA_VARIAVEL_CNTA	TABELA	conta_orcamentaria_composicao	S	FIN	F7	fórmula da conta a partir de premissas; mesmo destino da cópia em DBAMV
+MVCONT	ORCA_WIZARD_AUX	NAO		N	FIN		tecnico do fornecedor sem equivalente

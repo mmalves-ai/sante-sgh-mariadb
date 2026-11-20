@@ -1,0 +1,27 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+modelo_pesquisa_satisfacao_opcao	ACEITA	modelo_pesquisa_satisfacao_opcao	QUA	item	F8	Opção de resposta de pergunta de múltipla escolha da pesquisa de satisfação, com texto, valor e ordem
+carteira_risco_responsavel	ACEITA	carteira_risco_responsavel	QUA	vinculo	F8	Pessoas e perfis responsáveis por uma carteira de riscos, com permissão de ver ou editar
+investigacao_obito_vigilancia	ACEITA	investigacao_obito_vigilancia	QUA	principal	F7	Investigação hospitalar do óbito materno, infantil, fetal ou mal definido: prazos, ficha, conclusão e envio à vigilância do município
+tipo_manifestacao_ouvidoria	ACEITA	tipo_manifestacao_ouvidoria	QUA	dominio	F7	Tipo de manifestação (elogio, reclamação, sugestão, solicitação, denúncia, informação)
+canal_ouvidoria	ACEITA	canal_ouvidoria	QUA	dominio	F7	Canal de entrada da manifestação (presencial, telefone, e-mail, site, urna, aplicativo de mensagem, rede social)
+motivo_manifestacao	ACEITA	motivo_manifestacao	QUA	dominio	F7	Assunto hierárquico da manifestação (atendimento, demora, limpeza, alimentação, cobrança, comunicação)
+perfil_manifestante	ACEITA	perfil_manifestante	QUA	dominio	F7	Quem se manifesta (paciente, familiar, acompanhante, visitante, colaborador, fonte pagadora)
+motivo_encerramento_manifestacao	ACEITA	motivo_encerramento_manifestacao	QUA	dominio	F7	Motivo de encerramento (resolvida, improcedente, sem retorno do manifestante, encaminhada a outro órgão)
+prazo_manifestacao_ouvidoria	ACEITA	prazo_manifestacao_ouvidoria	QUA	configuracao	F7	Prazo de resposta por tipo e prioridade da manifestação e prazo do parecer do setor
+manifestacao_ouvidoria_evento	ACEITA	manifestacao_ouvidoria_evento	QUA	historico	F7	Mudança de situação ou de setor responsável da manifestação, com motivo e responsável
+contato_manifestacao	ACEITA	contato_manifestacao	QUA	item	F7	Contato com o manifestante (retorno, pedido de informação, resposta final), com meio, data, conteúdo e resultado
+tipo_surto_infeccao	ACEITA	tipo_surto_infeccao	QUA	dominio	F3	Tipos de surto (infeccioso, alimentar, por microrganismo resistente), conforme a lista do SINAN
+protocolo_classificacao_estabelecimento	ACEITA	protocolo_classificacao_estabelecimento	PEP	vinculo	F3	Protocolo vigente em cada estabelecimento ou unidade de urgência, com início e fim de vigência para guardar as trocas
+faixa_sinal_vital_classificacao	ACEITA	faixa_sinal_vital_classificacao	PEP	configuracao	F3	Faixa de sinal vital por idade (anos, meses, dias) que aciona um discriminador ou eleva o nível, com valor mínimo e máximo
+discriminador_fator_afericao	ACEITA	discriminador_fator_afericao	PEP	vinculo	F3	Fatores de aferição que o classificador deve informar ao avaliar cada discriminador baseado em sinal vital
+motivo_reclassificacao	ACEITA	motivo_reclassificacao	PEP	dominio	F3	Motivo da reclassificação (tempo-alvo vencido, piora clínica, novo sinal vital, erro de registro)
+motivo_cancelamento_classificacao	ACEITA	motivo_cancelamento_classificacao	PEP	dominio	F3	Motivo de encerrar a classificação sem concluir (evasão antes da chamada, desistência, registro em duplicidade, encaminhado direto à sala vermelha)
+classificador_habilitado	ACEITA	classificador_habilitado	PEP	vinculo	F7	Profissional habilitado a classificar em cada protocolo, com data e validade do treinamento ou certificação
+encaminhamento_externo_classificacao	ACEITA	encaminhamento_externo_classificacao	PEP	principal	F7	Encaminhamento do paciente de baixa prioridade a outro serviço da rede (unidade básica, ambulatório), com destino, orientação e aceite
+destino_encaminhamento_externo	ACEITA	destino_encaminhamento_externo	PEP	dominio	F7	Serviço externo que recebe os encaminhamentos da classificação, com endereço, horário e tipo de atendimento
+auditoria_classificacao_risco	ACEITA	auditoria_classificacao_risco	PEP	principal	F7	Auditoria periódica da classificação por amostra de episódios: período, filtro de seleção, protocolo e resultado de concordância
+auditoria_classificacao_risco_item	ACEITA	auditoria_classificacao_risco_item	PEP	item	F7	Episódio auditado: nível atribuído, nível que o auditor julga correto, tipo de desvio (sub ou supertriagem) e comentário
+auditoria_classificacao_risco_auditor	ACEITA	auditoria_classificacao_risco_auditor	PEP	vinculo	F7	Auditores da auditoria de classificação, com o papel de cada um (responsável, auditor, observador)
+recurso_previsto_urgencia	ACEITA	recurso_previsto_urgencia	PEP	dominio	F8	Recurso previsto para o paciente no protocolo por recursos (exame laboratorial, imagem, medicação venosa, procedimento, consulta especializada)
+pergunta_pre_classificacao	ACEITA	pergunta_pre_classificacao	PEP	configuracao	F8	Pergunta da abordagem inicial na chegada, antes da classificação, que antecipa a chamada ou abre um fluxo prioritário (dor no peito, déficit súbito)
+fator_afericao	ACEITA	fator_interferencia_sinal_vital	PEP	dominio	F3	Fator que interfere na leitura de um sinal vital na classificação (arritmia, oxigênio suplementar, febre recente, uso de antitérmico)

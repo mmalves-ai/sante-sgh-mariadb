@@ -1,0 +1,31 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+protocolo_gerenciado_setor	PEP	vinculo	F7	Setores em que o protocolo gerenciado é vigiado e se o alerta é disparado para a equipe do setor	DBAMV.PW_ALERTA_PROTOCOLO_SETOR
+protocolo_gerenciado_prescricao	PEP	vinculo	F7	Protocolos de prescrição sugeridos ao incluir o paciente no protocolo gerenciado, por categoria profissional	DBAMV.PW_ALERT_PROTO_PREMED_TP_PREST
+liberacao_pendencia_assinatura	PEP	historico	F7	Liberação temporária dada a profissional com assinaturas pendentes, com autorizador, vigência e desativação	DBAMV.PW_AUTORIZA_PENDENCIA_ASSINAT
+balanco_hidrico	PEP	principal	F3	Balanço hídrico do paciente por dia de referência e setor, com turnos, horário de fechamento e situação	DBAMV.PW_BALANCO_HIDRICO
+configuracao_balanco_setor	PEP	configuracao	F3	Regras do balanço hídrico por setor: turnos, horário de fechamento, idade pediátrica e grupos exibidos em ordem	DBAMV.PW_CONFIG_SETOR_BALANCO_HIDR;DBAMV.PW_CONFIG_SETOR_GRUPO_BAL_HID
+configuracao_balanco_turno	PEP	item	F3	Turnos do balanço hídrico de um setor, com nome, sigla e horário de início e fim	DBAMV.PW_CONFIG_TURNO_GRUPO_BAL_HID
+funcao_equipe_assistencial_escopo	PEP	vinculo	F7	Estabelecimentos, setores e operadoras em que cada função da equipe assistencial pode ser usada	DBAMV.PW_CAD_FUNCAO_MEDICA_EMPRESA
+inclusao_protocolo_criterio	PEP	item	F7	Critérios atendidos ou recusados na inclusão do paciente no protocolo, com valor encontrado e motivo	DBAMV.PW_CASO_PROTOCOLO_CRITERIO
+posologia_padrao_item	PEP	configuracao	F3	Posologia sugerida de um item prescritível por setor: dose, via, frequência, duração e uso contínuo	DBAMV.PW_CONFIGURACAO_PADRAO_ITEM
+posologia_padrao_componente	PEP	item	F3	Componentes da posologia sugerida (diluente, solução), com quantidade, unidade e via	DBAMV.PW_COMPONENTE_POSOLOGIA
+problema_paciente_conduta	PEP	item	F7	Conduta registrada para um problema da lista de problemas do paciente	DBAMV.PW_CONDUTA_PROBLEMA_PAC
+regra_pendencia_prescricao	PEP	configuracao	F7	Quando item prescrito sem registro gera pendência no prontuário, por setor, esquema e tipo de item, com tolerância	DBAMV.PW_CONFIG_AUDIT_SETOR_PRESC;DBAMV.PW_CONFIG_AUDIT_ESQUEMA_PRESC;DBAMV.PW_CONFIG_AUDIT_PRON_TIP_PRESC
+regra_reducao_quantidade_prescricao	PEP	configuracao	F7	Esquemas e itens cuja quantidade é recalculada quando se aplica um percentual de redução à prescrição	DBAMV.PW_CONFIG_ESQMA_REDUCAO_QUANTD;DBAMV.PW_CONFIG_ITENS_REDUCAO_QUANTD
+sinalizador_paciente	PEP	configuracao	F7	Sinalizador visual do paciente nas listas (cor, letra, ordem), com critérios automáticos de entrada e saída	DBAMV.PW_CONFIG_INDICACAO_PACIENTE
+sinalizador_paciente_origem	PEP	item	F7	Resposta de modelo ou campo de documento que liga automaticamente um sinalizador do paciente	DBAMV.PW_CONFIG_INDICACAO_PAC_ORI
+sinalizacao_paciente	PEP	historico	F7	Sinalizador ligado ao paciente ou atendimento, com início, fim, documento de origem e quem ligou e desligou	DBAMV.PW_INDICACAO_PACIENTE
+alerta_item_diagnostico	PEP	configuracao	F7	Regra de alerta do item prescritível conforme diagnóstico, sexo e faixa de idade do paciente	DBAMV.PW_CONFIG_INTER_CID_PRESC
+alerta_item_diagnostico_cid	PEP	item	F7	Diagnósticos de uma regra de alerta do item, com tipo (contraindica ou exige) e mensagem exibida	DBAMV.PW_ITCONFIG_INTER_CID_PRESC
+alerta_item_resultado_exame	PEP	configuracao	F7	Regra que confere resultado recente de exame ao prescrever um item, por dose, sexo, idade e janela de dias	DBAMV.PW_CONFIG_RESUL_EXAME_PRESC
+alerta_item_resultado_exame_faixa	PEP	item	F7	Exame, campo e faixas de valor que disparam a regra de alerta por resultado de exame	DBAMV.PW_ITCONFIG_RESUL_EXAME_PRESC
+interacao_medicamento_exame	PEP	configuracao	F7	Efeito de um item prescritível sobre exames laboratoriais (eleva ou reduz o valor), para alerta na solicitação	DBAMV.PW_CONFIG_SOLIC_EXAME_PRESC;DBAMV.PW_ITCONFIG_SOLIC_EXAME_ELEV;DBAMV.PW_ITCONFIG_SOLIC_EXAME_DIMIN
+especialidade_destino_parecer	PEP	configuracao	F7	Especialidades que podem receber parecer ou encaminhamento por setor de origem e tipo de atendimento	DBAMV.PW_CONFIG_SETOR_PARECER_ENCM;DBAMV.PW_ESPECIALIDADE_ATENDIMENTO
+conversao_unidade_afericao	PEP	configuracao	F8	Fator de conversão entre unidades de aferição (grama e quilo, centímetro e metro) para gráficos e cálculos	DBAMV.PW_FATOR_CONVERSAO_UNID_AFER
+item_agendavel_especialidade	AGE	vinculo	F3	Especialidades que podem realizar ou marcar cada item agendável	DBAMV.PW_ESPECIALID_ITEM_AGENDAMENTO
+evento_adverso	PEP	dominio	F8	Evento adverso padronizado, com definição e grupo, para registro estruturado na lista de problemas	DBAMV.PW_EVENTO_ADVERSO
+grau_evento_adverso	PEP	item	F8	Graus de um evento adverso padronizado, com a descrição clínica de cada nível	DBAMV.PW_GRAU_EVENTO_ADVERSO
+grupo_evento_adverso	PEP	dominio	F8	Grupos e subgrupos em árvore dos eventos adversos padronizados	DBAMV.PW_GRUPO_EVENTO_ADVERSO
+grupo_exibicao_prescricao	PEP	dominio	F3	Grupos de exibição da prescrição (dieta, cuidados, medicamentos), com ordem e uso na tela de favoritos	DBAMV.PW_GRUPO_PRESCRICAO
+grupo_exibicao_prescricao_item	PEP	vinculo	F3	Itens e esquemas de cada grupo de exibição da prescrição, com subgrupo, ordem e rótulo	DBAMV.PW_GRUPO_ITEM_PRESCRICAO;DBAMV.PW_GRUPO_PRESCRICAO_TIPO_ESQM
+grupo_parametro_vital	PEP	dominio	F3	Grupos de parâmetros vitais aferidos e exibidos juntos (sinais vitais, neurológico, dor)	DBAMV.PW_GRUPO_ITENS_AFERICAO

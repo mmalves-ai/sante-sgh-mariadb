@@ -1,0 +1,10 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+registro_raas	ACEITA	registro_raas	SUS	principal	F7	Registro de ações ambulatoriais de saúde (atenção psicossocial ou domiciliar) por paciente e competência
+registro_raas_procedimento	ACEITA	registro_raas_procedimento	SUS	item	F7	Ações e procedimentos realizados no registro de ações ambulatoriais
+remessa_raas	ACEITA	remessa_raas	SUS	principal	F7	Arquivo do registro de ações ambulatoriais da competência, com críticas e situação
+notificacao_doador	ACEITA	notificacao_doador	SUS	principal	F7	Potencial doador notificado à central estadual, com causa, órgãos e desfecho
+grupo_repasse	ACEITA	grupo_repasse	FAT	dominio	F7	Grupos de profissionais com a mesma regra de repasse
+dominio_contratualizacao_sus	ACEITA	dominio_contratualizacao_sus	SUS	dominio	F7	Listas da contratualização SUS (periodicidade, rede assistencial, complexidade, tipo de indicador, escore, esfera)
+incentivo_contratual_sus	ACEITA	incentivo_contratual_sus	SUS	configuracao	F7	Incentivos financeiros do contrato SUS e regra de concessão
+producao_fixa_setor_sus	ACEITA	producao_fixa_setor_sus	SUS	configuracao	F7	Quantidade padrão de procedimento público lançada por setor, instrumento e período na produção ambulatorial, com vigência
+solicitante_sus	FUNDIR	solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta, exame ou procedimento, com conselho, UF, ocupação, CNS e contato

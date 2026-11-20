@@ -1,0 +1,76 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+CCAGENDA	1001	CC	Centro Cirúrgico > Agenda cirúrgica (mapa de salas)	movimento	migrar-movimento	Agendamentos cirúrgicos com equipe, sala, convênio e situação
+CCAGENDA_EXC_CANC	66	CC	Centro Cirúrgico > Agenda > Excluídos/cancelados	historico	migrar-leitura	Cópia dos agendamentos cirúrgicos excluídos ou cancelados, para auditoria
+CCCADCIR	1001	CC	Centro Cirúrgico > Registro de cirurgia / Ficha anestésica	movimento	migrar-movimento	Registro da cirurgia realizada: horários, anestesia, sinais, sala, urgência
+CCCADCIR_EXCLUSAO	3	CC	Administração > Auditoria > Cirurgias excluídas	auditoria	migrar-leitura	Cópia de registros de cirurgia excluídos (3 linhas)
+CCHISAGE	1001	CC	Centro Cirúrgico > Agenda > Histórico de alterações	historico	migrar-leitura	Histórico de inclusão, alteração, exclusão e reagendamento da agenda cirúrgica
+CCLANCIR	1001	CC	Centro Cirúrgico > Registro de cirurgia > Procedimentos e equipe	movimento	migrar-movimento	Procedimentos realizados por cirurgia com equipe, porte, via e gases
+CCPARAM	97	CC	Administração > Parâmetros > Centro cirúrgico (por usuário)	configuracao	migrar-crud	Parâmetros e permissões do centro cirúrgico por usuário (97 usuários)
+CCPROEXT	10	CC	Centro Cirúrgico > Agenda cirúrgica > Procedimentos adicionais	movimento	migrar-movimento	Procedimentos extras do agendamento cirúrgico por sala/horário (10 linhas, 2020-2026)
+CCSALAS	4	CC	Centro Cirúrgico > Cadastros > Salas cirúrgicas	cadastro	migrar-crud	Salas cirúrgicas com centro de custo e horário da agenda web
+CCSALAS_TBUSERS	332	CC	Centro Cirúrgico > Cadastros > Salas > Usuários permitidos	vinculo	migrar-crud	Permissão de usuários por sala cirúrgica (83 usuários, 4 salas)
+CCTIPOLOCALBLC	5	CC	Cadastros > Domínios > Locais do bloco cirúrgico	dominio	migrar-crud	Locais do paciente no bloco: pré-operatório, espera, sala, RPA
+CCTIPOMOVIMENTACAOPAC	5	CC	Cadastros > Domínios > Tipos de movimentação no bloco	dominio	migrar-crud	Tipos de movimentação do paciente no bloco: admissão, transferência, alta
+CCTPURGENCIA	3	CC	Cadastros > Domínios > Caráter da cirurgia	dominio	migrar-crud	Caráter da cirurgia: urgência, eletiva, acidente
+CHAREA	110	HOT	Hotelaria > Higienização > Cadastro de áreas	cadastro	migrar-crud	Áreas higienizáveis com sigla e criticidade (110 áreas)
+CHAREA_CHPROFISLIMP	1001	HOT	Hotelaria > Higienização > Profissionais por área	vinculo	migrar-crud	Escala de profissionais de limpeza por área (17 profissionais)
+CHCRITICIDADE	3	HOT	Cadastros > Domínios > Criticidade de área	dominio	migrar-crud	Criticidade de área (crítica, semicrítica, não crítica) ANVISA
+CHEXECLIMPEZA	1001	HOT	Hotelaria > Higienização > Painel de execução	movimento	migrar-movimento	Execuções de limpeza por solicitação e situação, 2020-2026
+CHOCORRENCIA	9	HOT	Cadastros > Domínios > Tipos de ocorrência de limpeza	dominio	migrar-crud	Ocorrências: programada, emergencial, sangue, urina, fezes, vômito
+CHPARAM	1	HOT	Administração > Parâmetros > Higienização	configuracao	migrar-crud	Parâmetros da higienização: situação após alta, material de limpeza
+CHPROFISLIMP	17	HOT	Hotelaria > Higienização > Profissionais de limpeza	cadastro	migrar-crud	Profissionais de higienização próprios ou terceirizados, com usuário do sistema
+CHPROFLIMPTEL	17	HOT	Hotelaria > Higienização > Profissionais > Telefones	cadastro	migrar-crud	Telefones de contato dos profissionais de higienização
+CHSITUACAO	4	HOT	Cadastros > Domínios > Situações de higienização	dominio	migrar-crud	Fluxo: alta, aguardando, em higienização, liberado, com cor e ordem
+CHSOLICITLIMP	1001	HOT	Hotelaria > Higienização > Solicitações	movimento	migrar-movimento	Solicitações de limpeza geradas na alta, por atendimento e tipo
+CHSOLICITLIMP_TBLEITO	1001	HOT	Hotelaria > Higienização > Solicitações > Leitos	vinculo	migrar-movimento	Leitos incluídos em cada solicitação de limpeza
+CHTPLIMPEZA	6	HOT	Cadastros > Domínios > Tipos de limpeza	dominio	migrar-crud	Tipos de limpeza (concorrente, terminal, desinfecção) com tempo previsto
+CHTPLIMPEZA_GEITENS	19	HOT	Hotelaria > Higienização > Tipos de limpeza > Materiais	vinculo	migrar-crud	Kit de materiais de estoque consumidos por tipo de limpeza
+CVPARAM	1	HOT	Administração > Parâmetros > Controle de visitantes	configuracao	migrar-crud	Parâmetros da portaria: etiqueta, cores, foto, senha master
+CVTERMINALFAB	3	HOT	Portaria > Cadastros > Fabricantes de terminais	dominio	migrar-crud	Fabricantes de catracas e terminais de acesso
+CVTPIDENTIFIC	4	HOT	Portaria > Domínios > Tipos de identificação	dominio	migrar-crud	Formas de identificação do visitante (crachá, biometria, cartão)
+CVTPSITACESSO	3	HOT	Portaria > Domínios > Situações de acesso	dominio	migrar-crud	Situações de acesso do visitante (liberado, bloqueado)
+CVTPTERMINAL	6	HOT	Portaria > Cadastros > Terminais e catracas	cadastro	migrar-crud	Modelos de catraca/terminal/totem por fabricante
+CVTPVISITADO	6	HOT	Portaria > Domínios > Tipos de visitado	dominio	migrar-crud	Tipos de visitado (paciente, setor, funcionário)
+CVTPVISITANTE	8	HOT	Portaria > Domínios > Tipos de visitante	dominio	migrar-crud	Acompanhante, fornecedor, funcionário, representante, terceiro, visitante
+GDPRONTCADOPER	6	HOT	SAME > Cadastros > Operações de movimentação de prontuário	dominio	migrar-crud	Operações do arquivo: registro, saída, devolução, descarte, transferência, recebimento
+GDPRONTMOVIM	1001	HOT	SAME > Movimentação física de prontuários	movimento	migrar-movimento	Movimentação física de prontuários entre setores (~729 mil, 2020-07/2026)
+HTLEITO	226	INT	Consulta somente leitura: snapshot HT do leito	historico	migrar-leitura	Snapshot do leito, bloco, andar e acomodação no registro
+PRFA_CAD_MODO_RESPIR	3	CC	Cadastros > Domínios CC > Modos respiratórios (ficha anestésica)	dominio	migrar-crud	Modos respiratórios da ficha anestésica; recurso sem uso, a construir
+PRFA_CAD_POSICAO_CIR	9	CC	Cadastros > Domínios CC > Posições cirúrgicas	dominio	migrar-crud	Posições cirúrgicas do paciente com ícone, para ficha anestésica
+PRFA_TIPO_SINAL	3	CC	Cadastros > Domínios CC > Tipos de sinal (ficha anestésica)	dominio	migrar-crud	Tipos de sinal monitorado na ficha anestésica
+PRTIPO_PROFISSIONAL	9	CC	Cadastros > Domínios CC > Funções da equipe cirúrgica	dominio	migrar-crud	Funções da equipe cirúrgica: cirurgião, auxiliares, anestesista, instrumentador
+RELEITO	12	INT	Leitos > Leitos de observação (PA)	cadastro	migrar-crud	Leitos de observação e PA fora da internação
+RELOCLEITO	2	INT	Leitos > Locais de observação	cadastro	migrar-crud	Locais de leito externo: pronto atendimento e sala de observação
+REOCUPLEITO	804	INT	Leitos > Ocupação de leito de observação	historico	migrar-leitura	Ocupações de leito de observação; só jan-nov/2020 (legado)
+RETPLEITO	2	INT	Cadastros > Domínios > Tipos de leito de observação	dominio	migrar-crud	Tipos de leito externo: pronto atendimento, sala de observação
+RIACOMOD	9	INT	Leitos > Acomodações	cadastro	migrar-crud	Acomodações por bloco: tipo, clínica, sexo, faixa etária, TISS
+RIBLOCOS	7	INT	Leitos > Blocos/alas	cadastro	migrar-crud	Blocos de internação com andares, unidade e faixa etária
+RICADINT	1001	INT	Internação > Admissão (internações)	movimento	migrar-movimento	Internações; triggers geram atendimento, conta, guia e ocupação de leito
+RICGUIAS	1001	INT	Internação > Guias e autorizações	movimento	migrar-movimento	Guias de internação/prorrogação com senha, diárias e validade
+RICONFIC	760	INT	Configurações > Internação > Fichas impressas por convênio	configuracao	migrar-crud	Fichas de internação a imprimir por convênio
+RICTRLOC	1001	INT	Leitos > Histórico de ocupação (períodos)	movimento	migrar-movimento	Períodos de permanência por leito de cada internação
+RIESPFIC	1001	INT	Configurações > Internação > Fichas impressas por especialidade	configuracao	migrar-crud	Fichas de internação a imprimir por especialidade
+RILEITOS	109	INT	Leitos > Mapa e cadastro de leitos	cadastro	migrar-crud	Leitos (109) com status, ocupação e reserva; fonte do mapa
+RIMODFIC	15	INT	Configurações > Internação > Modelos de ficha	configuracao	migrar-crud	Modelos de ficha de internação: guia, admissão, termos
+RIMOTIVO	3	INT	Cadastros > Domínios > Motivos (inativa)	obsoleta	descartar	Marcada inativa pelo fornecedor; 3 valores sem referência ativa
+RIPARAM	1	INT	Configurações > Parâmetros da internação	configuracao	migrar-crud	Parâmetros da recepção interna (~154): numeração, faixas, obrigatoriedades
+RIPREINT	1001	INT	Internação > Pré-internação	movimento	migrar-movimento	Pré-internações/agendamentos de internação (1.066; 811 pendentes)
+RIPROTOC	1	HOT	SAME > Protocolo de guias	obsoleta	descartar	Registro único legado; substituído por GDPRONTMOVIM
+RISETOR	11	HOT	SAME > Setores de movimentação	dominio	migrar-crud	Setores de trânsito de prontuário/conta: SAME, faturamento, auditoria
+RISITREGLEITO	23	INT	Cadastros > Domínios > Situações de regulação de leito	dominio	migrar-crud	Situações da solicitação/regulação de leito (23); recurso a construir
+RITITFIC	24	INT	Configurações > Internação > Títulos de ficha	configuracao	migrar-crud	Títulos de fichas da internação: guia, admissão, termo, prorrogação
+RITRANSF	1001	INT	Leitos > Transferência de leito	movimento	migrar-movimento	Transferências de leito com origem, destino e justificativa (2020-2026)
+RITRFCLI	19	INT	Internação > Troca de clínica	historico	migrar-leitura	Trocas de clínica da internação (19, 2020-2024)
+RITRFCON	121	INT	Internação > Troca de convênio	movimento	migrar-movimento	Trocas de convênio da internação (2020 a 05/2026)
+RITRFESP	2	INT	Internação > Troca de especialidade	historico	migrar-leitura	Trocas de especialidade da internação (2, até 2023)
+RITRFMED	2	INT	Internação > Troca de médico	historico	migrar-leitura	Trocas de médico responsável da internação (2, até 2023)
+TBACOMODLEITO	12	INT	Cadastros > Estrutura > Acomodações	cadastro	migrar-crud	Acomodações/enfermarias com CC, clínica, sexo, idade e tipo TISS
+TBALTARN	4	INT	Cadastros > Domínios > Desfecho do recém-nascido	dominio	migrar-crud	Desfecho do RN (alta, permanência, transferência, óbito)
+TBANESTESIA	17	CC	Cadastros > Domínios > Tipos de anestesia	dominio	migrar-crud	Tipos de anestesia (geral, raqui, bloqueio, sedação)
+TBDESFECHO_INTERNACAO	9	INT	Cadastros > Domínios > Desfechos de internação	dominio	migrar-crud	Desfechos de internação (alta, evasão, óbito, transferência)
+TBDIETAS	6	HOT	Nutrição > Cadastros > Dietas	cadastro	migrar-crud	Tipos de dieta prescritível (oral, enteral, parenteral, jejum)
+TBESPLEI	38	INT	Cadastros > Estrutura > Especialidades de leito	dominio	carga-referencia	Especialidades de leito CNES/SUS por tipo de leito
+TBLEITO	134	INT	Cadastros > Estrutura > Leitos	cadastro	migrar-crud	134 leitos com acomodação, tipo, código AIH e criticidade
+TBLEITO_CHPROFISLIMP	136	HOT	Hotelaria > Higienização > Leitos por profissional	vinculo	migrar-crud	Profissionais de limpeza responsáveis por leito
+TBTIPOACOMOD	18	INT	Cadastros > Domínios > Tipos de acomodação	dominio	migrar-crud	Tipos de acomodação (enfermaria, apartamento, UTI, berçário)
+TBTPDIETA	7	HOT	Nutrição > Cadastros > Tipos de dieta	dominio	migrar-crud	Via/tipo de dieta (oral, enteral, parenteral, jejum)

@@ -1,0 +1,182 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+GEANTIMI	72	SUP	Farmácia > Antimicrobianos > Pedidos de antimicrobianos	movimento	migrar-leitura	Pedidos/tratamentos de antimicrobiano por paciente, 2020 a 11/2024
+GEARMLOC	1001	SUP	Estoque > Saldos > Saldo mensal por local	movimento	migrar-movimento	Saldo mensal de cada item por local de armazenagem (2019-2026)
+GEATUALIZASALDO	507	SUP	Estoque > Ferramentas > Recalcular saldos (log)	auditoria	migrar-leitura	Log de execuções de recálculo de saldo por competência
+GEBARRAS	230	SUP	Suprimentos > Cadastros > Itens > Códigos de barras	cadastro	migrar-crud	Códigos de barras de itens por fornecedor/laboratório
+GECADANTIMI	45	SUP	Farmácia > Antimicrobianos > Fichas de antimicrobiano	movimento	migrar-leitura	Cabeçalho das fichas de antimicrobiano com prescritor e convênio
+GECADBAL	251	SUP	Estoque > Inventário/Balanço	movimento	migrar-movimento	Documentos de balanço/inventário de estoque (251, até 02/2025)
+GECADDEV	1001	SUP	Estoque > Devoluções	movimento	migrar-movimento	Cabeçalho de devoluções de material/medicamento ao estoque
+GECADDISPENSACAO	1001	SUP	Farmácia > Dispensação por horário	movimento	migrar-movimento	Cabeçalho de dispensação ligada à prescrição eletrônica
+GECADNFS	1001	SUP	Estoque > Entradas > Nota fiscal de entrada	movimento	migrar-movimento	Cabeçalho de notas fiscais de entrada de estoque
+GECADPED	1001	SUP	Compras > Pedidos de compra / Cotação	movimento	migrar-movimento	Cabeçalho de pedidos de compra, cotação e licitação
+GECADSAI	1001	SUP	Estoque > Requisições e saídas	movimento	migrar-movimento	Cabeçalho de saídas de estoque para setor ou paciente
+GECADTER	5	SUP	Suprimentos > Cadastros > Terceiros	cadastro	migrar-crud	Terceiros destinatários de saídas/vendas externas
+GECADTRA	1001	SUP	Estoque > Transferências entre locais	movimento	migrar-movimento	Cabeçalho de transferências entre locais de armazenagem
+GECAPELAMP	1	SUP	Farmácia > Manipulação > Capelas	cadastro	migrar-crud	Capelas de manipulação de medicamentos (1 linha, módulo sem uso)
+GECAPELAMP_GEGRUPOMP	1	SUP	Farmácia > Manipulação > Capelas x grupos	vinculo	migrar-crud	Vínculo capela de manipulação x grupo de itens manipulados
+GECOMPRA	1001	SUP	Compras > Histórico de compras por item	historico	migrar-leitura	Histórico de compras por item/fornecedor/NF (2020-07/2026)
+GECONITL	1001	SUP	Estoque > Consumo mensal por local	historico	migrar-leitura	Consolidado mensal de entradas, saídas e devoluções por item e local
+GECTRLENTREGADOCSAIDA	1001	SUP	Farmácia > Controle de entrega de dispensação	movimento	migrar-movimento	Trilha de entrega/estorno de documentos de saída por situação farmacêutica
+GECTRVMM	1001	SUP	Estoque > Lotes e validades (por documento)	movimento	migrar-movimento	Validade e lote de material/medicamento por documento (modelo antigo)
+GEDESCOM	1	SUP	Compras > Cadastros > Destinos de compra	cadastro	migrar-crud	Endereços de entrega/faturamento de compras
+GEDESPDS	23	SUP	Compras > Pedidos > Descrição de serviços	movimento	migrar-leitura	Descrição de serviços em pedidos de licitação (2020-2024)
+GEDIASEMANA	7	SUP	Enum de sistema: dias da semana	dominio	descartar	Dias da semana fixos; vira enum no código
+GEDISPHOR	1001	SUP	Farmácia > Dispensação por horário > Etiquetas de dose	movimento	migrar-movimento	Dispensação por horário de checagem com emissão de etiqueta
+GEESTINI	42	SUP	Estoque > Estoque inicial	historico	migrar-leitura	Documentos de estoque inicial da implantação (31/12/2019)
+GEFECMES	79	SUP	Estoque > Fechamento mensal	movimento	migrar-movimento	Competências de estoque fechadas e exportadas (12/2019-06/2026)
+GEGERSEQ	25	SUP	Função: numeração sequencial de documentos de estoque	configuracao	migrar-crud	Contadores de sequência de documentos de estoque por período
+GEGRUPOMP	1	SUP	Farmácia > Manipulação > Grupos de manipulação	cadastro	migrar-crud	Grupos de itens de manipulação (1 linha, módulo sem uso)
+GEGRUPOS	43	SUP	Suprimentos > Cadastros > Grupos de itens	cadastro	migrar-crud	Grupos de itens com flags de antimicrobiano, rastreio e TISS
+GEHORMED	1	SUP	Farmácia > Parâmetros > Horários padrão de medicação	configuracao	migrar-crud	Grade de horários padrão de medicação por frequência
+GEINFVENEXT	206	SUP	Estoque > Saídas > Venda externa/terceiro	movimento	migrar-movimento	Dados extras de saída para terceiro (folha de gasto, chamada, BO)
+GEITEACAODOSE	3	SUP	Suprimentos > Cadastros > Domínios > Ação de dose	dominio	migrar-crud	Ação ao exceder dose: nenhum, notificar, bloquear
+GEITEMKITRAS	1001	SUP	Estoque > Kits rastreáveis > Itens	movimento	migrar-movimento	Itens com lote de cada kit rastreável/carrinho de parada
+GEITEMKITRAS_GELANDEV	1001	SUP	Estoque > Kits rastreáveis > Reposição	vinculo	migrar-movimento	Vínculo item de kit rastreável x devolução
+GEITEMKITRAS_GELANSAI	1001	SUP	Estoque > Kits rastreáveis > Consumo	vinculo	migrar-movimento	Vínculo item de kit rastreável x saída de estoque
+GEITENS	1001	SUP	Suprimentos > Cadastros > Itens (materiais/medicamentos)	cadastro	migrar-crud	Catálogo de materiais e medicamentos (8.406 itens)
+GEITENS_TBPRINC	189	SUP	Suprimentos > Cadastros > Itens > Princípios ativos	vinculo	migrar-crud	Vínculo item de estoque x princípio ativo
+GEKITITE	1001	SUP	Estoque > Kits > Itens do kit	vinculo	migrar-crud	Composição dos kits padrão (item e quantidade)
+GEKITKPI	1	SUP	Suprimentos > Cadastros > Itens > Itens secundários	vinculo	migrar-crud	Kit por item: item principal x item secundário
+GEKITRAS	766	SUP	Estoque > Kits rastreáveis / Carrinhos de parada	movimento	migrar-movimento	Kits rastreáveis montados por local (766, 2020-07/2026)
+GEKITS	45	SUP	Estoque > Kits > Cadastro de kits padrão	cadastro	migrar-crud	Kits padrão de materiais/medicamentos
+GEKONCDC	1001	SUP	Estoque > Consumo por centro de custo	historico	migrar-leitura	Consumo de itens por centro de custo e documento (base de custos)
+GELANBAL	1001	SUP	Estoque > Inventário/Balanço > Itens	movimento	migrar-movimento	Itens contados no balanço com diferença e lote
+GELANDEV	1001	SUP	Estoque > Devoluções > Itens	movimento	migrar-movimento	Itens devolvidos ao estoque com lote e validade
+GELANDISPENSACAO	1001	SUP	Farmácia > Dispensação por horário > Itens	movimento	migrar-movimento	Itens dispensados por prescrição com dose, via e horário
+GELANESI	599	SUP	Estoque > Estoque inicial > Itens	historico	migrar-leitura	Itens do estoque inicial da implantação
+GELANNFS	1001	SUP	Estoque > Entradas > Itens da NF	movimento	migrar-movimento	Itens de nota fiscal de entrada com lote, impostos e custo
+GELANPAC	1001	SUP	Estoque > Movimento direto paciente/CDC	movimento	migrar-movimento	Lançamentos avulsos de consumo por paciente ou centro de custo
+GELANPED	1001	SUP	Compras > Pedidos > Itens e cotações	movimento	migrar-movimento	Itens de pedido de compra com cotações por fornecedor
+GELANPEDENTREGA	46	SUP	Compras > Pedidos > Entregas programadas	movimento	migrar-leitura	Entregas parceladas de itens de pedido (só 01/2020)
+GELANSAI	1001	SUP	Estoque > Requisições e saídas > Itens	movimento	migrar-movimento	Itens de saída de estoque (mais de 2 milhões)
+GELANSAIREQ	1001	SUP	Estoque > Requisições > Itens requisitados	movimento	migrar-movimento	Itens requisitados antes do atendimento da saída
+GELANTRA	1001	SUP	Estoque > Transferências > Itens	movimento	migrar-movimento	Itens transferidos entre locais
+GELIMLOC	379	SUP	Suprimentos > Cadastros > Estoque mínimo/máximo por local	cadastro	migrar-crud	Estoque mínimo e máximo de item por local
+GELOCARM	23	SUP	Suprimentos > Cadastros > Locais de armazenagem	cadastro	migrar-crud	Locais de armazenagem (farmácias, almoxarifados, carrinhos)
+GELOCUSU	1001	SUP	Suprimentos > Cadastros > Usuários x locais	vinculo	migrar-crud	Permissão de usuário por local e tipo de movimento
+GENIVELSERV	18	SUP	Suprimentos > Cadastros > Níveis de serviço	dominio	migrar-crud	Níveis de serviço com fator de segurança para estoque
+GENOMCOM	440	SUP	Suprimentos > Cadastros > Nomes comerciais	cadastro	migrar-crud	Nomes comerciais/apresentações por item, laboratório e Brasíndice
+GEPADRAO_DATAMATRIX_QRCODE	2	SUP	Suprimentos > Cadastros > Domínios > Padrões DataMatrix/QR	dominio	migrar-crud	Padrões de leitura DataMatrix/QR Code de rastreabilidade
+GEPARAM	525	SUP	Suprimentos > Parâmetros	configuracao	migrar-crud	Parâmetros do estoque por usuário/empresa (cerca de 300 campos)
+GEQTDELOTEVALLOTEDOCSAIDA	1001	SUP	Estoque > Rastreabilidade > Lotes da saída	movimento	migrar-movimento	Quantidade por lote nos documentos de saída
+GERASVALBAL	1001	SUP	Estoque > Rastreabilidade > Lotes do balanço	movimento	migrar-movimento	Rastreabilidade de lote nos itens de balanço
+GERASVALDEVLOTE	1001	SUP	Estoque > Rastreabilidade > Lotes da devolução	movimento	migrar-movimento	Rastreabilidade de lote nos itens devolvidos
+GERASVALESTINI	457	SUP	Estoque > Rastreabilidade > Lotes do estoque inicial	historico	migrar-leitura	Rastreabilidade de lote do estoque inicial (2020-2023)
+GERASVALFINAL	843	SUP	Estoque > Rastreabilidade > Saldo final por lote	movimento	migrar-movimento	Saldo final de rastreabilidade por item e lote
+GERASVALINICIAL	681	SUP	Estoque > Rastreabilidade > Saldo inicial por lote	movimento	migrar-movimento	Saldo inicial de rastreabilidade por item e lote
+GERASVALNFS	1001	SUP	Estoque > Rastreabilidade > Lotes da entrada	movimento	migrar-movimento	Rastreabilidade de lote nas entradas por NF (há datas inválidas)
+GERASVALSAIDLOTE	1001	SUP	Estoque > Rastreabilidade > Lotes da saída	movimento	migrar-movimento	Rastreabilidade de lote nos itens de saída
+GERASVALTRANSFLOTE	1001	SUP	Estoque > Rastreabilidade > Lotes da transferência	movimento	migrar-movimento	Rastreabilidade de lote nas transferências entre locais
+GEREFER	26	SUP	Suprimentos > Cadastros > Referências de itens	cadastro	migrar-crud	Referências/categorias de itens com conta contábil e consignação
+GESALCON	1	SUP	Estoque > Consignados > Saldo por fornecedor	movimento	migrar-movimento	Saldo de consignado por fornecedor (1 linha)
+GESALDOKITRAS	1001	SUP	Estoque > Kits rastreáveis > Saldo	movimento	migrar-movimento	Saldo atual de cada item de kit rastreável
+GESALDOS	1001	SUP	Estoque > Saldos > Saldo mensal	movimento	migrar-movimento	Saldo mensal consolidado de itens com estoque médio
+GESITUACAOPED	10	SUP	Compras > Domínios > Situações do pedido	dominio	migrar-crud	Situações do pedido de compra (aberto a finalizado/cancelado)
+GESUBGRU	251	SUP	Suprimentos > Cadastros > Subgrupos de itens	cadastro	migrar-crud	Subgrupos de itens por grupo com código TISS
+GETABFUN	13	SUP	Suprimentos > Cadastros > Colaboradores/prestadores	cadastro	migrar-crud	Colaboradores com dados bancários e retenções (ISS/INSS)
+GETPLANCTO	6	SUP	Estoque > Domínios > Tipos de lançamento	dominio	migrar-crud	Tipos de lançamento de estoque (entrada, saída, balanço etc.)
+GETPSALDO	3	SUP	Estoque > Domínios > Tipos de saldo	dominio	migrar-crud	Tipo de saldo: instituição, consignação ou ambos
+GEULTDOCGER	1001	SUP	Função: numeração de documentos gerados por tipo	configuracao	migrar-crud	Último número de documento gerado por tipo de lançamento e mês
+GEUNIPRESC	1001	SUP	Suprimentos > Cadastros > Itens > Unidades de prescrição	cadastro	migrar-crud	Unidades de prescrição por item com conversão e doses mín/máx
+GEUSERS	432	SUP	Suprimentos > Usuários do estoque (permissões)	configuracao	migrar-crud	Perfil de usuário do estoque com flags de permissão e locais
+GEUSERS_TBCENCUS	66	SUP	Suprimentos > Usuários do estoque > Centros de custo	vinculo	migrar-crud	Centros de custo permitidos por usuário do estoque
+GEUSERS_TBCLASSI	177	SUP	Suprimentos > Usuários do estoque > Classificações	vinculo	migrar-crud	Classificações de item permitidas por usuário do estoque
+GEVALMEM	1001	SUP	Estoque > Lotes e validades	movimento	migrar-movimento	Lotes e validades de materiais/medicamentos (datas inválidas a sanear)
+GEVIASITEM	1001	SUP	Suprimentos > Cadastros > Itens > Vias permitidas	vinculo	migrar-crud	Vias de administração permitidas por item
+GPCOEFICIENTE_DEPREC	3	SUP	Patrimônio > Domínios > Coeficientes de depreciação	dominio	migrar-crud	Coeficientes de depreciação acelerada por turno
+GPORIGEM	5	SUP	Patrimônio > Cadastros > Origens do bem	dominio	migrar-crud	Origens do bem (próprio, doação, terceiros) com integração contábil
+GPPARAMG	1	SUP	Patrimônio > Parâmetros gerais	configuracao	migrar-crud	Parâmetros de depreciação e integração do patrimônio (módulo sem uso)
+GPPARAMU	3	SUP	Patrimônio > Parâmetros do usuário	configuracao	migrar-crud	Competência e permissões do usuário no patrimônio
+GPTP_RESPONSAVEL	4	SUP	Patrimônio > Domínios > Tipos de responsável	dominio	migrar-crud	Tipos de responsável pelo bem (funcionário, médico, cooperativa)
+HTNOTEXAMESEXO	754	SADT	Consulta somente leitura: snapshot HT de restrição de exame por sexo	historico	migrar-leitura	Snapshot de notificação de exame incompatível com sexo
+PREXTRATOITEM_SUBST	1001	SUP	Farmácia > Avaliação farmacêutica > Substituição de item	historico	migrar-leitura	Histórico de substituição de item/nome comercial no horário prescrito
+PREXTRATOITEM_TBSITFARM	1001	SUP	Farmácia > Avaliação farmacêutica da prescrição	historico	migrar-movimento	Trilha da situação de avaliação farmacêutica por horário prescrito (desde 10/2023)
+PRINTEGRACAOESTOQUE	1001	SUP	Farmácia > Dispensação por horário (integração prescrição-estoque)	integracao	migrar-movimento	Liga horário prescrito à saída, lançamento ou dispensação de estoque
+PRPARINTEGEST	5	SUP	Configurações > Farmácia > Integração prescrição-estoque por CDC	configuracao	migrar-crud	Regras de integração prescrição-estoque por centro de custo e tipo
+SHBOLSA	1	SADT	Agência transfusional > Bolsas	obsoleta	descartar	Registro único placeholder (data 1899); módulo hemoterapia nunca usado
+SHBOLSAHIST	1	SADT	Agência transfusional > Bolsas > Histórico	obsoleta	descartar	Histórico de bolsa; registro único placeholder 1899
+SHCLIENT	1	SADT	Agência transfusional > Cadastros > Clientes	cadastro	migrar-crud	Clientes/hemocentros; só placeholder, recurso a construir
+SHCONDUTA	1	SADT	Agência transfusional > Cadastros > Condutas	dominio	migrar-crud	Condutas transfusionais; só placeholder
+SHDOACAO	1	SADT	Agência transfusional > Doações	obsoleta	descartar	Lançamento de doação; registro único placeholder 1899
+SHESTFINAL	1	SADT	Agência transfusional > Cadastros > Estados finais	dominio	migrar-crud	Estados finais da bolsa/transfusão; só placeholder
+SHEXAME	1	SADT	Agência transfusional > Cadastros > Exames	cadastro	migrar-crud	Exames de doador, bolsa e receptor; só placeholder
+SHINTER	1	SADT	Agência transfusional > Cadastros > Intercorrências	dominio	migrar-crud	Intercorrências da doação/transfusão; só placeholder
+SHLOCAL	1	SADT	Agência transfusional > Cadastros > Locais de armazenagem	cadastro	migrar-crud	Locais de armazenagem de bolsas; só placeholder
+SHMOTDEV	1	SADT	Agência transfusional > Cadastros > Motivos de devolução	dominio	migrar-crud	Motivos de devolução/perda de bolsa; só placeholder
+SHMOV	10	SADT	Agência transfusional > Cadastros > Tipos de movimentação	dominio	migrar-crud	Movimentos da bolsa: bloqueio, transfusão total/parcial, perda, devolução
+SHPARAM	1	SADT	Agência transfusional > Parâmetros	configuracao	migrar-crud	Parâmetros de impressão e regras da hemoterapia
+SHPERGUN	1	SADT	Agência transfusional > Cadastros > Perguntas da triagem de doador	cadastro	migrar-crud	Perguntas da triagem de doadores; só placeholder
+SHREACAO	1	SADT	Agência transfusional > Cadastros > Reações transfusionais	dominio	migrar-crud	Tipos de reação transfusional; só placeholder
+SHREQUISICAO	1	SADT	Agência transfusional > Requisições	obsoleta	descartar	Requisição transfusional; registro único placeholder 1899
+SHRESPOSTA	1	SADT	Agência transfusional > Cadastros > Respostas da triagem	cadastro	migrar-crud	Opções de resposta da triagem de doadores; só placeholder
+SHTECNIC	1	SADT	Agência transfusional > Cadastros > Técnicos	cadastro	migrar-crud	Técnicos de hemoterapia; só placeholder
+SHTPTRANSF	4	SADT	Agência transfusional > Cadastros > Tipos de transfusão	dominio	migrar-crud	Caráter da transfusão: programada, rotina, urgência, emergência
+SIASSLAUDO_IMPRESSAO	1001	SADT	Laudos > Emissão/impressão de laudo (autenticação)	historico	migrar-leitura	Impressões de laudo com UUID de autenticação (01-07/2026)
+SIASSLAUDO_IMP_SILANEXA	1001	SADT	Laudos > Emissão/impressão > Exames do laudo	vinculo	migrar-leitura	Exames incluídos em cada impressão de laudo
+SICADATE	1001	SADT	SADT > Atendimento SADT (requisição)	movimento	migrar-movimento	Atendimentos/requisições SADT com convênio, médico e autorização
+SICADATE_EXCLUSAO	3	SADT	Administração > Auditoria > Exclusões de atendimento SADT	auditoria	migrar-leitura	Cópia de fichas SADT excluídas (2025-2026), trilha de exclusão
+SICOLETE	4	SADT	Cadastros SADT > Coletores	dominio	migrar-crud	Tipos de coletor de amostra (vácuo, seringa, swab)
+SICTRPSR	17	SADT	Cadastros SADT > Grupos de resultados possíveis	dominio	migrar-crud	Grupos de respostas padronizadas (aspecto urina, reagente/não reagente)
+SIESPEC	19	SADT	Cadastros SADT > Setores/especialidades laboratoriais	cadastro	migrar-crud	Setores do laboratório (bioquímica, hematologia, microbiologia...) com flag de interface
+SIEXAORC	1001	SADT	SADT > Orçamento de exames (itens)	movimento	migrar-movimento	Itens com valor dos orçamentos particulares de exames
+SIFORMUL	10	SADT	Cadastros SADT > Exames > Fórmulas de cálculo	configuracao	migrar-crud	Fórmulas de cálculo automático de elementos de resultado
+SIHISTVLREF	659	SADT	Cadastros SADT > Exames > Histórico de valores de referência	historico	migrar-leitura	Versões do texto de valor de referência por exame, ligadas ao resultado
+SIHISTVLREFELEMENTO	354	SADT	Cadastros SADT > Elementos > Histórico de valores de referência	historico	migrar-leitura	Versões de faixas de referência por elemento, preservam laudo emitido
+SIHISTVLREFEXAME	1001	SADT	Cadastros SADT > Exames > Histórico de valores de referência	historico	migrar-leitura	Versões de faixas de referência por exame (2023-2026) usadas em SIRES01
+SIKITEXA	77	SADT	Cadastros SADT > Kits/baterias de exames	cadastro	migrar-crud	Kits/baterias de exames com horário sugerido de coleta no PEP
+SIKITHISTEXA	203	SADT	Cadastros SADT > Kits > Histórico de versões	historico	migrar-leitura	Versões históricas dos kits de exames com vigência
+SIKITHISTITE	1001	SADT	Cadastros SADT > Kits > Histórico de versões	historico	migrar-leitura	Itens de cada versão histórica de kit de exames
+SIKITITE	1001	SADT	Cadastros SADT > Kits/baterias de exames (itens)	vinculo	migrar-crud	Exames e quantidades que compõem cada kit
+SILANEXA	1001	SADT	SADT > Lançamento/Solicitação de exames	movimento	migrar-movimento	Itens de exame lançados/solicitados por atendimento, núcleo do SADT (~1,96 mi)
+SILIBERACAOEXAME	1001	SADT	Laboratório/Imagem > Liberação de exames e Portal	movimento	migrar-movimento	Liberação de exame e auditoria de visualização no portal (IP, data)
+SIMATERI	20	SADT	Cadastros SADT > Materiais biológicos	cadastro	migrar-crud	Materiais/amostras biológicas (sangue, urina, líquidos) com códigos de apoio
+SIMETODO	116	SADT	Cadastros SADT > Métodos	cadastro	migrar-crud	Métodos analíticos de exames laboratoriais
+SIMODULO	8	SADT	Cadastros SADT > Setores SADT	cadastro	migrar-crud	Setores SADT (laboratório, RX, TC, US, endoscopia, hemodinâmica, anatomia)
+SIMODULO_SIWEBATOS	8	SADT	Portal de Resultados > Setores publicados	configuracao	migrar-crud	Setores SADT habilitados para exibição no portal web de resultados
+SIOBSERV	47	SADT	Cadastros SADT > Observações padrão de resultado	cadastro	migrar-crud	Textos padrão de observação para laudos laboratoriais
+SIORCAME	1001	SADT	SADT > Orçamento de exames	movimento	migrar-movimento	Cabeçalho de orçamentos particulares de exames, 2020 a 07/2026
+SIPACSMODALID	81	SADT	Cadastros SADT > Modalidades DICOM	cadastro	migrar-crud	Modalidades de imagem DICOM (CR, CT, US...) com ID D4H
+SIPACSVISIMG	2	SADT	Cadastros SADT > Visualizadores de imagem	dominio	migrar-leitura	Visualizadores de imagem (Oviyam, Weasis) usados por usuário
+SIPARANA	1	SADT	Configurações > Parâmetros SADT > Anatomia patológica	configuracao	migrar-crud	Parâmetros do setor de anatomia patológica (impressão, obrigatoriedades)
+SIPAREND	1001	SADT	Configurações > Parâmetros SADT > Endoscopia (por usuário)	configuracao	migrar-crud	Parâmetros de endoscopia, uma linha por usuário; campos RAVE obsoletos
+SIPARGER	1	SADT	Configurações > Parâmetros SADT > Gerais	configuracao	migrar-crud	Parâmetros gerais do SADT (CNES, competências, numeração, caminhos)
+SIPARHEM	286	SADT	Configurações > Parâmetros SADT > Hemodinâmica (por usuário)	configuracao	migrar-crud	Parâmetros de hemodinâmica por usuário (impressão, obrigatoriedades)
+SIPARLAB	1001	SADT	Configurações > Parâmetros SADT > Laboratório (por usuário)	configuracao	migrar-crud	Parâmetros do laboratório por usuário; contém senha gerencial e interfaces
+SIPAROUT	806	SADT	Configurações > Parâmetros SADT > Outros exames (por usuário)	configuracao	migrar-crud	Parâmetros do setor Outros por usuário
+SIPARRX	934	SADT	Configurações > Parâmetros SADT > Radiologia (por usuário)	configuracao	migrar-crud	Parâmetros de radiologia por usuário, responsável pelo laudo
+SIPARTM	1001	SADT	Configurações > Parâmetros SADT > Tomografia (por usuário)	configuracao	migrar-crud	Parâmetros de tomografia por usuário
+SIPARULT	1001	SADT	Configurações > Parâmetros SADT > Ultrassonografia (por usuário)	configuracao	migrar-crud	Parâmetros de ultrassonografia por usuário
+SIPOSRES	92	SADT	Cadastros SADT > Resultados possíveis	dominio	migrar-crud	Valores de resposta padronizados por grupo de resultado
+SIRECIPI	15	SADT	Cadastros SADT > Recipientes/tubos	cadastro	migrar-crud	Recipientes e tubos de coleta (EDTA, citrato, heparina)
+SIRES01	1001	SADT	Laboratório > Digitação/Importação de resultados	movimento	migrar-movimento	Resultados estruturados por elemento, com HTML/PDF do laudo
+SIRES01_DELETE	1001	SADT	Administração > Auditoria > Resultados excluídos	auditoria	migrar-leitura	Cópia de resultados excluídos (2023-2026) para auditoria
+SIRESOBS	1001	SADT	Laboratório > Digitação de resultados > Observações	movimento	migrar-movimento	Observações livres do resultado de cada exame
+SIRESPAD	214	SADT	Cadastros SADT > Modelos de resultado/laudo padrão	cadastro	migrar-crud	Modelos de texto/HTML de resultado padrão por exame
+SIRESVAR	1001	SADT	Laboratório > Digitação de resultados (variáveis de fórmula)	movimento	migrar-movimento	Valores de variáveis de fórmula informados por exame lançado
+SISTATUS_AMOSTRA	8	SADT	Cadastros SADT > Status de amostra	dominio	migrar-crud	Status de rastreio de amostra ligados ao status do PEP
+SITABELE	407	SADT	Cadastros SADT > Elementos de exame	cadastro	migrar-crud	Elementos/analitos dos exames com unidade, referência e casas decimais
+SITABPRO	989	SADT	Cadastros SADT > Exames	cadastro	migrar-crud	Catálogo de exames SADT com material, método, equivalência SUS/AMB
+SITBGRAN	39	SADT	Cadastros SADT > Grupos de laudo (ecocardiograma)	cadastro	migrar-crud	Seções/grandezas de laudo estruturado de ecocardiograma por exame
+SITECNIC	11	SADT	Cadastros SADT > Técnicos	cadastro	migrar-crud	Técnicos executantes/coletores do SADT (dados pessoais)
+SIVARFORMULA	19	SADT	Cadastros SADT > Exames > Variáveis de fórmula	configuracao	migrar-crud	Variáveis usadas nas fórmulas de cálculo de exames
+SIWEBCADPERFIL	1	SADT	Portal de Resultados > Perfis de acesso	cadastro	migrar-crud	Perfis de acesso ao portal web de resultados/imagens
+SIWEBCADPERFIL_SIPACSMODALID	43	SADT	Portal de Resultados > Perfis > Modalidades	vinculo	migrar-crud	Modalidades de imagem visíveis por perfil do portal
+SIWEBCADPERFIL_TBUSERS	1	SADT	Portal de Resultados > Perfis > Usuários	vinculo	migrar-crud	Usuários vinculados a perfil do portal de resultados
+SIWEBPARDATA	5	SADT	Portal de Resultados > Parâmetros (filtro de data)	dominio	migrar-leitura	Opções de período padrão do portal (hoje, ontem, semana)
+SIWEBPARLAUDO	7	SADT	Portal de Resultados > Layouts de laudo por setor	configuracao	migrar-leitura	Layouts Jasper de laudo web por setor (binário a refazer)
+SIWEBPARPERFIL	1	SADT	Portal de Resultados > Perfis > Permissões	configuracao	migrar-crud	Permissões do perfil web (ver imagem, digitar laudo, e-mail)
+SIWEBPARTPATU	3	SADT	Portal de Resultados > Parâmetros (atualização)	dominio	migrar-leitura	Unidades de atualização automática do portal
+SIWEBVISULIMG	5	SADT	Portal de Resultados > Parâmetros (visualizador)	dominio	migrar-leitura	Opções de visualizador de imagem do portal
+TBATIVID	214	SUP	Cadastros > Fornecedores > Atividades econômicas	dominio	carga-referencia	Atividades econômicas (divisões tipo CNAE) para fornecedores
+TBCATEGO	2	SUP	Cadastros > Fornecedores > Categorias	dominio	migrar-crud	Categorias de fornecimento (mat/med, OPME)
+TBCATFOR	12	SUP	Cadastros > Fornecedores > Categorias do fornecedor	vinculo	migrar-crud	Categorias atendidas por fornecedor
+TBDISPON	2	SUP	Cadastros > Fornecedores > Disponibilidade	dominio	migrar-crud	Disponibilidade de atendimento do fornecedor
+TBFATORRH	2	SADT	Cadastros > Domínios > Fator Rh	dominio	migrar-leitura	Fator Rh para hemoterapia/transfusão
+TBFORNEC	1001	SUP	Suprimentos > Cadastros > Fornecedores	cadastro	migrar-crud	Fornecedores e autônomos com dados fiscais e bancários
+TBFORNECTEL	35	SUP	Suprimentos > Cadastros > Fornecedores > Telefones	cadastro	migrar-crud	Telefones e contatos de fornecedores
+TBGRUPOUNIDADEMEDIDA	7	SUP	Cadastros > Domínios > Grupos de unidade de medida	dominio	migrar-leitura	Grandezas das unidades de medida (massa, volume, tempo)
+TBLABORA	1001	SUP	Cadastros > Mat/Med > Laboratórios/fabricantes	dominio	carga-referencia	Laboratórios/fabricantes com código Brasíndice
+TBSITUACAOFARMACIA	12	SUP	Cadastros > Domínios > Situações da farmácia	dominio	migrar-crud	Situação da avaliação farmacêutica e dispensação de itens
+TBTP_ENV_LISTA_AVAL_FARM	6	SUP	Farmácia > Configuração > Envio para avaliação farmacêutica	dominio	migrar-crud	Quando enviar itens para avaliação farmacêutica
+TBTPSANGUINEO	4	SADT	Cadastros > Domínios > Grupos sanguíneos	dominio	migrar-crud	Grupos sanguíneos ABO para transfusão
+TBUNICON	53	SUP	Cadastros > Estoque > Unidades de consumo	cadastro	migrar-crud	Unidades de consumo/apresentação de itens com equivalência TISS

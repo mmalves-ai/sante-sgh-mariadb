@@ -1,0 +1,13 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+servico_atendimento	REC	dominio	F3	Serviço clínico em que o atendimento é aberto (ortopedia, cardiologia), com especialidade, anamnese padrão e caução exigida	DBAMV SERVICO; SER_SOL
+agenda_servico_tipo_marcacao	AGE	vinculo	F3	Tipos de marcação aceitos por cada serviço agendável (primeira vez, retorno, encaixe)	DBAMV SER_DIS_TIP_MAR
+producao_fixa_setor_sus	SUS	configuracao	F3	Quantidade padrão de procedimento público lançada por setor, instrumento e período na produção ambulatorial, com vigência	DBAMV SETOR_PROCEDIMENTO_FATRMTO_SUS
+setor_executante_padrao	SADT	configuracao	F3	Setor executante sugerido por unidade de origem, setor solicitante e tipo de item prescrito	DBAMV SET_EXA_PADRAO
+setor_executante_padrao_horario	SADT	item	F3	Janela de horário ou feriado em que outro setor executante assume no lugar do padrão	DBAMV SET_EXA_PADRAO_HOR_ESP
+parametro_vital_local_afericao	PEP	vinculo	F7	Locais de aferição aceitos para cada parâmetro vital, com o local sugerido	DBAMV SINAL_VITAL_PW_LOCAL_AFERICAO
+parametro_vital_posicao_afericao	PEP	vinculo	F7	Posições do paciente aceitas para cada parâmetro vital, com a posição sugerida	DBAMV SINAL_VITAL_PW_POSICAO_PACIEN
+situacao_solicitacao_regulacao	INT	dominio	F7	Situações do pedido na central de regulação (aguardando, autorizado, negado, cancelado), com grupo de situação	DBAMV SITUACAO_REGULACAO
+solicitacao_cardapio	HOT	principal	F8	Pedido do setor à nutrição baseado no cardápio planejado, que gera a requisição de insumos ao estoque	DBAMV SOLICITACAO_CARDAPIO; SOLICITACAO_CARDAPIO_PLAN_CRDP
+solicitacao_cardapio_item	HOT	item	F8	Opção, preparação e insumo pedidos em cada solicitação de cardápio, com quantidade padrão e pedida	DBAMV SOLICITACAO_CARDAPIO_OPCAO; SOLICITACAO_CARDAPIO_PRATO; SOLICITACAO_CARDAPIO_PRODUTO
+diligencia_amostra	SADT	principal	F8	Pedido de averiguação sobre amostra ou coleta com atraso ou problema, com responsável, situação e resposta	DBAMV SOLICITACAO_DILIGENCIA_DIAGN
+modelo_pedido_internacao	INT	configuracao	F7	Modelo pronto de pedido de internação ou procedimento do profissional, com sessões, dias previstos e local	DBAMV SOLIC_ATD_PADR

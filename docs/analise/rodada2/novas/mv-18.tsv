@@ -1,0 +1,23 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+apuracao_repasse_rateio_setor	FAT	item	F8	Distribuição do valor apurado de repasse de um profissional entre os setores de origem da produção	REPASSE_PRESTADOR_RATEIO_SETOR
+regra_requisicao_intercompanhia	SUP	configuracao	F8	Regra do fluxo de requisição entre estabelecimentos: estoque de origem, destinos aceitos, transferência automática e documento fiscal gerado	REQUISICAO_CONFIGURACAO; REQUISICAO_CONFIGURACAO_ESTOQ
+prazo_requisicao_material	SUP	configuracao	F7	Prazo de entrega e janela de dias do mês em que cada estabelecimento ou setor pode abrir requisição ao almoxarifado	REQUISICAO_PRAZO
+reserva_estoque	SUP	principal	F7	Quantidade de insumo e lote reservada para uma solicitação ou kit, abatida do saldo disponível até a baixa	RESERVA
+reserva_numero_nota	FIN	item	F7	Número e série de nota fiscal reservados para uma fonte pagadora antes da emissão, com baixa ou cancelamento da reserva	RESERVA_NOTA_FISCAL
+mapeamento_resultado_laudo_apac	SUS	configuracao	F7	Qual campo do resultado de exame alimenta cada campo do laudo de APAC, por tipo de atendimento e estabelecimento	RESULTADO_EXAME_LAUDO_APAC
+resultado_padrao_ensaio	SADT	dominio	F8	Resultados padronizados usados para registrar a conclusão das análises de ensaio feitas em produtos	RESULTADO_PADRAO
+resumo_estadiamento_tnm	PEP	dominio	F8	Resumo esquemático de estadiamento por localização anatômica primária e sublocalização, com a categoria TNM correspondente	RESUMO_ESQUEMATICO
+cardapio_servico_quarto	HOT	principal	F8	Item do cardápio vendido ao paciente ou acompanhante pelo serviço de quarto, com grupo, composição e preço	RS_CARDAPIO
+grupo_cardapio_servico_quarto	HOT	dominio	F8	Grupos que organizam o cardápio do serviço de quarto (lanches, bebidas, pratos)	RS_GRUPO
+pedido_servico_quarto	HOT	principal	F8	Pedido de refeição avulsa feito do quarto durante a internação, com solicitante, forma de pagamento e situação	RS_PEDIDO
+pedido_servico_quarto_item	HOT	item	F8	Itens do cardápio e quantidades de um pedido do serviço de quarto	RS_ITENS_PEDIDO
+especialidade_classificacao_risco	PEP	vinculo	F3	Especialidades de destino habilitadas na classificação de risco de cada estabelecimento	SACR_ESPECIALIDADE
+situacao_alto_risco	PEP	dominio	F7	Situações de alto risco do protocolo de triagem por índice de gravidade, organizadas em grupos, que elevam a prioridade	SACR_SITUACAO_ALTO_RISCO; SACR_GRUPO_SITUACAO_ALTO_RISCO
+classificacao_risco_situacao_alto_risco	PEP	vinculo	F7	Situações de alto risco marcadas numa classificação de risco, com data e hora do registro	SACR_TRIAG_ATND_SITUA_ALT_RIS; SACR_SITUACAO_ALTO_RISCO_TRIA
+pendencia_sala_atendimento	PEP	principal	F7	Pendência de execução numa sala da urgência (medicação, coleta, exame) gerada pela prescrição ou pela classificação, até a liberação	SACR_PENDENCIA_SALA; SACR_PENDENCIA_ORIGEM
+regra_sugestao_diagnostico_enfermagem	PEP	configuracao	F7	Respostas do histórico de enfermagem que sugerem cada diagnóstico de enfermagem ao profissional	SAE_DIAGNOSTICO_RESPOSTA
+dominio_diagnostico_enfermagem	PEP	dominio	F7	Domínios da taxonomia de diagnósticos de enfermagem, acima das classes, com vigência	SAE_DOMINIO
+grupo_caracteristica_enfermagem	PEP	dominio	F7	Grupos e subgrupos que organizam características definidoras e fatores de risco ou relacionados dos diagnósticos de enfermagem	SAE_GRUPO_CARACTERISTICA_FTR; SAE_SUBGRUPO_CARACT_FTR; SAE_DIAGNOSTICO_ASSOCIACAO
+sala_cirurgica_procedimento	CC	vinculo	F7	Procedimentos cirúrgicos permitidos ou vedados em cada sala cirúrgica	SALA_CIRURGIA
+saldo_financeiro_periodo	FIN	historico	F7	Saldo inicial, débitos e créditos de portador, cliente ou credor por exercício e fechamento financeiro	SALDO_FINANCEIRO
+saldo_contabil_auxiliar_mensal	FIN	historico	F7	Saldo mensal da conta contábil aberto por auxiliar (participante ou detalhe), com e sem apuração de resultado	SALDO_MENSAL_EMP_AUX

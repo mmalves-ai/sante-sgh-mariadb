@@ -1,0 +1,67 @@
+funcionalidade	decisao	entidades_rodada1
+Estrutura física: unidades de internação, acomodações e leitos, com característica, gênero e permissão por usuário	F3	unidade_internacao, bloco_internacao, categoria_acomodacao, acomodacao, leito_hospitalar, especialidade_leito, caracteristica_leito, leito_observacao, local_observacao, permissao_unidade_usuario
+Situação e bloqueio do leito: livre, ocupado, reservado, em limpeza, interditado, em manutenção	F3	situacao_leito, periodo_situacao_leito, motivo_bloqueio_leito
+Admissão do paciente internado: caráter, tipo, diagnóstico de entrada, acidente de trabalho e cancelamento	F3	internacao, carater_admissao, modalidade_internacao, diagnostico_internacao, acidente_trabalho_internacao, cancelamento_internacao, parametro_internacao
+Autorização da internação e prorrogação: guia, senha, diárias liberadas, validade e autorizadores	F3	autorizacao_internacao, prorrogacao_internacao, responsavel_autorizacao_internacao
+Documentos impressos da internação: fichas, termos e guias por convênio e especialidade	F3	modelo_documento_internacao, regra_documento_internacao
+Pré-internação e reserva de leito: agendamento da internação com procedimentos, materiais, equipe e fila de espera	F3	agendamento_internacao, agendamento_internacao_procedimento, agendamento_internacao_material, reserva_leito
+Transferência de leito e histórico de ocupação, com motivo e solicitação	F3	ocupacao_leito, transferencia_leito, motivo_troca_leito, solicitacao_transferencia_leito, recusa_acomodacao
+Trocas durante a internação: convênio, clínica, especialidade e médico responsável	F3	troca_internacao, tipo_troca_internacao
+Alta hospitalar: alta médica, alta administrativa, motivo, desfecho, previsão e cancelamento	F3	alta_hospitalar, alta_medica, motivo_saida_hospitalar, desfecho_internacao, previsao_alta, cancelamento_alta
+Óbito: registro, numeração e cancelamento da declaração de óbito	F7	registro_obito, declaracao_obito, cancelamento_declaracao_obito
+Isolamento e precauções do paciente internado, com auditoria do cumprimento	F7	isolamento_paciente, tipo_precaucao, auditoria_isolamento
+Censo diário e indicadores de leito: ocupação, permanência, giro, reinternação e mortalidade	F3	fechamento_censo, fechamento_censo_unidade
+Gestão de fluxo do paciente (NIR): quadro de leitos por etapa, fila priorizada, barreiras de alta e reunião de leitos	F8	—
+Regulação externa: solicitação à central reguladora com o quadro clínico (sensório, suporte de O2, germes, diurese) e a 	F7	solicitacao_regulacao, evolucao_regulacao, central_reguladora, quadro_clinico_regulacao, servico_regulacao
+Leitos SUS: capacidade instalada, habilitação, leitos de programa e diárias especiais	F7	habilitacao_leito_sus, capacidade_leito_sus, procedimento_especialidade_leito
+Comunicação de internação e alta à operadora	F7	comunicacao_internacao_operadora
+Diárias pela acomodação: geração automática, diária parcial, pacote, faixa etária e diferença de acomodação	F3	regra_diaria, diaria_lancada, diferenca_acomodacao
+Gases medicinais por paciente: tempo de uso, regras por hora e uso simultâneo	F3	uso_gas_medicinal, regra_cobranca_gas
+Transporte de pacientes: transporte interno (maqueiro) e ambulância, com trajeto e cobrança por quilômetro	F8	—
+Internação domiciliar (home care): orçamento, transferência para casa e chamados	F8	—
+Integração de internação e movimento de leitos com sistemas externos pelo barramento do fornecedor	NAO	—
+Cadastro cirúrgico: grupo, subgrupo, porte, especialidade, natureza, caráter e texto padrão	F3	procedimento_cirurgico, grupo_procedimento_cirurgico, porte_cirurgico, carater_cirurgia, texto_padrao_cirurgia
+Salas cirúrgicas, grade de horários e permissão de uso por usuário	F3	sala_cirurgica, grade_sala_cirurgica, permissao_sala_usuario, parametro_bloco_usuario
+Pedido e agendamento da cirurgia: procedimentos, equipe prevista, pendências, histórico e pedido pelo portal do médico	F3	agendamento_cirurgico, agendamento_cirurgico_procedimento, agendamento_cirurgico_equipe, pendencia_agendamento_cirurgico, historico_agendamento_cirurgico
+Suspensão, cancelamento e transferência de cirurgia, com motivo	F3	suspensao_cirurgia, motivo_suspensao_cirurgia
+Equipe cirúrgica: participantes, função e tempos individuais	F3	participante_cirurgia, funcao_equipe_cirurgica
+Registro do ato cirúrgico e descrição cirúrgica: horários, achados e intercorrências	F3	ato_cirurgico, ato_cirurgico_procedimento, descricao_cirurgica, intercorrencia_cirurgica
+Avaliação pré-anestésica e ficha anestésica: tipo de anestesia, posição, monitoração, drogas e eventos	F3	avaliacao_pre_anestesica, ficha_anestesica, lancamento_ficha_anestesica, marco_ficha_anestesica, tipo_anestesia, posicao_cirurgica, modo_ventilatorio
+Movimento do paciente no bloco e recuperação pós-anestésica: local, situação em tempo real e aviso	F3	movimento_paciente_bloco, local_bloco, situacao_bloco, registro_recuperacao_anestesica
+Checklist de cirurgia segura em três momentos, com trava da incisão	F7	checklist_cirurgia_segura, item_checklist_cirurgia, confirmacao_checklist_cirurgia
+Consumo de materiais e medicamentos na cirurgia e gasto de sala, com débito na conta	F3	consumo_cirurgia, consumo_cirurgia_item, lista_material_procedimento
+OPME: solicitação, autorização por alçada, consumo em sala com etiqueta, consignado e conciliação	F3	solicitacao_opme, solicitacao_opme_item, autorizacao_opme, consumo_opme, conciliacao_opme, consignacao_material, alcada_aprovacao_opme
+Fluxo de autorização prévia das cirurgias eletivas junto ao convênio	F7	etapa_autorizacao_cirurgia
+Equipamentos e hemocomponentes reservados para a cirurgia	F8	—
+Documentos obrigatórios antes da cirurgia (termo de consentimento, exames), com bloqueio	F8	—
+Cartão de preferência do cirurgião (material, posição, equipamentos preferidos)	F8	—
+Auditoria da profilaxia antimicrobiana cirúrgica	F8	—
+Exame de hemodinâmica feito no centro cirúrgico	F8	—
+Projetos e mutirões cirúrgicos do SUS	F8	—
+Cotação eletrônica de OPME com portal de compras de terceiro (XML do fornecedor)	NAO	—
+Cadastro de instrumentais, caixas cirúrgicas e kits, com composição, foto e fases de processamento	F7	produto_reprocessavel, caixa_instrumental, caixa_instrumental_item, fase_reprocessamento
+Ciclo de esterilização: equipamento, carga e lote, indicadores biológico, químico e físico, liberação e rejeição	F7	equipamento_esterilizacao, metodo_esterilizacao, ciclo_esterilizacao, ciclo_esterilizacao_item, teste_ciclo_esterilizacao, rejeicao_reprocessamento
+Solicitação, recolhimento e entrega de material esterilizado aos setores e ao bloco	F7	solicitacao_material_esteril, solicitacao_material_esteril_item, movimento_material_esteril, movimento_material_esteril_item
+Rastreabilidade por etiqueta: código do pacote, validade e uso no paciente e na cirurgia	F7	pacote_esteril, uso_pacote_esteril
+Material de terceiros e consignado processado pela CME	F7	material_terceiro_cme, recebimento_material_terceiro
+Higienização de leitos e áreas: solicitação na alta, execução, profissional, criticidade, tipo de limpeza e material con	F3	area_higienizavel, criticidade_area, modalidade_limpeza, material_modalidade_limpeza, profissional_higienizacao, escala_higienizacao, solicitacao_limpeza, solicitacao_limpeza_local, execucao_limpeza, situacao_limpeza, ocorrencia_limpeza, parametro_higienizacao
+SAME: guarda física do prontuário, local no arquivo e movimentação entre setores	F3	volume_prontuario, local_arquivo, movimento_prontuario, operacao_movimento_prontuario, setor_tramite
+SAME: protocolo de envio de prontuários e contas entre setores (lote com itens)	F3	protocolo_tramite, protocolo_tramite_item
+SAME: solicitação e empréstimo de prontuário, com prazo e devolução atrasada	F3	solicitacao_prontuario, emprestimo_prontuario, motivo_solicitacao_prontuario
+Cópia e impressão do prontuário a pedido, com justificativa e quem recebeu	F3	solicitacao_copia_prontuario, entrega_copia_prontuario, justificativa_impressao
+Pendências do prontuário (falta de CID, assinatura, documento) e digitalização	F3	tipo_pendencia_prontuario, pendencia_prontuario, documento_digitalizado
+Nutrição: tipos de dieta, refeições e horários, mapa de dietas por corte e etiqueta da bandeja	F3	modalidade_dieta, via_dieta, caracteristica_dieta, refeicao_do_dia, horario_refeicao, mapa_dieta, mapa_dieta_item
+Triagem nutricional e terapia nutricional (EMTN): metas, acompanhamento e avaliação da parenteral	F7	triagem_nutricional, terapia_nutricional, meta_terapia_nutricional, acompanhamento_terapia_nutricional
+Refeição do acompanhante pelo direito legal e pelas regras do convênio	F7	direito_refeicao_acompanhante, refeicao_acompanhante
+Declaração de comparecimento e de acompanhante	F3	declaracao_emitida
+Manutenção corretiva: ordem de serviço, oficina, aprovação, retirada do equipamento e aceite	F7	equipamento_saude, ordem_servico, ordem_servico_evento, oficina_manutencao, especialidade_manutencao, aceite_ordem_servico
+Manutenção preventiva, calibração, segurança elétrica e plano de ar-condicionado	F7	plano_preventivo, execucao_preventiva, laudo_calibracao
+Patrimônio: bem, plaqueta, transferência com aceite, empréstimo, baixa, inventário e depreciação	F7	bem_patrimonial, plaqueta_bem, movimento_bem, inventario_bem, cota_depreciacao, baixa_bem
+Rouparia e lavanderia: enxoval, cotas por setor, coleta, envio, retorno em quilo e peças, perdas	F8	—
+Portaria: visitante, visita com crachá, regras por unidade, bloqueio, acompanhante e catraca	F8	—
+Contratos de manutenção e serviços terceirizados	F8	—
+Cardápio, pratos, ficha técnica e planejamento da produção	F8	—
+Composição nutricional dos alimentos (macro e micronutrientes)	F8	—
+Ocorrências na entrega da refeição	F8	—
+Lactário: fórmulas, preparo e etiqueta	F8	—
+Integração de nutrição com sistemas externos pelo barramento do fornecedor	NAO	—

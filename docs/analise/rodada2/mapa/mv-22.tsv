@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	TRO_PLA	TABELA	passagem_turno;passagem_turno_paciente	N	PEP	F3	
+DBAMV	TTB_FSCC_REL_OCIOSIDADE	MECANISMO	datamart	N	CC	F3	tabela de apoio do relatorio de ociosidade de sala
+DBAMV	TUBO_COLETA	TABELA	recipiente_coleta	N	SADT	F3	
+DBAMV	TUBO_REGRA_SUB_AMOSTRA	TABELA	regra_subamostra;regra_subamostra_recipiente	S	SADT	F7	
+DBAMV	TURMA	TABELA	tipo_turma_atividade	S	AGE	F8	
+DBAMV	TURNO	TABELA	turno_padrao	S	CAD	F7	
+DBAMV	TURNO_SETOR	TABELA	setor_turno;grade_horario_unidade	N	CAD	F7	
+DBAMV	TURNO_SETOR_LIVRO_ELETRONICO	TABELA	setor_turno	N	CAD	F7	
+DBAMV	TUSS	MECANISMO	catalogo_publico:tuss	N	INTG	F3	
+DBAMV	T_ITLOT_ENT	NAO		N	SUP		copia/backup: area temporaria da digitacao de lotes da entrada; o lote fica em lote_insumo
+DBAMV	UF	TABELA	unidade_federativa	N	CAD	F3	
+DBAMV	ULTIM_ITEM_AFERIC_INTEGRA_AUTM	MECANISMO	integracao	N	INTG	F8	ultimo valor lido do monitor; o registro clinico fica em afericao
+DBAMV	UNIDADE	TABELA	unidade_medida	N	SUP	F3	
+DBAMV	UNIDADES_CONVENIO_ORCAMENTO	TABELA	orcamento_receita_fonte_pagadora	S	FIN	F8	
+DBAMV	UNIDADE_ALIMENTO	TABELA	medida_caseira_alimento	N	HOT	F8	
+DBAMV	UNIDADE_ANALITICA	TABELA	setor_diagnostico	N	SADT	F3	significado incerto: unidade executora usada para recorte de acesso
+DBAMV	UNIDADE_ATENDIMENTO	TABELA	unidade_assistencial	N	CAD	F3	
+DBAMV	UNIDADE_ATENDIMENTO_PERF_AGDM	TABELA	perfil_marcacao_escopo	N	AGE	F8	
+DBAMV	UNIDADE_CONSUMIDORA	TABELA	medidor_consumo	S	HOT	F8	
+DBAMV	UNIDADE_MEDIDA_VAL_EXA	TABELA	unidade_resultado	N	SADT	F3	
+DBAMV	UNIDADE_MENSURACAO	TABELA	unidade_mensuracao_custo	N	FIN	F3	
+DBAMV	UNIDADE_NEGOCIO	TABELA	unidade_negocio	S	FIN	F8	
+DBAMV	UNIDADE_NEGOCIO_SETOR	TABELA	unidade_negocio_setor	S	FIN	F8	
+DBAMV	UNIDADE_PRESTADORA_SERVICO	TABELA	estabelecimento;contrato_gestor_sus	N	CAD	F3	
+DBAMV	UNIDADE_PRODUTO_UNIFICADO	TABELA	unificacao_insumo_item	N	SUP	F8	
+DBAMV	UNIDADE_REGIONAL	TABELA	unidade_saude_regional	S	CAD	F7	
+DBAMV	UNIDADE_RELATORIO_SCCOM	MECANISMO	datamart	N	REL	F8	carga para consolidar relatorios entre unidades
+DBAMV	UNIDADE_SETOR	TABELA	setor_funcional;unidade_mensuracao_custo	N	CAD	F3	
+DBAMV	UNID_INT	TABELA	unidade_internacao	N	INT	F3	
+DBAMV	UNID_INT_CONTROLE_FORMULA	MECANISMO	parametro	N	INT	F3	
+DBAMV	UNID_INT_CONTROLE_KANBAN	TABELA	meta_tempo_etapa	N	INT	F8	
+DBAMV	UNIMED_OBJ	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAMV	UNI_PRESC	TABELA	tipo_item_prescricao_unidade;unidade_prescricao	N	PEP	F3	
+DBAMV	UNI_PRO	TABELA	insumo_unidade	N	SUP	F3	
+DBAMV	UNI_PRO_INTEGRA	MECANISMO	integracao	N	INTG	F3	
+DBAMV	UPS_EQUIPE_SAUDE_FAMILIA_VIGC	TABELA	equipe_referencia	N	PEP	F8	
+DBAMV	UPS_SETOR	TABELA	setor_funcional	N	CAD	F3	
+DBAMV	USO_MERCADORIA_DI	TABELA	codigo_fiscal_oficial	N	FIN	F3	
+DBAMV	USUARIOS_AUTORIZADORES	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	USUARIOS_AUTORIZADORES_SOL_CPR	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	USUARIOS_ESPECIE	TABELA	usuario_estoque_classificacao	N	SUP	F3	
+DBAMV	USUARIOS_FFCV	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIOS_MUNICIPIO	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIOS_OFICINA_FUNCAO	TABELA	oficina_manutencao_usuario	N	HOT	F7	
+DBAMV	USUARIOS_PORTADORES	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIOS_REPMED	TABELA	usuario_vinculo_profissional	N	ADM	F3	
+DBAMV	USUARIOS_SET_EXA	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIOS_UNIDADE_ANALITICA	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIOS_UNIDADE_REGIONAL	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_AGENDA_CENTRAL	TABELA	usuario_tipo_agenda	N	ADM	F3	
+DBAMV	USUARIO_ANEXO_GUIA	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_ASSINATURA	TABELA	profissional_assinatura	N	CAD	F7	imagem vai para arquivo
+DBAMV	USUARIO_AUTORIZACAO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_CAD_SAME	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_CAIXA	TABELA	operador_caixa	N	FIN	F3	
+DBAMV	USUARIO_CANCELA_NOTA	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_COLUNA_CAD_PACIENTE	TABELA	permissao_campo_cadastro	N	CAD	F8	
+DBAMV	USUARIO_CONFIGURACAO_LICITACAO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_CONFIGURACAO_PECAS	TABELA	responsavel_orcamento	N	FIN	F7	
+DBAMV	USUARIO_CONVENIO	TABELA	credencial_fonte_pagadora	N	INTG	F3	senha vai para o cofre, nunca para a tabela
+DBAMV	USUARIO_ENCERRAMENTO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_EXCLUI_CNL_FFCV	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_FORNECEDOR	TABELA	vinculo_portal_cotacao	N	SUP	F3	
+DBAMV	USUARIO_GUIA	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_MODELO_EMPRESA	TABELA	usuario_estabelecimento	N	ADM	F3	
+DBAMV	USUARIO_MODELO_MODELOS	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_MODIFICA_OS	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_MOV_CME_SETOR	TABELA	permissao_setor_cme	N	CC	F7	
+DBAMV	USUARIO_MULTI_EMPRESA	TABELA	usuario_estabelecimento	N	ADM	F3	
+DBAMV	USUARIO_MULTI_EMPRESA_ESTOQUE	TABELA	local_estoque_usuario	N	SUP	F3	
+DBAMV	USUARIO_OFICINA	TABELA	oficina_manutencao_usuario	N	HOT	F7	
+DBAMV	USUARIO_ORCAMENTO	TABELA	responsavel_orcamento;preferencia_usuario	N	FIN	F7	
+DBAMV	USUARIO_ORCAMENTO_MENSAGEM	TABELA	mensagem_interna_destinatario	N	ADM	F3	
+DBAMV	USUARIO_PERFIL_AGENDAMENTO	TABELA	perfil_marcacao_usuario	N	AGE	F8	
+DBAMV	USUARIO_PERMITIDO_AGEND	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_PERMITIDO_PRODUTO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_PERM_PROCED	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_PRE_ORCAMENTO	TABELA	responsavel_orcamento	N	FIN	F7	
+DBAMV	USUARIO_PRODUTO_HABILITADO	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_RESP_GUIA	TABELA	usuario_fonte_pagadora	N	ADM	F3	
+DBAMV	USUARIO_RESTRICAO_GUIA	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_RESTRICAO_GUIA_DET	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USUARIO_SERVICO	TABELA	preferencia_usuario	N	ADM	F3	
+DBAMV	USUARIO_SETOR	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_SETOR_FFCH	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_SETOR_FFCV	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_SETOR_LIVRO_ELETRONICO	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_SETOR_MOVDOC	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_SETOR_SAC	TABELA	responsavel_ouvidoria_setor	N	QUA	F8	
+DBAMV	USUARIO_SINAC	TABELA	credencial_integracao	N	INTG	F3	
+DBAMV	USUARIO_SOLSAI_PRO_MOVEL	TABELA	local_estoque_usuario	N	SUP	F3	
+DBAMV	USUARIO_TIPO_RESERVA_HOR_SCMA	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USUARIO_ULTIMO_ACESSO	TABELA	preferencia_usuario;ultimo_acesso_usuario	N	ADM	F3	
+DBAMV	USUARIO_UNID_ATENDIMENTO	TABELA	usuario_unidade	N	ADM	F3	
+DBAMV	USUARIO_UNID_INT	TABELA	permissao_unidade_usuario	N	INT	F3	
+DBAMV	USU_AUT_DT_MOV	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USU_AUT_DT_PED_PSDI	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USU_AUT_DT_PED_PSSD	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USU_AUT_OC	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	USU_AUT_SCCV	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USU_AUT_SOLIC	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	USU_CEN_CIR	TABELA	configuracao_usuario_bloco	N	CC	F3	
+DBAMV	USU_CEN_CIR_MOV	TABELA	permissao_setor_cme	N	CC	F7	
+DBAMV	USU_CONF_GESTAO_PACOTE	TABELA	regra_alerta_destinatario	N	ADM	F7	
+DBAMV	USU_ESTOQUE	TABELA	local_estoque_usuario	N	SUP	F3	
+DBAMV	USU_INVENTARIO_CONF	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	USU_ORIGEM	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	USU_PERMISSAO_COMPETENCIA	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBAMV	VACINA	TABELA	imunobiologico	N	PEP	F7	
+DBAMV	VACINA_PAC	TABELA	vacina_aplicada	N	PEP	F7	
+DBAMV	VALE_RANCHO	TABELA	vale_refeicao	S	HOT	F8	
+DBAMV	VALE_RANCHO_CAIXA	TABELA	movimento_caixa	N	FIN	F3	
+DBAMV	VALIDA_CID_LAUDO_SUS	TABELA	regra_critica_sus	N	SUS	F7	
+DBAMV	VALORES_ELALUR_SPED_ECF	TABELA	ajuste_lalur	N	FIN	F7	
+DBAMV	VALOR_ACORDO_MEDICO_PAC	TABELA	acordo_honorario_particular	S	FAT	F7	
+DBAMV	VALOR_AIH	TABELA	conta_aih_procedimento	N	SUS	F7	
+DBAMV	VALOR_AIH_EQUIPE	TABELA	conta_aih_profissional	N	SUS	F7	
+DBAMV	VALOR_AIH_EQUIPE_INCREMENTO	TABELA	conta_aih_incremento;conta_aih_profissional	N	SUS	F7	
+DBAMV	VALOR_AIH_INCREMENTO	TABELA	conta_aih_incremento	N	SUS	F7	
+DBAMV	VALOR_CATEGORIA_CLINICA	NAO		N	FAT		sem valor de negocio: so liga dois codigos, sem atributo proprio
+DBAMV	VALOR_CUSTO_FIXO_PRODUCAO	TABELA	custo_fixo_producao_valor	S	SUP	F7	
+DBAMV	VALOR_DESCONTO	TABELA	desconto_custo_repasse	N	FAT	F8	
+DBAMV	VALOR_INICIAL_PRODUTO	TABELA	custo_medio_historico	N	SUP	F3	
+DBAMV	VALOR_REFERENCIA_ANALISE	TABELA	faixa_referencia	N	SADT	F3	
+DBAMV	VALOR_REFERENCIA_ECOCARD	TABELA	faixa_referencia_grandeza	N	SADT	F7	
+DBAMV	VALOR_TOTAL_CURVA	MECANISMO	datamart	N	SUP	F3	total calculado da curva ABC
+DBAMV	VAL_ECOCARDIO	TABELA	valor_grandeza_laudo	N	SADT	F3	
+DBAMV	VAL_EXA	TABELA	exame_analito;faixa_referencia	N	SADT	F3	
+DBAMV	VAL_EXA_CONVENIO	MECANISMO	parametro	N	SADT	F3	ordem do campo do exame por convenio
+DBAMV	VAL_EXA_TERCEIRO	TABELA	de_para_analito_apoio	N	SADT	F3	
+DBAMV	VAL_EXCED	TABELA	regra_cobranca_excedente	S	FAT	F7	
+DBAMV	VAL_FE_ECO	TABELA	formula_calculo	N	SADT	F3	
+DBAMV	VAL_HONO	TABELA	preco_procedimento_valor	N	FAT	F3	
+DBAMV	VAL_INDICE	TABELA	valor_indice	N	FAT	F3	
+DBAMV	VAL_INDICE_GRU_PRO	TABELA	valor_indice_grupo	N	FAT	F7	
+DBAMV	VAL_INDICE_ORI_ATE	TABELA	valor_indice_atendimento	S	FAT	F7	
+DBAMV	VAL_INDICE_SETOR	TABELA	valor_indice_setor	N	FAT	F8	
+DBAMV	VAL_INDICE_TP_ATEND	TABELA	valor_indice_atendimento	S	FAT	F7	
+DBAMV	VAL_OPME_IT_GUIA	TABELA	guia_fonte_pagadora_opme	N	FAT	F7	
+DBAMV	VAL_OPME_IT_GUIA_MGCO	TABELA	guia_fonte_pagadora_opme;solicitacao_opme_item	N	FAT	F7	
+DBAMV	VAL_PONTO_FRANQUIA	TABELA	franquia_contrato	N	FAT	F8	
+DBAMV	VAL_PORTE	TABELA	valor_porte_anestesico	N	FAT	F3	
+DBAMV	VAL_PORTE_MEDICO	TABELA	valor_porte_medico	N	FAT	F3	
+DBAMV	VAL_PRO	TABELA	preco_procedimento_valor	N	FAT	F3	
+DBAMV	VAL_PROC_ORCAMENTO	TABELA	orcamento_particular;orcamento_particular_item	N	FAT	F3	
+DBAMV	VAL_PROD_CONV	TABELA	preco_negociado_matmed	N	FAT	F3	
+DBAMV	VAL_PRO_CONVENIO_ESTADO	TABELA	preco_procedimento;preco_procedimento_valor	N	FAT	F3	
+DBAMV	VAL_PRO_RELACIONADO	TABELA	regra_lancamento;regra_lancamento_item	N	FAT	F3	
+DBAMV	VAL_REFERENCIA	TABELA	faixa_referencia	N	SADT	F3	
+DBAMV	VAL_REFERENCIA_TEMP	NAO		N	SADT		copia/backup: area temporaria das faixas de referencia
+DBAMV	VAL_TAB_SIASUS	NAO		N	SUS		obsoleto: valores do sistema ambulatorial anterior a tabela unificada
+DBAMV	VAL_TETO_CPM_EXCECAO	TABELA	teto_cobranca_excecao	S	FAT	F7	
+DBAMV	VAL_UCO	TABELA	valor_indice	N	FAT	F3	
+DBAMV	VARIACAO_CAMBIAL_INTER	TABELA	regra_contabilizacao	N	FIN	F7	
+DBAMV	VARIAVEIS_PADRAO	MECANISMO	parametro	N	FIN	F7	
+DBAMV	VARIAVEL_ROTINA	MECANISMO	framework	N	SIS	F3	
+DBAMV	VDIC_CONTROLE_PROCESSOS	MECANISMO	datamart	N	REL	F3	retrato materializado de contagem de processos
+DBAMV	VEICULO_ROMANEIO	TABELA	veiculo_entrega	N	SUP	F8	
+DBAMV	VEN_PRO	TABELA	documento_estoque;documento_estoque_item	N	SUP	F3	
+DBAMV	VERBAS_CATEGORIA	TABELA	teto_orcamentario	N	FIN	F8	
+DBAMV	VERBA_ORCAMENTARIA	TABELA	verba_orcamentaria	S	FIN	F8	
+DBAMV	VERIFICACAO_ROTATIVA_SALDO	TABELA	inventario_estoque;regra_contagem_rotativa	N	SUP	F3	
+DBAMV	VERIFICA_INATIVAS	NAO		N	FIN		tecnico do fornecedor sem equivalente
+DBAMV	VIA_ADMINISTRACAO	TABELA	via_de_uso	N	PEP	F3	
+DBAMV	VIA_DE_ACESSO	TABELA	via_acesso_cirurgico	N	CC	F3	
+DBAMV	VIA_TRATAMENTO	TABELA	via_de_uso	N	PEP	F3	
+DBAMV	VIA_TRATAMENTO_LAUDO_SIA_APAC	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	VINCULACAO	TABELA	fonte_recurso	N	SUP	F7	
+DBAMV	VINCULO_CNES	TABELA	tipo_vinculo_trabalho	N	CAD	F3	
+DBAMV	VINCULO_PRODUTO_NCM	TABELA	dado_fiscal_item	N	FIN	F3	
+DBAMV	VINCULO_SETOR_EMPRESA	TABELA	correspondencia_setor_estabelecimento	S	CAD	F7	
+DBAMV	VINCULO_SUS_PRESTADOR	TABELA	profissional	N	CAD	F3	
+DBAMV	VINC_EXPORT_BENS_RVS	NAO		N	FIN		obsoleto: registro de servicos ao exterior extinto
+DBAMV	VISAO	TABELA	modelo_demonstracao	N	FIN	F7	
+DBAMV	VISAO_CONTABIL	TABELA	modelo_demonstracao	N	FIN	F7	
+DBAMV	VISAO_CONTABIL_GERENCIAL	TABELA	modelo_demonstracao	N	FIN	F7	
+DBAMV	VISAO_CONTABIL_GERENCIAL_COMP	TABELA	composicao_linha_demonstracao	N	FIN	F7	
+DBAMV	VISAO_ORGANIZACIONAL	TABELA	estrutura_organizacional	S	CAD	F7	
+DBAMV	VISAO_PLANO_CONTABIL	TABELA	composicao_linha_demonstracao	N	FIN	F7	
+DBAMV	VISAO_SETOR	TABELA	agrupamento_setor	S	CAD	F7	
+DBAMV	VM_FAT_SEMESTRAL_ATEND	MECANISMO	datamart	N	REL	F3	retrato materializado de faturamento
+DBAMV	VM_FAT_SEMESTRAL_CONV	MECANISMO	datamart	N	REL	F3	retrato materializado de faturamento
+DBAMV	VULNERABILIDADE_SOCIAL	TABELA	condicao_vulnerabilidade	N	CAD	F7	
+DBAMV	XML_FOLHA_RESUMO_CLINICO	MECANISMO	framework	N	SIS	F3	
+DBAMV	XML_MENU_RESUMO_CLINICO	MECANISMO	framework	N	SIS	F3	
+DBAMV	XML_SCHEMA	TABELA	esquema_mensagem	N	INTG	F3	
+DBAMV	XML_TAG	MECANISMO	integracao	N	INTG	F3	mapa de etiqueta para coluna do gerador de arquivo
+DBAMV	XML_VERSAO	TABELA	esquema_mensagem	N	INTG	F3	
+DBAMV	XSL_MENU_RESUMO_CLINICO	MECANISMO	framework	N	SIS	F3	
+DBAPORTAL	ACAO_IMEDIATA_OCORRENCIA	TABELA	acao_imediata_incidente	S	QUA	F7	
+DBAPORTAL	ACAO_IMEDIATA_OCOR_ORG	TABELA	acao_imediata_incidente	S	QUA	F7	
+DBAPORTAL	ACHADO	TABELA	achado_auditoria	N	QUA	F8	
+DBAPORTAL	ACHADO_CAUSA_RAIZ	TABELA	analise_incidente_causa	N	QUA	F7	
+DBAPORTAL	ACHADO_IT_QUESTIONARIO	TABELA	auditoria_interna_item	N	QUA	F8	
+DBAPORTAL	ACHADO_ORGANIZACAO	TABELA	achado_auditoria	N	QUA	F8	
+DBAPORTAL	ANALISE_5W2H	TABELA	acao_plano_qualidade	N	QUA	F7	
+DBAPORTAL	ANALISE_5W2H_QUEM	TABELA	acao_plano_qualidade	N	QUA	F7	
+DBAPORTAL	ANALISE_COMENTARIO	TABELA	analise_critica_indicador	N	REL	F7	
+DBAPORTAL	ANALISE_CRITICA	TABELA	reuniao_analise_critica;reuniao_analise_critica_deliberacao	N	REL	F8	
+DBAPORTAL	ANALISE_ISHIKAWA	TABELA	analise_incidente;analise_incidente_causa	N	QUA	F7	
+DBAPORTAL	ANALISE_PDCA	TABELA	analise_incidente	N	QUA	F7	
+DBAPORTAL	ANEXO_MENSAGEM	MECANISMO	arquivo	N	ADM	F3	metadado em mensagem_interna
+DBAPORTAL	ARQUIVO_VERSAO	TABELA	documento_qualidade_versao	N	QUA	F8	
+DBAPORTAL	ARQ_ANEXOS_INIC_ACAO	MECANISMO	arquivo	N	QUA	F7	metadado em plano_acao_qualidade
+DBAPORTAL	AUTOMATION	MECANISMO	datamart	N	REL	F3	consulta de extracao do painel
+DBAPORTAL	AUTOMATION_HISTORICO_CONEXAO	NAO		N	REL		tecnico do fornecedor sem equivalente
+DBAPORTAL	BASELINE_PROJETO	MECANISMO	historico_entidade:iniciativa_estrategica	N	REL	F8	
+DBAPORTAL	CADEIA_VALOR	TABELA	processo_institucional	N	QUA	F8	
+DBAPORTAL	CALENDARIO	TABELA	dia_nao_util	N	CAD	F3	
+DBAPORTAL	CAMINHO_CRITICO	TABELA	objetivo_estrategico_relacao	N	REL	F8	
+DBAPORTAL	CAMPOS	MECANISMO	datamart	N	REL	F3	definicao de campo do indicador primario
+DBAPORTAL	CARGA	TABELA	carga_data_mart	N	REL	F3	
+DBAPORTAL	CARGA_AUTOMATION	TABELA	carga_data_mart	N	REL	F3	
+DBAPORTAL	CARGO	TABELA	cargo	N	RH	F7	
+DBAPORTAL	CATEGORIA_AUDITORIA	TABELA	categoria_auditoria_interna	N	QUA	F8	
+DBAPORTAL	CATEGORIA_DOCTO	TABELA	pasta_documento_qualidade	N	QUA	F8	
+DBAPORTAL	CATEGORIA_OCORRENCIA	TABELA	tipo_incidente	N	QUA	F7	
+DBAPORTAL	CATEGORIA_RISCO	TABELA	categoria_risco_institucional	N	QUA	F8	
+DBAPORTAL	CAUSA_RAIZ	TABELA	fator_contribuinte	N	QUA	F7	
+DBAPORTAL	CAUSA_RAIZ_ORGANIZACAO	TABELA	fator_contribuinte	N	QUA	F7	
+DBAPORTAL	CA_ACREDITACAO	TABELA	programa_acreditacao	N	QUA	F8	
+DBAPORTAL	CA_AREA	TABELA	requisito_acreditacao	N	QUA	F8	

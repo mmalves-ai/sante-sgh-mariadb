@@ -1,0 +1,135 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+CDACOMODTIPO	3	SGO	Plano próprio > Domínios > Tipos de acomodação do plano	dominio	migrar-crud	Tipos de acomodação contratada no plano de saúde próprio
+CDDIAVENCCOB	31	SGO	Plano próprio > Domínios > Dias de vencimento de cobrança	dominio	migrar-crud	Dias do mês permitidos para vencimento de mensalidades
+CDFAIXAETATP	3	SGO	Plano próprio > Domínios > Tipos de faixa etária	dominio	migrar-crud	Tipos de faixa etária para precificação do plano
+CDGUIASTATUS	9	SGO	Plano próprio > Domínios > Status de guia	dominio	migrar-crud	Situações da guia de autorização do plano próprio
+CDINCIDECOMIS	4	SGO	Plano próprio > Domínios > Incidência de comissão	dominio	migrar-crud	Base de incidência de comissão de vendas do plano
+CDMOTIVOBAIXA	1	SGO	Plano próprio > Domínios > Motivos de baixa	dominio	migrar-crud	Motivos de baixa de título/contrato do plano; só default
+CDMOTIVOSOLCART	3	SGO	Plano próprio > Domínios > Motivos de solicitação de carteirinha	dominio	migrar-crud	Motivos de emissão/segunda via de carteirinha do beneficiário
+CDMOTMOVIMCAD	12	SGO	Plano próprio > Domínios > Motivos de movimentação cadastral	dominio	migrar-crud	Motivos de inclusão, suspensão e exclusão de beneficiário por status
+CDMSGCOBRANCA	9	SGO	Plano próprio > Domínios > Mensagens de cobrança	dominio	migrar-crud	Mensagens impressas no boleto com prioridade de emissão
+CDMSGLINHA	7	SGO	Plano próprio > Domínios > Linhas de mensagem	dominio	migrar-crud	Posições de linha de mensagem em boletos/carteirinhas
+CDORIGEMCOBR	4	SGO	Plano próprio > Domínios > Origem da cobrança	dominio	migrar-crud	Origem da cobrança ao beneficiário (mensalidade, coparticipação etc.)
+CDORIGEMGUIA	5	SGO	Plano próprio > Domínios > Origem da guia	dominio	migrar-crud	Origem da guia de autorização do plano próprio
+CDPARDIGOBG	4	SGO	Plano próprio > Domínios > Obrigatoriedade de digitação	dominio	migrar-crud	Opções de obrigatoriedade: sim, não, só titular, só dependente
+CDPGTOBALCAOCP	4	SGO	Plano próprio > Domínios > Pagamento de coparticipação no balcão	dominio	migrar-crud	Formas de pagamento de coparticipação no balcão
+CDPGTOCOOPART	2	SGO	Plano próprio > Domínios > Pagamento de coparticipação	dominio	migrar-crud	Modo de cobrança da coparticipação do beneficiário
+CDPLANOCLASSIF	3	SGO	Plano próprio > Domínios > Classificação do plano	dominio	migrar-crud	Classificação regulatória do plano (individual, coletivo etc.)
+CDSTATUSCAD	4	SGO	Plano próprio > Domínios > Status cadastral do beneficiário	dominio	migrar-crud	Situações cadastrais do beneficiário (ativo, suspenso, cancelado)
+CDSTATUSSOLCART	4	SGO	Plano próprio > Domínios > Status de solicitação de carteirinha	dominio	migrar-crud	Situações da solicitação de carteirinha
+CDTPACUMULPOR	2	SGO	Plano próprio > Domínios > Tipo de acumulação	dominio	migrar-crud	Critério de acumulação de franquia/carência
+CDTPCOBRANCA	5	SGO	Plano próprio > Domínios > Tipos de cobrança	dominio	migrar-crud	Tipos de cobrança (boleto, débito, folha etc.)
+CDTPCONTRATO	2	SGO	Plano próprio > Domínios > Tipos de contrato	dominio	migrar-crud	Tipos de contrato do plano (pessoa física, jurídica)
+CDTPCONTRCAIXA	7	SGO	Plano próprio > Domínios > Tipos de controle de caixa	dominio	migrar-crud	Tipos de controle de caixa da operadora
+CDTPCOPART	3	SGO	Plano próprio > Domínios > Tipos de coparticipação	dominio	migrar-crud	Tipos de coparticipação (percentual, valor fixo)
+CDTPCTRCONTRAT	2	SGO	Plano próprio > Domínios > Controle contratual	dominio	migrar-crud	Tipos de controle contratual do plano
+CDTPDESCACR	2	SGO	Plano próprio > Domínios > Desconto ou acréscimo	dominio	migrar-crud	Tipo de ajuste financeiro: desconto ou acréscimo
+CDTPDESPCTAPG	17	SGO	Plano próprio > Domínios > Tipos de despesa assistencial	dominio	carga-referencia	Grupos de despesa assistencial ANS (consultas, exames, internações) para contas a pagar
+CDTPDESPCTAPGCM	2	SGO	Plano próprio > Domínios > Tipos de despesa (complemento)	dominio	migrar-crud	Classificação complementar de despesa assistencial em contas a pagar
+CDTPEMISSAO	8	SGO	Plano próprio > Domínios > Tipos de emissão	dominio	migrar-crud	Tipos de emissão de cobrança/carteirinha
+CDTPENDERECO	4	SGO	Plano próprio > Domínios > Tipos de endereço	dominio	migrar-crud	Tipos de endereço do beneficiário (residencial, cobrança etc.)
+CDTPEVTCTAREC	5	SGO	Plano próprio > Domínios > Eventos de contas a receber	dominio	migrar-crud	Eventos geradores de título a receber da operadora
+CDTPFRANQUIA	4	SGO	Plano próprio > Domínios > Tipos de franquia	dominio	migrar-crud	Tipos de franquia do plano
+CDTPGUIA	4	SGO	Plano próprio > Domínios > Tipos de guia	dominio	migrar-crud	Tipos de guia: ambulatório, consulta, internação, SP/SADT
+CDTPLANCAMEN	4	SGO	Plano próprio > Domínios > Tipos de lançamento	dominio	migrar-crud	Tipos de lançamento financeiro do beneficiário
+CDTPMOVVALOR	9	SGO	Plano próprio > Domínios > Tipos de movimentação de valor	dominio	migrar-crud	Tipos de movimentação de valor (mensalidade, reajuste, adicional)
+CDTPPERIODO	2	SGO	Plano próprio > Domínios > Tipos de período	dominio	migrar-crud	Unidade de período (dias, meses) para carência/vigência
+CDTPRETCONS	5	SGO	Plano próprio > Domínios > Tipos de retorno de consulta	dominio	migrar-crud	Regras de retorno de consulta sem nova cobrança
+CDVENDATPREP	6	SGO	Plano próprio > Domínios > Papéis na venda	dominio	migrar-crud	Papéis comerciais: vendedor, supervisor, gerente, indicador, concessionária
+CTWGRUPOEXPORTACAO	3	INTG	Integrações > Custos > Grupos de exportação	configuracao	migrar-crud	Destinos de exportação de custos: próprio, ApuraSUS, Federassantas
+FPESOCTPAMB	2	INTG	Integrações > eSocial/REINF > Ambientes e endpoints	configuracao	carga-referencia	Ambientes produção/restrita com URLs dos webservices eSocial e REINF
+GEINTAPOIOCOT	225	INTG	Integrações > Portais de cotação	integracao	migrar-leitura	Vínculo pedido de compra x código no portal de cotação externo
+GEPORTALCOMPRAS	3	INTG	Integrações > Portais de cotação > Cadastro	dominio	migrar-crud	Portais de cotação externos (Apoio, Smart Compras, Medical VM)
+INTEGRA_BI	573	INTG	Sem tela: fila de exclusões para o BI	integracao	descartar	Fila de exclusões rastreadas pelo ETL do BI legado; substituída
+PRCABEARQINTEGRAQT	1	INTG	Integrações > Oncologia (QT) > Campos do arquivo	configuracao	migrar-crud	Campos do arquivo de integração de quimioterapia
+PRCABNEXODATA	1	INTG	Integrações > Nexodata (prescrição digital)	integracao	migrar-leitura	Retorno de prescrição digital Nexodata (1 linha, 2022)
+PRLANCNEXODATA	1	INTG	Integrações > Nexodata (prescrição digital)	integracao	migrar-leitura	Documento enviado à Nexodata; registro único de teste
+PSATVASS	1	SGO	Operadora > Beneficiários > Histórico de alterações	obsoleta	descartar	Registro único com data 1899 (placeholder); módulo operadora nunca usado
+PSBENCPL	1	SGO	Operadora > Beneficiários > Dados complementares	obsoleta	descartar	Complemento do beneficiário; registro único placeholder, sem uso real
+PSBENEFI	1	SGO	Operadora > Beneficiários	obsoleta	descartar	Cadastro de beneficiários do plano; só 1 registro placeholder
+PSBENTMP	1	SGO	Operadora > Beneficiários (temporária)	temporaria	descartar	Tabela de trabalho de beneficiários; registro único 1899
+PSCOPARTTPGUIAQNDO	4	SGO	Operadora > Domínios > Regras de coparticipação por guia	dominio	migrar-crud	Quando cobrar coparticipação: existência de diárias/taxas ou mat/med
+PSCRITICA	7	SGO	Operadora > Domínios > Críticas de autorização	dominio	migrar-crud	Críticas de guia: carência, inadimplência, cobertura, preexistência
+PSDOCIMPNOMESOCIAL	8	SGO	Operadora > Domínios > Documentos com nome social	dominio	migrar-crud	Documentos que imprimem nome social: guias, carteirinhas, cobranças
+PSEMPEMITEOBS	5	SGO	Operadora > Domínios > Emissão de observação por empresa	dominio	migrar-crud	Público que recebe observação: todos, titulares, dependentes, agregados
+PSFORNEMEMSIT	6	SGO	Operadora > Domínios > Situações de fornecimento	dominio	migrar-crud	Situações de fornecimento ao beneficiário: solicitado, autorizado, entregue
+PSGRUPOCLASSIF	5	SGO	Operadora > Domínios > Grupos de classificação de procedimento	dominio	migrar-crud	Grupos ANS: ambulatorial, hospitalar, parto, odontológico
+PSMOTIVO	1	SGO	Operadora > Domínios > Motivos de baixa de beneficiário	dominio	migrar-crud	Motivos de baixa/exclusão de beneficiário
+PSNATUREZAPS	5	SGO	Operadora > Domínios > Naturezas de prestador	dominio	migrar-crud	Natureza da rede: contratada, própria, reembolso, eventual (ANS)
+PSORIGEMCOBR	7	SGO	Operadora > Domínios > Origens de cobrança	dominio	migrar-crud	Origens de cobrança: mensalidade, coparticipação, adesão, multa
+PSORIGEMGUIA	6	SGO	Operadora > Domínios > Origens de guia	dominio	migrar-crud	Origem da guia: SGO, recepção, SADT, autorizador on-line
+PSPLNASS	1	SGO	Operadora > Beneficiários > Planos do beneficiário	obsoleta	descartar	Plano por beneficiário; registro único placeholder 1899
+PSPRCANS	305	SGO	Operadora > Tabelas ANS > Classificação de procedimentos	dominio	carga-referencia	Classificação ANS de procedimentos/especialidades (305 códigos)
+PSREEMBOLSOTP	4	SGO	Operadora > Domínios > Tipos de reembolso	dominio	migrar-crud	Tipos de reembolso: hospitalar, SP/SADT, mat/med, transporte
+PSSIBCAMPOALT	19	SGO	Operadora > Domínios > Campos alteráveis no SIB	dominio	carga-referencia	Campos de beneficiário reportáveis em retificação do SIB/ANS
+PSTIPMEN	5	SGO	Operadora > Domínios > Tipos de mensalidade	dominio	migrar-crud	Tipos de cobrança: mensalidade, coparticipação, adesão, seguro
+PSTIPOGUIA	4	SGO	Operadora > Domínios > Tipos de guia	dominio	migrar-crud	Tipos de guia: consulta, SP/SADT, internação, ambulatório
+PSTPACUMULPOR	3	SGO	Operadora > Domínios > Acúmulo de limite por	dominio	migrar-crud	Nível de acúmulo de limite: grupo, subgrupo, procedimento
+PSTPPERIODO	2	SGO	Operadora > Domínios > Tipos de período	dominio	migrar-crud	Periodicidade de limite: mensal ou anual
+PSTPRETORNO	5	SGO	Operadora > Domínios > Regras de retorno	dominio	migrar-crud	Regra de retorno: mesmo credenciado e/ou especialidade
+PSTPSMESRECOL	6	SGO	Operadora > Domínios > Meses de recolhimento TPS	dominio	carga-referencia	Meses de recolhimento da Taxa de Saúde Suplementar (ANS)
+PSTPSVIGENCIA	2	SGO	Operadora > Tabelas ANS > Valores da TPS	configuracao	carga-referencia	Valores anual/trimestral da Taxa de Saúde Suplementar por vigência
+PSVENDAS	1	SGO	Operadora > Vendas de planos	obsoleta	descartar	Venda e comissionamento de plano; registro único placeholder 1899
+RETPPROTOLIFE	6	INTG	Integrações > Tolife > Perfis de prioridade	dominio	migrar-crud	Perfis de prioridade enviados à Tolife: gestante, cadeirante etc.
+SIMATHP	321	INTG	Integrações > Laboratório de apoio > De-para de materiais	integracao	migrar-crud	De-para de materiais com laboratório de apoio por interface
+SITBELHP	1001	INTG	Integrações > Laboratório de apoio > De-para de elementos	integracao	migrar-crud	De-para de elementos de exame com laboratório de apoio
+SITBEXEQ	2	INTG	Integrações > Interfaces de equipamento > De-para de exames	integracao	migrar-crud	Equivalência de exames por interface/equipamento
+SITBEXHP	1001	INTG	Integrações > Laboratório de apoio > Catálogo de exames	integracao	migrar-crud	Catálogo de exames do laboratório de apoio com material e exigências
+SITPEQV	20	INTG	Integrações > Interfaces de equipamento/laboratório de apoio	configuracao	migrar-crud	20 interfaces de equipamentos/labs de apoio; contém senhas FTP
+SITPEQVMODELO	4	INTG	Integrações > Interfaces > Modelos	dominio	migrar-crud	Modelos de interface (online, offline, modelo I/II)
+SITPEQV_SITPEQVMODELO	6	INTG	Integrações > Interfaces > Modelos por interface	vinculo	migrar-crud	Vínculo interface x modelo de comunicação
+SIWSETIQUETA	72	INTG	Integrações > Web service de etiquetas LIS	integracao	migrar-leitura	Layouts de etiqueta retornados pelo web service do LIS
+SIWSLANCETQTA	128	INTG	Integrações > Web service de etiquetas LIS (log)	integracao	migrar-leitura	Retornos de etiqueta LIS por exame, só 06/2023 a 01/2024
+SPMOTLIG	1	SGO	Operadora > Atendimento ao cliente > Motivos de ligação	dominio	migrar-crud	Motivos de ligação do SAC da operadora (1 registro)
+SPORIGEM_ATEND	6	SGO	Operadora > Protocolos de atendimento > Origens	dominio	migrar-leitura	Origens do protocolo de atendimento ANS (portal, SAC, SADT)
+SPVINCULOTITULAR	8	SGO	Operadora > Atendimento > Vínculos com titular	dominio	migrar-crud	Grau de vínculo do solicitante com o titular do plano
+TBCEPPARAMCAB	4	INTG	Utilitários > Importações > Layout do arquivo de CEP	configuracao	migrar-crud	Cabeçalhos do layout posicional de importação de CEP
+TBCEPPARAMPOS	16	INTG	Utilitários > Importações > Layout do arquivo de CEP	configuracao	migrar-crud	Posições de campos do layout de importação de CEP
+TBCLASSIFCREPLS	3	SGO	Operadora > Rede prestadora > Classificação	dominio	carga-referencia	Classificação de prestador da rede (RPS ANS)
+TBDIGITAL_ESPECIALIDADE	113	INTG	Integrações > D4H > Especialidades	dominio	carga-referencia	Especialidades padrão D4H referenciadas por TBESPEC
+TBDIGITAL_INTEG_FIELD	191	INTG	Integrações > D4H > Mapeamento de campos	integracao	migrar-leitura	Campos monitorados por tipo de integração D4H (fila vazia)
+TBDIGITAL_INTEG_TYPE	60	INTG	Integrações > D4H > Tipos de integração	integracao	migrar-leitura	Tipos de integração D4H/FHIR por tabela de origem
+TBDISPONIBILSERV	2	SGO	Operadora > Rede prestadora > Disponibilidade	dominio	carga-referencia	Disponibilidade do serviço do prestador (RPS ANS)
+TBENDPOINT	2	INTG	Integrações > Endpoints	configuracao	migrar-crud	URLs de endpoints externos por identificação
+TBENDPOINTINTERNALSERVICE	39	INTG	Integrações > Endpoints de serviços internos	configuracao	migrar-crud	URLs de microsserviços internos do fornecedor
+TBENDPOINTURI	30	INTG	Integrações > Endpoints > URIs	configuracao	migrar-crud	URIs/rotas por endpoint
+TBENVCOBEMAIL	5	SGO	Operadora > Beneficiários > Envio de cobrança por e-mail	dominio	migrar-leitura	Opções de envio de boleto por e-mail ao beneficiário
+TBIDENTIFICACAOENDPOINT	57	INTG	Integrações > Endpoints > Identificações	configuracao	migrar-crud	Catálogo de serviços integrados (SafeWeb, Vidaas, D4H)
+TBINFBANCO	2	INTG	Nenhuma (credencial de banco externo)	configuracao	descartar	Caminho e senha de banco externo usado em trigger; recriar em cofre
+TBISENCAOONUS	3	SGO	Operadora > Rede prestadora > Isenção de ônus	dominio	migrar-leitura	Isenção de ônus do prestador (RPS ANS)
+TBMEDSOLWEBCAD	5	INTG	Portal > Autocadastro de médico solicitante	cadastro	migrar-crud	Autocadastro web de solicitantes externos pendente de vínculo
+TBOPERSCHEMA	3	INTG	Integrações > Webservices > Operações	dominio	migrar-crud	Operações de webservice (dados clínicos, token, elegibilidade)
+TBREGIMEATEND	3	SGO	Operadora > Contratualização > Regimes de atendimento	dominio	migrar-crud	Regime ambulatorial/hospitalar no contrato com prestador
+TBREGUL_ENDPOINT	3	INTG	Integrações > Regulação GERINT > Endpoints	configuracao	migrar-crud	Endpoints REST dos serviços de regulação estadual
+TBREGUL_SERVICO	42	INTG	Integrações > Regulação GERINT > Serviços	configuracao	migrar-crud	Serviços de regulação de leitos (bloqueio, internação, transferência)
+TBREGUL_SISTEMA	2	INTG	Integrações > Regulação > Sistemas	configuracao	migrar-crud	Sistemas de regulação integrados (GERINT/GERCON)
+TBREGUL_TABELAS	20	INTG	Integrações > Regulação > Tabelas de domínio	dominio	carga-referencia	Tabelas de códigos exigidas pela regulação estadual
+TBREGUL_VLR_TABELAS	253	INTG	Integrações > Regulação > Valores das tabelas	dominio	carga-referencia	Valores das tabelas de domínio da regulação estadual
+TBSAFEWEB_FORMA_ASSIN_ICP	5	INTG	Integrações > Assinatura digital SafeWeb > Formas	dominio	migrar-crud	Formatos de assinatura ICP no provedor SafeWeb (AD-RB, AD-RT)
+TBSAFEWEB_SITAUTORIZA	3	INTG	Integrações > Assinatura digital SafeWeb > Situações	dominio	migrar-crud	Situação da autorização de assinatura em nuvem SafeWeb
+TBSAFEWEB_TIPOATENDIMENTO	2	INTG	Integrações > Assinatura digital SafeWeb > Tipos	dominio	migrar-crud	Tipo de atendimento para assinatura SafeWeb (interno/externo)
+TBSEXO_PIXPDQ	3	INTG	Integrações > PIX/PDQ > Sexo	dominio	carga-referencia	Códigos de sexo do padrão PIX/PDQ para integração
+TBSGHINTEGRADOR_PARAM	1	INTG	Integrações > Integrador SGH > Parâmetros	configuracao	migrar-crud	Liga/desliga o integrador de dados SGH
+TBSGHINTEGRADOR_TABELA	3	INTG	Integrações > Integrador SGH > Tabelas sincronizadas	configuracao	migrar-crud	Tabelas replicadas pelo integrador (paciente, internação, atendimento)
+TBSIPANSATO	75	SGO	Operadora > ANS > SIP > Grupos de eventos	dominio	carga-referencia	Grupos de eventos do SIP/ANS (consultas, exames, internações)
+TBSIPANSPROC	1001	SGO	Operadora > ANS > SIP > Procedimentos por grupo	vinculo	carga-referencia	Procedimentos TUSS por grupo de evento SIP com vigência
+TBSMSTPAGENDA	4	INTG	Integrações > SMS > Tipos de agendamento	dominio	migrar-crud	Periodicidade de envio agendado de SMS
+TBSMSTPERRO	6	INTG	Integrações > SMS > Erros do provedor	dominio	migrar-crud	Códigos de erro retornados pelo provedor de SMS
+TBSMSTPRETMSG	4	INTG	Integrações > SMS > Status de envio	dominio	migrar-crud	Status de retorno da mensagem SMS
+TBSTATUSCREPLS	4	SGO	Operadora > Rede credenciada > Status de movimentação	dominio	migrar-crud	Status do histórico de credenciamento (inclusão, exclusão, reinclusão)
+TBTIPOCOBRANCASGO	4	SGO	Operadora > Cobrança > Tipos de cobrança	dominio	migrar-crud	Mensalidade, coparticipação, cobrança avulsa e acordos
+TBTISSREMUNERAOPERPS	7	SGO	Operadora > Contratualização > Modelos de remuneração	dominio	carga-referencia	Modelos de remuneração do prestador (pacote, DRG, capitation)
+TBTISSSCHEMA	25	INTG	Integrações > TISS > Transações/schemas	configuracao	migrar-crud	Transações do webservice TISS (lote, recurso, status, cancelamento)
+TBTISSURLWSSGH	11	INTG	Integrações > TISS > URLs dos serviços	configuracao	migrar-crud	URL do webservice por transação TISS
+TBTISSWEBSERV	2	INTG	Integrações > TISS > Webservice por convênio	configuracao	migrar-crud	URL e credenciais do prestador no webservice de cada convênio
+TBTPCONTRATOCREPLS	2	SGO	Operadora > Rede credenciada > Tipo de contrato	dominio	migrar-crud	Contrato de credenciado direto ou indireto
+TBTPDOCUMENTO_PIXPDQ	6	INTG	Integrações > PIX/PDQ > Tipos de certidão	dominio	carga-referencia	Tipos de certidão do padrão PIX/PDQ/CADSUS
+TBTPEMAILPLS	9	SGO	Operadora > Configuração > Tipos de e-mail	dominio	migrar-crud	Modelos de e-mail ao beneficiário (boleto, cartas, extratos)
+TBTPEXPIPERGS	12	SGO	Operadora > Exportações > Tipos de prestador IPERGS	dominio	migrar-crud	Tipos de prestador para exportação ao IPERGS
+TBTPFAVORECIDO	4	SGO	Operadora > Contratualização > Favorecido	dominio	carga-referencia	Favorecido de cláusula contratual (operadora, prestador, ambos)
+TBTPFORMAREAJ	8	SGO	Operadora > Contratualização > Formas de reajuste	dominio	carga-referencia	Índice/forma de reajuste do contrato com prestador
+TBTPPRESTADOR	8	SGO	Operadora > Rede credenciada > Tipos de prestador	dominio	migrar-crud	Tipo de prestador credenciado (consultório, hospital, laboratório)
+TBTPUNIDTEMPO	5	SGO	Operadora > Contratualização > Unidades de tempo	dominio	carga-referencia	Unidade de prazo contratual (dia, dia útil, mês)
+TBTPVIGCONTRATO	2	SGO	Operadora > Contratualização > Tipos de vigência	dominio	carga-referencia	Contrato com prazo determinado ou indeterminado
+TBTPWEBSERV	2	INTG	Integrações > Webservices > Padrões	dominio	migrar-crud	Padrão do webservice: TISS ou próprio da operadora
+TBVIDAAS_FORMA_ASSIN_ICP	4	INTG	Integrações > Assinatura digital Vidaas > Formas	dominio	migrar-crud	Formatos de assinatura ICP no Vidaas (CAdES, PAdES)

@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	PTU_A900_R907	TABELA	termo_terminologia	N	INTG	F3	registro de detalhe da tabela nacional de materiais do intercambio vira termo de terminologia
+DBAPS	PTU_A900_R909	MECANISMO	integracao	N	SGO	F8	rodape de controle do arquivo de importacao
+DBAPS	PTU_A950_R951	MECANISMO	integracao	N	SGO	F8	cabecalho do arquivo do rol do intercambio; a versao vira edicao da terminologia
+DBAPS	PTU_A950_R952	TABELA	termo_terminologia	N	INTG	F3	honorarios do rol do intercambio carregados como termo de terminologia
+DBAPS	PTU_A950_R953	TABELA	termo_terminologia	N	INTG	F3	servicos de diagnostico do rol do intercambio carregados como termo de terminologia
+DBAPS	PTU_A950_R959	MECANISMO	integracao	N	SGO	F8	rodape de controle do arquivo de importacao
+DBAPS	PTU_ACREDITACAO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_AREA_ATUACAO	TABELA	area_atuacao_medica;termo_terminologia	S	CAD	F7	codigo do intercambio vira equivalencia na terminologia
+DBAPS	PTU_AUT_ORDEM_SERV	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	resposta de autorizacao da ordem de servico entre operadoras
+DBAPS	PTU_AUT_ORDEM_SERV_PROC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	quantidade autorizada por servico
+DBAPS	PTU_AUT_ORDEM_SERV_PROC_MSG	TABELA	critica_pedido_autorizacao	N	SGO	F7	mensagem especifica de negativa por item
+DBAPS	PTU_CANCELAMENTO	TABELA	cancelamento_guia_recebido	N	SGO	F7	cancelamento de transacao entre operadoras
+DBAPS	PTU_CARATER_ATENDIMENTO	TABELA	carater_atendimento_tiss	N	REC	F3	codigo do intercambio vira equivalencia
+DBAPS	PTU_COBERTURA_PLANOS	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_COMUNIC_DECURSO_PRAZO	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	aviso de prazo regulatorio vencido no pedido
+DBAPS	PTU_COMUNIC_INTER_ALTA_BENEF	TABELA	comunicacao_internacao_recebida	N	SGO	F7	
+DBAPS	PTU_CONFIRMACAO	MECANISMO	integracao	N	SGO	F8	mensagem de confirmacao do protocolo de troca
+DBAPS	PTU_CONSELHO_PROFISSIONAL	TABELA	conselho_classe	N	CAD	F3	codigo do intercambio vira equivalencia
+DBAPS	PTU_CONSULTA_A1100	MECANISMO	integracao	N	SGO	F8	mensagem de consulta do protocolo de troca
+DBAPS	PTU_CONSULTA_DADOS_BENEF	TABELA	consulta_elegibilidade_recebida	N	SGO	F7	consulta de beneficiario vinda de operadora parceira
+DBAPS	PTU_CONSULTA_DADOS_PREST	MECANISMO	integracao	N	SGO	F8	consulta de dados de prestador do protocolo de troca
+DBAPS	PTU_CONTESTACAO	TABELA	termo_terminologia	N	INTG	F3	dominio de motivos de contestacao do intercambio
+DBAPS	PTU_CONTROLE_AVISO	TABELA	aviso_atendimento_intercambio	S	SGO	F8	
+DBAPS	PTU_CONTROLE_INTERCAMBIO	TABELA	fatura_intercambio	S	SGO	F8	
+DBAPS	PTU_CRITICA	MECANISMO	integracao	N	SGO	F8	critica de validacao de arquivo de troca
+DBAPS	PTU_CRITICA_PARAMETRO	MECANISMO	integracao	N	SGO	F8	parametros da validacao de arquivo de troca
+DBAPS	PTU_ERRO_A200	TABELA	termo_terminologia	N	INTG	F3	dominio de erros do padrao de intercambio
+DBAPS	PTU_ERRO_INESPERADO	MECANISMO	integracao	N	SGO	F8	mensagem de erro do protocolo de troca
+DBAPS	PTU_ESPECIALIDADE	TABELA	especialidade_medica;termo_terminologia	N	CAD	F3	codigo do intercambio vira equivalencia na terminologia
+DBAPS	PTU_GRAU_PARENTESCO	TABELA	grau_dependencia	N	SGO	F7	codigo do intercambio vira equivalencia
+DBAPS	PTU_GRAU_PARTICIPACAO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_GRUPO_CARENCIA	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_GRUPO_SERVICO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_IMPOSTO	TABELA	termo_terminologia	N	INTG	F3	dominio de tributos do padrao de intercambio
+DBAPS	PTU_IMPOSTO_DETALHAMENTO	TABELA	termo_terminologia;tributo	N	INTG	F3	equivalencia entre codigo do intercambio e tributo proprio
+DBAPS	PTU_INDICADOR_ACIDENTE	MECANISMO	catalogo_publico:tiss	N	SGO	F8	
+DBAPS	PTU_INSTITUICAO_CERTIFICADORA	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_LOG_ERROS	MECANISMO	integracao	N	SGO	F8	log de erro na geracao de arquivo de troca
+DBAPS	PTU_MENSAGEM	MECANISMO	integracao	N	SGO	F8	cabecalho de toda mensagem do protocolo de troca
+DBAPS	PTU_MENSAGEM_ESPECIFICA	TABELA	termo_terminologia	N	INTG	F3	dominio de mensagens do padrao de intercambio
+DBAPS	PTU_MENSAGEM_LOG	MECANISMO	integracao	N	SGO	F8	log de processamento de mensagem
+DBAPS	PTU_MOTIVOS_INTERNACAO	MECANISMO	catalogo_publico:tiss	N	SGO	F8	motivo de saida da internacao com codigo oficial
+DBAPS	PTU_MOTIVO_ENCERRAMENTO	MECANISMO	catalogo_publico:tiss	N	SGO	F8	motivo de encerramento com codigo oficial
+DBAPS	PTU_MOTIVO_EXCLUSAO	TABELA	motivo_movimento_cadastral;termo_terminologia	N	SGO	F7	motivo de exclusao com codigo do cadastro de beneficiarios da ANS
+DBAPS	PTU_MOTIVO_EXCLUSAO_SEM_SUBST	TABELA	termo_terminologia	N	INTG	F3	dominio de exclusao de prestador sem substituicao
+DBAPS	PTU_MOTIVO_EXCLUSAO_SUBST	TABELA	termo_terminologia	N	INTG	F3	dominio de exclusao de prestador com substituicao
+DBAPS	PTU_MOTIVO_QUESTIONAMENTO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_MOTIVO_SAIDA_INTERNACAO	MECANISMO	catalogo_publico:tiss	N	SGO	F8	
+DBAPS	PTU_OCORRENCIA	MECANISMO	integracao	N	SGO	F8	ocorrencia de processamento de arquivo de troca
+DBAPS	PTU_OCORRENCIAS	MECANISMO	integracao	N	SGO	F8	ocorrencia de processamento de arquivo de troca
+DBAPS	PTU_OCORRENCIA_A100	MECANISMO	integracao	N	SGO	F8	ocorrencia de processamento de arquivo de troca
+DBAPS	PTU_OCORRENCIA_A500	MECANISMO	integracao	N	SGO	F8	ocorrencia de processamento de arquivo de troca
+DBAPS	PTU_ORDEM_SERVICO	TABELA	pedido_autorizacao_plano	N	SGO	F7	ordem de servico entre operadoras vira tipo de pedido
+DBAPS	PTU_ORDEM_SERVICO_PROC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	PTU_PAISES	TABELA	pais_referencia	N	CAD	F3	codigo do intercambio vira equivalencia
+DBAPS	PTU_PARAMETROS	MECANISMO	parametro	N	SGO	F8	parametros de geracao de arquivos de troca
+DBAPS	PTU_PARAMETROS_GERACAO	MECANISMO	integracao	N	SGO	F8	filtro de periodo de cada geracao de arquivo
+DBAPS	PTU_PARAMETROS_IMPOSTO_IR_A500	MECANISMO	parametro	N	SGO	F8	
+DBAPS	PTU_PEDIDO_AUTORIZACAO	TABELA	pedido_autorizacao_plano	N	SGO	F7	pedido vindo de operadora parceira
+DBAPS	PTU_PEDIDO_AUTORIZACAO_ITEM	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	PTU_PEDIDO_COMPLMT_AUT	TABELA	pedido_autorizacao_plano	N	SGO	F7	complemento vira pedido ligado ao original
+DBAPS	PTU_PEDIDO_COMPLMT_AUT_ITEM	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	PTU_PEDIDO_INSISTENCIA	MECANISMO	integracao	N	SGO	F8	mensagem de insistencia do protocolo de troca
+DBAPS	PTU_PERFIL_ASSISTENCIAL	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_PLANO_INTERCAMBIO	TABELA	plano_intercambio	S	SGO	F8	
+DBAPS	PTU_PREEXISTENCIA_PLANO_REGUL	TABELA	termo_terminologia	N	INTG	F3	lista de diagnosticos do padrao de intercambio
+DBAPS	PTU_PRESTADOR_EXC_AREA_ATUACAO	MECANISMO	integracao	N	SGO	F8	filtro do que nao se envia no arquivo de rede
+DBAPS	PTU_PRESTADOR_EXC_ESPEC	MECANISMO	integracao	N	SGO	F8	filtro do que nao se envia no arquivo de rede
+DBAPS	PTU_PRESTADOR_EXC_SADT	MECANISMO	integracao	N	SGO	F8	filtro do que nao se envia no arquivo de rede
+DBAPS	PTU_PROCEDIMENTO_CONSULTA	MECANISMO	parametro	N	SGO	F8	lista de procedimentos tratados como consulta no intercambio
+DBAPS	PTU_PRODUTOS	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_PRODUTO_REGULAMENTADO	TABELA	plano_intercambio	S	SGO	F8	
+DBAPS	PTU_REDE_REFERENCIADA	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_REMESSA_RETORNO	MECANISMO	integracao	N	SGO	F8	arquivo de troca enviado ou recebido
+DBAPS	PTU_REMESSA_RETORNO_ANEXO	MECANISMO	arquivo	N	SGO	F8	
+DBAPS	PTU_REQUISC_CONT_BENEFC	MECANISMO	integracao	N	SGO	F8	mensagem de contagem de beneficiarios do protocolo de troca
+DBAPS	PTU_RESPOSTA_CONSULTA_BENEF	TABELA	consulta_elegibilidade_recebida	N	SGO	F7	resposta registrada na consulta
+DBAPS	PTU_RESP_AUDITORIA	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	resposta apos auditoria
+DBAPS	PTU_RESP_AUDITORIA_PROC	TABELA	decisao_auditoria_medica	N	SGO	F7	
+DBAPS	PTU_RESP_AUDITORIA_PROCS	TABELA	decisao_auditoria_medica	N	SGO	F7	
+DBAPS	PTU_RESP_AUDITORIA_PROC_MSG	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	PTU_RESP_CONSULTA_A1100	MECANISMO	integracao	N	SGO	F8	resposta de consulta do protocolo de troca
+DBAPS	PTU_RESP_CONS_BENEF	TABELA	consulta_elegibilidade_recebida	N	SGO	F7	resposta registrada na consulta
+DBAPS	PTU_RESP_CONS_BENEF_ITEM	MECANISMO	integracao	N	SGO	F8	lista de beneficiarios devolvida na mensagem
+DBAPS	PTU_RESP_CONS_PREST	MECANISMO	integracao	N	SGO	F8	resposta de consulta de prestador
+DBAPS	PTU_RESP_CONS_PREST_ITEM	MECANISMO	integracao	N	SGO	F8	resposta de consulta de prestador
+DBAPS	PTU_RESP_CONT_BENEFC	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_CONT_BENFC_CUST_OP	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_CONT_BENFC_PR_PGMT	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_CUST_OP_PESS_FISI	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_CUST_OP_PESS_JURI	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_ORDEM_SERVICO	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	resposta da ordem de servico
+DBAPS	PTU_RESP_ORDEM_SERV_PROC	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	situacao por servico
+DBAPS	PTU_RESP_ORDEM_SERV_PROC_MSG	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	PTU_RESP_PEDIDO_AUT	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	resposta ao pedido
+DBAPS	PTU_RESP_PEDIDO_AUT_ITEM	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	quantidade autorizada por item
+DBAPS	PTU_RESP_PED_AUT_MENSAGEM_ESP	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	PTU_RESP_PR_PGMT_PESS_FISI	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_PR_PGMT_PESS_JURI	MECANISMO	integracao	N	SGO	F8	resposta de contagem; o numero vem do repasse de beneficiarios
+DBAPS	PTU_RESP_STATUS_TRANSAC	MECANISMO	integracao	N	SGO	F8	resposta de situacao de transacao; a situacao vive no pedido
+DBAPS	PTU_RESP_STATUS_TRANSAC_MSG	MECANISMO	integracao	N	SGO	F8	resposta de situacao de transacao; a situacao vive no pedido
+DBAPS	PTU_RESP_STATUS_TRANSAC_PROC	MECANISMO	integracao	N	SGO	F8	resposta de situacao de transacao; a situacao vive no pedido
+DBAPS	PTU_SEGMENTACAO_PRODUTO	TABELA	segmentacao_assistencial	N	SGO	F7	codigo do intercambio vira equivalencia
+DBAPS	PTU_SEGMENTO_A900_R902	TABELA	termo_terminologia	N	INTG	F3	descricao estendida do material na terminologia
+DBAPS	PTU_SEGMENTO_A900_R905	TABELA	termo_terminologia	N	INTG	F3	descricao estendida do medicamento na terminologia
+DBAPS	PTU_SEGMENTO_A950_R952	TABELA	termo_terminologia	N	INTG	F3	descricao estendida do procedimento na terminologia
+DBAPS	PTU_SEGMENTO_A950_R953	TABELA	termo_terminologia	N	INTG	F3	descricao estendida do procedimento na terminologia
+DBAPS	PTU_SERVICO_A1100	MECANISMO	integracao	N	SGO	F8	itens da resposta de consulta do protocolo de troca
+DBAPS	PTU_SERV_CLASSIFICACAO_REDE	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_SERV_URG_EMERG	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_STATUS_TRANSACAO	MECANISMO	integracao	N	SGO	F8	pedido de situacao de transacao do protocolo de troca
+DBAPS	PTU_TABELA_IMPOSTOS	TABELA	termo_terminologia	N	INTG	F3	dominio de tributos do padrao de intercambio
+DBAPS	PTU_TIPO_ACOMODACAO	TABELA	tipo_acomodacao_plano	N	SGO	F7	codigo do intercambio vira equivalencia
+DBAPS	PTU_TIPO_LOGRADOURO	TABELA	especie_logradouro	N	CAD	F3	codigo do intercambio vira equivalencia
+DBAPS	PTU_TIPO_PARTICIPACAO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_TIPO_PRESTADOR	TABELA	tipo_prestador_rede;termo_terminologia	N	SGO	F7	codigo do intercambio vira equivalencia
+DBAPS	PTU_TIPO_VINCULO	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_TITULACAO_CERTIFIC_ESPEC	TABELA	termo_terminologia	N	INTG	F3	dominio do padrao de intercambio entre operadoras
+DBAPS	PTU_UNIDADE_MEDIDA	MECANISMO	catalogo_publico:tiss	N	SGO	F8	
+DBAPS	PTU_UNIMED	TABELA	operadora_congenere	S	SGO	F8	
+DBAPS	PTU_UNIMED_ATUACAO	TABELA	operadora_congenere_municipio	S	SGO	F8	
+DBAPS	PTU_UNIMED_FEDERACAO	TABELA	operadora_congenere	S	SGO	F8	federacao vira hierarquia da parceira
+DBAPS	PTU_UNIMED_SUSPENSAO	TABELA	suspensao_operadora_congenere	S	SGO	F8	
+DBAPS	QUALIFICACAO_PRESTADOR	TABELA	atributo_qualificacao_rede	N	SGO	F7	
+DBAPS	QUALIFICACAO_TIPO_PRESTADOR	TABELA	atributo_qualificacao_rede	N	SGO	F7	tipo de prestador vira atributo do registro
+DBAPS	QUERY_DINAMICA	TABELA	relatorio	N	REL	F3	consulta montada pelo usuario vira relatorio do catalogo
+DBAPS	QUESTAO_2_RADAR	TABELA	envio_ans_item	N	SGO	F7	resposta de questionario regulatorio
+DBAPS	QUESTIONARIO	TABELA	modelo_questionario_saude	N	SGO	F7	
+DBAPS	QUESTIONARIO_PERGUNTAS	TABELA	modelo_questionario_saude_pergunta	N	SGO	F7	
+DBAPS	RACA_ETNIA	TABELA	classificacao_raca_cor	N	CAD	F3	
+DBAPS	RADAR_EVENTO_SAUDE	MECANISMO	catalogo_publico:tiss	N	SGO	F7	lista definida pela ANS
+DBAPS	RADAR_EVENTO_SAUDE_ORI	MECANISMO	catalogo_publico:tiss	N	SGO	F7	lista definida pela ANS
+DBAPS	RADAR_LIST_MSG_ELETRO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	lista definida pela ANS
+DBAPS	RADAR_LIST_TP_MSG	MECANISMO	catalogo_publico:tiss	N	SGO	F7	lista definida pela ANS
+DBAPS	RADAR_METODO_ELEG	MECANISMO	catalogo_publico:tiss	N	SGO	F7	lista definida pela ANS
+DBAPS	RADAR_TISS	TABELA	envio_ans;envio_ans_item	N	SGO	F7	questionario regulatorio de adocao da troca eletronica
+DBAPS	RATEIO_COPART	TABELA	regra_subsidio_coparticipacao	S	SGO	F8	
+DBAPS	RATEIO_COPART_COND	TABELA	regra_subsidio_coparticipacao	S	SGO	F8	condicao por plano vira escopo da regra
+DBAPS	RATEIO_COPART_GRU_PRO	TABELA	regra_subsidio_coparticipacao_item	S	SGO	F8	
+DBAPS	RATEIO_COPART_GRU_PRO_CONCOMIT	TABELA	regra_subsidio_coparticipacao_item	S	SGO	F8	procedimento concomitante vira condicao do item
+DBAPS	RATEIO_COPART_GRU_PRO_VAL	TABELA	regra_subsidio_coparticipacao_item	S	SGO	F8	valores com vigencia no item
+DBAPS	RATEIO_COPART_PROG	TABELA	regra_subsidio_coparticipacao_item;programa_saude	S	SGO	F8	programa de saude vira condicao do item
+DBAPS	RATEIO_COPART_TETO_URG	TABELA	regra_subsidio_coparticipacao_item	S	SGO	F8	teto de urgencia vira item da regra
+DBAPS	REAJUSTE_ANALISE	TABELA	reajuste_contrato_plano	N	SGO	F7	pendencia apurada antes do reajuste
+DBAPS	REAJUSTE_AUDITORIA	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	
+DBAPS	REAJUSTE_AUTOMATICO	TABELA	reajuste_contrato_plano;reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	REAJUSTE_AUTOMATICO_RECEITA	TABELA	reajuste_contrato_plano_item	N	SGO	F7	tipo de receita reajustada
+DBAPS	REAJUSTE_AUTOMATICO_TIPO_PLANO	TABELA	reajuste_contrato_plano_item	N	SGO	F7	percentual por tipo de plano
+DBAPS	REAJUSTE_COLETIVO	TABELA	reajuste_contrato_plano	N	SGO	F7	
+DBAPS	REAJUSTE_COLETIVO_PLANO	TABELA	reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	REAJUSTE_INDIVIDUAL	TABELA	indice_reajuste_plano	N	SGO	F7	teto autorizado pela ANS para plano individual
+DBAPS	RECEITA_PERFIL	TABELA	restricao_acesso_usuario	N	ADM	F7	tipo de receita permitido por perfil
+DBAPS	RECIPROCIDADE	TABELA	reciprocidade_beneficiario	S	SGO	F8	
+DBAPS	RECURSO_GLOSA	TABELA	recurso_glosa_recebido	N	SGO	F7	
+DBAPS	RECURSO_GLOSA_ERRO	TABELA	critica_recurso_glosa	S	SGO	F7	
+DBAPS	RECURSO_GLOSA_GUIA	TABELA	recurso_glosa_recebido_item	N	SGO	F7	guia recorrida vira item de nivel guia
+DBAPS	RECURSO_GLOSA_GUIA_GLOSA	TABELA	recurso_glosa_recebido_item	N	SGO	F7	glosa da guia inteira recorrida
+DBAPS	RECURSO_GLOSA_ITGUIA	TABELA	recurso_glosa_recebido_item	N	SGO	F7	
+DBAPS	REDE_REFERENCIADA	TABELA	rede_assistencial	N	SGO	F7	
+DBAPS	REEMBOLSO	TABELA	pedido_reembolso;pedido_reembolso_item	N	SGO	F7	
+DBAPS	REEMBOLSO_ANEXO	MECANISMO	arquivo	N	SGO	F7	
+DBAPS	REEMBOLSO_ERROS	TABELA	critica_pedido_reembolso	S	SGO	F7	
+DBAPS	REEMBOLSO_TABELA_FATURAMENTO	TABELA	pedido_reembolso	N	SGO	F7	tabela usada no calculo vira atributo do pedido
+DBAPS	REGIAO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	regiao com codigo oficial
+DBAPS	REGIME_INTERNACAO	TABELA	regime_atendimento	N	REC	F3	regime com codigo oficial
+DBAPS	REGRA_CADASTRAMENTO_DEP_AGR	TABELA	plano_grau_dependencia	N	SGO	F7	faixa de idade por grau e plano
+DBAPS	REGRA_COMISSAO	TABELA	regra_comissao	N	SGO	F8	
+DBAPS	REGRA_DISTRIBUICAO_COMISSAO	TABELA	regra_comissao_parcela	N	SGO	F8	forma de distribuicao vira parcela da regra
+DBAPS	REGRA_PAGAMENTO	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	REGRA_PRESTADOR	TABELA	regra_valoracao_item	N	SGO	F7	percentual por prestador e plano
+DBAPS	REGRA_REPASSE_SERVICO	TABELA	servico_adicional_plano	N	SGO	F7	percentual repassado do servico opcional
+DBAPS	REGRA_TIPO_ARQUIVO_SOL_WEB	TABELA	regra_documento_solicitacao_portal	S	SGO	F8	
+DBAPS	REGRA_TIP_ACOMODACAO	TABELA	regra_valoracao_item	N	SGO	F7	percentual por acomodacao
+DBAPS	REGRA_TIP_ACOM_EXCECAO	TABELA	regra_valoracao_item	N	SGO	F7	excecao por procedimento com vigencia
+DBAPS	REGRA_TP_ARQUIVO_PRESTADOR	TABELA	regra_arquivo_prestador	N	SGO	F7	
+DBAPS	RELATORIO_EMAIL	TABELA	envio_email	N	ADM	F3	lote de envio por competencia e contrato
+DBAPS	RELATORIO_EMAIL_LOG	MECANISMO	historico_entidade:envio_email	N	ADM	F3	
+DBAPS	RELATORIO_EMAIL_MENSAGEM	TABELA	envio_email_destinatario	N	ADM	F3	
+DBAPS	RELATORIO_PERSONALIZADO	TABELA	relatorio	N	REL	F3	
+DBAPS	RELATORIO_PERSONALIZADO_PAR	TABELA	relatorio_parametro	N	REL	F3	
+DBAPS	RELATORIO_PERSONALIZADO_USU	TABELA	relatorio_permissao	N	REL	F3	
+DBAPS	RELAT_DINAMICO	TABELA	relatorio	N	REL	F3	
+DBAPS	RELAT_DINAMICO_CATEGORIA	TABELA	relatorio	N	REL	F3	categoria vira atributo do relatorio
+DBAPS	REMESSA_PRESTADOR	TABELA	guia_conta_recebida	N	SGO	F7	
+DBAPS	REMESSA_PRESTADOR_MIGRA	NAO		N	SGO		copia/backup
+DBAPS	REMESSA_PRESTADOR_MIGRA_B	NAO		N	SGO		copia/backup
+DBAPS	REMESSA_PRESTADOR_REJEITADA	TABELA	guia_conta_recebida;critica_conta_recebida	N	SGO	F7	guia rejeitada na digitacao vira situacao com critica
+DBAPS	REMESSA_PREST_AUD_ENF	TABELA	auditoria_conta_recebida	N	SGO	F7	parecer de enfermagem por procedimento
+DBAPS	REMESSA_PREST_AUD_MED	TABELA	auditoria_conta_recebida;decisao_auditoria_medica	N	SGO	F7	parecer medico por procedimento
+DBAPS	RENOVACAO_CONTRATO	TABELA	contrato_plano_historico	N	SGO	F7	renovacao vira evento do contrato
+DBAPS	REPACTUACAO	TABELA	acordo_inadimplencia	N	SGO	F7	
+DBAPS	REPACTUACAO_ITMENS_CONTRATO	TABELA	acordo_inadimplencia_fatura	S	SGO	F7	
+DBAPS	REPACTUACAO_MENS_CONTRATO	TABELA	acordo_inadimplencia_fatura	S	SGO	F7	
+DBAPS	REPACTUACAO_VALORES	TABELA	titulo_renegociado	N	FIN	F3	parcelas do acordo sao titulos renegociados
+DBAPS	REPASSE_ADITIVO	TABELA	lote_pagamento_rede	N	SGO	F7	pagamento complementar por periodo
+DBAPS	REPASSE_ADITIVO_PREST	TABELA	lote_pagamento_rede_item	N	SGO	F7	
+DBAPS	REPASSE_COMISSAO_VENDA	TABELA	comissao_venda	N	SGO	F8	
+DBAPS	REPASSE_INTERCAMBIO	TABELA	repasse_beneficiario_intercambio	S	SGO	F8	
+DBAPS	REPASSE_INTERCAMBIO_PRODUTO	TABELA	repasse_beneficiario_intercambio_item	S	SGO	F8	produto repassado vira escopo do item
+DBAPS	REPASSE_INTERCAMBIO_PRO_USU	TABELA	repasse_beneficiario_intercambio_item	S	SGO	F8	
+DBAPS	REPASSE_INTERCAMBIO_USUARIO	TABELA	repasse_beneficiario_intercambio_item	S	SGO	F8	
+DBAPS	REPASSE_PRESTADOR	TABELA	lote_pagamento_rede	N	SGO	F7	
+DBAPS	REPASSE_PRESTADORES	TABELA	lote_pagamento_rede_item	N	SGO	F7	
+DBAPS	REPASSE_PRESTADOR_ERRO	MECANISMO	historico_entidade:lote_pagamento_rede	N	SGO	F7	aviso gerado no calculo do pagamento
+DBAPS	REPASSE_PRESTADOR_IMPOSTO	TABELA	lote_pagamento_rede_tributo	S	SGO	F7	
+DBAPS	REPASSE_PRESTADOR_INTERCAMBIO	TABELA	lote_pagamento_rede	N	SGO	F7	pagamento de prestador por atendimento a beneficiario de parceira
+DBAPS	REPASSE_PRESTADOR_LOG_IMPOSTO	MECANISMO	historico_entidade:lote_pagamento_rede_tributo	S	SGO	F7	
+DBAPS	REPASSE_PRESTADOR_MENSAGEM	MECANISMO	historico_entidade:lote_pagamento_rede	N	SGO	F7	aviso gerado no calculo do pagamento
+DBAPS	REPASSE_PRESTADOR_NF	MECANISMO	arquivo	N	SGO	F7	nota fiscal anexada ao pagamento
+DBAPS	REPRESENTANTE	TABELA	contato_contratante_plano	S	SGO	F7	
+DBAPS	REP_VENDEDORES	TABELA	comissao_venda	N	SGO	F8	total por data vira apuracao
+DBAPS	RESPONSAVEL_CARTEIRA	TABELA	carteira_contratos_plano	S	SGO	F7	usuario responsavel pela carteira
+DBAPS	RESPOSTAS_FECHADAS	TABELA	modelo_questionario_saude_pergunta	N	SGO	F7	opcoes de resposta da pergunta
+DBAPS	RESPOSTAS_QUESTIONARIO	TABELA	declaracao_saude_resposta	N	SGO	F7	
+DBAPS	RESP_INSTALACAO_MVSAUDE	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	RESP_PF_OPERADORA	TABELA	responsavel_operadora	N	SGO	F7	
+DBAPS	RESP_PJ_OPERADORA	TABELA	responsavel_operadora	N	SGO	F7	
+DBAPS	RESP_TECNICO_OPERADORA	TABELA	responsavel_operadora	N	SGO	F7	
+DBAPS	RESSARCIMENTO_SUS	TABELA	ressarcimento_sus	N	SGO	F7	
+DBAPS	RESSARCIMENTO_SUS_ANEXO	MECANISMO	arquivo	N	SGO	F7	
+DBAPS	RESTRICAO	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	RESTRICAO_ITREGRA	TABELA	restricao_cobertura_plano_item;limite_utilizacao_periodo	S	SGO	F7	quantidade maxima no periodo vira limite de utilizacao
+DBAPS	RESTRICAO_ITREGRA_GRUPO	TABELA	restricao_cobertura_plano_item	S	SGO	F7	
+DBAPS	RESTRICAO_ITREGRA_GRUPO_EXC	TABELA	restricao_cobertura_plano_item	S	SGO	F7	excecao por procedimento
+DBAPS	RESTRICAO_PRIORIDADE	TABELA	restricao_cobertura_plano	N	SGO	F7	prioridade dos criterios vira atributo da regra
+DBAPS	RESTRICAO_REGRA	TABELA	restricao_cobertura_plano	N	SGO	F7	
+DBAPS	REST_CONT_ESP	TABELA	restricao_cobertura_plano	N	SGO	F7	especialidade restrita por plano e contrato

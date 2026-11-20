@@ -1,0 +1,21 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+empresa_fornecedora_estabelecimento	FIN	vinculo	F3	Dados do fornecedor por estabelecimento: conta contábil, conta orçamentária, setor responsável e condição de pagamento padrão	DBAMV.FORN_CONTA; DBAMV.FORN_SETOR; DBAMV.FORNEC_CONTA_ORCA; DBAMV.FORNECEDOR_COND_PAGAMENTO
+condicao_pagamento	FIN	dominio	F3	Condição de pagamento negociada (à vista, 30/60/90 dias), com número de parcelas e prazos, usada em compras e títulos	DBAMV.FORNECEDOR_COND_PAGAMENTO; DBAMV.FINA_CONTA_CONDICAO
+declaracao_dctfweb_item	FIN	item	F7	Débito declarado na competência por tributo e código de receita, com vencimento, valor e título de origem	DBAMV.FINAN_LOTE_TRIBUTO_IT
+solicitacao_compra_fonte_recurso	SUP	vinculo	F7	Quantidade de cada item da solicitação de compra ou serviço custeada por cada fonte de recurso	DBAMV.FONTE_RECURSO_ITSOL_COM; DBAMV.FONTE_RECURSO_ITSOL_SER
+forca_militar	CAD	dominio	F8	Forças e corporações militares (Exército, Marinha, Aeronáutica, polícia) para cadastro de beneficiário de hospital militar	DBAMV.FORCA_MILITAR
+forma_farmaceutica	SUP	dominio	F3	Formas farmacêuticas do medicamento (comprimido, solução injetável, pomada), usadas no cadastro do insumo e na prescrição	DBAMV.FORMA_FARMACEUTICA
+sobra_fracionamento	SUP	item	F7	Sobra de dose fracionada por atendimento e item dispensado, com quantidade e abertura do frasco, para reaproveitar antes de nova saída	DBAMV.FRACIONAMENTO
+conhecimento_transporte	SUP	principal	F7	Conhecimento de transporte do frete de uma entrada de mercadoria, com transportador, número, vencimento e título a pagar	DBAMV.FRETE
+declaracao_importacao	SUP	principal	F8	Declaração de importação de insumo, com transportador, modalidade, volumes, frete e despesas aduaneiras rateadas na entrada	DBAMV.FRETE_DECLARACAO_IMPORTACAO; DBAMV.FRETE_DI
+formula_orcamentaria	FIN	configuracao	F8	Fórmula de cálculo de premissa do orçamento, com blocos de execução, resultado esperado e homologação	DBAMV.FUNCAO_ORCAMENTARIA; DBAMV.FUNCAO_ORCAMENTARIA_BLOCO
+formula_orcamentaria_parametro	FIN	item	F8	Parâmetro de entrada da fórmula orçamentária e o valor informado em cada bloco	DBAMV.FUNCAO_ORCAMENTARIA_PARAM; DBAMV.FUNCAO_ORCAMENTARIA_BLOCO_VL
+valor_hora_tecnico	HOT	historico	F7	Valor da hora normal, extra e de venda do técnico de manutenção por vigência, base do custo da ordem de serviço	DBAMV.FUNC_VIGENCIA; DBAMV.FUNCIONARIO
+contrato_fornecedor_grupo_insumo	FIN	vinculo	F7	Grupos e subgrupos de insumo cobertos pelo contrato, para sugerir o contrato na compra	DBAMV.GCTO_CONTRATO_SUPR
+evento_contrato	FIN	configuracao	F7	Evento programado do contrato (vencimento, reajuste, renovação), com gatilho em dias, aviso, canal e mudança de situação	DBAMV.GCTO_EVENTO; DBAMV.GCTO_CONTRATO_EVEN
+tipo_evento_contrato	FIN	dominio	F7	Tipos de evento e de data de referência usados nos eventos programados do contrato	DBAMV.GCTO_TIPO_EVENTO; DBAMV.GCTO_DATA; DBAMV.GCTO_DATA_EMPR
+indice_reajuste	FIN	dominio	F7	Índice econômico de reajuste de contrato (IPCA, IGP-M, INPC), com periodicidade e tipo de valor	DBAMV.GCTO_INDICADOR
+indice_reajuste_valor	FIN	historico	F7	Valor do índice de reajuste por período de vigência	DBAMV.GCTO_INDICADOR_VAL
+situacao_contrato	FIN	dominio	F7	Fases do contrato (minuta, vigente, suspenso, encerrado), com indicação de ativo e dias de tolerância por estabelecimento	DBAMV.GCTO_STATUS; DBAMV.GCTO_STATUS_EMPR
+motivo_situacao_contrato	FIN	dominio	F7	Motivos para mudança de situação ou ocorrência do contrato, por estabelecimento	DBAMV.GCTO_MOTIVO; DBAMV.GCTO_MOTIVO_EMPR
+modelo_texto_contrato	FIN	configuracao	F7	Texto padrão de cláusula ou tópico para montar a minuta do contrato, com ordem e campos de mesclagem	DBAMV.GCTO_TEXTO; DBAMV.GCTO_TAGS

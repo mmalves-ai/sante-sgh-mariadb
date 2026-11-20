@@ -1,0 +1,14 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+justificativa_acesso_prontuario_restrito	PEP	dominio	F8	Justificativas padrão, classificadas por tipo, para pedir ou conceder acesso a prontuário restrito	PW_JUSTIF_PRONTUARIO_VIP; PW_TIPO_JUSTIF_PRONTUARIO_VIP
+motivo_acesso_prontuario_restrito	PEP	dominio	F8	Motivos que o profissional escolhe ao pedir acesso a um prontuário restrito	PW_MOTIVO_SOLIC_PRONTUARIO_VIP
+marcador_tumoral	PEP	vinculo	F8	Exame laboratorial que serve de marcador tumoral para um diagnóstico topográfico ou morfológico, para acompanhar o tumor	PW_MARCADOR_TUMORAL; PW_MARCADOR_EXA_LAB; PW_MARCADOR_CID_MORFOLOGICO
+marco_linha_tempo_paciente	PEP	item	F7	Marco registrado na linha do tempo do paciente, com data, autor, origem clínica, visibilidade, exclusão justificada e marco pai	PW_MARCO_LINHA_TEMPO; PW_MARCO_LINHA_TEMPO_TRANSACAO
+regiao_corporal_sistema	PEP	vinculo	F8	Liga cada região ou órgão do corpo aos sistemas corporais a que pertence, para o exame físico estruturado	PW_PART_CORP_HUM_SIS_CORP_HUM; PW_SIS_CORP_HUM_ORG_CORP_HUM
+subgrupo_item_prescricao	PEP	dominio	F8	Subgrupos de exibição dentro de cada tipo de item de prescrição, com ordem na tela e na impressão	PW_SUB_GRUPO_PRESCRICAO
+justificativa_padrao_medicacao	PEP	dominio	F8	Textos padrão de justificativa para preparo ou uso de medicação, escolhidos pelo prescritor ou pela farmácia	PW_PREPARO_JUSTIFICATIVA
+profissional_recurso_agendavel	AGE	vinculo	F8	Recursos agendáveis (sala, equipamento) que cada profissional usa ou pode reservar	PW_PRESTADOR_RECURSO
+termo_consentimento_modelo_profissional	PEP	vinculo	F7	Profissionais que podem usar cada modelo de termo de consentimento, inclusive os modelos próprios do profissional	PW_PRESTADOR_TERMO_PADRAO; PW_TERMO_CONSENTIMENTO_PRESTAD
+protocolo_prescricao_setor	PEP	vinculo	F3	Setores em que cada protocolo de prescrição pronto fica disponível	PW_PRE_PAD_SETOR
+copia_contingencia_prontuario	PEP	configuracao	F8	Cópia local de contingência do prontuário por setor e tipo de documento, gerada periodicamente para consulta sem sistema	PW_PRONTUARIO_DISTRIBUIDO; PW_PRONTUARIO_DISTR_SETOR; PW_PRONTUARIO_DISTR_TIP_DOC; PW_PRONTUARIO_DISTR_OBJETO
+tipo_criterio_clinico	PEP	dominio	F7	Tipos de critério automático (diagnóstico, sinal vital, resultado, documento), com validação por valor ou faixa e seus parâmetros	PW_TIPO_CRITERIO; PW_TIPO_CRITERIO_PARAM_CONSULT; PW_TIPO_CRITERIO_PROTOCOLO
+unidade_duracao_tratamento	PEP	dominio	F3	Unidades de duração de tratamento na receita e na prescrição (dias, semanas, meses), com equivalência em dias	PW_UNIDADE_DURACAO

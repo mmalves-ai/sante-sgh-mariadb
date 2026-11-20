@@ -1,0 +1,9 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+boleto_parcela	ACEITA	boleto_parcela	FIN	vinculo	F7	Parcela a receber ou mensalidade cobrada em um boleto, quando um boleto agrupa várias cobranças, com valor de cada uma
+boleto	ACEITA	boleto	FIN	principal	F7	Boleto emitido para uma ou mais parcelas a receber, com nosso número, linha digitável, código Pix, vencimento e situação
+cadastro_empregador	ACEITA	cadastro_empregador	RH	configuracao	F3	Dados do empregador e contribuinte para eSocial e EFD-REINF: classificação tributária, regime, indicativos e software
+telefone_colaborador	ACEITA	telefone_colaborador	RH	item	F7	Telefones e contatos do colaborador, com tipo
+cheque_emitido	ACEITA	cheque_emitido	FIN	principal	F7	Cheque emitido para pagamento, com talão, número, valor, favorecido, compensação e cancelamento
+cheque_devolvido	ACEITA	cheque_devolvido	FIN	principal	F7	Cheque recebido e devolvido pelo banco, com motivo, número da devolução, reapresentação e cobrança
+talao_cheque	ACEITA	talao_cheque	FIN	principal	F7	Talão de cheques da conta bancária, com faixa de numeração inicial, final e próxima folha a emitir
+motivo_cancelamento_cheque	ACEITA	motivo_cancelamento_cheque	FIN	dominio	F7	Motivo para cancelar cheque emitido, indicando se a folha fica inutilizada

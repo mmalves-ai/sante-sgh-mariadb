@@ -1,0 +1,279 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+SPDATA	CMESCORE	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMINCENTIVO	TABELA	incentivo_contratual_sus	N	SUS	F3	
+SPDATA	CMPERIODO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMREDEASSIST	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTIPOCOMPLEXIDADESP	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPAFERICAO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPCONTRATO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPDADOS	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPINDICADOR	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPITEMINDIC	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	CMTPORCAMENTO	TABELA	dominio_contratualizacao_sus	N	SUS	F3	
+SPDATA	FACSEPRO	TABELA	procedimento_sigtap_servico	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	FAHEMOACEVASC	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOCARTRAT	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOCONTRAN	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAHEMOSITTRAN	TABELA	dominio_sus	N	SUS	F3	valores usados no complemento de nefrologia do laudo
+SPDATA	FAMEDSOL	TABELA	solicitante_sus	N	SUS	F3	
+SPDATA	FAPARAM	TABELA	competencia_sus	N	SUS	F7	competência vira tabela; demais opções do BPA vão para o mecanismo de parâmetros
+SPDATA	FAPARAMA	TABELA	competencia_sus	N	SUS	F7	competência vira tabela; demais opções da APAC vão para o mecanismo de parâmetros
+SPDATA	FAPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	FCCODCON	TABELA	codigo_prestador_fonte_pagadora;profissional_fonte_pagadora	N	FAT	F3	código do médico no convênio; conta bancária vai para conta_bancaria_profissional
+SPDATA	FCCPSCON	TABELA	codigo_prestador_fonte_pagadora	N	FAT	F3	
+SPDATA	FCCRECUN	TABELA	regra_credito_producao	N	FAT	F3	
+SPDATA	FCCTAAUD	TABELA	auditoria_conta;auditoria_conta_versao	N	FAT	F3	retrato pré e pós auditoria vira versão da conta
+SPDATA	FCCTAEXT	TABELA	conta_hospitalar	N	FAT	F3	
+SPDATA	FCCTAEXT_FCTISSLOTEPROT	TABELA	lote_tiss_conta	N	FAT	F3	
+SPDATA	FCCTRLANCIHA	TABELA	equivalencia_sigtap_item;registro_ciha_procedimento	N	SUS	F3	
+SPDATA	FCDIAEXT	TABELA	conta_hospitalar_segurado	N	FAT	F3	
+SPDATA	FCDIAINT	TABELA	conta_hospitalar_segurado	N	FAT	F3	
+SPDATA	FCEMPAUDPLANSERV	TABELA	empresa_auditoria_externa	N	FAT	F3	
+SPDATA	FCFAIPAC	TABELA	conta_hospitalar_periodo	N	FAT	F3	
+SPDATA	FCFECMES	TABELA	fechamento_competencia_fonte_pagadora	N	FAT	F3	
+SPDATA	FCGUIAS	TABELA	guia_fonte_pagadora	N	FAT	F3	
+SPDATA	FCHORATE	TABELA	horario_normal_tabela	N	FAT	F3	
+SPDATA	FCINTEGRPA	TABELA	producao_repasse	N	FAT	F3	
+SPDATA	FCIRREGULARID	TABELA	pendencia_conta	N	FAT	F3	histórico 2020-2022 migra como pendência resolvida
+SPDATA	FCLANAUD	TABELA	auditoria_conta_item	N	FAT	F3	
+SPDATA	FCLANEXT	TABELA	conta_hospitalar_item;glosa_item	N	FAT	F3	glosa e recurso do item saem do item e vão para glosa_item
+SPDATA	FCLANEXTSEQITEM	TABELA	conta_hospitalar_item_autorizacao	N	FAT	F3	
+SPDATA	FCORCAME	TABELA	orcamento_particular	N	FAT	F3	
+SPDATA	FCORCPAD	TABELA	modelo_orcamento	N	FAT	F3	
+SPDATA	FCORLAME	TABELA	modelo_orcamento_item	N	FAT	F3	
+SPDATA	FCPARAM	TABELA	competencia_faturamento	N	FAT	F3	competência vira tabela; numeração, NFS-e e integrações vão para o mecanismo de parâmetros
+SPDATA	FCPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	preferências soltas do faturista vão para parâmetro por usuário
+SPDATA	FCPORANE	TABELA	valor_porte_anestesico	N	FAT	F3	
+SPDATA	FCPROCUNIBHMED	TABELA	tabela_preco;preco_procedimento	N	FAT	F3	tabela de procedimentos da operadora
+SPDATA	FCRECIBO	TABELA	recibo	N	FIN	F3	
+SPDATA	FCREFUND	TABELA	preco_procedimento	N	FAT	F3	itens de tabelas de preço de referência
+SPDATA	FCTISSLOTEPROT	TABELA	lote_tiss;protocolo_recebimento;recurso_glosa	N	FAT	F3	
+SPDATA	FCTPMOTGLOSA	TABELA	grupo_motivo_glosa	N	FAT	F3	
+SPDATA	FCTPPGTONFSE	TABELA	nota_fatura	N	FAT	F3	condição de pagamento vira atributo enumerado da nota da fatura
+SPDATA	FGTBTPCREDOR	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHCLASSIFDIAG	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHJUSTPACDESC	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FHLEITOUTI	TABELA	leito_uti_habilitado	N	SUS	F3	
+SPDATA	FHLEITOUTITP	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	FIPARAM	TABELA	competencia_sus	N	SUS	F7	competência vira tabela; demais opções da AIH vão para o mecanismo de parâmetros
+SPDATA	FIPARUSU	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	HTPROSUS	TABELA	procedimento_sigtap	N	SUS	F3	histórico por competência vem da carga oficial
+SPDATA	PFPORTALOPCAO	TABELA	funcao_portal_prestador	S	SGO	F7	
+SPDATA	PFTPATEND	TABELA	tipo_prestador_rede	N	SGO	F7	
+SPDATA	RECONTAS	TABELA	conta_hospitalar	N	FAT	F3	
+SPDATA	REPROEXT	TABELA	conta_hospitalar_item	N	FAT	F3	
+SPDATA	RICONTAS	TABELA	conta_hospitalar;conta_hospitalar_periodo	N	FAT	F3	
+SPDATA	RIPROEXT	TABELA	conta_hospitalar_item	N	FAT	F3	
+SPDATA	RPDEDUTIVEL	TABELA	tipo_deducao_irrf	N	FAT	F3	
+SPDATA	RPEMPCALCIMP	TABELA	empresa_calculo_cumulativo_rpa	N	FAT	F3	
+SPDATA	RPEVENTO	TABELA	evento_repasse	N	FAT	F3	
+SPDATA	RPEVENTOESOC	TABELA	evento_repasse_incidencia	N	FAT	F3	
+SPDATA	RPINTEVE	TABELA	evento_repasse_contabil	N	FAT	F3	
+SPDATA	RPLANEVE	TABELA	lancamento_repasse	N	FAT	F3	
+SPDATA	RPLANEVE_COMPOSICAOBASE	TABELA	lancamento_repasse_base	N	FAT	F3	
+SPDATA	RPLANEVE_TBCBOPRO	TABELA	lancamento_repasse	N	FAT	F3	profissional beneficiário é coluna do lançamento
+SPDATA	RPLANRPA	TABELA	rpa_lancamento	N	FAT	F3	
+SPDATA	RPPARAM	MECANISMO	parametro	N	FAT	F3	numeração, modelo, contabilização e IRRF do RPA
+SPDATA	RPPARUSUEMP	TABELA	competencia_trabalho_usuario	N	FAT	F3	
+SPDATA	RPRENDISENTO	TABELA	tipo_rendimento_isento	N	FAT	F3	
+SPDATA	RPRPA	TABELA	rpa;rpa_retencao	N	FAT	F3	
+SPDATA	RPRPA_TBCBOPRO	TABELA	rpa	N	FAT	F3	profissional beneficiário é coluna do RPA
+SPDATA	RPTIPOPRESTADOR	TABELA	tipo_prestador_repasse	N	FAT	F3	
+SPDATA	SIREFCON	TABELA	equivalencia_item_fonte_pagadora	N	FAT	F3	
+SPDATA	TBALTSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBAPACS	TABELA	compatibilidade_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBASSOCI	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBATOAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBATRIBCOMPL	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBATRIBPRO	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCARATERATEND	TABELA	dominio_sus	N	SUS	F3	caráter usado nos instrumentos públicos; na TISS vale carater_atendimento_tiss
+SPDATA	TBCBOANS	TABELA	termo_terminologia	N	INTG	F3	CBO da terminologia TISS com vigência
+SPDATA	TBCBOANS_TBVERSAOTISS	TABELA	termo_versao_tiss	N	FAT	F3	
+SPDATA	TBCIDPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCIDSEC	TABELA	procedimento_sigtap_cid	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCLASER	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCLASSC	TABELA	classe_fonte_pagadora	S	CAD	F3	
+SPDATA	TBCLASSI	TABELA	classificacao_despesa	N	FAT	F3	
+SPDATA	TBCLSERV	TABELA	servico_classificacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCLSPRO	TABELA	procedimento_sigtap_servico	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCODATI	TABELA	codigo_prestador_fonte_pagadora;credencial_fonte_pagadora	N	FAT	F3	senhas de portal vão para o cofre, nunca para coluna
+SPDATA	TBCODATI_TBUSERS	TABELA	usuario_codigo_prestador	N	FAT	F3	
+SPDATA	TBCODSER	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMCID	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMHAB	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCOMPLEXSUS	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCOMPRO	TABELA	procedimento_sigtap_opm	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCOMREG	TABELA	compatibilidade_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBCONSBRASINATIVO	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONSIDCALCVLR	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVCOBTXPA	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVCONSMAT	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVEN_TBTISSPARDEF	TABELA	valor_padrao_campo_tiss	N	FAT	F3	
+SPDATA	TBCONVMEDREQATD	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCONVPERCTAPAC	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBCOOPER	TABELA	cooperativa_medica	N	FAT	F3	
+SPDATA	TBCOSPPROF	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBCRECOO	TABELA	membro_cooperativa	N	FAT	F3	
+SPDATA	TBCREMED	TABELA	credenciamento_cobranca;profissional_fonte_pagadora	N	FAT	F3	
+SPDATA	TBCREPRS	TABELA	credenciamento_cobranca	N	FAT	F3	
+SPDATA	TBCSEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBCTRTAT	TABELA	tipo_atendimento_tabela	N	FAT	F3	
+SPDATA	TBDRS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBDTHCDC	TABELA	diaria_taxa_centro_custo	N	FAT	F3	
+SPDATA	TBEMIREF	TABELA	referencia_emissao_matmed	N	FAT	F3	
+SPDATA	TBEMIREFMATMED	TABELA	referencia_emissao_matmed_excecao	N	FAT	F3	
+SPDATA	TBENTCON	TABELA	calendario_entrega_fatura	N	FAT	F3	
+SPDATA	TBFABOPM	TABELA	fabricante	N	SUP	F3	fabricante único do cadastro de insumos
+SPDATA	TBFAEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBFAETAR	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBFONTE_ORCAMENTARIA_SUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBFONTE_PAGADORA	TABELA	classe_fonte_pagadora	S	CAD	F3	
+SPDATA	TBFORMULAPAGTO	TABELA	regra_via_acesso	N	FAT	F3	
+SPDATA	TBFORSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBGRAUPARTPROC	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBGRUAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBGRUATE	TABELA	dominio_sus	N	SUS	F3	grupo de atendimento ainda exigido no BPA
+SPDATA	TBGRUHAB	TABELA	habilitacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBGRUPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBGRUSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBHABILI	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBHABSUS	TABELA	habilitacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBHISTTABDTH	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABMM	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABTHME	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBHISTTABTHMI	TABELA	contrato_tabela_vigencia	N	FAT	F3	
+SPDATA	TBINCPRO	TABELA	procedimento_sigtap_incremento	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBINDICE	TABELA	indice_cobranca;valor_indice	N	FAT	F3	
+SPDATA	TBINDPRO	TABELA	valor_indice_item	N	FAT	F3	
+SPDATA	TBIRREGCTRCTA	TABELA	tipo_pendencia_conta	N	FAT	F3	
+SPDATA	TBIRREGULARID	TABELA	tipo_pendencia_conta;tipo_pendencia_prontuario	N	FAT	F3	
+SPDATA	TBIRREGULARID_TBMODULO	TABELA	tipo_pendencia_conta_modulo	N	FAT	F3	
+SPDATA	TBITEATE	TABELA	tipo_atendimento_tabela	N	FAT	F3	
+SPDATA	TBITEPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBLOCCON	TABELA	local_cobranca	N	FAT	F3	
+SPDATA	TBLOCPRI	TABELA	dominio_sus	N	SUS	F3	localização do tumor do laudo oncológico
+SPDATA	TBLOCSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBMATMED	TABELA	item_referencia_matmed;equivalencia_matmed_fonte_pagadora	N	FAT	F3	
+SPDATA	TBMOCOBP	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMODALI	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMODSUS	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMOTCOB	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBMOTGLO	TABELA	motivo_glosa	N	FAT	F3	
+SPDATA	TBNIVEL	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBNIVSUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBORIGEM	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPACTHM	TABELA	pacote;pacote_item_incluso;pacote_contrato	N	FAT	F3	
+SPDATA	TBPERMEM	TABELA	regra_percentual_cobranca;preco_negociado_matmed	N	FAT	F3	
+SPDATA	TBPERTHM	TABELA	regra_percentual_cobranca;acrescimo_horario_especial	N	FAT	F3	
+SPDATA	TBPORMED	TABELA	valor_porte_medico	N	FAT	F3	
+SPDATA	TBPRAPAC	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPREPRO	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPRESER	TABELA	prestador_terceiro	N	FAT	F3	
+SPDATA	TBPRESSE	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBPRESTP	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPRESUS	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBPROAIH	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBPROCTO	TABELA	tabela_preco;preco_procedimento	N	FAT	F3	
+SPDATA	TBPROHAB	TABELA	procedimento_sigtap_habilitacao	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROLEI	TABELA	procedimento_sigtap_leito	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROLOC	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPRONIV	TABELA	procedimento_sigtap_atributo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROREG	TABELA	procedimento_sigtap_registro	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROREGCOMP	TABELA	procedimento_sigtap_registro	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBPROSUS	TABELA	procedimento_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBREFMEMTUSS	TABELA	equivalencia_matmed_tuss	N	FAT	F3	
+SPDATA	TBREFUNI	TABELA	equivalencia_matmed_fonte_pagadora	N	FAT	F3	
+SPDATA	TBREGSUS	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBREPGER	TABELA	regra_repasse;regra_repasse_item	N	FAT	F3	
+SPDATA	TBREPGER_TBCBOPRO	TABELA	regra_repasse_profissional	N	FAT	F3	
+SPDATA	TBRPATPREPASSE	TABELA	tipo_prestador_repasse;favorecido_repasse	N	FAT	F3	
+SPDATA	TBSEGUIA	TABELA	sequencial_guia	N	FAT	F3	
+SPDATA	TBSERSUS	TABELA	servico_classificacao_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSIPAC	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBSIPHOS	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBSRVCON	TABELA	tipo_servico_contratado	N	FAT	F3	
+SPDATA	TBSTATUSPROCESSA	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	situação de processamento vira opção do campo adicional da operadora
+SPDATA	TBSUBDES	TABELA	regra_desconto_grupo	N	FAT	F3	
+SPDATA	TBSUBSUS	TABELA	grupo_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUBTIPFINANC	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSCBO	TABELA	procedimento_sigtap_cbo	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSCID	TABELA	procedimento_sigtap_cid	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBSUSOPM	TABELA	procedimento_sigtap_opm	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBTABATO	TABELA	grupo_ato	N	FAT	F3	
+SPDATA	TBTABDTH	TABELA	preco_diaria_taxa;item_faturavel	N	FAT	F3	
+SPDATA	TBTABSIA	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBTABTHM	TABELA	preco_procedimento;item_faturavel	N	FAT	F3	
+SPDATA	TBTABTHMTUSS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTIPATE	TABELA	dominio_sus	N	SUS	F3	tipo de atendimento exigido no BPA
+SPDATA	TBTIPCOPART	TABELA	coparticipacao_contrato	N	FAT	F3	
+SPDATA	TBTIPFINANC	TABELA	dominio_sigtap	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBTIPLEI	TABELA	especialidade_leito	N	INT	F3	especialidade de leito vem da classificação nacional
+SPDATA	TBTIPPLANO	TABELA	coparticipacao_contrato;plano_fonte_pagadora;acomodacao_plano_fonte_pagadora	N	FAT	F3	plano_fonte_pagadora está em F7 mas a paridade exige
+SPDATA	TBTIPPLCONV	TABELA	diaria_por_plano_local	N	FAT	F3	
+SPDATA	TBTIPPRO	TABELA	tipo_servico_faturavel	N	FAT	F3	
+SPDATA	TBTISS	TABELA	regra_apresentacao_tiss;configuracao_tiss_fonte_pagadora	N	FAT	F3	
+SPDATA	TBTISSCAPACFUN	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCARATE	TABELA	carater_atendimento_tiss	N	REC	F3	
+SPDATA	TBTISSCATDESP	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCOBERTESPECIAL	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSCONSPROF	TABELA	conselho_classe	N	CAD	F3	
+SPDATA	TBTISSDIAGIMG	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSEMIEXP	TABELA	regra_apresentacao_tiss	N	FAT	F3	opção enumerada da regra
+SPDATA	TBTISSESTTUMOR	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSETAPAAUTORIZ	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSFINTRAT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSFORMAENV	TABELA	forma_envio_tuss	N	FAT	F3	
+SPDATA	TBTISSFORMAENVPAD	TABELA	endpoint_tiss_fonte_pagadora	N	FAT	F3	forma de envio vira atributo enumerado do canal
+SPDATA	TBTISSFORMAPG	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSGERSPSADTPS	TABELA	regra_apresentacao_tiss	N	FAT	F3	opção enumerada da regra
+SPDATA	TBTISSGRPPROC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSIDENTBENEFI	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSINDACID	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSLCEVENTO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSMETAST	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSMOTAUSENCODVALID	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSNODULO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSOPFABRIC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSPARDEF	TABELA	regra_montagem_guia	N	FAT	F3	
+SPDATA	TBTISSPOSPROF	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBTISSREFIND	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSREGIMEATEND	TABELA	regime_atendimento	N	REC	F3	
+SPDATA	TBTISSREGINT	TABELA	regime_atendimento_internacao	N	INT	F3	
+SPDATA	TBTISSSAUDEOCUPAC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSITCANC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSITPROT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSSITSOLIC	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTERMO	TABELA	terminologia	N	INTG	F3	
+SPDATA	TBTISSTERMO_TBTPLANC	TABELA	terminologia_tipo_lancamento	N	FAT	F3	
+SPDATA	TBTISSTPCONSUL	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPDEBCRE	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPDEMONS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPFAT	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPGUIA	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPGUIA_TBTISSPARDEF	TABELA	regra_montagem_guia_tipo	N	FAT	F3	
+SPDATA	TBTISSTPINTER	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTPQUIMIO	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSTUMOR	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSUNIDMED	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSVIAACES	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTISSVIAADMIN	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTPACOMTISS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia; a categoria do hospital guarda o código
+SPDATA	TBTPAPAC	TABELA	dominio_sus	N	SUS	F3	
+SPDATA	TBTP_ATEND_TISS	TABELA	termo_terminologia	N	INTG	F3	lista TUSS carregada da fonte oficial na terminologia
+SPDATA	TBTPCLASSIFUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPFASEUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPLANC	TABELA	tipo_lancamento	N	FAT	F3	
+SPDATA	TBTPOBRIGAMAT	TABELA	regra_consistencia_lancamento	N	FAT	F3	
+SPDATA	TBTPPERFILUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBTPPROFPROC	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+SPDATA	TBTPTRATUNIBH	TABELA	atributo_guia_fonte_pagadora;atributo_guia_opcao	N	FAT	F3	
+SPDATA	TBVERSAOBRASIN	TABELA	edicao_referencia_matmed	N	FAT	F3	
+SPDATA	TBVERSAOTISS	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVERSAOTISSMONIT	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVERSAOTISSPAD	TABELA	versao_padrao_tiss	N	FAT	F3	
+SPDATA	TBVLRDTH	TABELA	preco_diaria_taxa_valor	N	FAT	F3	
+SPDATA	TBVLRMEM	TABELA	preco_referencia_matmed	N	FAT	F3	
+SPDATA	TBVLRPAI	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBVLRSIA	NAO		N	SUS		obsoleto: tabela anterior à tabela unificada (até 2007), sem conta migrada que a use
+SPDATA	TBVLRSUS	TABELA	procedimento_sigtap_valor	N	SUS	F3	carga oficial da tabela unificada por competência
+SPDATA	TBVLRTHM	TABELA	preco_procedimento_valor	N	FAT	F3	

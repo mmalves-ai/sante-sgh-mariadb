@@ -1,0 +1,13 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+pedido_autorizacao_plano_anexo	SGO	item	F7	Anexo clínico do pedido de autorização (quimioterapia, radioterapia, órtese e prótese, situação odontológica inicial) com dados clínicos e resposta	DBAPS TISS_LOTE_ANEXO_*, TISS_SOL_GUIA_ANEXO_*, TISS_PROT_REC_ANEXO_O/Q/R, TISS_SIT_PROT_LOTE_OPME/QUIMIO/RADIO
+pedido_autorizacao_plano_diagnostico	SGO	item	F7	Diagnósticos informados no pedido de autorização e em seus anexos, com tipo e ordem	DBAPS TISS_SOL_GUIA_INT_DIAG*, TISS_LOTE_ANEXO_QUIMIO_CID, TISS_LOTE_ANEXO_RADIO_CID, TISS_SOL_ANEXO_DIAGNOSTICO_CID
+guia_conta_recebida_diagnostico	SGO	item	F7	Diagnósticos da guia de cobrança recebida, inclusive causa do óbito na internação	DBAPS TISS_LOT_GUIA_FAT_CONS_CID, TISS_LOT_GUIA_FAT_RESINT_CID, TISS_LOT_GUIA_FAT_RESINT_OBITO
+envio_ans_item_procedimento	SGO	item	F7	Procedimentos e itens de cada guia enviada no monitoramento assistencial, com quantidade, valores e detalhe de pacote	DBAPS TISS_MSG_ENV_OPER_ANS_PROC, TISS_MSG_ENV_OPER_ANS_DET
+cancelamento_guia_recebido_item	SGO	item	F7	Guias incluídas em um pedido de cancelamento recebido, com a situação de cada uma na resposta	DBAPS TISS_RESP_CANC_GUIA_GUIAS
+regra_titulo_receita_contrato	SGO	configuracao	F7	Tipos de receita do contrato que geram título a pagar ao fornecedor do serviço agregado	DBAPS TITULO_CONTRATO_LCTO_MENS
+situacao_dentaria_beneficiario	SGO	historico	F7	Dentes extraídos ou tratados do beneficiário, com procedimento, guia de origem e data, para validar a cobertura odontológica	DBAPS USUARIO_DENTE
+observacao_beneficiario	SGO	item	F7	Anotações registradas sobre o beneficiário, com tipo, autor e data	DBAPS USUARIO_OBSERVACAO
+vinculo_funcional_beneficiario	SGO	vinculo	F7	Matrícula funcional do beneficiário no órgão ou secretaria contratante, com admissão, desligamento e base para desconto em folha	DBAPS VINCULO_USUARIO
+verba_desconto_folha	SGO	configuracao	F7	Rubricas de desconto em folha por órgão contratante e tipo de beneficiário, com código no arquivo e forma de cálculo	DBAPS VERBA_ORGAO_TIPO_USUARIO
+procedimento_unidade_conversao	SGO	configuracao	F7	Unidades em que o procedimento pode ser cobrado, com fator de conversão e indicação da unidade padrão	DBAPS UNIDADES_PROC
+zona_geografica	CAD	dominio	F7	Zonas da cidade usadas para agrupar endereços de beneficiários e da rede	DBAPS ZONA

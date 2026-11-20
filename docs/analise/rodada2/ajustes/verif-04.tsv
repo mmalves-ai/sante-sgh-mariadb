@@ -1,0 +1,14 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+tipo_entrada_enxoval	ACEITA	tipo_entrada_enxoval	HOT	dominio	F8	Forma de entrada de peças no estoque do enxoval (compra, doação, reposição, devolução de setor)
+faixa_contagem_colonia	ACEITA	faixa_contagem_colonia	SADT	dominio	F7	Faixas de contagem de colônias usadas no laudo de cultura (por exemplo, abaixo ou acima de um limite de UFC/ml)
+modo_ventilacao_mecanica	ACEITA	modo_ventilacao_mecanica	PEP	dominio	F3	Modos de ventilação mecânica invasiva e não invasiva para a prescrição do suporte ventilatório
+capacidade_leito_sus	ACEITA	capacidade_leito_sus	INT	historico	F3	Leitos públicos contratados por tipo e competência, base do teto de diárias especiais
+central_reguladora	ACEITA	central_reguladora	INT	principal	F3	Central de regulação externa (estadual, municipal, operadora) com identificação e forma de conexão
+evento_regulacao	ACEITA	evento_regulacao	INT	historico	F3	Evolução da solicitação de regulação: envio, resposta, mudança de situação, contato com a central
+faixa_diurese	ACEITA	faixa_diurese	INT	dominio	F3	Faixa de débito urinário informada na regulação (normal, oligúria, anúria, diálise)
+nivel_consciencia	ACEITA	nivel_consciencia	INT	dominio	F3	Nível de consciência do paciente usado na regulação e nas escalas (alerta, sonolento, torporoso, comatoso)
+quadro_clinico_regulacao	ACEITA	quadro_clinico_regulacao	INT	item	F3	Quadro clínico informado à central em cada envio: consciência, oxigênio, germes, diurese, condição e procedência
+servico_regulacao	ACEITA	servico_regulacao	INT	principal	F3	Serviço ou especialidade que o hospital oferta ou pede à central, com o código usado por ela
+solicitacao_regulacao	ACEITA	solicitacao_regulacao	INT	principal	F3	Solicitação de vaga ou transferência à central reguladora, com número, serviço, tipo de leito e situação
+suporte_oxigenio	ACEITA	suporte_oxigenio	INT	dominio	F3	Suporte de oxigênio em uso (ar ambiente, cateter, máscara, ventilação não invasiva, intubado)
+tipo_leito_regulado	ACEITA	tipo_leito_regulado	INT	dominio	F3	Tipo de leito pedido à central (enfermaria, UTI adulto, UTI neonatal, semi-intensiva)

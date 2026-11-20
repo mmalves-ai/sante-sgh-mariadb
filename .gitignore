@@ -1,0 +1,17 @@
+# Segredos (AGENTS.md, regra 8): nunca versionar
+.env
+.env.*
+!.env.exemplo
+
+# Dump do MV e saídas do Oracle: dados reais e arquivos enormes (regra 5)
+dump/
+*.dmp
+*.dmp.sha256
+
+# Ferramentas e temporários
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+*.log

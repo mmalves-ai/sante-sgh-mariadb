@@ -1,0 +1,38 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAMV	TIP_RES	TABELA	desfecho_internacao	INT	F3	tipo de resultado da saída (indica óbito, ligado ao atendimento) é desfecho, não motivo de saída
+DBAMV	TP_ENTRADA	TABELA	tipo_entrada_enxoval	HOT	F8	lista de tipos de entrada de roupa no estoque; não é a peça do enxoval
+DBAMV	COLONIA	TABELA	faixa_contagem_colonia	SADT	F7	contagem de colônias da cultura (coluna de colônias nas tabelas de cultura); nada tem de necrotério
+DBAMV	CHECK_LIST	TABELA	plano_preventivo	HOT	F7	roteiro de manutenção (referido por bens e itens com tipo de OS e serviço); não é checklist cirúrgico
+DBAMV	IT_SOLIC_PADR	TABELA	modelo_pedido_internacao_item	INT	F7	fase do destino no catálogo é F7
+DBAMV	SITUACAO_REGULACAO	TABELA	situacao_pedido_leito	INT	F3	fase do destino é F3 (situações de regulação vivas no SPDATA)
+DBAMV	CONDICAO_REGULACAO	TABELA	quadro_clinico_regulacao	INT	F3	regulação estadual configurada e em uso na Rede (serviços, endpoints, códigos): paridade F3
+DBAMV	DEBITO_URINARIO_REGULACAO	TABELA	faixa_diurese	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	DGVA_EVOLUCAO_SOL_ATND_RGL	TABELA	quadro_clinico_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	ESPL_LEITO_REGULACAO	TABELA	tipo_leito_regulado;servico_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	EVOLUCAO_ADMINISTRATIVA	TABELA	evento_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	EVOLUCAO_MEDICA	TABELA	quadro_clinico_regulacao;evento_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	EVOLUCAO_SOL_ATND_RGL	TABELA	quadro_clinico_regulacao;evento_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	LEITO_REGULACAO	TABELA	tipo_leito_regulado;leito_hospitalar	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	SENSORIO_REGULACAO	TABELA	nivel_consciencia	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	SERVICO_REGULADOR	TABELA	servico_regulacao	INT	F3	regulação estadual em uso na Rede (42 serviços no SPDATA): paridade F3
+DBAMV	SOLIC_ATENDIMENTO_REGULACAO	TABELA	solicitacao_regulacao	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	SUPORTE_O2_REGULACAO	TABELA	suporte_oxigenio	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	TIPO_LEITO_REGULACAO	TABELA	tipo_leito_regulado	INT	F3	regulação estadual em uso na Rede: paridade F3
+DBAMV	EMPRESA_ESPEC_SUS	TABELA	capacidade_leito_sus	INT	F3	capacidade de leitos SUS já é F3 pelas outras origens (UTI SUS e leitos UTI do SPDATA)
+DBAMV	LOG_CAPACIDADE_UTI_SUS	TABELA	capacidade_leito_sus	INT	F3	capacidade de leitos SUS já é F3 pelas outras origens (UTI SUS e leitos UTI do SPDATA)
+DBAMV	CONFIG_HOCA	MECANISMO	parametro	INT	F8	parâmetros da atenção domiciliar, recurso F8; a Rede não usa
+DBAMV	PARAMETROS_HOCA	MECANISMO	parametro	INT	F8	parâmetros da atenção domiciliar, recurso F8; a Rede não usa
+DBAMV	CONTRATO_MANUTENCAO_DOC	MECANISMO	arquivo	HOT	F8	anexo do contrato terceirizado, cuja tabela dona é F8
+DBAMV	SOLICITACAO_SERVICO_DOC	MECANISMO	arquivo	HOT	F7	anexo da ordem de serviço de manutenção, cuja tabela dona é F7
+DBAMV	IMG_ALTA	MECANISMO	arquivo	HOT	F8	fase vazia; imagem da saída pela portaria (dona: liberacao_saida_paciente, HOT F8)
+DBAMV	IMG_ALTA_FRENTE	MECANISMO	arquivo	HOT	F8	fase vazia; documento da saída pela portaria (dona: liberacao_saida_paciente, HOT F8)
+DBAMV	IMG_ALTA_VERSO	MECANISMO	arquivo	HOT	F8	fase vazia; documento da saída pela portaria (dona: liberacao_saida_paciente, HOT F8)
+DBAMV	IMG_DOC_FRENTE	MECANISMO	arquivo	HOT	F8	fase vazia; documento do visitante (dona: visita, F8)
+DBAMV	IMG_DOC_VERSO	MECANISMO	arquivo	HOT	F8	fase vazia; documento do visitante (dona: visita, F8)
+DBAMV	IMG_CX_KIT	MECANISMO	arquivo	CC	F7	fase vazia; foto da caixa (dona: caixa_instrumental, F7)
+DBAMV	IMG_IT_CX_KIT	MECANISMO	arquivo	CC	F7	fase vazia; foto do item da caixa (dona: caixa_instrumental_item, F7)
+DBAMV	LOG_INTEGRA_CENTRAL_TELEFONICA	MECANISMO	integracao	HOT	F8	interface com central telefônica (ramal_telefonico é F8); a Rede não usa
+SPDATA	TBREGUL_SERVICO	TABELA	servico_regulacao	INT	F3	dado vivo no SPDATA (42 serviços da regulação estadual): paridade F3
+SPDATA	TBREGUL_SISTEMA	TABELA	central_reguladora;sistema_externo	INT	F3	dado vivo no SPDATA (2 sistemas de regulação); endpoints já são F3: paridade F3
+SPDATA	PRMODOVENT	TABELA	modo_ventilacao_mecanica	PEP	F3	modos de ventilação mecânica da prescrição (VMI/VNI), lista distinta dos modos respiratórios da anestesia
+SPDATA	CCAGENDA_EXC_CANC	TABELA	suspensao_cirurgia;registro_excluido	CC	F3	cópia de agenda excluída/cancelada segue o padrão das demais exclusões (internação, alta, cirurgia)

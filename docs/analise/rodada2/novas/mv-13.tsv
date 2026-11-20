@@ -1,0 +1,25 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+regra_alerta_paciente	ADM	vinculo	F8	Pacientes específicos acompanhados por uma regra de alerta, para avisar a equipe quando um evento deles ocorrer	PERFIL_ALERTA_PACIENTE
+perfil_lista_atendimento	PEP	configuracao	F7	Perfil compartilhado da lista de atendimentos do profissional, com critérios de entrada, faixa etária, sexo e tipo de atendimento	PERFIL_AMBULATORIAL
+perfil_lista_atendimento_criterio	PEP	item	F7	Critério do perfil da lista: fonte pagadora, estabelecimento, especialidade, origem, profissional, serviço, setor ou etapa, com ordem	PERFIL_AMBULATORIAL_CONVENIO; PERFIL_AMBULATORIAL_SETOR; PERFIL_AMBULATORIAL_SEGMENTO; PERFIL_AMBULATORIAL_TIP_PREST
+regra_resposta_pergunta_exame	SADT	configuracao	F7	Conduta para cada resposta da pergunta do pedido de exame: mensagem exibida e se impede a realização	PERGUNTA_RESPOSTA_EXALAB; PERGUNTA_RESPOSTA_EXARX
+pagamento_pix	FIN	principal	F7	Pagamento a credor por Pix, com chave ou código copia e cola, título pago, situação e confirmação do banco	PIX_MOVIMENTO_ENVIO_CP; PIX_MOVIMENTO_RETORNO_CP; PIX_MOVIMENTO_FINAN_CP
+planejamento_consumo_insumo	SUP	principal	F8	Quantidade planejada de cada insumo por ano e mês, base para compra programada e orçamento de suprimentos	PLANEJAMENTO_ANUAL
+equivalencia_conta_contabil	FIN	vinculo	F7	Correspondência entre contas de versões diferentes do plano de contas, usada na troca do plano e na migração de saldos	PLANO_CONTAS_DE_PARA; PLANO_CONTAS_DE_PARA_WIZARD
+cuidado_sugerido_achado	PEP	vinculo	F8	Cuidado de enfermagem sugerido para cada achado do exame físico, com frequência padrão	PLANO_CUIDADOS; POSSIBILIDADE_PLANO
+modelo_plano_cuidado	PEP	configuracao	F8	Modelo de plano de cuidado de conteúdo clínico licenciado ou próprio, com versão, situação e origem da carga	PL_CUIDADO
+modelo_plano_cuidado_elemento	PEP	item	F8	Elemento hierárquico do modelo: problema, objetivo, grupo de intervenção, intervenção, atividade, orientação educativa ou link	PL_CUID_PROBLEMA; PL_CUID_INTERV; PL_CUID_EDU_OBJETIVO; PL_CUID_ITEM; PL_CUID_POPULACAO
+modelo_plano_cuidado_codigo	PEP	vinculo	F8	Códigos de diagnóstico médico, de enfermagem ou de terminologia clínica que indicam o modelo de plano de cuidado	PL_CUID_CID; PL_CUID_NANDA; PL_CUID_SNOMED
+ponderacao_procedimento	REL	configuracao	F8	Peso e tempo padrão por procedimento, exame ou item prescrito, para medir produção ponderada e carga de trabalho	PONDERA_PROCEDIMENTO
+portador_documento	HOT	dominio	F3	Pessoa autorizada a transportar prontuários, protocolos e documentos entre setores, com contato	PORTADORES
+posicao_paciente_transporte	INT	dominio	F8	Posição do paciente no veículo de transporte (deitado, sentado, cadeira de rodas)	POSICAO_PACIENTE_AMBULANCIA
+posto_graduacao_militar	CAD	dominio	F7	Posto ou graduação militar do paciente ou dependente, para hospitais que atendem forças armadas e auxiliares	POSTO_MILITAR
+regra_atuacao_categoria_profissional	PEP	configuracao	F3	O que cada categoria profissional pode fazer no prontuário: evoluir, prescrever, transcrever, aprazar, checar, conferir	PREMED_TIP_PRESTA; PREMED_TIP_PRESTA_TIP_FRE
+protocolo_prescricao_sintoma	PEP	vinculo	F8	Sintomas ou achados de avaliação que sugerem cada protocolo de prescrição	PRESCRICAO_PADRAO_SCR_SINTOMA
+profissional_formacao	CAD	item	F7	Formação do profissional: grau de instrução, título, número da cédula profissional e indicação da principal	PRESTADOR_GRAU_INS
+profissional_instituicao_externa	CAD	vinculo	F8	Instituições externas em que o profissional atua ou é referência, com período	PRESTADOR_INSTITUICAO; PRESTADOR_REFERENCIA
+profissional_unidade_atuacao	CAD	vinculo	F7	Unidades de internação em que o profissional atua, para listas de pacientes e passagem de plantão	PRESTADOR_UNIDADE_INTERNACAO
+prescricao_exame_verificado	PEP	item	F8	Exame exigido pelo protocolo e conferido antes de liberar a prescrição do ciclo, com observação	PRE_MED_EXAME
+prescricao_variavel_calculo	PEP	item	F7	Valor informado de cada variável da fórmula de cálculo de dose usada na prescrição	PRE_MED_RESPOSTA_FORMULA
+protocolo_prescricao_cid	PEP	vinculo	F7	Diagnósticos que indicam cada protocolo de prescrição	PRE_PAD_CID
+protocolo_prescricao_setor	PEP	vinculo	F3	Setores em que cada protocolo de prescrição pode ser usado	PRE_PAD_SETOR

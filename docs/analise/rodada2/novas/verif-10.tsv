@@ -1,0 +1,4 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+modelo_pesquisa_satisfacao_opcao	QUA	item	F8	Opção de resposta de pergunta de múltipla escolha da pesquisa de satisfação, com texto, valor e ordem	verificador 10: pergunta de múltipla escolha sem lista de opções
+carteira_risco_responsavel	QUA	vinculo	F8	Pessoas e perfis responsáveis por uma carteira de riscos, com permissão de ver ou editar	verificador 10: descrição de carteira_risco promete responsáveis e acesso sem tabela
+investigacao_obito_vigilancia	QUA	principal	F7	Investigação hospitalar do óbito materno, infantil, fetal ou mal definido: prazos, ficha, conclusão e envio à vigilância do município	verificador 10: Portarias GM 1.119/2008 e 72/2010; revisao_obito cobre só a comissão de óbito

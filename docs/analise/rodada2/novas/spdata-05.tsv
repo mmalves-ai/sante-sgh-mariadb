@@ -1,0 +1,6 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+grupo_sanguineo	SADT	dominio	F7	Grupo sanguíneo do sistema ABO, usado na tipagem do paciente, nas bolsas e nas provas de compatibilidade	SPDATA.TBTPSANGUINEO
+fator_rh	SADT	dominio	F7	Fator Rh (positivo ou negativo), registrado junto com o grupo sanguíneo na tipagem e nas bolsas	SPDATA.TBFATORRH
+tipo_responsavel_bem	FIN	dominio	F7	Tipo de responsável pela guarda do bem (colaborador, médico, cooperativa, terceiro)	SPDATA.GPTP_RESPONSAVEL
+kit_exame_versao_item	SADT	item	F3	Exame e quantidade de cada versão do kit de exames, para reproduzir a composição vigente na data do pedido	SPDATA.SIKITHISTITE
+dispositivo_coleta	SADT	dominio	F3	Dispositivo usado na coleta da amostra (sistema a vácuo, seringa, swab), com orientação de uso	SPDATA.SICOLETE

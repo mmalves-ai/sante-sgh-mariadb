@@ -1,0 +1,7 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+modalidade_dieta_caracteristica	HOT	vinculo	F3	Características aplicáveis a cada dieta prescritível, com a ordem em que aparecem na prescrição	SPDATA PRCARACT_TBDIETAS
+intencao_tratamento_oncologico	PEP	dominio	F3	Intenção do tratamento oncológico (curativa, paliativa, adjuvante), com o código correspondente da troca com convênios	SPDATA PRFINALIDADETRAT
+periodo_consulta_sumario_alta	PEP	dominio	F3	Janelas de tempo usadas para trazer procedimentos e exames ao sumário de alta (atendimento todo, últimas horas)	SPDATA PROPCAOPERIODO
+tipo_validacao_dose_unidade	PEP	vinculo	F3	Unidades de medida aceitas em cada tipo de validação de dose, para comparar a dose prescrita com o limite	SPDATA TBUNIDMEDIDA_PRINC_VALID
+tipo_notificacao_agravo	PEP	dominio	F3	Modalidade da notificação compulsória (caso individual, surto, notificação negativa) conforme a vigilância	SPDATA TBTPNOTIFCID10
+versao_classificacao_clinica	PEP	catalogo_publico	F3	Versão vigente de cada classificação clínica oficial carregada (doenças, atenção primária, reações adversas)	SPDATA TBVERSAOCID; SPDATA TBVERSAOCIAP; SPDATA TBVERSAOCBARA

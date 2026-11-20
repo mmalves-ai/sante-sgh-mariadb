@@ -1,0 +1,19 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+tipo_evento_oncologico	PEP	dominio	F8	Ações registráveis no acompanhamento do paciente oncológico, com indicação de uso pela equipe	DBAMV ACAO_REGISTRO_FLUXO_ONCOLOGIA
+tipo_evento_oncologico_profissional	PEP	vinculo	F8	Tipos de profissional que podem ou não registrar cada ação do acompanhamento oncológico	DBAMV ACAO_REGISTRO_FLX_ONCO_TP_PRES
+achado_cirurgico_padrao	CC	dominio	F3	Achados intraoperatórios padronizados para seleção na descrição da cirurgia	DBAMV ACHADO_CIRURGICO
+descricao_cirurgica_achado	CC	item	F3	Achados padronizados registrados na descrição da cirurgia, com complemento livre	DBAMV ACHADO_CIRURGICO_AVI_CIR
+ajuste_tempo_marcacao	AGE	dominio	F7	Acréscimo ou redução de minutos sobre a duração padrão do item marcado (paciente idoso, sedação, acesso difícil)	DBAMV ACRESCIMO_TEMPO_SCMA
+regra_desconto_procedimento	FAT	configuracao	F3	Desconto ou acréscimo percentual do acordo para um procedimento específico, por tipo de atendimento	DBAMV ACRESC_DESCONTOS_PROC
+categoria_anotacao_administrativa	PEP	dominio	F8	Categorias que organizam as anotações administrativas do caso (serviço social, regulação, gestão de leito)	DBAMV AGRUPA_EVOL_ADMIN
+regra_liberacao_antimicrobiano	SUP	configuracao	F7	Regra de liberação do antimicrobiano por produto: dias liberados sem ficha, dose de referência e bloqueio da dispensação	DBAMV ANT_PRO
+procedimento_cirurgico_equipamento	CC	configuracao	F3	Equipamentos exigidos por procedimento cirúrgico e a quantidade, usados na reserva do agendamento	DBAMV APARELHO_CIRURGIA, APARELHO_CIRURGIA_SUB_GRUPOS
+area_atuacao_medica	CAD	dominio	F7	Áreas de atuação médica reconhecidas pelo conselho, complementares à especialidade	DBAMV AREA_ATUACAO
+profissional_area_atuacao	CAD	vinculo	F7	Áreas de atuação de cada profissional, com registro no conselho quando houver	DBAMV AREA_ATUACAO_PRESTADOR
+area_coleta_domiciliar	SADT	configuracao	F8	Região atendida pela coleta domiciliar de amostras e entrega de resultados, com taxa de deslocamento	DBAMV AREA_COLETA_AMOSTRA
+area_coleta_domiciliar_entrega	SADT	item	F8	Taxa por forma de entrega do resultado em cada região de coleta domiciliar	DBAMV AREA_TIPO_ENTREGA
+condicao_armazenamento	SUP	dominio	F7	Condição ou restrição de guarda do insumo (refrigerado, protegido da luz, inflamável, controlado)	DBAMV ARMAZENAMENTO_CARACTERISTICA
+profissional_funcao_equipe	FAT	vinculo	F3	Funções da equipe que cada profissional pode exercer na cobrança e no repasse	DBAMV ATI_PRE
+regra_profissional_automatico_aih	SUS	configuracao	F7	Profissional e CBO lançados automaticamente na conta de internação SUS por procedimento ou grupo	DBAMV AUTOMATIZA_LANCAMENTO_AIH
+regra_servico_classificacao_sus	SUS	configuracao	F7	Serviço e classificação SUS preenchidos automaticamente na produção conforme serviço do hospital e procedimento	DBAMV AUTOMATIZA_SERVICO_SUS
+autorizador_sus	SUS	principal	F7	Profissional autorizador do gestor para laudos de internação e APAC, com documento, conselho e cartão de saúde	DBAMV AUTORIZADOR

@@ -1,0 +1,3 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+sobra_fracionamento	SUP	item	F7	Sobra de dose fracionada por atendimento e item dispensado, com quantidade e abertura do frasco, para reaproveitar antes de nova saída	DBAMV LOG_FRACIONAMENTO (mesmo conceito proposto no lote mv-06)
+dispositivo_usuario	ADM	principal	F8	Aparelho móvel do usuário, com plataforma, identificador, chave de notificação, validação por e-mail e situação	DBACP GSTMOB_USUARIO_ACESSO (mesmo conceito proposto no lote mv-04)

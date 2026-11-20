@@ -1,0 +1,21 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+declaracao_importacao	SUP	principal	F7	Declaração de importação de insumos, com fornecedor, moeda, câmbio, documento, conclusão e vínculo com a entrada no estoque	MV: DBAMV.DECLARACAO_IMPORTACAO, DECLARACAO_IMP_CONCLUSAO, DUPLICATA_DI
+emprestimo_insumo	SUP	principal	F3	Empréstimo de insumos com outra instituição (cedido ou recebido), com local, previsão de devolução, valor e situação	MV: DBAMV.EMPRESTIMO, C_CONEST_EMP_FOR
+regra_deducao_nota_servico	FIN	configuracao	F7	Regra por fonte pagadora e grupo de item que diz quais parcelas do valor são deduzidas na nota fiscal de serviço	MV: DBAMV.DEDUCAO_NOTA_FISCAL
+ensaio_analise	SADT	principal	F8	Ensaio do laboratório de análises de produtos e ambiente, com versão e situação	MV: DBAMV.ENSAIO_LABORATORIAL
+ensaio_analise_unidade	SADT	vinculo	F8	Unidades analíticas que executam cada ensaio, com a unidade padrão	MV: DBAMV.ENSAIO_UNIDADE_ANALITICA
+ensaio_analise_produto	SADT	vinculo	F8	Produtos ou matrizes para os quais o ensaio está habilitado	MV: DBAMV.ENSAIO_PRODUTO_ANALISE
+ensaio_analise_programa	SADT	vinculo	F8	Programas de análise que incluem o ensaio, com prazo em dias e horas	MV: DBAMV.ENSAIO_PROGRAMA_ANALISE
+amostra_analise_ensaio	SADT	item	F8	Ensaio executado em uma amostra de análise, com unidade, referência, valor, ordem e situação	MV: DBAMV.ENSAIO_AMOSTRA_ANALISE, ENSAIO_AMOSTRA_ANALISE_ORDEM
+requerente_analise	SADT	principal	F8	Empresa ou pessoa que pede análises ao laboratório, com contato e tipo; dados cadastrais na pessoa jurídica	MV: DBAMV.EMPRESA_REQUERENTE
+requerente_analise_atividade	SADT	vinculo	F8	Ramos de atividade econômica do requerente de análises	MV: DBAMV.EMPRESA_RAMO_ATIVIDADE
+regional_saude	CAD	dominio	F7	Regional ou diretoria de saúde que agrupa municípios, usada na divisão de vagas e cotas	MV: DBAMV.DIRETORIA_REGIONAL
+distrito_sanitario	CAD	dominio	F7	Distrito sanitário do município, com código externo, usado no endereço e nos relatórios públicos	MV: DBAMV.DIS_SAN
+regra_antimicrobiano_estabelecimento	PEP	configuracao	F7	Regra de uso do antimicrobiano por estabelecimento: dias liberados, dose diária definida, vigilância e restrição	MV: DBAMV.EMPRESA_ANTIMICROB
+configuracao_efd_contribuicoes	FIN	configuracao	F7	Configuração da escrituração de PIS e Cofins por estabelecimento: situações tributárias, incidência e regime	MV: DBAMV.EMPRESA_SPED_PIS_COFINS
+elemento_despesa	FIN	dominio	F8	Elemento de despesa orçamentária em hierarquia, com classificação, conta contábil e projeto	MV: DBAMV.ELEMENTOS
+doenca_cronica	PEP	dominio	F7	Doença crônica por CID que marca o paciente para acompanhamento e alertas	MV: DBAMV.DOENCA_CRONICA
+dispositivo_usuario	ADM	principal	F8	Aparelho móvel do usuário, com plataforma, identificador, chave de notificação, validação por e-mail e situação	MV: DBAMV.DISPOSITIVO_USUARIO, DISPOSITIVO_USUARIO_ACESSO, DISPOSITIVO_USU_VERIFICACAO
+diagnostico_enfermagem_associado	PEP	vinculo	F7	Diagnósticos que costumam ocorrer junto de outro, com tipo de ocorrência, para sugestão ao profissional	MV: DBAMV.DIAGNOSTICO_ASSOCIADO
+destino_romaneio_entrega	SUP	dominio	F8	Destino das entregas do romaneio, com endereço completo e situação	MV: DBAMV.DESTINO_ROMANEIO
+servico_domiciliar_exame	SADT	item	F8	Coleta domiciliar ou entrega de laudo ligada ao pedido de exame, com endereço, data, contato e valor	MV: DBAMV.ENDER_COLETA_ENTREGA

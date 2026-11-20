@@ -1,0 +1,12 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAPORTAL	EVENTO_SENTINELA	TABELA	regra_alerta;indicador	ADM	F3	regra de alerta sobre indicador (titulo, formula, grupo do indicador); nao e tipo de incidente
+DBAPORTAL	REG_EVENTO_SENT	TABELA	analise_critica_indicador;notificacao_usuario	REL	F7	disparo do alerta: valor do indicador, motivo e justificativa de nao abrir plano; nao e notificacao de incidente
+DBAPORTAL	REG_PESSOA	TABELA	notificacao_usuario	ADM	F3	pessoas avisadas do disparo do alerta com marca de lido; nao participam de analise de incidente
+DBAPORTAL	RESPOSTA_PARAM	TABELA	regra_alerta	ADM	F3	valor de parametro da funcao da regra de alerta (liga ao evento sentinela), nao opcao de campo do incidente
+DBAPORTAL	HIST_GEST_COMPETENCIA	MECANISMO	historico_entidade:apuracao_indicador	REL	F3	historico da competencia de apuracao de indicador; a competencia de origem ja vai para apuracao_indicador
+DBAPORTAL	RESPOSTA_ORGANIZACAO	MECANISMO	parametro	ADM	F3	resposta do estabelecimento as perguntas do seu cadastro; mesmo destino das perguntas do cadastro
+DBAPORTAL	RESPOSTA_PERGUNTA_ORGANIZACAO	MECANISMO	parametro	ADM	F3	opcoes das perguntas do cadastro do estabelecimento; mesmo destino das perguntas do cadastro
+DBAMV	NATUREZA_PSIH	TABELA	caso_infeccao;classe_contaminacao_cirurgica	QUA	F7	registro do potencial de contaminacao da cirurgia (aviso, cirurgia) ligado ao caso
+SPDATA	TBTPSURTO	TABELA	tipo_surto_infeccao	QUA	F3	dominio SINAN com dados na base de origem da Rede, usado na notificacao de agravo: paridade
+SPDATA	TBCBARASEVERIDADE	TABELA	gravidade_reacao_adversa	PEP	F3	carga CBARA com dados na base de origem da Rede (Rede usa no registro de alergia): paridade
+SPDATA	TBCBARAREACAOADVERSA	TABELA	manifestacao_alergica	PEP	F3	carga CBARA com dados na base de origem da Rede (28 reacoes): paridade

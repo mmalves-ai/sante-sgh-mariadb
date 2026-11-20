@@ -1,0 +1,32 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+competencia_orcamento	FIN	item	F7	Competência mensal da versão do orçamento, com abertura, fechamento e responsável pelo fechamento	DBAMV ORCAMENTO_HOSPITALAR_COMP
+plano_orcamentario	FIN	principal	F7	Plano de contas próprio do orçamento, com máscara, tipo e vigência, separado do plano contábil	DBAMV ORCA_PLANO
+plano_orcamentario_estabelecimento	FIN	vinculo	F7	Estabelecimentos que usam cada plano orçamentário, com situação	DBAMV ORCA_PLANO_EMPR
+conta_orcamentaria	FIN	principal	F7	Conta do plano orçamentário com hierarquia, grau, natureza, tipo e regras de transferência e bloqueio	DBAMV ORCA_CONTA, ORCA_PLANO_ESTR, ORCA_PLANO_CNTA
+conta_orcamentaria_estabelecimento	FIN	vinculo	F7	Conta orçamentária por estabelecimento, ligada à conta contábil e ao item de resultado correspondentes	DBAMV ORCA_CONTA_EMPR
+conta_orcamentaria_composicao	FIN	item	F7	Composição de uma conta orçamentária a partir de outras contas ou premissas, com fórmula e meses de referência	DBAMV ORCA_CONTA_COMP, ORCA_VARIAVEL_CNTA
+conta_orcamentaria_indicador	FIN	vinculo	F8	Indicadores estatísticos que explicam cada conta orçamentária	DBAMV ORCA_CONTA_IND
+tipo_conta_orcamentaria	FIN	dominio	F7	Tipos de conta orçamentária (receita, custo, despesa, investimento, estatística)	DBAMV ORCA_TIPO_CONTA
+modelo_peca_orcamentaria	FIN	configuracao	F8	Formulário de coleta do orçamento por área, com orientações, hierarquia e o que o preenchedor vê e edita	DBAMV ORCA_PECA, PECA_ORCAMENTARIA
+modelo_peca_orcamentaria_linha	FIN	item	F8	Linha ou bloco do formulário de coleta, com conta, fórmula, casas decimais, valor sugerido e edição permitida	DBAMV ORCA_PECA_ITEM, ORCA_CONTA_PECA, PECA_ORCAMENTARIA_CONFIGURACAO
+modelo_peca_orcamentaria_setor	FIN	vinculo	F8	Centros de custo que preenchem cada linha do formulário de coleta	DBAMV ORCA_PECA_ITEM_SETOR
+versao_orcamento_peca	FIN	vinculo	F8	Formulários de coleta usados numa versão do orçamento	DBAMV ORCA_CONTROLE_PECA
+lancamento_peca_orcamentaria	FIN	item	F8	Valor ou quantidade informada no formulário de coleta por linha, mês e centro de custo, antes da consolidação	DBAMV PECA_ORCAMENTARIA_LANCAMENTO, PECA_ORCAMENTARIA_LANCMTO_SET
+realizado_orcamento	FIN	principal	F7	Valor realizado por conta orçamentária, centro de custo e mês, para comparar com o orçado	DBAMV ORCA_REALIZADO, ORCA_REALIZADO_ITEM
+realizado_orcamento_origem	FIN	item	F7	Documento de origem que compõe o realizado (nota, título, lançamento ou carga externa), com valor e data	DBAMV ORCA_REALIZADO_MOV, ORCA_EXTERNO
+tipo_origem_realizado	FIN	dominio	F7	Tipos de origem externa de valores realizados carregados no orçamento	DBAMV ORCA_TIPO_EXTERNO
+motivo_movimento_orcamento	FIN	dominio	F7	Motivos de transferência, ajuste ou revisão de valores orçados	DBAMV ORCA_MOTIVO
+pedido_compra_parcela	SUP	item	F3	Parcela de pagamento prevista no pedido de compra, com vencimento e valor, que alimenta a previsão do contas a pagar	DBAMV ORD_DUPL
+condicao_pagamento	FIN	configuracao	F3	Condição de pagamento negociada (à vista, 30/60/90), usada em compras e em títulos	DBAMV PARCELA_COND_PAGAMENTO (cabeçalho implícito)
+condicao_pagamento_parcela	FIN	item	F3	Parcela da condição de pagamento, com número, prazo em dias e percentual do total	DBAMV PARCELA_COND_PAGAMENTO
+solicitacao_compra_entrega	SUP	item	F7	Entrega parcelada pedida para o item da solicitação de compra, com data, quantidade atendida e cancelada	DBAMV PARCELA_ITSOL_COM
+pendencia_processo_compra	SUP	item	F7	Pendência no andamento da solicitação ou cotação por item, com tipo de justificativa, responsável e liberação	DBAMV PENDENCIA_PROCESSO
+pacote_cid	FAT	vinculo	F7	Diagnósticos que descaracterizam o pacote e levam a conta para cobrança aberta	DBAMV PACOTE_CID
+item_agendavel_orientacao_fonte_pagadora	AGE	vinculo	F8	Orientação ao paciente específica da fonte pagadora para um item agendável, exibida na marcação	DBAMV ORIENTACAO_CONVENIO_ITEM_AGE
+recusa_rede_credenciada	AGE	historico	F8	Recusa do paciente em ser atendido na rede credenciada oferecida para um item agendável, com data e usuário	DBAMV PAC_RECUSA_REDE_CREDEN
+escala_clinica_regra_exibicao	PEP	configuracao	F7	Regra que mostra ou oculta o resultado da escala conforme as respostas dadas	DBAMV PAGU_FORMULA_REGRAS_RESULT
+escala_clinica_regra_condicao	PEP	item	F7	Condição da regra de exibição: variável, faixa de valor ou resposta esperada	DBAMV PAGU_REGRAS_RESULT_PERGUNTA, PAGU_REGRAS_RES_PERGUN_RESP
+painel_clinico	PEP	configuracao	F8	Painel clínico do paciente por setor ou profissional, com período, frequência e atualização automática	DBAMV PAINEL_CLINICO
+painel_clinico_grupo	PEP	item	F8	Grupo de informações do painel clínico (documentos, sinais vitais, escalas, prescrição), com ordem	DBAMV PAINEL_CLINICO_GRUPO
+painel_clinico_item	PEP	item	F8	Informação exibida no grupo do painel clínico (sinal vital, escala, tipo de prescrição), com destaque e ordem	DBAMV PAINEL_CLINICO_PARAMETRO
+tipo_grupo_painel_clinico	PEP	dominio	F8	Tipos de grupo do painel clínico, com identificador e detalhamento exibido	DBAMV PAINEL_CLINICO_TIPO_GRUPO

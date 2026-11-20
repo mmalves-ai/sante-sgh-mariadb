@@ -1,0 +1,20 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+regra_subamostra_recipiente	SADT	item	F7	Recipientes e quantidades de sub-amostras que cada regra gera, com o recipiente sugerido por padrão	DBAMV TUBO_REGRA_SUB_AMOSTRA
+tipo_turma_atividade	AGE	dominio	F8	Tipos de turma de atividade coletiva (grupo terapêutico, educação em saúde, reabilitação)	DBAMV TURMA
+turno_padrao	CAD	dominio	F7	Turnos padrão do hospital (manhã, tarde, noite) com hora de início e fim, usados em filtros e escalas	DBAMV TURNO
+orcamento_receita_fonte_pagadora	FIN	item	F8	Linha de receita orçada por fonte pagadora e setor, para planejar o orçamento de receita	DBAMV UNIDADES_CONVENIO_ORCAMENTO
+medidor_consumo	HOT	dominio	F8	Medidor de energia, água ou gás de uma área, para leitura periódica e rateio de consumo	DBAMV UNIDADE_CONSUMIDORA
+unidade_negocio	FIN	principal	F8	Unidade de negócio (linha de serviço com resultado próprio), com agrupamento, estabelecimento e situação	DBAMV UNIDADE_NEGOCIO
+unidade_negocio_setor	FIN	vinculo	F8	Setores que compõem cada unidade de negócio, para apurar receita e custo por linha de serviço	DBAMV UNIDADE_NEGOCIO_SETOR
+unidade_saude_regional	CAD	principal	F7	Unidade de saúde de uma regional (posto, policlínica, hemonúcleo), com endereço, contato e prioridade	DBAMV UNIDADE_REGIONAL
+acao_imediata_incidente	QUA	dominio	F7	Ações imediatas padronizadas que o notificante escolhe ao registrar um incidente, por estabelecimento	DBAPORTAL ACAO_IMEDIATA_OCORRENCIA, ACAO_IMEDIATA_OCOR_ORG
+vale_refeicao	HOT	dominio	F8	Vale de refeição vendido no caixa a acompanhante ou visitante, com valor e situação	DBAMV VALE_RANCHO, VALE_RANCHO_CAIXA
+acordo_honorario_particular	FAT	configuracao	F7	Honorário combinado entre paciente e profissional para um atendimento e procedimento, com vigência e desativação	DBAMV VALOR_ACORDO_MEDICO_PAC
+custo_fixo_producao_valor	SUP	historico	F7	Valor de cada custo fixo da produção própria por vigência	DBAMV VALOR_CUSTO_FIXO_PRODUCAO
+regra_cobranca_excedente	FAT	configuracao	F7	Cobrança de quantidade excedente de um item: quantidade inicial, valor ou percentual das seguintes e item substituto	DBAMV VAL_EXCED
+valor_indice_atendimento	FAT	configuracao	F7	Valor de índice diferenciado por tipo e origem de atendimento num acordo, com grupo de procedimento	DBAMV VAL_INDICE_ORI_ATE, VAL_INDICE_TP_ATEND
+teto_cobranca_excecao	FAT	configuracao	F7	Exceção ao teto de custo mensal para um paciente, com período e justificativa	DBAMV VAL_TETO_CPM_EXCECAO
+verba_orcamentaria	FIN	dominio	F8	Verba do orçamento, com tipo e grupo, distribuída por categoria de gasto	DBAMV VERBA_ORCAMENTARIA, VERBAS_CATEGORIA
+correspondencia_setor_estabelecimento	CAD	vinculo	F7	Correspondência entre setores de estabelecimentos diferentes da rede, para transferência e consolidação	DBAMV VINCULO_SETOR_EMPRESA
+estrutura_organizacional	CAD	principal	F7	Nó da estrutura organizacional hierárquica (diretoria, gerência, coordenação), com setor ligado e nó pai	DBAMV VISAO_ORGANIZACIONAL
+agrupamento_setor	CAD	dominio	F7	Visão que agrupa setores para relatórios e análises gerenciais, por estabelecimento	DBAMV VISAO_SETOR

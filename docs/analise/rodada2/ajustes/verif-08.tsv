@@ -1,0 +1,26 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+capitulo_cid	ACEITA	capitulo_cid10	INTG	catalogo_publico	F7	Capítulos da CID-10 com faixa de códigos
+grupo_cid	ACEITA	agrupamento_cid10	INTG	catalogo_publico	F7	Grupos e subgrupos da CID-10 dentro de cada capítulo
+regiao_anatomica	ACEITA	regiao_anatomica_codificada	INTG	catalogo_publico	F8	Regiões, localizações e sublocalizações anatômicas codificadas
+campanha_venda	ACEITA	campanha_comercial_plano	SGO	principal	F8	Campanha comercial com período, planos e condições especiais
+carencia_plano	ACEITA	carencia_produto_contrato	SGO	configuracao	F7	Prazo de carência de cada grupo por plano ou contrato, com redução e isenção negociadas
+categoria_beneficiario	ACEITA	classe_beneficiario_plano	SGO	dominio	F7	Categorias de vínculo com a contratante (empregado, agregado, aposentado, demitido, associado)
+categoria_vendedor	ACEITA	classe_vendedor_plano	SGO	dominio	F8	Categorias de vendedor para regra de comissão e meta
+estorno_reajuste	ACEITA	reversao_reajuste_contrato	SGO	principal	F7	Estorno ou devolução de reajuste aplicado indevidamente, com valores por beneficiário
+grau_dependencia	ACEITA	grau_parentesco_dependente	SGO	dominio	F7	Graus de dependência e parentesco com o titular, com o código exigido no cadastro de beneficiários da ANS
+grupo_carencia	ACEITA	grupo_prazo_carencia	SGO	configuracao	F7	Grupos de procedimentos com prazo de carência próprio (urgência, consulta, parto, alta complexidade)
+guia_leitura_contratual	ACEITA	guia_leitura_contrato_plano	SGO	principal	F7	Guia de leitura do contrato exigido pela norma da agência reguladora, por produto: texto, versão, vigência e situação
+lote_reciprocidade	ACEITA	lote_atendimento_reciproco	SGO	principal	F8	Lote de movimentos ou atendimentos em reciprocidade com operadora parceira: período, contratante, tipo de processo, leiaute e situação
+metodo_venda	ACEITA	canal_venda_plano	SGO	dominio	F8	Canais de venda (presencial, telefone, digital, empresa)
+modelo_criterio	ACEITA	conjunto_criterio_aplicacao	SGO	configuracao	F7	Conjunto nomeado de critérios (plano, prestador, procedimento, atendimento) que delimita onde uma regra de isenção, valoração ou pagamento se aplica
+plano_contas_ans	ACEITA	plano_contas_padrao_ans	SGO	catalogo_publico	F7	Plano de contas padrão da ANS para operadoras, com vigência
+plano_intercambio	ACEITA	produto_intercambio	SGO	configuracao	F8	Plano de operadora parceira reconhecido no atendimento recíproco: carteira, categoria, acomodação, cobertura e regras locais
+regra_comissao	ACEITA	regra_comissao_venda	SGO	configuracao	F8	Regra de comissão por plano, corretora ou categoria: base de incidência, percentual e vigência
+ressarcimento_sus	ACEITA	cobranca_ressarcimento_sus	SGO	principal	F7	Aviso de beneficiário atendido no SUS: competência, valores cobrados, prazos e pagamento
+simulacao_preco	ACEITA	simulacao_preco_plano	SGO	principal	F8	Simulação de preço para um grupo de vidas, com planos e faixas cotados
+tipo_reembolso	ACEITA	modalidade_reembolso	SGO	dominio	F7	Tipos de reembolso (hospitalar, SP/SADT, materiais e medicamentos, transporte)
+conta_portal_beneficiario	ACEITA	conta_portal_beneficiario	SGO	principal	F7	Conta do beneficiário no portal e aplicativo, com segundo fator e consentimentos
+lote_faturamento_plano_critica	ACEITA	lote_faturamento_plano_critica	SGO	item	F7	Erro ou aviso por contrato ou fatura numa geração de faturas, com tipo e resolução
+lote_faturamento_plano_escopo	ACEITA	lote_faturamento_plano_escopo	SGO	item	F7	Contratos, beneficiários, contas e reembolsos selecionados por filtro numa geração de faturas
+demanda_nip_andamento	ACEITA	demanda_nip_andamento	SGO	item	F7	Andamentos da reclamação recebida da agência: prazo, resposta enviada, reparação, anexos e classificação final
+acao_judicial_beneficiario_andamento	ACEITA	acao_judicial_beneficiario_andamento	SGO	item	F7	Andamentos da ação judicial do beneficiário: intimação, prazo de cumprimento, providência tomada e responsável

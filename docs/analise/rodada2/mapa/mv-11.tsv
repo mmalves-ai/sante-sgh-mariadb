@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	MONITOR_TIME	NAO		N	SIS		tecnico do fornecedor sem equivalente (tempo de resposta de requisicoes internas)
+DBAMV	MOTIVO	TABELA	motivo_cancelamento_operacao;motivo_cancelamento_operacao_escopo	N	REC	F3	motivo geral tipado da recepcao; o escopo define onde vale
+DBAMV	MOTIVO_ACERTO_ESTOQUE	TABELA	motivo_ajuste_estoque	N	SUP	F3	
+DBAMV	MOTIVO_ATRASO_AMBULANCIA	TABELA	motivo_atraso_transporte	N	INT	F8	
+DBAMV	MOTIVO_AUDITORIA	TABELA	motivo_auditoria	N	FAT	F3	
+DBAMV	MOTIVO_CANCELAMENTO	TABELA	motivo_cancelamento_operacao;motivo_cancelamento_operacao_escopo	N	REC	F3	
+DBAMV	MOTIVO_CANCELAMENTO_EXAME	TABELA	motivo_cancelamento_exame	N	SADT	F3	
+DBAMV	MOTIVO_CANCELAMENTO_NFE	TABELA	motivo_cancelamento_documento_fiscal	S	FIN	F3	codigo do provedor municipal vira coluna do motivo
+DBAMV	MOTIVO_CANCELAMENTO_SIDRA	NAO		N	SUP		tecnico do fornecedor sem equivalente (modulo especifico, sem dados nem referencias)
+DBAMV	MOTIVO_CANCELAMENTO_SOLIC_AMBU	TABELA	motivo_cancelamento_transporte	S	INT	F8	
+DBAMV	MOTIVO_CANCELA_NFSR	TABELA	motivo_cancelamento_documento_fiscal	S	FIN	F3	
+DBAMV	MOTIVO_CANC_INTC	TABELA	motivo_cancelamento_internacao	N	INT	F3	
+DBAMV	MOTIVO_CANC_NT_CRE_DEB_SUPRI	TABELA	motivo_cancelamento_documento_fiscal	S	FIN	F3	
+DBAMV	MOTIVO_CANC_SOL	TABELA	motivo_cancelamento_requisicao_transfusao	S	SADT	F3	usado pelo item da solicitacao de sangue
+DBAMV	MOTIVO_CANC_SOL_PBSA	TABELA	motivo_cancelamento_requisicao_transfusao	S	SADT	F3	
+DBAMV	MOTIVO_CHE_CANC	TABELA	motivo_cancelamento_cheque	S	FIN	F3	
+DBAMV	MOTIVO_COBRANCA	MECANISMO	catalogo_publico:sigtap	N	SUS	F7	motivo de cobranca/saida da APAC: tabela oficial do faturamento SUS
+DBAMV	MOTIVO_COBRANCA_SUS	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	motivo de saida/permanencia da AIH: tabela oficial; regras de pagamento vem com ela
+DBAMV	MOTIVO_CONTAGEM_ESTOQUE	TABELA	motivo_inventario_estoque	S	SUP	F7	
+DBAMV	MOTIVO_DESCARACT_PACOTE	TABELA	motivo_descaracterizacao_pacote	N	FAT	F3	
+DBAMV	MOTIVO_DESCARTE_SUS	TABELA	motivo_descarte_sus	N	SUS	F7	
+DBAMV	MOTIVO_DIVERG_ATEND	TABELA	motivo_nao_atendimento	N	SUP	F3	divergencia no atendimento da requisicao ao estoque
+DBAMV	MOTIVO_ENVIO_MVTO	TABELA	motivo_tramite_documento	S	HOT	F3	
+DBAMV	MOTIVO_GLOSA	TABELA	motivo_glosa	N	FAT	F3	
+DBAMV	MOTIVO_GLOSA_BPA	TABELA	motivo_rejeicao_sus	N	SUS	F7	
+DBAMV	MOTIVO_ITEM_GLOSA	TABELA	motivo_glosa	N	FAT	F3	
+DBAMV	MOTIVO_LANC_NT_CRE_DEB_SUPRI	TABELA	motivo_nota_credito_debito	N	FIN	F8	
+DBAMV	MOTIVO_LCTO	TABELA	motivo_lancamento_contabil	N	FIN	F7	
+DBAMV	MOTIVO_MOV_CONTA_AIH	MECANISMO	historico_entidade:conta_aih	N	SUS	F7	motivo de cada movimentacao da AIH entre protocolos
+DBAMV	MOTIVO_MOV_CONTA_APAC	MECANISMO	historico_entidade:apac	N	SUS	F7	motivo de cada movimentacao da APAC entre protocolos
+DBAMV	MOTIVO_NOTA_CRED_DEB	TABELA	motivo_nota_credito_debito	N	FIN	F8	
+DBAMV	MOTIVO_PADRAO_REGISTRO_FLUXO	TABELA	motivo_registro_fluxo_oncologico	S	PEP	F8	usado no registro de fluxo da oncologia
+DBAMV	MOTIVO_PADRAO_REG_FLX_TP_PRES	TABELA	motivo_registro_fluxo_oncologico_categoria	S	PEP	F8	
+DBAMV	MOTIVO_PARTO	TABELA	motivo_parto_cirurgico	N	PEP	F8	
+DBAMV	MOTIVO_PENDENCIA_GUIA	TABELA	motivo_pendencia_guia	N	FAT	F3	
+DBAMV	MOTIVO_PERMANENCIA	TABELA	motivo_permanencia_programa	S	PEP	F8	usado pelo atendimento em programa
+DBAMV	MOTIVO_PRORROGACAO	TABELA	motivo_prorrogacao	N	FIN	F3	
+DBAMV	MOTIVO_RECOLETA	TABELA	motivo_nova_coleta	N	SADT	F3	
+DBAMV	MOTIVO_RECURSO_GLOSA	TABELA	justificativa_glosa_padrao	N	FAT	F7	
+DBAMV	MOTIVO_REPROVACAO	TABELA	motivo_reprovacao_agendamento_cirurgico	S	CC	F7	usado na aprovacao do aviso de cirurgia
+DBAMV	MOTIVO_REPROVACAO_SOLIC_AMBU	TABELA	motivo_cancelamento_transporte	S	INT	F8	tipo do motivo distingue cancelamento e reprovacao
+DBAMV	MOTIVO_RESTRICAO_EXA_LAB	TABELA	motivo_restricao_exame	S	SADT	F7	
+DBAMV	MOTIVO_RESTRICAO_VISITA	TABELA	motivo_bloqueio_visita	S	HOT	F8	
+DBAMV	MOTIVO_RETIFICACAO_EXAME	TABELA	motivo_retificacao_laudo	S	SADT	F3	
+DBAMV	MOTIVO_SITUACAO_CONREC	TABELA	motivo_cancelamento_documento_fiscal	S	FIN	F3	motivo da situacao da nota/titulo a receber; codigos de integracao vao para o motor
+DBAMV	MOTIVO_SOL_SAME	TABELA	motivo_solicitacao_prontuario	N	HOT	F3	
+DBAMV	MOTIVO_SUBSTITUICAO_CIRURGIA	TABELA	motivo_suspensao_cirurgia	N	CC	F3	
+DBAMV	MOTIVO_SUSPENSAO	TABELA	motivo_movimento_cadastral	N	SGO	F7	suspensao de beneficiario e prestador da operadora
+DBAMV	MOTIVO_TRANSFERENCIA	TABELA	motivo_transferencia_conta	N	FAT	F3	
+DBAMV	MOTIVO_TRANSF_LEITO	TABELA	motivo_troca_leito	N	INT	F3	
+DBAMV	MOTORISTA	TABELA	motorista	S	CAD	F8	
+DBAMV	MOTORISTA_ROMANEIO	TABELA	motorista	S	CAD	F8	
+DBAMV	MOT_ALT	TABELA	motivo_saida_hospitalar;motivo_encerramento_atendimento	N	INT	F3	
+DBAMV	MOT_ALT_MEIO_MAG	TABELA	termo_equivalencia	N	INTG	F3	de-para do motivo de alta por fonte pagadora no arquivo
+DBAMV	MOT_AUSENCIA_DOC_OBRIGATORIO	TABELA	motivo_ausencia_documento_paciente	S	CAD	F3	
+DBAMV	MOT_BAI	TABELA	motivo_baixa_estoque	S	SUP	F3	
+DBAMV	MOT_BAIXA	TABELA	motivo_baixa_bem	N	FIN	F7	
+DBAMV	MOT_BAIXA_EMPRESA	TABELA	regra_contabilizacao	N	FIN	F7	conta contabil por motivo de baixa e estabelecimento
+DBAMV	MOT_CANC	TABELA	motivo_cancelamento_operacao	N	REC	F3	
+DBAMV	MOT_CANCEL	TABELA	motivo_cancelamento_operacao	N	REC	F3	
+DBAMV	MOT_CANCEL_AMOSTRA	TABELA	motivo_cancelamento_exame	N	SADT	F3	
+DBAMV	MOT_CANC_CONTA	TABELA	motivo_cancelamento_conta	N	FAT	F3	
+DBAMV	MOT_CAUCAO	TABELA	motivo_adiantamento_paciente	S	FIN	F3	
+DBAMV	MOT_COB_TABSIASUS	MECANISMO	catalogo_publico:sigtap	N	SUS	F7	compatibilidade procedimento x motivo de cobranca e oficial
+DBAMV	MOT_DEV	TABELA	motivo_devolucao_estoque	S	SUP	F3	
+DBAMV	MOT_DEV_CHEQUES	TABELA	motivo_devolucao_cheque	S	FIN	F7	
+DBAMV	MOT_ENT	TABELA	motivo_procura_atendimento	S	REC	F7	usado pelo motivo de entrada do atendimento
+DBAMV	MOT_EXC_RX	TABELA	motivo_cancelamento_exame	N	SADT	F3	
+DBAMV	MOT_EXIGENCIA	NAO		N	FAT		obsoleto (sem dados e sem nenhuma tabela que o referencie)
+DBAMV	MOT_GLOSA_MEIO_MAG	TABELA	motivo_glosa_fonte_pagadora	N	FAT	F7	
+DBAMV	MOT_INTERDICAO_SAL_CIR	TABELA	motivo_bloqueio_sala_cirurgica	S	CC	F3	
+DBAMV	MOT_MANUT	TABELA	motivo_ordem_servico_manutencao	S	HOT	F7	
+DBAMV	MOT_MOVIMENTACAO_CONTA	TABELA	motivo_movimentacao_conta_sus	S	SUS	F7	
+DBAMV	MOT_PED	TABELA	motivo_solicitacao_compra	S	SUP	F3	
+DBAMV	MOT_SAISET_FORN	TABELA	motivo_devolucao_fornecedor	N	SUP	F7	
+DBAMV	MOT_SERV	TABELA	motivo_ordem_servico_manutencao	S	HOT	F7	
+DBAMV	MOT_TRANSFERENCIA	TABELA	motivo_suspensao_cirurgia	N	CC	F3	usado na transferencia de cirurgia (remarcacao)
+DBAMV	MOT_TRANSF_HOCA	TABELA	motivo_transferencia_domicilio	N	INT	F8	
+DBAMV	MOVIMENTACAO_RESERVA_PRODUTO	TABELA	reserva_estoque	S	SUP	F7	
+DBAMV	MOVIMENTACAO_STANDBY_EXAME	TABELA	item_exame_evento	N	SADT	F3	
+DBAMV	MOVIMENTO_AGENDA_CENTRAL	TABELA	marcacao_horario_historico	N	AGE	F3	
+DBAMV	MOVIMENTO_BENEFICIO	TABELA	concessao_beneficio	S	HOT	F8	
+DBAMV	MOV_AMOSTRA	TABELA	amostra_biologica_evento	N	SADT	F3	
+DBAMV	MOV_ATEND_CATEGORIA_CLINICA	TABELA	atendimento_categoria_clinica	S	FAT	F8	
+DBAMV	MOV_BENS	TABELA	movimento_bem	N	FIN	F7	
+DBAMV	MOV_CAIXA	TABELA	movimento_caixa	N	FIN	F3	
+DBAMV	MOV_CARDAPIO	TABELA	mapa_dieta;mapa_dieta_item	N	HOT	F3	
+DBAMV	MOV_CARDAPIO_AUT	TABELA	producao_refeicao	N	HOT	F8	
+DBAMV	MOV_CATEGORIA_CLINICA	TABELA	atendimento_categoria_clinica	S	FAT	F8	
+DBAMV	MOV_CC_RPA	TABELA	registro_recuperacao_anestesica	N	CC	F3	
+DBAMV	MOV_CENTRO_CIRURGICO	TABELA	movimento_paciente_bloco	N	CC	F3	
+DBAMV	MOV_CONCOR	TABELA	movimento_bancario	N	FIN	F3	
+DBAMV	MOV_COTA_COMPETENCIA	TABELA	transferencia_cota_sus	N	SUS	F7	
+DBAMV	MOV_EMP	TABELA	emprestimo_insumo	S	SUP	F7	
+DBAMV	MOV_FSCC_PRESTADOR	TABELA	participante_cirurgia	N	CC	F3	
+DBAMV	MOV_GLOSAS	TABELA	glosa	N	FAT	F3	
+DBAMV	MOV_HONORARIO_PASSIVO	TABELA	provisao_passivo	N	FIN	F8	
+DBAMV	MOV_HOSP	TABELA	atendimento_situacao_historico	N	REC	F3	
+DBAMV	MOV_INT	TABELA	transferencia_leito;ocupacao_leito	N	INT	F3	
+DBAMV	MOV_INV	TABELA	dispositivo_invasivo_evento;dispositivo_invasivo_paciente	N	PEP	F3	
+DBAMV	MOV_ISOLAMENTO	TABELA	isolamento_paciente	N	INT	F7	
+DBAMV	MOV_LEITOS	TABELA	ocupacao_leito	N	INT	F3	
+DBAMV	MOV_MVTO_ESTOQUE	TABELA	movimento_estoque	N	SUP	F3	
+DBAMV	MOV_PENDENCIA_PREST	TABELA	pendencia_profissional	S	CAD	F7	
+DBAMV	MOV_PRESTADOR	TABELA	atendimento_responsavel_historico	S	REC	F3	
+DBAMV	MOV_SALA_CENTRO_CIRURGICO	TABELA	movimento_paciente_bloco	N	CC	F3	
+DBAMV	MSG_CONSOLIDA	NAO		N	SIS		tecnico do fornecedor sem equivalente (mensagens da rotina de consolidacao)
+DBAMV	MT_BAIXA	TABELA	motivo_baixa_estoque	S	SUP	F3	usado no detalhe do estoque
+DBAMV	MULTI_EMPRESAS	TABELA	estabelecimento;mantenedora	N	CAD	F3	
+DBAMV	MULTI_EMPRESAS_CBO	TABELA	ocupacao_cbo_estabelecimento	S	SUS	F7	
+DBAMV	MULTI_EMPRESAS_LOGOMARCA	TABELA	logotipo_estabelecimento	N	CAD	F3	
+DBAMV	MULTI_EMPRESAS_MOD_ATENDIMENTO	MECANISMO	parametro	N	SUS	F7	modalidades SUS habilitadas por estabelecimento
+DBAMV	MULTI_EMPRESAS_MV_SAUDE	TABELA	operadora_saude;operadora_saude_estabelecimento	N	SGO	F7	demais parametros da operadora vao para o mecanismo de parametros
+DBAMV	MULTI_EMPRESAS_PGTO_REP	TABELA	estabelecimento_repasse	S	FAT	F3	
+DBAMV	MULTI_EMPRESAS_REMVAR_CRED	TABELA	regra_repasse_variavel	N	FAT	F8	
+DBAMV	MULTI_EMPRESAS_REPASSE	TABELA	estabelecimento_repasse	S	FAT	F3	
+DBAMV	MULTI_EMPRESAS_SERVICO_CLASSIF	TABELA	servico_classificacao_estabelecimento	N	CAD	F7	
+DBAMV	MUNICIPIO	TABELA	municipio_ibge	N	CAD	F3	
+DBAMV	MUNICIPIO_UNIDADE_REGIONAL	MECANISMO	catalogo_publico:cnes	N	CAD	F7	regional de saude do municipio vem da fonte oficial
+DBAMV	MVPAINEL_CFG_VOZ	TABELA	painel_chamada	N	REC	F3	
+DBAMV	MVPEP_CONFIG_NOTIFICACAO	TABELA	regra_alerta	N	ADM	F3	
+DBAMV	MVPEP_NOTIFICACAO	TABELA	aviso_clinico	N	PEP	F3	
+DBAMV	MVS_ITNOTA_FISCAL	MECANISMO	integracao	N	FIN	F7	area de troca da nota com outro sistema do fornecedor
+DBAMV	MVS_NOTA_FISCAL	MECANISMO	integracao	N	FIN	F7	area de troca da nota com outro sistema do fornecedor
+DBAMV	MVS_NOTA_FISCAL_TRIBUTO	MECANISMO	integracao	N	FIN	F7	area de troca da nota com outro sistema do fornecedor
+DBAMV	MVS_PLANO_ANS	TABELA	plano_contas_ans	N	SGO	F7	
+DBAMV	MVTEMP_ANDRE	NAO		N	SIS		copia/backup (tabela temporaria de objetos do banco)
+DBAMV	MVTEMP_PRO_FAT	NAO		N	FAT		copia/backup (copia temporaria de itens faturaveis)
+DBAMV	MVTO_AJUSTE_CONTABIL	TABELA	lancamento_contabil	N	FIN	F7	
+DBAMV	MVTO_CME	TABELA	movimento_material_esteril	N	CC	F7	
+DBAMV	MVTO_CONTA	TABELA	protocolo_tramite	N	HOT	F3	
+DBAMV	MVTO_ESTOQUE	TABELA	documento_estoque;movimento_estoque	N	SUP	F3	
+DBAMV	MVTO_ESTOQUE_CONCLUSAO	TABELA	documento_estoque	N	SUP	F3	
+DBAMV	MVTO_ESTOQUE_NFE	TABELA	nota_entrada	N	SUP	F3	
+DBAMV	MVTO_ESTOQUE_ONC	TABELA	dispensacao;dispensacao_item	N	SUP	F3	
+DBAMV	MVTO_FINANCEIRO	MECANISMO	datamart	N	FIN	F7	movimento financeiro consolidado para consulta
+DBAMV	MVTO_GASES	TABELA	uso_gas_medicinal	N	INT	F3	
+DBAMV	MVTO_KIT_PRODUZIDO	TABELA	lote_produzido;pacote_esteril	N	SUP	F7	
+DBAMV	MVTO_PACIENTE	TABELA	documento_estoque	N	SUP	F3	dados do paciente sem cadastro no movimento viram colunas do documento
+DBAMV	MVTO_VISITA_ACOM	TABELA	visita;acompanhante_internacao	N	HOT	F8	
+DBAMV	MVW_RES_SEMESTRAL_NA	MECANISMO	datamart	N	REL	F7	resumo semestral materializado
+DBAMV	MVW_RES_SEMESTRAL_TP_ATEND_NA	MECANISMO	datamart	N	REL	F7	resumo semestral materializado
+DBAMV	NAO_CONFORMIDADE	TABELA	inclusao_protocolo_evento	N	PEP	F7	desvio do protocolo com justificativa e checagem
+DBAMV	NATUREZA	TABELA	natureza_despesa	S	FIN	F8	
+DBAMV	NATUREZA_CIRURGIA	TABELA	carater_cirurgia	N	CC	F3	
+DBAMV	NATUREZA_DESPESA	TABELA	natureza_despesa;categoria_contabil_insumo	S	FIN	F8	
+DBAMV	NATUREZA_HOSPITALAR	MECANISMO	catalogo_publico:cnes	N	CAD	F3	natureza da organizacao vem do cadastro oficial
+DBAMV	NATUREZA_OPERACAO_DI	TABELA	natureza_operacao	N	FIN	F3	
+DBAMV	NATUREZA_PSIH	TABELA	caso_infeccao	N	QUA	F7	
+DBAMV	NAT_TIPDET_CON_PAG	TABELA	retencao_titulo;dado_fiscal_titulo_pagar	N	FIN	F3	
+DBAMV	NFSE_CONTROLE_CIDADE	TABELA	provedor_nota_municipal;municipio_provedor_nota	N	FIN	F3	
+DBAMV	NIVEL_AUTORIZADOR	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	NIVEL_HIERARQUIA	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	nivel de hierarquia do procedimento SUS
+DBAMV	NIVEL_SSM_ALT	MECANISMO	catalogo_publico:sigtap	N	SUS	F7	nivel do procedimento SUS alterado por portaria
+DBAMV	NIVEL_TAB_SIASUS	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	nivel do procedimento ambulatorial SUS
+DBAMV	NIVEL_VISAO_ORGANIZACIONAL	MECANISMO	datamart	N	REL	F7	nivel da visao organizacional para relatorios
+DBAMV	NOTA_CREDITO	TABELA	nota_credito_debito	N	FIN	F7	
+DBAMV	NOTA_CREDITO_DEBITO	TABELA	nota_credito_debito;nota_credito_debito_item	N	FIN	F7	
+DBAMV	NOTA_CREDITO_DEBITO_FNFI	TABELA	encontro_contas_item	N	FIN	F8	
+DBAMV	NOTA_CREDITO_DEBITO_TRIBUTO	TABELA	tributo_nota_credito_debito	N	FIN	F8	
+DBAMV	NOTA_CRE_DEB_ENTRADA_REF	TABELA	nota_credito_debito_item;nota_entrada	N	FIN	F8	nota de entrada referenciada vira chave no item
+DBAMV	NOTA_CRE_DEB_SUPRI	TABELA	nota_credito_debito	N	FIN	F7	
+DBAMV	NOTA_EMPENHO	TABELA	nota_empenho;nota_empenho_item	N	FIN	F8	
+DBAMV	NOTA_FISCAL	TABELA	nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_AUXILIAR	NAO		N	FIN		tecnico do fornecedor sem equivalente (auxiliar da geracao de nota no recebimento)
+DBAMV	NOTA_FISCAL_ELETRONICA_ASSINAT	MECANISMO	integracao	N	FIN	F3	estrutura do XML assinado da nota de servico
+DBAMV	NOTA_FISCAL_ELETRONICA_ATIVID	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_ELETRONICA_BASE	TABELA	nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_CANC	TABELA	evento_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_CONFIG	TABELA	configuracao_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_ITENS	TABELA	nota_servico_item	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_LOG_XML	MECANISMO	integracao	N	FIN	F3	log de geracao e envio do XML
+DBAMV	NOTA_FISCAL_ELETRONICA_LOT_ENV	TABELA	lote_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_LOT_RSP	TABELA	lote_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_SERVICO	TABELA	servico_municipal	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_TOTAIS	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_ELETRONICA_TRIB	TABELA	tributo_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISCAL_ELETRONICA_UTIL	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_ELETRON_ATIV_CTBT	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_ELET_NOT_FIS_DIGI	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_ELET_SIT_LOT_ENV	MECANISMO	integracao	N	FIN	F3	consulta de situacao do lote no provedor
+DBAMV	NOTA_FISCAL_ELET_SIT_LOT_RSP	MECANISMO	integracao	N	FIN	F3	resposta da consulta de situacao do lote
+DBAMV	NOTA_FISCAL_FFCV_CONVENIO_RPS	NAO		N	FIN		tecnico do fornecedor sem equivalente (filtro de tela por usuario)
+DBAMV	NOTA_FISCAL_FFCV_RPS	NAO		N	FIN		tecnico do fornecedor sem equivalente (pre-selecao de notas por usuario)
+DBAMV	NOTA_FISCAL_LOG_ARQUIVO	MECANISMO	integracao	N	FIN	F3	arquivos enviados e retornos do webservice
+DBAMV	NOTA_FISCAL_PARAM_CANCELA	MECANISMO	historico_entidade:nota_servico	N	FIN	F3	tentativas de cancelamento da nota com verificacoes
+DBAMV	NOTA_FISCAL_RECEBIMENTO	TABELA	vinculo_nota_faturamento	N	FIN	F3	nota gerada a partir do recebimento
+DBAMV	NOTA_FISCAL_TAB_NOT_FIS_DIGI	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTA_FISCAL_TRIBUTO	TABELA	tributo_nota_servico	N	FIN	F3	
+DBAMV	NOTA_FISC_ELET_NOT_FIS_DIGI_OK	MECANISMO	integracao	N	FIN	F3	retorno de sucesso do provedor municipal
+DBAMV	NOTA_FIS_ELET_NOT_FIS_DIGI_ERR	MECANISMO	integracao	N	FIN	F3	retorno de erro do provedor municipal
+DBAMV	NOTA_FIS_ELET_NOT_FIS_DIGI_FAT	MECANISMO	integracao	N	FIN	F3	estrutura do XML da nota de servico
+DBAMV	NOTIFICACAO	TABELA	notificacao_usuario;aviso_clinico	N	ADM	F3	
+DBAMV	NOTIFICACAO_ATRASO_EXA_LAB	TABELA	regra_alerta	N	ADM	F3	exames monitorados na regra de atraso
+DBAMV	NOTIFICACAO_ATRASO_LAB	TABELA	regra_alerta	N	ADM	F3	
+DBAMV	NOTIFICACAO_CCIH	TABELA	analise_cultura_positiva	N	QUA	F7	
+DBAMV	NOTIFICACAO_CENTRO_CIRURGICO	TABELA	notificacao_usuario	N	ADM	F3	
+DBAMV	NOTIFICACAO_DILIGENCIA	TABELA	envio_notificacao	N	ADM	F8	
+DBAMV	NOTIFICACAO_FORNECEDOR	TABELA	ocorrencia_fornecedor	N	SUP	F3	
+DBAMV	NOTIFICACAO_IMAGEM	TABELA	envio_notificacao	N	ADM	F8	
+DBAMV	NOTIFICACAO_LABORATORIO	TABELA	envio_notificacao	N	ADM	F8	
+DBAMV	NOTIFIC_AGDM_MOV_INV	TABELA	aviso_clinico	N	PEP	F3	
+DBAMV	NOT_FIS_ELET_NF_DIGI_OK_FAT	MECANISMO	integracao	N	FIN	F3	retorno do provedor municipal
+DBAMV	NOT_FIS_ELET_NOT_FIS_DIGI_RCIB	MECANISMO	integracao	N	FIN	F3	recibo do provedor municipal
+DBAMV	NPP_ADULTO	TABELA	formulacao_parenteral;terapia_nutricional	N	PEP	F3	
+DBAMV	NPP_NEO	TABELA	formulacao_parenteral;terapia_nutricional	N	PEP	F3	
+DBAMV	NPP_PEDIATRICO	TABELA	formulacao_parenteral;terapia_nutricional	N	PEP	F3	
+DBAMV	NUMERACAO_NOTA	TABELA	serie_documento_fiscal	N	FIN	F3	
+DBAMV	NUTRICIONISTA_EMPRESA	TABELA	estabelecimento_responsavel	N	CAD	F3	
+DBAMV	NUTRIENTE	TABELA	nutriente_referencia	N	HOT	F8	
+DBAMV	NUTRIENTE_ALIMENTO	TABELA	alimento_referencia_nutriente	N	HOT	F8	
+DBAMV	OBSERVACAO	NAO		N	SIS		sem valor de negocio (texto solto sem dono, sem dados)
+DBAMV	OBSERVACAO_BLOQUEIO_EXAME	TABELA	restricao_exame	N	SADT	F3	
+DBAMV	OBSERVACAO_PRE_DEFINIDA	TABELA	texto_padrao_resultado	N	SADT	F3	
+DBAMV	OCORRENCIA_ARQ_RET_PGTO	TABELA	retorno_bancario_item	N	FIN	F3	
+DBAMV	OCORRENCIA_DIETA	TABELA	ocorrencia_entrega_refeicao	N	HOT	F8	
+DBAMV	OCORRENCIA_LAY_ARQ	TABELA	ocorrencia_bancaria	N	FIN	F3	
+DBAMV	OCORRENCIA_RETORNO_COBRANCA	TABELA	ocorrencia_cobranca_bancaria	N	FIN	F7	
+DBAMV	OCO_MED	TABELA	ocorrencia_profissional	S	CAD	F7	
+DBAMV	OFICINA	TABELA	oficina_manutencao	N	HOT	F7	
+DBAMV	OFI_SERV	TABELA	oficina_manutencao_servico	S	HOT	F7	
+DBAMV	ONTIME_GRAFICO	MECANISMO	datamart	N	REL	F7	metas e producao semanais para grafico

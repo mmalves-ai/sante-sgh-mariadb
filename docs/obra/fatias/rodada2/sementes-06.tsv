@@ -1,0 +1,73 @@
+funcionalidade	decisao	entidades_rodada1
+FAT: contrato, preço e catálogos		0
+FAT: conta do paciente		0
+FAT: convênios, TISS e glosa		1
+FAT: particular e gestão		0
+FAT: repasse médico		0
+SUS: faturamento SUS		0
+**Total**		**1**
+1	F3: cada con	`contrato_pagador`, `contrato_tabela_vigencia`, `regra_percentual_cobranca`, `regra_desconto_grupo`, `regra_via_acesso`, `item_isento_cobranca`, `teto_cobranca`, `referencia_emissao_matmed`, `diaria_por_plano_local`, `calendario_entrega_fatura`
+2	F3: todo ite	`item_faturavel`, `grupo_faturamento`, `subgrupo_faturamento`, `classificacao_despesa`, `tipo_lancamento`, `local_cobranca`, `grupo_ato`
+3	F3: o coraçã	`tabela_preco`, `versao_tabela_preco`, `preco_procedimento`, `lote_reajuste`, `importacao_tabela`, `diferenca_importacao`
+4	F3: toda int	`preco_diaria_taxa`, `diaria_taxa_centro_custo`
+5	F3: o honorá	`indice_cobranca`, `valor_indice`, `valor_porte_medico`, `valor_porte_anestesico`
+6	F3: o mat/me	`edicao_referencia_matmed`, `item_referencia_matmed`, `preco_referencia_matmed`, `equivalencia_matmed_pagador`, `equivalencia_matmed_tuss`
+7	F3: a guia e	`terminologia_tiss`, `termo_tiss`, `versao_tiss`, `forma_envio_termo`
+8	F3: sem cred	`credenciamento_cobranca`, `excecao_credenciamento`, `codigo_prestador_pagador`, `usuario_codigo_prestador`
+9	F3: em uso n	`equivalencia_item_pagador`
+10	F3: modelado	`atributo_guia_pagador`, `valor_atributo_guia`
+11	F3: já const	—
+12	F3: a unidad	`conta_paciente`, `periodo_conta`, `situacao_conta`, `diagnostico_conta`, `dados_segurado_conta`, `etapa_conta`, `motivo_cancelamento_conta`
+13	F8: a regra 	—
+14	F3: a troca 	`transferencia_conta`, `transferencia_item_conta`
+15	F3: é a maio	`item_conta`, `participante_item_conta`, `grau_participacao`, `memoria_preco_item`
+16	F3: na Rede 	`regra_lancamento`, `item_regra_lancamento`, `excecao_regra_lancamento`, `kit_cobranca`, `item_kit_cobranca`, `origem_lancamento`
+17	F3: mexe no 	`horario_normal_tabela`, `acrescimo_horario_especial`
+18	F3: ajuste m	`ajuste_conta`, `motivo_ajuste_conta`, `alcada_ajuste`
+19	F8: acordo c	—
+20	F3: cirurgia	`pacote`, `versao_pacote`, `item_incluso_pacote`, `excecao_pacote`, `teto_pacote`, `pacote_conta`, `descaracterizacao_pacote`
+21	F3: em uso d	`auditoria_conta`, `versao_auditoria_conta`, `item_auditoria_conta`, `empresa_auditoria_externa`, `item_dispensado_auditoria`
+22	F3: trava o 	`tipo_pendencia_conta`, `pendencia_conta`, `protocolo_documento`, `item_protocolo_documento`
+23	F8: o caso r	—
+24	F3: toda con	`guia_pagador`, `item_guia_pagador`, `anexo_guia`, `pendencia_guia`, `historico_guia`, `sequencial_guia`, `responsavel_guia`
+25	F7: hospital	`solicitacao_opme`, `item_solicitacao_opme`, `aprovacao_opme`, `limite_opme_procedimento`
+26	F7: transaçã	`consulta_elegibilidade`, `comunicacao_beneficiario`, `recibo_comunicacao`
+27	F7: reduz gl	`solicitacao_autorizacao`, `item_solicitacao_autorizacao`, `resposta_autorizacao`, `item_resposta_autorizacao`, `consulta_situacao_autorizacao`
+28	F7: transaçõ	`cancelamento_guia`, `envio_documento_tiss`
+29	F3: o envio 	`guia_tiss`, `procedimento_guia_tiss`, `profissional_guia_tiss`, `despesa_guia_tiss`, `opme_guia_tiss`, `diagnostico_guia_tiss`, `regra_montagem_guia`
+30	F3: cada ope	`regra_apresentacao_tiss`, `valor_padrao_campo_tiss`
+31	F3: rotina m	`fatura_pagador`, `lote_tiss`, `conta_lote_tiss`, `arquivo_lote_tiss`, `protocolo_recebimento`, `situacao_protocolo`, `endpoint_tiss_pagador`
+32	F3: fecha o 	`competencia_faturamento`, `fechamento_competencia_pagador`, `competencia_usuario`
+33	F3: a baixa 	`demonstrativo_pagamento`, `item_demonstrativo_pagamento`, `deducao_demonstrativo`, `demonstrativo_analise_conta`, `conciliacao_item`
+34	F3: recupera	`glosa`, `item_glosa`, `motivo_glosa`, `recurso_glosa`, `item_recurso_glosa`, `desfecho_glosa`, `prazo_recurso_pagador`
+35	NAO: feito p	—
+36	F3: obrigaçã	`nota_fatura`
+37	F3: a contab	`regra_contabil_receita`, `lancamento_contabil_receita`
+38	F3: parâmetr	`parametro_faturamento`, `alcada_faturamento`, `preferencia_faturista`
+39	F3: o partic	`caixa`, `movimento_caixa`, `recebimento_particular`, `caucao`, `adiantamento_paciente`
+40	F3: já const	`orcamento_particular`, `item_orcamento_particular`, `modelo_orcamento`
+41	F3: o histór	`recibo`, `item_recibo`
+42	F8: indicado	—
+43	F3: paga os 	`regra_repasse`, `versao_regra_repasse`, `profissional_regra_repasse`, `grupo_repasse`
+44	F3: em uso m	`apuracao_repasse`, `item_repasse`, `lancamento_repasse`, `base_calculo_repasse`, `evento_repasse`, `estorno_repasse`, `integracao_contabil_evento`
+45	F3: obrigaçã	`rpa`, `lancamento_rpa`, `retencao_rpa`, `natureza_rendimento`, `deducao_irrf`
+46	F3: boa part	`cooperativa_medica`, `membro_cooperativa`, `prestador_terceiro`, `favorecido_repasse`
+47	F8: modelo d	—
+48	F8: valor re	—
+49	F8: refiname	—
+50	F3: a CIHA e	`competencia_sigtap`, `procedimento_sigtap`, `valor_procedimento_sigtap`, `grupo_sigtap`, `compatibilidade_sigtap`, `dominio_sigtap`, `atributo_procedimento_sigtap`
+51	F3: obrigató	`equivalencia_sigtap_item`, `remessa_ciha`, `registro_ciha`, `critica_ciha`
+52	F3: a CIHA l	`identificacao_sus_paciente`
+53	F7: base do 	`competencia_sus`, `critica_sus`, `parametro_sus`, `permissao_setor_sus`
+54	F7: o hospit	`programacao_orcamentaria_sus`, `teto_financeiro_sus`, `cota_procedimento_sus`
+55	F7: sem cont	`producao_ambulatorial_sus`, `item_producao_ambulatorial`, `remessa_bpa`, `solicitante_sus`
+56	F7: exigida 	`laudo_apac`, `laudo_apac_oncologia`, `laudo_apac_nefrologia`, `laudo_apac_auditiva`, `autorizacao_apac`, `apac`, `procedimento_apac`, `remessa_apac`
+57	F7: porta de	`laudo_internacao_sus`, `autorizacao_internacao_sus`, `faixa_numeracao_aih`
+58	F7: faturame	`conta_aih`, `procedimento_conta_aih`, `profissional_conta_aih`, `opm_conta_aih`, `diagnostico_conta_aih`, `remessa_sisaih`
+59	F7: a UTI SU	`leito_uti_habilitado`, `diaria_uti_sus`
+60	F7: fecha o 	`retorno_sus`, `rejeicao_sus`, `reapresentacao_sus`
+61	F7: a compat	`habilitacao_estabelecimento_sus`, `servico_estabelecimento_sus`
+62	F7: o hospit	`regra_repasse_sus`, `item_repasse_sus`
+63	F7: exigida 	`contrato_gestor_sus`, `meta_contratual_sus`, `indicador_contratual_sus`, `afericao_meta_sus`, `incentivo_contratual_sus`
+64	F8: só para 	—
+65	F8: só para 	—

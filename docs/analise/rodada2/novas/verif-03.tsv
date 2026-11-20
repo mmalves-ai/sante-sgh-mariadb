@@ -1,0 +1,2 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+tipo_registro_classificacao_risco	PEP	dominio	F3	Tipos de registro na linha do tempo da classificação de risco (classificação inicial, reclassificação, correção)	DBAMV SACR_TRIAGEM_ATENDIME_HIST_TIP (com dados); verificador 03

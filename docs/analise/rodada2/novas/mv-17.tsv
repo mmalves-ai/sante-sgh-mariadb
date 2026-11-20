@@ -1,0 +1,25 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+vinculo_supervisao_profissional	PEP	vinculo	F7	Profissional responsável por validar ou coassinar os documentos pendentes de outro (preceptor e residente, titular e auxiliar), com vigência	DBAMV PW_VINCULO_USUARIO
+qualificacao_plano_manutencao	HOT	item	F8	Qualificação técnica exigida por um plano de manutenção, com oficina, número de técnicos e homem-hora previstos	DBAMV QUALIFICACAO_PLANO
+rack_amostra_exame	SADT	vinculo	F7	Exames aceitos em cada rack de amostras, para alocação exclusiva na bancada	DBAMV RACK_EXA_LAB
+regra_alocacao_receita_custo	FIN	configuracao	F7	Regra que destina a receita faturada a um centro de custo conforme item, grupo, setor, serviço, especialidade ou profissional	DBAMV REG_ALOC_RECEITA; RATEIO_PADRAO
+receita_centro_custo_mensal	FIN	principal	F7	Receita apurada por centro de custo, fonte pagadora e competência (serviço, honorário, mat/med, glosa) para o resultado do custeio	DBAMV RECEITA_SETOR
+centro_distribuicao_amostra	SADT	principal	F7	Central que recebe e redistribui amostras entre setores de diagnóstico, com horário em que o roteamento fica suspenso	DBAMV RECEPCAO_AMOSTRA
+referencia_bibliografica_analise	SADT	dominio	F8	Referência normativa ou bibliográfica citada para fundamentar o resultado de uma análise laboratorial	DBAMV REFERENCIA_ANALISE
+regiao_geografica	CAD	dominio	F7	Região geográfica interna que agrupa municípios e bairros para relatórios e áreas de atuação	DBAMV REGIAO
+conta_aih_registro_civil	SUS	item	F7	Dados do registro civil do recém-nascido informados na conta de internação SUS: declaração, cartório, livro, folha, termo e matrícula	DBAMV REGISTRO_CIVIL
+regra_cobranca_atendimento	FAT	configuracao	F7	Percentual de cobrança ou coparticipação por componente, grupo ou item definido para um atendimento específico, com senha e vigência	DBAMV REGRA_ATENDIMENTO; REGRA_ATENDIMENTO_PRO_FAT
+regra_agrupamento_producao_sus	SUS	configuracao	F7	Como cada procedimento é agrupado na produção ambulatorial SUS: por setor, profissional ou vínculo, com vigência	DBAMV REGRA_AGRUPAMENTO_SUS
+alerta_contagem_celular	SADT	configuracao	F8	Condição sobre a contagem diferencial de células que dispara mensagem ao analista na bancada	DBAMV REGRA_CONTADOR_CELULA
+regra_redistribuicao_vaga	AGE	configuracao	F8	Libera um percentual das vagas não usadas de um serviço ou tipo de marcação para outro, dias antes da data, com vigência	DBAMV REGRA_DISTRIBUICAO_HORARIO
+regra_redistribuicao_vaga_profissional	AGE	vinculo	F8	Profissionais cujas agendas seguem a regra de redistribuição de vagas	DBAMV REGRA_DISTRIBUICAO_HOR_PRES
+regra_parcelamento_entrega_compra	SUP	configuracao	F7	Programação padrão de entregas parceladas da solicitação de compra por insumo, classe ou estoque, com intervalo e quantidade	DBAMV REGRA_PARCELA_ITSOL_COM
+regra_prioridade_etiqueta_amostra	SADT	configuracao	F8	Prioridade e prefixo na impressão de etiquetas de amostra conforme tipo de atendimento, tipo de fonte pagadora e terminal	DBAMV REGRA_PRIORIDADE_IMPR_ETIQ_AMO
+regra_prioridade_etiqueta_amostra_fonte_pagadora	SADT	vinculo	F8	Fontes pagadoras alcançadas por uma regra de prioridade de etiqueta de amostra	DBAMV REGRA_PRIORIDADE_IMPR_ETIQ_CON
+regra_transferencia_item_estabelecimento	FAT	configuracao	F7	Regra que leva itens lançados num estabelecimento para a conta de outro da rede, por fonte pagadora, grupo, item, setor ou profissional	DBAMV REGRA_PRO_FAT_EMPRESA
+rateio_orcamento_setor	FIN	configuracao	F8	Rateio de contas do orçamento de um centro de custo de origem para centros de destino	DBAMV REGRA_RATEIO_SETOR
+regra_servico_compartilhado	FIN	configuracao	F8	Centro de serviço compartilhado entre estabelecimentos e como seu custo é transferido entre origem e destino, com vigência	DBAMV REGRA_SETOR_CSC
+excecao_consumo_custo	FIN	configuracao	F8	Insumos, classes, setores ou fontes pagadoras excluídos da apropriação de consumo ao custo com base no faturamento	DBAMV REG_EXC_CONSUMO; REG_EXC_MATMED
+regra_importacao_custo	FIN	configuracao	F8	Setor e natureza de custo que recebem valores importados de outros módulos (repasse médico) no custeio, com vigência	DBAMV REG_IMP_FFCH
+conta_orcamentaria_composicao	FIN	item	F7	Composição de uma conta orçamentária a partir de outras contas ou premissas, com fórmula e observação	DBAMV REGRA_COMPOSICAO
+regra_servico_classificacao_sus	SUS	configuracao	F7	Serviço e classificação SUS atribuídos à produção conforme o serviço do hospital e o procedimento	DBAMV RELACAO_PROCED_SUS_SERVICO

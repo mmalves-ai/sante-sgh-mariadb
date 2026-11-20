@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	A800_LCTO_MENSALIDADE	MECANISMO	integracao	N	SGO	F8	tipos de receita enviados no arquivo de intercambio entre operadoras viram mapeamento do motor
+DBAPS	ACAO_AUTOMATICA	TABELA	regra_acao_automatica	S	ADM	F8	
+DBAPS	ACAO_AUTOMATICA_ENTIDADE	TABELA	regra_acao_automatica	S	ADM	F8	entidade alvo vira atributo da regra
+DBAPS	ACAO_AUTOMATICA_RESULTADO	TABELA	regra_acao_automatica_resultado	S	ADM	F8	
+DBAPS	ACAO_AUT_CONDICAO	TABELA	regra_acao_automatica_condicao	S	ADM	F8	
+DBAPS	ACAO_JUDICIAL	TABELA	acao_judicial_beneficiario;alerta_cadastral_operadora	S	SGO	F7	
+DBAPS	ACESSO_UNIMED_BRASIL	MECANISMO	integracao	N	SGO	F8	credencial de acesso a portal externo de intercambio
+DBAPS	ACIONISTAS_OPERADORA	TABELA	acionista_operadora	S	SGO	F7	
+DBAPS	ADIANTAMENTO	TABELA	adiantamento_rede	N	SGO	F7	
+DBAPS	ADMINISTRADOR_OPERADORA	TABELA	responsavel_operadora	N	SGO	F7	administradores com mandato e cargo
+DBAPS	ADM_CARTAO_CREDITO	TABELA	administradora_cartao	N	FIN	F3	
+DBAPS	AGENDA	TABELA	agenda_comercial	S	SGO	F8	
+DBAPS	AGENDA_ANEXOS	MECANISMO	arquivo	N	SGO	F8	anexo do compromisso comercial; metadado em agenda_comercial
+DBAPS	AGENDA_CARTEIRA	TABELA	solicitacao_cartao_beneficiario;lote_emissao_cartao	N	SGO	F7	agendamento de emissao de cartao por matricula ou contrato
+DBAPS	AGENDA_MATERIAL	TABELA	agenda_comercial_material	S	SGO	F8	
+DBAPS	AGRUPAMENTO_CARENCIA	TABELA	grupo_carencia	N	SGO	F7	
+DBAPS	AGRUPAMENTO_CONTRATO_COLETIVO	TABELA	agrupamento_reajuste_coletivo	N	SGO	F7	
+DBAPS	AGRUPA_PC_ANS	TABELA	mapa_conta_balancete_ans;quadro_economico_ans_conta	N	SGO	F7	
+DBAPS	AGRUP_PROCED	TABELA	grupo_procedimento_plano	S	SGO	F7	
+DBAPS	ALERTA	TABELA	alerta_cadastral_operadora	S	SGO	F7	
+DBAPS	ALTEMPRESA_CONTRATO	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	troca de contrato e plano do beneficiario vira movimento cadastral
+DBAPS	ALTERACAO_DIA_VECTO	TABELA	alteracao_vencimento_contrato	S	SGO	F7	
+DBAPS	ALTERACOES_VALORES_REAJUSTE	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	alteracao de percentual ou valor do reajuste individual
+DBAPS	ANEXO_CONTA_MEDICA	MECANISMO	arquivo	N	SGO	F7	documento anexo da guia; metadado em guia_conta_recebida
+DBAPS	ANS	TABELA	conferencia_cadastral_ans_item	N	SGO	F7	
+DBAPS	ANS_PARTOS_PROTOCOLO	TABELA	protocolo_beneficiario	N	SGO	F7	pedido de taxa de partos por prestador vira protocolo com resposta
+DBAPS	ANS_PARTO_ITEM_ASSIST	MECANISMO	parametro	N	SGO	F7	itens assistenciais usados na resposta de partos
+DBAPS	AREA_ATUACAO	TABELA	area_atuacao_medica	S	CAD	F7	
+DBAPS	ARQUIVO	MECANISMO	integracao	N	SGO	F7	area de troca de linhas de arquivo importado
+DBAPS	ARQUIVO_AUTORIZACAO_RECIPR	MECANISMO	integracao	N	SGO	F8	arquivo de autorizacoes de reciprocidade importado
+DBAPS	ARQUIVO_CONFERENCIA	TABELA	conferencia_cadastral_ans;conferencia_cadastral_ans_item	N	SGO	F7	
+DBAPS	ARQUIVO_CONTA_MEDICA	TABELA	lote_conta_recebida	N	SGO	F7	
+DBAPS	ARQUIVO_FATURA_TAXA	MECANISMO	integracao	N	SGO	F8	arquivo de fatura de taxas do intercambio
+DBAPS	ARQUIVO_GERACAO_XML_TISS	TABELA	troca_tiss_operadora	N	SGO	F7	
+DBAPS	ARQUIVO_SOLICITACAO_WEB	MECANISMO	arquivo	N	SGO	F8	documento do pedido no portal; metadado em solicitacao_portal_beneficiario
+DBAPS	ATEND_CALL_CENTER	TABELA	protocolo_beneficiario	N	SGO	F7	
+DBAPS	ATEND_CALL_CENTER_FASES	TABELA	protocolo_beneficiario_andamento	N	SGO	F7	
+DBAPS	ATEND_CALL_CENTER_FEEDBACK	TABELA	avaliacao_protocolo_beneficiario	S	SGO	F8	
+DBAPS	ATEND_CALL_CENTER_OCORRENCIA	TABELA	ocorrencia_protocolo_beneficiario	S	SGO	F7	
+DBAPS	ATEND_CALL_CENTER_SERVICO	TABELA	protocolo_beneficiario_servico	S	SGO	F7	
+DBAPS	ATIVOS_IMOB_OPERADORA	TABELA	ativo_garantidor_operadora	S	SGO	F7	
+DBAPS	ATIVOS_INVEST_OPERADORA	TABELA	ativo_garantidor_operadora	S	SGO	F7	
+DBAPS	ATI_MED	TABELA	funcao_equipe_cobranca	N	FAT	F3	grau de participacao com percentual de honorario
+DBAPS	AUDITOR	TABELA	auditor_plano	N	SGO	F7	
+DBAPS	AUDITORIA	MECANISMO	trilha_auditoria	N	ADM	F3	log generico de alteracao de tabela
+DBAPS	AUDIT_TABELAS	MECANISMO	trilha_auditoria	N	ADM	F3	log generico de transacao por tabela
+DBAPS	AUTORIZACAO_ANS	TABELA	indice_reajuste_plano	N	SGO	F7	percentual autorizado pela ANS por periodo
+DBAPS	AUTORIZACAO_ANS_TIPO_PLANO	TABELA	indice_reajuste_plano	N	SGO	F7	
+DBAPS	AUTORIZACAO_RECIPROCIDADE	TABELA	pedido_autorizacao_plano;beneficiario_intercambio	S	SGO	F7	
+DBAPS	AUTORIZADOR	TABELA	usuario;alcada_autorizador_plano	S	ADM	F3	
+DBAPS	AUTORIZ_DISTR_CONTRATO	TABELA	regra_distribuicao_analise	S	SGO	F8	
+DBAPS	AUTO_CADELETRONICO_GERAL	MECANISMO	parametro	N	SGO	F8	padroes da importacao eletronica de propostas
+DBAPS	AUTO_CADELETRONICO_TAXA	TABELA	lancamento_programado_contrato	N	SGO	F7	taxa cobrada no cadastro eletronico vira lancamento programado
+DBAPS	AUTO_CALL_CENTER_IMP_USU	MECANISMO	parametro	N	SGO	F7	abertura automatica de protocolo na importacao de beneficiario
+DBAPS	AUTO_EXCLUDENTE	TABELA	regra_critica_conta	N	SGO	F7	procedimentos excludentes na mesma guia
+DBAPS	AUTO_EXCLUDENTE_HEAD	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	AUTO_EXCLUDENTE_PRINCIPAL	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	AUTO_EXCLUDENTE_REJEITADO	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	AUTWEB_ALTERACAO_SENHA_LOG	MECANISMO	trilha_auditoria	N	ADM	F3	troca de senha no portal
+DBAPS	AUTWEB_CONFIG	MECANISMO	parametro	N	SGO	F7	parametros do portal de autorizacao
+DBAPS	AUTWEB_CONFIG_CHAVES_EXIBICAO	MECANISMO	parametro	N	SGO	F7	chaves de exibicao do portal
+DBAPS	AUTWEB_DIAS_EXCECAO_PREST	TABELA	permissao_portal_prestador	N	SGO	F7	janela excepcional de emissao de guia por dia
+DBAPS	AUTWEB_EXC_CARTEIRA	TABELA	cartao_beneficiario	N	SGO	F7	excecao de digito verificador vira marca no cartao
+DBAPS	AUTWEB_HORARIO_EXCECAO_PREST	TABELA	permissao_portal_prestador	N	SGO	F7	prestadores liberados fora do horario
+DBAPS	AUTWEB_LINK	MECANISMO	framework	N	SIS	F7	links favoritos da tela do portal
+DBAPS	AUTWEB_LOG_CARTAO_MAGNETICO	TABELA	consulta_elegibilidade_recebida	N	SGO	F7	leitura do cartao no prestador e uma consulta de elegibilidade
+DBAPS	AUTWEB_MURAL	TABELA	aviso_portal_prestador	N	SGO	F7	
+DBAPS	AUTWEB_PRESTADOR_ARQUIVO	TABELA	aviso_portal_prestador	N	SGO	F7	arquivos para download publicados ao prestador
+DBAPS	AUTWEB_PROCEDIMENTO_FAVORITO	TABELA	favorito_usuario	N	ADM	F3	
+DBAPS	AUTWEB_TOKEN	TABELA	token_atendimento_beneficiario	S	SGO	F7	
+DBAPS	AUX_HISTORICO	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	BAIXA_EVENTO_LIQUIDAR	TABELA	lote_pagamento_rede_item	N	SGO	F7	
+DBAPS	BANCO	TABELA	banco;carteira_cobranca	N	FIN	F3	
+DBAPS	BANCO_LOGOTIPO	MECANISMO	arquivo	N	FIN	F3	logotipo do banco; metadado em banco
+DBAPS	BATCH_JOB_EXECUTION	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BATCH_JOB_EXECUTION_CONTEXT	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BATCH_JOB_EXECUTION_PARAMS	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BATCH_JOB_INSTANCE	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BATCH_STEP_EXECUTION	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BATCH_STEP_EXECUTION_CONTEXT	MECANISMO	framework	N	SIS	F3	agendador de jobs
+DBAPS	BENEFICIARIO_ESTORNO_COMISSAO	TABELA	comissao_venda_item	N	SGO	F8	estorno de comissao por saida precoce
+DBAPS	BENEFICIARIO_TRANSITO	TABELA	beneficiario_intercambio	S	SGO	F8	
+DBAPS	BENEFICIARIO_TRANSITO_HABITUAL	TABELA	beneficiario_intercambio	S	SGO	F8	periodo de habitualidade vira vigencia do registro
+DBAPS	BENEFICIARIO_TRANSITO_ME	TABELA	beneficiario_intercambio	S	SGO	F8	empresa do grupo vira escopo do registro
+DBAPS	BOLETO	TABELA	boleto	N	FIN	F7	
+DBAPS	BOLETO_BANCARIO	TABELA	boleto	N	FIN	F7	
+DBAPS	B_APRESENTACAO	TABELA	item_referencia_matmed	N	FAT	F3	
+DBAPS	B_LABORATORIO	TABELA	item_referencia_matmed	N	FAT	F3	fabricante vira atributo do item de referencia
+DBAPS	B_MEDICAMENTOS	TABELA	item_referencia_matmed	N	FAT	F3	
+DBAPS	B_PRECOS	TABELA	preco_referencia_matmed	N	FAT	F3	
+DBAPS	CADASTRO_RETORNO	TABELA	leiaute_bancario	N	FIN	F3	
+DBAPS	CADU	TABELA	operadora_congenere	S	SGO	F8	
+DBAPS	CALENDARIO_CAMARA_COMPENSACAO	TABELA	calendario_compensacao_intercambio	S	SGO	F8	
+DBAPS	CALENDARIO_CONTA	TABELA	calendario_pagamento_rede	N	SGO	F7	
+DBAPS	CALENDARIO_CONTA_EXCECAO	TABELA	calendario_pagamento_rede	N	SGO	F7	
+DBAPS	CALL_CENTER_ANEXO	MECANISMO	arquivo	N	SGO	F7	anexo do protocolo; metadado em protocolo_beneficiario
+DBAPS	CALL_CENTER_EVENTO	TABELA	protocolo_beneficiario_andamento	N	SGO	F7	tipo de evento da mensagem vira lista fixa do andamento
+DBAPS	CALL_CENTER_MENSAGEM	TABELA	protocolo_beneficiario_andamento	N	SGO	F7	
+DBAPS	CAMPANHA_DESCONTO_PARCELA	TABELA	campanha_venda_desconto	N	SGO	F8	
+DBAPS	CAMPANHA_ESTRUTURA_VENDA	TABELA	campanha_venda_participante	S	SGO	F8	
+DBAPS	CAMPANHA_VENDA	TABELA	campanha_venda	N	SGO	F8	
+DBAPS	CAMPOS_TABELA	MECANISMO	integracao	N	SGO	F7	definicao de campos de leiaute de arquivo
+DBAPS	CAMPO_CONDICAO	TABELA	regra_acao_automatica_condicao	S	ADM	F8	campos disponiveis viram lista do motor de acoes
+DBAPS	CANAL_MSG_RADAR	TABELA	envio_ans_item	N	SGO	F7	questionario de adocao do padrao de troca enviado a ANS
+DBAPS	CANC_CONT_COL_ADESAO	TABELA	cancelamento_contrato_plano	N	SGO	F7	
+DBAPS	CARATER_ATENDIMENTO	MECANISMO	catalogo_publico:tiss	N	SGO	F7	
+DBAPS	CARENCIA_PLANO	TABELA	carencia_plano	N	SGO	F7	
+DBAPS	CARENCIA_PROC_USUARIO	TABELA	carencia_aplicada	N	SGO	F7	
+DBAPS	CARENCIA_USUARIO	TABELA	carencia_aplicada	N	SGO	F7	
+DBAPS	CARGO	TABELA	cargo_dirigente_operadora	S	SGO	F7	
+DBAPS	CARTAO_CREDITO	TABELA	contrato_forma_cobranca	N	SGO	F7	cartao de debito da cobranca do beneficiario
+DBAPS	CARTAS	TABELA	modelo_comunicacao_beneficiario	N	SGO	F7	
+DBAPS	CARTEIRA	TABELA	cartao_beneficiario	N	SGO	F7	
+DBAPS	CARTEIRA_CONTRATO	TABELA	carteira_contratos_plano	S	SGO	F7	
+DBAPS	CATEGORIA	TABELA	natureza_prestador_rede	N	SGO	F7	categoria do prestador na rede (inferida pelas colunas, sem descritivo)
+DBAPS	CATEGORIA_BENEFICIARIO	TABELA	categoria_beneficiario	N	SGO	F7	
+DBAPS	CATEGORIA_VENDEDOR	TABELA	categoria_vendedor	N	SGO	F8	
+DBAPS	CAT_REPORTS	TABELA	relatorio	N	REL	F3	catalogo de relatorios por categoria
+DBAPS	CBHPM_CAP1	TABELA	termo_terminologia	N	INTG	F3	tabela de honorarios de referencia carregada como terminologia
+DBAPS	CBHPM_CAP2	TABELA	termo_terminologia	N	INTG	F3	tabela de honorarios de referencia carregada como terminologia
+DBAPS	CBHPM_CAP3	TABELA	termo_terminologia	N	INTG	F3	tabela de honorarios de referencia carregada como terminologia
+DBAPS	CBHPM_CAP4	TABELA	termo_terminologia	N	INTG	F3	tabela de honorarios de referencia carregada como terminologia
+DBAPS	CBHPM_VAL_PORTE	TABELA	porte_procedimento	N	FAT	F3	valor de cada porte da tabela de referencia
+DBAPS	CBO	MECANISMO	catalogo_publico:cbo	N	CAD	F3	
+DBAPS	CEDAE_COL_PRD	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	CEDAE_CONS_PRD	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	CENTRO_DE_CUSTO	TABELA	centro_custo	N	FIN	F3	
+DBAPS	CEP_BAIRROS	TABELA	bairro	N	CAD	F3	
+DBAPS	CEP_LOCALIDADES	TABELA	municipio_ibge	N	CAD	F3	
+DBAPS	CEP_LOGRADOUROS	TABELA	logradouro_cep	N	CAD	F3	
+DBAPS	CEP_UF	TABELA	unidade_federativa	N	CAD	F3	
+DBAPS	CFG_COBRANCA	TABELA	carteira_cobranca	N	FIN	F7	variaveis de cobranca por conta corrente
+DBAPS	CFG_OCORRENCIA	TABELA	ocorrencia_cobranca_bancaria	N	FIN	F7	
+DBAPS	CFG_RETORNO	TABELA	leiaute_bancario	N	FIN	F3	
+DBAPS	CFG_SEGMENTO	TABELA	leiaute_bancario	N	FIN	F3	
+DBAPS	CFG_TIPO_CONTRATO	TABELA	tipo_contrato_plano	N	SGO	F7	configuracao por tipo vira atributos do tipo
+DBAPS	CFG_USUARIO_SGU_MVSAUDE	TABELA	usuario_acao_excecao	N	ADM	F3	liberacao de analise concedida ao usuario
+DBAPS	CG_REF_CODES	MECANISMO	framework	N	SIS	F3	dominios de valores de tela do fornecedor
+DBAPS	CHAT	TABELA	mensagem_pedido_autorizacao	S	SGO	F8	
+DBAPS	CHAT_MENSAGEM	TABELA	mensagem_pedido_autorizacao	S	SGO	F8	
+DBAPS	CHEFIA_COMERCIAL	TABELA	equipe_venda	N	SGO	F8	
+DBAPS	CHEFIA_COMERCIAL_ABRANGENCIA	TABELA	equipe_venda	N	SGO	F8	abrangencia da chefia vira escopo da equipe
+DBAPS	CHEFIA_COMERCIAL_VENDEDOR	TABELA	equipe_venda_membro;regra_comissao_parcela	N	SGO	F8	
+DBAPS	CID	MECANISMO	catalogo_publico:cid10	N	CAD	F3	
+DBAPS	CID_CONTROLE_CRONICO	TABELA	criterio_elegibilidade_programa	N	SGO	F8	CID recorrente que indica condicao cronica
+DBAPS	CLASSE_SOCIAL	TABELA	classe_socioeconomica	S	CAD	F8	
+DBAPS	CLASSIFICACAO_METASTASE	TABELA	termo_terminologia	N	INTG	F3	classificacao de estadiamento de tumor como terminologia
+DBAPS	CLASSIFICACAO_NODULO	TABELA	termo_terminologia	N	INTG	F3	classificacao de estadiamento de tumor como terminologia
+DBAPS	CLASSIFICACAO_OCORRENCIA_GUIA	TABELA	critica_autorizacao	N	SGO	F7	classificacao de ocorrencia na analise da guia
+DBAPS	CLASSIFICACAO_TUMOR	TABELA	termo_terminologia	N	INTG	F3	classificacao de estadiamento de tumor como terminologia
+DBAPS	CLIENTE	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	CLONA_CONTRATO_MVS	MECANISMO	historico_entidade:contrato_plano	N	SGO	F7	registro da copia de um contrato para outro
+DBAPS	CNES	MECANISMO	catalogo_publico:cnes	N	CAD	F3	
+DBAPS	CODIGO_DESPESA	MECANISMO	catalogo_publico:tiss	N	SGO	F7	
+DBAPS	COMARCA	TABELA	comarca_judicial	S	CAD	F7	
+DBAPS	COMN_OPE_RADAR	TABELA	envio_ans_item	N	SGO	F7	questionario de adocao do padrao de troca enviado a ANS
+DBAPS	COMPETENCIA_RATEIO_CUSTO	TABELA	apuracao_fator_custeio	S	SGO	F8	
+DBAPS	CONCOMITANTE	TABELA	regra_valoracao_item	N	SGO	F7	procedimento concomitante com percentual proprio
+DBAPS	CONCOMITANTE_VALOR	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	CONECTIVIDADE_RADAR	TABELA	envio_ans_item	N	SGO	F7	questionario de adocao do padrao de troca enviado a ANS
+DBAPS	CONFIGURAR_TABELAS	MECANISMO	framework	N	SIS	F3	metadado de tabelas alteraveis
+DBAPS	CONFIG_CONTAS_ATOS_COOPERAT	TABELA	regra_ato_cooperativo	S	SGO	F8	
+DBAPS	CONFIG_CONTA_CONTAB_FECH	TABELA	conferencia_saldo_fechamento	S	FIN	F7	
+DBAPS	CONFIG_CONTA_REG_AUX	TABELA	regra_livro_auxiliar_ans	S	SGO	F7	
+DBAPS	CONFIG_CONTA_REG_AUX_FILTRO	TABELA	regra_livro_auxiliar_ans	S	SGO	F7	
+DBAPS	CONFIG_CONTRATO_RECEITA	TABELA	lancamento_programado_contrato	N	SGO	F7	taxa administrativa especifica do contrato
+DBAPS	CONFIG_EVENTO_RESSARC_FRANQUIA	TABELA	regra_franquia_plano	N	SGO	F7	lancamentos usados no ressarcimento de franquia
+DBAPS	CONFIG_FORNECEDOR_IMPOSTO	TABELA	regra_retencao;enquadramento_tributario_participante	N	FIN	F3	
+DBAPS	CONFIG_GERA_LOG	MECANISMO	framework	N	SIS	F3	liga ou desliga log por rotina
+DBAPS	CONFIG_INSTALACAO_MVSAUDE	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	CONFIG_INSTALACAO_UNIMED	NAO		N	SGO		tecnico do fornecedor sem equivalente
+DBAPS	CONFIG_LIVRO_AUXILIAR	TABELA	regra_livro_auxiliar_ans	S	SGO	F7	
+DBAPS	CONFIG_PAGAMENTO_UNIMED	TABELA	operadora_congenere;calendario_compensacao_intercambio	S	SGO	F8	vinculo da parceira com a camara de acerto
+DBAPS	CONFIG_RATEIO_CUSTO	TABELA	regra_fator_custeio	S	SGO	F8	
+DBAPS	CONFIG_RATEIO_CUSTO_CONTAS	TABELA	regra_fator_custeio	S	SGO	F8	
+DBAPS	CONFIG_REA_CALL_CENTER	TABELA	servico_atendimento_operadora	N	SGO	F7	tipos de reclamacao tratados pela central
+DBAPS	CONFIG_RECLAMACAO_CALL_CENTER	TABELA	servico_atendimento_operadora	N	SGO	F7	tipos de atendimento tidos como reclamacao
+DBAPS	CONFIG_RELAT_COBERT_ASSIST	TABELA	regra_livro_auxiliar_ans	S	SGO	F7	
+DBAPS	CONFIG_REPASSE_PGTO_PRESTADOR	TABELA	regra_favorecido_pagamento_rede	S	SGO	F7	
+DBAPS	CONFIG_REP_TP_PRESTADOR	TABELA	tipo_prestador_rede	N	SGO	F7	documento e destino contabil do pagamento por tipo
+DBAPS	CONFIG_TISS	MECANISMO	parametro	N	SGO	F7	padroes da troca eletronica da operadora
+DBAPS	CONFIG_TOLERANCIA_MENS	MECANISMO	parametro	N	SGO	F7	tolerancia de diferenca na mensalidade
+DBAPS	CONFIG_VALIDADE_CARTEIRA	TABELA	regra_validade_cartao	N	SGO	F7	
+DBAPS	CONFIG_VALIDA_LOTE_COBRANCA	MECANISMO	parametro	N	SGO	F7	chaves de validacao do lote recebido
+DBAPS	CONF_FILTROS_EXTRATORES_CTS	MECANISMO	integracao	N	SGO	F7	filtros de extracao de arquivos contabeis
+DBAPS	CONF_SINCRONICAZAO_PESSOA	MECANISMO	integracao	N	SGO	F7	de-para de sincronizacao de pessoa
+DBAPS	CONSELHO_PROFISSIONAL	TABELA	conselho_classe	N	CAD	F3	
+DBAPS	CONSELHO_PROFISSIONAL_TISS	TABELA	conselho_classe	N	CAD	F3	
+DBAPS	CONSOLIDA_ADIANTA	TABELA	adiantamento_rede	N	SGO	F7	consolidado de adiantamento por fatura
+DBAPS	CONSOLIDA_FATOR_CUSTEIO	TABELA	apuracao_fator_custeio	S	SGO	F8	
+DBAPS	CONSOLIDA_PERCENTUAL_ATO	TABELA	apuracao_ato_cooperativo	S	SGO	F8	
+DBAPS	CONSOLIDA_SINISTRA	MECANISMO	datamart	N	REL	F7	consolidacao de sinistralidade
+DBAPS	CONSULTA_MEDALLIANCE	MECANISMO	integracao	N	SGO	F8	consultas importadas de parceiro externo
+DBAPS	CONTAH_REJEITADA	TABELA	guia_conta_recebida;critica_conta_recebida	N	SGO	F7	
+DBAPS	CONTAH_REJEITADA_LOG	TABELA	critica_conta_recebida	N	SGO	F7	
+DBAPS	CONTAS_MEDICAS_MENS_CONTRATO	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	CONTAS_MEDICAS_MENS_CONT_MIGRA	TABELA	lancamento_coparticipacao	N	SGO	F7	coparticipacao migrada de sistema anterior entra na mesma tabela
+DBAPS	CONTATO_OPERADORA	TABELA	canal_atendimento_operadora	N	SGO	F7	
+DBAPS	CONTA_CORRENTE	TABELA	conta_bancaria;carteira_cobranca	N	FIN	F3	
+DBAPS	CONTA_CORRENTE_CARTEIRA	TABELA	carteira_contratos_plano	S	SGO	F7	
+DBAPS	CONTA_CORRENTE_USUARIO	TABELA	lancamento_conta_beneficiario	S	SGO	F7	
+DBAPS	CONTA_HOSPITALAR	TABELA	guia_conta_recebida	N	SGO	F7	
+DBAPS	CONTA_HOSPITALAR_DECLARACAO	TABELA	guia_conta_recebida_declaracao	S	SGO	F7	
+DBAPS	CONTA_HOSP_AUD_ENF	TABELA	auditoria_conta_recebida	N	SGO	F7	
+DBAPS	CONTA_HOSP_AUD_MED	TABELA	auditoria_conta_recebida	N	SGO	F7	
+DBAPS	CONTA_MAG_CONTA_ERRO	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_FIM_LOTE	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_HEAD_CONTA	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_HEAD_REM	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_ITCONTA	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_ITCONTA_ERRO	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_TOTAL_CONTA	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MAG_TRAILLER_REM	MECANISMO	integracao	N	SGO	F7	leiaute magnetico de contas de entidade de classe
+DBAPS	CONTA_MEDICA	TABELA	guia_conta_recebida	N	SGO	F7	
+DBAPS	CONTA_MEDICA_COBRANCA_BENEFC	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	CONTA_MEDICA_CONTESTACAO	TABELA	contestacao_cobranca_intercambio	S	SGO	F8	
+DBAPS	CONTA_MEDICA_EQUIPE_TISS	MECANISMO	integracao	N	SGO	F7	area de troca da importacao de guias
+DBAPS	CONTA_MEDICA_GLOSA	TABELA	glosa_conta_recebida	N	SGO	F7	
+DBAPS	CONTA_MEDICA_LIBERACAO_BENEFC	TABELA	lancamento_coparticipacao	N	SGO	F7	liberacao da cobranca ao beneficiario vira situacao do lancamento
+DBAPS	CONTA_MEDICA_PROCEDIMENTO_TISS	MECANISMO	integracao	N	SGO	F7	area de troca da importacao de guias
+DBAPS	CONTA_MEDICA_TISS	MECANISMO	integracao	N	SGO	F7	area de troca da importacao de guias
+DBAPS	CONTA_UCO	TABELA	guia_conta_recebida_item	N	SGO	F7	valor de custo operacional por item da guia
+DBAPS	CONTRATO	TABELA	contrato_plano;contrato_forma_cobranca	N	SGO	F7	
+DBAPS	CONTRATOS_A_CANCELAR	TABELA	cancelamento_contrato_plano	N	SGO	F7	
+DBAPS	CONTRATO_ACRES_DESC	TABELA	lancamento_programado_contrato	N	SGO	F7	
+DBAPS	CONTRATO_AGRUPAMENTO	TABELA	agrupamento_reajuste_contrato	N	SGO	F7	
+DBAPS	CONTRATO_ANEXO	MECANISMO	arquivo	N	SGO	F7	documento do contrato; metadado em contrato_plano

@@ -1,0 +1,17 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+moeda	FIN	dominio	F7	Moeda usada em valores de títulos, tabelas de preço e consolidação, com símbolo, casas decimais e arredondamento	DBAMV.MOEDA
+ligacao_tarifada	FAT	principal	F7	Ligação telefônica feita do ramal do paciente, com data, duração, destino e valor para cobrança na conta	DBAMV.LIGACAO_PACIENTE
+servico_lavanderia_cliente	HOT	principal	F8	Lavagem de roupa prestada a cliente externo, com peso, lavanderia, etapas, valor, entrega e cancelamento	DBAMV.LAVAGEM_ROUPA_CLIENTE
+modalidade_analise_produto	SUP	dominio	F8	Modalidade de análise técnica de produto (amostra, documental, laboratorial) na qualificação para compra	DBAMV.MODALIDADE_ANALISE
+parecer_padrao_analise_produto	SUP	dominio	F8	Texto padrão do parecer por modalidade e resultado da análise técnica de produto	DBAMV.MENSAGEM_PADRAO
+laudo_apac_odontologia	SUS	item	F7	Complemento odontológico do laudo de APAC: anomalias, oclusão, condição bucal e tratamento proposto	DBAMV.LAUDO_APAC_ODONTOLOGIA
+motivo_compra_publica	SUP	dominio	F7	Motivos padronizados de cancelamento de pedido e de desclassificação de fornecedor em compras públicas	DBAMV.JUSTIFICATIVA_COMPRA_PUBLICO
+motivo_liberacao_resultado	SADT	dominio	F7	Motivo exigido para liberar resultado fora da faixa plausível, com situação ativa	DBAMV.JUSTIFICATIVA_LIB_ABSURDO
+lote_etiqueta_coleta	SADT	principal	F7	Lote de etiquetas de coleta pré-impressas para setor solicitante externo, com faixa numérica e quem gerou	DBAMV.LOTE_ETIQUETA_EXTERNA
+local_entrega_resultado	SADT	dominio	F7	Local padrão para entrega de laudos e resultados, com endereço e contato	DBAMV.LOCAL_PADRAO_ENTREGA
+estabelecimento_externo	CAD	principal	F3	Hospital ou serviço externo de destino de transferência ou encaminhamento, com endereço, telefone e CNES	DBAMV.LOC_TRANS
+meio_transporte	INT	dominio	F3	Meio de transporte do paciente na chegada, na transferência ou na alta (próprio, ambulância, aéreo)	DBAMV.MEIO_TRANSPORTE
+livro_registro_setor	PEP	principal	F7	Livro eletrônico de registros e ocorrências do setor, aberto por data, com os lançamentos de cada turno	DBAMV.LIVRO_ELETRONICO
+servico_contratavel	SUP	principal	F3	Serviço que pode ser comprado ou contratado, com unidade, tributação, conta contábil e tempo previsto	DBAMV.MANU_SERV
+local_fisico	CAD	principal	F7	Local físico (sala, andar, ambiente) ligado a setor, com responsável e código de barras para patrimônio	DBAMV.LOCALIDADE
+regra_pis_cofins_conta	FIN	configuracao	F7	CST de PIS e COFINS e natureza do crédito por conta contábil, para a escrituração das contribuições	DBAMV.IT_VISAO_CONTABIL

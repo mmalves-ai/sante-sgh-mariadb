@@ -1,0 +1,2 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+boleto_parcela	FIN	vinculo	F7	Parcela a receber ou mensalidade cobrada em um boleto, quando um boleto agrupa várias cobranças, com valor de cada uma	DBAPS ITBOLETO, BOLETO (agrupador de mensalidades); DBAMV LOTE_REC_ITCON_REC

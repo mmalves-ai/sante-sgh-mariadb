@@ -1,0 +1,279 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+CMESCORE	4	SUS	Faturamento SUS > Contratualização > Domínios > Escores	dominio	migrar-crud	Escores de avaliação de metas da contratualização SUS
+CMINCENTIVO	1	SUS	Faturamento SUS > Contratualização > Incentivos	cadastro	migrar-crud	Incentivos financeiros da contratualização; só default
+CMPERIODO	16	SUS	Faturamento SUS > Contratualização > Domínios > Periodicidade	dominio	migrar-crud	Periodicidades de aferição de metas contratuais
+CMREDEASSIST	6	SUS	Faturamento SUS > Contratualização > Domínios > Redes assistenciais	dominio	carga-referencia	Redes de atenção do MS: Cegonha, RUE, RAPS, Deficiência, Crônicas
+CMTIPOCOMPLEXIDADESP	7	SUS	Faturamento SUS > Contratualização > Domínios > Complexidade	dominio	migrar-crud	Tipos de complexidade de serviços contratualizados
+CMTPAFERICAO	4	SUS	Faturamento SUS > Contratualização > Domínios > Tipos de aferição	dominio	migrar-crud	Formas de aferição de metas (quantitativa, qualitativa)
+CMTPCONTRATO	3	SUS	Faturamento SUS > Contratualização > Domínios > Esfera do contrato	dominio	migrar-crud	Esfera do gestor contratante: federal, estadual, municipal
+CMTPDADOS	3	SUS	Faturamento SUS > Contratualização > Domínios > Tipos de dado	dominio	migrar-crud	Tipos de dado de indicador/incentivo da contratualização
+CMTPINDICADOR	8	SUS	Faturamento SUS > Contratualização > Domínios > Tipos de indicador	dominio	migrar-crud	Grupos de indicadores: qualidade da assistência, gestão clínica, humanização
+CMTPITEMINDIC	7	SUS	Faturamento SUS > Contratualização > Domínios > Itens de indicador	dominio	migrar-crud	Tipos de item que compõem os indicadores contratuais
+CMTPORCAMENTO	2	SUS	Faturamento SUS > Contratualização > Domínios > Tipos de orçamento	dominio	migrar-crud	Componentes do orçamento contratual (pré-fixado, pós-fixado)
+FACSEPRO	1001	SUS	Cadastros > SUS > Serviço/classificação por procedimento	dominio	carga-referencia	Compatibilidade SIGTAP procedimento x serviço/classificação para BPA/APAC
+FAHEMOACEVASC	3	SUS	Faturamento SUS > APAC > Domínios > Acesso vascular	dominio	carga-referencia	Acesso vascular da APAC de hemodiálise: FAV, cateter curto/longo
+FAHEMOCARTRAT	4	SUS	Faturamento SUS > APAC > Domínios > Característica do tratamento	dominio	carga-referencia	Característica do tratamento dialítico na APAC
+FAHEMOCONTRAN	4	SUS	Faturamento SUS > APAC > Domínios > Contraindicação a transplante	dominio	carga-referencia	Contraindicação a transplante renal na APAC de hemodiálise
+FAHEMOSITTRAN	4	SUS	Faturamento SUS > APAC > Domínios > Situação de transplante	dominio	carga-referencia	Situação na lista de transplante para APAC de hemodiálise
+FAMEDSOL	1	SUS	Faturamento SUS > Cadastros > Médicos solicitantes externos	cadastro	migrar-crud	Médico solicitante externo (CNS, CRM) para BPA/APAC; 1 registro
+FAPARAM	1	SUS	Administração > Parâmetros > Faturamento SUS ambulatorial (BPA)	configuracao	migrar-crud	Parâmetros do BPA: órgão, competência, prestador, teto, versão
+FAPARAMA	1	SUS	Administração > Parâmetros > Faturamento SUS APAC	configuracao	migrar-crud	Parâmetros da APAC: competência, digitação obrigatória, cotas
+FAPARUSU	1	SUS	Administração > Parâmetros > Faturamento SUS por usuário	configuracao	migrar-crud	Competência de trabalho do usuário no faturamento SUS ambulatorial
+FCCODCON	768	FAT	Faturamento > Cadastros > Médicos credenciados por convênio	cadastro	migrar-crud	Código do médico no convênio, dados bancários e valor de consulta
+FCCPSCON	33	FAT	Faturamento > Cadastros > Código do prestador por convênio e setor	cadastro	migrar-crud	Código do hospital/setor no convênio (TISS) com conta bancária
+FCCRECUN	12	FAT	Faturamento > Cadastros > Crédito de contas por médico	vinculo	migrar-crud	Regra de crédito de contas por médico e convênio (12 linhas)
+FCCTAAUD	1001	FAT	Faturamento > Auditoria de contas	movimento	migrar-movimento	Cópia auditada do cabeçalho da conta (pré/pós auditoria)
+FCCTAEXT	1001	FAT	Faturamento > Contas do paciente	movimento	migrar-movimento	Contas de convênio/particular (externas e internação), ~214 mil, 2020-2026
+FCCTAEXT_FCTISSLOTEPROT	1001	FAT	Faturamento > Remessa / Lotes TISS > Contas do lote	vinculo	migrar-movimento	Liga cada conta ao lote TISS em que foi remetida
+FCCTRLANCIHA	1001	SUS	Faturamento SUS > CIHA > Procedimento SIGTAP dos itens	vinculo	migrar-movimento	Equivalência SIGTAP dos itens de conta para informar CIHA ao SUS
+FCDIAEXT	1001	FAT	Faturamento > Contas > Dados do segurado (externo)	movimento	migrar-movimento	Dados funcionais do segurado servidor por conta externa (cargo, unidade, região)
+FCDIAINT	1001	FAT	Faturamento > Contas > Dados do segurado (internação)	movimento	migrar-movimento	Dados funcionais do segurado servidor por conta de internação
+FCEMPAUDPLANSERV	9	FAT	Faturamento > Cadastros > Empresas de auditoria	cadastro	migrar-crud	Empresas de auditoria médica externa dos convênios
+FCFAIPAC	1001	FAT	Faturamento > Contas > Períodos parciais	movimento	migrar-movimento	Períodos (faixas data/hora) das contas parciais do paciente
+FCFECMES	678	FAT	Faturamento > Fechamento de competência por convênio	movimento	migrar-movimento	Fechamento mensal por convênio, competências 2022-2026
+FCGUIAS	1001	FAT	Faturamento > Contas > Guias TISS	movimento	migrar-movimento	Guias principal/secundária por conta e ato com senha e tipo TISS
+FCHORATE	7	FAT	Faturamento > Cadastros > Horário normal por tabela	configuracao	migrar-crud	Horário de expediente por tabela para cobrança de urgência
+FCINTEGRPA	1001	FAT	Repasse médico > Integração faturamento x repasse	integracao	migrar-movimento	Itens faturados enviados ao repasse médico, 10/2023-06/2026
+FCIRREGULARID	218	FAT	Faturamento > Contas > Irregularidades	historico	migrar-leitura	Pendências/irregularidades de conta com período; usado 2020-2022
+FCLANAUD	1001	FAT	Faturamento > Auditoria de contas > Itens	movimento	migrar-movimento	Itens da conta auditada com valores, glosas e motivo
+FCLANEXT	1001	FAT	Faturamento > Lançamentos da conta	movimento	migrar-movimento	Itens da conta (procedimentos, taxas, mat/med), pagamento, glosa, recurso
+FCLANEXTSEQITEM	1001	FAT	Faturamento > Lançamentos > Sequencial TISS	vinculo	migrar-movimento	Sequencial do item na guia TISS e vínculo com autorização
+FCORCAME	1	FAT	Faturamento > Orçamentos de particular	movimento	migrar-leitura	Orçamento de procedimento particular; único registro de 2020
+FCORCPAD	1	FAT	Faturamento > Orçamentos > Modelos padrão	cadastro	migrar-crud	Modelo de orçamento padrão por procedimento e acomodação; 1 linha
+FCORLAME	1	FAT	Faturamento > Orçamentos > Honorários da equipe	cadastro	migrar-crud	Honorários da equipe médica no orçamento padrão; 1 linha
+FCPARAM	1	FAT	Administração > Parâmetros > Faturamento	configuracao	migrar-crud	Parâmetros do faturamento: numeração, competência, NFS-e, integrações
+FCPARUSU	403	FAT	Administração > Parâmetros > Faturamento por usuário	configuracao	migrar-crud	Preferências e competência do faturista por usuário (403)
+FCPORANE	213	FAT	Faturamento > Tabelas de preço > Portes anestésicos	cadastro	migrar-crud	Valores de porte anestésico por tabela e data de vigência
+FCPROCUNIBHMED	760	FAT	Faturamento > Tabelas de preço > Procedimentos Unimed	dominio	carga-referencia	Lista de procedimentos médicos (códigos TUSS) de tabela Unimed
+FCRECIBO	1001	FAT	Faturamento > Recibos de particular	historico	migrar-leitura	Recibos de pagamento particular/honorários, 2020 a 05/2021
+FCREFUND	1001	FAT	Faturamento > Tabelas de preço > Itens de referência	cadastro	carga-referencia	Tabelas de preço de referência por código (~1,08 mi; não é reembolso)
+FCTISSLOTEPROT	1001	FAT	Faturamento > Remessa / Lotes TISS	movimento	migrar-movimento	Lotes TISS com protocolo e demonstrativo de recurso, 2020-2026
+FCTPMOTGLOSA	20	FAT	Cadastros > Domínios > Grupos de motivo de glosa	dominio	carga-referencia	Grupos de motivo de glosa TISS (elegibilidade, guia, material etc.)
+FCTPPGTONFSE	5	FAT	Cadastros > Domínios > Condição de pagamento NFS-e	dominio	migrar-crud	Condição de pagamento da NFS-e: à vista, prazo, cartões
+FGTBTPCREDOR	4	SUS	Cadastros > SUS > Tipos de credor	dominio	carga-referencia	Tipo de credor AIH/BPA: CPF/CNS, CNPJ, CNES hospital, terceiros
+FHCLASSIFDIAG	3	SUS	Faturamento SUS > AIH > Domínios > Classificação do diagnóstico	dominio	carga-referencia	Classificação de diagnóstico secundário: preexistente ou adquirido
+FHJUSTPACDESC	3	SUS	Faturamento SUS > AIH > Domínios > Justificativa paciente sem identificação	dominio	carga-referencia	Justificativas SISAIH para paciente sem documento (desacordado, óbito)
+FHLEITOUTI	12	SUS	Faturamento SUS > AIH > Leitos de UTI habilitados	cadastro	migrar-crud	Quantidade de leitos UTI habilitados por tipo e unidade
+FHLEITOUTITP	19	SUS	Faturamento SUS > AIH > Domínios > Tipos de UTI	dominio	carga-referencia	Tipos de UTI SUS (adulto, pediátrica, neonatal, coronariana, COVID)
+FIPARAM	1	SUS	Administração > Parâmetros > Faturamento SUS AIH	configuracao	migrar-crud	Parâmetros da AIH: entidade, competência, laudo, cobranças
+FIPARUSU	2	SUS	Administração > Parâmetros > AIH por usuário	configuracao	migrar-crud	Competência de trabalho do usuário no faturamento AIH
+HTPROSUS	1001	SUS	Faturamento SUS > SIGTAP > Histórico de procedimentos	historico	carga-referencia	Histórico de atributos SIGTAP por competência (até 11/2013)
+PFPORTALOPCAO	8	FAT	Faturamento > Portal do prestador > Opções	dominio	migrar-crud	Funções do portal do prestador (autorização, faturamento, protocolo)
+PFTPATEND	5	FAT	Faturamento > Portal do prestador > Tipos de atendimento	dominio	migrar-crud	Tipos de prestador/atendimento no portal (ambulatório, clínica, hospital)
+RECONTAS	1001	FAT	Faturamento > Contas do atendimento externo	movimento	migrar-movimento	Controle de contas externas por registro, convênio e competência
+REPROEXT	1001	FAT	Atendimento > Procedimentos extras do atendimento externo	movimento	migrar-movimento	Procedimentos adicionais da ficha externa, ligados a lançamento de conta
+RICONTAS	1001	FAT	Faturamento > Contas de internação (parciais)	movimento	migrar-movimento	Contas parciais da internação por competência, gerada por trigger
+RIPROEXT	103	FAT	Internação > Procedimentos extras/APAC	historico	migrar-leitura	Procedimentos extras da conta de internação (103, datas sentinela)
+RPDEDUTIVEL	7	FAT	Repasse médico > Domínios > Tipos de dedução	dominio	carga-referencia	Deduções de IR: previdência, pensão, dependentes, simplificado
+RPEMPCALCIMP	1	FAT	Repasse médico > Configurações > Empresas para cálculo cumulativo	configuracao	migrar-crud	Empresas consideradas no cálculo cumulativo de impostos do RPA
+RPEVENTO	93	FAT	Repasse médico > Eventos de RPA	cadastro	migrar-crud	Eventos de repasse/RPA (consultas, exames, honorários) com regras fiscais
+RPEVENTOESOC	36	FAT	Repasse médico > Eventos > Natureza eSocial	configuracao	migrar-crud	Natureza de rubrica e incidência INSS/IRRF por evento de RPA
+RPINTEVE	76	FAT	Repasse médico > Integração contábil dos eventos	configuracao	migrar-crud	Mapeamento evento de RPA para grupo/item financeiro-contábil
+RPLANEVE	1001	FAT	Repasse médico > Lançamento de eventos	movimento	migrar-movimento	Lançamentos de repasse por prestador (médico/empresa), 2020-06/2026
+RPLANEVE_COMPOSICAOBASE	1001	FAT	Repasse médico > Lançamentos > Base de cálculo	movimento	migrar-movimento	Composição da base de cálculo e impostos de cada lançamento
+RPLANEVE_TBCBOPRO	1001	FAT	Repasse médico > Lançamentos > Profissional	vinculo	migrar-movimento	Profissional (CBO) beneficiário de cada lançamento de repasse
+RPLANRPA	1001	FAT	Repasse médico > RPA > Lançamentos do RPA	vinculo	migrar-movimento	Lançamentos de evento agrupados em cada RPA
+RPPARAM	1	FAT	Repasse médico > Parâmetros do RPA	configuracao	migrar-crud	Parâmetros do RPA: numeração, modelo, contabilização, IRRF
+RPPARUSUEMP	24	FAT	Repasse médico > Parâmetros por usuário	configuracao	migrar-crud	Empresa e competência de processamento do RPA por usuário
+RPRENDISENTO	11	FAT	Repasse médico > Domínios > Rendimentos isentos	dominio	carga-referencia	Tipos de rendimento isento de IR (tabela Receita/eSocial)
+RPRPA	1001	FAT	Repasse médico > RPAs gerados	movimento	migrar-movimento	Recibos de pagamento de autônomo emitidos (5,2 mil, 2020-06/2026)
+RPRPA_TBCBOPRO	1001	FAT	Repasse médico > RPA > Profissional	vinculo	migrar-movimento	Profissional (CBO) beneficiário de cada RPA
+RPTIPOPRESTADOR	6	FAT	Repasse médico > Domínios > Tipos de prestador	dominio	migrar-crud	Tipos de prestador: médico, empresa médica, fornecedor, vendedor
+SIREFCON	1001	FAT	Faturamento > Convênios > De-para de exames por convênio	vinculo	migrar-crud	Código de faturamento do exame por convênio e tipo de conta
+TBALTSUS	20	SUS	Cadastros > SUS > Motivos de saída/permanência	dominio	carga-referencia	Motivos de alta/permanência SUS para AIH/APAC
+TBAPACS	1001	SUS	Cadastros > SUS > Compatibilidade APAC	dominio	carga-referencia	Compatibilidade procedimento principal x secundário de APAC (SIGTAP)
+TBASSOCI	1	SUS	Cadastros > SUS > Domínios de laudo	dominio	migrar-leitura	Domínio de associação do laudo SUS (só NÃO INFORMADO)
+TBATOAIH	41	SUS	Cadastros > SUS > Atos AIH (legado)	obsoleta	migrar-leitura	Atos profissionais AIH da tabela SIH anterior ao SIGTAP
+TBATRIBCOMPL	108	SUS	Cadastros > SUS > SIGTAP > Atributos complementares	dominio	carga-referencia	Atributos complementares do SIGTAP com competência
+TBATRIBPRO	1001	SUS	Cadastros > SUS > SIGTAP > Atributos por procedimento	vinculo	carga-referencia	Atributos complementares por procedimento SIGTAP (até 201311)
+TBCARATERATEND	7	FAT	Cadastros > TISS > Caráter do atendimento	dominio	carga-referencia	Caráter do atendimento (eletivo, urgência, acidentes) TISS/SUS
+TBCBOANS	277	FAT	Cadastros > TISS > CBO ANS	dominio	carga-referencia	CBO da terminologia TISS com vigência
+TBCBOANS_TBVERSAOTISS	1001	FAT	Cadastros > TISS > CBO por versão TISS	vinculo	carga-referencia	CBO ANS válidos por versão TISS
+TBCIDPRO	1001	SUS	Cadastros > SUS > Compatibilidade CID x procedimento (legado)	vinculo	carga-referencia	Compatibilidade CID x procedimento SUS da tabela anterior
+TBCIDSEC	607	SUS	Cadastros > SUS > SIGTAP > CID secundário	vinculo	carga-referencia	CIDs secundários permitidos por procedimento SIGTAP
+TBCLASER	148	SUS	Cadastros > SUS > Classificações de serviço (legado)	dominio	carga-referencia	Classificações de serviço SUS anteriores ao SIGTAP
+TBCLASSC	8	FAT	Cadastros > Convênios > Classes de convênio	dominio	migrar-crud	Classe do convênio (particular, plano, SUS, gratuito)
+TBCLASSI	9	FAT	Cadastros > Domínios > Classificação de despesa	dominio	migrar-crud	Classificação de itens/despesas com referência TISS
+TBCLSERV	248	SUS	Cadastros > SUS > SIGTAP > Serviço/classificação	dominio	carga-referencia	Classificações de serviço especializado SIGTAP por competência
+TBCLSPRO	1001	SUS	Cadastros > SUS > SIGTAP > Serviço por procedimento	vinculo	carga-referencia	Serviço/classificação exigidos por procedimento SIGTAP
+TBCODATI	14	FAT	Cadastros > Convênios > Códigos de prestador e acesso a portal	cadastro	migrar-crud	Código do hospital/prestador e login de portal por convênio (senhas)
+TBCODATI_TBUSERS	1001	FAT	Cadastros > Convênios > Códigos de prestador > Usuários	vinculo	migrar-crud	Usuários autorizados a usar cada código de prestador
+TBCODSER	50	SUS	Cadastros > SUS > Serviços (legado)	dominio	carga-referencia	Serviços especializados SUS (tabela anterior ao SIGTAP)
+TBCOMCID	1001	SUS	Cadastros > SUS > Compatibilidade CID (legado)	vinculo	carga-referencia	Compatibilidade CID x procedimento SUS legado
+TBCOMHAB	1001	SUS	Cadastros > SUS > Compatibilidade habilitação (legado)	vinculo	carga-referencia	Compatibilidade procedimento x habilitação SUS legado
+TBCOMPLEXSUS	4	SUS	Cadastros > SUS > Complexidades	dominio	carga-referencia	Níveis de complexidade SIGTAP
+TBCOMPRO	1001	SUS	Cadastros > SUS > Compatibilidade OPM (legado)	vinculo	carga-referencia	Compatibilidade procedimento x OPM SUS com validade
+TBCOMREG	1001	SUS	Cadastros > SUS > SIGTAP > Compatibilidades	vinculo	carga-referencia	Compatibilidades entre procedimentos/registros SIGTAP (até 201311)
+TBCONSBRASINATIVO	3	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Opções de consistência de item Brasíndice inativo
+TBCONSIDCALCVLR	3	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Data considerada no cálculo de valor (emissão, entrada, lançamento)
+TBCONVCOBTXPA	5	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Opções de cobrança de taxa por porte anestésico
+TBCONVCONSMAT	3	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Opções de consistência de lançamento de material
+TBCONVEN_TBTISSPARDEF	1001	FAT	Cadastros > Convênios > Parâmetros TISS padrão	configuracao	migrar-crud	Valores default de campos TISS por convênio
+TBCONVMEDREQATD	7	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Exigência de médico requisitante por tipo de recepção
+TBCONVPERCTAPAC	4	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Aplicação de percentual de taxa em pacotes
+TBCOOPER	242	FAT	Faturamento > Repasse > Cooperativas médicas	cadastro	migrar-crud	Cooperativas com dados bancários e alíquotas de retenção
+TBCOSPPROF	4	FAT	Cadastros > Convênios > Parâmetros (enum)	dominio	migrar-leitura	Profissionais considerados em cobrança (titular, auxiliares, anestesista)
+TBCRECOO	345	FAT	Faturamento > Repasse > Médicos da cooperativa	vinculo	migrar-crud	Vínculo médico x cooperativa para repasse
+TBCREMED	185	FAT	Faturamento > Repasse > Credenciamento médico por convênio	vinculo	migrar-crud	Credenciamento do médico por convênio e contas
+TBCREPRS	44	FAT	Faturamento > Repasse > Credenciamento de prestador por convênio	vinculo	migrar-crud	Prestador de serviço credenciado por convênio e ato
+TBCSEPRO	1001	SUS	Cadastros > SUS > Serviço por procedimento (legado)	vinculo	carga-referencia	Serviço/classificação por procedimento SUS legado
+TBCTRTAT	3	FAT	Cadastros > Domínios > Tabelas de tipo de atendimento	dominio	migrar-leitura	Tabelas de tipo de atendimento (padrão SUS, TUSS, presencial)
+TBDRS	1	SUS	Cadastros > SUS > Diretorias regionais de saúde	dominio	migrar-crud	Diretoria regional de saúde para AIH/APAC (só NÃO INFORMADO)
+TBDTHCDC	3	FAT	Cadastros > Tabelas de preço > Diárias/taxas por centro de custo	configuracao	migrar-crud	Diária/taxa associada a centro de custo e tabela
+TBEMIREF	165	FAT	Cadastros > Convênios > Referências de emissão por classificação	configuracao	migrar-crud	Referência de código/descrição/valor (PMC/PFB) na conta por convênio
+TBEMIREFMATMED	1	FAT	Cadastros > Convênios > Referência de emissão por item	configuracao	migrar-crud	Exceção de referência PMC/PFB por item mat/med e convênio
+TBENTCON	12	FAT	Cadastros > Convênios > Calendário de entrega e pagamento	configuracao	migrar-crud	Dias de entrega de fatura e pagamento por convênio
+TBFABOPM	1	SUS	Cadastros > SUS > Fabricantes de OPM	cadastro	migrar-crud	Fabricantes de OPM para AIH (1 registro)
+TBFAEPRO	1001	SUS	Cadastros > SUS > Faixas por procedimento (legado)	vinculo	carga-referencia	Faixa de valor/tarifa por procedimento SIA legado
+TBFAETAR	19	SUS	Cadastros > SUS > Faixas de tarifa (legado)	dominio	carga-referencia	Faixas de tarifa SIA legado com limites
+TBFONTE_ORCAMENTARIA_SUS	4	SUS	Cadastros > SUS > Fontes orçamentárias	dominio	carga-referencia	Fontes orçamentárias SUS por competência
+TBFONTE_PAGADORA	12	FAT	Cadastros > Domínios > Fontes pagadoras	dominio	carga-referencia	Fonte pagadora do atendimento (SUS, convênio, particular, DPVAT)
+TBFORMULAPAGTO	16	FAT	Cadastros > Convênios > Fórmulas de pagamento	configuracao	migrar-crud	Percentuais por via de acesso em procedimentos múltiplos
+TBFORSUS	415	SUS	Cadastros > SUS > SIGTAP > Formas de organização	dominio	carga-referencia	Formas de organização SIGTAP por subgrupo
+TBGRAUPARTPROC	20	FAT	Cadastros > TISS > Grau de participação	dominio	carga-referencia	Grau de participação do profissional TISS
+TBGRUAIH	573	SUS	Cadastros > SUS > Grupos AIH (legado)	obsoleta	carga-referencia	Grupos de procedimentos da tabela SIH anterior ao SIGTAP
+TBGRUATE	20	SUS	Cadastros > SUS > Grupos de atendimento (legado)	dominio	carga-referencia	Grupos de atendimento SIA (gestante, diabético, acidentado)
+TBGRUHAB	19	SUS	Cadastros > SUS > Grupos de habilitação	dominio	carga-referencia	Grupos de habilitações SUS combinadas
+TBGRUPRO	1001	SUS	Cadastros > SUS > Grupo por procedimento (legado)	vinculo	carga-referencia	Grupo SIA/SIH por procedimento legado
+TBGRUSUS	10	SUS	Cadastros > SUS > SIGTAP > Grupos	dominio	carga-referencia	Grupos de procedimentos SIGTAP
+TBHABILI	216	SUS	Cadastros > SUS > Habilitações (legado)	dominio	carga-referencia	Habilitações SUS anteriores ao SIGTAP
+TBHABSUS	260	SUS	Cadastros > SUS > SIGTAP > Habilitações	dominio	carga-referencia	Habilitações SIGTAP com competência
+TBHISTTABDTH	95	FAT	Cadastros > Convênios > Vigência de tabelas de diárias	vinculo	migrar-crud	Períodos de vigência da tabela de diárias/taxas por convênio
+TBHISTTABMM	135	FAT	Cadastros > Convênios > Vigência de tabelas mat/med	vinculo	migrar-crud	Períodos de vigência da tabela mat/med por convênio
+TBHISTTABTHME	102	FAT	Cadastros > Convênios > Vigência de honorários externos	vinculo	migrar-crud	Vigência da tabela de honorários de atendimento externo por convênio
+TBHISTTABTHMI	101	FAT	Cadastros > Convênios > Vigência de honorários internos	vinculo	migrar-crud	Vigência da tabela de honorários de internação por convênio
+TBINCPRO	1001	SUS	Cadastros > SUS > Incrementos por habilitação (legado)	vinculo	carga-referencia	Incrementos de procedimento por habilitação SUS, 2008-2013
+TBINDICE	242	FAT	Cadastros > Convênios > Índices (CH/UCO/filme)	cadastro	migrar-crud	Valores de índices de cobrança por convênio com vigência
+TBINDPRO	5	FAT	Cadastros > Convênios > Índice por procedimento	cadastro	migrar-crud	Valor de índice específico por procedimento e convênio
+TBIRREGCTRCTA	4	FAT	Configurações > Faturamento > Controle de irregularidades	dominio	migrar-leitura	Opção de controle de conta com irregularidade
+TBIRREGULARID	39	FAT	Faturamento > Auditoria de contas > Irregularidades	cadastro	migrar-crud	Tipos de irregularidade de conta/prontuário (falta CID, assinatura)
+TBIRREGULARID_TBMODULO	43	FAT	Faturamento > Auditoria de contas > Irregularidades por módulo	vinculo	migrar-crud	Módulos em que cada irregularidade se aplica
+TBITEATE	31	FAT	Cadastros > Domínios > Tipos de atendimento	dominio	carga-referencia	Tipos de atendimento por tabela (consulta, exame, internação)
+TBITEPRO	30	SUS	Cadastros > SUS > Itens de programação (legado)	dominio	carga-referencia	Itens de programação físico-orçamentária SIA legado
+TBLOCCON	19	FAT	Cadastros > Faturamento > Locais de conta	cadastro	migrar-crud	Locais de cobrança da conta (UTI, apartamento, PA, exames)
+TBLOCPRI	49	SUS	Cadastros > Domínios SUS > Localização do tumor primário	dominio	carga-referencia	Localizações de tumor primário para APAC oncologia
+TBLOCSUS	4	SUS	Cadastros > SUS > SIGTAP > Locais de realização	dominio	carga-referencia	Local de realização do procedimento SUS (estabelecimento, domicílio, via pública)
+TBMATMED	1001	FAT	Cadastros > Tabelas de preço > Materiais e medicamentos (Brasíndice/Simpro/TUSS)	cadastro	carga-referencia	Catálogo mat/med por tabela de referência e operadora (~910 mil itens)
+TBMOCOBP	1001	SUS	Cadastros > SUS > APAC > Motivos de cobrança por procedimento	vinculo	carga-referencia	Compatibilidade procedimento APAC x motivo de cobrança
+TBMODALI	7	SUS	Cadastros > SUS > SIGTAP > Modalidades	dominio	carga-referencia	Modalidades de atendimento SIGTAP (ambulatorial, hospitalar, hospital-dia)
+TBMODSUS	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x modalidade	vinculo	carga-referencia	Procedimento SIGTAP x modalidade por competência
+TBMOTCOB	39	SUS	Cadastros > Domínios SUS > Motivos de cobrança APAC	dominio	carga-referencia	Motivos de cobrança APAC (OPM, deficiência auditiva etc.)
+TBMOTGLO	677	FAT	Cadastros > TISS/ANS > Motivos de glosa	dominio	carga-referencia	Motivos de glosa TISS com vigência e regra de reapresentação
+TBNIVEL	9	SUS	Cadastros > Domínios SUS > Níveis hierárquicos de unidade	dominio	carga-referencia	Níveis hierárquicos de unidades de saúde SIA/SUS
+TBNIVSUS	8	SUS	Cadastros > SUS > SIGTAP > Níveis de complexidade	dominio	carga-referencia	Níveis de complexidade SUS (PAB, média, alta)
+TBORIGEM	1001	SUS	Cadastros > SUS > SIGTAP > Origem do procedimento	vinculo	carga-referencia	Procedimento SIGTAP x código de origem SIA/SIH
+TBPACTHM	335	FAT	Cadastros > Tabelas de preço > Pacotes > Composição	cadastro	migrar-crud	Composição de pacotes de procedimentos por convênio e local
+TBPERMEM	1001	FAT	Cadastros > Convênios > Regras de mat/med	configuracao	migrar-crud	Percentual/valor fixo de mat/med por convênio e tabela
+TBPERTHM	1001	FAT	Cadastros > Convênios > Regras de honorários	configuracao	migrar-crud	Percentuais de CH, anestesia, filme e horário por convênio
+TBPORMED	1001	FAT	Cadastros > Tabelas de preço > Portes médicos	cadastro	migrar-crud	Valor do porte médico por convênio e vigência (2015-2025)
+TBPRAPAC	1001	SUS	Cadastros > SUS > APAC > Compatibilidades (legado)	obsoleta	migrar-leitura	Compatibilidade APAC principal x secundário anterior ao SIGTAP
+TBPREPRO	1001	SUS	Cadastros > SUS > SIA > Procedimento x prestador (legado)	obsoleta	migrar-leitura	Procedimento SIA antigo x natureza do prestador
+TBPRESER	164	FAT	Cadastros > Prestadores de serviço terceiros	cadastro	migrar-crud	Prestadores terceiros com dados de repasse, custo e CNES
+TBPRESSE	8	SUS	Cadastros > Domínios SUS > Natureza do prestador	dominio	carga-referencia	Natureza jurídica do prestador SIA (privado, público, filantrópico)
+TBPRESTP	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x tipo de prestador	vinculo	carga-referencia	Procedimento SIGTAP x tipo de prestador permitido
+TBPRESUS	8	SUS	Cadastros > Domínios SUS > Tipos de prestador	dominio	carga-referencia	Tipo de prestador SUS (privado, público, filantrópico, sindicato)
+TBPROAIH	1001	SUS	Cadastros > SUS > Tabela SIH antiga	obsoleta	migrar-leitura	Tabela de procedimentos AIH anterior ao SIGTAP
+TBPROCTO	1001	FAT	Cadastros > Tabelas de preço > Procedimentos por tabela	cadastro	migrar-crud	Procedimentos de cada tabela de preço (AMB, CBHPM, TUSS, própria)
+TBPROHAB	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x habilitação	vinculo	carga-referencia	Compatibilidade procedimento SIGTAP x habilitação por competência
+TBPROLEI	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x leito	vinculo	carga-referencia	Procedimento SIGTAP x especialidade de leito por competência
+TBPROLOC	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x local	vinculo	carga-referencia	Procedimento SUS x local de realização
+TBPRONIV	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x complexidade	vinculo	carga-referencia	Procedimento SUS x nível de complexidade
+TBPROREG	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x instrumento	vinculo	carga-referencia	Procedimento SIGTAP x instrumento de registro (BPA, AIH, APAC)
+TBPROREGCOMP	233	SUS	Cadastros > SUS > SIGTAP > Instrumento complementar	vinculo	carga-referencia	Procedimento SIGTAP x instrumento de registro complementar
+TBPROSUS	1001	SUS	Cadastros > SUS > Tabela unificada (SIGTAP)	cadastro	carga-referencia	Procedimentos SIGTAP com valores, atributos e competências
+TBREFMEMTUSS	1001	FAT	Cadastros > TISS/ANS > De-para mat/med x TUSS	vinculo	carga-referencia	Equivalência código Brasíndice/Simpro x TUSS com vigência
+TBREFUNI	1001	FAT	Cadastros > Tabelas de preço > Equivalência mat/med por tabela	vinculo	migrar-crud	Códigos de referência de mat/med por tabela de operadora
+TBREGSUS	9	SUS	Cadastros > SUS > SIGTAP > Instrumentos de registro	dominio	carga-referencia	Instrumentos de registro SUS (BPA, AIH, APAC, RAAS)
+TBREPGER	1001	FAT	Repasse > Regras de repasse médico	configuracao	migrar-crud	Regras de repasse por convênio, procedimento, especialidade e horário
+TBREPGER_TBCBOPRO	1001	FAT	Repasse > Regras de repasse > Profissionais	vinculo	migrar-crud	Profissionais aos quais a regra de repasse se aplica
+TBRPATPREPASSE	2	FAT	Cadastros > Domínios > Tipo de favorecido do repasse	dominio	migrar-crud	Favorecido do repasse: CRM ou fornecedor
+TBSEGUIA	41	FAT	Faturamento > TISS > Sequenciais de guia/lote por convênio	configuracao	migrar-crud	Contador de transação e lote TISS por convênio e tipo de guia
+TBSERSUS	65	SUS	Cadastros > SUS > SIGTAP > Serviços	dominio	carga-referencia	Serviços especializados SUS por competência
+TBSIPAC	71	SUS	Cadastros > SUS > SIPAC (legado)	obsoleta	migrar-leitura	Grupos SIPAC de alta complexidade anteriores ao SIGTAP
+TBSIPHOS	54	SUS	Cadastros > SUS > SIPAC > Credenciamento (legado)	obsoleta	migrar-leitura	Credenciamento do hospital em grupos SIPAC antigos
+TBSRVCON	9	FAT	Cadastros > Domínios > Serviços do convênio	dominio	migrar-crud	Tipos de serviço contratados com convênio (internação, laboratório, imagem)
+TBSTATUSPROCESSA	2	FAT	Cadastros > Domínios > Status de processamento	dominio	migrar-crud	Processado/não processado na classificação de autorização Unimed BH
+TBSUBDES	166	FAT	Cadastros > Convênios > Descontos por subgrupo	configuracao	migrar-crud	Percentual de desconto por grupo/subgrupo de despesa
+TBSUBSUS	70	SUS	Cadastros > SUS > SIGTAP > Subgrupos	dominio	carga-referencia	Subgrupos da tabela SIGTAP por competência
+TBSUBTIPFINANC	58	SUS	Cadastros > SUS > SIGTAP > Subtipos de financiamento	dominio	carga-referencia	Subtipos de financiamento SIGTAP
+TBSUSCBO	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x CBO	vinculo	carga-referencia	Compatibilidade procedimento SIGTAP x CBO por competência
+TBSUSCID	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x CID	vinculo	carga-referencia	Compatibilidade procedimento SIGTAP x CID-10 por competência
+TBSUSOPM	1001	SUS	Cadastros > SUS > SIGTAP > Procedimento x OPM	vinculo	carga-referencia	Compatibilidade procedimento x OPM e quantidade por instrumento
+TBTABATO	29	FAT	Cadastros > Domínios > Grupos de ato médico	dominio	migrar-crud	Grupos de ato (patologia clínica, radiologia, cardiologia, filme)
+TBTABDTH	1001	FAT	Cadastros > Tabelas de preço > Diárias, taxas e gases	cadastro	migrar-crud	Diárias, taxas, gases e pacotes por tabela com equivalência TUSS
+TBTABSIA	1001	SUS	Cadastros > SUS > Tabela SIA antiga	obsoleta	migrar-leitura	Tabela de procedimentos SIA anterior ao SIGTAP (até 2007)
+TBTABTHM	1001	FAT	Cadastros > Tabelas de preço > Honorários e procedimentos	cadastro	migrar-crud	Procedimentos por tabela com CH, porte, filme e equivalência TUSS
+TBTABTHMTUSS	1001	FAT	Cadastros > TISS/ANS > Terminologia TUSS de procedimentos	dominio	carga-referencia	Termos TUSS de procedimentos com vigência
+TBTIPATE	9	SUS	Cadastros > Domínios SUS > Tipos de atendimento BPA	dominio	carga-referencia	Tipos de atendimento SIA (urgência, primeira consulta, vacinação)
+TBTIPCOPART	2	FAT	Cadastros > Domínios > Tipos de coparticipação	dominio	migrar-crud	Coparticipação por valor ou percentual
+TBTIPFINANC	8	SUS	Cadastros > SUS > SIGTAP > Tipos de financiamento	dominio	carga-referencia	Tipos de financiamento SUS (PAB, MAC, FAEC)
+TBTIPLEI	38	SUS	Cadastros > SUS > SIGTAP > Especialidades de leito	dominio	carga-referencia	Especialidades/tipos de leito SUS por competência
+TBTIPPLANO	2	FAT	Cadastros > Convênios > Planos/acomodação	cadastro	migrar-crud	Tipos de plano por convênio (apartamento, enfermaria) e coparticipação
+TBTIPPLCONV	76	FAT	Cadastros > Convênios > Diária por plano e local	vinculo	migrar-crud	Diária aplicada por convênio, tipo de plano e local de conta
+TBTIPPRO	431	FAT	Cadastros > Tabelas de preço > Classificação de procedimentos	vinculo	migrar-crud	Classifica procedimentos por tipo de serviço
+TBTISS	76	FAT	Cadastros > Convênios > Parâmetros TISS	configuracao	migrar-crud	Parâmetros TISS por convênio (versão, guias, XML, numeração)
+TBTISSCAPACFUN	5	FAT	Cadastros > TISS/ANS > Terminologias > Capacidade funcional	dominio	carga-referencia	Escala ECOG de capacidade funcional (TUSS)
+TBTISSCARATE	2	FAT	Cadastros > TISS/ANS > Terminologias > Caráter do atendimento	dominio	carga-referencia	Caráter eletivo ou urgência (TUSS)
+TBTISSCATDESP	5	FAT	Cadastros > TISS/ANS > Terminologias > Categorias de despesa	dominio	carga-referencia	Categorias de despesa do demonstrativo TISS
+TBTISSCOBERTESPECIAL	4	FAT	Cadastros > TISS/ANS > Terminologias > Cobertura especial	dominio	carga-referencia	Cobertura especial (gestante, pré e pós-operatório)
+TBTISSCONSPROF	15	FAT	Cadastros > TISS/ANS > Terminologias > Conselhos profissionais	dominio	carga-referencia	Conselhos profissionais com código TISS
+TBTISSDIAGIMG	6	FAT	Cadastros > TISS/ANS > Terminologias > Diagnóstico por imagem	dominio	carga-referencia	Tipos de diagnóstico por imagem (TUSS)
+TBTISSEMIEXP	4	FAT	Cadastros > Domínios > Emissão/exportação TISS	dominio	migrar-crud	Indica uso em emissão, exportação TISS, ambos ou nenhum
+TBTISSESTTUMOR	6	FAT	Cadastros > TISS/ANS > Terminologias > Estadiamento	dominio	carga-referencia	Estadiamento do tumor (TUSS oncologia)
+TBTISSETAPAAUTORIZ	2	FAT	Cadastros > TISS/ANS > Terminologias > Etapas de autorização	dominio	carga-referencia	Etapas da autorização prévia TISS
+TBTISSFINTRAT	5	FAT	Cadastros > TISS/ANS > Terminologias > Finalidade do tratamento	dominio	carga-referencia	Finalidade do tratamento oncológico (TUSS)
+TBTISSFORMAENV	1001	FAT	Cadastros > TISS/ANS > Forma de envio por procedimento	vinculo	carga-referencia	Forma de envio ANS de cada código TUSS com vigência (~963 mil)
+TBTISSFORMAENVPAD	4	FAT	Cadastros > TISS/ANS > Terminologias > Formas de envio	dominio	carga-referencia	Formas de envio (portal, upload, webservice, papel)
+TBTISSFORMAPG	4	FAT	Cadastros > TISS/ANS > Terminologias > Formas de pagamento	dominio	carga-referencia	Formas de pagamento do demonstrativo TISS
+TBTISSGERSPSADTPS	5	FAT	Cadastros > Domínios > Geração SP/SADT no PS	dominio	migrar-crud	Opções de geração de guia SP/SADT por tipo de conta
+TBTISSGRPPROC	31	FAT	Cadastros > TISS/ANS > Terminologias > Grupos de procedimento	dominio	carga-referencia	Grupos de procedimentos e itens assistenciais ANS
+TBTISSIDENTBENEFI	10	FAT	Cadastros > TISS/ANS > Terminologias > Identificação do beneficiário	dominio	carga-referencia	Meio de identificação do beneficiário (biometria, QR code)
+TBTISSINDACID	4	FAT	Cadastros > TISS/ANS > Terminologias > Indicador de acidente	dominio	carga-referencia	Indicador de acidente (trabalho, trânsito, outros)
+TBTISSLCEVENTO	4	FAT	Cadastros > TISS/ANS > Terminologias > Local do evento	dominio	carga-referencia	Rede de realização do evento (contratada, própria, reembolso)
+TBTISSMETAST	5	FAT	Cadastros > TISS/ANS > Terminologias > Metástase	dominio	carga-referencia	Classificação M do TNM (TUSS)
+TBTISSMOTAUSENCODVALID	8	FAT	Cadastros > TISS/ANS > Terminologias > Ausência de token	dominio	carga-referencia	Motivo de ausência do código de validação do beneficiário
+TBTISSNODULO	7	FAT	Cadastros > TISS/ANS > Terminologias > Linfonodo	dominio	carga-referencia	Classificação N do TNM (TUSS)
+TBTISSOPFABRIC	3	FAT	Cadastros > TISS/ANS > Terminologias > Opção de fabricante	dominio	carga-referencia	Opção de fabricante na solicitação de OPME
+TBTISSPARDEF	48	FAT	Cadastros > Convênios > Parâmetros TISS > Regras de guia	configuracao	migrar-crud	Regras configuráveis de montagem de guias TISS
+TBTISSPOSPROF	14	FAT	Cadastros > TISS/ANS > Terminologias > Grau de participação	dominio	carga-referencia	Grau de participação do profissional (cirurgião, auxiliar, anestesista)
+TBTISSREFIND	1001	FAT	Cadastros > TISS/ANS > Códigos TUSS de referência	dominio	carga-referencia	Lista de códigos TUSS de referência
+TBTISSREGIMEATEND	6	FAT	Cadastros > TISS/ANS > Terminologias > Regime de atendimento	dominio	carga-referencia	Regime de atendimento TISS (ambulatorial, internação, telessaúde)
+TBTISSREGINT	4	FAT	Cadastros > TISS/ANS > Terminologias > Regime de internação	dominio	carga-referencia	Regime de internação (hospitalar, hospital-dia, domiciliar)
+TBTISSSAUDEOCUPAC	7	FAT	Cadastros > TISS/ANS > Terminologias > Saúde ocupacional	dominio	carga-referencia	Tipo de exame ocupacional (admissional, periódico, demissional)
+TBTISSSITCANC	6	FAT	Cadastros > TISS/ANS > Terminologias > Situação do cancelamento	dominio	carga-referencia	Retorno do cancelamento de guia TISS
+TBTISSSITPROT	10	FAT	Cadastros > TISS/ANS > Terminologias > Situação do protocolo	dominio	carga-referencia	Status do protocolo de lote TISS
+TBTISSSITSOLIC	7	FAT	Cadastros > TISS/ANS > Terminologias > Status da solicitação	dominio	carga-referencia	Status da solicitação de autorização TISS
+TBTISSTERMO	76	FAT	Cadastros > TISS/ANS > Terminologias TUSS (cadastro)	dominio	carga-referencia	Catálogo das terminologias TUSS e emissão em guia
+TBTISSTERMO_TBTPLANC	24	FAT	Cadastros > TISS/ANS > Terminologia x tipo de lançamento	vinculo	migrar-crud	Terminologia TUSS aplicável a cada tipo de lançamento da conta
+TBTISSTPCONSUL	5	FAT	Cadastros > TISS/ANS > Terminologias > Tipo de consulta	dominio	carga-referencia	Tipo de consulta (primeira, retorno, pré-natal)
+TBTISSTPDEBCRE	9	FAT	Cadastros > TISS/ANS > Terminologias > Débitos e créditos	dominio	carga-referencia	Tipos de débito/crédito do demonstrativo (IRRF, ISS, INSS)
+TBTISSTPDEMONS	3	FAT	Cadastros > TISS/ANS > Terminologias > Tipos de demonstrativo	dominio	carga-referencia	Tipos de demonstrativo de pagamento e análise de conta
+TBTISSTPFAT	4	FAT	Cadastros > TISS/ANS > Terminologias > Tipo de faturamento	dominio	carga-referencia	Tipo de faturamento (parcial, final, complementar, total)
+TBTISSTPGUIA	9	FAT	Cadastros > TISS/ANS > Tipos de guia	dominio	carga-referencia	Tipos de guia e anexos TISS
+TBTISSTPGUIA_TBTISSPARDEF	69	FAT	Cadastros > Convênios > Parâmetros TISS > Regras por guia	vinculo	migrar-crud	Regras de montagem aplicáveis a cada tipo de guia
+TBTISSTPINTER	5	FAT	Cadastros > TISS/ANS > Terminologias > Tipo de internação	dominio	carga-referencia	Tipo de internação (clínica, cirúrgica, obstétrica)
+TBTISSTPQUIMIO	4	FAT	Cadastros > TISS/ANS > Terminologias > Tipo de quimioterapia	dominio	carga-referencia	Linha da quimioterapia (TUSS)
+TBTISSTUMOR	9	FAT	Cadastros > TISS/ANS > Terminologias > Tumor	dominio	carga-referencia	Classificação T do TNM (TUSS)
+TBTISSUNIDMED	52	FAT	Cadastros > TISS/ANS > Terminologias > Unidades de medida	dominio	carga-referencia	Unidades de medida TUSS (ampola, comprimido, frasco)
+TBTISSVIAACES	3	FAT	Cadastros > TISS/ANS > Terminologias > Via de acesso	dominio	carga-referencia	Via de acesso cirúrgico (única, mesma, diferentes)
+TBTISSVIAADMIN	35	FAT	Cadastros > TISS/ANS > Terminologias > Via de administração	dominio	carga-referencia	Vias de administração de medicamentos (TUSS)
+TBTPACOMTISS	60	FAT	Cadastros > TISS/ANS > Terminologias > Acomodação	dominio	carga-referencia	Tipos de acomodação TUSS
+TBTPAPAC	5	SUS	Cadastros > Domínios SUS > Tipos de APAC	dominio	carga-referencia	Tipo de APAC (inicial, continuidade, única, encerramento)
+TBTP_ATEND_TISS	59	FAT	Cadastros > TISS/ANS > Terminologias > Tipo de atendimento	dominio	carga-referencia	Tipos de atendimento TISS por versão
+TBTPCLASSIFUNIBH	18	FAT	Cadastros > Convênios > Classificação oncológica Unimed BH	dominio	migrar-crud	Classificação oncológica Unimed BH (tratamento, perfil, fase)
+TBTPFASEUNIBH	4	FAT	Cadastros > Convênios > Classificação Unimed BH > Fases	dominio	migrar-crud	Fase do tratamento oncológico Unimed BH
+TBTPLANC	5	FAT	Cadastros > Domínios > Tipos de lançamento da conta	dominio	migrar-crud	Serviços hospitalares, profissionais, complementares, mat/med
+TBTPOBRIGAMAT	4	FAT	Cadastros > Domínios > Obrigatoriedade de material	dominio	migrar-crud	Regra de consistência de material por convênio
+TBTPPERFILUNIBH	3	FAT	Cadastros > Convênios > Classificação Unimed BH > Perfis	dominio	migrar-crud	Perfil de tratamento sistêmico Unimed BH
+TBTPPROFPROC	5	FAT	Cadastros > Domínios > Posição do profissional no repasse	dominio	migrar-crud	Titular, auxiliares ou anestesista no lançamento de repasse
+TBTPTRATUNIBH	3	FAT	Cadastros > Convênios > Classificação Unimed BH > Tratamentos	dominio	migrar-crud	Tratamento curativo ou não curativo Unimed BH
+TBVERSAOBRASIN	398	FAT	Cadastros > Tabelas de preço > Versões Brasíndice	historico	carga-referencia	Versões importadas do Brasíndice
+TBVERSAOTISS	20	FAT	Cadastros > TISS/ANS > Versões TISS	dominio	carga-referencia	Versões do padrão TISS suportadas
+TBVERSAOTISSMONIT	8	FAT	Cadastros > TISS/ANS > Versões TISS monitoramento	dominio	carga-referencia	Versões do padrão TISS de monitoramento ANS
+TBVERSAOTISSPAD	26	FAT	Cadastros > TISS/ANS > Versões padrão TISS	dominio	carga-referencia	Versões padrão TISS com vigência
+TBVLRDTH	1001	FAT	Cadastros > Tabelas de preço > Valores de diárias e taxas	historico	migrar-crud	Valores de diárias e taxas por tabela e vigência
+TBVLRMEM	1001	FAT	Cadastros > Tabelas de preço > Preços de mat/med	historico	carga-referencia	Preços de mat/med (PFB/PMC) por versão Brasíndice e vigência
+TBVLRPAI	1001	SUS	Cadastros > SUS > Valores AIH antigos	obsoleta	migrar-leitura	Valores de procedimentos AIH anteriores ao SIGTAP (até 2007)
+TBVLRSIA	1001	SUS	Cadastros > SUS > Valores SIA antigos	obsoleta	migrar-leitura	Valores de procedimentos SIA anteriores ao SIGTAP (até 2007)
+TBVLRSUS	1001	SUS	Cadastros > SUS > SIGTAP > Histórico de valores	historico	carga-referencia	Valores SH/SP/SADT de procedimentos SIGTAP por competência
+TBVLRTHM	1001	FAT	Cadastros > Tabelas de preço > Valores de honorários	historico	migrar-crud	Valores de CH, CO, filme e anestesia por tabela e vigência

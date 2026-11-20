@@ -1,0 +1,4 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+lote_assinatura_item	ADM	item	F7	Documento incluído num lote de assinatura, com ordem, situação e erro de cada documento	lote_assinatura sem item; DBAMV FILA_CARTORIO_DIGITAL, PW_RELATORIO_ASSINATURA_DIGIT
+categoria_tarefa	ADM	dominio	F8	Categorias de tarefa do usuário (pendência, revisão, cobrança interna), com cor e situação	tarefa_usuario cita categoria sem domínio
+painel_gerencial_permissao	REL	vinculo	F3	Perfis ou usuários que podem abrir cada painel gerencial	painel_gerencial sem controle de acesso; relatorio_permissao e analise_salva_permissao já existem

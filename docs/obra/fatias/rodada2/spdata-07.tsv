@@ -1,0 +1,342 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+COINDICATVPRE	6	FIN	Contabilidade > Domínios > Indicador de atividade preponderante	dominio	carga-referencia	Indicador de atividade preponderante do SPED/ECF
+COINDICNATPJ	7	FIN	Contabilidade > Domínios > Natureza da pessoa jurídica	dominio	carga-referencia	Indicador de natureza da PJ para SPED/ECF
+CONIRE	27	FIN	Contabilidade > Cadastros > NIRE por UF	cadastro	migrar-crud	Número NIRE da empresa por UF com vigência (SPED contábil)
+COPARAM	10	FIN	Administração > Parâmetros > Contabilidade	configuracao	migrar-crud	Parâmetros da contabilidade: plano, competência, integrações, SPED
+COPERIODESCRIT	4	FIN	Contabilidade > Domínios > Períodos de escrituração	dominio	migrar-crud	Períodos de escrituração contábil com vigência
+COSPEDHSTSEMP	8	FIN	Contabilidade > SPED > Histórico de situação da empresa	historico	migrar-leitura	Vigências da situação especial da empresa no SPED contábil
+COSPEDSITEMP	7	FIN	Contabilidade > Domínios > Situação especial SPED	dominio	carga-referencia	Situações especiais da empresa (cisão, fusão, extinção) para SPED
+COSPEDTPDOC	8	FIN	Contabilidade > Domínios > Tipos de documento SPED	dominio	carga-referencia	Tipos de documento com código do SPED contábil
+COTIPOITEM	13	FIN	Contabilidade > Domínios > Tipos de item	dominio	carga-referencia	Tipos de item SPED (mercadoria, serviço, ativo imobilizado)
+COTIPOPLANOCONTAREFERENCIAL	14	FIN	Contabilidade > Domínios > Planos de contas referenciais	dominio	carga-referencia	Planos de contas referenciais da Receita Federal para ECD/ECF
+COTIPOSOLICITACAOSENHA	4	FIN	Contabilidade > Domínios > Solicitação de senha	dominio	migrar-crud	Quando pedir senha: sempre, só bloqueio, só desbloqueio, nunca
+COTP_ORIGEM_LANCAMENTO	11	FIN	Contabilidade > Domínios > Origem do lançamento	dominio	migrar-crud	Módulo de origem do lançamento contábil (financeiro, faturamento, estoque etc.)
+COTPSUBSTECD	6	FIN	Contabilidade > Domínios > Tipo de ECD substituta	dominio	carga-referencia	Motivos de escrituração contábil digital substituta
+CTCTARECEITANCI	4	FIN	Custos > Cadastros > Contas de receita	cadastro	migrar-crud	Contas de receita do custeio (serviços, honorários, mat/med)
+CTPARAM	2	FIN	Administração > Parâmetros > Custos	configuracao	migrar-crud	Parâmetros do custeio hospitalar: competência, ocupação, receitas
+CTTIPODADO	2	FIN	Custos > Domínios > Tipos de dado	dominio	migrar-crud	Tipos de dado estatístico do custeio
+CTWTPREGRA	2	FIN	Custos > Domínios > Tipos de regra de rateio	dominio	migrar-crud	Tipos de regra de rateio/exportação de custos
+DMCADLEIAUTE	5	FIN	Fiscal > DMED > Leiautes por ano	dominio	carga-referencia	Códigos de leiaute da DMED por ano-calendário (Receita Federal)
+ESATVCOMERCIAL	1	FIN	Fiscal > REINF > Atividades CPRB	dominio	carga-referencia	Atividades sujeitas à CPRB com alíquota e vigência (REINF R-2060)
+ESSERIE_R4000_GRUPOS	44	FIN	Catálogo oficial: dicionário XML REINF série R-4000	configuracao	carga-referencia	Grupos/registros do leiaute XML REINF R-4000 por evento
+ESSERIE_R4000_TAGS	170	FIN	Catálogo oficial: dicionário XML REINF série R-4000	configuracao	carga-referencia	Tags do leiaute XML REINF R-4000 com caminho e tamanho
+ESTPAJUSTE	2	FIN	Fiscal > REINF > Domínios > Tipos de ajuste	dominio	carga-referencia	Tipo de ajuste da CPRB: redução ou acréscimo
+ESTPCODAJUSTE	11	FIN	Fiscal > REINF > Domínios > Códigos de ajuste	dominio	carga-referencia	Códigos de ajuste da base da CPRB (REINF)
+FPADMESOCIAL	6	RH	RH > Tabelas eSocial > Tipos de admissão	dominio	carga-referencia	Tipos de admissão do trabalhador (tabela eSocial)
+FPAFAST_COD	8	RH	RH > Tabelas legais > Códigos de afastamento	dominio	carga-referencia	Códigos de afastamento do trabalhador (SEFIP/folha)
+FPAFAST_RAIS	20	RH	RH > Tabelas legais > Afastamentos RAIS	dominio	carga-referencia	Códigos de causa de afastamento da RAIS
+FPAGEACIDTRAB	246	RH	SESMT > Tabelas eSocial > Agentes causadores de acidente	dominio	carga-referencia	Agentes causadores do acidente de trabalho (tabela 14 eSocial, CAT)
+FPAGENSITDOEN	57	RH	SESMT > Tabelas eSocial > Agentes de doença profissional	dominio	carga-referencia	Agente causador/situação geradora de doença profissional (CAT)
+FPAGENTQUIMIC	26	RH	SESMT > Tabelas legais > Agentes químicos (NR-7)	dominio	carga-referencia	Agentes químicos para monitoração biológica ocupacional (NR-7)
+FPALIQRATCNAE	51	RH	RH > Tabelas legais > Alíquota RAT por CNAE	dominio	carga-referencia	Alíquota RAT por CNAE (Decreto 3.048)
+FPASOEXAMEORD	2	RH	SESMT > ASO > Domínios > Ordem do exame	dominio	carga-referencia	Ordem do exame no ASO: referencial ou sequencial (S-2220)
+FPASOINDRESUL	4	RH	SESMT > ASO > Domínios > Indicação de resultado	dominio	carga-referencia	Indicação de resultado do exame ocupacional (normal, alterado, estável)
+FPASOINTEXAME	3	RH	SESMT > ASO > Domínios > Interpretação do exame	dominio	carga-referencia	Interpretação de exame toxicológico/biológico no ASO
+FPASORESULTADO	2	RH	SESMT > ASO > Domínios > Resultado (apto/inapto)	dominio	carga-referencia	Conclusão do ASO: apto ou inapto
+FPASOTIPO	6	RH	SESMT > ASO > Domínios > Tipos de ASO	dominio	carga-referencia	Tipos de ASO: admissional, periódico, retorno, mudança, demissional
+FPBANCOPIS	4	RH	RH > Tabelas legais > Bancos do PIS	dominio	carga-referencia	Bancos de cadastramento do PIS/PASEP
+FPBR_PDH	3	RH	RH > Tabelas legais > Indicativo BR/PDH	dominio	carga-referencia	Indicativo de beneficiário reabilitado ou portador de deficiência habilitado
+FPCATAGTGERDOE	59	RH	SESMT > CAT > Domínios > Agente gerador de doença	dominio	carga-referencia	Agente causador de doença para CAT (tabela eSocial)
+FPCATCAUSACD	247	RH	SESMT > CAT > Domínios > Causas de acidente	dominio	carga-referencia	Situação geradora/causa do acidente de trabalho (tabela eSocial)
+FPCATCODACTRAB	22	RH	SESMT > CAT > Domínios > Códigos de acidente	dominio	carga-referencia	Códigos de tipo de acidente de trabalho (tabela 24 eSocial)
+FPCATCORPOATG	45	RH	SESMT > CAT > Domínios > Parte do corpo atingida	dominio	carga-referencia	Parte do corpo atingida no acidente (tabela 13 eSocial)
+FPCATEG_FGTS	7	RH	RH > Tabelas legais > Categorias FGTS/SEFIP	dominio	carga-referencia	Categorias de trabalhador para FGTS/SEFIP
+FPCATEGTRAB	44	RH	RH > Tabelas eSocial > Categorias de trabalhador	dominio	carga-referencia	Categorias de trabalhador com vigência (tabela 01 eSocial)
+FPCATEGTRAB_FPCLASSIFTRIB	457	RH	RH > Tabelas eSocial > Categoria x classificação tributária	vinculo	carga-referencia	Compatibilidade categoria de trabalhador x classificação tributária eSocial
+FPCATEGTRAB_FPLOTACAOTRIB	202	RH	RH > Tabelas eSocial > Categoria x lotação tributária	vinculo	carga-referencia	Compatibilidade categoria de trabalhador x tipo de lotação tributária
+FPCATFATRISCO	1001	RH	SESMT > Tabelas eSocial > Fatores de risco	dominio	carga-referencia	Fatores de risco ambientais do trabalho (tabela 24 eSocial)
+FPCATLDOCORPO	4	RH	SESMT > CAT > Domínios > Lateralidade	dominio	carga-referencia	Lateralidade da parte do corpo atingida (esquerda, direita, ambas)
+FPCATNATLESAO	29	RH	SESMT > CAT > Domínios > Natureza da lesão	dominio	carga-referencia	Natureza da lesão do acidente (tabela 17 eSocial)
+FPCAT_SEFIP	24	RH	RH > Tabelas legais > Categorias SEFIP	dominio	carga-referencia	Categorias de trabalhador da SEFIP/GFIP
+FPCATSITGERACD	59	RH	SESMT > CAT > Domínios > Situação geradora do acidente	dominio	carga-referencia	Situação geradora do acidente de trabalho (tabela eSocial)
+FPCATTIPO	3	RH	SESMT > CAT > Domínios > Tipos de CAT	dominio	carga-referencia	Tipo de CAT: inicial, reabertura, óbito
+FPCATTPEMIS	3	RH	SESMT > CAT > Domínios > Tipo de emitente	dominio	carga-referencia	Iniciativa de emissão da CAT (empregador, ordem judicial, órgão)
+FPCATTPLOCACD	7	RH	SESMT > CAT > Domínios > Local do acidente	dominio	carga-referencia	Tipo de local do acidente (estabelecimento, via pública etc.)
+FPCATTPREG	9	RH	SESMT > CAT > Domínios > Tipo de registrador	dominio	carga-referencia	Tipo de registrador da CAT (empregador, sindicato, médico etc.)
+FPCAUSA_AFASTAMENTO	13	RH	RH > Tabelas legais > Causas de afastamento	dominio	carga-referencia	Causas de afastamento/rescisão para obrigações legais
+FPCLASSIFSERV	31	FIN	Fiscal > REINF > Domínios > Tipos de serviço	dominio	carga-referencia	Classificação de serviços prestados com retenção (tabela 06 REINF)
+FPCLASSIFTRIB	19	RH	RH > Tabelas eSocial > Classificação tributária	dominio	carga-referencia	Classificação tributária do contribuinte (tabela 08 eSocial)
+FPCODALIQFPAS	247	RH	RH > Tabelas legais > Alíquotas FPAS/terceiros	dominio	carga-referencia	Alíquotas de terceiros por FPAS e situação do contribuinte
+FPCOD_GPS	69	RH	RH > Tabelas legais > Códigos de pagamento GPS	dominio	carga-referencia	Códigos de pagamento da GPS (INSS)
+FPCODSIGLALIQ	17	RH	RH > Tabelas legais > Siglas de alíquota de terceiros	dominio	carga-referencia	Siglas e alíquotas de entidades terceiras (SENAI, SESC, INCRA)
+FPCOD_TERC	26	RH	RH > Tabelas legais > Códigos de terceiros	dominio	carga-referencia	Códigos de outras entidades/terceiros para GPS/SEFIP
+FPCONDFUNC	12	RH	RH > Domínios > Condições do funcionário	dominio	migrar-crud	Condições/situações do funcionário (ativo, afastado, demitido)
+FPCOND_TRAB_IMIGRANTE	7	RH	RH > Tabelas eSocial > Condição do trabalhador imigrante	dominio	carga-referencia	Condição de ingresso do trabalhador imigrante (eSocial)
+FPCOR	6	RH	RH > Tabelas eSocial > Raça/cor	dominio	carga-referencia	Raça/cor com código eSocial
+FPDESCNATLES	28	RH	SESMT > CAT > Domínios > Descrição da natureza da lesão	dominio	carga-referencia	Descrição complementar da natureza da lesão (CAT)
+FPDOSE_VACINA	3	RH	SESMT > Domínios > Doses de vacina	dominio	migrar-crud	Doses de vacina ocupacional (1ª, 2ª, reforço)
+FPECIV	7	RH	RH > Tabelas eSocial > Estado civil	dominio	carga-referencia	Estado civil com código eSocial
+FPEDITREL_VERSAOESOCIAL	98	RH	Sem tela: relatórios eSocial por versão de leiaute	configuracao	descartar	Liga relatório do editor SQL do fornecedor a evento/versão eSocial
+FPEMPSOFTWARE	1	RH	RH > Parâmetros > Empresa de software	configuracao	descartar	Dados da software house do legado para eSocial; substituído pelo novo fornecedor
+FPEPC	4	RH	SESMT > Domínios > Uso de EPC	dominio	carga-referencia	Indicativo de utilização de EPC (eSocial S-2240)
+FPESOCADMESTAT	3	RH	RH > Tabelas eSocial > Admissão de estatutário	dominio	carga-referencia	Indicativo de tipo de provimento/admissão de estatutário
+FPESOCAPRENDIZ	3	RH	RH > Tabelas eSocial > Contratação de aprendiz	dominio	carga-referencia	Indicativo de contratação de aprendiz (eSocial S-1005)
+FPESOCARQXSD	373	RH	Catálogo oficial: schemas XSD do eSocial	configuracao	carga-referencia	Schemas XSD e namespaces por evento eSocial e vigência
+FPESOCAUTORIA	2	RH	RH > Tabelas eSocial > Autoria da ação judicial	dominio	carga-referencia	Autoria do processo judicial (próprio contribuinte ou terceiro)
+FPESOCCADRESEV	11	RH	RH > Tabelas eSocial > Códigos de resposta de evento	dominio	carga-referencia	Códigos de retorno do processamento de evento eSocial
+FPESOCCADRESLT	27	RH	RH > Tabelas eSocial > Códigos de resposta de lote	dominio	carga-referencia	Códigos de retorno do processamento de lote eSocial
+FPESOCCLASSE	4	RH	RH > Tabelas eSocial > Classe do evento	dominio	carga-referencia	Classes de evento eSocial (tabela, não periódico, periódico)
+FPESOCCONTDEF	4	RH	RH > Tabelas eSocial > Contratação de PcD	dominio	carga-referencia	Indicativo de contratação de pessoa com deficiência
+FPESOCDEPEND	9	RH	Catálogo oficial: dependências entre eventos eSocial	configuracao	carga-referencia	Regras de dependência/obrigatoriedade entre eventos eSocial
+FPESOCDESONER	3	RH	RH > Tabelas eSocial > Desoneração da folha	dominio	carga-referencia	Indicativo de desoneração da folha (CPRB)
+FPESOCDICEVT	1001	RH	Sem tela: dicionário de registros eSocial	configuracao	descartar	Dicionário interno do fornecedor de registros XML por evento eSocial
+FPESOCDICEVT_FPESOCDICOPCAO	1001	RH	Sem tela: dicionário eSocial x telas do legado	vinculo	descartar	Liga registro eSocial à tela Delphi de origem do dado
+FPESOCDICOPCAO	182	RH	Sem tela: dicionário eSocial x telas do legado	configuracao	descartar	Caminhos de menu do desktop legado que alimentam cada dado eSocial
+FPESOCEMPTRAB	2	RH	RH > Tabelas eSocial > Empresa de trabalho temporário	dominio	carga-referencia	Indicativo de empresa de trabalho temporário
+FPESOCENTEDUC	2	RH	RH > Tabelas eSocial > Entidade educativa	dominio	carga-referencia	Indicativo de entidade educativa sem fins lucrativos
+FPESOCENVIOREINFINFO	2	FIN	Fiscal > REINF > Domínios > Informação de envio	dominio	carga-referencia	Opções de informação de envio para EFD-REINF
+FPESOCEVENTO	86	RH	RH > eSocial > Eventos	dominio	carga-referencia	Eventos eSocial/REINF (S-1000 a S-5xxx) com grupo e liberação
+FPESOCIAL_FMTRREBEEX	11	RH	RH > Tabelas eSocial > Forma de tributação exterior	dominio	carga-referencia	Forma de tributação de rendimento de beneficiário no exterior
+FPESOCINDAVISO	5	RH	RH > Tabelas eSocial > Cumprimento de aviso prévio	dominio	carga-referencia	Indicativo de cumprimento do aviso prévio
+FPESOCINDEVTPER	2	RH	RH > Tabelas eSocial > Indicativo de período	dominio	carga-referencia	Indicativo de período de apuração (mensal, anual)
+FPESOCINDPROC	9	RH	RH > Tabelas eSocial > Tipo de processo	dominio	carga-referencia	Tipo de processo: administrativo, judicial, NIS, FAP
+FPESOCINDSUSP	14	RH	RH > Tabelas eSocial > Indicativo de suspensão	dominio	carga-referencia	Indicativo de suspensão da exigibilidade (tabela eSocial)
+FPESOCMOTAFAS	34	RH	RH > Tabelas eSocial > Motivos de afastamento	dominio	carga-referencia	Motivos de afastamento com vigência (tabela 18 eSocial)
+FPESOCMOTREM	10	RH	RH > Tabelas eSocial > Motivos de remuneração	dominio	carga-referencia	Motivos de remuneração/cessão com sigla (eSocial)
+FPESOCORIRETIF	3	RH	RH > Tabelas eSocial > Origem da retificação	dominio	carga-referencia	Origem da retificação de evento eSocial
+FPESOCPARAMS1210	3	RH	RH > Parâmetros > eSocial S-1210	dominio	migrar-crud	Opções de geração do evento S-1210 (pagamentos)
+FPESOCPEND	6	RH	RH > eSocial > Pendências de envio	integracao	descartar	6 pendências eSocial 2018-2020 nunca autorizadas; eSocial fora do SGH
+FPESOCPENDDET	1001	RH	RH > eSocial > Pendências > Detalhe	integracao	descartar	Detalhes de pendência eSocial gerados por triggers até 2026, nunca enviados
+FPESOCPTOELET	7	RH	RH > Tabelas eSocial > Opção de ponto eletrônico	dominio	carga-referencia	Opções de registro de ponto eletrônico (eSocial S-1005)
+FPESOCREGEVE	34	RH	Catálogo oficial: regras de validação eSocial	configuracao	carga-referencia	Regras de validação de eventos eSocial (manual de orientação)
+FPESOCSITEMP	5	RH	RH > Tabelas eSocial > Situação da empresa	dominio	carga-referencia	Situação da pessoa jurídica (normal, extinção, fusão, cisão)
+FPESOCSITENVEVE	39	RH	RH > eSocial > Situação de envio por evento	integracao	descartar	Hash do último envio por evento e empresa; nada foi enviado
+FPESOCSMAPATAG	473	RH	Sem tela: mapeamento tag XML eSocial x campo	configuracao	descartar	Mapa interno do fornecedor de tags XML para propriedades do código
+FPESOCTIPOEVENTPERIODIC	3	RH	RH > Tabelas eSocial > Tipos de evento periódico	dominio	carga-referencia	Tipos de evento periódico do eSocial
+FPESOCTPAPURIR	2	RH	RH > Tabelas eSocial > Tipo de apuração IR	dominio	carga-referencia	Tipo de apuração do IRRF (mensal, anual)
+FPESOCTPAVISO	5	RH	RH > Tabelas eSocial > Tipos de aviso prévio	dominio	carga-referencia	Tipos de aviso prévio (trabalhado, indenizado)
+FPESOCTPJORTRAB	8	RH	RH > Tabelas eSocial > Tipos de jornada	dominio	carga-referencia	Tipos de jornada de trabalho (eSocial)
+FPESOCTPPROVI	7	RH	RH > Tabelas eSocial > Tipos de provimento	dominio	carga-referencia	Tipos de provimento de servidor (eSocial)
+FPESOCTPRESP	8	RH	RH > Tabelas eSocial > Tipos de resposta	dominio	carga-referencia	Classes de resposta do eSocial (sucesso, erro, advertência)
+FPESOCTPSEGMAS	2	RH	RH > Tabelas eSocial > Segurado especial	dominio	carga-referencia	Indicativo de segurado especial/tipo de segurado
+FPESOCTRABTEMP	2	RH	RH > Tabelas eSocial > Hipótese de trabalho temporário	dominio	carga-referencia	Hipóteses legais de contratação de trabalho temporário
+FPESOCTVERSAOESOCIAL	4	RH	RH > Tabelas eSocial > Versões de leiaute	dominio	carga-referencia	Versões de leiaute do eSocial com tag
+FPEVENTO	108	RH	RH > Folha > Rubricas	cadastro	migrar-crud	Rubricas da folha com fórmulas, natureza e vigência (108); folha nunca rodou
+FPEXPAGNOCIVO	4	RH	SESMT > Domínios > Exposição a agente nocivo	dominio	carga-referencia	Indicativo de exposição a agente nocivo (aposentadoria especial)
+FPFORMATRIBRENDEXT	11	FIN	Fiscal > REINF > Domínios > Tributação rendimento exterior	dominio	carga-referencia	Forma de tributação de rendimentos pagos ao exterior (REINF R-4000)
+FPFPAS	32	RH	RH > Tabelas legais > Códigos FPAS	dominio	carga-referencia	Códigos FPAS de enquadramento previdenciário
+FPFPAS_FPCLASSIFTRIB	262	RH	RH > Tabelas legais > FPAS x classificação tributária	vinculo	carga-referencia	Compatibilidade FPAS x classificação tributária (eSocial)
+FPGRAUEXPAGNOC	4	RH	SESMT > Domínios > Grau de exposição	dominio	carga-referencia	Grau de exposição a agente nocivo (GFIP/eSocial)
+FPGRUPONATRENDIMENTO	11	FIN	Fiscal > REINF > Domínios > Grupos de natureza de rendimento	dominio	carga-referencia	Grupos da tabela de natureza de rendimentos (REINF R-4000)
+FPGRUPORISCO	6	RH	SESMT > Domínios > Grupos de risco	dominio	carga-referencia	Grupos de risco ocupacional (físico, químico, biológico etc.)
+FPGRUPOTRAB	6	RH	RH > Tabelas eSocial > Grupos de categoria	dominio	carga-referencia	Grupos de categoria de trabalhador (empregado, avulso, contribuinte)
+FPHSTDIAAFAST	2	RH	RH > Parâmetros > Dias de afastamento pagos pela empresa	configuracao	carga-referencia	Vigência do número de dias de afastamento a cargo do empregador
+FPINDAQUIRURAL	7	RH	RH > Tabelas eSocial > Aquisição de produção rural	dominio	carga-referencia	Indicativo de aquisição de produção rural (eSocial/REINF)
+FPINDICATADM	3	RH	RH > Tabelas eSocial > Indicativo de admissão	dominio	carga-referencia	Indicativo de admissão: normal, decorrente de ação fiscal/judicial
+FPINDICDECPRO	14	RH	RH > Tabelas eSocial > Indicativo de decisão	dominio	carga-referencia	Indicativo da decisão em processo (liminar, sentença, depósito)
+FPINDICNIF	3	RH	RH > Tabelas eSocial > Indicativo de NIF	dominio	carga-referencia	Indicativo de número de identificação fiscal no exterior
+FPINFOBENEFRENDEXT	9	FIN	Fiscal > REINF > Domínios > Relação com beneficiário exterior	dominio	carga-referencia	Relação da fonte pagadora com beneficiário no exterior (REINF)
+FPINTAGRUP	5	RH	RH > Integrações > Agrupadores de rotina	dominio	migrar-crud	Agrupadores de rotinas de integração da folha (compras, mensal, férias)
+FPINTROTINA	19	RH	RH > Integrações > Rotinas com financeiro/contábil	configuracao	migrar-crud	Rotinas da folha que integram com financeiro e contabilidade
+FPITENSNATREND_DEDUTIVEL	186	FIN	Fiscal > REINF > Natureza de rendimento x deduções	vinculo	carga-referencia	Deduções permitidas por natureza de rendimento (REINF/repasse RPA)
+FPITENSNATRENDIMENTO	246	FIN	Fiscal > REINF > Naturezas de rendimento	dominio	carga-referencia	Tabela 01 REINF de natureza de rendimentos com tributos e flags
+FPITENSNATREND_RENDISENTO	64	FIN	Fiscal > REINF > Natureza de rendimento x isenções	vinculo	carga-referencia	Rendimentos isentos permitidos por natureza de rendimento (REINF)
+FPLOCPRESTRAB	3	RH	RH > Tabelas eSocial > Local de prestação	dominio	carga-referencia	Tipo de local de prestação do trabalho
+FPLOTACAOTRIB	14	RH	RH > Tabelas eSocial > Tipos de lotação tributária	dominio	carga-referencia	Tipos de lotação tributária (tabela 10 eSocial)
+FPLOTACAOTRIB_FPCLASSIFTRIB	108	RH	RH > Tabelas eSocial > Lotação x classificação tributária	vinculo	carga-referencia	Compatibilidade tipo de lotação x classificação tributária
+FPLOTTRIBCAD	1	RH	RH > Cadastros > Lotações tributárias da empresa	cadastro	migrar-crud	Lotação tributária da empresa com FPAS e vigência; 1 registro
+FPMATANALISE	29	RH	SESMT > Domínios > Material de análise	dominio	carga-referencia	Material biológico analisado (sangue, urina) para NR-7
+FPMATBIOLOGIC	38	RH	SESMT > Tabelas legais > Indicadores biológicos	vinculo	carga-referencia	Indicadores biológicos por agente químico, material e nível (NR-7)
+FPMOT_ADM	3	RH	RH > Tabelas legais > Motivos de admissão	dominio	carga-referencia	Motivos de admissão (CAGED)
+FPMOTAFAST	21	RH	RH > Domínios > Motivos de afastamento	dominio	carga-referencia	Motivos de afastamento do funcionário
+FPMOTDESLIG	47	RH	RH > Tabelas eSocial > Motivos de desligamento	dominio	carga-referencia	Motivos de desligamento com vigência (tabela 19 eSocial)
+FPMOTESTABILI	14	RH	RH > Tabelas eSocial > Motivos de estabilidade	dominio	carga-referencia	Motivos de garantia provisória de emprego (estabilidade)
+FPMTCANCELAVI	5	RH	RH > Tabelas eSocial > Cancelamento de aviso prévio	dominio	carga-referencia	Motivos de cancelamento de aviso prévio
+FPNATRUBRICA	203	RH	RH > Tabelas eSocial > Natureza de rubricas	dominio	carga-referencia	Natureza das rubricas da folha com vigência (tabela 03 eSocial)
+FPNATUR_REND	8	RH	RH > Tabelas legais > Natureza de rendimento (DIRF)	dominio	carga-referencia	Naturezas de rendimento para informes legais
+FPNIVELESTAG	6	RH	RH > Tabelas eSocial > Nível de estágio	dominio	carga-referencia	Nível do estágio (fundamental, médio, superior etc.)
+FPOCOR_SEFIP	9	RH	RH > Tabelas legais > Ocorrências SEFIP	dominio	carga-referencia	Códigos de ocorrência SEFIP (exposição a agente nocivo)
+FPPARAM	1	RH	Administração > Parâmetros > Folha de pagamento	configuracao	migrar-crud	Parâmetros da folha/eSocial da empresa (início eSocial 2017)
+FPPARAM_USUARIO	1	RH	Administração > Parâmetros > Folha por usuário	configuracao	migrar-crud	Competência e alertas do usuário no módulo de folha
+FPPARAMVIG	1	RH	Administração > Parâmetros > Folha > Vigências	historico	migrar-leitura	Histórico de vigência dos parâmetros da folha
+FPPROCESSOTEOR	5	RH	RH > Tabelas eSocial > Teor da decisão	dominio	carga-referencia	Teor/tipo de decisão em processo administrativo ou judicial
+FPPROCTRAB_ESOCIAL_CR	42	RH	RH > Tabelas eSocial > Códigos de receita processo trabalhista	dominio	carga-referencia	Códigos de receita do processo trabalhista (S-2500/S-2501)
+FPPTCORPATING	44	RH	RH > Tabelas eSocial > Partes do corpo atingidas (CAT)	dominio	carga-referencia	Tabela eSocial de partes do corpo atingidas em acidente de trabalho
+FPREMESSA	3	RH	RH > Folha > Remessas de folha (histórico)	historico	migrar-leitura	Remessas/fechamentos de folha 2008-2018, resíduo de implantação sem uso
+FPRESC_CAGED	9	RH	RH > Tabelas legais > Códigos de rescisão CAGED	dominio	carga-referencia	Códigos oficiais de desligamento do CAGED
+FPRESC_CAUSA	8	RH	RH > Tabelas legais > Causas de demissão	dominio	carga-referencia	Causas de demissão usadas na rescisão
+FPRESC_RAIS	27	RH	RH > Tabelas legais > Tipos de rescisão RAIS	dominio	carga-referencia	Códigos oficiais de rescisão da RAIS
+FPRESC_SEFIP	18	RH	RH > Tabelas legais > Motivos de rescisão SEFIP	dominio	carga-referencia	Códigos oficiais de movimentação/rescisão da SEFIP
+FPRESP	1	RH	RH > Cadastros > Responsáveis legais da empresa	cadastro	migrar-crud	Responsável legal da empresa para obrigações trabalhistas (eSocial, RAIS)
+FPRET_RAIS	6	RH	RH > Tabelas legais > Tipos de retorno RAIS	dominio	carga-referencia	Códigos de retorno de afastamento da RAIS
+FPRISCOCUP	461	RH	RH > Tabelas eSocial > Riscos ocupacionais	dominio	carga-referencia	Fatores de risco ocupacional agrupados (SESMT/PPP)
+FPRUBRICAFGTS	8	RH	RH > Tabelas eSocial > Incidência FGTS de rubricas	dominio	carga-referencia	Códigos oficiais de incidência de FGTS das rubricas
+FPRUBRICAFGTS_FPEVENTO	22	RH	RH > Folha > Eventos/rubricas > Incidências	vinculo	migrar-crud	Vínculo evento de folha x incidência FGTS
+FPRUBRICAINSS	21	RH	RH > Tabelas eSocial > Incidência INSS de rubricas	dominio	carga-referencia	Códigos oficiais de incidência previdenciária das rubricas
+FPRUBRICAINSS_FPEVENTO	22	RH	RH > Folha > Eventos/rubricas > Incidências	vinculo	migrar-crud	Vínculo evento de folha x incidência INSS
+FPRUBRICAIRRF	87	RH	RH > Tabelas eSocial > Incidência IRRF de rubricas	dominio	carga-referencia	Códigos oficiais de incidência de IRRF com vigência
+FPRUBRICAIRRF_FPEVENTO	22	RH	RH > Folha > Eventos/rubricas > Incidências	vinculo	migrar-crud	Vínculo evento de folha x incidência IRRF
+FPRUBRICAIRRF_GRUPO	10	RH	RH > Tabelas eSocial > Grupos de incidência IRRF	dominio	carga-referencia	Grupos dos códigos de incidência de IRRF
+FPRUBRICAPISPASEP	5	RH	RH > Tabelas eSocial > Incidência PIS/PASEP	dominio	carga-referencia	Códigos oficiais de incidência PIS/PASEP das rubricas
+FPRUBRICASIND	4	RH	RH > Tabelas eSocial > Incidência sindical	dominio	carga-referencia	Códigos oficiais de incidência de contribuição sindical
+FPRUBRICASIND_FPEVENTO	13	RH	RH > Folha > Eventos/rubricas > Incidências	vinculo	migrar-crud	Vínculo evento de folha x incidência sindical
+FPSAQUE	14	RH	RH > Tabelas legais > Códigos de saque FGTS	dominio	carga-referencia	Códigos oficiais de saque do FGTS na rescisão
+FPSENTENCAINSS	2	RH	RH > Tabelas eSocial > Sentença INSS	dominio	carga-referencia	Domínio eSocial de tipo de sentença previdenciária
+FPSIT_FUNC	16	RH	RH > Cadastros > Domínios > Situações do funcionário	dominio	migrar-crud	Situações do funcionário na empresa (ativo, afastado, demitido)
+FPSITGERACID	57	RH	RH > Tabelas eSocial > Situação geradora de acidente	dominio	carga-referencia	Tabela eSocial de situações geradoras de acidente de trabalho
+FPSUBRISCOCUP	1001	RH	RH > Tabelas eSocial > Sub-riscos ocupacionais	dominio	carga-referencia	Detalhamento dos fatores de risco ocupacional (dicionário grande)
+FPTEMPO_RESID_TRAB_IMIGRANTE	2	RH	RH > Tabelas eSocial > Tempo de residência de imigrante	dominio	carga-referencia	Domínio eSocial de prazo de residência do trabalhador imigrante
+FPTIPOAVISO	5	RH	RH > Cadastros > Domínios > Tipos de aviso prévio	dominio	carga-referencia	Tipos de aviso prévio na rescisão
+FPTIPO_CONTRATO	3	RH	RH > Tabelas eSocial > Tipos de contrato	dominio	carga-referencia	Tipos de contrato de trabalho (prazo determinado/indeterminado)
+FPTIPOINDCPRB	2	RH	RH > Tabelas eSocial > Indicador CPRB	dominio	carga-referencia	Indicador de contribuição previdenciária sobre receita bruta
+FPTIPORESC	8	RH	RH > Cadastros > Tipos de rescisão	cadastro	migrar-crud	Tipos de rescisão ligando códigos RAIS, SEFIP, CAGED, saque e motivo
+FPTIPO_TRABALHADOR	2	RH	RH > Tabelas eSocial > Tipos de trabalhador	dominio	carga-referencia	Tipos de trabalhador (urbano/rural)
+FPTPACESSORIA	5	RH	RH > Cadastros > Domínios > Tipos de assessoria	dominio	migrar-crud	Tipos de assessoria/prestador de serviço contábil-trabalhista
+FPTPACIDTRANS	3	RH	RH > Tabelas eSocial > Tipos de acidente de trânsito	dominio	carga-referencia	Domínio eSocial de tipo de acidente de trânsito na CAT
+FPTP_ADM_CAG	5	RH	RH > Tabelas legais > Tipos de admissão CAGED	dominio	carga-referencia	Códigos oficiais de admissão do CAGED
+FPTP_ADM_RAIS	5	RH	RH > Tabelas legais > Tipos de admissão RAIS	dominio	carga-referencia	Códigos oficiais de admissão da RAIS
+FPTP_ARQ_EMPREGADORWEB	4	RH	RH > Tabelas legais > Arquivos Empregador Web	dominio	carga-referencia	Tipos de arquivo do Empregador Web (seguro-desemprego)
+FPTPARQESOC	44	RH	RH > eSocial > Tipos de arquivo/evento	dominio	carga-referencia	Tipos de arquivo/evento eSocial (empregador, rubricas, lotações, cargos)
+FPTPAVISORESC	5	RH	RH > Cadastros > Domínios > Tipos de aviso na rescisão	dominio	carga-referencia	Tipos de aviso prévio (trabalhado, indenizado, dispensado)
+FPTPCONDIFER	9	RH	RH > Tabelas eSocial > Condição diferenciada	dominio	carga-referencia	Condições diferenciadas de trabalho do eSocial
+FPTPCONTRIB	41	RH	RH > Tabelas eSocial > Tipos de contribuinte	dominio	carga-referencia	Classificação tributária do contribuinte (eSocial)
+FPTPDEFICIEN	6	RH	RH > Tabelas eSocial > Tipos de deficiência	dominio	carga-referencia	Tipos de deficiência do trabalhador
+FPTPDEPENDENT	11	RH	RH > Tabelas eSocial > Tipos de dependente	dominio	carga-referencia	Tipos de dependente com vigência (eSocial)
+FPTPDEPENDENTREINF	9	RH	RH > Tabelas REINF > Tipos de dependente	dominio	carga-referencia	Tipos de dependente para a EFD-REINF
+FPTPDESCINSS	3	RH	RH > Tabelas eSocial > Tipos de desconto INSS	dominio	carga-referencia	Indicadores de desconto de contribuição previdenciária
+FPTPDESFOCPRB	2	RH	RH > Tabelas eSocial > Desoneração CPRB	dominio	carga-referencia	Indicador de desoneração da folha (CPRB)
+FPTPESTABELEC	2	RH	RH > Tabelas eSocial > Tipos de estabelecimento	dominio	carga-referencia	Tipos de inscrição de estabelecimento
+FPTP_EST_FISICO	7	RH	RH > Cadastros > Domínios > Estado físico/deficiência	dominio	carga-referencia	Estado físico do funcionário (deficiência ou não) para RAIS
+FPTP_EVENTO	5	RH	RH > Cadastros > Domínios > Tipos de evento de folha	dominio	migrar-crud	Tipos de evento de folha (provento, desconto, base)
+FPTPEVENTOAUT	6	RH	RH > Cadastros > Domínios > Eventos automáticos	dominio	migrar-crud	Tipos de evento lançados automaticamente na folha
+FPTPEVENTOAUT_TBEMPHOS	4	RH	RH > Parâmetros > Eventos automáticos por empresa	configuracao	migrar-crud	Configuração de lançamento automático de eventos por empresa
+FPTP_EVENTO_SIND	4	RH	RH > Cadastros > Domínios > Eventos sindicais	dominio	migrar-crud	Tipos de evento associados ao sindicato
+FPTPFATORELEV	8	RH	RH > Tabelas eSocial > Fatores de elevação	dominio	carga-referencia	Fatores de elevação de risco/aposentadoria especial
+FPTPFERIAS	3	RH	RH > Cadastros > Domínios > Tipos de férias	dominio	migrar-crud	Tipos de férias (normal, coletiva, abono)
+FPTP_FOLHA	9	RH	RH > Cadastros > Tipos de folha	dominio	migrar-crud	Tipos de folha de pagamento ligados ao tipo eSocial
+FPTPFOLHAESOC	5	RH	RH > Tabelas eSocial > Tipos de folha	dominio	carga-referencia	Tipos de folha conforme eSocial (mensal, 13º, etc.)
+FPTP_FUNC	16	RH	RH > Cadastros > Domínios > Tipos de colaborador	dominio	migrar-crud	Tipos de colaborador (CLT, estagiário, autônomo etc.)
+FPTPINCCONT	3	RH	RH > Tabelas eSocial > Incidência de contribuição	dominio	carga-referencia	Indicador de incidência de contribuição
+FPTPINSCRICAO	4	RH	RH > Tabelas eSocial > Tipos de inscrição	dominio	carga-referencia	Tipos de inscrição (CNPJ, CPF, CAEPF, CNO)
+FPTPISENMULTA	2	RH	RH > Tabelas eSocial > Isenção de multa	dominio	carga-referencia	Indicador de isenção de multa (eSocial)
+FPTPJORINTERM	2	RH	RH > Tabelas eSocial > Jornada intermitente	dominio	carga-referencia	Indicador de jornada de trabalho intermitente
+FPTPLOTACAO	16	RH	RH > Tabelas eSocial > Tipos de lotação tributária	dominio	carga-referencia	Tabela eSocial de tipos de lotação tributária
+FPTPOBRA	3	RH	RH > Tabelas eSocial > Tipos de obra	dominio	carga-referencia	Indicador de obra de construção civil
+FPTPOBRIGAECD	2	RH	RH > Tabelas eSocial > Obrigatoriedade ECD	dominio	carga-referencia	Indicador de obrigatoriedade de escrituração contábil digital
+FPTPONUS	3	RH	RH > Tabelas eSocial > Tipos de ônus de cessão	dominio	carga-referencia	Ônus da cessão/requisição de trabalhador
+FPTPONUSREMUN	3	RH	RH > Tabelas eSocial > Ônus da remuneração	dominio	carga-referencia	Ônus da remuneração em cessão de servidor
+FPTPPENSAOALI	4	RH	RH > Tabelas eSocial > Tipos de pensão alimentícia	dominio	carga-referencia	Indicador de pensão alimentícia (eSocial)
+FPTPPRESTSERV	3	RH	RH > Tabelas REINF > Tipos de prestação de serviço	dominio	carga-referencia	Tipos de prestação de serviço (REINF)
+FPTPPROCESSO	4	RH	RH > Tabelas eSocial > Tipos de processo	dominio	carga-referencia	Tipos de processo administrativo/judicial
+FPTP_REFER	5	RH	RH > Cadastros > Domínios > Tipos de referência de evento	dominio	migrar-crud	Tipos de referência de evento (horas, dias, percentual, valor)
+FPTPREGIMEPRE	3	RH	RH > Tabelas eSocial > Regimes previdenciários	dominio	carga-referencia	Regimes previdenciários (RGPS, RPPS, exterior)
+FPTPREGIMETRA	2	RH	RH > Tabelas eSocial > Regimes trabalhistas	dominio	carga-referencia	Regimes trabalhistas (CLT, estatutário)
+FPTPREGJORNAD	4	RH	RH > Tabelas eSocial > Regimes de jornada	dominio	carga-referencia	Tipos de regime de jornada de trabalho
+FPTPREINTEG	6	RH	RH > Tabelas eSocial > Tipos de reintegração	dominio	carga-referencia	Tipos de reintegração de empregado
+FPTPRESCDIRET	8	RH	RH > Tabelas eSocial > Rescisão de diretor	dominio	carga-referencia	Motivos de desligamento de diretor não empregado
+FPTPRETINSS	2	RH	RH > Tabelas eSocial > Retenção INSS	dominio	carga-referencia	Indicador de retenção de contribuição previdenciária
+FPTP_SAL	7	RH	RH > Cadastros > Domínios > Tipos de salário	dominio	carga-referencia	Unidades de pagamento do salário com código eSocial
+FPTP_SERV_NF_TO	2	RH	RH > Cadastros > Domínios > Tipos de serviço em NF	dominio	migrar-crud	Tipos de serviço em nota fiscal de tomador
+FPTPSITESPEC	5	RH	RH > Tabelas eSocial > Situações especiais	dominio	carga-referencia	Situações especiais de declaração (eSocial/DCTFWeb)
+FPTPTEL	3	RH	RH > Cadastros > Domínios > Tipos de telefone	dominio	migrar-crud	Tipos de telefone do colaborador
+FPTP_TREINAMENTO_CAPACITACAO	21	RH	RH > Tabelas eSocial > Treinamentos e capacitações	dominio	carga-referencia	Tabela eSocial de treinamentos/capacitações (NRs) do SESMT
+FPTPVALE	3	RH	RH > Cadastros > Domínios > Tipos de vale	dominio	migrar-crud	Tipos de vale (transporte, refeição, alimentação)
+FPVACINA	7	RH	RH > SESMT > Cadastros > Vacinas	dominio	migrar-crud	Vacinas ocupacionais aplicáveis a colaboradores
+FPVALE	1	RH	RH > Cadastros > Vales	cadastro	migrar-crud	Cadastro de vales-benefício por tipo
+FPVINC_RAIS	21	RH	RH > Tabelas legais > Vínculos RAIS	dominio	carga-referencia	Códigos oficiais de tipo de vínculo da RAIS
+MFADIFOR	1001	FIN	Financeiro > Adiantamentos a fornecedores/médicos	movimento	migrar-movimento	Adiantamentos a fornecedores e médicos (2020-06/2026)
+MFADIFOR_TBCBOPRO	395	FIN	Financeiro > Adiantamentos > Profissional	vinculo	migrar-movimento	Vínculo adiantamento x profissional beneficiário
+MFBORDER	1001	FIN	Financeiro > Borderôs de pagamento	movimento	migrar-movimento	Borderôs bancários de pagamento (12/2019-07/2026)
+MFCABECLANC	1001	FIN	Função: agrupador de lançamentos financeiros	movimento	migrar-movimento	Cabeçalho (ID) que agrupa lançamentos financeiros relacionados
+MFCABECRENEGO	2	FIN	Financeiro > Renegociação de títulos	movimento	migrar-leitura	Renegociações de títulos (2 linhas, 2021)
+MFCCCONV	1001	FIN	Financeiro > Conta corrente de convênios	movimento	migrar-movimento	Créditos/recebimentos de convênios em conta bancária
+MFCONPAG	1001	FIN	Financeiro > Contas a pagar	movimento	migrar-movimento	Títulos de contas a pagar (~71 mil, 2019-07/2026)
+MFCONPAG_TBCBOPRO	1001	FIN	Financeiro > Contas a pagar > Profissional	vinculo	migrar-movimento	Vínculo título a pagar x profissional (repasse/honorário)
+MFCTAREC	1001	FIN	Financeiro > Contas a receber	movimento	migrar-movimento	Títulos a receber de convênios/particulares (~25 mil)
+MFCTAUSU	1001	FIN	Financeiro > Permissões > Usuários x contas bancárias	vinculo	migrar-crud	Contas bancárias permitidas por usuário do financeiro
+MFDESACR	1001	FIN	Financeiro > Contas a pagar > Descontos e acréscimos	movimento	migrar-movimento	Descontos, acréscimos e retenções de impostos nos títulos
+MFLANCTO	1001	FIN	Financeiro > Tesouraria > Movimento bancário	movimento	migrar-movimento	Lançamentos bancários (débito, crédito, transferências)
+MFLANGSI	1001	FIN	Financeiro > Apropriação gerencial (grupo/subgrupo/item)	movimento	migrar-movimento	Rateio de títulos por grupo, subgrupo, item e centro de custo
+MFPAGADF	1001	FIN	Financeiro > Adiantamentos > Compensação	movimento	migrar-movimento	Utilização de adiantamentos na baixa de contas a pagar
+MFPARAM	2	FIN	Financeiro > Parâmetros	configuracao	migrar-crud	Parâmetros do financeiro por empresa (operações, alíquotas, contas)
+MFPARAM_MFTIPOLANC	19	FIN	Financeiro > Parâmetros > Tipos de lançamento	configuracao	migrar-crud	Tipos de lançamento habilitados por empresa
+MFPARUSU	59	FIN	Financeiro > Parâmetros do usuário	configuracao	migrar-crud	Empresa e competência de trabalho por usuário do financeiro
+MFREFDES	24	FIN	Financeiro > Cadastros > Descontos/acréscimos e impostos	cadastro	migrar-crud	Códigos de desconto/acréscimo e retenções com código DARF
+MFSALATU	392	FIN	Financeiro > Tesouraria > Saldo atual das contas	movimento	migrar-movimento	Saldo atualizado por conta bancária
+MFSALDOS	588	FIN	Financeiro > Tesouraria > Saldos diários	historico	migrar-leitura	Saldos diários fechados por conta bancária (até 01/2026)
+MFTIPODOC	6	FIN	Financeiro > Domínios > Finalidades de DOC/TED	dominio	carga-referencia	Finalidades de transferência bancária (padrão FEBRABAN)
+MFTIPOLANC	40	FIN	Financeiro > Domínios > Tipos de credor/lançamento	dominio	migrar-crud	Tipos de credor/lançamento (fornecedor, médico, prestador, adiantamento)
+MFTIPOLANC_TBOPCOES	1001	FIN	Administração > Perfis > Tipos de lançamento por opção	configuracao	migrar-crud	Tipos de lançamento permitidos por opção de menu
+MFTIPOTED	5	FIN	Financeiro > Domínios > Tipos de TED	dominio	carga-referencia	Códigos de finalidade de TED
+MFTPAPURACAO	2	FIN	Financeiro > Domínios > Tipos de apuração	dominio	migrar-crud	Tipo de apuração de impostos (mensal/por pagamento)
+MFTPCOBRANCA	4	FIN	Financeiro > Domínios > Tipos de cobrança	dominio	migrar-crud	Tipos de cobrança bancária
+MFTPCONTRIBUICAO	4	FIN	Financeiro > Domínios > Tipos de contribuição	dominio	migrar-crud	Tipos de contribuição/retenção sobre pagamentos
+MFTPPGTOBANCO	6	FIN	Financeiro > Domínios > Formas de pagamento bancário	dominio	carga-referencia	Formas de pagamento por banco (CNAB)
+MOPARAM	1	FIN	Financeiro > Orçamento > Parâmetros	configuracao	migrar-crud	Parâmetros do módulo de orçamento (1 linha, módulo sem uso)
+NFSECLASSIFICACAO_TRIBUTARIA	13	FIN	Fiscal > NFS-e > Classificação tributária IBS/CBS	dominio	carga-referencia	Tabela cClassTrib da reforma tributária (CST IBS/CBS)
+NFSEEMPDESENT	9	FIN	Fiscal > NFS-e > Entidades/municípios do provedor	dominio	carga-referencia	Municípios/entidades atendidos pelos provedores de NFS-e
+NFSEEMPDESENV	38	FIN	Fiscal > NFS-e > Provedores de NFS-e	dominio	carga-referencia	Padrões/provedores de NFS-e (ABRASF, WebISS etc.) com versão XML
+NFSEPARUSU	38	FIN	Fiscal > NFS-e > Parâmetros do usuário	configuracao	migrar-crud	Competência e retenções padrão por usuário na NFS-e
+PEJUSTIF	3	RH	RH > Ponto > Justificativas	cadastro	migrar-crud	Justificativas de ocorrências de ponto
+PEPARAM	1	RH	RH > Ponto > Parâmetros	configuracao	migrar-crud	Parâmetros do ponto eletrônico (noturno, tolerâncias, horas extras)
+PEPARAM_USUARIO	1	RH	RH > Ponto > Parâmetros do usuário	configuracao	migrar-crud	Competência de trabalho do usuário no ponto
+PEPERIOD_JUSTIF	23	RH	RH > Ponto > Domínios > Períodos de justificativa	dominio	migrar-crud	Períodos/tipos de abrangência de justificativa de ponto
+PETP_INTEGR_EVENTO	13	RH	RH > Ponto > Domínios > Integração com folha	dominio	migrar-crud	Tipos de integração de eventos do ponto com a folha
+PETPINTERVALO	5	RH	RH > Ponto > Domínios > Tipos de intervalo	dominio	migrar-crud	Tipos de intervalo de jornada
+PETP_MOVIM	15	RH	RH > Ponto > Domínios > Tipos de movimentação	dominio	migrar-crud	Tipos de movimentação de ponto
+POBANCOHRTP	4	RH	RH > Ponto/Escala > Domínios > Tipos de banco de horas	dominio	migrar-crud	Tipos de banco de horas
+POCLASSIFMARC	3	RH	RH > Ponto/Escala > Domínios > Classificação de marcação	dominio	migrar-crud	Classificação das marcações de ponto
+PODIA	8	RH	RH > Ponto/Escala > Domínios > Dias	dominio	migrar-crud	Dias da semana e feriado para escalas
+POPROGSIT	5	RH	RH > Ponto/Escala > Domínios > Situações da programação	dominio	migrar-crud	Situações da programação de escala
+POPROSITUACAO	3	RH	RH > Ponto/Escala > Domínios > Situações do processamento	dominio	migrar-crud	Situações do processamento de ponto/escala
+POREPHOMOLOGADO	3	RH	RH > Ponto/Escala > Domínios > REP homologados	dominio	carga-referencia	Tipos de relógio de ponto homologado (Portaria 671)
+POTPCONTTEMP	4	RH	RH > Ponto/Escala > Domínios > Contratos temporários	dominio	migrar-crud	Tipos de contrato temporário com limite semanal de horas
+POTPHORA	9	RH	RH > Ponto/Escala > Domínios > Tipos de hora	dominio	migrar-crud	Tipos de hora (normal, extra, noturna, falta)
+POTPINIBANCO	4	RH	RH > Ponto/Escala > Domínios > Início do banco de horas	dominio	migrar-crud	Critérios de início do banco de horas
+POTPJORNADA	6	RH	RH > Ponto/Escala > Domínios > Tipos de jornada	dominio	migrar-crud	Tipos de jornada de trabalho
+POTPTRABFOLGA	12	RH	RH > Ponto/Escala > Domínios > Trabalho x folga	dominio	migrar-crud	Regimes de trabalho e folga (12x36 etc.)
+RPCODIGO_RECEITA	1001	FIN	Fiscal > Tabelas > Códigos de receita (DARF/REINF)	dominio	carga-referencia	Códigos de receita federal por tributo (IRPF, RRA) e natureza
+SDCFOP	553	FIN	Fiscal > Tabelas SPED > CFOP	dominio	carga-referencia	Tabela oficial CFOP com vigência
+SDCSTCOFINS	33	FIN	Fiscal > Tabelas SPED > CST COFINS	dominio	carga-referencia	Tabela oficial CST COFINS com vigência
+SDCSTPIS	33	FIN	Fiscal > Tabelas SPED > CST PIS	dominio	carga-referencia	Tabela oficial CST PIS com vigência
+SDGECADNFS	1001	FIN	Fiscal > SPED > Dados fiscais da NF de entrada	movimento	migrar-movimento	Complemento SPED da NF de entrada: chave NF-e, tipo, CFOP
+SDGEITENS	1001	FIN	Cadastros > Itens > Dados fiscais	cadastro	migrar-crud	Dados fiscais do item de estoque: NCM, CST PIS/COFINS, gênero
+SDGELANNFS	1001	FIN	Fiscal > SPED > CFOP por item de NF	movimento	migrar-movimento	CFOP de cada item da NF de entrada para escrituração
+SDGENERO	100	FIN	Fiscal > Tabelas SPED > Gênero do item	dominio	carga-referencia	Tabela oficial de gênero do item de mercadoria/serviço
+SDINDICCONDPJ	2	FIN	Fiscal > Tabelas SPED > Condição da PJ na retenção	dominio	carga-referencia	Condição da PJ: beneficiária ou responsável pelo recolhimento
+SDINDICTPOPER	3	FIN	Fiscal > Tabelas SPED > Tipo de operação	dominio	carga-referencia	Indicador do tipo de operação para EFD-Contribuições
+SDITEMSERVICO	193	FIN	Fiscal > Tabelas SPED > Lista de serviços	dominio	carga-referencia	Lista oficial de itens de serviço (LC 116) com vigência
+SDMFCONPAG	1001	FIN	Fiscal > SPED > Dados fiscais do título a pagar	movimento	migrar-movimento	Complemento SPED de contas a pagar: serviço, CST, natureza do crédito
+SDNATCREDITO	18	FIN	Fiscal > Tabelas SPED > Natureza do crédito	dominio	carga-referencia	Tabela oficial de natureza da base de crédito PIS/COFINS
+SDNATRECEITA	2	FIN	Fiscal > Tabelas SPED > Natureza da receita	dominio	carga-referencia	Natureza da receita: cumulativa ou não cumulativa
+SDNATRETFONTE	6	FIN	Fiscal > Tabelas SPED > Natureza da retenção na fonte	dominio	carga-referencia	Natureza da retenção na fonte (órgãos públicos, PJ privada etc.)
+SDPARAM	1	FIN	Configurações > Fiscal > Parâmetros SPED	configuracao	migrar-crud	Competência de processamento e caminho do validador PVA
+SDTIPODOCTO	35	FIN	Fiscal > Tabelas SPED > Modelos de documento fiscal	dominio	carga-referencia	Modelos oficiais de documento fiscal com vigência
+STEMITENTE	5	RH	SESMT > CAT > Emitentes	dominio	carga-referencia	Tabela eSocial de emitente da CAT
+STFIL_PREV	4	RH	SESMT > CAT > Filiação previdenciária	dominio	carga-referencia	Tabela eSocial de filiação à Previdência do acidentado
+STLOCAL	6	RH	SESMT > CAT > Tipos de local do acidente	dominio	carga-referencia	Tabela eSocial de tipo de local do acidente
+STRESULT	6	RH	SESMT > ASO/Exames > Resultados	dominio	carga-referencia	Resultados de exame ocupacional/monitoração biológica (eSocial)
+STTPASO	4	RH	SESMT > ASO > Tipos de ASO	dominio	carga-referencia	Tipos de ASO eSocial (periódico, retorno, mudança de função)
+STTP_CAT	3	RH	SESMT > CAT > Tipos de CAT	dominio	carga-referencia	Tipos de CAT eSocial (inicial, reabertura, óbito)
+STTPMEDIDAS	3	RH	SESMT > Medidas de controle	dominio	carga-referencia	Tipos de medida de controle de risco ocupacional
+TBAGEBAN	143	FIN	Financeiro > Cadastros > Agências bancárias	cadastro	migrar-crud	Agências bancárias com endereço e modelo de cheque
+TBBANCOS	49	FIN	Financeiro > Cadastros > Bancos/carteiras de cobrança	cadastro	migrar-crud	Bancos e carteiras com layouts de cobrança e boleto
+TBCADPAG	22	FIN	Financeiro > Cadastros > Formas de pagamento	cadastro	migrar-crud	Formas de pagamento/recebimento (boleto, cartão parcelado, débito)
+TBCLIENT	1	FIN	Financeiro > Cadastros > Clientes	cadastro	migrar-crud	Clientes do contas a receber (1 registro)
+TBCONTAB	1	FIN	Nenhuma (registro de teste)	obsoleta	descartar	Conta contábil de teste; plano de contas real está em CT*
+TBCTABAN	489	FIN	Financeiro > Cadastros > Contas bancárias	cadastro	migrar-crud	Contas bancárias da empresa com sequências de remessa
+TBFINCODRECOL	1001	FIN	Financeiro > Fiscal > Códigos de recolhimento	dominio	carga-referencia	Códigos de receita/recolhimento federal (DARF/GRU)
+TBGRUDES	40	FIN	Financeiro > Cadastros > Grupos de despesa/receita	cadastro	migrar-crud	Grupos do plano gerencial de despesas/receitas com CC
+TBIMUNIDADE_ISSQN	6	FIN	Financeiro > Fiscal > NFS-e > Imunidades ISSQN	dominio	carga-referencia	Tipos de imunidade de ISSQN da NFS-e nacional
+TBINDICADOR_OPERA_NF	4	FIN	Financeiro > Fiscal > NFS-e > Indicador de operação	dominio	carga-referencia	Indicador de local da operação NFS-e (IBS/CBS)
+TBINDNIF	3	FIN	Financeiro > Fiscal > REINF > Indicador NIF	dominio	carga-referencia	Indicador NIF de beneficiário no exterior (REINF)
+TBINTCRC	1001	FIN	Contabilidade > Integração > Contas de receita	configuracao	migrar-crud	Conta contábil de receita por convênio, item e tipo de lançamento
+TBINTIMP	2	FIN	Contabilidade > Integração > Impostos	configuracao	migrar-crud	Alíquotas e códigos de impostos retidos com vigência (inclui IBS/CBS)
+TBITEDES	533	FIN	Financeiro > Cadastros > Itens de despesa/receita	cadastro	migrar-crud	533 itens do plano gerencial com contábil, custos e REINF
+TBNATOPE	29	FIN	Fiscal > Cadastros > Naturezas de operação	dominio	migrar-crud	Naturezas de operação (CFOP) para notas fiscais
+TBORGAOPUBLICO	3	FIN	Fiscal > Cadastros > Órgãos públicos arrecadadores	cadastro	migrar-crud	Órgãos públicos credores de tributos (RFB, INSS, município)
+TBORIGEMRECEBIMENTO	4	FIN	Cadastros > Domínios > Formas de recebimento	dominio	migrar-crud	Origem do recebimento: à vista, débito, crédito, parcelado
+TBSERVICO_NFSE_ITENS	23	FIN	Fiscal > NFS-e > Itens da lista de serviços	dominio	carga-referencia	Itens da lista de serviços LC 116 para NFS-e
+TBTABBCO	497	FIN	Cadastros > Referências > Bancos	dominio	carga-referencia	Bancos com código e dígito (FEBRABAN)
+TBTABIRR	15	RH	Folha > Tabelas > IRRF, INSS e salário-família	configuracao	migrar-crud	Faixas de IRRF, INSS, salário-família e teto por vigência
+TBTIPOCARTAO	2	FIN	Cadastros > Domínios > Tipos de cartão	dominio	migrar-crud	Cartão de débito ou crédito na configuração de pagamento
+TBTIPOLANCVLR	7	FIN	Cadastros > Domínios > Tipos de valor para integração contábil	dominio	migrar-crud	Valor faturado, pago, glosado e reapresentado na integração
+TBTIPOPAGFOR	21	FIN	Financeiro > Fornecedores > Formas de pagamento	vinculo	migrar-crud	Formas de pagamento aceitas por fornecedor
+TBTIPOPERMISSAO	4	FIN	Cadastros > Domínios > Tipos de permissão contábil	dominio	migrar-crud	Permissão fazer/desfazer por empresa e usuário na contabilidade
+TBTIPOTAXACARTAO	2	FIN	Cadastros > Domínios > Tipos de taxa de cartão	dominio	migrar-crud	Taxa de cartão percentual ou valor fixo
+TBTPCONTA	3	FIN	Cadastros > Domínios > Tipos de conta bancária	dominio	migrar-crud	Conta corrente, aplicação ou poupança
+TBTPNATOPENF	3	FIN	Fiscal > Cadastros > Tipo de natureza de operação	dominio	migrar-crud	Simples remessa ou venda de mercadoria
+TBTPOCORBANCOPGTO	113	FIN	Financeiro > Pagamentos eletrônicos > Ocorrências bancárias	dominio	migrar-crud	Códigos de ocorrência de retorno bancário por banco
+TBTPTRIBUTO	5	RH	Folha > Cadastros > Tributos da integração	dominio	migrar-crud	Tributos da folha (FGTS, INSS, IRRF, PIS)
+TBTRIBUTACAO_ISSQN	4	FIN	Fiscal > NFS-e > Tributação ISSQN	dominio	carga-referencia	Natureza da tributação do ISSQN
+TBUNIMEN	1	FIN	Custos > Cadastros > Unidades de mensuração	cadastro	migrar-crud	Unidades de mensuração de custos (ApuraSUS)

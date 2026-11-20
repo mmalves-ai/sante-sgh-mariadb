@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	OPCAO_CARDAPIO	TABELA	alternativa_cardapio;preparacao_culinaria	N	HOT	F8	
+DBAMV	OPERACAO_ARGUMENTO	TABELA	alcada_aprovacao;alcada_aprovacao_nivel	N	ADM	F3	limite de valor por operação que exige autorização
+DBAMV	OPERACAO_AUTORIZADA	TABELA	pedido_aprovacao;decisao_aprovacao	N	ADM	F3	
+DBAMV	OPERACAO_NT_CRE_DEB_SUPRI	TABELA	motivo_nota_credito_debito;nota_credito_debito	N	FIN	F8	comportamento (estoque, nota referência) vira atributo do motivo
+DBAMV	OPERACAO_RVS	NAO		N	FIN		obsoleto: registro de serviços ao exterior extinto
+DBAMV	OPERADORA_ANS	TABELA	fonte_pagadora	N	CAD	F3	registro na agência fica na fonte pagadora
+DBAMV	OPERADORA_CONVENIO	TABELA	mapeamento_codigo_externo	N	INTG	F3	código da operadora na empresa de conectividade
+DBAMV	OPERA_AGENDA	TABELA	bloqueio_agenda	N	AGE	F3	
+DBAMV	OPER_ARGUM_GRU_USU	TABELA	perfil_acao;usuario_acao_excecao	N	ADM	F3	operações permitidas por perfil ou usuário
+DBAMV	OPMENEXO_BASE	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_CAMPO_EXTRA	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_CODPROCEDIMENTO	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_FORNECEDOR	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_ITEM	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_ITEM_CAMPO_EXTRA	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_ITEM_LOTE	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_ITEM_REQUISICAO	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_IT_REQUIS_CAMPO_EXTRA	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_LOTE	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_PEDIDO	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_RESPOSTAS	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_RESPOSTAS_CAMPO_EXTRA	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	OPMENEXO_RESP_COD_PROCEDIMENTO	MECANISMO	integracao	N	SUP	F7	estrutura da mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+DBAMV	ORCAMENTO	TABELA	linha_orcamento;valor_orcado_mes	N	FIN	F7	
+DBAMV	ORCAMENTO_HOCA	TABELA	orcamento_internacao_domiciliar;orcamento_internacao_domiciliar_item	N	INT	F8	
+DBAMV	ORCAMENTO_HOSPITALAR	TABELA	versao_orcamento	N	FIN	F7	
+DBAMV	ORCAMENTO_HOSPITALAR_COMP	TABELA	competencia_orcamento	S	FIN	F7	
+DBAMV	ORCA_AJUSTE_NF	TABELA	ajuste_orcamento_nota	N	FIN	F8	
+DBAMV	ORCA_AJUSTE_NF_RATEIO	TABELA	ajuste_orcamento_nota	N	FIN	F8	rateio por centro vira linhas do ajuste
+DBAMV	ORCA_CONTA	TABELA	conta_orcamentaria	S	FIN	F7	
+DBAMV	ORCA_CONTA_COMP	TABELA	conta_orcamentaria_composicao	S	FIN	F7	
+DBAMV	ORCA_CONTA_EMPR	TABELA	conta_orcamentaria_estabelecimento	S	FIN	F7	
+DBAMV	ORCA_CONTA_IND	TABELA	conta_orcamentaria_indicador	S	FIN	F8	
+DBAMV	ORCA_CONTA_PECA	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	
+DBAMV	ORCA_CONTA_USUA	TABELA	responsavel_orcamento	N	FIN	F7	gestor da conta com permissões
+DBAMV	ORCA_CONTROLE	TABELA	versao_orcamento	N	FIN	F7	
+DBAMV	ORCA_CONTROLE_CONCLUSAO	TABELA	aprovacao_orcamento	N	FIN	F7	conclusão do preenchimento por setor
+DBAMV	ORCA_CONTROLE_CONTA	TABELA	linha_orcamento	N	FIN	F7	
+DBAMV	ORCA_CONTROLE_CONTA_AUX	TABELA	linha_orcamento	N	FIN	F7	subitem da linha (fornecedor, contrato)
+DBAMV	ORCA_CONTROLE_ESTATISTICO	TABELA	valor_estatistico_orcado	N	FIN	F8	
+DBAMV	ORCA_CONTROLE_ESTAT_SETOR	TABELA	valor_estatistico_orcado	N	FIN	F8	
+DBAMV	ORCA_CONTROLE_IND	TABELA	valor_estatistico_orcado	N	FIN	F8	
+DBAMV	ORCA_CONTROLE_IND_MOV	TABELA	valor_estatistico_orcado	N	FIN	F8	valores mensais com base histórica
+DBAMV	ORCA_CONTROLE_IND_SETOR	TABELA	valor_estatistico_orcado	N	FIN	F8	
+DBAMV	ORCA_CONTROLE_MOV	TABELA	valor_orcado_mes	N	FIN	F7	orçado x realizado mensal
+DBAMV	ORCA_CONTROLE_MOV_AUX	TABELA	valor_orcado_mes	N	FIN	F7	
+DBAMV	ORCA_CONTROLE_PECA	TABELA	versao_orcamento_peca	S	FIN	F8	
+DBAMV	ORCA_CONTROLE_PENDENCIAS	TABELA	aprovacao_orcamento	N	FIN	F7	pendência de envio e aprovação por setor
+DBAMV	ORCA_CONTROLE_PLANO_PEND	TABELA	aprovacao_orcamento	N	FIN	F7	
+DBAMV	ORCA_CONTROLE_SETOR	TABELA	linha_orcamento	N	FIN	F7	linha por centro de custo
+DBAMV	ORCA_EXCECAO	TABELA	regra_controle_orcamentario	N	FIN	F8	itens excluídos do controle
+DBAMV	ORCA_EXIBE_INFO	NAO		N	FIN		tecnico do fornecedor sem equivalente
+DBAMV	ORCA_EXTERNO	TABELA	realizado_orcamento_origem	S	FIN	F7	carga externa de realizado
+DBAMV	ORCA_EXTERNO_LOTE	MECANISMO	integracao	N	FIN	F7	lote de carga externa
+DBAMV	ORCA_GRUPO_INDICADOR	TABELA	grupo_indicador_orcamentario	N	FIN	F8	
+DBAMV	ORCA_INDICADOR_COMP	TABELA	indicador_orcamentario	N	FIN	F8	
+DBAMV	ORCA_LOGS	MECANISMO	trilha_auditoria	N	FIN	F7	
+DBAMV	ORCA_MOTIVO	TABELA	motivo_movimento_orcamento	S	FIN	F7	
+DBAMV	ORCA_NOTA_EXPLICATIVA	TABELA	nota_explicativa	N	FIN	F8	
+DBAMV	ORCA_PECA	TABELA	modelo_peca_orcamentaria	S	FIN	F8	
+DBAMV	ORCA_PECA_ITEM	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	
+DBAMV	ORCA_PECA_ITEM_SETOR	TABELA	modelo_peca_orcamentaria_setor	S	FIN	F8	
+DBAMV	ORCA_PECA_VARIAVEIS	TABELA	premissa_orcamento	N	FIN	F7	variável usada nas fórmulas
+DBAMV	ORCA_PERFIL	TABELA	perfil_acesso	N	ADM	F3	permissões do orçamento viram ações do perfil
+DBAMV	ORCA_PERFIL_USUARIO	TABELA	usuario_perfil	N	ADM	F3	
+DBAMV	ORCA_PERFIL_USUA_CONTA	TABELA	responsavel_orcamento	N	FIN	F7	
+DBAMV	ORCA_PERFIL_USUA_PROV	TABELA	usuario_perfil	N	ADM	F3	perfil provisório com vigência
+DBAMV	ORCA_PERFIL_USUA_SETOR	TABELA	responsavel_orcamento	N	FIN	F7	
+DBAMV	ORCA_PLANO	TABELA	plano_orcamentario	S	FIN	F7	
+DBAMV	ORCA_PLANO_CNTA	TABELA	conta_orcamentaria	S	FIN	F7	posição da conta na estrutura do plano
+DBAMV	ORCA_PLANO_EMPR	TABELA	plano_orcamentario_estabelecimento	S	FIN	F7	
+DBAMV	ORCA_PLANO_ESTR	TABELA	conta_orcamentaria	S	FIN	F7	hierarquia do plano vira hierarquia da conta
+DBAMV	ORCA_RATEIO	TABELA	criterio_rateio	N	FIN	F7	critério de distribuição do orçado entre setores
+DBAMV	ORCA_RATEIO_DESTINO	TABELA	destino_criterio_rateio	N	FIN	F7	
+DBAMV	ORCA_RATEIO_ORIGEM	TABELA	criterio_rateio	N	FIN	F7	conta e setor de origem do critério
+DBAMV	ORCA_RATEIO_USUARIO	TABELA	responsavel_orcamento	N	FIN	F7	usuário que aplica o rateio
+DBAMV	ORCA_REALIZADO	TABELA	realizado_orcamento	S	FIN	F7	
+DBAMV	ORCA_REALIZADO_ITEM	TABELA	realizado_orcamento	S	FIN	F7	colunas mensais viram linhas por mês
+DBAMV	ORCA_REALIZADO_MOV	TABELA	realizado_orcamento_origem	S	FIN	F7	
+DBAMV	ORCA_TIPO_CENTRO	TABELA	classificacao_centro_custo	N	FIN	F3	
+DBAMV	ORCA_TIPO_CONTA	TABELA	tipo_conta_orcamentaria	S	FIN	F7	
+DBAMV	ORCA_TIPO_EXTERNO	TABELA	tipo_origem_realizado	S	FIN	F7	
+DBAMV	ORCA_VARIAVEL	TABELA	premissa_orcamento	N	FIN	F7	
+DBAMV	ORCA_VARIAVEL_CNTA	TABELA	conta_orcamentaria_composicao	S	FIN	F7	fórmula da conta a partir de premissas
+DBAMV	ORCA_WIZARD_AUX	NAO		N	FIN		tecnico do fornecedor sem equivalente
+DBAMV	ORDEM_DEVOLUCAO	TABELA	devolucao_fornecedor	N	SUP	F7	
+DBAMV	ORDEM_IMPRESSAO_LAUDO	TABELA	modelo_impressao_laudo	N	SADT	F3	ordem de impressão vira atributo do modelo
+DBAMV	ORDEM_IMPRESSAO_LAUDO_SETOR	TABELA	modelo_impressao_laudo	N	SADT	F3	
+DBAMV	ORDEM_PRODUCAO	TABELA	ordem_manipulacao;lote_produzido	N	SUP	F7	
+DBAMV	ORDEM_SOLIC_COMPRA_ME	TABELA	vinculo_pedido_compra_portal	N	INTG	F3	
+DBAMV	ORDEM_TRANSFERENCIA_REMESSA	MECANISMO	historico_entidade:producao_ambulatorial_sus	N	SUS	F7	troca de remessa da produção
+DBAMV	ORDEM_UNITARIZACAO_PRODUTO	TABELA	ordem_unitarizacao;ordem_unitarizacao_item	N	SUP	F7	
+DBAMV	ORD_COM	TABELA	pedido_compra;pedido_compra_item	N	SUP	F3	
+DBAMV	ORD_COM_MOEDA	TABELA	pedido_compra	N	SUP	F3	moeda e cotação viram atributos do pedido
+DBAMV	ORD_DUPL	TABELA	pedido_compra_parcela	S	SUP	F3	
+DBAMV	ORD_DUPL_COTA	TABELA	reserva_orcamentaria	N	FIN	F8	comprometimento do pedido por competência
+DBAMV	ORGANIZA_GRUPO_PROCEDIMENTOS	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	forma de organização da tabela oficial
+DBAMV	ORGAO	TABELA	orgao_transplante	N	PEP	F8	cadastro de órgãos; uso exato não documentado
+DBAMV	ORGAO_EMISSOR	TABELA	orgao_emissor_documento	N	CAD	F3	
+DBAMV	ORGAO_EMISSOR_CNES	TABELA	orgao_emissor_documento	N	CAD	F3	código oficial vira atributo
+DBAMV	ORIENTACAO_CONVENIO_ITEM_AGE	TABELA	item_agendavel_orientacao_fonte_pagadora	S	AGE	F8	
+DBAMV	ORIENTACAO_DIETA	TABELA	orientacao_saude	N	PEP	F8	
+DBAMV	ORIENTACAO_EXAME	TABELA	orientacao_preparo	N	SADT	F3	
+DBAMV	ORIENTACAO_SEXUAL	TABELA	orientacao_sexual_declarada	N	CAD	F7	
+DBAMV	ORIGEM_MATERIAL_EMPENHO	TABELA	fonte_recurso	N	SUP	F7	
+DBAMV	ORIGEM_MERCADORIA	TABELA	tabela_fiscal_oficial	N	FIN	F3	origem da mercadoria da nota fiscal
+DBAMV	ORIGEM_SAC_SOLICITACAO	TABELA	canal_ouvidoria	N	QUA	F8	
+DBAMV	ORIGEM_SENHA_AUT	TABELA	tipo_senha_autorizacao;regra_exigencia_autorizacao	N	REC	F7	
+DBAMV	ORI_ATE	TABELA	origem_entrada_atendimento	N	REC	F3	
+DBAMV	ORI_SAME	TABELA	regra_origem_atendimento	N	REC	F3	arquivo de prontuário por origem
+DBAMV	OUTROS_CONTATOS_PACIENTE	TABELA	telefone_pessoa;email_pessoa	N	CAD	F3	
+DBAMV	PACIENTE	TABELA	paciente;pessoa_fisica;endereco_pessoa;documento_pessoa	N	CAD	F3	
+DBAMV	PACIENTE_ADICIONAL	TABELA	pessoa_fisica;paciente	N	CAD	F3	
+DBAMV	PACIENTE_CARTAO	TABELA	registro_reimpressao	N	ADM	F3	emissão e vias do cartão do paciente
+DBAMV	PACIENTE_CONTA_SUS	TABELA	conta_aih;producao_ambulatorial_sus	N	SUS	F7	dados do paciente congelados na produção exportada
+DBAMV	PACIENTE_IDENTIDADE	TABELA	documento_pessoa	N	CAD	F3	
+DBAMV	PACIENTE_MOTIVO_RESTRICAO_VSIT	TABELA	bloqueio_visitante	N	HOT	F8	
+DBAMV	PACIENTE_OBITO	TABELA	anonimizacao_registro	N	ADM	F3	processo de eliminação de dados de falecido
+DBAMV	PACIENTE_PROGRAMA_SAUDE	TABELA	paciente_linha_cuidado	N	CAD	F8	
+DBAMV	PACIENTE_RGHC	TABELA	prontuario_estabelecimento	N	CAD	F3	
+DBAMV	PACOTE	TABELA	pacote;pacote_contrato;pacote_versao	N	FAT	F3	
+DBAMV	PACOTE_AIH	TABELA	conta_aih	N	SUS	F7	
+DBAMV	PACOTE_CID	TABELA	pacote_cid	S	FAT	F7	
+DBAMV	PACOTE_DIARIA	TABELA	pacote_diaria_acomodacao	N	FAT	F3	
+DBAMV	PACOTE_EXCECAO	TABELA	pacote_excecao	N	FAT	F3	
+DBAMV	PACOTE_EXCECAO_PROCEDIMENTO	TABELA	pacote_excecao	N	FAT	F3	
+DBAMV	PACOTE_GRU_PRO	TABELA	pacote_item_incluso	N	FAT	F3	
+DBAMV	PACOTE_PRO_FAT	TABELA	pacote_item_incluso	N	FAT	F3	
+DBAMV	PACOTE_TETOS	TABELA	pacote_teto	N	FAT	F3	
+DBAMV	PACOTE_TIP_ACOM	TABELA	pacote_diaria_acomodacao	N	FAT	F3	acomodações em que o pacote vale
+DBAMV	PAC_RECUSA_REDE_CREDEN	TABELA	recusa_rede_credenciada	S	AGE	F8	
+DBAMV	PADRAO_COBRANCA	TABELA	regra_lancamento	N	FAT	F3	cobrança periódica automática
+DBAMV	PADRAO_CRESCIMENTO	TABELA	curva_referencia_ponto	N	PEP	F8	
+DBAMV	PADRAO_FORMULA	TABELA	escala_clinica_variavel	N	PEP	F3	destino de gravação vira destino estruturado
+DBAMV	PADRAO_FORMULA_PERGUNTA	TABELA	escala_clinica_variavel	N	PEP	F3	origem automática da variável
+DBAMV	PAGCON_PAG	TABELA	baixa_titulo	N	FIN	F3	
+DBAMV	PAGU_ACAO	MECANISMO	framework	N	PEP	F3	ação programada da tela
+DBAMV	PAGU_AVALIACAO	TABELA	aplicacao_escala	N	PEP	F3	
+DBAMV	PAGU_FORMULA	TABELA	escala_clinica	N	PEP	F3	
+DBAMV	PAGU_FORMULA_INTERPRETACAO	TABELA	escala_clinica_faixa	N	PEP	F3	
+DBAMV	PAGU_FORMULA_REGRAS_RESULT	TABELA	escala_clinica_regra_exibicao	S	PEP	F7	
+DBAMV	PAGU_FORMULA_SETOR	TABELA	escala_clinica_setor	N	PEP	F7	
+DBAMV	PAGU_ITAVALIACAO	TABELA	aplicacao_escala_item	N	PEP	F3	
+DBAMV	PAGU_ITFORMULA	TABELA	escala_clinica_variavel	N	PEP	F3	
+DBAMV	PAGU_OBJETO	TABELA	tipo_documento_clinico	N	PEP	F3	
+DBAMV	PAGU_OBJETO_PARAMETRO	MECANISMO	parametro	N	PEP	F3	parâmetro por tipo de documento
+DBAMV	PAGU_OBJETO_PERG_FORMULA	TABELA	modelo_campo	N	PEP	F3	pergunta de escala exibida no documento
+DBAMV	PAGU_OBJETO_RELATORIO	TABELA	modelo_impressao_clinica	N	PEP	F3	
+DBAMV	PAGU_OBJETO_REL_PARAM	TABELA	modelo_impressao_clinica	N	PEP	F3	
+DBAMV	PAGU_PERGUNTA	TABELA	escala_clinica_variavel	N	PEP	F3	
+DBAMV	PAGU_REGRAS_RESULT_PERGUNTA	TABELA	escala_clinica_regra_condicao	S	PEP	F7	
+DBAMV	PAGU_REGRAS_RES_PERGUN_RESP	TABELA	escala_clinica_regra_condicao	S	PEP	F7	
+DBAMV	PAGU_RESPOSTA	TABELA	escala_clinica_opcao	N	PEP	F3	
+DBAMV	PAG_DESC_ACRES	TABELA	ajuste_titulo	N	FIN	F3	
+DBAMV	PAINEL_ATENDIMENTO	MECANISMO	datamart	N	PEP	F3	situação diária derivada da prescrição
+DBAMV	PAINEL_CLINICO	TABELA	painel_clinico	S	PEP	F8	
+DBAMV	PAINEL_CLINICO_GRUPO	TABELA	painel_clinico_grupo	S	PEP	F8	
+DBAMV	PAINEL_CLINICO_PARAMETRO	TABELA	painel_clinico_item	S	PEP	F8	
+DBAMV	PAINEL_CLINICO_TIPO_GRUPO	TABELA	tipo_grupo_painel_clinico	S	PEP	F8	
+DBAMV	PAINEL_DIG_ATENDIME	TABELA	painel_tv	N	REL	F3	
+DBAMV	PAIS	TABELA	pais_referencia	N	CAD	F3	
+DBAMV	PALAVRAS_CHAVE_LAUDO	TABELA	laudo_palavra_chave	N	SADT	F8	
+DBAMV	PALM	NAO		N	SIS		obsoleto: coletor de mão descontinuado
+DBAMV	PALM_ETIQUETA_CME	NAO		N	CC		obsoleto: processo de coletor de mão descontinuado
+DBAMV	PAL_CHA	TABELA	palavra_chave_laudo	N	SADT	F8	
+DBAMV	PAPEL_CENTRO_CIRURGICO	TABELA	configuracao_usuario_bloco	N	CC	F3	papel com ações liberadas no bloco
+DBAMV	PAPEL_CENTRO_CIR_USUARIO	TABELA	configuracao_usuario_bloco	N	CC	F3	
+DBAMV	PARCELA_COND_PAGAMENTO	TABELA	condicao_pagamento;condicao_pagamento_parcela	S	FIN	F3	
+DBAMV	PARCELA_ITORD_PRO	TABELA	pedido_compra_entrega	N	SUP	F3	
+DBAMV	PARCELA_ITSOL_COM	TABELA	solicitacao_compra_entrega	S	SUP	F7	
+DBAMV	PARECER_AUDITORIA	TABELA	motivo_auditoria	N	FAT	F3	parecer padrão do auditor
+DBAMV	PARTICIPA_EMPRESA	TABELA	empresa_grupo_consolidacao	N	FIN	F8	
+DBAMV	PARTICULARIDADE	TABELA	cenario_alerta	N	ADM	F3	
+DBAMV	PARTIC_USUARIO	TABELA	assinatura_alerta	N	ADM	F3	
+DBAMV	PAR_GERADOR_ETIQUETA	MECANISMO	framework	N	ADM	F3	layout de etiqueta
+DBAMV	PAR_MED	TABELA	interconsulta;interconsulta_resposta	N	PEP	F3	
+DBAMV	PASSAGEM_PLANTAO	TABELA	passagem_turno;passagem_turno_paciente	N	PEP	F3	
+DBAMV	PASTA_TRABALHO_CONTEUDO	TABELA	lote_trabalho_item	N	SADT	F7	
+DBAMV	PASTA_TRABALHO_PSSD	TABELA	lote_trabalho	N	SADT	F7	
+DBAMV	PATOLOGIA_GES	NAO		N	PEP		sem valor de negocio: garantia de saúde de outro país
+DBAMV	PECA_ORCAMENTARIA	TABELA	modelo_peca_orcamentaria	S	FIN	F8	
+DBAMV	PECA_ORCAMENTARIA_CONFIGURACAO	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	
+DBAMV	PECA_ORCAMENTARIA_CONSOLIDACAO	TABELA	execucao_rotina	N	SIS	F3	execução da consolidação
+DBAMV	PECA_ORCAMENTARIA_HISTORICO	TABELA	aprovacao_orcamento	N	FIN	F7	fase e justificativa do formulário
+DBAMV	PECA_ORCAMENTARIA_HIST_DET	MECANISMO	historico_entidade:lancamento_peca_orcamentaria	N	FIN	F8	
+DBAMV	PECA_ORCAMENTARIA_LANCAMENTO	TABELA	lancamento_peca_orcamentaria	S	FIN	F8	
+DBAMV	PECA_ORCAMENTARIA_LANCMTO_SET	TABELA	lancamento_peca_orcamentaria	S	FIN	F8	abertura por centro de custo
+DBAMV	PECA_ORCAMENTARIA_LANC_CSLDC	TABELA	valor_orcado_mes	N	FIN	F7	resultado consolidado
+DBAMV	PECA_ORCAMENTARIA_LIBERACAO	TABELA	responsavel_orcamento	N	FIN	F7	liberação do formulário ao preenchedor
+DBAMV	PEDIDO_EMPENHO	TABELA	empenho	N	SUP	F7	
+DBAMV	PEDIDO_EMPENHO_FORNECEDOR	TABELA	empenho;empenho_item	N	SUP	F7	
+DBAMV	PEDIDO_EMPENHO_FORNEC_REVOG	MECANISMO	historico_entidade:empenho	N	SUP	F7	revogação do empenho
+DBAMV	PED_LAB	TABELA	requisicao_exame;exame_item	N	SADT	F3	
+DBAMV	PED_LAB_DETALHES_CALC	TABELA	amostra_biologica	N	SADT	F3	volume e tempo de coleta
+DBAMV	PED_LAB_PRESTADOR_EXTERNO	TABELA	requisicao_exame;solicitante_externo	N	SADT	F3	
+DBAMV	PED_RX	TABELA	requisicao_exame;exame_item	N	SADT	F3	
+DBAMV	PED_RX_PRESTADOR_EXTERNO	TABELA	requisicao_exame;solicitante_externo	N	SADT	F3	
+DBAMV	PENDENCIA_ATENDIMENTO	TABELA	atendimento_pendencia	N	REC	F7	
+DBAMV	PENDENCIA_AVISO	TABELA	pendencia_agendamento_cirurgico	N	CC	F3	
+DBAMV	PENDENCIA_CONTA	TABELA	tipo_pendencia_conta	N	FAT	F3	
+DBAMV	PENDENCIA_IMPORTACAO_OC	MECANISMO	integracao	N	SUP	F3	falha de importação de pedido
+DBAMV	PENDENCIA_PROCESSO	TABELA	pendencia_processo_compra	S	SUP	F7	
+DBAMV	PEPWEB_COLUNA_CONFIG	MECANISMO	framework	N	PEP	F3	layout do portal
+DBAMV	PEPWEB_PARAMETROS	MECANISMO	parametro	N	PEP	F3	
+DBAMV	PEPWEB_PORTAL_CONFIG	MECANISMO	framework	N	PEP	F3	layout do portal
+DBAMV	PEPWEB_PORTLET_CONFIG	MECANISMO	framework	N	PEP	F3	layout do portal
+DBAMV	PEPWEB_PORTLET_CONFIG_MENU	MECANISMO	framework	N	PEP	F3	menu do portal
+DBAMV	PEPWEB_TIPO_GRAFICO	MECANISMO	framework	N	PEP	F3	tipo de gráfico da tela
+DBAMV	PEPWEB_UNIDADE_MULTI_EMPRESAS	TABELA	rede	N	CAD	F3	unidade regional agrupa estabelecimentos
+DBAMV	PEPWEB_USUARIO_UNID_REG	TABELA	usuario_estabelecimento	N	ADM	F3	
+DBAMV	PEP_AUTORIZACAO_PRESTADOR	TABELA	usuario_acao_excecao	N	ADM	F3	autorização temporária para fechar registros
+DBAMV	PEP_CONFIGURACAO_LISTA_PACIEN	TABELA	painel_filtro_usuario	N	PEP	F3	
+DBAMV	PEP_CONFIGURACAO_USUARIO_SETOR	TABELA	usuario_unidade	N	ADM	F3	
+DBAMV	PEP_GRUPO_CID	TABELA	grupo_cid	N	INTG	F7	
+DBAMV	PEP_JUSTIFICATIVA_CANCEL_ALT	TABELA	cancelamento_alta	N	INT	F3	
+DBAMV	PEP_REGISTRO_DOCUMENTO_CLINICO	TABELA	documento_prontuario	N	PEP	F3	
+DBAMV	PEP_REGISTRO_LOG	MECANISMO	trilha_auditoria	N	PEP	F3	
+DBAMV	PEP_SETOR_LISTA_PACIENTE	TABELA	painel_filtro_usuario	N	PEP	F3	setores da lista do usuário
+DBAMV	PEP_SETOR_ULTIMA_ATUALIZACAO	TABELA	painel_filtro_usuario	N	PEP	F3	
+DBAMV	PERCENTUAL_CONSIGNADO	TABELA	faixa_percentual_consignado	N	SUP	F7	
+DBAMV	PERCENTUAL_UNID_REG	TABELA	cota_marcacao	N	AGE	F8	distribuição percentual das vagas
+DBAMV	PERFIL_AGENDAMENTO	TABELA	perfil_marcacao	N	AGE	F8	

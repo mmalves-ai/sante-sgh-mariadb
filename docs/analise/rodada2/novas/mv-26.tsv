@@ -1,0 +1,25 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+documento_orientacao_contratual	SGO	principal	F7	Guia de leitura do contrato exigido pela norma da ANS: texto, versão, vigência e situação	DBAPS.GUIA_LEITURA_CONTRATUAL
+documento_orientacao_contratual_entrega	SGO	item	F7	Entrega do guia de leitura a cada contrato, com validade, data de entrega e observação	DBAPS.CONTRATO_GUIA_LEITURA_CONTRATU
+norma_regulatoria	SGO	dominio	F7	Normas da ANS que exigem adequação de contrato ou produto (adaptação, migração, reajuste), com número e vigência	DBAPS.CONTRATO_NORMA_ANS
+contrato_plano_observacao	SGO	item	F7	Observações datadas do contrato por tipo, com autor, para consulta no atendimento e na cobrança	DBAPS.CONTRATO_OBSERVACAO
+lancamento_programado_contrato_faixa	SGO	item	F7	Valor ou percentual do lançamento programado por faixa etária, parentesco e tipo de beneficiário	DBAPS.CONTR_LCTO_MEN_FAIX_ETAR; DBAPS.EMPRESA_MODELO_RECEITA_FX_ETAR
+repasse_beneficiario_operadora	SGO	principal	F8	Contrato ou beneficiário recebido ou repassado a outra operadora em compartilhamento de risco, com referência externa e vigência	DBAPS.CONTRATO_REPASSADO_PTU; DBAPS.EMPRESA_EVENTUAL
+taxa_administrativa_contrato	SGO	configuracao	F7	Taxa de administração cobrada no contrato de custo operacional: classificação, abrangência, percentual ou valor e vigência	DBAPS.CONTRATO_TAXA_ADMINISTRATIVA
+taxa_administrativa_contrato_procedimento	SGO	item	F7	Taxa de administração específica por procedimento, grupo ou tipo de guia no contrato de custo operacional	DBAPS.CONTRATO_TAXA_ADMIN_PROC
+participacao_societaria_operadora	SGO	item	F7	Empresas controladas, coligadas ou dependentes da operadora, com CNPJ, ações, percentual e tipo de vínculo	DBAPS.CONTROLADAS_OPERADORA; DBAPS.EMP_DEP_OPERADORA
+motivo_cortesia_autorizacao	SGO	dominio	F7	Motivos ou destinos de autorização concedida por cortesia, fora da cobertura contratada	DBAPS.CORTESIA
+critica_fechamento_competencia_plano	SGO	item	F7	Críticas da apuração do fechamento mensal da operadora (saldos, provisões), com ação sugerida e resolução	DBAPS.CRITICA_APURACAO_FECHAMENTO
+pendencia_reajuste_contrato	SGO	item	F7	Contratos que o processamento de reajuste não reajustou, com motivo, responsável e autorização para seguir	DBAPS.CRITICA_REAJUSTE
+sinonimo_especialidade	CAD	item	F8	Termos populares de cada especialidade usados na busca do guia de rede e do portal	DBAPS.ESPECIALIDADE_TERMO
+etapa_protocolo_beneficiario	SGO	dominio	F7	Etapas do protocolo de atendimento ao beneficiário, com indicação de etapa inicial e de conclusão	DBAPS.FASE_ATEND_CALL_CENTER; DBAPS.FASES_SAC
+gravidade_protocolo_beneficiario	SGO	dominio	F7	Níveis de gravidade do protocolo de atendimento, usados para prioridade e prazo	DBAPS.GRAVIDADE_CALL_CENTER
+regra_reajuste_sinistralidade	SGO	configuracao	F7	Regra de reajuste coletivo por sinistralidade: grupo, período de apuração e vigência	DBAPS.GRUPO_SINISTRA; DBAPS.FAIXA_REAJUSTE
+regra_reajuste_sinistralidade_faixa	SGO	item	F7	Faixas de sinistralidade apurada e o percentual de reajuste aplicado em cada uma	DBAPS.FAIXA_REAJUSTE
+grupo_economico_contratante	SGO	principal	F7	Grupo econômico de contratantes em árvore, com documento, saldo controlado e uso no reajuste e na comissão	DBAPS.GRUPO_EMPRESA
+agrupamento_prestador_rede	SGO	dominio	F7	Agrupamentos de prestadores da rede usados em regras de valoração, pagamento e relatório	DBAPS.GRUPO_PRESTADOR
+agrupamento_procedimento_plano	SGO	dominio	F7	Árvore de grupos de procedimentos da operadora usada em cobertura, carência, coparticipação, franquia e limites	DBAPS.GRUPO_PROCEDIMENTO; DBAPS.GRUPO_DIREITO; DBAPS.GRUPOS_BRAS
+modelo_pedido_portal_prestador	SGO	configuracao	F8	Modelo de guia salvo pelo prestador no portal para reaproveitar solicitações frequentes	DBAPS.GUIA_MODELO
+ocorrencia_pedido_autorizacao	SGO	item	F7	Ocorrências classificadas registradas no pedido de autorização, com autor e observação	DBAPS.GUIA_OCORRENCIA
+configuracao_efd_contribuicoes	FIN	configuracao	F7	Configuração da escrituração de PIS e Cofins por estabelecimento: situações tributárias, incidência e regime	DBAPS.EMPRESA_MVS_SPED_PIS_COFINS
+area_atuacao_medica	CAD	dominio	F7	Áreas de atuação médica reconhecidas pelo conselho, complementares à especialidade	DBAPS.ESPECIAL_PREST_AREA_ATUACAO

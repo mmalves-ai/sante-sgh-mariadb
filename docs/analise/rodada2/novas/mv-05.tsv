@@ -1,0 +1,23 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+nota_entrada_atendimento	SUP	vinculo	F7	Atendimentos ligados a uma nota de entrada, para material consignado ou comprado para uso direto no paciente	DBAMV ENT_PRO_ATENDIMENTO
+nota_entrada_cambio	SUP	item	F8	Conversão de nota de entrada emitida em moeda estrangeira: moeda, índice, data da cotação e valores convertidos	DBAMV ENT_PRO_MOEDA
+entrada_servico_cambio	FIN	item	F8	Conversão de entrada de serviço contratada em moeda estrangeira: moeda, índice, data da cotação e valores convertidos	DBAMV ENT_SERV_MOEDA
+equipe_licitacao	SUP	principal	F7	Servidores habilitados a compor comissão de pregão ou de licitação, com função e vigência	DBAMV EQUIPE_PREGAO
+equipe_licitacao_processo	SUP	vinculo	F7	Membros da comissão designados para cada processo licitatório, com o papel de cada um	DBAMV EQUIPE_PREGAO_PROCESSO
+profissional_equipamento	CAD	vinculo	F8	Equipamentos que cada profissional está habilitado a operar, usado na agenda de exames	DBAMV EQUIPTO_PRESTADOR
+autorizacao_servico_sus_paciente	SUS	principal	F7	Especialidade ou serviço que o gestor autorizou para o paciente ser atendido pelo SUS, com data e mensagem	DBAMV ESPEC_SERV_PAC_SUS
+local_estoque_classificacao	SUP	vinculo	F3	Grupos, subgrupos ou insumos que cada local de estoque pode guardar e movimentar	DBAMV ESP_EST
+local_estoque_transferencia	SUP	vinculo	F3	Locais de destino autorizados a receber transferência de cada local de estoque	DBAMV ESTOQUE_TRANSFERENCIA
+estabelecimento_solicitante	CAD	principal	F3	Estabelecimento de saúde externo que encaminha paciente ou pede exame, com CNES e situação	DBAMV ESTABELECIMENTO_SOLICIT
+estadio_clinico	PEP	dominio	F8	Estádios e códigos de estadiamento oncológico disponíveis para o registro do tumor	DBAMV ESTADIO, ESTADIAMENTO
+modelo_etiqueta	ADM	configuracao	F3	Leiaute de etiqueta por finalidade (estoque, esterilização, lactário, documento, unitarização): driver, colunas, tamanho e margens	DBAMV ETIQUETA, ETIQUETA_AMAP, ETIQUETA_AMDC, ETIQUETA_CME, ETIQUETA_LAPROD, ETIQUETA_MOVDOC, ETIQUETA_PARI, ETIQUETA_UNITARIZACAO
+modelo_etiqueta_campo	ADM	item	F3	Campo impresso no modelo de etiqueta: dado de origem, posição, tamanho, fonte, rotação e código de barras	DBAMV ETIQUETA_ITEM*, ETIQUETA_PARAMETRO, ETIQUETA_UNITARIZACAO_CAMPO
+modelo_etiqueta_uso	ADM	vinculo	F3	Onde cada modelo de etiqueta se aplica (local de estoque, estabelecimento, insumo), com número de cópias e impressora	DBAMV ETIQUETA_ESTOQUE, ETIQUETA_UNITARIZA_EMPRESA, ETIQUETA_UNITARIZA_PRODUTO
+exame_local_anatomico	SADT	vinculo	F7	Locais anatômicos de coleta aceitos para cada exame	DBAMV EXA_LAB_LOCAL_ANATOMICO_COLETA
+regra_pedido_exame_automatico	SADT	configuracao	F7	Regra e exceções da geração automática de pedido de exame por tipo de atendimento, fonte pagadora e setor	DBAMV EXCECAO_PEDIDO_EXAME
+preco_refeicao	HOT	configuracao	F7	Valor da refeição por tipo de refeição e dieta em cada estabelecimento, usado na cobrança de acompanhante	DBAMV EXCECAO_PRECO_REFEICAO
+regra_aceite_glosa	FAT	configuracao	F7	Faixa de valor em que a glosa é aceita sem recurso, por fonte pagadora, tipo de conta e motivo	DBAMV FAIXA_ACEITE_GLOSA
+faixa_etaria	CAD	dominio	F3	Faixas de idade nomeadas usadas em regra, estatística, custo e relatório	DBAMV FAIXA_ETARIA, FAIXA_ETARIA_RELATORIO
+prazo_dispositivo_invasivo	PEP	configuracao	F3	Tempo máximo de permanência e antecedência do aviso de troca do dispositivo invasivo por faixa etária	DBAMV FAIXA_ETARIA_PRO_INVASIVO
+faixa_preco_acrescimo	FAT	item	F7	Percentual de acréscimo cobrado sobre o item conforme a faixa do preço de custo	DBAMV FAIXA_PRECOS_FFCV
+fase_orcamentaria	FIN	dominio	F8	Fases da execução orçamentária (previsto, reservado, empenhado, liquidado, pago)	DBAMV FASE_ORCAMENTARIA

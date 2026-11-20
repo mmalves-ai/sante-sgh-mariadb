@@ -1,0 +1,7 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+lote_assinatura_item	ACEITA	lote_assinatura_item	ADM	item	F7	Documento incluído num lote de assinatura, com ordem, situação e erro de cada documento
+categoria_tarefa	ACEITA	categoria_tarefa	ADM	dominio	F8	Categorias de tarefa do usuário (pendência, revisão, cobrança interna), com cor e situação
+painel_gerencial_permissao	ACEITA	painel_gerencial_permissao	REL	vinculo	F3	Perfis ou usuários que podem abrir cada painel gerencial
+canal_notificacao	ACEITA	canal_notificacao	ADM	dominio	F3	Canais de entrega de aviso (central, e-mail, mensagem no celular, painel), com situação
+usuario_escopo	ACEITA	usuario_escopo	ADM	vinculo	F3	Recorte de acesso do usuário numa dimensão extra (um estoque, um caixa, um setor de exame), sem criar tabela por dimensão
+tipo_escopo_acesso	ACEITA	tipo_escopo_acesso	ADM	dominio	F3	Dimensões extras de recorte de acesso que um hospital pode ligar (estoque, caixa, setor de exame, oficina, especialidade)

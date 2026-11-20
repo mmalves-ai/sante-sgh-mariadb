@@ -1,0 +1,2 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+insumo_classe_terapeutica	SUP	vinculo	F7	Classes terapêuticas de cada medicamento, permitindo mais de uma por insumo, para relatório, padronização e substituição	DBAMV ACA_PRO (chave produto x ação terapêutica)

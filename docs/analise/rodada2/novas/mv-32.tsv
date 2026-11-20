@@ -1,0 +1,8 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+item_assistencial_ans	SGO	configuracao	F7	Itens assistenciais do envio trimestral de produção assistencial à ANS, em árvore, com código do leiaute e ordem	DBAPS SIP_ITEM_ASSIST, SIP_ITEM_ASSIST_COMP
+item_assistencial_ans_criterio	SGO	item	F7	Critério que enquadra o evento no item assistencial: procedimento, especialidade, despesa, CID, idade, permanência, guia, regime, segmentação	DBAPS SIP_ITEM_ASSISTENCIAL_*, SIP_ITASSIST_*, SIP_ITEM_ASSISTC_REG_INTC, SIP_ITEM_ASSIST_GRU_CAR, SEGMENTACAO_SIP_ITEM_ASSIS
+limite_producao_prestador_faixa	SGO	item	F8	Faixas de quantidade atendida no período com o fator de pagamento aplicado a cada faixa na revisão da produção	DBAPS REVISAO_PROD_QTD_ATEND_FAIXA
+pedido_autorizacao_plano_anexo	SGO	item	F7	Anexo clínico do pedido de autorização (quimioterapia, radioterapia, órtese e prótese) com dados clínicos, diagnósticos e resposta	DBAPS TISS_AUTORIZACAO_ANEXO, TISS_AUTORIZACAO_DIAGNOST_CID (mesmo nome proposto em outro lote)
+tipo_ativo_garantidor	SGO	dominio	F7	Tipos de imóvel e de aplicação financeira usados na classificação dos ativos garantidores informados à ANS	DBAPS TIPO_BEM_IMOB, TIPO_BEM_INVEST
+tipo_observacao_operadora	SGO	dominio	F7	Tipos de observação registrável em contrato, beneficiário e prestador, por estabelecimento	DBAPS TIPO_OBSERVACAO_CONTRATO, TIPO_OBSERVACAO_PRESTADOR, TIPO_OBSERVACAO_USUARIO
+tipo_compromisso_operadora	SGO	dominio	F8	Tipos de compromisso da agenda da operadora, com público-alvo e cor de exibição	DBAPS TIPO_AGENDA

@@ -1,0 +1,46 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAMV	CONF_PERM_REP_PLANTAO	TABELA	perfil_acao	ADM	F3	permissão por usuário no repasse de plantão (média/alta gestão, alterar após publicar) é controle de acesso, não regra
+DBAMV	MOT_MOVIMENTACAO_CONTA	TABELA	motivo_transferencia_conta	FAT	F3	módulo e fase seguem a tabela de destino
+DBAMV	MOTIVO_COBRANCA	TABELA	dominio_sigtap	SUS	F3	mesmo conceito do motivo de cobrança do legado, que já vai para dominio_sigtap
+DBAMV	CID_TABSIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	ESP_SSM_ALT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	FE_ATE_TAB_SIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	FXET_SSM_ALT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	MOT_COB_TABSIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	NIVEL_SSM_ALT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	NIVEL_TAB_SIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	SER_SIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	SER_SSM_ALT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	SIASUS_PROC_FIN	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	SSM_ALTERADO	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	SUBGRUPO_SSM	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SIASUS_ESTADIO	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SIASUS_FINALIDADE_TRAT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SIASUS_HABILITACOES_SUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SIASUS_PREST	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TAB_SSM_APAC	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TIP_ATE_SSM_ALT	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TIP_ATE_TAB_SIASUS	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TET_ORC	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TET_ORC_SSM	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TET_ORC_SUB_GRU	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TET_ORC_SUB_GRU_SSM	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	TET_ORC_UPS_GRU_SSM	NAO		SUS		obsoleto: chave no código SIA de 8 posições anterior à tabela unificada; a carga oficial não traz isso
+DBAMV	RAAS	TABELA	registro_raas;registro_raas_procedimento	SUS	F7	instrumento SUS obrigatório para atenção psicossocial e domiciliar: obrigação legal é F7
+DBAMV	GRUPO_REPASSE	TABELA	grupo_repasse;grupo_repasse_profissional	FAT	F7	sem uso na Rede (nenhuma origem no legado); grupo e membros na mesma fase
+DBAMV	SETOR_PROCEDIMENTO_FATRMTO_SUS	TABELA	producao_fixa_setor_sus	SUS	F7	a Rede não fatura produção ambulatorial SUS hoje; segue a fase da produção ambulatorial
+SPDATA	CMESCORE	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMPERIODO	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMREDEASSIST	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTIPOCOMPLEXIDADESP	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPAFERICAO	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPCONTRATO	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPDADOS	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPINDICADOR	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPITEMINDIC	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMTPORCAMENTO	TABELA	dominio_contratualizacao_sus	SUS	F7	só listas semeadas, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+SPDATA	CMINCENTIVO	TABELA	incentivo_contratual_sus	SUS	F7	só a linha padrão, sem contrato com gestor na Rede; acompanha contrato_gestor_sus (F7)
+DBAMV	INCENTIVO_DIFERENCIADO_SUS	TABELA	incentivo_contratual_sus	SUS	F7	acompanha contrato_gestor_sus (F7)
+DBAMV	IT_INCENTIVO_DIFERENCIADO_SUS	TABELA	incentivo_contratual_sus	SUS	F7	acompanha contrato_gestor_sus (F7)
+SPDATA	FAMEDSOL	TABELA	solicitante_externo	CAD	F3	solicitante do SUS é o mesmo solicitante externo, só com CNS; tabela duplicada fundida

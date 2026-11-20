@@ -1,0 +1,334 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+unidade_internacao	INT	principal	F3	Ala ou posto de internação, especialização da unidade assistencial, com clínica, faixa etária, gênero aceito e centro de custo	MV UNID_INT, EST_UNID_INT; SPDATA RIBLOCOS (unidade); depende de unidade_assistencial (02) e centro de custo (07)
+bloco_internacao	INT	principal	F3	Bloco ou andar físico que agrupa unidades e quartos, com faixa etária e unidade responsável	SPDATA RIBLOCOS 7; MV EST_UNID_INT
+categoria_acomodacao	INT	dominio	F3	Categoria da acomodação (enfermaria, apartamento, UTI, berçário, hospital-dia) com o código de acomodação da TISS	SPDATA TBTIPOACOMOD 18; MV TIP_ACOM; código TISS de acomodação
+acomodacao	INT	principal	F3	Quarto ou enfermaria com capacidade de leitos, categoria, clínica, gênero, faixa etária e centro de custo	SPDATA TBACOMODLEITO 12, RIACOMOD 9; MV TIP_ACOM
+leito_hospitalar	INT	principal	F3	Leito de internação com acomodação, tipo de leito, código para a AIH, criticidade e indicação de leito extra ou virtual	SPDATA TBLEITO 134, RILEITOS 109; MV LEITO; HTLEITO vira historico_entidade:leito_hospitalar
+especialidade_leito	INT	catalogo_publico	F3	Especialidade e tipo de leito pela classificação nacional de estabelecimentos, usada na habilitação e no faturamento público	SPDATA TBESPLEI 38, TBTIPLEI 38; fonte cnes
+caracteristica_leito	INT	dominio	F3	Atributo físico do leito que restringe a alocação (isolamento, pressão negativa, obeso, berço aquecido, oxigênio)	MV INDICE_ACOMODACAO; new-sgh atributos do leito
+leito_caracteristica	INT	vinculo	F3	Características que cada leito possui, consultadas na escolha do leito e no pedido de vaga	derivado de caracteristica_leito; MV LEITO
+capacidade_unidade_internacao	INT	historico	F3	Leitos instalados, operacionais e bloqueados por unidade e data, denominador do censo e dos indicadores	derivado de RILEITOS/TBLEITO; MV CAPACIDADE_UTI_SUS (ideia)
+permissao_unidade_usuario	INT	vinculo	F3	Unidades de internação em que cada usuário pode admitir, transferir e dar alta	MV USUARIO_UNID_INT; depende de usuario (01)
+local_observacao	INT	principal	F3	Local de observação fora da internação (pronto atendimento, sala de observação) com unidade e centro de custo	SPDATA RELOCLEITO 2
+tipo_leito_observacao	INT	dominio	F3	Tipo do leito de observação (maca do pronto atendimento, poltrona, leito de sala de observação)	SPDATA RETPLEITO 2
+leito_observacao	INT	principal	F3	Leito ou maca de observação do pronto atendimento, sem gerar internação nem diária de internação	SPDATA RELEITO 12
+ocupacao_leito_observacao	INT	principal	F3	Período em que um atendimento de urgência ocupa um leito de observação, com entrada, saída e destino	SPDATA REOCUPLEITO 804 (legado 2020); depende de atendimento (02)
+situacao_leito	INT	dominio	F3	Situação operacional do leito: livre, ocupado, reservado, em limpeza, interditado, em manutenção, bloqueado	SPDATA RILEITOS (situação); new-sgh api/leitos/estados
+periodo_situacao_leito	INT	historico	F3	Intervalo em que o leito ficou numa situação não ocupada, com motivo, responsável e ordem de serviço ou limpeza ligada	SPDATA RILEITOS, HTLEITO 226; MV RESERVA_LEITO_LIMPEZA; liga a ordem_servico_manutencao e solicitacao_limpeza
+motivo_bloqueio_leito	INT	dominio	F3	Motivo de bloqueio ou interdição do leito (manutenção, isolamento, falta de pessoal, reforma)	new-sgh adt/os-leito.ts
+internacao	INT	principal	F3	Internação hospitalar do paciente: data de entrada, leito inicial, caráter, regime, modalidade, médico, convênio e procedência	SPDATA RICADINT 1001 (gatilhos viram serviço admitir); MV ATENDIME; depende de atendimento e paciente (02), conta (06); autorização e prorrogação (RICGUIAS 1001) em solicitacao_autorizacao (06); RIPARAM vai para parametro; RIMOTIVO descartada (obsoleta)
+carater_admissao	INT	dominio	F3	Caráter do atendimento na admissão (eletivo, urgência ou emergência) com o código da TISS	MV CARATER_INTERNACAO; código TISS de caráter
+modalidade_internacao	INT	dominio	F3	Tipo da internação (clínica, cirúrgica, obstétrica, pediátrica, psiquiátrica) com o código da TISS	MV TIPO_INTERNACAO; código TISS de tipo de internação
+regime_atendimento_internacao	INT	dominio	F3	Regime da internação (hospitalar, hospital-dia, domiciliar) com o código da TISS	código TISS de regime; RICADINT
+procedencia_internacao	INT	dominio	F3	Origem do paciente internado (pronto atendimento, ambulatório, transferência externa, central de regulação, bloco)	MV PROCEDENCIA_REGULACAO; RICADINT
+diagnostico_internacao	INT	item	F3	Diagnósticos da internação (entrada, principal, secundários, causa externa) com o momento do registro	MV DIAGNOSTICO_ATENDIME; RICADINT; catalogo_publico:cid10
+acidente_internacao	INT	item	F3	Dados do acidente que motivou a internação (trabalho, trânsito, outro) com local, data e comunicação de acidente de trabalho	MV ACIDENTE_TRABALHO; RICADINT; indicador de acidente da TISS
+motivo_cancelamento_internacao	INT	dominio	F3	Motivo para cancelar uma internação lançada por engano ou desistência	MV MOTIVO_CANC_INTC
+cancelamento_internacao	INT	principal	F3	Cancelamento da internação com motivo, autor, data e retrato do leito e da conta no momento	SPDATA RIEXCINT 30; MV MOTIVO_CANC_INTC
+internacao_recem_nascido	INT	vinculo	F3	Recém-nascido ligado à internação da mãe, com ordem no parto e desfecho próprio	SPDATA TBALTARN; depende de paciente (02)
+desfecho_recem_nascido	INT	dominio	F3	Desfecho do recém-nascido na alta da mãe (alta junto, permanece, transferido, óbito)	SPDATA TBALTARN 4
+acompanhante_internacao	INT	principal	F7	Acompanhante registrado na internação, com parentesco, período e direito legal (idoso, criança, gestante, deficiente)	MV MVTO_VISITA_ACOM; usado por refeição do acompanhante e portaria
+titulo_documento_internacao	INT	dominio	F3	Título dos documentos da internação (guia, ficha de admissão, termo de responsabilidade, prorrogação)	SPDATA RITITFIC 24
+modelo_documento_internacao	INT	configuracao	F3	Modelo de ficha, termo ou guia impressa na internação, com título e conteúdo do editor de documentos	SPDATA RIMODFIC 15; editor de documentos (framework)
+regra_documento_internacao	INT	configuracao	F3	Quais modelos imprimir na admissão conforme convênio, especialidade e tipo de internação	SPDATA RICONFIC 760, RIESPFIC 1001
+agendamento_internacao	INT	principal	F3	Pré-internação agendada: paciente, data prevista, acomodação desejada, médico, convênio, situação e fila de espera	SPDATA RIPREINT 1001; MV PRE_INTERNACAO
+agendamento_internacao_procedimento	INT	item	F3	Procedimentos previstos para a pré-internação	MV RES_LEI_PROCEDIMENTO; depende de procedimento (CAD)
+agendamento_internacao_material	INT	item	F3	Materiais e medicamentos previstos para a pré-internação	MV IT_MATERIAL_PRE_INTERNACAO; depende de produto (05)
+agendamento_internacao_profissional	INT	item	F3	Profissionais previstos na pré-internação e a função de cada um	MV PRE_INTERNACAO_PRESTADOR; depende de profissional (02)
+motivo_cancelamento_agendamento_internacao	INT	dominio	F3	Motivo do cancelamento ou não comparecimento da pré-internação	RIPREINT (811 pendentes)
+reserva_leito	INT	principal	F3	Reserva de leito para paciente agendado ou transferido, com validade, origem e situação	MV PRE_RESERVA_LEITO; SPDATA RILEITOS (reserva); new-sgh reservas do NIR
+ocupacao_leito	INT	principal	F3	Período em que a internação ocupou um leito, com início, fim e motivo; base do censo, da diária e da permanência	SPDATA RICTRLOC 1001; MV MOV_LEITOS
+transferencia_leito	INT	principal	F3	Transferência do paciente entre leitos com origem, destino, motivo, justificativa e autor	SPDATA RITRANSF 1001; MV MOV_INT; LOG_TRANSF_PACIENTE vira trilha_auditoria
+motivo_troca_leito	INT	dominio	F3	Motivo da transferência de leito (piora clínica, isolamento, pedido do paciente, liberação de UTI)	MV MOTIVO_TRANSF_LEITO
+solicitacao_transferencia_leito	INT	principal	F3	Pedido de troca de leito feito pela assistência, com prioridade, justificativa e atendimento pela gestão de leitos	MV SOLIC_TRANSFERENCIA_LEITO
+motivo_recusa_acomodacao	INT	dominio	F3	Motivo da recusa da acomodação oferecida (preferência, custo, isolamento)	MV RECUSA_ACOMODA
+recusa_acomodacao	INT	principal	F3	Registro de que o paciente recusou a acomodação de direito ou oferecida, com termo e motivo	MV RECUSA_ACOMODA
+tipo_troca_internacao	INT	dominio	F3	Dado trocado durante a internação: convênio, plano, clínica, especialidade, médico responsável	SPDATA RITRFCON/RITRFCLI/RITRFESP/RITRFMED
+troca_internacao	INT	historico	F3	Troca de convênio, clínica, especialidade ou médico responsável, com valor anterior, valor novo, data e motivo	SPDATA RITRFCON 121, RITRFCLI 19, RITRFESP 2, RITRFMED 2
+alta_hospitalar	INT	principal	F3	Alta administrativa da internação: data, motivo de saída, desfecho, destino e encerramento de ocupação e diárias	MV PW_REGISTRO_ALTA, AVISO_ALTA_ADM; SPDATA RICADINT; alta_medica é do 03 (HTATENDALTA)
+motivo_saida_hospitalar	INT	dominio	F3	Motivo de encerramento da internação com os códigos da TISS e do faturamento público	SPDATA TBMOTALT 55; MV MOT_ALT, TISS_VERSAO_MOT_ALT
+desfecho_internacao	INT	dominio	F3	Desfecho clínico da internação (alta melhorada, evasão, óbito, transferência externa)	SPDATA TBDESFECHO_INTERNACAO 9
+previsao_alta	INT	historico	F3	Data prevista de alta e cada revisão, com quem informou e o motivo da mudança	new-sgh altas-previstas; MV AVISO_ALTA_ADM
+motivo_cancelamento_alta	INT	dominio	F3	Motivo para desfazer uma alta registrada	SPDATA RIALTA_EXCLUSAO
+cancelamento_alta	INT	principal	F3	Cancelamento da alta com motivo, autor e reabertura de ocupação e conta	SPDATA RIALTA_EXCLUSAO 75
+alta_a_pedido	INT	principal	F7	Termo de alta a pedido ou registro de evasão, com responsável, testemunhas e orientação dada	MV ALTAS_REVELIA, RISCO_ALTA
+servico_funerario	INT	principal	F8	Funerária que retira corpos, com contato e documentos exigidos	MV FUNERARIA; areas-sem-dono 12; declaracao_obito é do 03
+cartorio_registro_civil	INT	dominio	F8	Cartório de registro civil para onde segue a declaração de óbito ou de nascido vivo	MV REGISTRO_CIVIL; areas-sem-dono 12
+liberacao_corpo	INT	principal	F8	Guarda no necrotério e entrega do corpo à família ou funerária, com documentos conferidos e horários	MV COLONIA, CAD_OBITO; depende de declaracao_obito (03)
+tipo_precaucao	INT	dominio	F7	Tipo de precaução (contato, gotícula, aerossol, reverso) com as medidas exigidas	MV REG_ISO
+isolamento_paciente	INT	principal	F7	Isolamento ou precaução do paciente, com germe, início, fim, quem indicou e leito afetado	MV REG_ISO, MOV_ISOLAMENTO; depende de vigilância da CCIH (QUA)
+criterio_auditoria_isolamento	INT	configuracao	F7	Critérios verificados na auditoria de cumprimento de cada tipo de precaução	MV REGRA_TIPO_AUDITORIA_ISOLAMT, TIPO_AUDITORIA_ISOLAMENTO
+auditoria_isolamento	INT	principal	F7	Auditoria do cumprimento das precauções no leito, com auditor, data e conformidade geral	MV TIPO_AUDITORIA_ISOLAMENTO
+auditoria_isolamento_item	INT	item	F7	Resposta de cada critério na auditoria de isolamento, com não conformidade e ação	MV REGRA_TIPO_AUDITORIA_ISOLAMT
+fechamento_censo	INT	principal	F3	Fechamento diário do censo hospitalar, com hora de corte, autor e situação (aberto, fechado, reaberto)	derivado de RICTRLOC e RICADINT; new-sgh internacao/censo
+fechamento_censo_unidade	INT	item	F3	Números do dia por unidade: existentes, admissões, altas, óbitos, transferências, leitos-dia e operacionais	derivado de RICTRLOC; new-sgh censo.spec, permanencia.spec
+fechamento_censo_paciente	INT	item	F3	Pacientes presentes no corte do censo, com leito, convênio e dias de permanência	derivado de RICTRLOC; new-sgh censo (marcadas)
+situacao_pedido_leito	INT	dominio	F3	Situação do pedido de vaga ou da regulação de leito (aguardando, em análise, leito reservado, negado, efetivado)	SPDATA RISITREGLEITO 23 (de-para pendente M44.2-14); MV SITUACAO_REGULACAO
+pedido_leito	INT	principal	F8	Pedido de vaga de internação vindo do pronto atendimento, bloco, ambulatório ou fora, com prioridade e exigências	MV GF_DADOS_INTERNACAO; new-sgh dominio-internacao/nir (fila)
+etapa_fluxo_paciente	INT	dominio	F8	Etapa do quadro de fluxo do paciente (aguardando leito, internado, alta prevista, alta dada, leito em limpeza)	MV UNID_INT_CONTROLE_KANBAN
+meta_tempo_etapa	INT	configuracao	F8	Tempo alvo de cada etapa do fluxo por unidade, usado para colorir o quadro e alertar	MV UNID_INT_CONTROLE_KANBAN, GF_META, GF_INDICADORES
+regra_alerta_fluxo	INT	configuracao	F8	Regra de alerta de gestão de fluxo (pedido parado, alta atrasada, ocupação alta) com limite e canal	MV GF_ALERTAS
+regra_alerta_fluxo_destinatario	INT	vinculo	F8	Usuários e grupos que recebem cada alerta de gestão de fluxo	MV GF_USUARIO_ALERTA
+tipo_barreira_alta	INT	dominio	F8	Tipo de barreira que atrasa a alta (exame, parecer, social, transporte, autorização, vaga externa)	new-sgh nir; MV RISCO_ALTA
+barreira_alta	INT	principal	F8	Barreira identificada na alta de um paciente, com responsável, prazo e data de resolução	new-sgh nir (barreiras de alta)
+reuniao_leitos	INT	principal	F8	Reunião diária de gestão de leitos, com participantes, data e ocupação no momento	new-sgh nir (reunião de leitos)
+reuniao_leitos_paciente	INT	item	F8	Decisão tomada na reunião de leitos para cada paciente (alta prevista, transferência, barreira)	new-sgh nir
+central_reguladora	INT	principal	F7	Central de regulação externa (estadual, municipal, operadora) com identificação e forma de conexão	MV SERVICO_REGULADOR; SPDATA TBREGUL_SISTEMA 2, TBREGUL_ENDPOINT 3 (conexão vira integracao)
+servico_regulacao	INT	principal	F7	Serviço ou especialidade que o hospital oferta ou pede à central, com o código usado por ela	SPDATA TBREGUL_SERVICO 42; MV ESPL_LEITO_REGULACAO; TBREGUL_VLR_TABELAS/TBREGUL_TABELAS viram integracao
+solicitacao_regulacao	INT	principal	F7	Solicitação de vaga ou transferência à central reguladora, com número, serviço, tipo de leito e situação	MV SOLIC_ATENDIMENTO_REGULACAO, LEITO_REGULACAO; new-sgh regulacao.controller
+evento_regulacao	INT	historico	F7	Evolução da solicitação de regulação: envio, resposta, mudança de situação, contato com a central	MV EVOLUCAO_SOL_ATND_RGL
+quadro_clinico_regulacao	INT	item	F7	Quadro clínico informado à central em cada envio: consciência, oxigênio, germes, diurese, condição e procedência	MV CONDICAO_REGULACAO, SUPORTE_O2_REGULACAO, GERME_REGULACAO
+nivel_consciencia	INT	dominio	F7	Nível de consciência do paciente usado na regulação e nas escalas (alerta, sonolento, torporoso, comatoso)	MV SENSORIO_REGULACAO
+suporte_oxigenio	INT	dominio	F7	Suporte de oxigênio em uso (ar ambiente, cateter, máscara, ventilação não invasiva, intubado)	MV SUPORTE_O2_REGULACAO
+faixa_diurese	INT	dominio	F7	Faixa de débito urinário informada na regulação (normal, oligúria, anúria, diálise)	MV DEBITO_URINARIO_REGULACAO
+tipo_leito_regulado	INT	dominio	F7	Tipo de leito pedido à central (enfermaria, UTI adulto, UTI neonatal, semi-intensiva)	MV TIPO_LEITO_REGULACAO
+habilitacao_leito_sus	INT	principal	F7	Habilitação do estabelecimento para leitos especiais no sistema público, com portaria e vigência	MV LEITO_PROGRAMA_SUS; SPDATA FHLEITOUTITP 19
+capacidade_leito_sus	INT	historico	F7	Leitos públicos contratados por tipo e competência, base do teto de diárias especiais	MV CAPACIDADE_UTI_SUS, TIP_ACOM_UTI_SUS; SPDATA FHLEITOUTI 12
+leito_habilitado_sus	INT	vinculo	F7	Leitos físicos vinculados a cada habilitação ou programa do sistema público	MV LEITO_PROGRAMA_SUS
+procedimento_especialidade_leito	INT	catalogo_publico	F7	Procedimentos públicos permitidos por especialidade de leito, carregados da tabela unificada	SPDATA TBPROLEI 1001; MV PROCEDIMENTO_SUS_ESPEC_LEITO; fonte sigtap
+comunicacao_internacao_operadora	INT	principal	F7	Comunicação de internação ou alta enviada à operadora, com protocolo, data de envio, resposta e situação	MV COMUNICACAO_BENEFICIARIO; envio pelo mecanismo integracao (TISS)
+acomodacao_plano_convenio	INT	configuracao	F3	Categoria de acomodação a que cada plano dá direito, base da diferença de acomodação	SPDATA TBTIPPLCONV 76; MV INDICE_ACOMODACAO; depende de plano do convênio (06)
+regra_diaria	INT	configuracao	F3	Regra de geração da diária por acomodação, convênio e faixa etária: hora de virada, diária parcial e item da conta	MV CTRL_DIARIA_AUTOMATICA, DIARIA_PARCIAL, DIARIA_FAIXA_ETARIA; SPDATA TBTABDTH, TBHISTTABDTH (preço é do 06)
+pacote_diarias_internacao	INT	configuracao	F7	Pacote de diárias com itens inclusos por procedimento ou convênio, que substitui a diária avulsa	MV PACOTE_DIARIA
+diaria_lancada	INT	principal	F3	Diária gerada de cada dia de ocupação, com acomodação, regra aplicada e item lançado na conta	derivado de ocupacao_leito e regra_diaria; SPDATA gatilhos de RICADINT; depende de conta (06)
+diferenca_acomodacao	INT	principal	F3	Cobrança da diferença entre a acomodação usada e a de direito, com aceite do paciente e valor por dia	MV DIFER_ACOMOD
+uso_gas_medicinal	INT	principal	F3	Uso de gás medicinal pelo paciente, com gás, fluxo, início, fim e local (leito, sala, transporte)	MV MVTO_GASES; SPDATA CCLANCIR (gases), PROXIGENOTERAPIA; depende de produto (05)
+regra_cobranca_gas	INT	configuracao	F3	Regra de cobrança de gás por tempo de uso, por convênio e gás, com unidade de cobrança e arredondamento	MV REGRA_GASES; SPDATA TBTABDTH
+regra_cobranca_gas_faixa	INT	item	F3	Faixas de horas de uso e a quantidade cobrada em cada uma	MV REGRA_GASES_HORAS
+regra_cobranca_gas_simultaneo	INT	item	F3	Tratamento do uso simultâneo de gases (cobra os dois, só o maior, desconto)	MV REGRA_GASES_SIMULTANEO
+solicitacao_transporte_paciente	INT	principal	F8	Pedido de transporte interno do paciente com origem, destino, recurso (maca, cadeira, oxigênio), maqueiro e tempos	MV TRANSPORTE_PACIENTE, PW_SOLICITACAO_TRANSPORTE
+motivo_atraso_transporte	INT	dominio	F8	Motivo de atraso no transporte interno ou na ambulância	MV MOTIVO_ATRASO_AMBULANCIA
+profissional_transporte	INT	vinculo	F8	Profissionais habilitados para transporte interno ou ambulância, com função e turno	MV PROFISSIONAL_AMBULANCIA
+categoria_ambulancia	INT	dominio	F8	Categoria da ambulância (básica, avançada, UTI móvel, simples remoção)	MV TIPO_AMBULANCIA
+ambulancia	INT	principal	F8	Veículo de remoção, próprio ou terceirizado, com placa, categoria e equipamentos	MV GESTAO_AMBULANCIA_CONFIG
+chamado_ambulancia	INT	principal	F8	Remoção de paciente por ambulância: origem, destino, horários, quilometragem, veículo e situação	MV SOLICITACAO_AMBULANCIA, TIPO_SOLICITACAO_AMBULANCIA
+chamado_ambulancia_acompanhante	INT	item	F8	Acompanhantes levados na remoção por ambulância	MV SOLICITACAO_AMBULANCIA_ACOMPAN
+chamado_ambulancia_equipe	INT	item	F8	Equipe da remoção por ambulância e função de cada um	MV SOLICITACAO_AMBULANCIA_PROFISS
+rota_ambulancia	INT	configuracao	F8	Trajeto padrão de remoção com distância, usado na cobrança por trajeto	MV TRAJETO
+regra_cobranca_ambulancia	INT	configuracao	F8	Regra de cobrança da remoção por quilômetro ou por trajeto, por convênio e categoria de ambulância	MV REGRA_COBRANCA_AMBULANCIA_KM, REGRA_COBRANCA_AMBULANCIA_TRAJ
+orcamento_internacao_domiciliar	INT	principal	F8	Orçamento da atenção domiciliar para a operadora ou o particular, com período, custos e situação	MV ORCAMENTO_HOCA, ITCUSTO_HOCA, ITIMPOSTO_HOCA
+orcamento_internacao_domiciliar_item	INT	item	F8	Itens do orçamento domiciliar: visitas, equipamentos, materiais e medicamentos	MV ITORCAMENTO_HOCA
+motivo_transferencia_domicilio	INT	dominio	F8	Motivo da transferência do paciente para a atenção domiciliar	MV MOT_TRANSF_HOCA
+internacao_domiciliar	INT	principal	F8	Internação domiciliar com origem hospitalar, endereço, equipe, período e situação	MV TRANSF_HOCA
+area_atendimento_domiciliar	INT	configuracao	F8	Área geográfica atendida pela equipe domiciliar	MV PW_AREA_DOMICILIAR
+area_atendimento_domiciliar_profissional	INT	vinculo	F8	Profissionais que atendem cada área domiciliar	MV PW_AREA_PRESTADOR_DOMICILIAR
+escala_atendimento_domiciliar	INT	principal	F8	Escala dos profissionais da atenção domiciliar por área e período	MV PW_ESCALA_DOMICILIAR, PW_GERACAO_AGENDA_DOMICILIAR
+visita_domiciliar	INT	principal	F8	Visita agendada ou realizada no domicílio, com profissional, horário e registro	MV PW_AGENDA_DOMICILIAR, PW_IT_AGENDA_DOMICILIAR
+tipo_chamado_domiciliar	INT	dominio	F8	Tipo de chamado da atenção domiciliar (intercorrência, reposição, retirada de equipamento)	MV PW_TIPO_CHAMADO_DOMICILIAR, PW_MOTIVOS_DOMICILIAR
+chamado_atencao_domiciliar	INT	principal	F8	Chamado do paciente em casa, com tipo, motivo, triagem, atendimento e desfecho	MV PW_CHAMADO_DOMICILIAR
+procedimento_cirurgico	CC	principal	F3	Dados cirúrgicos do procedimento: grupo, porte, duração média, natureza, anestesia sugerida e lateralidade exigida	MV CIRURGIA, ESPECIALID_CIRURGIA; SPDATA CCLANCIR (porte); depende de procedimento (CAD, catalogo_publico:tuss)
+grupo_procedimento_cirurgico	CC	dominio	F3	Grupo e subgrupo cirúrgico em árvore (cardíaca, vascular, ortopédica...)	MV GRUPO_CIRURGIA, SUB_GRUPO_CIRURGIA
+porte_cirurgico	CC	dominio	F3	Porte da cirurgia (pequeno, médio, grande, especial) usado em agenda, taxa de sala e indicadores	MV PORTE_CIRURGIA; SPDATA CCLANCIR
+carater_cirurgia	CC	dominio	F3	Caráter da cirurgia (eletiva, urgência, emergência, acidente)	SPDATA CCTPURGENCIA 3
+classe_contaminacao_cirurgica	CC	dominio	F3	Potencial de contaminação da ferida (limpa, potencialmente contaminada, contaminada, infectada) para a CCIH	MV CIRURGIA (natureza)
+via_acesso_cirurgico	CC	dominio	F3	Via de acesso do procedimento (única, mesma via, diferentes vias) com o código da TISS	SPDATA CCLANCIR (via); código TISS de via de acesso
+procedimento_cirurgico_especialidade	CC	vinculo	F3	Especialidades cirúrgicas que podem realizar cada procedimento	MV ESPECIALID_CIRURGIA; depende de especialidade (CAD)
+texto_padrao_cirurgia	CC	configuracao	F3	Texto padrão da descrição cirúrgica por procedimento e cirurgião	MV CIRURGIA_TEXTO_PADRAO
+unidade_cirurgica	CC	principal	F3	Centro cirúrgico, obstétrico ou de hemodinâmica, especialização da unidade assistencial, com horário de funcionamento	SPDATA CCSALAS (centro de custo); depende de unidade_assistencial (02)
+sala_cirurgica	CC	principal	F3	Sala cirúrgica com unidade, centro de custo, especialidades preferenciais e horário da agenda na web	SPDATA CCSALAS 4; MV SALA_CIRURGIA
+grade_sala_cirurgica	CC	configuracao	F3	Grade de horários da sala por dia da semana, com especialidade ou cirurgião reservado	MV HR_SAL_CIR, CONF_HORARIO_SALA_CIR_USUARIO
+bloqueio_sala_cirurgica	CC	principal	F3	Bloqueio ou reserva de horário da sala (manutenção, limpeza terminal, reserva de equipe) com motivo	MV RESERVA_SAL_CIR, RESERVA_HORARIOS_SCMA, TIPO_RESERVA_HORARIOS_SCMA
+permissao_sala_usuario	CC	vinculo	F3	Salas cirúrgicas que cada usuário pode agendar e operar	SPDATA CCSALAS_TBUSERS 332
+configuracao_usuario_bloco	CC	configuracao	F3	Permissões e preferências do usuário no bloco: salas visíveis, ações liberadas e unidade padrão	SPDATA CCPARAM 97 (parâmetros soltos vão para parametro)
+agendamento_cirurgico	CC	principal	F3	Pedido e agenda da cirurgia: paciente, sala, data, duração, cirurgião, convênio, caráter, origem e situação	SPDATA CCAGENDA 1001; MV AVISO_CIRURGIA; new-sgh pedido pelo portal
+agendamento_cirurgico_procedimento	CC	item	F3	Procedimentos previstos no agendamento, com lateralidade e indicação do principal	SPDATA CCPROEXT 10, CCAGENDA; MV CIRURGIA_AVISO
+agendamento_cirurgico_equipe	CC	item	F3	Equipe prevista no agendamento e a função de cada profissional	MV PRESTADOR_AVISO; SPDATA CCAGENDA
+agendamento_cirurgico_material	CC	item	F3	Materiais, OPME e instrumentais previstos para a cirurgia, ligados à solicitação de OPME	MV IT_AV_PRODUTOS_ROUPARIA; solicitacao_opme é do 05; produto do 05
+tipo_pendencia_cirurgica	CC	dominio	F3	Tipo de pendência que impede confirmar a cirurgia (autorização, exame, risco cirúrgico, OPME, vaga de UTI)	MV PENDENCIA_AVISO
+pendencia_agendamento_cirurgico	CC	item	F3	Pendência do agendamento com tipo, responsável, prazo e data de resolução	MV PENDENCIA_AVISO; new-sgh gravarPendencia; autorização prévia (etapa_autorizacao_cirurgia) em solicitacao_autorizacao (06)
+reagendamento_cirurgico	CC	historico	F3	Cada mudança de data, sala ou horário da cirurgia agendada, com motivo e autor	SPDATA CCHISAGE 1001; MV LOG_AVISO_CIRURGIA_EVOLUCAO (o resto vira historico_entidade:agendamento_cirurgico)
+prazo_agendamento_cirurgico	CC	configuracao	F7	Antecedência mínima e máxima para agendar por caráter, convênio e especialidade	MV PRAZO_AGENDAMENTO_AVISO
+motivo_suspensao_cirurgia	CC	dominio	F3	Motivo de suspensão ou cancelamento da cirurgia, classificado por responsável (paciente, equipe, estrutura, convênio)	MV MOTIVO_SUBSTITUICAO_CIRURGIA; SPDATA CCAGENDA_EXC_CANC
+suspensao_cirurgia	CC	principal	F3	Suspensão, cancelamento ou transferência da cirurgia, com motivo, momento, autor e reagendamento	SPDATA CCAGENDA_EXC_CANC 66; MV LOG_AVISO_CIRURGIA_SUSPENSAO, SOLIC_CANCELAMENTO_CIRURGIA, TRANSFERENCIA_CIRURGIA
+funcao_equipe_cirurgica	CC	dominio	F3	Função na equipe cirúrgica (cirurgião, auxiliares, anestesista, instrumentador) com o grau de participação da TISS	SPDATA PRTIPO_PROFISSIONAL 9; MV PAPEL_CENTRO_CIRURGICO
+participante_cirurgia	CC	item	F3	Profissional que participou do ato cirúrgico, com função, procedimento e horário de entrada e saída	SPDATA CCLANCIR 1001; MV PRESTADOR_CIRURGIA; depende de profissional (02)
+equipe_padrao_cirurgiao	CC	configuracao	F7	Equipe habitual de cada cirurgião, sugerida no agendamento	MV PW_PRESTADOR_PADRAO_CIRURGIA
+ato_cirurgico	CC	principal	F3	Cirurgia realizada: sala, horários de entrada, incisão, fim e saída, caráter, anestesia e ligação ao agendamento	SPDATA CCCADCIR 1001 (CCCADCIR_EXCLUSAO vira trilha_auditoria); MV AVISO_CIRURGIA
+ato_cirurgico_procedimento	CC	item	F3	Procedimentos realizados no ato, com porte, via de acesso, lateralidade e técnica	SPDATA CCLANCIR 1001; MV CIRURGIA_AVISO
+descricao_cirurgica	CC	principal	F3	Descrição do ato pelo cirurgião, com achados, técnica, peças enviadas e assinatura	MV DESCRICAO_AVISO_CIRURGIA, ACHADO_CIRURGICO; LOG_DESCRICAO_CIRURGIA vira trilha_auditoria
+tipo_intercorrencia_cirurgica	CC	dominio	F3	Tipo de intercorrência intraoperatória (hemorragia, parada, lesão inadvertida, reação anestésica)	MV COMPLIC_INTRA_OPERATORIA
+intercorrencia_cirurgica	CC	item	F3	Intercorrência durante o ato com tipo, horário, conduta e ligação à notificação de evento adverso	MV COMPLIC_INTRA_OPERATORIA; evento adverso é do QUA
+contagem_instrumental_cirurgia	CC	item	F7	Contagem de compressas, agulhas e instrumentais antes e depois do ato, com divergência	MV ITCONTAGEM_KIT
+ato_cirurgico_exame	CC	vinculo	F8	Exame diagnóstico feito no ato cirúrgico (hemodinâmica, imagem intraoperatória) ligado ao laudo do diagnóstico	MV CIRURGIA_EXAME_HEMODINAMICA, LOG_CIRURGIA_EXAME_HEMO; SPDATA SIPARHEM (SADT)
+classificacao_asa	CC	dominio	F3	Estado físico do paciente na escala da sociedade americana de anestesiologia (ASA I a VI e emergência)	MV FICHA_PRE_ANESTESICA
+avaliacao_pre_anestesica	CC	principal	F3	Avaliação pré-anestésica: classificação de risco, via aérea, jejum, alergias, exames e plano anestésico	MV FICHA_PRE_ANESTESICA; new-sgh dominio-cirurgia/apa
+tipo_anestesia	CC	dominio	F3	Tipo de anestesia (geral, raquidiana, peridural, bloqueio, sedação, local)	SPDATA TBANESTESIA 17; MV TIP_ANEST
+ficha_anestesica	CC	principal	F3	Ficha do ato anestésico com anestesista, técnica, posição, modo ventilatório e balanço	MV PW_FICHA_ANESTESICA; SPDATA CCCADCIR (anestesia e sinais)
+ficha_anestesica_tecnica	CC	item	F3	Técnicas anestésicas usadas na ficha, quando há mais de uma	MV PW_FICHA_ANESTESICA; tipo_anestesia
+lancamento_ficha_anestesica	CC	item	F3	Lançamento por horário na ficha: droga, dose, fluido, gás, hemocomponente ou sinal vital medido	MV PW_IT_FICHA_ANESTESICA; SPDATA CCCADCIR (sinais)
+marco_ficha_anestesica	CC	item	F3	Marco do ato anestésico com horário (indução, intubação, incisão, extubação, saída da sala)	MV PW_IT_FICHA_ANESTESICA
+posicao_cirurgica	CC	dominio	F3	Posição do paciente na mesa (decúbito dorsal, ventral, lateral, litotomia) com ícone	SPDATA PRFA_CAD_POSICAO_CIR 9
+modo_ventilatorio	CC	dominio	F3	Modo ventilatório na anestesia (espontâneo, controlado a volume, a pressão)	SPDATA PRFA_CAD_MODO_RESPIR 3 (sem uso, confirmar com anestesistas)
+tipo_sinal_monitorado	CC	dominio	F3	Sinal monitorado na ficha anestésica (pressão, frequência, saturação, capnografia, temperatura)	SPDATA PRFA_TIPO_SINAL 3
+configuracao_monitoracao_anestesica	CC	configuracao	F7	Sinais e intervalos de registro exigidos na ficha por tipo de anestesia e unidade	MV CONFIG_FICHA_MONITORAMENTO
+local_bloco	CC	dominio	F3	Local do paciente no bloco (pré-operatório, espera, sala, recuperação)	SPDATA CCTIPOLOCALBLC 5
+tipo_movimento_bloco	CC	dominio	F3	Tipo de movimentação do paciente no bloco (admissão, transferência interna, alta do bloco)	SPDATA CCTIPOMOVIMENTACAOPAC 5
+situacao_bloco	CC	dominio	F3	Situação exibida no painel do bloco e da família (aguardando, em preparo, em cirurgia, em recuperação, liberado)	MV STATUS_CENTRO_CIRURGICO
+movimento_paciente_bloco	CC	principal	F3	Movimentação do paciente entre os locais do bloco, com horário, tipo, situação e responsável	MV MOV_CENTRO_CIRURGICO, MOV_SALA_CENTRO_CIRURGICO; SPDATA CCTIPOMOVIMENTACAOPAC
+registro_recuperacao_anestesica	CC	principal	F3	Permanência na recuperação pós-anestésica, com entrada, alta, destino e critérios atingidos	MV MOV_CC_RPA; new-sgh srpa
+avaliacao_recuperacao_anestesica	CC	item	F3	Avaliação seriada na recuperação pela escala de Aldrete e dor, com horário e escore	MV MOV_CC_RPA
+modelo_checklist_cirurgia	CC	configuracao	F7	Versão do checklist de cirurgia segura por unidade, com vigência	MV CHECK_LIST
+item_checklist_cirurgia	CC	configuracao	F7	Pergunta do checklist por momento (antes da indução, antes da incisão, antes da saída) e se trava a incisão	MV CHECK_LIST; new-sgh trava da incisão
+checklist_cirurgia_segura	CC	principal	F7	Checklist aplicado num ato cirúrgico, com situação por momento e responsável	MV CHECK_LIST; new-sgh dominio-cirurgia/checklist
+confirmacao_checklist_cirurgia	CC	item	F7	Resposta de cada item do checklist, com quem confirmou e quando	MV CHECK_LIST
+lista_material_procedimento	CC	configuracao	F3	Lista padrão de materiais e medicamentos por procedimento e cirurgião, sugerida no gasto de sala	SPDATA GEKITS 45, GEKITITE 1001 (kits do estoque, 05); MV CIRURGIA_KIT
+consumo_cirurgia	CC	principal	F3	Folha de gasto de sala do ato cirúrgico, com situação de conferência e débito na conta	MV DEBITO_MATMED_CIRURGIA, IMP_GASTO_SALA; depende de conta (06)
+consumo_cirurgia_item	CC	item	F3	Item consumido na cirurgia com produto, lote, quantidade, origem do estoque e item da conta gerado	MV DEBITO_MATMED_CIRURGIA, CONTA_KIT; depende de produto e lote (05)
+taxa_sala_cirurgica	CC	configuracao	F7	Regra de taxa de sala e de uso de equipamento por porte, tempo e convênio	MV CUSTO_SALA_CIRURGIA; preço do item é do 06
+reserva_equipamento_cirurgia	CC	item	F8	Equipamento reservado para a cirurgia (arco, microscópio, torre), com conflito de horário entre salas	MV AVISO_EQUIPAMENTOS, APARELHO_CIRURGIA; depende de equipamento_saude
+reserva_hemocomponente_cirurgia	CC	item	F8	Hemocomponente reservado para a cirurgia, com tipo, quantidade e situação da prova cruzada	MV SANGUE_AVISO; requisição transfusional é do 03
+hemocomponente_padrao_procedimento	CC	configuracao	F8	Reserva padrão de hemocomponentes por procedimento cirúrgico	MV KIT_SANGUE
+tipo_documento_pre_operatorio	CC	dominio	F8	Documento exigido antes da cirurgia (termo de consentimento, risco cirúrgico, exames, autorização)	MV TIPO_DOCUMENTO_CIRURGICO
+documento_exigido_cirurgia	CC	configuracao	F8	Regra de documento obrigatório por procedimento, convênio ou faixa etária e se bloqueia a entrada em sala	MV RESTRICAO_DOCUMENTO_CIRURGIA
+documento_cirurgia_apresentado	CC	item	F8	Documento apresentado para o agendamento, com conferente, data e arquivo anexado	MV DOCUMENTO_ANEXO_CIRURGICO; binário vai para arquivo
+cartao_preferencia_cirurgiao	CC	principal	F8	Cartão de preferência do cirurgião por procedimento: posição, luvas, fios, equipamentos e observações	MV AVISO_CIRURGIA_PREFERENCIA
+cartao_preferencia_cirurgiao_item	CC	item	F8	Material, instrumental ou equipamento preferido no cartão, com quantidade	MV AVISO_CIRURGIA_PREFERENCIA
+protocolo_profilaxia_cirurgica	CC	configuracao	F8	Antimicrobiano profilático indicado por procedimento, com dose, tempo antes da incisão e repique	MV AUDIT_ANTIMICROBIANO; antimicrobianos restritos são do 03
+auditoria_profilaxia_cirurgica	CC	principal	F8	Conferência da profilaxia aplicada no ato (droga, horário, repique, duração) contra o protocolo	MV AUDIT_ANTIMICROBIANO
+projeto_mutirao_cirurgico	CC	principal	F8	Projeto ou mutirão cirúrgico público, com período, meta, financiamento e situação	MV PROJETO_CIRURGICO_FFCV
+projeto_mutirao_cirurgico_procedimento	CC	item	F8	Procedimentos e quantidades previstas e realizadas no mutirão	MV IT_PROJETO_CIRURGIA
+produto_reprocessavel	CC	principal	F7	Instrumental ou material reprocessável, com limite de reprocessamentos, método indicado e contador de usos	MV DET_KIT, BENS_ESTERILIZACAO; depende de produto (05)
+caixa_instrumental	CC	principal	F7	Modelo de caixa ou kit cirúrgico, com especialidade, método de esterilização, validade e foto	MV CX_KIT, KIT, IMG_CX_KIT (imagem vai para arquivo)
+caixa_instrumental_item	CC	item	F7	Composição da caixa: instrumental, quantidade e ordem de montagem	MV IT_CX_KIT, ITCAIXA_CIRURGICA, IMG_IT_CX_KIT
+fase_reprocessamento	CC	dominio	F7	Fase do reprocessamento (recepção, limpeza, inspeção, preparo, esterilização, guarda, distribuição)	MV PRODUTO_FASES_CME
+produto_fase_reprocessamento	CC	vinculo	F7	Fases obrigatórias por produto ou caixa, na ordem em que acontecem	MV PRODUTO_FASES_CME
+metodo_esterilizacao	CC	dominio	F7	Método de limpeza ou esterilização (vapor, peróxido de hidrogênio, óxido de etileno, termodesinfecção)	MV TIPO_ESTERILIZACAO, TIP_LAVAGEM
+equipamento_esterilizacao	CC	principal	F7	Autoclave, termodesinfectora ou lavadora da CME, com capacidade e métodos suportados	MV MAQ_ESTERILIZADOR; depende de equipamento_saude
+protocolo_esterilizacao	CC	configuracao	F7	Parâmetros validados de ciclo (tempo, temperatura, pressão) por equipamento, método e tipo de carga	MV PROTOCOLO_ESTERILIZACAO_PADRAO, MAQ_ESTER_CICLO
+ciclo_esterilizacao	CC	principal	F7	Ciclo de esterilização ou lavagem: equipamento, lote, operador, início, fim, parâmetros e liberação	MV ESTERILIZACAO, PREPARACAO_LOTE, MAQ_ESTER_CICLO
+ciclo_esterilizacao_item	CC	item	F7	Pacotes colocados na carga do ciclo	MV ESTERILIZA_SOLICITACAO_CME
+tipo_indicador_esterilizacao	CC	dominio	F7	Indicador de controle do ciclo (biológico, químico por classe, teste de Bowie-Dick, físico)	MV ESTERILIZACAO
+teste_ciclo_esterilizacao	CC	item	F7	Resultado de cada indicador do ciclo, com leitura, lote do indicador e responsável	MV ESTERILIZACAO
+motivo_rejeicao_reprocessamento	CC	dominio	F7	Motivo de rejeição no reprocessamento (sujidade, embalagem violada, indicador reprovado, peça danificada)	MV REJEICAO_ESTERILIZACAO
+rejeicao_reprocessamento	CC	principal	F7	Rejeição de pacote ou ciclo, com motivo, fase, retorno ao reprocessamento e recolhimento dos já distribuídos	MV REJEICAO_ESTERILIZACAO
+solicitacao_material_esteril	CC	principal	F7	Pedido de material esterilizado por setor ou para agendamento cirúrgico, com prazo e situação	MV SOLICITACAO_CME, HISTORICO_SOLICITACAO_CME
+solicitacao_material_esteril_item	CC	item	F7	Caixas, kits ou itens avulsos pedidos e a quantidade	MV COMPOSICAO_SOLICITACAO_CME, ITEM_COMPOSICAO_SOLICIT_CME, ITEM_AVULSO_SOLICITACAO_CME
+movimento_material_esteril	CC	principal	F7	Entrega ou recolhimento de material entre a CME e os setores, com responsável e conferência	MV MVTO_CME; LOG_MVTO_CME vira trilha_auditoria
+movimento_material_esteril_item	CC	item	F7	Pacotes entregues ou recolhidos no movimento	MV IT_MVTO_CME
+permissao_setor_cme	CC	vinculo	F7	Setores e tipos de movimento que cada usuário pode fazer na CME	MV USUARIO_MOV_CME_SETOR
+pacote_esteril	CC	principal	F7	Pacote processado com código da etiqueta, caixa, ciclo, data de validade e situação (estéril, usado, vencido)	MV ETIQUETA_CME, IDENTIFICADOR_ETIQUETA_CME, MVTO_KIT_PRODUZIDO
+pacote_esteril_conteudo	CC	item	F7	Conteúdo efetivo do pacote, com faltas ou peças suspensas em relação ao modelo da caixa	MV ITMVTO_KIT_PRODUZIDO, ETIQUETA_ITEM_CME, HISTORICO_IT_KIT_SUSPENSO_CME
+uso_pacote_esteril	CC	principal	F7	Uso do pacote no paciente, ligado ao ato cirúrgico ou ao atendimento, fechando a rastreabilidade	MV ITMVTO_KITS; depende de atendimento (02)
+material_terceiro_reprocessamento	CC	principal	F7	Material de terceiro ou consignado que passa pela CME, com dono, fornecedor e paciente previsto	MV BEM_TERCEIRO_CME
+recebimento_material_terceiro	CC	principal	F7	Recebimento e devolução do material de terceiro na CME, com conferência e responsável	MV IT_AV_BEM_FORN_EXT_UTIL
+recebimento_material_terceiro_item	CC	item	F7	Peças conferidas no recebimento e na devolução do material de terceiro	MV IT_AV_BEM_FORN_EXT_UTIL
+criticidade_area	HOT	dominio	F3	Classificação de risco da área para limpeza (crítica, semicrítica, não crítica)	SPDATA CHCRITICIDADE 3
+area_higienizavel	HOT	principal	F3	Área do hospital que recebe limpeza, com sigla, criticidade, setor e leito ou sala ligados	SPDATA CHAREA 110
+modalidade_limpeza	HOT	dominio	F3	Tipo de limpeza (concorrente, terminal, desinfecção) com tempo previsto	SPDATA CHTPLIMPEZA 6; MV TIPO_LIMPEZA
+material_modalidade_limpeza	HOT	configuracao	F3	Materiais de estoque consumidos por tipo de limpeza, com quantidade	SPDATA CHTPLIMPEZA_GEITENS 19; depende de produto (05)
+profissional_higienizacao	HOT	principal	F3	Profissional de limpeza próprio ou terceirizado, com empresa, usuário do sistema e situação	SPDATA CHPROFISLIMP 17
+profissional_higienizacao_telefone	HOT	item	F3	Telefones de contato do profissional de limpeza	SPDATA CHPROFLIMPTEL 17
+escala_higienizacao	HOT	vinculo	F3	Profissionais responsáveis por cada área, com turno	SPDATA CHAREA_CHPROFISLIMP 1001
+leito_profissional_higienizacao	HOT	vinculo	F3	Profissionais responsáveis pela limpeza de cada leito	SPDATA TBLEITO_CHPROFISLIMP 136
+situacao_limpeza	HOT	dominio	F3	Etapa do fluxo da limpeza (alta, aguardando, em higienização, liberado) com cor e ordem	SPDATA CHSITUACAO 4 (valores 3 e 4 pendentes, D-SIT-21)
+tipo_ocorrencia_limpeza	HOT	dominio	F3	Ocorrência que gera limpeza (programada, emergencial, sangue, urina, fezes, vômito)	SPDATA CHOCORRENCIA 9
+solicitacao_limpeza	HOT	principal	F3	Pedido de limpeza gerado na alta ou manualmente, com atendimento, tipo, ocorrência, prioridade e situação	SPDATA CHSOLICITLIMP 1001; MV SOLIC_LIMPEZA; parâmetros de CHPARAM vão para parametro
+solicitacao_limpeza_local	HOT	item	F3	Leitos ou áreas incluídos numa solicitação de limpeza	SPDATA CHSOLICITLIMP_TBLEITO 1001
+execucao_limpeza	HOT	principal	F3	Execução da limpeza com profissional, início, fim, situação e liberação do leito	SPDATA CHEXECLIMPEZA 1001
+inspecao_limpeza	HOT	principal	F7	Inspeção da limpeza feita pela supervisão, com aprovação ou reprovação e motivo	MV LOG_REPROVACAO_LIMPEZA
+local_arquivo	HOT	principal	F3	Local de guarda no arquivo em árvore (sala, armário, prateleira, caixa)	MV SALA_SAME, ARMARIO_SAME, CAD_SAME
+tipo_documento_arquivo	HOT	dominio	F7	Tipo de documento guardado no arquivo (prontuário, exames, conta, filme)	MV TIPO_DOCUMENTO_SAME
+volume_prontuario	HOT	principal	F3	Volume físico do prontuário do paciente, com número, tipo de documento, local atual e situação	MV SAME, IT_SAME; depende de paciente (02)
+setor_tramite	HOT	dominio	F3	Setor por onde prontuários e contas circulam (arquivo, faturamento, auditoria, unidade)	SPDATA RISETOR 11
+operacao_movimento_prontuario	HOT	dominio	F3	Operação no arquivo (registro, saída, devolução, descarte, transferência, recebimento)	SPDATA GDPRONTCADOPER 6
+movimento_prontuario	HOT	principal	F3	Movimentação física do volume entre setores, com operação, origem, destino, responsável e prazo	SPDATA GDPRONTMOVIM 1001 (cerca de 729 mil)
+protocolo_tramite	HOT	principal	F3	Protocolo de envio em lote entre setores, com tipo de conteúdo (prontuário, conta, documento), emissor e recebedor	MV IT_SAME_PROTOCOLOS, DOCUMENTO_KIT; SPDATA RIPROTOC (obsoleta); protocolo de conta do 06 unificado aqui
+protocolo_tramite_item	HOT	item	F3	Item enviado no protocolo, com conferência no recebimento e recusa	MV IT_SAME_PROTOCOLOS, DOCUMENTO_PASTA_PARCIAL; LOG_IT_SAME_PROTOCOLOS vira trilha_auditoria
+motivo_solicitacao_prontuario	HOT	dominio	F3	Motivo do pedido de prontuário (consulta, auditoria, pesquisa, processo judicial, faturamento)	MV MOTIVO_SOL_SAME
+solicitacao_prontuario	HOT	principal	F3	Pedido de prontuário ao arquivo com solicitante, motivo, data desejada e situação	MV SOLICITACAO_SAME, SOL_PRONT
+solicitacao_prontuario_item	HOT	item	F3	Volumes pedidos na solicitação de prontuário	MV ITSOLICITACAO_SAME
+emprestimo_prontuario	HOT	principal	F3	Empréstimo do volume com prazo de devolução, cobrança de atraso e devolução	MV EMPRESTIMO; SPDATA GDPRONTMOVIM (saída e devolução)
+eliminacao_prontuario	HOT	principal	F7	Eliminação de prontuário pela tabela de temporalidade, com termo, aprovação da comissão e digitalização prévia	SPDATA GDPRONTCADOPER (descarte)
+tipo_justificativa_impressao	HOT	dominio	F3	Justificativa para imprimir ou exportar o prontuário (pedido do paciente, judicial, auditoria, transferência)	SPDATA PRTIPO_JUSTIF_EXPORTACAO 4
+justificativa_impressao	HOT	principal	F3	Registro de cada impressão ou exportação do prontuário, com justificativa, usuário e partes impressas	SPDATA PRJUSTIF_IMP_EXPORTACAO 1001
+solicitacao_copia_prontuario	HOT	principal	F3	Pedido de cópia do prontuário pelo paciente ou terceiro, com documentos de autorização, prazo e custo	MV PW_SOLICITACAO_IMPRES_PRON_PAC, PW_PRONTUARIO, PW_ITPRONTUARIO
+entrega_copia_prontuario	HOT	principal	F3	Entrega da cópia, com quem recebeu, documento apresentado e data	MV PW_RECEPTOR_PRONTUARIO
+tipo_pendencia_prontuario	HOT	dominio	F3	Tipo de pendência do prontuário (falta de diagnóstico, assinatura, evolução, documento) com setor responsável	SPDATA TBIRREGULARID 39; MV PW_TIPO_PENDENCIA_PRONTUARIO
+tipo_pendencia_prontuario_setor	HOT	vinculo	F3	Setores ou módulos que cobram cada tipo de pendência	SPDATA TBIRREGULARID_TBMODULO 43
+pendencia_prontuario	HOT	principal	F3	Pendência apontada num atendimento, com tipo, responsável, prazo e resolução	SPDATA FCIRREGULARID 218; MV PW_AUTORIZA_PENDENCIA_ASSINAT; assinatura é do 01
+documento_digitalizado	HOT	principal	F3	Documento digitalizado do atendimento, com tipo, páginas, conferência e situação; o arquivo vai para o armazenamento	SPDATA PRGEDIMP 9; MV ARQUIVO_ATENDIMENTO, STATUS_ARQUIVO_ATENDIMENTO
+lote_digitalizacao	HOT	principal	F7	Lote de digitalização com volumes, operador, conferência de qualidade e liberação para eliminação	MV ARQUIVO_ATENDIMENTO
+modalidade_dieta	HOT	dominio	F3	Dieta prescritível (livre, branda, pastosa, líquida, enteral, parenteral, jejum)	SPDATA TBDIETAS 6; MV TIPO_DIETA; prescrição de dieta é do 03 (PRPRESCDIETA)
+via_dieta	HOT	dominio	F3	Via de administração da dieta (oral, sonda, ostomia, parenteral)	SPDATA TBTPDIETA 7, PRVIAADMIN 8
+caracteristica_dieta	HOT	dominio	F3	Característica que modifica a dieta (hipossódica, sem lactose, diabética, para alergia)	SPDATA PRCARACTDIE 19; MV ORIENTACAO_DIETA
+refeicao_do_dia	HOT	dominio	F3	Refeição do dia (desjejum, colação, almoço, lanche, jantar, ceia)	SPDATA PRTPREFEIC 7; MV TIPO_REFEICAO
+horario_refeicao	HOT	configuracao	F3	Horário padrão de cada refeição por unidade e o corte para entrar no mapa	SPDATA PRHORPAD 8; MV REFEICAO_DIETA
+copa_distribuicao	HOT	principal	F7	Copa que monta e distribui as bandejas	MV COPA
+copa_distribuicao_unidade	HOT	vinculo	F7	Unidades de internação atendidas por cada copa	MV COPA
+mapa_dieta	HOT	principal	F3	Mapa de dietas fechado por refeição, unidade e horário de corte	new-sgh nutricao/mapa
+mapa_dieta_item	HOT	item	F3	Linha do mapa por paciente: leito, dieta, via, características, alergias, jejum e etiqueta da bandeja	new-sgh nutricao/mapa (etiquetas); depende de prescrição (03)
+instrumento_triagem_nutricional	HOT	configuracao	F7	Instrumento de triagem nutricional (NRS-2002, MUST, STRONGkids) com perguntas e pontos de corte	MV FICHA_NUTRICAO
+triagem_nutricional	HOT	principal	F7	Triagem de risco nutricional do internado, com instrumento, escore, risco e reavaliação prevista	MV FICHA_NUTRICAO; new-sgh nutricao/triagens; terapia, meta e acompanhamento ficam no 03 (D5)
+triagem_nutricional_resposta	HOT	item	F7	Resposta a cada pergunta do instrumento na triagem	MV FICHA_NUTRICAO
+direito_refeicao_acompanhante	HOT	configuracao	F7	Regra do direito à refeição do acompanhante por lei, convênio, idade do paciente e acomodação	MV REGRA_CARDAPIO_ACOMPANHANTE, REGRA_CARDAPIO_IDADE_ACOMPANH
+direito_refeicao_acompanhante_refeicao	HOT	item	F7	Refeições cobertas por cada regra de direito do acompanhante	MV REGRA_CARDAPIO_ACOM_TP_REFC
+refeicao_acompanhante	HOT	principal	F7	Refeição servida ou autorizada ao acompanhante, com regra aplicada e cobrança quando houver	MV ATENDIMENTO_AUTORIZA_CRDP_ACOM; new-sgh nutricao/acompanhantes
+modelo_declaracao	HOT	configuracao	F3	Modelo de declaração de comparecimento ou de acompanhante, com texto e campos variáveis	MV CONFIG_DECLARACAO
+declaracao_emitida	HOT	principal	F3	Declaração de comparecimento ou de acompanhante emitida, com período, pessoa e emissor	MV DECLARACAO_COMPARECIMENTO_ACOM; SPDATA PRATESTREQIMP (atestados são do 03)
+equipamento_saude	HOT	principal	F7	Equipamento médico ou predial mantido, com modelo, série, criticidade, local, registro sanitário e bem patrimonial	MV MANU_EQUIPS, APARELHOS_EQUIPTO; depende de bem_patrimonial (07)
+oficina_manutencao	HOT	principal	F7	Oficina interna ou externa que executa manutenção, com especialidades e contato	MV OFICINA, TIPO_EMAIL_OFICINA
+oficina_manutencao_usuario	HOT	vinculo	F7	Usuários de cada oficina e a função (técnico, supervisor, aprovador)	MV USUARIO_OFICINA, USUARIOS_OFICINA_FUNCAO
+especialidade_manutencao	HOT	dominio	F7	Especialidade de manutenção (eletrônica, mecânica, elétrica, refrigeração, predial)	MV MANU_ESPEC
+servico_manutencao	HOT	principal	F7	Serviço de manutenção padronizado, com especialidade, tempo previsto e custo de referência	MV MANU_SERV
+causa_falha_equipamento	HOT	dominio	F7	Causa da falha (uso indevido, desgaste, queda, defeito de fábrica) para indicadores e tecnovigilância	new-sgh dominio-manutencao (tecnovigilância)
+ordem_servico_manutencao	HOT	principal	F7	Ordem de serviço corretiva: solicitante, equipamento ou local, oficina, prioridade, causa, custo, aceite e situação	MV SOLICITACAO_OS; new-sgh dominio-manutencao; bloqueia leito via periodo_situacao_leito
+ordem_servico_manutencao_item	HOT	item	F7	Serviços e peças da ordem, com quantidade, custo e requisição ao estoque	MV ITSOLICITACAO_OS; depende de produto (05)
+ordem_servico_manutencao_evento	HOT	historico	F7	Etapas da ordem: aprovação do orçamento, retirada do equipamento, envio externo, retorno e aceite do solicitante	MV APROVA_AVALIACAO_OS, RETIRO_EQUIPAMENTO_OS
+plano_preventivo	HOT	configuracao	F7	Plano de manutenção preventiva, calibração, segurança elétrica ou climatização, com periodicidade e oficina	MV PLANO_MANUTENCAO, PLANO_MANUTENCAO_OFICINA
+plano_preventivo_tarefa	HOT	item	F7	Tarefas e verificações de cada plano preventivo, com valor esperado	MV PLANO_MANUTENCAO
+plano_preventivo_equipamento	HOT	vinculo	F7	Equipamentos ou ambientes cobertos por cada plano preventivo	MV PLANO_MANUTENCAO_PROD
+ambiente_climatizado	HOT	principal	F7	Ambiente com climatização exigido no plano de manutenção e controle, com área, ocupação e equipamentos	new-sgh pmoc.ts
+execucao_preventiva	HOT	principal	F7	Execução de uma preventiva programada, com técnico, data, resultado e pendência gerada	new-sgh preventiva.ts
+execucao_preventiva_item	HOT	item	F7	Resultado de cada tarefa da preventiva, com valor medido e conformidade	new-sgh preventiva.ts
+laudo_calibracao	HOT	principal	F7	Laudo de calibração ou de segurança elétrica, com padrão usado, resultado, validade e documento anexo	new-sgh laudos PDF/A; PLANO_MANUTENCAO_DOC vira arquivo
+contrato_servico_terceirizado	HOT	principal	F8	Contrato de manutenção ou serviço terceirizado, com fornecedor, vigência, valor, reajuste e documentos	MV CONTRATO_MANUTENCAO, CONTRATO_MANUTENCAO_DOC (documento vai para arquivo); fornecedor do 02/05
+contrato_servico_terceirizado_item	HOT	item	F8	Equipamentos, ambientes ou serviços cobertos pelo contrato, com valor	MV ITCONTRATO_MANUTENCAO
+nivel_servico_contrato	HOT	configuracao	F8	Nível de serviço contratado (prazo de atendimento e solução por prioridade) e multa	MV MANU_SERV_NIVEL, ACRESCIMO_DECRESCIMO_MANU_SERV
+peca_enxoval	HOT	principal	F8	Tipo de peça do enxoval (lençol, camisola, campo cirúrgico) com peso unitário e vida útil em lavagens	MV ROUPA_ESTOQUE; depende de produto (05)
+cota_enxoval_setor	HOT	configuracao	F8	Cota de peças de enxoval por setor e turno	MV ROUPA_ESTOQUE
+lavanderia_externa	HOT	principal	F8	Lavanderia terceirizada com contrato e preço por quilo	MV LAVANDERIA
+coleta_roupa_suja	HOT	principal	F8	Coleta de roupa suja por setor, com peso, sacos e responsável	MV ENT_ROUPA
+remessa_lavanderia	HOT	principal	F8	Envio de roupa à lavanderia com peso total, data e situação	MV ENT_ROUPA
+retorno_lavanderia	HOT	principal	F8	Retorno da lavanderia com peso e peças recebidas, diferença e rejeição por sujidade	MV ENT_DET_ROUPA
+retorno_lavanderia_item	HOT	item	F8	Quantidade de cada peça devolvida pela lavanderia	MV ENT_DET_ROUPA
+distribuicao_enxoval	HOT	principal	F8	Entrega de enxoval limpo aos setores conforme a cota	MV ROUPA_ESTOQUE
+distribuicao_enxoval_item	HOT	item	F8	Peças entregues por setor na distribuição	MV ROUPA_ESTOQUE
+motivo_baixa_enxoval	HOT	dominio	F8	Motivo de baixa da peça (desgaste, mancha, rasgo, extravio, evasão com paciente)	MV ROUPA_ESTOQUE
+baixa_enxoval	HOT	principal	F8	Baixa de peças do enxoval com motivo, setor e quantidade	MV ROUPA_ESTOQUE
+tipo_visitante	HOT	dominio	F3	Tipo de pessoa na portaria (visitante, acompanhante, fornecedor, funcionário, representante, terceiro)	SPDATA CVTPVISITANTE 8
+tipo_visitado	HOT	dominio	F3	Quem é visitado (paciente, setor, funcionário)	SPDATA CVTPVISITADO 6
+forma_identificacao_visitante	HOT	dominio	F3	Forma de identificação na entrada (crachá, biometria, cartão, reconhecimento facial)	SPDATA CVTPIDENTIFIC 4
+situacao_acesso_visitante	HOT	dominio	F3	Situação de acesso da pessoa (liberado, bloqueado, restrito)	SPDATA CVTPSITACESSO 3
+fabricante_terminal_acesso	HOT	dominio	F3	Fabricante de catraca ou terminal de controle de acesso	SPDATA CVTERMINALFAB 3
+modelo_terminal_acesso	HOT	dominio	F3	Modelo de catraca, terminal ou totem, por fabricante	SPDATA CVTPTERMINAL 6; parâmetros de CVPARAM vão para parametro
+ponto_acesso	HOT	principal	F8	Portaria ou ponto de acesso do hospital, com terminais instalados	MV PT_PORTARIA, PT_PORTARIA_MAQUINA
+terminal_acesso	HOT	principal	F8	Catraca ou terminal instalado num ponto de acesso, com modelo e endereço de rede	MV PT_PORTARIA_MAQUINA; comunicação vai para integracao
+pessoa_portaria	HOT	principal	F8	Visitante, acompanhante ou prestador cadastrado na portaria, com documento, foto e situação	MV PT_PESSOA, PT_IMAGEM (foto vai para arquivo)
+cracha_visitante	HOT	principal	F8	Crachá físico da portaria, com número, cor, tipo e situação	MV PT_CRACHA
+visita	HOT	principal	F8	Entrada e saída de visitante ou acompanhante, com visitado, crachá, ponto de acesso e horários	MV PT_MVTO_PACIENTE, MVTO_VISITA_ACOM
+regra_visita_unidade	HOT	configuracao	F8	Horários de visita e limite de visitantes e acompanhantes por unidade	MV PT_CONFIG_UNID_INTERNAC_VISITT, PT_CONFIG_UNID_INT_DATA, PT_CONFIG_INTERNACAO
+regra_visita_acomodacao	HOT	item	F8	Limite de visitantes e acompanhantes por categoria de acomodação ou leito	MV PT_CONFIG_UNID_ACOM, PT_CONFIG_UNID_LEITO_ACOM
+regra_acesso_setor	HOT	configuracao	F8	Dias e horários em que prestadores e fornecedores podem entrar em cada setor	MV PT_CONFIG_SETOR_ADM, PT_CONFIG_SETOR_ADM_DATA
+bloqueio_visitante	HOT	principal	F8	Bloqueio de visita por pessoa ou paciente, com motivo, período e quem determinou	MV PT_PESSOA
+acesso_prestador_servico	HOT	principal	F8	Entrada e saída de prestador ou fornecedor, com empresa, setor de destino e horários	MV PT_MVTO_ADM, PT_EMPRESA
+pertence_paciente	HOT	principal	F8	Guarda de pertences do paciente na admissão, com termo e devolução	MV PT_MVTO_PERTENCE, PT_PERTENCE, PT_TIPO_PERTENCE
+pertence_paciente_item	HOT	item	F8	Objetos guardados, com descrição, quantidade e estado	MV PT_PERTENCE
+ramal_telefonico	HOT	principal	F8	Lista telefônica interna: ramal, local, setor e contatos	MV PT_RAMAL, PT_LOCALIZACAO, PT_CONTATO
+preparacao_culinaria	HOT	principal	F8	Preparação ou prato servido, com rendimento, modo de preparo e dietas a que serve	MV PRATO
+ficha_tecnica_preparacao	HOT	item	F8	Ingredientes da preparação com produto, per capita, fator de correção e custo	MV ITMOV_FICHA_CARDAPIO; depende de produto (05)
+preparacao_dieta	HOT	vinculo	F8	Dietas para as quais cada preparação é permitida	MV DIETA_PRATO
+alternativa_cardapio	HOT	dominio	F8	Opção oferecida no cardápio (padrão, opção 1, opção vegetariana)	MV OPCAO_CARDAPIO, CLAS_CARDAPIO
+planejamento_cardapio	HOT	principal	F8	Cardápio planejado por período, refeição e dieta, com aprovação da nutricionista	MV PLANO_CARDAPIO, PLANO_CARDAPIO_OPCAO, MOV_CARDAPIO
+planejamento_cardapio_preparacao	HOT	item	F8	Preparações de cada dia e refeição do cardápio planejado	MV PLANO_CARDAPIO_PRATO, ITPRATO_OPCAO_CARDAPIO
+escolha_cardapio_paciente	HOT	principal	F8	Escolha da opção do cardápio feita pelo paciente ou acompanhante para cada refeição	MV SOLICITACAO_CARDAPIO, SOLICITACAO_CARDAPIO_OPCAO
+producao_refeicao	HOT	principal	F8	Ordem de produção da cozinha por dia e refeição, calculada do mapa e das escolhas	MV MOV_CARDAPIO_AUT, PLANO_CARDAPIO_PRODUTO
+producao_refeicao_item	HOT	item	F8	Quantidade a produzir por preparação e o consumo previsto de ingredientes	MV SOLICITACAO_CARDAPIO_PRODUTO, ITMOV_CARDAPIO
+alimento_referencia	HOT	catalogo_publico	F8	Alimento da tabela brasileira de composição de alimentos, com grupo e porção de referência	MV ALIMENTO; fonte tabela brasileira de composição de alimentos
+nutriente_referencia	HOT	catalogo_publico	F8	Macro ou micronutriente com unidade de medida	MV NUTRIENTE
+alimento_referencia_nutriente	HOT	catalogo_publico	F8	Quantidade de cada nutriente por 100 g do alimento	MV NUTRIENTE_ALIMENTO
+medida_caseira_alimento	HOT	dominio	F8	Medida caseira do alimento (colher, xícara, unidade) com equivalência em gramas	MV UNIDADE_ALIMENTO
+tipo_ocorrencia_refeicao	HOT	dominio	F8	Ocorrência na entrega da refeição (recusa, troca, atraso, paciente ausente, dieta errada)	MV OCORRENCIA_DIETA
+ocorrencia_entrega_refeicao	HOT	principal	F8	Ocorrência registrada na entrega da bandeja, com paciente, refeição, tipo e providência	MV OCORRENCIA_DIETA (LOG_OCORRENCIA_DIETA vira trilha_auditoria)
+formula_lactea	HOT	principal	F8	Fórmula infantil ou módulo do lactário, com composição, diluição e validade após preparo	MV FICHA_NUTRICAO_LACTARIO
+preparo_lactario	HOT	principal	F8	Preparo do lactário por horário, com responsável, lote e etiqueta dos frascos	MV ITMOV_LACTARIO, ETIQUETA_LACTARIO_EMPRESA
+preparo_lactario_item	HOT	item	F8	Frasco preparado por paciente, com fórmula, volume, horário de administração e etiqueta	MV ITMOV_LACTARIO, ATENDIME_OBS_LACTARIO

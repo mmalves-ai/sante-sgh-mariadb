@@ -1,0 +1,221 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+usuario	ADM	principal	F3	Conta de acesso de uma pessoa ao sistema, com login, nome, e-mail, situação, datas de criação, expiração e último uso	SPDATA TBUSERS (1001+); DBASGU USUARIOS, CONFIGURACAO_USUARIO; DBACP USUARIO_PORTAL*
+usuario_situacao_historico	ADM	historico	F3	Linha do tempo da situação da conta: ativação, bloqueio, conta dormente, desbloqueio e desativação, com motivo e responsável	DBASGU USUARIOS (situação); contas dormentes e recertificação da rodada 1; SPDATA TBUSERS (status)
+motivo_bloqueio_usuario	ADM	dominio	F3	Motivos de bloqueio ou desativação de conta (desligamento, inatividade, tentativas, ordem da chefia, recertificação negada)	DBASGU USUARIOS; SPDATA TBUSERS (status); apoio a usuario_situacao_historico
+usuario_vinculo_profissional	ADM	vinculo	F3	Liga a conta ao cadastro do profissional ou colaborador, com vigência, para assinar e responder como profissional	SPDATA TBUSUCPL (vínculo profissional); depende de profissional (grupo 02/RH)
+pedido_acesso	ADM	principal	F3	Solicitação de criação ou ampliação de acesso, com solicitante, justificativa, aprovador e situação	DBASGU USUARIOS; rodada 1 (pedido de acesso); usa pedido_aprovacao
+pedido_acesso_item	ADM	item	F3	Cada perfil, papel ou escopo pedido dentro de uma solicitação de acesso, com decisão individual	rodada 1 (pedido de acesso); perfil_acesso, usuario_estabelecimento e afins
+recertificacao_acesso	ADM	principal	F3	Campanha periódica de revisão dos acessos por gestor, com período, escopo e situação	rodada 1 (recertificação); exigência SBIS de revisão de acesso
+recertificacao_acesso_item	ADM	item	F3	Decisão do gestor sobre cada usuário e perfil revisado na campanha: manter, reduzir ou revogar, com data	rodada 1 (recertificação)
+perfil_acesso	ADM	principal	F3	Grupo de permissões atribuível a usuários (faturista, enfermeiro, recepção), por estabelecimento ou rede	SPDATA TBGRUUSU (42); DBASGU GRUPO_USUARIO, PER_CON, PER_MULT; MVBIKE PERFIL*
+acao_sistema	ADM	dominio	F3	Catálogo de ações permissionáveis e auditáveis do sistema (ver, incluir, alterar, excluir, aprovar), por tela e módulo	SPDATA TBOPCOES (1001), TBEVENTOS (117); DBASGU MENU, MENU_PROCESSO; DBACP FUNCIONALIDADE
+perfil_acao	ADM	vinculo	F3	Ações permitidas a cada perfil de acesso	SPDATA TBPERUSU (1001); DBACP FUNCAO_PERMISSAO_*, MODULO_PERMISSAO_*, SISTEMA_PERMISSAO_*
+usuario_perfil	ADM	vinculo	F3	Perfis de acesso atribuídos a cada usuário, com vigência e estabelecimento	SPDATA TBUSERS (grupo); DBASGU PAPEL_USUARIOS
+usuario_acao_excecao	ADM	vinculo	F3	Concessão ou negação de uma ação específica a um usuário, além do que os perfis dão, com motivo e vigência	SPDATA TBUSUCPL (400, flags finas de permissão)
+usuario_permissao_sus	ADM	configuracao	F3	Permissões finas do usuário no faturamento SUS por instrumento (internação, ambulatorial, alta complexidade) e operação	SPDATA TBPERMISSAO_SUS (1001); lacuna 1 do new-sgh; depende de grupo 06 (SUS)
+papel_seguranca	ADM	principal	F3	Papel de segurança da certificação de registro eletrônico de saúde, com limite de usuários por papel	SPDATA TBPAPEL (5); DBASGU PAPEL, PAPEL_SIS, PAPEL_MOD
+papel_seguranca_acao	ADM	vinculo	F3	Ações liberadas a cada papel de segurança	SPDATA TBPAPEL_TBOPCOES (520); DBASGU PAPEL_ACOES_*, PAPEL_MOD_CMP, PAPEL_TAB
+usuario_papel_seguranca	ADM	vinculo	F3	Papéis de segurança atribuídos a cada usuário, com vigência	SPDATA TBUSERS_TBPAPEL (1001); DBASGU PAPEL_USUARIOS
+regra_segregacao_funcao	ADM	configuracao	F3	Regra de funções incompatíveis no mesmo usuário (quem pede não aprova), com ação ao violar: bloquear ou alertar	rodada 1 (segregação já existe no new-sgh); DBAMV USUARIOS_AUTORIZADORES*
+regra_segregacao_funcao_acao	ADM	item	F3	Ações ou perfis que formam o conflito de cada regra de segregação	rodada 1; apoio a regra_segregacao_funcao
+restricao_acesso_usuario	ADM	configuracao	F7	Janela de horário e redes de origem permitidas por perfil ou usuário, para limitar acesso fora do turno ou de fora da casa	DBAMV CONFIG_ACESSO_SISTEMA; DBASGU CONFIG_SGU
+usuario_estabelecimento	ADM	vinculo	F3	Estabelecimentos que o usuário pode acessar, com o padrão de entrada	DBAMV USUARIO_MULTI_EMPRESA; depende de estabelecimento (grupo 02)
+usuario_unidade	ADM	vinculo	F3	Unidades assistenciais acessíveis ao usuário dentro do estabelecimento	SPDATA TBUNIUSE (825); DBAMV USUARIO_SETOR; depende de unidade_assistencial (grupo 02)
+usuario_local_atendimento	ADM	vinculo	F3	Locais e consultórios em que o usuário atua ou que pode operar	SPDATA TBLOCAL_TBUSERS (1001); depende de local de atendimento (grupo 02)
+usuario_convenio	ADM	vinculo	F3	Convênios que o usuário pode ver e operar	SPDATA TBUSERS_TBCONVEN (1001), TBUSERCON (1001); DBAMV USUARIO_CONVENIO; depende de convênio (grupo 06)
+usuario_tipo_agenda	ADM	vinculo	F3	Tipos de agenda que o usuário pode consultar e marcar	SPDATA TBAGEUSE (29); DBAMV USUARIO_AGENDA_CENTRAL, USUARIO_PERFIL_AGENDAMENTO; depende de agenda (grupo 02)
+usuario_tipo_prontuario	ADM	vinculo	F3	Tipos de registro do prontuário que o usuário pode ler ou escrever	SPDATA TBCTRPRTUSU (1001); depende de tipo de documento clínico (grupo 03)
+tipo_escopo_acesso	ADM	dominio	F7	Dimensões extras de recorte de acesso que um hospital pode ligar (estoque, caixa, setor de exame, oficina, especialidade)	DBAMV USUARIO_CAIXA, USUARIOS_SET_EXA, USUARIO_MULTI_EMPRESA_ESTOQUE, USUARIO_OFICINA, USUARIOS_ESPECIE
+usuario_escopo	ADM	vinculo	F7	Recorte de acesso do usuário numa dimensão extra (um estoque, um caixa, um setor de exame), sem criar tabela por dimensão	DBAMV USUARIO_* (83 tabelas de escopo por assunto); DBASGU USUARIO_LEITO, USUARIO_EMPRESA_COLETA
+tipo_documento_aprovacao	ADM	dominio	F3	Tipos de documento que passam por alçada (pedido de compra, ajuste de conta, transferência, pagamento, OPME)	conflitos 2.3: alçada única do 01; DBAMV ALCADA_TRANSF, ALCADA_GESTAO, USU_AUT_OC, USU_AUT_SOLIC
+alcada_aprovacao	ADM	configuracao	F3	Regra de aprovação por tipo de documento e estabelecimento: quantos níveis, em série ou paralelo, e prazo	conflitos 2.3 (dono 01; absorve alçadas do 04, 05, 06, 07); DBAMV ALCADA_USUARIO, USUARIOS_AUTORIZADORES
+alcada_aprovacao_nivel	ADM	item	F3	Faixa de valor e aprovador (perfil ou usuário) de cada nível da regra de alçada	DBAMV ALCADA_FFCV, USU_AUT_DT_MOV, USU_AUT_SCCV
+pedido_aprovacao	ADM	principal	F3	Pedido de aprovação de um documento de qualquer módulo, com valor, nível atual, prazo e situação	conflitos 2.3 (dono 01); DBAMV USUARIO_AUTORIZACAO
+decisao_aprovacao	ADM	historico	F3	Cada decisão tomada num pedido de aprovação: aprovador, nível, aprovou ou recusou, justificativa e data	conflitos 2.3 (dono 01); DBAMV USUARIOS_AUTORIZADORES_SOL_CPR
+delegacao_aprovacao	ADM	configuracao	F7	Delegação temporária da alçada de um aprovador a outro (férias, afastamento), com período e tipos de documento	DBAMV USUARIOS_AUTORIZADORES; necessidade comum em hospital novo
+politica_senha	ADM	configuracao	F3	Política de senha e sessão por estabelecimento: tamanho, complexidade, validade, reuso, tentativas, bloqueio e inatividade	SPDATA TBCFGLOGIN (1); DBASGU DIRETRIZ_SENHA, CONFIG_SGU; DBAMV CONFIG_ACESSO_SISTEMA
+credencial_usuario	ADM	principal	F3	Credencial local da conta: resumo criptográfico forte da senha, data de troca, troca obrigatória e expiração	SPDATA TBUSERS (senha); lacuna 8 (gravação nativa de senha no banco próprio)
+historico_senha	ADM	historico	F3	Resumos das senhas anteriores do usuário para a regra de não reutilizar	SPDATA TBHISTSENHA (1001); DBASGU LOG_SENHA
+redefinicao_senha	ADM	principal	F3	Pedido de redefinição de senha ou convite de primeiro acesso, com código de uso único, validade e uso	tokens do portal de laudos (DBASGU PLAUDOS_USUARIOS*); rodada 1 (convite de conta)
+segundo_fator_usuario	ADM	principal	F3	Fator adicional cadastrado pelo usuário (aplicativo autenticador, e-mail, chave física), com situação e data	rodada 1; DBASGU CONFIG_SGU
+codigo_recuperacao_segundo_fator	ADM	item	F3	Códigos de recuperação de uso único do segundo fator, guardados como resumo criptográfico	rodada 1; apoio a segundo_fator_usuario
+bloqueio_login	ADM	historico	F3	Bloqueio temporário de entrada por tentativas erradas, com início, fim, origem e quem desbloqueou	SPDATA TBCFGLOGIN (tentativas); DBASGU LOG_SENHA; lacuna 8
+provedor_identidade	ADM	configuracao	F7	Diretório ou provedor de login único do hospital (LDAP, Active Directory, OpenID, SAML), com endereço e referência ao cofre	MVONEPASS CONFIGURATION_SETTINGS; DBASGU CONFIG_SGU_LDAP; DBACP CONFIG_LOGIN_UNICO, CONFIGURACAO_AD; DBAPORTAL CONFIGURACAO_LDAP
+vinculo_identidade_externa	ADM	vinculo	F7	Liga a conta local à identidade do usuário no provedor externo	MVONEPASS ACCREDIT_USER, USER_HASH; DBACP AUTH_CHAVE
+provedor_identidade_perfil	ADM	configuracao	F7	Mapa de grupo do diretório para perfil de acesso, para criar e ajustar contas automaticamente	DBACP CONFIGURACAO_AD; DBAPORTAL CONFIG_AUTENTICACAO_CONNECT
+modelo_leitor_biometrico	ADM	dominio	F3	Modelos de leitor biométrico homologados para captura no balcão e no login	SPDATA TBLEITORBIOME (2)
+biometria_usuario	ADM	principal	F8	Cadastro biométrico do usuário para entrar ou confirmar ação, com referência ao modelo protegido, dedo e validade	DBASGU BIOMETRIA_USUARIOS; DBAMV CONFIG_BIO_AUTENTICACAO, CONFIG_ACESSO_BIO_MAQUINA, CONFIGURACAO_BIOMETRIA
+termo_uso_versao	ADM	principal	F3	Versões do termo de uso do sistema, com texto, vigência e obrigatoriedade de novo aceite	SPDATA PRTERMOCAD (1); DBASGU TERMO_USO; conflitos 2.2 (dono 01)
+aceite_termo_uso	ADM	historico	F3	Aceite de cada versão do termo por usuário, com data, estação e endereço de origem	SPDATA PRTERMOACEITE (814); conflitos 2.2 (dono 01)
+evento_sessao	ADM	historico	F3	Entradas, saídas, falhas de login, expirações e trocas de estabelecimento, com origem e estação	DBASGU LOG_ACESSO_MV2000, MOD_LOG_ACESSO_MV2000, ESTAT_*; DBAMV LOG_ACESSO_PEP, LOG_CONTAGEM_USUARIO; SPDATA FPCON
+ultimo_acesso_usuario	ADM	principal	F3	Último acesso de cada usuário por módulo e estabelecimento, para contas dormentes e recertificação	SPDATA TBSGHCONEXAO (1001); DBAMV USUARIO_ULTIMO_ACESSO; DBACP USUARIO_LOGADO
+evento_auditoria	ADM	principal	F3	Evento da trilha única: quem, quando, de onde, ação, tela e resultado, gravado na mesma transação	SPDATA TBCABTRILHA (1001+, >1 mi); DBAMV LOG_* (265 tabelas), AUDIT_TABELA*; DBACP LOGS_EDICAO
+evento_auditoria_registro	ADM	item	F3	Registro afetado por cada evento, com tabela, chave e valores antes e depois	SPDATA TBLANTRILHASGH (1001); DBAMV AUDIT_COLUNA*, HIST_*
+evento_auditoria_alerta	ADM	item	F3	Alerta gerado por um evento da trilha (ação crítica, acesso fora do padrão), com nível e quem tratou	SPDATA TBLANTRALERTA (1001)
+tipo_acao_auditavel	ADM	dominio	F3	Tipos de evento auditável exigidos pela certificação (login, impressão, assinatura, quebra de vidro, exportação)	SPDATA TBTPACAOAUDIT (29), TBEVENTOS (117)
+nivel_criticidade_auditoria	ADM	dominio	F3	Níveis de criticidade dos eventos de auditoria, de emergência a depuração	SPDATA TBNVLCRITICID (8)
+registro_excluido	ADM	principal	F3	Cópia do registro de negócio excluído ou cancelado, com justificativa, usuário e data, para consulta e reversão	SPDATA REEXCATE (520), RIEXCINT (30), RIALTA_EXCLUSAO (75), REPACAGD_EXCLUSAO (20); DBAMV LOG_* de exclusão
+motivo_exclusao_registro	ADM	dominio	F3	Motivos padronizados para excluir ou cancelar atendimento, internação, alta ou marcação	SPDATA REEXCATE, RIEXCINT, RIALTA_EXCLUSAO (justificativas)
+politica_retencao_auditoria	ADM	configuracao	F7	Prazo de guarda e destino por tipo de evento e de registro (trilha 20 anos, sessão, envio), com regra de arquivamento	lacuna 9 (guarda da trilha); exigência SBIS e CFM
+parametro_definicao	ADM	configuracao	F3	Catálogo tipado de parâmetros por módulo: chave, tipo, padrão, escopos permitidos e descrição	conflitos 2.4 (mecanismo genérico do 01); DBAMV CONFIG_*, CONFIGURACAO_*, PARAMETROS_*; DBASGU PARAMETRO, PARAM_MODULO*; DBACP PARAMETRO_GLOBAL*
+parametro_opcao	ADM	item	F3	Valores permitidos de um parâmetro de lista, com rótulo e ordem	DBAMV CG_REF_CODES (domínio do parâmetro); apoio a parametro_definicao
+parametro_valor	ADM	configuracao	F3	Valor de um parâmetro num escopo (rede, estabelecimento, unidade, usuário), com vigência	DBAMV CONFIG_FATURAMENTO, CONFIG_ESTOQUE, CONFIG_GERAL; lacuna 7 (parâmetros largos por módulo)
+parametro_valor_historico	ADM	historico	F3	Mudanças de valor de parâmetro, com valor anterior, novo, quem, quando e motivo	DBAMV AUDITORIA_CONFIG, CONFIG_*_LOG, LOG_CONFIG_*, HIST_CONFIG_*
+regra_obrigatoriedade_campo	ADM	configuracao	F3	Campo de tela opcional, obrigatório ou oculto por estabelecimento (CNS, filiação, telefone), com condição	SPDATA TBDIGITAR (3), TBDIGITAR_CNSCADPAC (4), TBDIGITAR_FILIACAO (4)
+modulo_sistema	ADM	dominio	F3	Módulos do sistema, com nome, ordem e texto de abertura	SPDATA TBMODULO (75); DBASGU MODULOS; DBACP MODULO_SISTEMA
+tela_sistema	ADM	dominio	F3	Telas do sistema por módulo, carregadas do código, para favorito, auditoria e permissão	SPDATA TBOPCOES (árvore de menu); DBASGU MENU; DBAMV MENU_SOUL
+favorito_usuario	ADM	vinculo	F3	Telas marcadas como favoritas pelo usuário, com ordem	DBASGU USUARIO_MENU_FAVORITO
+funcionalidade_sistema	ADM	dominio	F3	Funcionalidades que podem ser ligadas ou desligadas por hospital ou unidade	DBACP FUNCIONALIDADE_SISTEMA_LICENCA (só licença); rodada 1
+funcionalidade_estabelecimento	ADM	configuracao	F3	Funcionalidade ligada ou desligada por estabelecimento e, opcionalmente, por unidade, com data de virada	rodada 1 (virada por hospital e setor)
+funcionalidade_estabelecimento_historico	ADM	historico	F3	Linha do tempo de liga e desliga de cada funcionalidade, com quem decidiu e motivo	rodada 1; virada gradual dos hospitais
+tipo_comunicado	ADM	dominio	F3	Tipos de comunicado interno (aviso geral, norma, mudança de processo, manutenção)	DBASGU CRMI_TIPO
+comunicado	ADM	principal	F3	Comunicado interno com título, texto, vigência, prioridade e exigência de ciência	DBASGU CRMI, CRMI_CONTROLE_EXIBICAO; DBAPORTAL MENSAGEM_NOTICIA
+comunicado_destinatario	ADM	vinculo	F3	Público do comunicado: perfil, unidade, estabelecimento ou usuário	DBASGU CRMI_HOSPITAL, CRMI_SISTEMA; DBAPORTAL PARA_MENSAGEM
+comunicado_ciencia	ADM	historico	F3	Ciência dada por cada usuário a cada comunicado, com data	DBASGU CRMI_CONTROLE_EXIBICAO
+mensagem_interna	ADM	principal	F3	Mensagem direta entre usuários, com assunto, texto e remetente	SPDATA TBMENSAG (98); DBASGU MENSAGEM; DBAPORTAL MENSAGEM
+mensagem_interna_destinatario	ADM	item	F3	Destinatários de cada mensagem interna, com leitura e arquivamento	SPDATA TBMENSAG (leitura); DBASGU USUARIO_MENSAGEM
+cenario_alerta	ADM	dominio	F3	Situações de negócio que um alerta pode vigiar (pendência de envio fiscal, prazo vencendo, exame atrasado)	SPDATA TBCENARIO (1); DBAMV NOTIFICACAO_ATRASO_LAB, NOTIFICACAO_ATRASO_EXA_LAB
+regra_alerta	ADM	configuracao	F3	Regra de alerta configurável: cenário, condição (sexo, idade), mensagem, gravidade e repetição	SPDATA TBALERTA (2); DBAMV CONFIG_NOTIFICACAO, PERFIL_ALERTA; conflitos 2.3 (motor único, dono 01)
+regra_alerta_versao	ADM	historico	F3	Versões de cada regra de alerta, com quem alterou e quando passou a valer	conflitos 2.3 (regra com versão); DBAMV MVPEP_CONFIG_NOTIFICACAO
+alerta_gatilho	ADM	item	F3	Tela, ação ou evento que dispara cada regra de alerta	SPDATA TBALERTA_TBOPCOES_TBEVENTOS (2)
+regra_alerta_destinatario	ADM	vinculo	F7	Quem recebe o alerta: perfil, especialidade, unidade ou profissional	DBAMV CONFIG_NOTIFICACAO_ESPECIALID, CONFIG_NOTIFICACAO_PRESTADOR, CONFIG_NOTIFICACAO_SETOR, CONFIG_NOTIFICACAO_TIP_PRESTA
+assinatura_alerta	ADM	vinculo	F3	Alertas que o usuário escolheu receber, com canal preferido	SPDATA TBUSERS_TBALERTA (1); DBAMV PERFIL_ALERTA_USUARIO
+notificacao_usuario	ADM	principal	F3	Aviso na central do usuário: origem, texto, link, gravidade, lida e resolvida	DBAMV NOTIFICACAO, NOTIFICACAO_*; DBAPORTAL PENDENCIA
+canal_notificacao	ADM	dominio	F8	Canais de entrega de aviso (central, e-mail, mensagem no celular, painel), com situação	DBACP NI_REGRA_ENVIO, NI_USUARIO_ENVIO
+preferencia_canal_usuario	ADM	configuracao	F8	Canal e horário de silêncio escolhidos pelo usuário por tipo de aviso	DBACP NI_USUARIO_ENVIO
+regra_consolidacao_notificacao	ADM	configuracao	F8	Como juntar avisos repetidos num só (janela de tempo, chave de agrupamento, limite por usuário)	DBACP NI_CONSOLIDADORA, NI_NOTIFICACAO_INTELIGENTE
+envio_notificacao	ADM	historico	F8	Cada entrega de aviso por canal, com avisos consolidados, data, resultado e tentativas	DBACP NI_REG_ENVIO, NI_REG_NOTIFICACAO, NI_HISTORICO_EXECUCAO
+resposta_notificacao	ADM	historico	F8	Quem abriu ou agiu sobre o aviso e quando, para medir tempo de resposta	DBACP NI_NOTIFICACAO_RESPOSTA
+servidor_email	ADM	configuracao	F3	Servidor de saída de e-mail por estabelecimento: endereço, porta, remetente e referência da credencial no cofre	SPDATA PREMAILCFG (2); DBAMV CONFIG_EMAIL; DBASGU SERVICO_ENVIO_EMAIL
+finalidade_email	ADM	dominio	F3	Finalidades que enviam e-mail (laudo, relatório agendado, convite de conta, assinatura, notificação)	SPDATA PREMAILMODULO (4); DBASGU TIPO_EMAIL; DBAMV PROCESSO_EMAIL
+modelo_email	ADM	configuracao	F3	Modelo de mensagem por finalidade e estabelecimento: assunto, corpo e campos substituíveis	DBASGU TIPO_EMAIL, TAG_CAMPO_EMAIL
+modelo_email_campo	ADM	item	F3	Campos substituíveis permitidos em cada modelo (nome do paciente, data, link), com máscara	DBASGU TAG_CAMPO_EMAIL
+lista_distribuicao_email	ADM	principal	F7	Lista nomeada de destinatários reutilizável em envios e relatórios agendados	DBAMV DESTINATARIO_UNIFICADO
+lista_distribuicao_email_membro	ADM	item	F7	Usuários ou endereços que compõem cada lista de distribuição	DBAMV DESTINATARIO_UNIFICADO
+envio_email	ADM	historico	F3	Registro de cada e-mail enviado: finalidade, modelo, assunto, situação, tentativas e erro	DBASGU SERVICO_ENVIO_EMAIL; SPDATA TBEDITREL_AGENDA_LOG (parte de e-mail)
+envio_email_destinatario	ADM	item	F3	Destinatários de cada envio (para, cópia, cópia oculta), com resultado por endereço	DBAMV DESTINATARIO_UNIFICADO
+politica_assinatura	ADM	configuracao	F3	Exigência de assinatura por tipo de documento: tipo de certificado, prazo, quem assina e se exige carimbo do tempo	DBAMV CONFIGURACAO_ASSINATURA_DIGIT; conflitos 2.3 (dono 01); tipo de documento clínico do grupo 03
+tipo_certificado	ADM	dominio	F3	Tipos de certificado aceitos (A1, A3, em nuvem, assinatura eletrônica avançada)	DBAMV ASSINATURA_DIGITAL*; rodada 1
+oid_icp	ADM	dominio	F3	Identificadores de política e de atributos do certificado da infraestrutura nacional, usados na validação	rodada 1; CARTORIO SIGNATURE
+provedor_assinatura_nuvem	ADM	configuracao	F3	Provedor de certificado em nuvem homologado, com endereço do serviço e referência da credencial no cofre	DBAMV CONFIGURACAO_ASSINATURA_DIGIT; SITE_ASSINATURA_DIGITAL (fronteira com integração)
+certificado_usuario	ADM	principal	F3	Certificado do usuário: tipo, titular, emissor, validade, provedor e referência, sem guardar a chave privada	DBAMV USUARIO_ASSINATURA
+documento_assinado	ADM	principal	F3	Envelope do documento assinado de qualquer módulo: origem, resumo do conteúdo, arquivo, código de verificação	CARTORIO DOCUMENT; DBAMV DOCUMENTO_DIGITAL; conflitos 2.2 (assinatura transversal no 01; pendência no 03)
+assinatura_documento	ADM	item	F3	Cada assinatura aplicada ao documento: signatário, certificado, data, carimbo do tempo e validade	CARTORIO SIGNATURE, STATUS; DBAMV ASSINATURA_DIGITAL, ASSINATURA_DIGITAL_DIAGN
+lote_assinatura	ADM	principal	F7	Assinatura de vários documentos de uma vez pelo mesmo signatário, com situação e erros por documento	DBAMV FILA_CARTORIO_DIGITAL, PW_RELATORIO_ASSINATURA_DIGIT; CARTORIO CARTORIO
+consulta_verificacao_documento	ADM	historico	F3	Consulta pública da autenticidade de um documento pelo código, com data, origem e resultado	rodada 1 (verificação pública)
+estacao_trabalho	ADM	principal	F3	Estação de trabalho ou guichê identificado, com estabelecimento, unidade e local	DBAMV IMP_REGISTRO_TERMINAL, IMPRESSORA_TERMINAL; lacuna 10
+impressora	ADM	principal	F3	Impressora cadastrada (etiqueta, pulseira, laudo, comum), com modelo, endereço e situação	DBAMV IMPRESSORA_TERMINAL, IMPRESSORA_BARRA, PRINTER_REGISTRY_INFO
+finalidade_impressao	ADM	dominio	F3	Finalidades de impressão (etiqueta de amostra, pulseira, ficha, receita, laudo, documento A4)	DBAMV IMPRESSORA_BARRA, IMPRESSORA_UNITARIZACAO, IMPRIME_ETIQUETA_KIT
+estacao_impressora	ADM	vinculo	F3	Impressora padrão de cada estação por finalidade	DBAMV IMPRESSORA_TERMINAL, IMPRESSORA_TERMINAL_USUARIO, IMP_REGISTRO_GIW
+motivo_reimpressao	ADM	dominio	F3	Motivos aceitos para reimprimir documento ou etiqueta	DBAMV TAB_REIMPRESSAO
+registro_reimpressao	ADM	historico	F3	Cada reimpressão: documento, motivo, usuário, estação e data	DBAMV TAB_REIMPRESSAO
+verificacao_backup	ADM	historico	F3	Registro de cada cópia de segurança: tipo, início, fim, tamanho, resumo de integridade e situação	SPDATA TBPROCBACKUP (2), TBSITBACKUP (4); exigência SBIS
+teste_restauracao	ADM	historico	F3	Restauração de teste de uma cópia, com ambiente, duração, conferência e responsável	exigência SBIS (restauração testada); rodada 1
+tipo_justificativa_exportacao	ADM	dominio	F3	Justificativas padrão para imprimir ou exportar o prontuário (pedido do paciente, auditoria, ordem judicial)	SPDATA PRTIPO_JUSTIF_EXPORTACAO (4)
+exportacao_documento	ADM	historico	F3	Cada impressão ou exportação de documento do prontuário, com justificativa, usuário, formato e destino	SPDATA PRJUSTIF_IMP_EXPORTACAO (1001); DBAMV ACESSO_DOCUMENTO
+dicionario_usuario	ADM	principal	F3	Palavras do dicionário ortográfico pessoal do usuário	SPDATA TBDICIONARIO_TBUSERS (77)
+preferencia_usuario	ADM	configuracao	F3	Preferências gerais do usuário: tela inicial, densidade, tema, estação padrão, painel de chamada	SPDATA TBUSERSCOMPL (962); DBACP PAINEL_PREFERENCIAS_USUARIO
+preferencia_tela_usuario	ADM	configuracao	F3	Preferência do usuário por tela: colunas visíveis, ordenação e filtros salvos	DBAPORTAL ORDENACAO_PREFERENCIA, PREFERENCIA_*
+conta_plataforma	ADM	principal	F3	Conta da equipe que opera e dá suporte ao sistema, separada das contas do hospital	DBASGU USUARIOS_MASTER
+atribuicao_suporte	ADM	vinculo	F3	Estabelecimentos em que cada conta da plataforma pode atuar, com vigência e nível	DBASGU USUARIOS_MASTER; rodada 1
+sessao_suporte	ADM	historico	F3	Sessão de suporte como o usuário: pedido, autorização, motivo, início, fim e usuário personificado	rodada 1 (entrar como, auditado)
+auditoria_plataforma	ADM	historico	F3	Ações da equipe da plataforma fora das sessões de suporte (ligar funcionalidade, recarga, correção)	rodada 1
+restricao_prontuario	ADM	principal	F3	Marca de prontuário restrito de um paciente (personalidade, funcionário, caso sensível), com modo e motivo	SPDATA TBTPPERM_RICADPAC (2); DBAMV PW_SENHA_PACIENTE_VIP; depende de paciente (grupo 02)
+restricao_prontuario_autorizado	ADM	vinculo	F3	Usuários ou perfis autorizados a abrir um prontuário restrito, com vigência	DBAMV PW_SENHA_PACIENTE_VIP; SPDATA TBTPPERM_RICADPAC (consentido)
+motivo_acesso_emergencial	ADM	dominio	F3	Motivos aceitos para abrir prontuário restrito em emergência	DBAMV PW_AUDITORIA_PRONTUARIO_VIP
+acesso_emergencial	ADM	principal	F3	Abertura de prontuário restrito em emergência: usuário, paciente, motivo, texto livre e duração	DBAMV PW_AUDITORIA_PRONTUARIO_VIP
+revisao_acesso_emergencial	ADM	historico	F3	Revisão posterior de cada acesso de emergência pelo responsável: procedente ou não, com parecer	DBAMV PW_AUDITORIA_PRONTUARIO_VIP; exigência SBIS
+leitura_prontuario	ADM	historico	F3	Quem leu cada documento do prontuário, quando e de onde	DBAMV LOG_ACESSO_PEP, ACESSO_DOCUMENTO, CONFIGURACAO_SISTEM_ACES_ANEXO
+base_legal_tratamento	ADM	dominio	F3	Bases legais da lei de proteção de dados para tratamento e anonimização (tutela da saúde, obrigação legal)	SPDATA TBLGPDANONMOT (6)
+operacao_tratamento_dados	ADM	principal	F7	Inventário das operações de tratamento de dado pessoal: finalidade, base legal, dados, áreas e retenção	exigência legal de registro das operações; não existe em nenhuma das duas origens
+tipo_termo_lgpd	ADM	dominio	F3	Tipos de termo de proteção de dados (consentimento, revogação, anonimização)	SPDATA TBTERMCONREVTP (4); TBTIPOREPRE (2, signatário)
+consentimento_titular	ADM	principal	F3	Termo de proteção de dados do titular: tipo, finalidade, signatário (paciente ou representante), situação e arquivo	SPDATA TBMOVTERMSTATUS (5), TBTIPOREPRE (2); lacuna 4; termo clínico é do 03 (termo_consentimento_paciente)
+consentimento_titular_historico	ADM	historico	F3	Passos do termo de proteção de dados: emitido, autorizado, revogado, com data e responsável	SPDATA TBMOVTERMSTATUS (5); lacuna 4
+pedido_titular	ADM	principal	F3	Pedido do titular (acesso, correção, portabilidade, eliminação), com prazo legal, responsável e resposta	rodada 1 (prazo de 15 dias já no new-sgh)
+pedido_titular_historico	ADM	historico	F3	Andamento do pedido do titular, com cada passo, data e responsável	rodada 1
+anonimizacao_registro	ADM	historico	F3	Anonimização executada: titular, base legal, tabelas afetadas, quem pediu e quem executou	SPDATA TBLGPDANONMOT (6)
+funcao_responsavel_lgpd	ADM	dominio	F3	Funções de responsável por proteção de dados (encarregado, substituto, comitê)	SPDATA TBLGPDANONUSERFUNCAO (2)
+encarregado_dados	ADM	principal	F3	Encarregado de proteção de dados por estabelecimento, com função, contato público e vigência	SPDATA TBLGPDANONUSERFUNCAO (2)
+incidente_seguranca_dados	ADM	principal	F7	Incidente com dado pessoal: descrição, titulares afetados, risco, comunicação à autoridade e aos titulares	exigência legal de comunicar incidente; não existe em nenhuma das duas origens
+orgao_certificador	ADM	dominio	F3	Órgãos que concedem certificação de entidade beneficente ou título ao estabelecimento	SPDATA TBTPMINISTCER (4)
+certificacao_estabelecimento	ADM	principal	F3	Certificação ou título do estabelecimento (entidade beneficente e afins), com número, órgão e validade	SPDATA TBTPMINISTCER (4); depende de estabelecimento (grupo 02)
+dimensao_priorizacao_gut	ADM	dominio	F3	Dimensões da matriz de priorização: gravidade, urgência e tendência	SPDATA RPMATRIZ_GUT_TIPO (3)
+grau_priorizacao_gut	ADM	dominio	F3	Graus de cada dimensão da matriz de priorização, com descrição e pontuação	SPDATA RPMATRIZ_GUT_DESCRICAO (15)
+rotina_agendada	SIS	configuracao	F3	Rotina automática visível na Administração (carga, envio, fechamento), com agenda, parâmetros, dono e situação	DBAMV BATCH_JOB_INSTANCE, EDITOR_JOB, FECHA_CONTA_CONFIG_JOB_AGEND; MVBIKE TAREFA, ROTINA_CARGA
+execucao_rotina	SIS	historico	F3	Cada execução de rotina: início, fim, situação, volumes, mensagem de erro e quem disparou	DBAMV BATCH_JOB_EXECUTION, LOG_TASK
+execucao_rotina_etapa	SIS	item	F3	Etapas de cada execução de rotina, com volumes lidos, gravados e rejeitados	DBAMV BATCH_STEP_EXECUTION
+implantacao_estabelecimento	SIS	principal	F7	Projeto de implantação de um estabelecimento: módulos, datas previstas, fase atual e responsável	DBASGU IMPLANTACAO, CHECAGEM_IMPLANTACAO; MVBIKE DIAGNOSTICO_PROCESSOS
+modelo_item_prontidao	SIS	configuracao	F7	Catálogo de cadastros mínimos e conferências por módulo exigidos para ligar um hospital	MVBIKE ITEM_CADASTRO, ITEM_CADASTRO_PADRAO, ITEM_CADASTRO_CATALOGO
+item_prontidao	SIS	item	F7	Situação de cada item de prontidão na implantação: pendente, pronto, dispensado, com evidência	MVBIKE ITEM_CADASTRO_LOG; DBASGU CHECAGEM_IMPLANTACAO
+meta_implantacao	SIS	item	F7	Metas da implantação por processo (prazo, volume, adesão) com resultado medido	MVBIKE METAS_DIAG_PROCESSOS, METAS_DIAG_PROCESSOS_EMP, METAS_DIAG_PROCESSOS_ROTINA
+cenario_homologacao	SIS	configuracao	F7	Roteiro de teste de processo ponta a ponta usado para homologar a implantação	MVBIKE DIAGNOSTICO_PROCESSO_ANALITICO, DIAGNOSTICO_PROCESSO_SINTETICO
+execucao_cenario_homologacao	SIS	historico	F7	Execução de um roteiro de homologação na implantação, com resultado, responsável e achados	MVBIKE DIAGNOSTICO_PROCESSOS_APR, DIAGNOSTICO_PROCESSOS_APR_A
+lote_carga_legado	SIS	principal	F3	Lote de carga do sistema de origem (dia 0 ou diferencial): início, fim, origem, situação e volumes	rodada 1 (conector de virada); lacuna 9
+lote_carga_legado_tabela	SIS	item	F3	Resultado da carga por tabela de origem: lidos, gravados, rejeitados e tempo	rodada 1
+marca_sincronismo	SIS	configuracao	F3	Ponto de corte do sincronismo diferencial por tabela de origem	rodada 1 (dia 2+n)
+mapa_identificador_legado	SIS	vinculo	F3	De-para entre a chave do sistema de origem e a chave própria, por entidade	rodada 1
+divergencia_carga	SIS	item	F3	Registro rejeitado ou divergente na carga, com regra violada, valor e tratamento	rodada 1
+aceite_carga_area	SIS	historico	F3	Avaliação dos dados carregados por cada área (dia 1): aprovado ou com ressalva, responsável e data	rodada 1 (dia 1: avaliação pelas áreas)
+categoria_relatorio	REL	dominio	F3	Categorias do catálogo de relatórios (assistencial, faturamento, gerencial, fiscal)	SPDATA TBOPCAOREL (3); DBAMV EMPRESA_CAT_REPORTS
+relatorio	REL	principal	F3	Relatório do catálogo: nome, módulo, categoria, consulta definida pelo produto, formato e situação	SPDATA TBEDITREL (252); DBAMV PAGU_OBJETO, PAGU_OBJETO_RELATORIO
+relatorio_versao	REL	historico	F3	Versões da definição de cada relatório, com quem alterou, quando e o que mudou	SPDATA TBEDITREL (SQL por versão), TBEDITQRP (1001, leiaute antigo como referência anexa); DBAMV REPORTS_CHECKLIST
+relatorio_parametro	REL	item	F3	Parâmetros de entrada de cada relatório: nome, tipo, obrigatoriedade e valor padrão	SPDATA TBEDITPARAM (1001); DBAMV PAGU_OBJETO_PARAMETRO, PAGU_OBJETO_REL_PARAM, PW_PARAMETRO_PAGU_OBJETO
+relatorio_parametro_pesquisa	REL	configuracao	F3	Pesquisa que alimenta um parâmetro de relatório (lista de convênios, unidades), com filtro	SPDATA TBEDITPESQ (41); DBAMV PAGU_OBJETO_PERG_FORMULA
+relatorio_coluna	REL	item	F3	Colunas de saída do relatório, com rótulo, formato e marca de dado pessoal a mascarar	DBASGU RELATORIO_CABECALHO_COLUNA; DBAMV LISTA_RELATORIO_CSV, ITEM_LISTA_RELATORIO_CSV
+relatorio_permissao	REL	vinculo	F3	Perfis ou usuários autorizados a executar cada relatório	SPDATA TBEDITREL_GRUUSU (52), TBEDITREL_TBUSERS (15)
+relatorio_tela	REL	vinculo	F3	Relatório oferecido como botão dentro de uma tela, com ordem	SPDATA TBBTNOPREL (3), TBOPCAOREL (3); lacuna 5
+relatorio_tela_parametro	REL	item	F3	Valor da tela que preenche cada parâmetro do relatório ligado a ela	SPDATA TBPARAMOPREL (9)
+relatorio_modelo_documento	REL	vinculo	F3	Relatório usado como modelo de documento do prontuário	SPDATA TBEDITREL_PRMODELOREL (1); depende de modelo de documento (grupo 03)
+agrupamento_relatorio	REL	principal	F3	Conjunto nomeado de relatórios executados juntos (conferência de envio trabalhista e fiscal)	SPDATA TBAGRUPRELAT (29)
+agrupamento_relatorio_item	REL	item	F3	Relatórios de cada agrupamento, com ordem e versão de leiaute	SPDATA TBAGRUPRELAT_TBEDITREL (61)
+execucao_relatorio	REL	historico	F3	Cada execução de relatório: usuário, parâmetros, linhas, tempo, formato e se saiu dado pessoal	DBAMV TAB_RELATORIOS_EXECUTADOS
+triagem_relatorio_legado	REL	principal	F3	Destino decidido para cada relatório do sistema de origem: catálogo, tela, indicador ou descarte, com área e aceite	SPDATA TBEDITREL (252); lacuna 6 (DP-3)
+agendamento_relatorio	REL	configuracao	F3	Envio agendado de relatório: periodicidade, parâmetros, formato e alerta de falha ao dono	SPDATA TBEDITREL_AGENDA (2); DBAMV REPORTS_SCHEDULE_INFO
+agendamento_relatorio_destinatario	REL	item	F3	Destinatários de cada agendamento (usuário, lista de distribuição ou endereço)	SPDATA TBEDITREL_AGENDA (destinatários)
+envio_relatorio	REL	historico	F3	Cada envio agendado: data, situação, link gerado, validade do link e erro	SPDATA TBEDITREL_AGENDA_LOG (1001), TBEDITREL_AGENDA_SITUACAO (4)
+grupo_indicador	REL	dominio	F3	Grupos de indicadores (assistencial, ocupação, infecção, financeiro, regulatório)	DBAPORTAL IVM_GRUPO_INDICADOR, DIMENSAO
+indicador	REL	principal	F3	Indicador hospitalar com nome, grupo, polaridade, periodicidade e responsável	DBAPORTAL INDICADOR, INDICADOR_PRIMARIO, IVM; DBAMV INDICADOR_ESTATISTICA_HOSP, GF_INDICADORES
+indicador_versao	REL	historico	F3	Ficha técnica versionada: fórmula, numerador, denominador, fonte, critérios de inclusão e vigência	DBAPORTAL FICHA_IVM, FORMULA, IVM_FONTE_FORMULA, IVM_FONTE_INDICADOR, IVM_REFERENCIA
+faixa_indicador	REL	configuracao	F3	Faixas de desempenho do indicador (bom, atenção, crítico) para a cor dos painéis	DBAPORTAL IVM_FAIXA; DBACP FORMATACAO_CONDICIONAL
+meta_indicador	REL	configuracao	F3	Meta do indicador por estabelecimento, unidade e período	DBAPORTAL META_INDICADOR, META_MENSAL; DBAMV GF_META
+apuracao_indicador	REL	principal	F3	Resultado apurado no período, com numerador, denominador, valor, escopo e situação (prévia, fechada)	DBAPORTAL TB_RESUMO_INDICADORES; DBAMV GF_DADOS; areas-sem-dono 25 (produção derivada vira indicador)
+apuracao_indicador_estrato	REL	item	F7	Resultado da apuração aberto por estrato (unidade, convênio, especialidade, faixa etária)	DBAPORTAL IVM_DIMENSIONALIDADE, DIMENSAO_IND_PRIMARIO; DBAMV GF_FAIXA_ETARIA
+analise_critica_indicador	REL	item	F7	Análise do resultado fora da meta: causa, comentário, responsável e ação proposta	DBAPORTAL INDICADOR_ANALISE_CRITICA, INDICADOR_REUNIAO
+painel_gerencial	REL	principal	F3	Painel gerencial nomeado, com público, estabelecimento e período padrão	DBACP CONFIG_GRAFICO_*; DBAPORTAL PREFERENCIA_GRAFICO, PREFERENCIA_IND_VISUALIZACAO
+painel_gerencial_item	REL	item	F3	Indicadores e gráficos de cada painel gerencial, com posição e forma de exibição	DBACP CONFIG_GRAFICO_*; DBAPORTAL IVM_LINK
+carga_data_mart	REL	historico	F3	Cada carga do data mart: início, fim, período, situação e volumes, sem dado identificável	DBAMV DW_LOG_CARGA; DBAPORTAL CARGA, CARGA_AUTOMATION
+carga_data_mart_etapa	REL	item	F3	Resultado da carga por dimensão ou fato, com linhas e tempo	DBAMV DW_LOG_CARGA_DIMENSAO, DW_LOG_CARGA_FATO; DBAPORTAL DW_TABELA
+tipo_painel_tv	REL	dominio	F3	Tipos de painel de TV (ocupação de UTI, farmácia, mapa cirúrgico, laboratório, chamada)	SPDATA PNCONFIGPORTAL (19); DBAMV PAINEL_CLINICO_TIPO_GRUPO
+painel_tv	REL	principal	F3	Painel de TV operacional: tipo, estabelecimento, unidade, tempo de rotação e situação	SPDATA PNCONFIGPORTAL (19); DBAMV PAINEL_CLINICO, CONFIG_PAINEL; MVBIKE PAINEL*
+painel_tv_bloco	REL	item	F3	Blocos exibidos em cada painel de TV, com filtro, ordem e tempo em tela	DBAMV PAINEL_CLINICO_GRUPO, PAINEL_CLINICO_PARAMETRO, CONFIG_PAINEL_FSCC
+painel_tv_dispositivo	REL	vinculo	F3	Televisores ou estações onde cada painel está ligado, com código de pareamento e último contato	SPDATA PNCONFIGPORTAL; painel de chamada é do grupo 02 (conflitos 2.5)
+tipo_bloco_pagina	REL	dominio	F8	Catálogo de blocos para a página inicial (lista de trabalho, indicador, gráfico, links, comunicado)	DBACP PORTLET, PORTLET_HTML, PORTLET_IMAGEM, PORTLET_LINK, GRUPO_PORTLET
+modelo_pagina_inicial	REL	configuracao	F8	Página inicial montada pelo hospital, com nome, estabelecimento e situação	DBACP PAGINA, PAGINA_CONFIGURACAO, PASTA; DBAPORTAL CONFIG_PORTAL
+modelo_pagina_inicial_bloco	REL	item	F8	Blocos de cada página inicial, com posição, tamanho e configuração	DBACP PORTLET_CONFIGURACAO, PORTLET_LINK_PARAM, PASTA_CONFIGURACAO
+modelo_pagina_inicial_perfil	REL	vinculo	F8	Perfis de acesso que usam cada página inicial, com prioridade	DBACP PORTLET_PAPEL
+analise_salva	REL	principal	F8	Análise ad hoc salva sobre o data mart: assunto, filtros, linhas, colunas e medidas, sem dado identificável	DBACP PLAN_PLANILHA_DINAMICA, PLAN_FILTROS_PLANILHA, PLAN_PROMPT, PLAN_DATAMART
+analise_salva_permissao	REL	vinculo	F8	Perfis ou usuários que podem abrir cada análise salva	DBACP PLAN_PLANILHA_PAPEL, PLAN_DATAMART_PAPEL, PLAN_OBJETO_OLAP_PAPEL
+tema_clinico	REL	dominio	F8	Temas clínicos que agrupam riscos na central de comando (sepse, queda, lesão por pressão, deterioração)	MVBIKE TEMA_CLINICO, AGRUPADOR_TEMA_CLINICO
+regra_risco_clinico	REL	configuracao	F8	Regra que acende um risco do paciente a partir de exame, medicamento, diagnóstico ou aferição, com gravidade	DBATUALIZA RISCO_CLINICO; MVBIKE RISCO_CLINICO, RISCO_ALTA
+regra_risco_clinico_criterio	REL	item	F8	Critérios de cada regra de risco (exame e faixa, medicamento e dose, diagnóstico, sinal vital)	DBATUALIZA RISCO_LABORATORIO, RISCO_MEDICAMENTO, RISCO_CID, RISCO_AFERICAO; MVBIKE RISCO_DOSE
+ocorrencia_risco_clinico	REL	principal	F8	Risco acendido para um paciente na unidade: regra, momento, gravidade, quem reconheceu e resolução	DBAMV GF_ALERTAS, GF_USUARIO_ALERTA; depende de atendimento (grupo 02) e PEP (grupo 03)
+alerta_fluxo_unidade	REL	configuracao	F8	Limites de fluxo da unidade que geram alerta (espera, ocupação, altas pendentes, leitos bloqueados)	DBAMV GF_ALERTAS, GF_DADOS_INTERNACAO
+perspectiva_estrategica	REL	dominio	F8	Perspectivas do mapa estratégico (financeira, cliente, processos, aprendizado)	DBAPORTAL PERSPECTIVA, PERSPECTIVA_ORGANIZACAO; MVBIKE PERSPECTIVA_ESTRATEGIA
+mapa_estrategico	REL	principal	F8	Mapa estratégico do estabelecimento ou da rede para um ciclo, com missão, visão e vigência	DBAPORTAL ESTRATEGIA, ESTRATEGIA_MAPA_DIAGRAMA, ESTRATEGIA_MAPA_IMAGEM
+tema_estrategico	REL	item	F8	Temas estratégicos de cada mapa	DBAPORTAL ESTRATEGIA_TEMA_ESTRATEGICO
+objetivo_estrategico	REL	principal	F8	Objetivo do mapa, com perspectiva, tema, dono e descrição	DBAPORTAL OBJETIVO, OBJETIVO_CONTRIBUICAO
+objetivo_estrategico_relacao	REL	vinculo	F8	Relação de causa e efeito entre objetivos do mapa	DBAPORTAL OBJETIVO_CAUSA_EFEITO
+objetivo_estrategico_indicador	REL	vinculo	F8	Indicadores que medem cada objetivo, com peso	DBAPORTAL ESTRATEGIA_OBJETIVO_INDICADOR
+iniciativa_estrategica	REL	principal	F8	Iniciativa ou projeto para cumprir objetivos, com dono, prazo, orçamento e situação	DBAPORTAL INICIATIVA_ACAO, PROGRAMA, CADEIA_VALOR
+iniciativa_estrategica_objetivo	REL	vinculo	F8	Objetivos a que cada iniciativa contribui	DBAPORTAL INICIATIVA_ACAO_OBJETIVO, INICIATIVA_ACAO_INDICADOR
+iniciativa_estrategica_acao	REL	item	F8	Ações de cada iniciativa, com responsável, prazo e andamento	DBAPORTAL INICIATIVA_ACAO, INICIATIVA_ACAO_ACHADO
+reuniao_analise_critica	REL	principal	F8	Reunião de análise crítica da estratégia ou dos indicadores, com data, pauta e ata	DBAPORTAL REUNIAO, ANALISE_CRITICA, INICIATIVA_INDICADOR_REUNIAO
+reuniao_analise_critica_participante	REL	item	F8	Participantes de cada reunião, com presença	DBAPORTAL REUNIAO
+reuniao_analise_critica_deliberacao	REL	item	F8	Deliberações da reunião, com responsável, prazo e ligação a objetivo, indicador ou iniciativa	DBAPORTAL ANALISE_CRITICA, INDICADOR_REUNIAO
+cenario_simulacao_receita	REL	principal	F8	Cenário de simulação de receita: objetivo, período de produção base, escopo e dono	DBACP SD_CENARIO, SD_OBJETIVO_CENARIO, SD_CENARIO_PAPEL
+cenario_simulacao_parametro	REL	item	F8	Premissas do cenário: reajuste por convênio, troca de tabela de preço, filtros de unidade e atendimento	DBACP SD_CENARIO_PARAMETRO, SD_TROCA_TABELA_PARAMETRO, SD_REGRA_CONVENIO, SD_SETOR_UNIDADE
+regra_conversao_procedimento	REL	configuracao	F8	De-para de procedimento usado na simulação (código atual para novo), com fator	DBACP SD_CONVERSAO_PROCEDIMENTO, SD_CONVERSAO_PROCEDIMENTO_PCT
+regra_conversao_tabela_preco	REL	configuracao	F8	Troca de tabela de preço simulada por convênio, com tabela de origem, destino e percentual	DBACP SD_CONVERSAO_TAB_PRECO
+simulacao_receita	REL	principal	F8	Execução de um cenário sobre a produção real, com data, situação e totais antes e depois	DBACP SD_SIMULACAO, SD_TIPO_SIMULACAO, SD_STATUS; DBADW FA_SIMULA_ATENDIMENTO
+simulacao_receita_resultado	REL	item	F8	Resultado da simulação por convênio, procedimento e unidade: valor atual, simulado e diferença	DBACP SD_SIMULACAO_CONVERSAO, SD_UNIDADE_PRODUCAO; DBADW FA_SD_*
+simulacao_receita_inconsistencia	REL	item	F8	Itens que a simulação não conseguiu precificar, com motivo	DBACP SD_INCONSISTENCIA_TT, SD_INCONSISTENCIA_TT_PCT

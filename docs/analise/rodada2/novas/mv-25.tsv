@@ -1,0 +1,38 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+acao_judicial_beneficiario	SGO	principal	F7	Decisão judicial que obriga a operadora a cobrir ou manter beneficiário: processo, vara, vigência, setor responsável e aviso	DBAPS ACAO_JUDICIAL
+comarca_judicial	CAD	dominio	F7	Comarcas e varas usadas para registrar processos judiciais do grupo	DBAPS COMARCA
+acionista_operadora	SGO	item	F7	Composição societária da operadora: acionista pessoa física ou jurídica, quantidade de ações e percentual	DBAPS ACIONISTAS_OPERADORA
+cargo_dirigente_operadora	SGO	dominio	F7	Cargos de administração da operadora com o código exigido no envio econômico à ANS	DBAPS CARGO
+agenda_comercial	SGO	principal	F8	Compromissos da equipe de vendas e pós-venda com contratantes e contratos: visita, local, situação e responsável	DBAPS AGENDA
+agenda_comercial_material	SGO	item	F8	Material de divulgação entregue em cada compromisso comercial, com quantidade	DBAPS AGENDA_MATERIAL
+grupo_procedimento_plano	SGO	dominio	F7	Agrupamento de procedimentos usado nas regras de coparticipação, franquia, limite e cobertura do plano	DBAPS AGRUP_PROCED
+alerta_cadastral_operadora	SGO	principal	F7	Aviso ligado a beneficiário, contratante ou prestador, exibido ao autorizar, atender ou faturar	DBAPS ALERTA
+alteracao_vencimento_contrato	SGO	historico	F7	Troca do dia de vencimento do contrato com dia anterior, novo, valor proporcional cobrado e competência do ajuste	DBAPS ALTERACAO_DIA_VECTO
+area_atuacao_medica	CAD	dominio	F7	Áreas de atuação médica reconhecidas pelo conselho, com código usado no intercâmbio entre operadoras	DBAPS AREA_ATUACAO
+avaliacao_protocolo_beneficiario	SGO	item	F8	Retorno do beneficiário sobre o atendimento do protocolo, com classificação e comentário	DBAPS ATEND_CALL_CENTER_FEEDBACK
+ocorrencia_protocolo_beneficiario	SGO	item	F7	Denúncia ou reclamação registrada no protocolo: informante, prestador ou contratante citado, gravidade e encerramento	DBAPS ATEND_CALL_CENTER_OCORRENCIA
+protocolo_beneficiario_servico	SGO	vinculo	F7	Tipos de serviço tratados em cada protocolo de atendimento	DBAPS ATEND_CALL_CENTER_SERVICO
+ativo_garantidor_operadora	SGO	principal	F7	Imóveis e aplicações da operadora informados à ANS: registro, avaliação, valor contábil, custódia e vínculo assistencial	DBAPS ATIVOS_IMOB_OPERADORA; DBAPS ATIVOS_INVEST_OPERADORA
+alcada_autorizador_plano	SGO	configuracao	F7	Nível e poderes do analista de autorização: liberar procedimento, guia, limite, prorrogação e exclusão	DBAPS AUTORIZADOR
+regra_distribuicao_analise	SGO	configuracao	F8	Distribuição automática de contratos ou pedidos entre analistas, com quantidade, prioridade e vigência	DBAPS AUTORIZ_DISTR_CONTRATO
+token_atendimento_beneficiario	SGO	principal	F7	Código de uso único gerado pelo beneficiário para confirmar presença no prestador, com validade e uso	DBAPS AUTWEB_TOKEN
+beneficiario_intercambio	SGO	principal	F8	Beneficiário de outra operadora atendido na rede própria ou credenciada: origem, plano, contato, período habitual	DBAPS BENEFICIARIO_TRANSITO; DBAPS BENEFICIARIO_TRANSITO_HABITUAL
+operadora_congenere	SGO	principal	F8	Operadora parceira em acordo de atendimento recíproco: registro, dados cadastrais, hierarquia e câmara de acerto	DBAPS CADU; DBAPS CONFIG_PAGAMENTO_UNIMED
+calendario_compensacao_intercambio	SGO	configuracao	F8	Calendário de acerto financeiro entre operadoras parceiras, com vigência e envio de arquivos	DBAPS CALENDARIO_CAMARA_COMPENSACAO
+campanha_venda_participante	SGO	vinculo	F8	Equipes e vendedores participantes de cada campanha, com suspensão e regra de comissão de exceção	DBAPS CAMPANHA_ESTRUTURA_VENDA
+carteira_contratos_plano	SGO	dominio	F7	Carteira que agrupa contratos para gestão comercial e cobrança, com conta de recebimento própria	DBAPS CARTEIRA_CONTRATO; DBAPS CONTA_CORRENTE_CARTEIRA
+mensagem_pedido_autorizacao	SGO	item	F8	Conversa entre prestador e analista sobre um pedido de autorização, com origem, leitura e anexo	DBAPS CHAT; DBAPS CHAT_MENSAGEM
+classe_socioeconomica	CAD	dominio	F8	Faixas de classe socioeconômica para perfil de beneficiário e segmentação comercial	DBAPS CLASSE_SOCIAL
+apuracao_fator_custeio	SGO	principal	F8	Apuração mensal do fator de rateio entre custo e despesa da operadora, com fator calculado e aplicado	DBAPS COMPETENCIA_RATEIO_CUSTO; DBAPS CONSOLIDA_FATOR_CUSTEIO
+regra_fator_custeio	SGO	configuracao	F8	Grupos e contas contábeis que formam o rateio de custo da operadora, com vigência	DBAPS CONFIG_RATEIO_CUSTO; DBAPS CONFIG_RATEIO_CUSTO_CONTAS
+regra_ato_cooperativo	SGO	configuracao	F8	Grupos de contas que separam ato cooperativo principal, auxiliar e não cooperativo, com vigência	DBAPS CONFIG_CONTAS_ATOS_COOPERAT
+apuracao_ato_cooperativo	SGO	principal	F8	Apuração mensal de valores e percentuais por natureza de ato cooperativo	DBAPS CONSOLIDA_PERCENTUAL_ATO
+conferencia_saldo_fechamento	FIN	configuracao	F7	Contas contábeis cujo saldo é conferido antes de fechar a competência, com tipo de saldo e vigência	DBAPS CONFIG_CONTA_CONTAB_FECH
+regra_livro_auxiliar_ans	SGO	configuracao	F7	Montagem dos registros auxiliares exigidos pela ANS: contas, filtros, processos e relatórios por tipo de livro	DBAPS CONFIG_LIVRO_AUXILIAR; DBAPS CONFIG_CONTA_REG_AUX; DBAPS CONFIG_RELAT_COBERT_ASSIST
+regra_favorecido_pagamento_rede	SGO	configuracao	F7	Define a quem se paga o procedimento executado por um prestador: ele mesmo ou o prestador principal, com vigência	DBAPS CONFIG_REPASSE_PGTO_PRESTADOR
+lancamento_conta_beneficiario	SGO	historico	F7	Créditos e débitos em conta corrente do beneficiário ligados a guia, competência e operação	DBAPS CONTA_CORRENTE_USUARIO
+guia_conta_recebida_declaracao	SGO	item	F7	Declarações de nascido vivo e de óbito informadas na guia de internação recebida	DBAPS CONTA_HOSPITALAR_DECLARACAO
+contestacao_cobranca_intercambio	SGO	item	F8	Contestação de valor cobrado entre operadoras parceiras, por item, com motivo, aceite ou rejeição	DBAPS CONTA_MEDICA_CONTESTACAO
+regra_acao_automatica	ADM	configuracao	F8	Ação automática configurável sobre uma entidade do sistema, disparada quando as condições são atendidas	DBAPS ACAO_AUTOMATICA; DBAPS ACAO_AUTOMATICA_ENTIDADE
+regra_acao_automatica_condicao	ADM	item	F8	Condições da ação automática: campo, operador e valor comparado	DBAPS ACAO_AUT_CONDICAO; DBAPS CAMPO_CONDICAO
+regra_acao_automatica_resultado	ADM	item	F8	Campos alterados pela ação automática e o valor gravado em cada um	DBAPS ACAO_AUTOMATICA_RESULTADO

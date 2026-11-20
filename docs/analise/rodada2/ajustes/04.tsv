@@ -1,0 +1,54 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+acesso_paciente_portaria	ACEITA	acesso_paciente_portaria	HOT	principal	F8	Entrada e saída de paciente pela portaria, com crachá, setor, marcação ligada, custódia e permanência
+achado_cirurgico_padrao	ACEITA	achado_cirurgico_padrao	CC	dominio	F3	Achados intraoperatórios padronizados para seleção na descrição da cirurgia
+agendamento_cirurgico_exame	ACEITA	agendamento_cirurgico_exame	CC	item	F7	Exame laboratorial ou de imagem pedido junto do agendamento cirúrgico, com quantidade e setor executante
+carater_cirurgia_contato	ACEITA	carater_cirurgia_contato	CC	item	F7	E-mails e telefones avisados quando uma cirurgia de certo caráter é marcada, com texto da mensagem
+cardapio_servico_quarto	ACEITA	cardapio_servico_quarto	HOT	principal	F8	Item do cardápio vendido ao paciente ou acompanhante pelo serviço de quarto, com grupo, composição e preço
+concessao_beneficio	ACEITA	concessao_beneficio	HOT	principal	F8	Entrega de benefício a paciente, acompanhante, profissional ou setor, com destinatário, confirmação e ajuste
+consumo_utilidade	ACEITA	consumo_utilidade	HOT	principal	F8	Leitura e conta mensal de água, energia, gás e esgoto por unidade consumidora, com período, quantidade e valores
+descricao_cirurgica_achado	ACEITA	descricao_cirurgica_achado	CC	item	F3	Achados padronizados registrados na descrição da cirurgia, com complemento livre
+grupo_alimento	ACEITA	grupo_alimento	HOT	dominio	F8	Grupos de alimentos (cereais, laticínios, carnes, frutas) usados no cardápio e na composição nutricional
+grupo_cardapio_servico_quarto	ACEITA	grupo_cardapio_servico_quarto	HOT	dominio	F8	Grupos que organizam o cardápio do serviço de quarto (lanches, bebidas, pratos)
+justificativa_mutirao_cirurgico	ACEITA	justificativa_mutirao_cirurgico	CC	dominio	F8	Justificativas padronizadas usadas na inclusão ou alteração de pacientes em mutirão cirúrgico
+kit_documento_protocolo_item	ACEITA	kit_documento_protocolo_item	HOT	item	F7	Tipo de documento que compõe um conjunto padrão enviado junto no protocolo de trâmite
+liberacao_saida_paciente	ACEITA	liberacao_saida_paciente	HOT	principal	F8	Saída do paciente pela portaria após a alta: quem retirou, documento, parentesco, enfermagem presente e horário
+medidor_consumo	ACEITA	medidor_consumo	HOT	dominio	F8	Medidor de energia, água ou gás de uma área, para leitura periódica e rateio de consumo
+meio_transporte	ACEITA	meio_transporte	INT	dominio	F3	Meio de transporte do paciente na chegada, na transferência ou na alta (próprio, ambulância, aéreo)
+modalidade_dieta_caracteristica	ACEITA	modalidade_dieta_caracteristica	HOT	vinculo	F3	Características aplicáveis a cada dieta prescritível, com a ordem em que aparecem na prescrição
+modalidade_dieta_refeicao	ACEITA	modalidade_dieta_refeicao	HOT	vinculo	F7	Refeições em que cada dieta é servida, por estabelecimento
+modelo_pedido_internacao	ACEITA	modelo_pedido_internacao	INT	configuracao	F7	Modelo pronto de pedido de internação ou procedimento do profissional, com sessões, dias previstos e local
+modelo_solicitacao_procedimento_item	ACEITA	modelo_pedido_internacao_item	INT	item	F7	Procedimento, quantidade e diagnóstico de um modelo de solicitação de internação ou cirurgia do profissional
+motivo_bloqueio_sala_cirurgica	ACEITA	motivo_bloqueio_sala_cirurgica	CC	dominio	F3	Motivo para interditar sala cirúrgica (manutenção, limpeza terminal, falta de equipe)
+motivo_bloqueio_visita	ACEITA	motivo_bloqueio_visita	HOT	dominio	F8	Motivo para restringir ou bloquear visitas a um paciente ou de uma pessoa
+motivo_cancelamento_transporte	ACEITA	motivo_cancelamento_transporte	INT	dominio	F8	Motivo para cancelar ou reprovar pedido de ambulância ou de transporte do paciente, com tipo de uso
+motivo_ordem_servico_manutencao	ACEITA	motivo_ordem_servico_manutencao	HOT	dominio	F7	Motivo da ordem de serviço de manutenção, com tipo (corretiva, preventiva) e tipo de ordem
+motivo_reprovacao_agendamento_cirurgico	ACEITA	motivo_reprovacao_agendamento_cirurgico	CC	dominio	F7	Motivo para reprovar o pedido de agendamento cirúrgico na aprovação, com ação seguinte
+motivo_tramite_documento	ACEITA	motivo_tramite_documento	HOT	dominio	F3	Motivo do envio de documento ou prontuário em protocolo entre setores
+oficina_manutencao_servico	ACEITA	oficina_manutencao_servico	HOT	vinculo	F7	Serviços de manutenção que cada oficina executa
+pedido_servico_quarto	ACEITA	pedido_servico_quarto	HOT	principal	F8	Pedido de refeição avulsa feito do quarto durante a internação, com solicitante, forma de pagamento e situação
+pedido_servico_quarto_item	ACEITA	pedido_servico_quarto_item	HOT	item	F8	Itens do cardápio e quantidades de um pedido do serviço de quarto
+portador_documento	ACEITA	portador_documento	HOT	dominio	F3	Pessoa autorizada a transportar prontuários, protocolos e documentos entre setores, com contato
+posicao_paciente_transporte	ACEITA	posicao_paciente_transporte	INT	dominio	F8	Posição do paciente no veículo de transporte (deitado, sentado, cadeira de rodas)
+prazo_atendimento_manutencao	ACEITA	prazo_atendimento_manutencao	HOT	configuracao	F7	Prazo de atendimento e solução das ordens de manutenção por categoria e prioridade
+preco_refeicao	ACEITA	preco_refeicao	HOT	configuracao	F7	Valor da refeição por tipo de refeição e dieta em cada estabelecimento, usado na cobrança de acompanhante
+procedimento_cirurgico_equipamento	ACEITA	procedimento_cirurgico_equipamento	CC	configuracao	F3	Equipamentos exigidos por procedimento cirúrgico e a quantidade, usados na reserva do agendamento
+procedimento_cirurgico_exame	ACEITA	procedimento_cirurgico_exame	CC	vinculo	F7	Exame de imagem gerado automaticamente por procedimento e unidade (hemodinâmica)
+programa_atencao_domiciliar	ACEITA	programa_atencao_domiciliar	INT	dominio	F8	Programas de atenção domiciliar oferecidos por fonte pagadora, com o tipo de guia que cada um gera
+projeto_mutirao_cirurgico_fornecedor	ACEITA	projeto_mutirao_cirurgico_fornecedor	CC	vinculo	F8	Fornecedores participantes do projeto ou mutirão cirúrgico
+projeto_mutirao_cirurgico_insumo	ACEITA	projeto_mutirao_cirurgico_insumo	CC	item	F8	Insumo e item faturável previstos no projeto ou mutirão cirúrgico, com quantidade
+qualificacao_plano_manutencao	ACEITA	qualificacao_plano_manutencao	HOT	item	F8	Qualificação técnica exigida por um plano de manutenção, com oficina, número de técnicos e homem-hora previstos
+sala_cirurgica_procedimento	ACEITA	sala_cirurgica_procedimento	CC	vinculo	F7	Procedimentos cirúrgicos permitidos ou vedados em cada sala cirúrgica
+servico_lavanderia_cliente	ACEITA	servico_lavanderia_cliente	HOT	principal	F8	Lavagem de roupa prestada a cliente externo, com peso, lavanderia, etapas, valor, entrega e cancelamento
+servico_lavanderia_cliente_item	ACEITA	servico_lavanderia_cliente_item	HOT	item	F8	Peça e quantidade lavadas para cliente externo atendido pela lavanderia, com valor unitário e total
+situacao_solicitacao_regulacao	FUNDIR	situacao_pedido_leito	INT	dominio	F7	Situações do pedido na central de regulação (aguardando, autorizado, negado, cancelado), com grupo de situação
+solicitacao_cardapio	ACEITA	solicitacao_cardapio	HOT	principal	F8	Pedido do setor à nutrição baseado no cardápio planejado, que gera a requisição de insumos ao estoque
+solicitacao_cardapio_item	ACEITA	solicitacao_cardapio_item	HOT	item	F8	Opção, preparação e insumo pedidos em cada solicitação de cardápio, com quantidade padrão e pedida
+tipo_beneficio_concedido	ACEITA	tipo_beneficio_concedido	HOT	dominio	F8	Tipos de benefício concedido (transporte, refeição, auxílio), indicando se exige fornecedor e destinatário
+tipo_bico_mamadeira	ACEITA	tipo_bico_mamadeira	HOT	dominio	F8	Tipos de bico usados no preparo do lactário, conforme idade e necessidade do recém-nascido
+tipo_consumo_utilidade	ACEITA	tipo_consumo_utilidade	HOT	dominio	F8	Tipos de consumo de utilidade medidos em fatura (energia ativa, reativa, demanda, água, gás)
+tipo_destinatario_beneficio	ACEITA	tipo_destinatario_beneficio	HOT	dominio	F8	Quem pode receber o benefício (paciente, acompanhante, profissional, setor) e se exige atendimento ou paciente
+tipo_embalagem_esteril	ACEITA	tipo_embalagem_esteril	CC	dominio	F7	Tipos de embalagem usados no preparo de material para esterilização (papel grau cirúrgico, tecido, contêiner)
+tipo_ordem_servico	ACEITA	tipo_ordem_servico_manutencao	HOT	dominio	F7	Tipos de ordem de serviço da manutenção (corretiva, preventiva, instalação), com prazo e exigência de equipamento
+tipo_pertence	ACEITA	tipo_pertence	HOT	dominio	F8	Tipos de pertence guardado (documento, valor, roupa, eletrônico, prótese)
+vale_refeicao	ACEITA	vale_refeicao	HOT	principal	F8	Vale de refeição vendido no caixa a acompanhante ou visitante, com valor e situação
+valor_hora_tecnico	ACEITA	valor_hora_tecnico_manutencao	HOT	historico	F7	Valor da hora normal, extra e de venda do técnico de manutenção por vigência, base do custo da ordem de serviço

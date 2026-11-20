@@ -1,0 +1,223 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+DIPARAM	2	PEP	Administração > Parâmetros > Diálise	configuracao	descartar	Parâmetros do módulo de diálise sem uso; recriar se houver demanda
+HTATENDALTA	1001	PEP	PEP > Alta médica / Sumário de alta	movimento	migrar-movimento	Altas médicas com previsão, saída do leito e diagnóstico (desde 04/2023)
+HTATENDIMENTO	1001	PEP	Consulta somente leitura: snapshot HT do atendimento no registro clínico	historico	migrar-leitura	Snapshot imutável do atendimento (setor, leito, CID, profissionais)
+HTATENDRESP	1001	PEP	Consulta somente leitura: snapshot HT do responsável do atendimento	historico	migrar-leitura	Snapshot do responsável pelo paciente no atendimento (dados pessoais)
+HTCABECFORMULCOMP	15	PEP	Administração PEP > Construtor de formulários > Versões	historico	migrar-leitura	Versões publicadas do layout de formulários clínicos (2024-2026)
+HTCHKGERAL	1001	PEP	Enfermagem > Checagem > Histórico de alterações	auditoria	migrar-leitura	Histórico das alterações de situação de checagem/aprazamento
+HTFORMULCOMP	255	PEP	Administração PEP > Construtor de formulários > Versões > Componentes	historico	migrar-leitura	Componentes DFM de cada versão de layout de formulário
+HTPARAMORIGEMCABIMP	79	PEP	Configurações > Parâmetros do PEP > Cabeçalho de impressão	configuracao	migrar-crud	Origem dos dados do cabeçalho por tipo de documento impresso
+PRAGRAVOPERGUNTA	1001	PEP	PEP > Notificação de agravos > Perguntas SINAN	dominio	carga-referencia	Perguntas das fichas de notificação compulsória por agravo
+PRAGRAVOTPARQUETIPO	53	PEP	PEP > Notificação de agravos > Tipos de agravo	dominio	carga-referencia	Agravos de notificação compulsória (códigos SINAN)
+PRAGRUPBALANCO	4	PEP	Enfermagem > Balanço hídrico > Grupos	dominio	migrar-crud	Grupos de ganhos do balanço hídrico (VO, EV, enteral, parenteral)
+PRAGRUP_PRFILTROCLASSIF	1	PEP	PEP > Painel > Filtros por classificação	configuracao	migrar-crud	Vínculo filtro do painel x classificação de item
+PRALERGIAPAC	1001	PEP	PEP > Alergias do paciente	movimento	migrar-movimento	Registro de alergias do paciente com ações e trilha
+PRALERGIAPAC_TBPRINC	1001	PEP	PEP > Alergias do paciente > Princípios ativos	vinculo	migrar-movimento	Princípios ativos de cada alergia registrada
+PRALERGIAPACTMP	1001	PEP	PEP > Registros clínicos > Rascunhos	temporaria	migrar-movimento	Alergias em rascunho de evolução; migrar só rascunhos pendentes
+PRALERGIAPACTMP_TBPRINC	1001	PEP	PEP > Registros clínicos > Rascunhos	temporaria	migrar-movimento	Princípios ativos de alergias em rascunho
+PRASS_DOC_PREXAMEASS	1001	PEP	PEP > Documentos do prontuário > Exames	vinculo	migrar-leitura	Vínculo documento do prontuário x assinatura de exame
+PRASSINANTE	2	PEP	PEP > Domínios > Tipos de assinante	dominio	migrar-crud	Quem assina o documento: paciente ou responsável legal
+PRASSINAT_DOC_PRCHKGERAL	1001	PEP	PEP > Documentos do prontuário > Checagens	vinculo	migrar-leitura	Vínculo documento do prontuário x horário de checagem
+PRASSINATURA_CAB	1001	PEP	PEP > Documentos do prontuário (linha do tempo)	movimento	migrar-movimento	Cabeçalho de documento do prontuário por paciente e atendimento
+PRASSINATURA_DOC	1001	PEP	PEP > Documentos do prontuário (linha do tempo)	movimento	migrar-movimento	Versões/eventos de documento clínico com XML de impressão (~1,4 milhão)
+PRATESTREQIMP	1001	PEP	PEP > Atestados e requerimentos	movimento	migrar-movimento	Atestados, declarações e requerimentos emitidos ao paciente
+PRBHINTENSIDADE	4	PEP	Enfermagem > Balanço hídrico > Intensidades	dominio	migrar-crud	Intensidade de eliminações no balanço hídrico
+PRBHTIPOFECHAMENTO	2	PEP	Enfermagem > Balanço hídrico > Tipos de fechamento	dominio	migrar-crud	Tipo de fechamento do balanço hídrico (parcial/24h)
+PRBHTPELIMINA	6	PEP	Enfermagem > Balanço hídrico > Tipos de eliminação	dominio	migrar-crud	Tipos de eliminação (diurese, dreno, êmese) e campos exigidos
+PRCABEC_MONITORIZACAO	2	PEP	Enfermagem > Monitorização	movimento	migrar-leitura	Cabeçalho de monitorização do paciente (2 linhas, 2020-2022)
+PRCABEVOL	1001	PEP	PEP > Registros clínicos (evolução/anamnese/escalas)	movimento	migrar-movimento	Cabeçalho dos registros clínicos dos formulários (~769 mil)
+PRCABEVOLTMP	1001	PEP	PEP > Registros clínicos > Rascunhos	temporaria	migrar-movimento	Rascunhos de registros clínicos; migrar só pendentes não arquivados
+PRCAB_IDENTIFIC_PAC	2	PEP	PEP > Domínios > Identificação do paciente em documento	dominio	migrar-crud	Usar dados históricos ou atuais do paciente no documento
+PRCADRESP	1001	PEP	Administração PEP > Opções de resposta (legado)	dominio	migrar-leitura	Opções de resposta do modelo antigo de formulários clínicos
+PRCAMPOSLOCALIZACAOPACIENTE	13	PEP	PEP > Painel/Localizar paciente > Colunas	configuracao	migrar-crud	Campos disponíveis na tela de localização de pacientes
+PRCARACTDIE	19	PEP	Cadastros PEP > Dietas > Características	cadastro	migrar-crud	Características de dieta (consistência, via) e respostas possíveis
+PRCARACTLAN	1001	PEP	PEP > Prescrição > Dietas > Características	movimento	migrar-movimento	Características respondidas em cada prescrição de dieta
+PRCARACT_TBDIETAS	18	PEP	Cadastros PEP > Dietas > Características por dieta	vinculo	migrar-crud	Ordem das características aplicáveis a cada dieta
+PRCHKGERAL	1001	PEP	Enfermagem > Aprazamento e checagem	movimento	migrar-movimento	Horários aprazados e checagem de itens prescritos (>2 milhões)
+PRCONTEVOL	1001	PEP	PEP > Registros clínicos > Conteúdo	movimento	migrar-movimento	Conteúdo RTF/XML renderizado de cada registro clínico
+PRDADOSENVIOOPERADORA	15	PEP	Administração PEP > Construtor > Formato de envio à operadora	dominio	migrar-crud	Formatos de exportação de respostas para operadora
+PREMAILOPCAO	10	PEP	Configurações > PEP > Notificações por e-mail	configuracao	migrar-crud	Eventos notificáveis por e-mail: ciclos, planejamento, acesso de emergência
+PREVOLESPEC	1001	PEP	Administração PEP > Construtor de formulários > Especialidades do modelo	vinculo	migrar-crud	Vínculo modelo de formulário clínico x especialidade autorizada
+PREVOLPAC	1001	PEP	PEP > Registros clínicos (respostas dos formulários)	movimento	migrar-movimento	Respostas do paciente às perguntas dos formulários clínicos (mais de 3 milhões)
+PREVOLPACTMP	1001	PEP	PEP > Registros clínicos > Rascunhos	temporaria	migrar-leitura	Respostas de rascunhos de registros clínicos ainda não finalizados
+PREVOLTIPOACO	64	PEP	Administração PEP > Construtor de formulários > Tipos de acomodação	vinculo	migrar-crud	Vínculo modelo de formulário x tipo de acomodação onde é oferecido
+PREVOLUCAO	67	PEP	Administração PEP > Construtor de formulários > Modelos	cadastro	migrar-crud	Modelos de formulários clínicos: evolução, anamnese, sumário, registro cirúrgico
+PREXAMEASSINATURA	1001	PEP	PEP > Solicitação de exames > Assinatura do pedido	movimento	migrar-movimento	Vínculo exame solicitado (SILANEXA) ao agrupamento de assinatura do pedido
+PREXTRATOITEM_PRCHKGERAL	1001	PEP	Enfermagem > Aprazamento e checagem > Extrato do horário	historico	migrar-leitura	Histórico de aprazamento, reaprazamento e situação de checagem por horário prescrito
+PRFA_UTILIZACAO	3	PEP	Cadastros > Domínios PEP > Utilização do item (bomba/medicamento)	dominio	migrar-crud	Uso do item na prescrição: bomba de infusão, medicamento ou ambos
+PRFAVORITO	672	PEP	PEP > Painel de pacientes > Favoritos e filtros do usuário	configuracao	migrar-crud	Filtros favoritos do usuário para localizar pacientes (unidade, leito, especialidade)
+PRFAVORITO_EXIBIR	1001	PEP	PEP > Painel de pacientes > Colunas exibidas	configuracao	migrar-crud	Colunas exibidas e ordem na lista de pacientes por usuário
+PRFICHAREL	678	PEP	Administração PEP > Modelos de impressão	configuracao	migrar-leitura	Layouts de impressão do PEP em componentes Delphi; base para refazer modelos
+PRFILTROCLASSIF	1	PEP	Cadastros > Domínios PEP > Classificações de filtro	dominio	migrar-crud	Classificações de filtro de itens (só Material)
+PRFILTROUSUARIO	140	PEP	PEP > Resultados de exames > Filtros do usuário	configuracao	migrar-crud	Filtros salvos do usuário na consulta de pedidos e resultados de exames
+PRFINALIDADETRAT	9	PEP	Cadastros > Domínios PEP > Finalidades de tratamento	dominio	migrar-crud	Finalidade do tratamento oncológico (curativa, paliativa...) mapeada à TISS
+PRFORMULA	1	PEP	Cadastros PEP > Fórmulas de cálculo de dose	cadastro	migrar-crud	Fórmulas de cálculo de miligramagem; só placeholder, recurso a construir
+PRFORMULCOMP	1001	PEP	Administração PEP > Construtor de formulários > Layout	configuracao	migrar-crud	Componentes visuais (DFM Delphi) dos formulários clínicos; converter para JSON
+PRFREQUENCIA	21	PEP	Cadastros PEP > Frequências de administração	dominio	migrar-crud	Frequências/intervalos de administração usadas no aprazamento
+PRGEDIMP	9	PEP	PEP > Anexos / GED	movimento	migrar-movimento	Documentos digitalizados importados ao prontuário (02/2025 a 06/2026)
+PRGLASGOW	30	PEP	Cadastros PEP > Índices prognósticos > Escala de Glasgow	dominio	migrar-crud	Itens e pontuações da escala de coma de Glasgow
+PRHEMOTLAN	1	PEP	Cadastros PEP > Hemocomponentes prescritíveis	cadastro	migrar-crud	Hemocomponentes ligados a exame SADT; só placeholder vazio
+PRHORPAD	8	PEP	Cadastros PEP > Nutrição > Horários padrão de dieta	configuracao	migrar-crud	Horários padrão de administração de dietas por refeição
+PRHRRELATIVA	13	PEP	Cadastros PEP > Frequências > Horários relativos	dominio	migrar-crud	Horários relativos (ex.: antes/após refeição) por frequência
+PRINDICEAGRUPAMENTO	21	PEP	Cadastros PEP > Índices prognósticos > Índices	configuracao	migrar-crud	Índices prognósticos (APACHE, SOFA etc.) ligados a tipo de documento
+PRINDICEPONTUACAO	121	PEP	Cadastros PEP > Índices prognósticos > Faixas de pontuação	configuracao	migrar-crud	Faixas de valor e pontuação das variáveis dos índices prognósticos
+PRINDICEVARIAVEL	109	PEP	Cadastros PEP > Índices prognósticos > Variáveis	configuracao	migrar-crud	Variáveis dos índices prognósticos com unidade e categoria
+PRINFOPERGOPERADORA	28	PEP	Cadastros PEP > Informações enviadas à operadora	dominio	migrar-crud	Informações clínicas/cadastrais enviáveis à operadora, por tipo
+PRITEM_GEITENS	1001	PEP	Cadastros > Itens mat/med > Parâmetros clínicos de prescrição	cadastro	migrar-crud	Parâmetros clínicos do item: dose mínima/máxima, alto risco, acesso invasivo
+PRITEMNAOPAD	29	PEP	Cadastros PEP > Itens não padronizados	cadastro	migrar-crud	Itens não padronizados prescritíveis, por tipo de item
+PRITEMNAOPAD_GETABVIA	31	PEP	Cadastros PEP > Itens não padronizados > Vias	vinculo	migrar-crud	Vias de administração permitidas para item não padronizado
+PRITEMNAOPAD_TBPRINC	3	PEP	Cadastros PEP > Itens não padronizados > Princípios ativos	vinculo	migrar-crud	Princípios ativos de item não padronizado
+PRITEMRECEITA	1001	PEP	PEP > Receituário > Itens da receita	movimento	migrar-movimento	Medicamentos da receita estruturada: posologia, dose, duração
+PRITENSESQ	1001	PEP	PEP > Prescrição médica > Soluções (etapas/esquema)	movimento	migrar-movimento	Componentes das soluções prescritas por etapa (esquema alternado)
+PRITENSGERAL	1001	PEP	PEP > Prescrição médica > Itens de dieta/material manipulado	movimento	migrar-movimento	Itens manipulados de dietas ou materiais por linha prescrita
+PRITENSGLICEMIA	1001	PEP	PEP > Prescrição médica > Glicemia e escala de insulina	movimento	migrar-movimento	Itens e faixas de dose da escala de glicemia capilar prescrita
+PRITENSKITMED	877	PEP	Cadastros PEP > Kits de medicamentos > Itens	cadastro	migrar-crud	Itens e quantidades dos kits de medicamentos de prescrição
+PRKITMED	282	PEP	Cadastros PEP > Kits de medicamentos	cadastro	migrar-crud	Kits de medicamentos de prescrição com via e intervalo de dose
+PRKITSOL	44	PEP	Cadastros PEP > Kits de soluções	cadastro	migrar-crud	Soluções padrão com via, frequência e velocidade de infusão
+PRKITSOLITENS	169	PEP	Cadastros PEP > Kits de soluções > Itens	cadastro	migrar-crud	Componentes e quantidades das soluções padrão
+PRLANCAMENTOEXAME	20	PEP	PEP > Exames lançados no prontuário	movimento	migrar-movimento	Resultados de exames lançados no prontuário (pouco uso, 2024-2026)
+PRLANCEXAMEESTRUTURADO	36	PEP	PEP > Exames lançados > Resultado estruturado	movimento	migrar-movimento	Elementos, valores e faixas de normalidade de exame lançado
+PRLANCREGISTROTEMPO	2	PEP	PEP > Registro de tempo de evento	movimento	migrar-leitura	Registros de tempo ligados a Nexodata; 2 registros de 12/2022
+PRLANGERAL	1001	PEP	PEP > Prescrição médica > Itens prescritos	movimento	migrar-movimento	Linhas da prescrição por tipo: medicamento, solução, dieta, procedimento, ventilação
+PRLANIMAGTMP	1	PEP	PEP > Anotação sobre imagem	temporaria	descartar	Rascunho único de imagem anotada (04/2024); recurso sem uso real
+PRLAYIMPPRESC	4	PEP	Configurações > PEP > Layout de impressão da prescrição	dominio	migrar-crud	Disposição de horários relativos e SOS na impressão da prescrição
+PRLOCAL_ASSISTENCIA	44	PEP	Cadastros PEP > Locais de assistência	cadastro	migrar-crud	Locais de assistência por unidade/leito e tipo de atendimento
+PRLOCALINVASIVO	10	PEP	Cadastros > Domínios PEP > Locais de acesso invasivo	dominio	migrar-crud	Locais anatômicos de acesso invasivo (cateteres, sondas)
+PRLOCPACDEFAULT	524	PEP	Configurações > PEP > Preferências e permissões do usuário	configuracao	migrar-crud	Preferências e permissões PEP por usuário: retroativo, assinatura, alertas
+PRMANCHESTER	7	PEP	Cadastros PEP > Classificação de risco Manchester	configuracao	migrar-crud	Cores/prioridades Manchester ligadas a perguntas do formulário de triagem
+PRMAQBUSCAPRESC	1001	PEP	Função: índice de busca de itens de prescrição	temporaria	descartar	Índice palavra-item para busca na prescrição; regenerar por busca textual
+PRMAQUINABUSCA	1001	PEP	Função: índice de busca textual do prontuário	temporaria	descartar	Índice invertido (~25 milhões) palavra-registro; regenerável no novo motor de busca
+PRMODELOREL	18	PEP	Configurações > PEP > Tipos de modelo de impressão	dominio	migrar-crud	Tipos de documento impresso: prescrição, sumário de alta, TCLE, laudos
+PRMODOVENT	10	PEP	Cadastros > Domínios PEP > Modos ventilatórios	dominio	migrar-crud	Modos de ventilação mecânica para prescrição de VMI/VNI
+PROFTEXAME	35	PEP	Cadastros PEP > Oftalmologia > Exames	cadastro	migrar-crud	Exames oftalmológicos por grupo; módulo oftalmo sem uso
+PROFTGABARITO	144	PEP	Cadastros PEP > Oftalmologia > Gabarito de acuidade	dominio	migrar-crud	Gabarito da tabela de acuidade visual (linha, coluna, valor)
+PROFTGRADUACAO	5	PEP	Cadastros PEP > Oftalmologia > Graduações	dominio	migrar-crud	Graduações usadas no exame oftalmológico
+PROFTGRUPEXAME	6	PEP	Cadastros PEP > Oftalmologia > Grupos de exame	dominio	migrar-crud	Grupos de exames oftalmológicos
+PROFTTPACUID	24	PEP	Cadastros PEP > Oftalmologia > Tipos de acuidade	dominio	migrar-crud	Tipos de medida de acuidade visual por exame
+PROFTTPARQUIV	6	PEP	Cadastros PEP > Oftalmologia > Tipos de arquivo	dominio	migrar-crud	Tipos de arquivo anexável ao exame oftalmológico
+PROPCAOPERIODO	4	PEP	Cadastros > Domínios PEP > Opções de período	dominio	migrar-crud	Períodos de busca de procedimentos/exames no sumário de alta
+PROXIGENOTERAPIA	7	PEP	Cadastros > Domínios PEP > Tipos de oxigenoterapia	dominio	migrar-crud	Dispositivos/tipos de oxigenoterapia em respiração espontânea
+PRPADEVOL	1001	PEP	Administração PEP > Construtor de formulários > Perguntas do modelo	vinculo	migrar-crud	Perguntas de cada modelo com ordem, obrigatoriedade e exibição
+PRPADRECEITA	628	PEP	Cadastros PEP > Receitas padrão	cadastro	migrar-crud	Receitas padrão por usuário ou gerais, com vigência
+PRPARAM	1	PEP	Configurações > Parâmetros do PEP	configuracao	migrar-crud	Parâmetros gerais do PEP: vias, modelos, integrações, impressão
+PRPARAM_CHECAGEM	1	PEP	Configurações > Parâmetros do PEP > Checagem	configuracao	migrar-crud	Obrigatoriedade de lote/validade na checagem por tipo de item
+PRPARAMORIGEMCABIMP	79	PEP	Configurações > PEP > Cabeçalho de impressão por documento	configuracao	migrar-crud	Origem dos dados do cabeçalho impresso por tipo de documento
+PRPARAM_PRESCFUTURA	1	PEP	Configurações > Parâmetros do PEP > Prescrição futura	configuracao	migrar-crud	Tempos de avaliação e antecedência da prescrição futura
+PRPARAMSUMARIOALTA	1	PEP	Configurações > Parâmetros do PEP > Sumário de alta	configuracao	migrar-crud	Perguntas e períodos que compõem o sumário de alta
+PRPAREVOLIMG	1	PEP	Administração PEP > Imagens para anotação em formulário	configuracao	migrar-crud	Imagem base para anotação gráfica em modelo de formulário
+PRPAROFTALMO	1	PEP	Configurações > Parâmetros do PEP > Oftalmologia	configuracao	migrar-crud	Parâmetros da prescrição oftalmológica
+PRPARRECMED	2	PEP	Configurações > Parâmetros do PEP > Receituário	configuracao	migrar-crud	Modelo de impressão por tipo de receita médica
+PRPARTAMPADPRESC	3	PEP	Configurações > PEP > Tamanho de fonte da prescrição	dominio	migrar-crud	Tamanhos de fonte padrão para impressão da prescrição
+PRPARVARCAD	29	PEP	Configurações > PEP > Variáveis de cálculo de dose	dominio	migrar-crud	Variáveis de cálculo de dose: peso, altura, creatinina, AUC
+PRPARVARUNIRESP	17	PEP	Configurações > PEP > Unidades das variáveis de cálculo	dominio	migrar-crud	Unidades das variáveis de cálculo de dose (kg, m, ml, mg/kg/min)
+PRPERGUNTA	1001	PEP	Administração PEP > Construtor de formulários > Perguntas	cadastro	migrar-crud	Banco de perguntas dos formulários clínicos (1.514) com tipo e unidade
+PRPLANPRESC	15	PEP	PEP > Planejamento de prescrição	historico	migrar-leitura	Planejamentos de prescrição de 2020-2021; recurso abandonado
+PRPRESC	1001	PEP	PEP > Prescrição médica	movimento	migrar-movimento	Cabeçalho da prescrição eletrônica com vigência e profissional
+PRPRESC_AUTOPREENCHIDO	1001	PEP	PEP > Prescrição médica > Campos autopreenchidos	movimento	migrar-movimento	Marca campos de item prescrito preenchidos automaticamente
+PRPRESCDIETA	1001	PEP	PEP > Prescrição médica > Dieta	movimento	migrar-movimento	Detalhe de dieta prescrita: tipo, via, infusão
+PRPRESCHEMO	910	PEP	PEP > Prescrição médica > Hemoterapia	movimento	migrar-movimento	Detalhe de hemocomponente prescrito com indicação clínica
+PRPRESCMED	1001	PEP	PEP > Prescrição médica > Medicamento	movimento	migrar-movimento	Detalhe de medicamento prescrito: dose, unidade, intervalo, justificativas
+PRPRESCPROCED	1001	PEP	PEP > Prescrição médica > Procedimentos	movimento	migrar-movimento	Procedimentos de enfermagem/clínicos prescritos
+PRPRESC_PRPROTGERAL	1001	PEP	PEP > Prescrição médica > Protocolos aplicados	vinculo	migrar-movimento	Vínculo prescrição x protocolo usado para gerá-la
+PRPRESCSOL	1001	PEP	PEP > Prescrição médica > Soluções	movimento	migrar-movimento	Detalhe de solução prescrita: volume, infusão, kit
+PRPRESCVI	1001	PEP	PEP > Prescrição médica > Ventilação mecânica invasiva	movimento	migrar-movimento	Parâmetros de VMI prescritos: modo, PEEP, FiO2, volume
+PRPRESCVNI	1001	PEP	PEP > Prescrição médica > Ventilação não invasiva	movimento	migrar-movimento	Parâmetros de VNI prescritos: pressões, FiO2, tempo
+PRPROCESSOPEP	3	PEP	Cadastros > Domínios PEP > Processos de fluxo	dominio	migrar-crud	Sentidos do fluxo de documento: prosseguir, retroagir
+PRPROTGERAL	377	PEP	Cadastros PEP > Protocolos de prescrição	cadastro	migrar-crud	Protocolos de prescrição (377) com indicação, faixa de idade e peso
+PRPROTGERALESP	18	PEP	Cadastros PEP > Protocolos de prescrição > Especialidades	vinculo	migrar-crud	Especialidades autorizadas a usar cada protocolo
+PRREAV_MEDICA	4	PEP	Cadastros > Domínios PEP > Motivos de reavaliação médica	dominio	migrar-crud	Tipos de reavaliação médica da prescrição
+PRRECEITA	1001	PEP	PEP > Receituário	movimento	migrar-movimento	Receitas médicas emitidas (desde 04/2023), com suspensão e assinatura
+PRRESPOSTA	1001	PEP	Administração PEP > Construtor de formulários > Opções de resposta	cadastro	migrar-crud	Opções de resposta das perguntas dos formulários (3.849)
+PRSAE_CLASSIF_META	3	PEP	Cadastros > Domínios PEP > SAE > Classificação de metas	dominio	migrar-crud	Classificação de metas da SAE; módulo SAE a construir
+PRSAE_LIKERT	6	PEP	Cadastros > Domínios PEP > SAE > Escala Likert	dominio	migrar-crud	Pontos da escala Likert de resultados NOC da SAE
+PRSENECESSARIO	5	PEP	Cadastros > Domínios PEP > Condições se necessário	dominio	migrar-crud	Condições para administração se necessário (SOS): dor, febre etc.
+PRSENECESSARIO_PRPRESCMED	1001	PEP	PEP > Prescrição médica > Medicamento > Se necessário	vinculo	migrar-movimento	Condições SOS associadas ao medicamento prescrito
+PRSENECESSARIO_PRPRESCPROCED	1001	PEP	PEP > Prescrição médica > Procedimento > Se necessário	vinculo	migrar-movimento	Condições SOS associadas ao procedimento prescrito
+PRSINAIS	1	PEP	Cadastros PEP > Sinais vitais	cadastro	migrar-crud	Sinais vitais estruturados; só placeholder, recurso a construir
+PRSITAPRAZAM	5	PEP	Cadastros > Domínios PEP > Situações de aprazamento	dominio	migrar-crud	Situações do aprazamento de horário prescrito
+PRSITCHECAGEM	8	PEP	Cadastros > Domínios PEP > Situações de checagem	dominio	migrar-crud	Situações de checagem de enfermagem (código legado)
+PRSITDOCUMENTO	34	PEP	Cadastros > Domínios PEP > Situações de documento	dominio	migrar-crud	Situações do documento clínico: lançado, suspenso, validado, administrado
+PRSITDOCUMENTOASSINADO	4	PEP	Cadastros > Domínios PEP > Situações de assinatura	dominio	migrar-crud	Situações de documento assinado digitalmente
+PRSITEXAME	4	PEP	Cadastros > Domínios PEP > Situações de exame	dominio	migrar-crud	Situações do exame solicitado no PEP
+PRSITUACAOCHECAGEM	14	PEP	Cadastros > Domínios PEP > Situações de checagem (processo)	dominio	migrar-crud	Situações de checagem por processo de enfermagem
+PRSUMARIO_ALTA_COMP	14	PEP	Configurações > PEP > Componentes do sumário de alta	dominio	migrar-crud	Seções que compõem o sumário de alta
+PRTIPODOCANEXO	20	PEP	Cadastros > Domínios PEP > Tipos de documento anexo	dominio	migrar-crud	Tipos de anexo (TISS): elegibilidade, laudo, pedido, relatório, prescrição
+PRTIPONOTIFICACAO	3	PEP	Cadastros > Domínios PEP > Tipos de notificação	dominio	migrar-crud	Comportamento da notificação: aviso, bloqueio ou exigência de justificativa
+PRTIPOPERGPAR	30	PEP	Cadastros > Domínios PEP > Tipos de pergunta parametrizada	dominio	migrar-crud	Campos parametrizados de laudo: sinais e sintomas, justificativa, CIDs
+PRTIPOPRESENTEADMISSAO	3	PEP	Cadastros > Domínios PEP > Presente na admissão	dominio	migrar-crud	Indicador presente na admissão (diagnóstico/lesão)
+PRTPALERTA	2	PEP	Cadastros > Domínios PEP > Tipos de alerta	dominio	migrar-crud	Tipos de alerta: notificação ou notificação com bloqueio
+PRTPASSINATURA	84	PEP	Cadastros > Domínios PEP > Tipos de documento do prontuário	dominio	migrar-crud	Tipos de documento clínico (84) usados na trilha de assinatura
+PRTPASSINATURA_PRSITDOC	31	PEP	Configurações > PEP > Fluxo de situações por documento	configuracao	migrar-crud	Situações permitidas e ordem por tipo de documento
+PRTPASSINATURA_TBOID	19	PEP	Configurações > PEP > OIDs por tipo de documento	configuracao	migrar-crud	OIDs (SRES/HL7) atribuídos a cada tipo de documento
+PRTPATEND	4	PEP	Cadastros > Domínios PEP > Tipos de atendimento	dominio	migrar-crud	Tipos de atendimento: ambulatório, internação, ambos
+PRTPCOMP	7	PEP	Cadastros > Domínios PEP > Tipos de composição	dominio	migrar-crud	Tipos de formulário: diagnóstico, evolução, anamnese, sumário, registro cirúrgico
+PRTPDOCUMENTO	3	PEP	Cadastros > Domínios PEP > Tipos de exigência de assinatura	dominio	migrar-crud	Exigência de assinatura do documento: somente lançamento, assinatura requerida
+PRTPINFOPERGOPERADORA	7	PEP	Cadastros > Domínios PEP > Grupos de informação à operadora	dominio	migrar-crud	Grupos de informação enviada à operadora: paciente, clínicos, medicamentos
+PRTPINFUSAO	8	PEP	Cadastros > Domínios PEP > Tipos de infusão/administração	dominio	migrar-crud	Formas de administração: bomba, bolus, gravitacional, mamadeira, seio
+PRTPLAN	19	PEP	Cadastros > Domínios PEP > Tipos de item de prescrição	dominio	migrar-crud	Tipos de item prescritível: dieta, medicamento, solução, oxigenoterapia, procedimento
+PRTPLAN_GETABVIA	10	PEP	Configurações > PEP > Vias por tipo de item	configuracao	migrar-crud	Vias de administração visíveis por tipo de item prescrito
+PRTPLAN_PRFREQUENCIA	100	PEP	Configurações > PEP > Frequências por tipo de item	configuracao	migrar-crud	Frequências visíveis por tipo de item prescrito
+PRTPLAN_PRTPINFUSAO	15	PEP	Configurações > PEP > Infusões por tipo de item	configuracao	migrar-crud	Tipos de infusão visíveis por tipo de item prescrito
+PRTPNOTALEMB	2	PEP	Cadastros > Domínios PEP > Tipos de nota/lembrete	dominio	migrar-crud	Tipos de anotação: nota ou lembrete; recurso sem uso
+PRTPNOTIFEMAIL	3	PEP	Cadastros > Domínios PEP > Situações de envio de e-mail	dominio	migrar-crud	Situação do envio de notificação: nenhum, interno, interno e externo
+PRTPPERGUNTA	24	PEP	Cadastros > Domínios PEP > Tipos de pergunta	dominio	migrar-crud	Tipos de campo de pergunta: título, data, hora, sim/não, texto, valor
+PRTPPROT	5	PEP	Cadastros PEP > Tipos de protocolo (oncologia)	configuracao	migrar-crud	Tipos de protocolo: pré-quimio, quimioterapia, suporte, pós-quimio, com cor
+PRTPRECMED	5	PEP	Cadastros > Domínios PEP > Tipos de receita médica	dominio	migrar-crud	Tipos de receita: padrão, psicotrópico, antimicrobiano, estruturada
+PRTPREFEIC	7	PEP	Cadastros PEP > Nutrição > Tipos de refeição	dominio	migrar-crud	Refeições do dia por tipo de dieta
+PRTPREQUISICAO	4	PEP	Cadastros > Domínios PEP > Geração de requisição por público	dominio	migrar-crud	Regra de geração de requisição: não gerar, pediatria, neonatal, ambos
+PRTPRESPOSTA	26	PEP	Configurações > PEP > Respostas por tipo de pergunta (operadora)	configuracao	migrar-crud	Mapeia tipo de pergunta para dado enviado à operadora
+PRTPTCLE	5	PEP	Cadastros > Domínios PEP > Situações do TCLE	dominio	migrar-crud	Situações do termo de consentimento: autorizado, revogado, emitido
+PRUNIDINFUSAO	4	PEP	Cadastros > Domínios PEP > Unidades de infusão	dominio	migrar-crud	Unidades de velocidade de infusão: ml/h, gotas/min, mcg/kg/min, L/min
+PRUNIDRESPOSTA	6	PEP	Cadastros > Domínios PEP > Unidades de resposta	dominio	migrar-crud	Unidades de medida de parâmetros: bpm, rpm, mmHg, %, °C
+PRUNITPLAN	3	PEP	Configurações > PEP > Unidades por tipo de item	configuracao	migrar-crud	Unidades de prescrição permitidas por tipo de item
+PRVALIDARMEDDUPLICPRESC	2	PEP	Cadastros > Domínios PEP > Validação de duplicidade	dominio	migrar-crud	Modos de validação de medicamento duplicado na prescrição
+PRVELOCINFUSAO	1001	PEP	PEP > Prescrição médica > Soluções > Velocidade de infusão	movimento	migrar-movimento	Velocidade e volume por etapa da solução prescrita (2020-2026)
+PRVIAADMIN	8	PEP	Cadastros > Domínios PEP > Vias de administração de dieta	dominio	migrar-crud	Vias de administração de dieta (oral, sonda, parenteral)
+PRVIAAEREA	4	PEP	Cadastros > Domínios PEP > Vias aéreas	dominio	migrar-crud	Via aérea: fisiológica, orotraqueal, nasotraqueal, traqueostomia
+TBACAOGRAUGRA	3	PEP	Cadastros > Domínios > Ações por gravidade de interação	dominio	migrar-leitura	Ação do sistema por gravidade de interação medicamentosa
+TBCLASSINTMED	7	PEP	Cadastros > Domínios > Classificação de interação medicamentosa	dominio	migrar-crud	Classificação farmacológica de interações medicamentosas
+TBDIGITAL_VIAACESSO	64	PEP	Cadastros > Domínios > Vias de administração	dominio	carga-referencia	Vias de administração padronizadas (D4H)
+TBFORMA_ASSINATURA_ICP	2	PEP	Configurações > Assinatura digital > Formas	dominio	migrar-leitura	Política de assinatura ICP-Brasil (AD-RB, AD-RT)
+TBGRAUGRAVINT	3	PEP	Cadastros > Domínios > Gravidade de interação	dominio	migrar-crud	Gravidade de interação medicamentosa com ação associada
+TBHORARIODOSE	231	PEP	Configurações > Prescrição > Horários padrão por nº de doses	configuracao	migrar-crud	Horários de aprazamento por número de doses diárias
+TBHORMED	3	PEP	Configurações > Prescrição > Horário de medicação	configuracao	migrar-crud	Regras de horário inicial e vigência da prescrição
+TBHORMED_RIBLOCOS	7	PEP	Configurações > Prescrição > Horário de medicação por bloco	vinculo	migrar-crud	Regra de horário de medicação por bloco de internação
+TBHORMED_TBUNIDAD	2	PEP	Configurações > Prescrição > Horário de medicação por unidade	vinculo	migrar-crud	Regra de horário de medicação por unidade
+TBKITPRO	13	PEP	Cadastros > Enfermagem > Kits de procedimento	cadastro	migrar-crud	Kits de itens por procedimento de enfermagem com via e intervalo
+TBLANC_DIAG_MANTER	2	PEP	Cadastros > Domínios > Lista de diagnósticos	dominio	migrar-leitura	Escopo de manutenção do diagnóstico (atendimento ou prontuário)
+TBLANC_DIAG_STATUS	7	PEP	Cadastros > Domínios > Lista de diagnósticos	dominio	migrar-leitura	Status do diagnóstico lançado (confirmado, resolvido, suspenso)
+TBLANC_DIAG_SUJ_CUID	2	PEP	Cadastros > Domínios > Lista de diagnósticos	dominio	migrar-leitura	Sujeito do cuidado do diagnóstico (paciente, família)
+TBLISTADIAGNOSTICOESTADO	2	PEP	Cadastros > Domínios > Lista de problemas	dominio	migrar-leitura	Estado do diagnóstico na lista de problemas
+TBLISTADIAGNOSTICOSITUACAO	7	PEP	Cadastros > Domínios > Lista de problemas	dominio	migrar-leitura	Situação clínica do problema (ativo, remissão, recidiva)
+TBLISTADIAGNOSTICOTIPO	2	PEP	Cadastros > Domínios > Lista de problemas	dominio	migrar-leitura	Tipo de diagnóstico na lista de problemas
+TBLISTAPROBLEMACLASSIF	2	PEP	Cadastros > Domínios > Lista de problemas	dominio	migrar-leitura	Classificação da lista de problemas
+TBMODALIDADE_ASSIST	5	PEP	Cadastros > Domínios > Modalidades assistenciais	dominio	migrar-crud	Modalidade assistencial usada no sumário de alta
+TBMOTALT	55	PEP	Cadastros > Domínios > Motivos de alta	dominio	carga-referencia	Motivos de alta/saída padrão SUS
+TBMOTIVOMP	1	PEP	Cadastros > Domínios > Motivos de status da ordem médica	dominio	migrar-crud	Motivos para mudança de situação de ordem médica/manipulação
+TBNUMDOSE	26	PEP	Prescrição > Configuração > Horários padrão > Doses	configuracao	migrar-crud	Número da dose por horário padrão de medicação
+TBOID	85	PEP	Administração > Assinatura digital > OIDs ICP-Brasil	configuracao	migrar-crud	OIDs ICP-Brasil para extrair dados de certificados digitais
+TBPRINC_VALIDACAO	4	PEP	Cadastros > Domínios > Tipos de validação de dose	dominio	migrar-crud	Base de cálculo de dose (peso, superfície corporal, quantidade)
+TBPROBOCINTMED	2	PEP	Cadastros > Domínios > Probabilidade de interação	dominio	migrar-crud	Probabilidade da interação medicamentosa (provável, suspeita)
+TBPROENF	200	PEP	Cadastros > Enfermagem > Procedimentos e cuidados	cadastro	migrar-crud	Procedimentos/cuidados de enfermagem com restrição de sexo e idade
+TBREFERENCIA	2	PEP	Cadastros > Domínios > Referências de dose	dominio	migrar-crud	Referência da dose máxima do princípio ativo (dose, período)
+TBSITUACAOMP	7	PEP	Cadastros > Domínios > Situações da ordem médica	dominio	migrar-crud	Fluxo da ordem médica (planejado, prescrito, validado, manipulado)
+TBSTATUSPROCEDIMENTO	8	PEP	Cadastros > Domínios > Status do procedimento	dominio	carga-referencia	Status do procedimento realizado no sumário de alta (padrão RNDS)
+TBTABELA_CAMPO	6	PEP	Prescrição > Configuração > Campos de autopreenchimento	configuracao	migrar-crud	Campos da prescrição passíveis de autopreenchimento
+TBTABENC	1	PEP	Cadastros > Domínios > Tipos de encaminhamento	dominio	migrar-crud	Encaminhamento na alta/atendimento
+TBTIPOCERTIFICADO	3	PEP	Administração > Assinatura digital > Tipos de certificado	dominio	migrar-crud	Provedor de certificado: token local, SafeWeb, Vidaas
+TBTIPOOID	10	PEP	Administração > Assinatura digital > Tipos de OID	dominio	migrar-crud	Classificação dos OIDs de certificado (conselho, CPF, CNES)
+TBTPALERGIA	5	PEP	Cadastros > Domínios > Tipos de alergia	dominio	migrar-crud	Tipos de alergia por classificação
+TBTPAUTORIDADE	3	PEP	Cadastros > Vigilância > Autoridades notificadas	dominio	migrar-crud	Autoridade sanitária destino da notificação compulsória
+TBTPINTMED	3	PEP	Cadastros > Domínios > Tipos de interação	dominio	migrar-crud	Interação com princípio ativo, alimento ou diagnóstico
+TBTPNOTAGRAVO	3	PEP	Cadastros > Vigilância > Periodicidade de notificação	dominio	carga-referencia	Notificação imediata ou semanal do agravo
+TBTPNOTIFCID10	4	PEP	Cadastros > Vigilância > Tipos de notificação	dominio	carga-referencia	Tipo de notificação SINAN (individual, surto, negativa)
+TBTPNOTIFICACAOALERGIA	3	PEP	Cadastros > Domínios > Ação do alerta de alergia	dominio	migrar-crud	Notificar, exigir justificativa ou bloquear prescrição
+TBTPPARTO	4	PEP	Cadastros > Domínios > Tipos de parto	dominio	migrar-crud	Tipo de parto (normal, cesária, fórceps)
+TBTPRN	3	PEP	Cadastros > Domínios > Condição do recém-nascido	dominio	migrar-crud	Recém-nascido vivo a termo, prematuro ou morto
+TBTPSITUACAOMP	6	PEP	Prescrição > Configuração > Regras de mudança de situação	configuracao	migrar-crud	Exigência de senha/motivo por situação e processo da ordem médica
+TBTPSURTO	4	PEP	Cadastros > Vigilância > Tipos de surto	dominio	carga-referencia	Tipos de surto SINAN
+TBTPVALIDINTERACAO	2	PEP	Cadastros > Domínios > Validação de interação	dominio	migrar-crud	Escopo de validação da interação (prontuário ou registro)
+TBUNIDMEDIDA_PRINC_VALID	4	PEP	Cadastros > Farmacologia > Validação x unidade	vinculo	migrar-crud	Unidades de medida aceitas por tipo de validação de dose
+TBVERSAOCBARA	1	PEP	Cadastros > Referências > Versões CBARA	dominio	carga-referencia	Versão da classificação de reações adversas/alergias CBARA
+TBVERSAOCIAP	1	PEP	Cadastros > Referências > Versões CIAP	dominio	carga-referencia	Versão da CIAP-2
+TBVERSAOCID	1	PEP	Cadastros > Referências > Versões CID	dominio	carga-referencia	Versão da CID-10

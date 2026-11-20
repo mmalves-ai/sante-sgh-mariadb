@@ -1,0 +1,6 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+categoria_alergeno	PEP	dominio	F3	Categorias do agente alérgeno (medicamento, alimento, ambiental, outros), para agrupar alertas e relatórios	SPDATA TBCLASSIFALERGIA; SPDATA TBCBARACATEGORIA
+origem_informacao_alergia	PEP	dominio	F3	Quem informou a alergia (paciente, familiar, profissional, documento externo), para dar grau de confiança ao registro	SPDATA TBCBARAORIGEMINFO
+correspondencia_cid_morfologia	PEP	catalogo_publico	F3	Morfologias tumorais compatíveis com cada CID de neoplasia, carregadas da classificação oncológica oficial	SPDATA TBCIDMORF
+unidade_idade	CAD	dominio	F3	Unidade em que a idade é expressa (anos, meses, dias), usada em regras por faixa etária	SPDATA TBUNID_IDADE
+situacao_posse_plano	CAD	dominio	F3	Resposta do paciente sobre ter plano de saúde ou cartão de desconto, usada na captação e no perfil	SPDATA TBPESQUIPLANO

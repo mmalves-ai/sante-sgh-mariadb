@@ -1,0 +1,19 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+valor_complementar_sus	SUS	configuracao	F7	Valor complementar ou contratado com o gestor local por procedimento da tabela unificada, por estabelecimento, unidade e vigência	DBAMV PROCEDIMENTO_SUS_REGRA_INCRE, PROCEDIMENTO_SUS_VALOR_COMP, PROCEDIMENTO_SUS_VALOR_CONTRAT
+avaliacao_tecnica_produto	SUP	principal	F8	Produto em avaliação técnica para padronização, com especificação, forma farmacêutica, via, parecer e situação	DBAMV PRODUTO_ANALISE, PRODUTO_ANALISE_PROGRAMA
+avaliacao_tecnica_produto_marca	SUP	vinculo	F8	Fabricantes e marcas avaliados para cada produto em avaliação técnica, com resultado	DBAMV PRODUTO_ANALISE_EMPRESA, PRODUTO_ANALISE_MARCA
+programa_avaliacao_produto	SUP	dominio	F8	Programas ou frentes de avaliação de produtos (padronização, qualificação de marca, teste em uso)	DBAMV PROGRAMA_ANALISE
+programacao_suprimento	SUP	principal	F7	Programação anual de consumo e compra por insumo e unidade, base para empenho e compra programada	DBAMV PROGRAMACAO_ANUAL, PROGRAMACAO_MENSAL, PROGRAMACAO_SEMANAL
+programacao_suprimento_periodo	SUP	item	F7	Quantidade programada e saldo da programação por mês ou semana	DBAMV PROGRAMACAO_ANUAL, PROGRAMACAO_MENSAL, PROGRAMACAO_SEMANAL
+programa_atencao_domiciliar	INT	dominio	F8	Programas de atenção domiciliar oferecidos por fonte pagadora, com o tipo de guia que cada um gera	DBAMV PROGRAMAS_HOMECARE
+programa_trabalho_acao	FIN	item	F8	Atividade ou ação ligada ao programa de trabalho do orçamento público, com datas previstas e realizadas	DBAMV PROGRAMA_TRABALHO_ATIVIDADE
+justificativa_excecao_cobertura	FAT	dominio	F7	Justificativas padronizadas para liberar excepcionalmente um item restrito pela fonte pagadora	DBAMV PROIBICAO_EXCEPCIONAL_JUSTIF
+justificativa_mutirao_cirurgico	CC	dominio	F8	Justificativas padronizadas usadas na inclusão ou alteração de pacientes em mutirão cirúrgico	DBAMV PROJETO_CIR_JUSTIFICATIVA
+protocolo_tratamento_seriado	AGE	configuracao	F8	Modelo de tratamento em sessões por diagnóstico: total de dias, ciclos, intervalo, faixa de idade e procedimento	DBAMV PROTOCOLO
+protocolo_tratamento_seriado_dependencia	AGE	vinculo	F8	Protocolos que correm nos mesmos ciclos de outro protocolo, com a ordem de execução	DBAMV PROTOCOLO_DEPENDENCIA
+item_faturavel_cid	FAT	vinculo	F7	Diagnósticos permitidos, padrão ou exigidos para um item faturável, como principal ou secundário	DBAMV PRO_FAT_CID
+liberacao_saida_paciente	HOT	principal	F8	Saída do paciente pela portaria após a alta: quem retirou, documento, parentesco, enfermagem presente e horário	DBAMV PT_ALTA_HOSP
+acesso_paciente_portaria	HOT	principal	F8	Entrada e saída de paciente pela portaria, com crachá, setor, marcação ligada, custódia e permanência	DBAMV PT_MVTO_PACIENTE
+tipo_pertence	HOT	dominio	F8	Tipos de pertence guardado (documento, valor, roupa, eletrônico, prótese)	DBAMV PT_TIPO_PERTENCE
+agrupador_historico_prontuario	PEP	dominio	F7	Agrupadores que organizam a linha do tempo de documentos do prontuário (evoluções, exames, cirurgias)	DBAMV PW_AGRUPADOR_HISTORICO
+agrupador_historico_prontuario_tipo	PEP	vinculo	F7	Tipos de documento clínico que compõem cada agrupador do histórico do prontuário	DBAMV PW_AGRUPADOR_HIST_TIPO_DOCUM

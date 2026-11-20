@@ -1,0 +1,133 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAMV	GERA_ARQMAG_DIPRECA	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_ENSA	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPE	MECANISMO	integracao	INTG	F3	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPSA	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPSM	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_PLANSERV	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_TJDFT	MECANISMO	integracao	INTG	F8	controle de remessa de arquivo de convênio no motor de integração
+DBAMV	GERA_ARQMAG_UNI_LONDRINA	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_UNI_POA	MECANISMO	integracao	INTG	F8	leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_RETORNO_IPE	MECANISMO	integracao	INTG	F3	retorno de arquivo de convênio lido pelo motor de integração
+DBAMV	GF_LOG_EXPORTACAO_DADOS	MECANISMO	integracao	INTG	F8	log de exportação de dados
+DBAMV	IMPORTACAO_DCTF	MECANISMO	integracao	INTG	F7	área de troca de importação fiscal
+DBAMV	IMPORTACAO_FPO	MECANISMO	integracao	INTG	F7	linhas do arquivo; dado final em programacao_orcamentaria_sus
+DBAMV	IMPORTACAO_LAUDOS_ACH	MECANISMO	integracao	INTG	F7	importação de laudos do gestor
+DBAMV	IMPORTACAO_LAUDOS_SIH	MECANISMO	integracao	INTG	F7	troca de laudos com o gestor
+DBAMV	IMPORTA_MOV_CAIXA	MECANISMO	integracao	INTG	F7	importação de movimento de caixa
+DBAMV	IMPORTA_RECHARZO	MECANISMO	integracao	INTG	F8	importação de fatura externa
+DBAMV	IMPORTA_REG_AMB	MECANISMO	integracao	INTG	F7	controle de importação de contas
+DBAMV	IMPORTA_REG_FAT	MECANISMO	integracao	INTG	F7	controle de importação de contas
+DBAMV	IMPORT_ATEND	MECANISMO	integracao	INTG	F7	padrões da importação de atendimentos
+DBAMV	IMPORT_ATEND_PRO_FAT	MECANISMO	integracao	INTG	F7	itens padrão da importação de atendimentos
+DBAMV	IMP_ACPR_ERR	MECANISMO	integracao	INTG	F7	log de erro de importação
+DBAMV	IMP_BPA_EXTERNO	MECANISMO	integracao	INTG	F7	área de troca; dado final em producao_ambulatorial_sus_item
+DBAMV	IMP_CHEQUE	MECANISMO	integracao	INTG	F7	controle de importação
+DBAMV	IMP_CONTABIL	MECANISMO	integracao	INTG	F7	log de erro de importação contábil
+DBAMV	IMP_FAT	MECANISMO	integracao	INTG	F7	controle de importação de produção SUS
+DBAMV	IMP_FCCT	MECANISMO	integracao	INTG	F7	área de troca de lançamentos contábeis
+DBAMV	IMP_FCCT_ERR	MECANISMO	integracao	INTG	F7	log de erro de importação contábil
+DBAMV	IMP_GUIA_XML	MECANISMO	integracao	INTG	F7	área de troca de importação de XML
+DBAMV	IMVAPP_CONVENIO_TP_ATENDIMENTO	MECANISMO	integracao	INTG	F8	configuração de integração com sistema externo
+DBAMV	IMVAPP_ESTOQUE_SUBINVETORY	MECANISMO	integracao	INTG	F8	de-para de estoque com sistema externo
+DBAMV	IMVAPP_LOG_INTEGRACAO	MECANISMO	integracao	INTG	F8	log de integração
+DBAPS	IDENTIFICACAO_BENEFICIARIO	MECANISMO	catalogo_publico:tiss	INTG	F3	terminologia de tipo de identificacao do beneficiario
+DBAPS	IDENTIFICADOR_CAMPO_TISS	MECANISMO	catalogo_publico:tiss	INTG	F3	identificadores de campo do padrao
+DBAPS	IMPORTACAO_XML	MECANISMO	integracao	INTG	F7	importacao de arquivo XML de guias
+DBAPS	IMPORTA_NOTA_FISCAL_ELET	MECANISMO	integracao	INTG	F7	retorno de arquivo de nota de servico; final em nota_servico
+DBAPS	IMP_BAIXA_EVENTO_LIQUIDAR	MECANISMO	integracao	INTG	F7	area de troca; final em lote_pagamento_rede_item
+DBAPS	IMP_CADASTRO	MECANISMO	integracao	INTG	F7	area de troca da carga de beneficiarios; final em beneficiario_plano
+DBAPS	IMP_CADASTRO_CONTRATO	MECANISMO	integracao	INTG	F7	area de troca; final em contrato_plano
+DBAPS	IMP_CADASTRO_RECIPROCIDADE	MECANISMO	integracao	INTG	F8	area de troca; final em reciprocidade_beneficiario
+DBAPS	IMP_CADASTRO_USUARIOS	MECANISMO	integracao	INTG	F7	area de troca; final em beneficiario_plano
+DBAPS	IMP_CANCELA_MENS_CONTRATO	MECANISMO	integracao	INTG	F7	area de troca; final em fatura_plano
+DBAPS	IMP_CARENCIA_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em carencia_aplicada
+DBAPS	IMP_CENTRO_DE_CUSTO	MECANISMO	integracao	INTG	F7	carga do legado; final em subdivisao_contrato_plano
+DBAPS	IMP_COMISSAO_PHS	MECANISMO	integracao	INTG	F8	carga do legado; final em comissao_venda
+DBAPS	IMP_CONTA_MEDICA	MECANISMO	integracao	INTG	F7	carga do legado; final em guia_conta_recebida
+DBAPS	IMP_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em contrato_plano
+DBAPS	IMP_CONTRATO_DEB_AUT	MECANISMO	integracao	INTG	F7	carga do legado; final em contrato_forma_cobranca
+DBAPS	IMP_CONTRATO_OBSERVACAO	MECANISMO	integracao	INTG	F7	carga do legado; final em contrato_plano
+DBAPS	IMP_CONTRATO_OUTRAS_RECEITAS	MECANISMO	integracao	INTG	F7	carga do legado; final em lancamento_programado_contrato
+DBAPS	IMP_CONT_INDIVID_CRITICAS	MECANISMO	integracao	INTG	F7	criticas da carga de contrato individual
+DBAPS	IMP_DESLIGA_BENEFICIARIO	MECANISMO	integracao	INTG	F7	area de troca; final em movimento_cadastral_beneficiario
+DBAPS	IMP_DESLIGA_PRESTADOR	MECANISMO	integracao	INTG	F7	area de troca; final em descredenciamento_prestador
+DBAPS	IMP_DESLIGA_PRESTADOR_END	MECANISMO	integracao	INTG	F7	area de troca; final em local_atendimento_rede
+DBAPS	IMP_EMPRESA	MECANISMO	integracao	INTG	F7	carga do legado; final em contratante_plano
+DBAPS	IMP_ESPECIALIDADE_PRESTADOR	MECANISMO	integracao	INTG	F7	carga do legado; final em especialidade_atendida_rede
+DBAPS	IMP_FAIXA_ETARIA	MECANISMO	integracao	INTG	F7	carga do legado; final em faixa_etaria_modelo_item
+DBAPS	IMP_FAIXA_VIDAS	MECANISMO	integracao	INTG	F7	carga do legado; final em faixa_vidas_modelo
+DBAPS	IMP_FATURA	MECANISMO	integracao	INTG	F7	carga do legado; final em lote_conta_recebida
+DBAPS	IMP_FATURAMENTO_UNNIMAX	MECANISMO	integracao	INTG	F8	arquivo de faturamento de terceiro; final em fatura_plano_item
+DBAPS	IMP_FORNEC_REEMBOLSO	MECANISMO	integracao	INTG	F7	carga do legado; dados bancarios para pedido_reembolso
+DBAPS	IMP_FORN_DETALHAMENTO	MECANISMO	integracao	INTG	F7	carga do legado; vinculo prestador e fornecedor
+DBAPS	IMP_GRUPO_FAIXA_ETARIA	MECANISMO	integracao	INTG	F7	carga do legado; final em faixa_etaria_modelo
+DBAPS	IMP_GRUPO_FAIXA_VIDAS	MECANISMO	integracao	INTG	F7	carga do legado; final em faixa_vidas_modelo
+DBAPS	IMP_GUIA	MECANISMO	integracao	INTG	F7	carga do legado; final em pedido_autorizacao_plano
+DBAPS	IMP_HIS_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_HIS_EMPRESA	MECANISMO	integracao	INTG	F7	carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_HIS_PLANO	MECANISMO	integracao	INTG	F7	carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_ITCONTA_MEDICA	MECANISMO	integracao	INTG	F7	carga do legado; final em guia_conta_recebida_item
+DBAPS	IMP_ITCONTA_MEDICA_COBR	MECANISMO	integracao	INTG	F7	carga do legado; final em lancamento_coparticipacao
+DBAPS	IMP_ITCONTA_MEDICA_PGTO	MECANISMO	integracao	INTG	F7	carga do legado; final em guia_conta_recebida_equipe
+DBAPS	IMP_ITEM_LOTE_RECIPROCIDADE	MECANISMO	integracao	INTG	F8	carga do legado; final em lote_reciprocidade_item
+DBAPS	IMP_ITEM_RECIPROCIDADE	MECANISMO	integracao	INTG	F8	carga do legado; final em reciprocidade_movimento
+DBAPS	IMP_ITGUIA	MECANISMO	integracao	INTG	F7	carga do legado; final em pedido_autorizacao_plano_item
+DBAPS	IMP_ITMENS_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em fatura_plano_item
+DBAPS	IMP_ITMENS_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em mensalidade_beneficiario
+DBAPS	IMP_ITMENS_USUARIO_COPART	MECANISMO	integracao	INTG	F7	carga do legado; final em lancamento_coparticipacao
+DBAPS	IMP_ITREEMBOLSO	MECANISMO	integracao	INTG	F7	carga do legado; final em pedido_reembolso_item
+DBAPS	IMP_LOTE	MECANISMO	integracao	INTG	F7	carga do legado; final em lote_conta_recebida
+DBAPS	IMP_LOTE_RECIPROCIDADE	MECANISMO	integracao	INTG	F8	carga do legado; final em lote_reciprocidade
+DBAPS	IMP_MENS_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em fatura_plano
+DBAPS	IMP_MENS_CONTRATO_REC	MECANISMO	integracao	INTG	F7	carga do legado; final em baixa do titulo_receber
+DBAPS	IMP_MENS_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em mensalidade_beneficiario
+DBAPS	IMP_MEN_CON_REC_LCTO	MECANISMO	integracao	INTG	F7	carga do legado; acrescimo e desconto na baixa do titulo_receber
+DBAPS	IMP_MIGRACAO_MENS_PHS	MECANISMO	integracao	INTG	F8	carga do legado; final em fatura_plano
+DBAPS	IMP_PESSOA	MECANISMO	integracao	INTG	F7	carga do legado; final em pessoa_fisica ou pessoa_juridica
+DBAPS	IMP_PESSOA_ENDERECO	MECANISMO	integracao	INTG	F7	carga do legado; final no endereco da pessoa
+DBAPS	IMP_PLANO	MECANISMO	integracao	INTG	F7	carga do legado; final em plano_comercializado
+DBAPS	IMP_PLANO_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em contrato_plano_oferta
+DBAPS	IMP_PRESTADOR	MECANISMO	integracao	INTG	F7	carga do legado; final em prestador_rede
+DBAPS	IMP_PRESTADOR_ENDERECO	MECANISMO	integracao	INTG	F7	carga do legado; final em local_atendimento_rede
+DBAPS	IMP_PRESTADOR_ENDERECO_CONTATO	MECANISMO	integracao	INTG	F7	carga do legado; final em local_atendimento_rede
+DBAPS	IMP_PRESTADOR_ENDERECO_ESPL	MECANISMO	integracao	INTG	F7	carga do legado; final em especialidade_atendida_rede
+DBAPS	IMP_PROCEDIMENTO	MECANISMO	integracao	INTG	F7	carga do legado; final em item_faturavel
+DBAPS	IMP_PROCED_TIPO_ATENDIMENTO	MECANISMO	integracao	INTG	F7	carga do legado; final em regra_cobertura_rol
+DBAPS	IMP_REATIVA_BENEFICIARIO	MECANISMO	integracao	INTG	F7	area de troca; final em movimento_cadastral_beneficiario
+DBAPS	IMP_REATIVA_PRESTADOR	MECANISMO	integracao	INTG	F7	area de troca; final em prestador_rede_historico
+DBAPS	IMP_REATIVA_PRESTADOR_END	MECANISMO	integracao	INTG	F7	area de troca; final em local_atendimento_rede
+DBAPS	IMP_RECEITA_MENS_CONTRATO	MECANISMO	integracao	INTG	F7	area de troca; final em fatura_plano_item
+DBAPS	IMP_RECIPROCIDADE	MECANISMO	integracao	INTG	F8	carga do legado; final em reciprocidade_beneficiario
+DBAPS	IMP_REEMBOLSO	MECANISMO	integracao	INTG	F7	carga do legado; final em pedido_reembolso
+DBAPS	IMP_REMCTA	MECANISMO	integracao	INTG	F7	controle de arquivo de remessa de contas importado
+DBAPS	IMP_REMCTA_LOTES	MECANISMO	integracao	INTG	F7	lotes do arquivo de remessa de contas importado
+DBAPS	IMP_REPRESENTANTE	MECANISMO	integracao	INTG	F7	carga do legado; final em contratante_plano
+DBAPS	IMP_RESP_FINANCEIRO	MECANISMO	integracao	INTG	F7	carga do legado; final em contrato_plano
+DBAPS	IMP_SERVICOS_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_SERVICOS_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_SERVICOS_USUARIOS	MECANISMO	integracao	INTG	F7	carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em beneficiario_plano
+DBAPS	IMP_USUARIO_OBSERVACAO	MECANISMO	integracao	INTG	F7	carga do legado; final em beneficiario_plano
+DBAPS	IMP_VALORES_SERVICOS_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_VALORES_TABELA_CONTRATO	MECANISMO	integracao	INTG	F7	carga do legado; final em tabela_preco_contrato
+DBAPS	IMP_VALORES_TABELA_USUARIO	MECANISMO	integracao	INTG	F7	carga do legado; final em mensalidade_beneficiario
+DBAPS	INDICADOR_ACIDENTE	MECANISMO	catalogo_publico:tiss	INTG	F3	terminologia de indicador de acidente
+DBAPS	INSTALA_TABELA_TNUM	MECANISMO	catalogo_publico:tuss	SGO	F8	terminologia de materiais e OPME
+DBAPS	ITEM_ARQUIVO_CONTA_MEDICA	MECANISMO	integracao	INTG	F7	arquivo de contas da reciprocidade; final em guia_conta_recebida
+DBAPS	ITEM_ARQUIVO_FATURA_TAXA	MECANISMO	integracao	INTG	F7	arquivo de taxas da reciprocidade; final em fatura_plano_item
+DBAPS	ITEM_ARQUIVO_PROCEDIMENTO	MECANISMO	integracao	INTG	F7	arquivo de procedimentos da reciprocidade; final em guia_conta_recebida_item
+DBAPS	ITGERA_XML_TISS_CM	MECANISMO	integracao	INTG	F7	selecao para geracao de arquivo TISS
+DBAPS	ITGUIA_CONTA_CONTABIL_ERROS	MECANISMO	integracao	INTG	F7	erros da contabilizacao de eventos
+DBAPS	ITGUIA_MENSAGEM_ESPECIFICA	MECANISMO	integracao	INTG	F8	mensagem de intercambio ligada ao item
+DBAPS	ITIMPORTA_NOTA_FISCAL_ELET	MECANISMO	integracao	INTG	F7	retorno de nota de servico; final em nota_servico
+DBAPS	ITIMPORTA_NOTA_FISC_ELET_ERRO	MECANISMO	integracao	INTG	F7	erros do retorno de nota de servico
+DBAPS	TAG	TABELA	marcador_rede	SGO	F8	verif-08: marcadores de prestador (usados por PRESTADOR_TAG), nao modelo de mensagem
+DBAPS	INADIMPLECIA_FASE_ACOMPANHAMEN	NAO		SGO		duplicado de fase_cobranca_inadimplencia
+DBAPS	LOG_GER_LOTE_ERRO	TABELA	lote_faturamento_plano_critica	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_AUDITORIA	TABELA	lote_faturamento_plano_critica	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_ERRO	TABELA	lote_faturamento_plano_critica	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_BENEF	TABELA	lote_faturamento_plano_escopo	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_CONTAS_MEDICAS	TABELA	lote_faturamento_plano_escopo	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_CONTRATO	TABELA	lote_faturamento_plano_escopo	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7
+DBAPS	LOG_GER_MENS_REEMBOLSO	TABELA	lote_faturamento_plano_escopo	SGO	F7	verif-08: operadora nao e usada pela Rede; fase do lote de faturamento e F7

@@ -1,0 +1,29 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+informacao_economica_ecf	FIN	item	F7	Valores declaratórios diversos da escrituração fiscal anual (royalties, exportação, doações, pagamentos ao exterior) por exercício	DBAMV SPED_ECF_LANCAMENTOS_DIVERSOS
+arquivo_efd_fiscal	FIN	principal	F7	Arquivo da escrituração fiscal digital de ICMS e IPI por competência, com finalidade (original ou retificação) e situação	DBAMV SPED_FISCAL
+deducao_iss_periodo	FIN	item	F7	Dedução do ISS apurada no período de escrituração, com tipo de obrigação, processo judicial e valor	DBAMV SPED_FISCAL_DEDUCAO_ISS
+talao_cheque	FIN	principal	F3	Talão de cheques da conta bancária, com faixa de numeração inicial, final e próxima folha a emitir	DBAMV TALAO
+carater_cirurgia_contato	CC	item	F7	E-mails e telefones avisados quando uma cirurgia de certo caráter é marcada, com texto da mensagem	DBAMV TIPO_AVISO_CIRURGIA_EMAIL, TIPO_AVISO_CIRURGIA_TELEFONE
+preco_negociado_procedimento	FAT	configuracao	F3	Valor fixo de procedimento acordado com a fonte pagadora e plano, por vigência, prestador ou setor, que prevalece sobre a tabela	DBAMV TAB_CONVENIO
+tipo_beneficio_concedido	HOT	dominio	F8	Tipos de benefício concedido (transporte, refeição, auxílio), indicando se exige fornecedor e destinatário	DBAMV TIPO_BENEFICIO
+tipo_destinatario_beneficio	HOT	dominio	F8	Quem pode receber o benefício (paciente, acompanhante, profissional, setor) e se exige atendimento ou paciente	DBAMV TIPO_DESTINATARIO_BENEFICIO
+tipo_pendencia_profissional	CAD	dominio	F7	Tipos de pendência cadastral ou documental do profissional	DBAMV TIPO_PENDENCIA_PREST
+tipo_ocorrencia_profissional	CAD	dominio	F7	Tipos de ocorrência registrada sobre o profissional, com pontuação usada no acompanhamento de conduta	DBAMV TIPO_OCORRENCIA_MEDICA
+conduta_ocorrencia_profissional	CAD	dominio	F7	Medidas aplicáveis ao profissional após ocorrência (advertência verbal, escrita, suspensão)	DBAMV TIPO_ADVERTENCIA
+tipo_consumo_utilidade	HOT	dominio	F8	Tipos de consumo de utilidade medidos em fatura (energia ativa, reativa, demanda, água, gás)	DBAMV TIPO_CONSUMO
+tipo_custo	FIN	dominio	F7	Classificação do custo para a apuração (direto, indireto, fixo, variável)	DBAMV TIPO_CUSTO
+tipo_combustivel	SUP	dominio	F8	Combustíveis usados pelos veículos de entrega, para controle de abastecimento no romaneio	DBAMV TIPO_COMBUSTIVEL_ROMANEIO
+tipo_compra_importacao	SUP	dominio	F8	Modalidade da compra internacional informada na declaração de importação	DBAMV TIPO_COMPRA_DI
+tipo_embalagem	SUP	dominio	F7	Tipos de embalagem do produto (frasco, ampola, blister, caixa), usados na análise e no cadastro	DBAMV TIPO_EMBALAGEM
+tipo_empenho	FIN	dominio	F8	Espécie do empenho no orçamento público (ordinário, estimativo, global)	DBAMV TIPO_EMPENHO
+forma_entrega_resultado	SADT	dominio	F7	Formas de entrega do laudo ao paciente (balcão, portal, correio, e-mail), indicando se cobra taxa	DBAMV TIPO_ENTREGA_RESULTADO
+tipo_movimento_caixa	FIN	dominio	F3	Tipos de entrada ou saída avulsa no caixa fora do recebimento de conta	DBAMV TIPO_EXTRA_CAIXA
+modalidade_dieta_refeicao	HOT	vinculo	F7	Refeições em que cada dieta é servida, por estabelecimento	DBAMV TIPO_DIETA_REFEICAO
+tipo_local_fisico	CAD	dominio	F7	Tipos de local físico do hospital (prédio, andar, sala, área externa)	DBAMV TIPO_LOCAL
+tipo_nota_credito_debito	FIN	configuracao	F7	Tipo de nota de crédito ou débito, com conta contábil, documento financeiro, formulário e se gera título a receber	DBAMV TIPO_NOTA_CRED_DEB
+tipo_ordem_servico	HOT	dominio	F7	Tipos de ordem de serviço da manutenção (corretiva, preventiva, instalação), com prazo e exigência de equipamento	DBAMV TIPO_OS
+tipo_plano_orcamentario	FIN	dominio	F7	Tipos de plano orçamentário (operacional, investimento, consolidado), indicando se consolida outros planos	DBAMV TIPO_PLANO_ORCAMENTARIO
+assunto_processo_compra	SUP	dominio	F8	Assuntos do acompanhamento do processo de compra ou pagamento, com exigências de contato, número do processo e empenho	DBAMV TIPO_ASSUNTO_GERENCM_PROC
+tipo_documento_processo_compra	SUP	dominio	F8	Documentos que tramitam no processo de compra ou pagamento, indicando se gera lançamento, exige favorecido ou envia aviso	DBAMV TIPO_DOCUMENTO_GERENCM_PROC
+formato_arquivo_conta	FAT	dominio	F7	Formatos de arquivo de envio de contas à fonte pagadora fora do padrão nacional, com indicação de carga em massa	DBAMV TIPO_ARQUIVO_CONTA_ENVIO
+formato_arquivo_conta_usuario	FAT	vinculo	F7	Usuários autorizados a gerar cada formato de arquivo de contas	DBAMV TIPO_ARQUIVO_CONTA_ENVIO_USU

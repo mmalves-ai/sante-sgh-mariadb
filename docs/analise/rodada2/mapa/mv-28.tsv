@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	ITMODELO_CRITERIO_PREST_ENDER	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PREST_XML	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PROCEDIMENTO	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PROG_ATEND	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_TIPO_ATEND	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_TIP_PLANO	TABELA	modelo_criterio_rede_item	S	SGO	F7	
+DBAPS	ITMODELO_HORARIO_DETALHE	TABELA	horario_normal_tabela	N	FAT	F3	faixa horária por dia que define acréscimo na valoração
+DBAPS	ITNOTA_FISCAL_MVS	TABELA	nota_servico_item;fatura_plano	N	FIN	F3	nota emitida sobre as faturas do contrato
+DBAPS	ITNOTA_FISCAL_MVS_CANC	TABELA	evento_nota_servico	N	FIN	F3	cancelamento e reativação da nota por fatura
+DBAPS	ITNOTA_FISCAL_PROTOCOLO	TABELA	nota_prestador_lote_conta	S	SGO	F7	
+DBAPS	ITPAGAMENTO_PRESTADOR	TABELA	lote_pagamento_rede_item	N	SGO	F7	
+DBAPS	ITPARCELAS_COMISSAO	TABELA	regra_comissao_parcela	N	SGO	F8	
+DBAPS	ITPGTO_PRESTADOR	TABELA	lote_pagamento_rede_item;baixa_titulo	N	SGO	F7	data e valor pagos saem da baixa do título
+DBAPS	ITPRESTADOR_EQUIPE_MEDICA	TABELA	percentual_funcao_equipe_rede	S	SGO	F7	
+DBAPS	ITPROCED_PREST_EQUIPE_MEDICA	TABELA	funcao_equipe_procedimento_rede	S	SGO	F7	
+DBAPS	ITPROGRAMA_ATENDIMENTO	TABELA	programa_saude	N	SGO	F8	vigência do programa
+DBAPS	ITPROGRAMA_ATENDIMENTO_PLANO	TABELA	programa_saude_plano	N	SGO	F8	
+DBAPS	ITPROGRAMA_ATENDIMENTO_PROC	TABELA	programa_saude_procedimento	N	SGO	F8	
+DBAPS	ITPROGRAMA_ATEND_GRUPO_PROCED	TABELA	programa_saude_procedimento	N	SGO	F8	por grupo de procedimento
+DBAPS	ITPROMOCAO_PLANO_FAIXA	TABELA	campanha_venda_desconto	N	SGO	F8	
+DBAPS	ITREEMBOLSO	TABELA	pedido_reembolso_item	N	SGO	F7	
+DBAPS	ITREEMBOLSO_GLOSA	TABELA	pedido_reembolso_glosa;pedido_reembolso_item	S	SGO	F7	
+DBAPS	ITREEMBOLSO_OCULOS	TABELA	pedido_reembolso_oculos;pedido_reembolso_item	S	SGO	F8	
+DBAPS	ITREGRA_COMISSAO	TABELA	regra_comissao;regra_comissao_parcela	N	SGO	F8	
+DBAPS	ITREGRA_CRITERIO	TABELA	regra_valoracao_item;modelo_criterio_rede	S	SGO	F7	liga a regra ao conjunto de critérios
+DBAPS	ITREGRA_CRITERIO_TABELA	TABELA	regra_valoracao_item	N	SGO	F7	tabela e percentual por critério com vigência
+DBAPS	ITREGRA_DISTRIBUICAO_COMISSAO	TABELA	regra_comissao_parcela	N	SGO	F8	distribuição por parcela
+DBAPS	ITREGRA_PAGAMENTO	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	ITREGRA_PAGAMENTO_PROC	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	ITREGRA_PAGTO_TABELA	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	ITREGRA_PAGTO_VIGENCIA	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	ITREGRA_REPASSE_SERVICO	TABELA	repasse_servico_adicional	S	SGO	F8	
+DBAPS	ITREMESSA_PRESTADOR	TABELA	guia_conta_recebida_item	N	SGO	F7	
+DBAPS	ITREMESSA_PRESTADOR_COBRANCA	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	ITREMESSA_PRESTADOR_COB_ADIC	TABELA	lancamento_coparticipacao	N	SGO	F7	motivos adicionais da cobrança
+DBAPS	ITREMESSA_PRESTADOR_COB_MIGRA	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_EQUIPE	TABELA	guia_conta_recebida_equipe	N	SGO	F7	
+DBAPS	ITREMESSA_PRESTADOR_EQ_MIGRA	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_EQ_MIGRA_B	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_FATURA	TABELA	lote_pagamento_rede_item	N	SGO	F7	situação de pagamento por participante da equipe
+DBAPS	ITREMESSA_PRESTADOR_FAT_MIGRA	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_MIGRA	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_MIGRA_B	NAO		N			copia/backup (cópia de migração)
+DBAPS	ITREMESSA_PRESTADOR_REJEITADA	TABELA	critica_conta_recebida;guia_conta_recebida_item	N	SGO	F7	itens rejeitados na digitação
+DBAPS	ITREMESSA_PRESTADOR_REJT_COBR	TABELA	lancamento_coparticipacao	N	SGO	F7	cobrança de itens rejeitados
+DBAPS	ITREMESSA_PREST_AUD_ENF	TABELA	auditoria_conta_recebida	N	SGO	F7	motivos do parecer de enfermagem
+DBAPS	ITREMESSA_PREST_AUD_MED	TABELA	auditoria_conta_recebida	N	SGO	F7	motivos do parecer médico
+DBAPS	ITREMESSA_PREST_EQP_RATEIO	TABELA	lancamento_coparticipacao	N	SGO	F7	rateio da coparticipação pela equipe
+DBAPS	ITREPASSE_ADITIVO	TABELA	repasse_servico_adicional_item	S	SGO	F8	
+DBAPS	ITREVISAO_PRODUCAO	TABELA	limite_producao_prestador	N	SGO	F8	itens da revisão de produção
+DBAPS	ITSIMULACAO_PRECO	TABELA	simulacao_preco_item	N	SGO	F8	
+DBAPS	ITTAXA_MANUTENCAO	TABELA	fatura_plano_item	N	SGO	F7	taxa de manutenção por beneficiário
+DBAPS	ITTIMBRE_GRUPO_PROCEDIMENTO	NAO		N			sem valor de negocio: selo tributário de outro país, sem equivalente no Brasil
+DBAPS	IT_ESCALA_DIA	TABELA	marcacao_horario	N	AGE	F3	horário marcado do beneficiário em serviço próprio
+DBAPS	IVA	TABELA	tributo	N	FIN	F3	tributo sobre consumo (IBS/CBS na reforma)
+DBAPS	IVA_EXCECAO_PROCEDIMENTO	TABELA	aliquota_tributo_excecao	S	FIN	F8	
+DBAPS	IVA_EXCECAO_RECEITA	TABELA	aliquota_tributo_excecao	S	FIN	F8	
+DBAPS	JUSTIFICATIVA_AUTORIZACAO_RCPR	TABELA	intercambio_autorizacao	S	SGO	F8	
+DBAPS	KIT	TABELA	pacote_remuneracao_rede_item	N	SGO	F7	
+DBAPS	KIT_PRESTADOR	TABELA	pacote_remuneracao_rede;pacote_remuneracao_rede_item	N	SGO	F7	
+DBAPS	LANCAMENTO_HORA	TABELA	lancamento_avulso_prestador	N	SGO	F7	honorário lançado por hora
+DBAPS	LAYOUTS_IMPORT_RECI_FUNDAFFEMG	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_ARQUIVO_RETORNO_CAC	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_FARMACIA_ELETROS_SAUDE	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_FIEA	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LAYOUT_FIEA_PAR	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LAYOUT_FONASA_BPS_DIA_BAJ_PADR	NAO		N			sem valor de negocio: arquivo do seguro público de outro país
+DBAPS	LAYOUT_FUNCIONAL_FARM_ESPELHO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_IMP_AFRERJ_FUNDAFFEMG	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_IMP_CONTA_MEDICA_UNIMED	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_PEONA	TABELA	provisao_tecnica_base_evento	S	SGO	F7	
+DBAPS	LAYOUT_RETORNO_FOLHA_CHESF	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETORNO_FOLHA_ESP_ELO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETORNO_FOLHA_FACHESF	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETORNO_FOLH_FACH_SUPLE	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETORNO_FOL_FAC_DES_ASS	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETOR_SEPLAG_FUNDAFFEMG	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RETOR_SEPLAG_FUNDAFFENG	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LAYOUT_RUCAF	NAO		N			sem valor de negocio: cadastro de afiliados de outro país
+DBAPS	LCTO_MENSALIDADE	TABELA	tipo_lancamento_fatura	N	SGO	F7	
+DBAPS	LCTO_MENSALIDADE_GRU_FAT	TABELA	configuracao_nota_servico;tipo_lancamento_fatura	N	FIN	F3	agrupamento do lançamento na nota
+DBAPS	LCTO_MENSALIDADE_MSG_CARTEIRA	TABELA	mensagem_cartao_beneficiario	S	SGO	F8	
+DBAPS	LCTO_MENSALIDADE_SINSTRLD	MECANISMO	parametro	N	SGO	F7	parâmetro solto por estabelecimento
+DBAPS	LCTO_MENSALIDADE_VALOR_PORTAL	TABELA	servico_adicional_plano	N	SGO	F7	valor exibido no portal
+DBAPS	LCTO_MENS_EXCLUIR_LOG_GER_MENS	TABELA	lote_faturamento_plano	N	SGO	F7	lançamentos excluídos da geração
+DBAPS	LCTO_MENS_PRORATA	TABELA	tipo_lancamento_fatura	N	SGO	F7	incidência de pró-rata
+DBAPS	LCTO_MEN_FAIX_ETAR	TABELA	tabela_preco_plano_faixa	N	SGO	F7	valor do lançamento por faixa e parentesco
+DBAPS	LCTO_MEN_INCIDENCIA	TABELA	incidencia_lancamento_fatura	S	SGO	F7	
+DBAPS	LCTO_MEN_INCIDENCIA_CONTRATO	TABELA	incidencia_lancamento_fatura	S	SGO	F7	
+DBAPS	LEIAUTE_COBRANCA	TABELA	leiaute_bancario	N	FIN	F3	
+DBAPS	LIDER_DEPENDENTE	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIDER_DEPENDENTE_FOLHA	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIDER_DEPENDENTE_FOLHA_HIST	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIDER_TITULAR	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIDER_TITULAR_FOLHA	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIDER_TITULAR_FOLHA_HIST	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LIMITE_COBRANCA	TABELA	teto_coparticipacao	N	SGO	F7	limite cobrado por competência
+DBAPS	LIMITE_PARECER_USU_CALLCENTER	TABELA	servico_atendimento_operadora	N	SGO	F7	prazo de parecer por setor e gravidade
+DBAPS	LINHA	NAO		N			tecnico do fornecedor sem equivalente (tabela auxiliar de linhas)
+DBAPS	LIVRO_RECEITAS_EMITIDAS	TABELA	livro_auxiliar_operadora_item;livro_auxiliar_operadora	S	SGO	F7	
+DBAPS	LIVRO_RECEITAS_RECEBIDAS	TABELA	livro_auxiliar_operadora_item;livro_auxiliar_operadora	S	SGO	F7	
+DBAPS	LIVRO_SALDO_A_RECEBER	TABELA	livro_auxiliar_operadora_item;livro_auxiliar_operadora	S	SGO	F7	
+DBAPS	LIVRO_SALDO_EVENT_LIQUIDAR	TABELA	livro_auxiliar_operadora_item;livro_auxiliar_operadora	S	SGO	F7	
+DBAPS	LIVRO_SALDO_FAT_ANTECIPADO	TABELA	livro_auxiliar_operadora_item;livro_auxiliar_operadora	S	SGO	F7	
+DBAPS	LOG_ACAO_AUTOMATICA	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LOG_ARQUIVO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ARQUIVO_CONFERENCIA	TABELA	conferencia_cadastral_ans_item	N	SGO	F7	
+DBAPS	LOG_ARQUIVO_CONTA_MEDICA	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ARQUIVO_LIDER	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ATEND_CALL_CENTER	MECANISMO	historico_entidade:protocolo_beneficiario	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_ATUALIZA_ACRES_DESC_ERP	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ATUALIZA_CAD_USU	MECANISMO	historico_entidade:beneficiario_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_AUTORIZA	TABELA	pedido_autorizacao_plano_historico	N	SGO	F7	
+DBAPS	LOG_AUTO_EXCLUDENTE	MECANISMO	historico_entidade:regra_critica_conta	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_BAIXA_COBRANCA_BANCARIA	TABELA	retorno_cobranca	N	FIN	F7	processamento do retorno bancário
+DBAPS	LOG_BENEFICIARIO	MECANISMO	historico_entidade:beneficiario_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_BENEFICIARIO_ACAO	MECANISMO	historico_entidade:beneficiario_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_BRASINDICE	TABELA	importacao_tabela	N	FAT	F3	
+DBAPS	LOG_CALCULO_IMPOSTO_ATO1	MECANISMO	historico_entidade:retencao_titulo	N	FIN	F3	log que vira histórico da tabela
+DBAPS	LOG_CALCULO_MENSALIDADE	MECANISMO	historico_entidade:lote_faturamento_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_CARENCIA_USUARIO	MECANISMO	historico_entidade:carencia_aplicada	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_CARTEIRA	MECANISMO	historico_entidade:cartao_beneficiario	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_COBRANCA	TABELA	remessa_cobranca	N	FIN	F7	
+DBAPS	LOG_CONTRATO	MECANISMO	historico_entidade:contrato_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_CONTRATO_RESP_COB	MECANISMO	historico_entidade:contrato_forma_cobranca	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_CON_PAG_REEMBOLSO	MECANISMO	historico_entidade:pedido_reembolso	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_CRITICAS_ARQUIVO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_DEB_AUT	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_DESLIGAMENTO_FUTURO_BENEFC	MECANISMO	historico_entidade:movimento_cadastral_beneficiario	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_EMPRESA	MECANISMO	historico_entidade:contratante_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_EMPRESA_INTEGRACAO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_EMPRESA_INTEGRACAO_TIT	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ENVIO_COBRANCA	TABELA	remessa_cobranca	N	FIN	F7	
+DBAPS	LOG_ERROS_MIGRACAO_FATURAMENTO	NAO		N			tecnico do fornecedor sem equivalente (log da migração de versão)
+DBAPS	LOG_ERRO_APLICA_REAJUSTE	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_ERRO_AUTORIZACAO_RECIPR	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ERRO_ELO_SAUDE	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ERRO_LIDER	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ERRO_PROCESSAMENTO_NF	MECANISMO	historico_entidade:lote_nota_servico	N	FIN	F3	log que vira histórico da tabela
+DBAPS	LOG_ERRO_PROTOCOLO_TISS	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_ESTORNO_REAJUSTE	MECANISMO	historico_entidade:estorno_reajuste	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_EXECUCAO_PONTO_ENTRADA	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LOG_EXECUCAO_ROTINA	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LOG_FALHAS_IMPORTACAO_CBHPM	MECANISMO	historico_entidade:importacao_tabela	N	FAT	F3	log que vira histórico da tabela
+DBAPS	LOG_GERACAO_PROCESS	MECANISMO	historico_entidade:lote_faturamento_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_GER_LOTE_ERRO	TABELA	lote_faturamento_plano_critica	S	SGO	F3	
+DBAPS	LOG_GER_MENS	TABELA	lote_faturamento_plano	N	SGO	F7	a execução da geração mensal
+DBAPS	LOG_GER_MENS_AUDITORIA	TABELA	lote_faturamento_plano_critica	S	SGO	F3	
+DBAPS	LOG_GER_MENS_BENEF	TABELA	lote_faturamento_plano_escopo	S	SGO	F3	
+DBAPS	LOG_GER_MENS_CONTAS_MEDICAS	TABELA	lote_faturamento_plano_escopo	S	SGO	F3	
+DBAPS	LOG_GER_MENS_CONTRATO	TABELA	lote_faturamento_plano_escopo	S	SGO	F3	
+DBAPS	LOG_GER_MENS_ERRO	TABELA	lote_faturamento_plano_critica	S	SGO	F3	
+DBAPS	LOG_GER_MENS_MEN_CON	TABELA	fatura_plano	N	SGO	F7	fatura gerada em cada execução
+DBAPS	LOG_GER_MENS_REEMBOLSO	TABELA	lote_faturamento_plano_escopo	S	SGO	F3	
+DBAPS	LOG_GER_MENS_VALOR_CONTAS	TABELA	lancamento_coparticipacao	N	SGO	F7	contas e valores faturados
+DBAPS	LOG_GLOSA_FATURA	MECANISMO	historico_entidade:glosa_conta_recebida	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_GLOSA_FATURA_CONTA	MECANISMO	historico_entidade:glosa_conta_recebida	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_IMPORTACAO_FOLHA	MECANISMO	historico_entidade:remessa_desconto_folha	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_IMPORTACAO_FOLHA_MENS_ERRO	MECANISMO	historico_entidade:remessa_desconto_folha	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_IMPORTACAO_MVS	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_IMPORTACAO_PROCEDIMENTO	TABELA	importacao_tabela	N	FAT	F3	
+DBAPS	LOG_IMPORTACAO_PROCED_ERR	MECANISMO	historico_entidade:importacao_tabela	N	FAT	F3	log que vira histórico da tabela
+DBAPS	LOG_IMPORTACAO_PROCED_TABELA	TABELA	importacao_tabela	N	FAT	F3	tabelas atingidas pela carga
+DBAPS	LOG_INADIMPLENCIA	MECANISMO	historico_entidade:ocorrencia_inadimplencia	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_ITMENS_CONTRATO	MECANISMO	historico_entidade:fatura_plano_item	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_LEITURA_REMESSA	TABELA	arquivo_enviado_prestador	N	SGO	F7	
+DBAPS	LOG_LIB_TROCA_PROCESS	MECANISMO	historico_entidade:contrato_forma_cobranca	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_LOG_GER_MENS	MECANISMO	historico_entidade:fatura_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_MENS_CONTRATO	MECANISMO	historico_entidade:fatura_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_MONITORAMENTO	MECANISMO	historico_entidade:envio_ans_item	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_MONIT_TISS_GUIA_CTAS_MED	MECANISMO	historico_entidade:envio_ans_item	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_MVS_ENVIO_USUARIO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_NOTIFICACAO_ENVIO_BOLETO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_NOTIFICACAO_REEMBOLSO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_NOTIFICACAO_SUSP_USU	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_NOTIFICACAO_TRAMITE_PEND	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_PAGAMENTO_PRESTADOR	MECANISMO	historico_entidade:lote_pagamento_rede	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_PONTO_ENTRADA	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LOG_PRESTADOR	MECANISMO	historico_entidade:prestador_rede	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_PRESTADOR_INTEGRACAO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_PRESTADOR_REAJUSTE	MECANISMO	historico_entidade:reajuste_contrato_rede	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_PROCESSAMENTO_JOBS	MECANISMO	framework	N	SIS	F7	execução técnica ou leiaute de relatório coberto pela plataforma
+DBAPS	LOG_PROCESSAMENTO_JOBS_LIDER	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_PROCESSO_GERACAO_MENS	MECANISMO	historico_entidade:lote_faturamento_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_PROCESSO_MVS	MECANISMO	trilha_auditoria	N	SGO	F7	log técnico de quem fez o quê
+DBAPS	LOG_PROCESSO_REAJUSTE	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_PTU_GERACAO_A500_ERRO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_REAJUSTE	TABELA	reajuste_contrato_plano	N	SGO	F7	
+DBAPS	LOG_REAJUSTE_RECEITA	TABELA	reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	LOG_REAJUSTE_TABELA	TABELA	reajuste_contrato_rede	N	SGO	F7	reajuste da tabela de remuneração
+DBAPS	LOG_REAJUSTE_TIPO_PLANO	TABELA	reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	LOG_REFATURAMENTO_PTU	MECANISMO	historico_entidade:guia_conta_recebida	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_RELATORIO_ETIQUETA	MECANISMO	trilha_auditoria	N	SGO	F7	log técnico de quem fez o quê
+DBAPS	LOG_REPACTUACAO_ERRO	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_REPASSE_PRESTADOR	MECANISMO	historico_entidade:lote_pagamento_rede	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_REPASSE_PREST_MENS_ERRO	MECANISMO	historico_entidade:lote_pagamento_rede	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_SINCRON_FOLHA_MENS_ERRO	MECANISMO	historico_entidade:remessa_desconto_folha	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_TRANSACAO	MECANISMO	trilha_auditoria	N	SGO	F7	log técnico de quem fez o quê
+DBAPS	LOG_TRANSFERENCIA_LOTE	MECANISMO	historico_entidade:lote_conta_recebida	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_TRANSF_CAPITAL_SOCIAL	MECANISMO	historico_entidade:transferencia_capital_cooperado	S	SGO	F8	log que vira histórico da tabela
+DBAPS	LOG_USUARIO_CUIDAR_MAIS	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_USUARIO_INTEGRACAO	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOG_VALIDA_DADOS_SIB	TABELA	envio_ans_retorno	N	SGO	F7	críticas prévias do cadastro de beneficiários
+DBAPS	LOG_VALOR_MENSALIDADE	MECANISMO	historico_entidade:fatura_plano	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOG_VINCULACAO_RPS_ANS	TABELA	movimento_rede_ans	N	SGO	F7	
+DBAPS	LOTE	TABELA	lote_conta_recebida	N	SGO	F7	
+DBAPS	LOTE_CANCELAMENTO_MENSALIDADE	TABELA	lote_faturamento_plano	N	SGO	F7	cancelamento em lote
+DBAPS	LOTE_CARTEIRA	TABELA	lote_emissao_cartao	N	SGO	F7	
+DBAPS	LOTE_CARTEIRA_ERROS	MECANISMO	historico_entidade:lote_emissao_cartao	N	SGO	F7	log que vira histórico da tabela
+DBAPS	LOTE_COMISSAO	TABELA	comissao_venda	N	SGO	F8	
+DBAPS	LOTE_COMISSAO_CONTRATOS	TABELA	comissao_venda_item	N	SGO	F8	
+DBAPS	LOTE_COMISSAO_EMP_VENDEDORAS	TABELA	comissao_venda	N	SGO	F8	corretoras incluídas na apuração
+DBAPS	LOTE_COMISSAO_ERROS	MECANISMO	historico_entidade:comissao_venda	N	SGO	F8	log que vira histórico da tabela
+DBAPS	LOTE_COMISSAO_EVENTOS	TABELA	comissao_venda_item	N	SGO	F8	eventos avulsos
+DBAPS	LOTE_COMISSAO_NF	TABELA	comissao_venda;documento_origem_titulo	N	SGO	F8	nota da corretora vira documento do título
+DBAPS	LOTE_DESLIGAMENTO	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	desligamento em lote
+DBAPS	LOTE_GUIA_WEB	TABELA	lote_conta_recebida	N	SGO	F7	lote montado no portal
+DBAPS	LOTE_GUIA_WEB_PARAMETROS	TABELA	critica_conta_recebida	N	SGO	F7	
+DBAPS	LOTE_INTERFACE	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca
+DBAPS	LOTE_PROTOCOLO_CTAMED	TABELA	lote_conta_recebida	N	SGO	F7	
+DBAPS	LOTE_RECIPROCIDADE	TABELA	intercambio_operadora_lote	S	SGO	F8	
+DBAPS	MAIORIDADE_CONTRATUAL	TABELA	regra_maioridade_dependente	N	SGO	F7	
+DBAPS	MAIORIDADE_CONTRATUAL_TIPO	TABELA	regra_maioridade_dependente	N	SGO	F7	por tipo de usuário e grau
+DBAPS	MATERIAL_ESTOQUE	TABELA	material_divulgacao_estoque	S	SGO	F8	
+DBAPS	MATERIAL_MARKETING	TABELA	material_divulgacao	S	SGO	F8	
+DBAPS	MENSAGEM_AUTORIZACAO_RECIPR	TABELA	intercambio_autorizacao	S	SGO	F8	
+DBAPS	MENSAGERIA_LOG	MECANISMO	integracao	N	SGO	F7	arquivo, fila ou log de troca; negócio na tabela de destino da troca

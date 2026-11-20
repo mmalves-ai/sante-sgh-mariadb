@@ -1,0 +1,380 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBADW	DI_PS_TITDEP	MECANISMO	datamart	N	REL	F7	
+DBADW	DI_PS_TP_SEXO	MECANISMO	datamart	N	REL	F7	
+DBADW	DI_REFERENCIA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_REGRA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_RISCO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SALA_CIR	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SCORE	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SERVICO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SETOR	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SETOR_EXAME	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SIMULACAO	MECANISMO	datamart	N	REL	F7	
+DBADW	DI_SIM_NAO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_SINTOMA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_STATUS_SIMULACAO	MECANISMO	datamart	N	REL	F7	
+DBADW	DI_TEMPO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TEMPO_MES	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIPO_CENARIO	MECANISMO	datamart	N	REL	F7	
+DBADW	DI_TIPO_CONTA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIPO_DOCUMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIPO_INTERNACAO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIPO_REMESSA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIPO_VENCIMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIP_ACOM	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TIP_ANESTESIA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_ANALISE_PACOTE	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_ATENDIMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_CONTA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_CUSTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_CUSTO_RECEITA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_GRU_PRO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_NATUREZA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_PAGAMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_RECEBIMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_RECEITA	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_SEXO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_SITUACAO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TP_SIT_CONTA_FAT	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TRATAMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TRATAMENTO_RECURSO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_TURNO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_UNIDADE_PRODUCAO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_VIA_ACESSO	MECANISMO	datamart	N	REL	F3	
+DBADW	DI_XYZABC	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ATENDIMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ATENDIMENTO_SECUNDARIO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ATIVIDADE_PACIENTE	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CIRURGIA	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CIRURGIA_CONSUMO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CLASSIFICACAO_RISCO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CLINICO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CONTABILIDADE	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CONTA_PAGAR	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CONTA_RECEBER	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CUSTO_ATENDIMENTO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CUSTO_DIRECIONADOR	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_CUSTO_RECEITA_SETOR	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ESTOQUE	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ESTOQUE_CONSUMO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_EXAME	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_EXTRATO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_FATURAMENTO_CONTAS	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_FATURAMENTO_CONTAS_MES	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_FLUXO_CAIXA	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_FLUXO_CAIXA_DIARIO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_IH_REG_INF	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_INDICE	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_ITENS_COMPRA	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_META_INDICE	MECANISMO	datamart	N	REL	F3	metas vêm de meta_indicador
+DBADW	FA_PACIENTE_DIA	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_PRECO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_PROCEDIMENTO_CIRURGICO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_PS_DESPESA_EXECUTANTE	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_PS_EMPRESA	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_PS_SINISTRALIDADE	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_REFERENCIA_INDICE	MECANISMO	datamart	N	REL	F3	metas vêm de meta_indicador
+DBADW	FA_REPASSE	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_RISCO_AUDITORIA	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_SALDO	MECANISMO	datamart	N	REL	F3	
+DBADW	FA_SD_ANALISE_GANHO	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_ANALISE_GANHO_NR	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_AUDITORIA_PACOTE	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_CONSUMO_MATMED	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_DESP_OPER	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_DRE	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_FATURAMENTO	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_REPASSE	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_TRATAMENTO	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_TRATAMENTO_RECURSO	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SD_UNIDADE_CONSUMIDA	MECANISMO	datamart	N	REL	F7	
+DBADW	FA_SIMULA_ATENDIMENTO	MECANISMO	datamart	N	REL	F7	
+DBAMV	IMV_INTEGRA_EQUIPAMENTO	MECANISMO	integracao	N	SADT	F3	área de troca com equipamento de laboratório; negócio em resultado_exame
+DBAMV	IMV_INTEGRA_EQUIP_EXPORTA	MECANISMO	integracao	N	SADT	F3	área de troca com equipamento de laboratório; negócio em resultado_exame
+DBAMV	INTEGRA_C_CONEST	MECANISMO	integracao	N	SUP	F3	exportação de consolidado mensal de estoque; negócio em saldo_estoque_mensal e consumo_centro_custo
+DBAMV	INTEGRA_C_CONSET	MECANISMO	integracao	N	SUP	F3	exportação de consolidado mensal de estoque; negócio em saldo_estoque_mensal e consumo_centro_custo
+DBAMV	INTEGRA_FFAS_EXT	MECANISMO	integracao	N	SUS	F7	entrada de produção ambulatorial SUS vinda de sistema externo; negócio em producao_ambulatorial_sus
+DBAMV	INTEGRA_FFIS_EXT	MECANISMO	integracao	N	SUS	F7	entrada de produção ambulatorial SUS vinda de sistema externo; negócio em producao_ambulatorial_sus
+DBAMV	INTEGRA_LEGADO_RECURSOS	MECANISMO	integracao	N	FAT	F3	carga de legado de movimentação de glosa; negócio em recurso_glosa
+DBAMV	INTEGRA_SISTEMAS	TABELA	sistema_externo	N	INTG	F3	
+DBAMV	INTEGRA_SOLICITACAO_AGENDMTO	MECANISMO	integracao	N	AGE	F7	fila de solicitações da central de regulação; negócio em solicitacao_regulacao
+DBAMV	INTEGRA_TISS_IT_SOLICITACAO	TABELA	solicitacao_autorizacao_item	N	FAT	F7	área de troca com sistema externo; conteúdo vira item do pedido de autorização
+DBAMV	INTEGRA_TISS_SOLICITACAO	TABELA	solicitacao_autorizacao	N	FAT	F7	área de troca com sistema externo; conteúdo vira o pedido de autorização
+MVINTEGRA	AGFA_ADT	MECANISMO	integracao	N	INTG	F3	fila de mensagens com o sistema de imagem
+MVINTEGRA	AGFA_DFT	MECANISMO	integracao	N	INTG	F3	fila de mensagens com o sistema de imagem
+MVINTEGRA	AGFA_ORM_IN	MECANISMO	integracao	N	INTG	F3	fila de mensagens com o sistema de imagem
+MVINTEGRA	AGFA_ORU	MECANISMO	integracao	N	INTG	F3	fila de mensagens com o sistema de imagem
+MVINTEGRA	ARQUIVO_INTEGRACAO	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	COLUNA_INTEGRACAO	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	CONDICAO_EXECUCAO	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	CONFIGURACAO_MVCONNECT	MECANISMO	parametro	N	INTG	F3	parâmetro solto do motor de integração
+MVINTEGRA	CONFIG_INTERFACE_LIS	TABELA	interface_equipamento	N	SADT	F3	
+MVINTEGRA	CONFIG_MVINTEGRA	MECANISMO	parametro	N	INTG	F3	parâmetro solto do motor de integração
+MVINTEGRA	CONSULTA_CIDADAO_PRONTUARIO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	CONTROLE_LIMPEZA_LOG	TABELA	politica_retencao_auditoria	N	ADM	F7	prazo de guarda e expurgo das tabelas de log
+MVINTEGRA	DATASUS_BASE	TABELA	esquema_mensagem	N	INTG	F3	
+MVINTEGRA	DATASUS_LINHA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	DATASUS_METADADOS	MECANISMO	historico_entidade:esquema_mensagem	N	INTG	F3	
+MVINTEGRA	DATASUS_METADADOS_CAMPO	TABELA	esquema_mensagem	N	INTG	F3	
+MVINTEGRA	DEPARA	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+MVINTEGRA	ERRO_PROCESSO	TABELA	falha_integracao	N	INTG	F3	
+MVINTEGRA	FILTRO_PROCESSO	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	HL7_EVENTO	TABELA	evento_hl7	N	INTG	F3	
+MVINTEGRA	HL7_EVENTO_SEGMENTO	TABELA	perfil_mensagem_hl7	N	INTG	F3	
+MVINTEGRA	HL7_EVENTO_VERSAO	TABELA	evento_hl7	N	INTG	F3	
+MVINTEGRA	HL7_MAPM_SEGM_IMV_CNFG_ENT_XML	TABELA	perfil_mensagem_hl7_campo	N	INTG	F3	
+MVINTEGRA	HL7_SEGMENTO	TABELA	perfil_mensagem_hl7	N	INTG	F3	
+MVINTEGRA	HL7_SEGMENTO_MAPEAMENTO	TABELA	perfil_mensagem_hl7_campo	N	INTG	F3	
+MVINTEGRA	HL7_SEGM_IMV_CNFG_ENTID_XML	TABELA	perfil_mensagem_hl7_campo	N	INTG	F3	
+MVINTEGRA	HL7_VALOR_MAPEAMENTO	TABELA	perfil_mensagem_hl7_campo	N	INTG	F3	
+MVINTEGRA	HL7_VERSAO	TABELA	evento_hl7	N	INTG	F3	
+MVINTEGRA	HL7_VERSAO_TERCEIRO	TABELA	canal_hl7	N	INTG	F3	versões e eventos aceitos por sistema externo
+MVINTEGRA	IMV_AGENDAMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_AMOSTRA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_ATENDIMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_ATENDIMENTO_SOS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_AUTORIZADOR	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_AUTORIZADOR_TISS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_CADASTRO_PESSOA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_COLETA_SINAL_VITAL	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_COMPRA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_CONDICAO_ENV	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_ELEMENTO_XML	TABELA	esquema_mensagem	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_ENTIDADE_XML	TABELA	esquema_mensagem	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_FUNCAO_CONEC	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_JOB	TABELA	rotina_agendada	N	SIS	F3	
+MVINTEGRA	IMV_CONFIGURACAO_REQUISICAO	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_SAIDA	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_SAIDA_PARAM	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_SAIDA_TP_DOC	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIGURACAO_TIP_INTG_CNCT	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIG_ALERTA_EMAIL	TABELA	destinatario_falha_integracao;servidor_email	N	INTG	F3	servidor de e-mail com credencial no cofre, nunca a senha
+MVINTEGRA	IMV_CONFIG_ENTID_XML_PROC_INTG	TABELA	operacao_ponto_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONFIG_ERRO_PROCESSO	TABELA	destinatario_falha_integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONTABIL	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_CONTROLE_AMOSTRA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_DATASUL_CLASSE	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+MVINTEGRA	IMV_DATASUL_ESPECIE	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+MVINTEGRA	IMV_DATASUL_UNID	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+MVINTEGRA	IMV_FATURAMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_FINANCEIRO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_HEMODERIVADO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_LAUDO_AIH	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_LAUDO_PSDI	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_LEITO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_LOG_REQUISICAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MENSAGEM_ERRO	TABELA	falha_integracao	N	INTG	F3	
+MVINTEGRA	IMV_MENSAGEM_SAIDA_FORMATADA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MENSAGEM_SAIDA_PADRAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MENSAGEM_SAIDA_PADRAO_STAT	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MENSAGEM_SMS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_MOVIMENTACAO_ESTOQUE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_NOTA_ESTOQUE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_NOTA_FISCAL_ELETRONICA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_NUTRICAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_PRESCRICAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_PRE_PEDIDO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_PRODUTO_ANS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_REGISTRO_JOB	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_RESULTADO_PSSD	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_SERVICO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_SOLICITACAO_ATENDIMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_SOLICITACAO_ESTOQUE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_SOLICITACAO_SADT	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_SOLICITACAO_SERVICO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_TARIFADOR	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	IMV_UNIFICA_PACIENTE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_BNEXO_BASE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_CONF	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_CONF_IT	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA_CAB	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA_CAB_CE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA_IT	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA_IT_CE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_COTA_IT_PE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_CAB	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_CAB_CE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_FORN	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_IT	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_IT_CE	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_BNEXO_RESP_IT_RS	MECANISMO	integracao	N	SUP	F3	mensagem do portal de cotação; negócio em cotacao e vinculo_portal_cotacao
+MVINTEGRA	INTEGRA_CONTROLE_XML_COMPRAS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_CRACHA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_AGENDAMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_ATENDIMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_CAD_PESSOA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_COMPRAS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_EVOLUCAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_FINANCEIRO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_INTERNACAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_LANC_CONTA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_PRONTUAR_ATEND	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_SERVICO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_SOLICIT_AGDM	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_SOLIC_SADT	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_SOL_AGDM	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENTRADA_TARIFADOR	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENT_AGEND_CIRURGICO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENT_CAD_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENT_HEMODERIVADO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENT_MOV_CONTABIL	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_ENT_MOV_ESTOQUE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_LOG	NAO		N	INTG		tecnico do fornecedor sem equivalente
+MVINTEGRA	INTEGRA_LOG_IMPORT	TABELA	importacao_tabela	N	FAT	F3	
+MVINTEGRA	INTEGRA_ONEXO_BASE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_CONF	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_CONF_CAB	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_CONF_CAB_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_CONF_IT	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_CONF_IT_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_CAB	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_CAB_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_CAB_PR	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_IT	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_IT_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_REQ_IT_LT	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_CAB	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_CAB_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_CAB_PR	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_FORN	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_IT	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_IT_CE	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_IT_LT	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_ONEXO_RESP_IT_RS	MECANISMO	integracao	N	SUP	F7	mensagem do portal de cotação de OPME; negócio em solicitacao_opme e cotacao
+MVINTEGRA	INTEGRA_PARAMETRO_SAPIENS	MECANISMO	parametro	N	INTG	F3	parâmetro solto do motor de integração
+MVINTEGRA	INTEGRA_PARAMETRO_SGPS	MECANISMO	parametro	N	INTG	F3	parâmetro solto do motor de integração
+MVINTEGRA	INTEGRA_PARAM_207	MECANISMO	parametro	N	INTG	F3	parâmetro solto do motor de integração
+MVINTEGRA	INTEGRA_PLANO_CONTAS_DE_PARA	TABELA	depara_conta_externa	N	FIN	F3	
+MVINTEGRA	INTEGRA_SAIDA_AGENDAMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_ATENDIMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_ATENDIMENTO_STS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_CAD_PESSOA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_CAD_PESSOA_STS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_CAD_TABELAS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_COMPRAS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_COMPRAS_XML	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_CONTABIL	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_CONTA_FINANC	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_EVOLUCAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_EXAMES	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_FATURAMENTO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_FINANCEIRO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_HEMODERIVADO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_INTERNACAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_ITORD_COM_XML	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MOVIM_LEITOS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MOVIM_LEITOS_STS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MOV_CONTABIL	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MOV_ESTOQUE	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_MOV_FINANC	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_NUTRICAO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_ORD_COM_XML	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SERVICO	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SOLICITACAO_AGDM	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SOLICITACAO_SADT	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SOLIC_SADT_STS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SOL_AGDM	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAIDA_SOL_ATENDIME	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_SAI_CAD_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	INTEGRA_XML_MATERIAIS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	JOB_INTEGRACAO	TABELA	rotina_agendada	N	SIS	F3	
+MVINTEGRA	LOG_ERROS_JOBS_GSH	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	MVS_IMP_EMPRESA	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	PACIENTE_SBS	MECANISMO	integracao	N	INTG	F3	
+MVINTEGRA	PROCESSO_INTEGRACAO	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	SISTEMA_PROCESSO	TABELA	ponto_integracao	N	INTG	F3	
+MVINTEGRA	SISTEMA_TERCEIRO	TABELA	sistema_externo	N	INTG	F3	
+MVINTEGRA	VERIFICACAO_ERRO	TABELA	falha_integracao	N	INTG	F3	
+DBACP	LOGS	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBACP	LOGS_EDICAO	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBACP	LOG_ACESSO_PORTLET_UNIVERSAL	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	AUDITORES_INDEPENDENTES_SPED	TABELA	auditor_independente	N	FIN	F7	
+DBAMV	AUDITORIA_CHECAGEM_PRESCRICAO	TABELA	grupo_conferencia_checagem;auditoria_checagem	N	PEP	F8	tipos de item de prescrição que entram na auditoria de checagem
+DBAMV	AUDITORIA_CHEC_PRESC_USUARIOS	TABELA	auditoria_checagem_auditor	N	PEP	F8	
+DBAMV	AUDITORIA_CONFIG	TABELA	parametro_valor_historico	N	ADM	F3	
+DBAMV	AUDITORIA_CONTA	TABELA	auditoria_conta;auditoria_conta_item	N	FAT	F3	
+DBAMV	AUDITORIA_CONTA_COMP	TABELA	auditoria_conta	N	FAT	F3	auditoria feita por empresa externa
+DBAMV	AUDITORIA_CONTA_INTEGRACAO	TABELA	auditoria_conta	N	FAT	F3	auditoria feita por empresa externa
+DBAMV	AUDITORIA_IN_LOCO	TABELA	visita_auditoria_externa;auditoria_conta	N	FAT	F7	trava da conta durante a auditoria presencial
+DBAMV	AUDITORIA_PARCIAL	TABELA	auditoria_checagem	N	PEP	F8	
+DBAMV	AUDIT_ANTIMICROBIANO	TABELA	auditoria_profilaxia_cirurgica	N	CC	F8	
+DBAMV	AUDIT_AUTO_PSIH	TABELA	parecer_padrao_auditoria_antimicrobiano	S	PEP	F7	
+DBAMV	AUDIT_AUTO_PSIH_EMPRESA	TABELA	parecer_padrao_auditoria_antimicrobiano	S	PEP	F7	
+DBAMV	AUDIT_COLUNA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	AUDIT_COLUNA_AUDITORIA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	AUDIT_TABELA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	AUDIT_TABELA_AUDITORIA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	HIST_ADIT_CONTR	TABELA	aditivo_contrato	N	FIN	F7	aditivo de itens e preços do contrato de compra
+DBAMV	HIST_AUDIT_PSIH	TABELA	auditoria_prescricao_ccih	N	PEP	F7	
+DBAMV	HIST_AUTORIZADOR_ORDEM_COMPRA	TABELA	decisao_aprovacao	N	ADM	F3	
+DBAMV	HIST_CONFIG_FCCT	TABELA	parametro_valor_historico	N	ADM	F3	
+DBAMV	HIST_DADOS_DEMOGRAFICOS	TABELA	paciente_versao	N	CAD	F3	
+DBAMV	HIST_LOTE_VALIDADE	MECANISMO	historico_entidade:lote_insumo	N	SUP	F3	
+DBAMV	HIST_PACIENTE_PROGRAMA_SAUDE	TABELA	paciente_linha_cuidado_historico	N	CAD	F8	
+DBAMV	HIST_REN_CONTR	TABELA	aditivo_contrato	N	FIN	F7	renovação de vigência do contrato de compra
+DBAMV	HIST_SUBS_PAC	TABELA	alergia_paciente_evento	N	PEP	F3	
+DBAMV	LOG_ACAO_CARGA_SUS_REGRA	NAO		N	SUS		tecnico do fornecedor sem equivalente
+DBAMV	LOG_ACAO_CARGA_SUS_SIGTAP	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	log da carga da tabela oficial
+DBAMV	LOG_ACESSO_PEP	TABELA	leitura_prontuario	N	ADM	F3	
+DBAMV	LOG_ACOMPANHANTE	MECANISMO	historico_entidade:acompanhante_internacao	N	INT	F7	
+DBAMV	LOG_ACOMP_CARGA_SUS_EQUIPE_SF	MECANISMO	catalogo_publico:cnes	N	SUS	F7	log da carga de equipes de saúde da família
+DBAMV	LOG_ACOMP_CARGA_SUS_REGRA	NAO		N	SUS		tecnico do fornecedor sem equivalente
+DBAMV	LOG_ACOMP_CARGA_SUS_SIGTAP	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	log da carga da tabela oficial
+DBAMV	LOG_ACOMP_VALIDA_AIH	TABELA	critica_sus	N	SUS	F7	
+DBAMV	LOG_AGENDAMENTO_RESERVA_NF	TABELA	execucao_rotina	N	SIS	F3	
+DBAMV	LOG_AJUSTES_REMESSAS	MECANISMO	historico_entidade:fatura_fonte_pagadora	N	FAT	F3	
+DBAMV	LOG_ALTA	TABELA	cancelamento_alta	N	INT	F3	
+DBAMV	LOG_ALTERACAO_IT_COMPS_SOL_CME	MECANISMO	historico_entidade:solicitacao_material_esteril_item	N	CC	F7	
+DBAMV	LOG_ALTERA_CTRL_PROD	MECANISMO	historico_entidade:insumo	N	SUP	F3	
+DBAMV	LOG_ALTERA_DIETA	MECANISMO	historico_entidade:mapa_dieta_item	N	HOT	F3	
+DBAMV	LOG_ALTERA_PRODUTO	MECANISMO	historico_entidade:insumo	N	SUP	F3	
+DBAMV	LOG_ALTERA_PRODUTO_LOTE_VALID	MECANISMO	historico_entidade:lote_insumo	N	SUP	F3	
+DBAMV	LOG_ALTERA_PROD_LOTE_VALIDADE	MECANISMO	historico_entidade:lote_insumo	N	SUP	F3	
+DBAMV	LOG_ALTERA_REPASSE	MECANISMO	historico_entidade:apuracao_repasse_item	N	FAT	F3	
+DBAMV	LOG_ALTERA_REPASSE_SIA	MECANISMO	historico_entidade:producao_repasse_sus	N	SUS	F7	
+DBAMV	LOG_ALTERA_REPASSE_SIH	MECANISMO	historico_entidade:producao_repasse_sus	N	SUS	F7	
+DBAMV	LOG_ALTERA_VIGENCIA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	LOG_ALT_CAD_TRANSPLAN_RGCT	TABELA	inscricao_transplante_historico	N	SUS	F8	
+DBAMV	LOG_ALT_CONTA_MOV	TABELA	reclassificacao_lancamento	N	FIN	F3	
+DBAMV	LOG_APURACAO_DAC_FINANCEIRO	MECANISMO	integracao	N	FAT	F3	erro na importação do XML de demonstrativo; falha vai para falha_integracao
+DBAMV	LOG_ATUALIZACAO	MECANISMO	catalogo_publico:cid10	N	INTG	F3	log da atualização da tabela oficial
+DBAMV	LOG_ATUALIZA_CEP	MECANISMO	catalogo_publico:ibge	N	CAD	F3	log da atualização da base de CEP e logradouros
+DBAMV	LOG_AUDITORIA_TABELA	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	LOG_AUDIT_PIX	MECANISMO	historico_entidade:chave_pix_credor	N	FIN	F3	
+DBAMV	LOG_AUTORIZADOR_SOLIC_COMPRA	TABELA	decisao_aprovacao	N	ADM	F3	
+DBAMV	LOG_AVISO_CIRURGIA	MECANISMO	historico_entidade:agendamento_cirurgico	N	CC	F3	
+DBAMV	LOG_AVISO_CIRURGIA_EVOLUCAO	TABELA	reagendamento_cirurgico	N	CC	F3	
+DBAMV	LOG_AVISO_CIRURGIA_SUSPENSAO	TABELA	suspensao_cirurgia	N	CC	F3	
+DBAMV	LOG_BAIXA_REJEITADA_RET_COB	TABELA	retorno_cobranca_item	N	FIN	F7	
+DBAMV	LOG_BAIXA_RET_COB	TABELA	retorno_cobranca	N	FIN	F7	
+DBAMV	LOG_BIOCLINICO	MECANISMO	integracao	N	SADT	F3	log de importação de arquivo do laboratório externo
+DBAMV	LOG_BRASINDICE	TABELA	importacao_tabela	N	FAT	F3	
+DBAMV	LOG_CAD_DESC_ACRES_REP	TABELA	regra_repasse_versao	N	FAT	F3	
+DBAMV	LOG_CALC_CUSTO	TABELA	execucao_rotina	N	SIS	F3	
+DBAMV	LOG_CAPACIDADE_UTI_SUS	TABELA	capacidade_leito_sus	N	INT	F7	
+DBAMV	LOG_CAPTADOR_PLANSERV	TABELA	demonstrativo_analise_conta	N	FAT	F3	retorno do captador da operadora com valores informados, glosados e aprovados
+DBAMV	LOG_CARGA_REP_ATEND	TABELA	execucao_rotina_etapa	N	SIS	F3	
+DBAMV	LOG_CARGA_SUS_EQUIPE_SAUDE_FAM	MECANISMO	catalogo_publico:cnes	N	SUS	F7	log da carga de equipes de saúde da família
+DBAMV	LOG_CARGA_SUS_REGRA	NAO		N	SUS		tecnico do fornecedor sem equivalente
+DBAMV	LOG_CARGA_SUS_SIGTAP	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	log da carga da tabela oficial
+DBAMV	LOG_CATEGORIA	MECANISMO	historico_entidade:paciente_classe	N	CAD	F8	
+DBAMV	LOG_CBHPM	TABELA	importacao_tabela_diferenca	N	FAT	F3	
+DBAMV	LOG_CID	MECANISMO	historico_entidade:diagnostico_atendimento	N	PEP	F3	
+DBAMV	LOG_CIRURGIA_EXAME_HEMO	MECANISMO	historico_entidade:ato_cirurgico_exame	N	CC	F8	
+DBAMV	LOG_CITPRE_MED_TRATAMENTO	MECANISMO	historico_entidade:prescricao_item	N	PEP	F3	
+DBAMV	LOG_COMPETENCIA_FATURAMENTO	TABELA	competencia_faturamento_historico	N	FAT	F3	
+DBAMV	LOG_CONCILIACAO_OPME	MECANISMO	historico_entidade:conciliacao_opme	N	SUP	F7	
+DBAMV	LOG_CONFIG_FECHA_CONTA_AUT	MECANISMO	historico_entidade:regra_fechamento_automatico_conta	N	FAT	F8	
+DBAMV	LOG_CONFIG_FFAS	MECANISMO	parametro	N	ADM	F3	mudança de configuração registrada no histórico do parâmetro
+DBAMV	LOG_CONFIG_RECEITA_FFCH	MECANISMO	historico_entidade:apuracao_custo	N	FIN	F7	
+DBAMV	LOG_CONFIG_TELA_OBR_LOT_VLD	MECANISMO	parametro	N	ADM	F3	mudança de configuração registrada no histórico do parâmetro
+DBAMV	LOG_CONF_CONS	TABELA	consumo_opme	N	SUP	F7	confirmação do consumo de material consignado
+DBAMV	LOG_CONF_CONS_REPLICA	TABELA	consumo_opme	N	SUP	F7	confirmação do consumo de material consignado
+DBAMV	LOG_CONTABIL	TABELA	execucao_rotina	N	SIS	F3	

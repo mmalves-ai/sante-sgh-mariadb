@@ -1,0 +1,496 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+titulo_pagar	FIN	principal	F3	Título a pagar ao credor, com documento, emissão, valor bruto e líquido, natureza gerencial e situação	SPDATA MFCONPAG; MV CON_PAG; credor = fornecedor (05) ou profissional (02)
+parcela_pagar	FIN	item	F3	Parcela do título a pagar com vencimento, valor, saldo em aberto e situação de pagamento	SPDATA MFCONPAG; MV ITCON_PAG, PARCELA_COND_PAGAMENTO
+baixa_titulo	FIN	principal	F3	Baixa total ou parcial de parcela a pagar, com data, conta bancária, forma de pagamento, juros, multa e desconto	SPDATA MFCONPAG, MFLANCTO; MV PAGCON_PAG
+ajuste_titulo	FIN	item	F3	Desconto, acréscimo, juros, multa ou abatimento lançado na parcela a pagar ou a receber, com tipo e motivo	SPDATA MFDESACR; MV PAG_DESC_ACRES, CONREC_DESC_ACRES, CON_PAG_DESC_ACRES
+tipo_ajuste_titulo	FIN	dominio	F3	Códigos de desconto, acréscimo e retenção usáveis nos títulos, com efeito no saldo e tributo associado	SPDATA MFREFDES
+tipo_credor	FIN	dominio	F3	Classe do credor ou do lançamento: fornecedor, médico, prestador, adiantamento, tributo, folha	SPDATA MFTIPOLANC
+grupo_lancamento_financeiro	FIN	principal	F3	Agrupador que liga títulos e lançamentos nascidos da mesma operação, para consulta e estorno conjuntos	SPDATA MFCABECLANC
+beneficiario_titulo_pagar	FIN	vinculo	F3	Profissional ou favorecido final de um título a pagar, usado em honorário e repasse pagos via pessoa jurídica	SPDATA MFCONPAG_TBCBOPRO; depende de profissional (02)
+documento_origem_titulo	FIN	vinculo	F3	Documento que originou o título (nota de entrada, contrato, recibo, folha, guia), com tipo e chave	MV CON_PAG_DOCUMENTO; depende de nota de entrada (05) e contrato_fornecedor
+tipo_documento_financeiro	FIN	dominio	F3	Tipo do documento que respalda o título: nota fiscal, fatura, recibo, boleto, guia, contrato	MV CON_PAG_DOCUMENTO; SPDATA MFCONPAG
+motivo_prorrogacao	FIN	dominio	F3	Motivos aceitos para alterar o vencimento de uma parcela	MV MOTIVO_PRORROGACAO
+prorrogacao_parcela	FIN	historico	F3	Linha do tempo das mudanças de vencimento da parcela, com data anterior, nova data, motivo e autor	MV MOTIVO_PRORROGACAO; SPDATA MFCONPAG
+devolucao_titulo_pagar	FIN	item	F3	Abatimento no título a pagar pela devolução de itens ao fornecedor, ligado à nota de devolução	MV DEV_FOR_ITCON_PAG; depende de devolução ao fornecedor (05)
+bloqueio_titulo	FIN	historico	F3	Bloqueio e desbloqueio do pagamento de um título, com motivo, autor e data	MV BLOQUEIO_ALCADA_FINAN; aprovação pelo mecanismo alcada_aprovacao/pedido_aprovacao (dono 01)
+motivo_bloqueio_titulo	FIN	dominio	F3	Motivos de bloqueio de pagamento: falta de aprovação, divergência de nota, pendência fiscal, ordem judicial	MV BLOQUEIO_ALCADA_FINAN
+fluxo_aprovacao	FIN	configuracao	F8	Fluxo de aprovação em várias etapas por tipo de documento financeiro, compra ou contrato, com faixa de valor	MV ALCA_PONTO, ALCA_DEMANDA, ALCA_PARAMETRO; estende alcada_aprovacao (dono 01)
+etapa_fluxo_aprovacao	FIN	item	F8	Etapa do fluxo de aprovação, com ordem, condição de entrada, prazo e regra de quórum	MV ALCA_PONTO, ALCA_PONTO_STAT
+aprovador_etapa	FIN	vinculo	F8	Usuário ou papel que aprova uma etapa do fluxo, com substituto e permissão de aprovar pelo celular	MV ALCA_APROVADOR, ALCA_APROVADOR_MOB, ALCA_APROVADOR_STAT
+agrupador_aprovacao	FIN	dominio	F8	Agrupador de documentos para aprovação em bloco (por centro de custo, natureza ou credor)	MV ALCA_DEMANDA_AGRP, ALCA_PONTO_AGRP, ALCA_PERMISSAO_AGRP
+resposta_padrao_aprovacao	FIN	dominio	F8	Respostas fixas do aprovador (aprovo, reprovo, devolvo para ajuste) com exigência de justificativa	MV ALCA_PONTO_RESP
+delegacao_aprovacao	FIN	historico	F8	Delegação temporária da competência de aprovar a outro usuário, com período e limite	MV ALCA_PERMISSAO
+bordero_pagamento	FIN	principal	F3	Borderô que reúne parcelas a pagar de uma conta bancária e data, com totais e situação de envio	SPDATA MFBORDER; MV BORDERO, LOTE_PGTO_ITCON_PAG
+item_bordero	FIN	item	F3	Parcela incluída no borderô, com valor a pagar, forma de pagamento e dados do favorecido	SPDATA MFBORDER; MV LOTE_PGTO_ITCON_PAG
+remessa_bancaria	FIN	principal	F3	Arquivo de remessa de pagamentos gerado para o banco, com leiaute, sequência e conferência de totais	MV LOTE_REM_ITCON_PAG; SPDATA TBCTABAN (sequência)
+retorno_bancario	FIN	principal	F3	Arquivo de retorno de pagamentos lido do banco, com data de processamento e resumo	MV RETORNO_PAGCON_PAG
+item_retorno_bancario	FIN	item	F3	Linha do retorno de pagamento ligada ao item do borderô, com ocorrência, valor efetivado e data	MV RETORNO_PAGCON_PAG; SPDATA TBTPOCORBANCOPGTO
+ocorrencia_bancaria	FIN	dominio	F3	Códigos de ocorrência devolvidos pelo banco no retorno de pagamento, por banco, com efeito na baixa	SPDATA TBTPOCORBANCOPGTO
+conta_bancaria_credor	FIN	principal	F3	Conta bancária do credor para pagamento eletrônico, com titular, documento e conta preferencial	MV FORN_CONTA_CORRENTE; contas do profissional ficam em conta_bancaria_profissional (02)
+chave_pix_credor	FIN	item	F3	Chave Pix do credor (CPF, CNPJ, e-mail, telefone ou aleatória), com validação e data de confirmação	MV FORN_CC_CHAVE_PIX
+forma_pagamento_credor	FIN	vinculo	F3	Formas de pagamento aceitas por cada credor (crédito em conta, boleto, Pix, guia)	SPDATA TBTIPOPAGFOR
+forma_pagamento_banco	FIN	catalogo_publico	F3	Formas de pagamento do padrão de arquivo bancário (crédito em conta, TED, boleto, tributo), por banco	SPDATA MFTPPGTOBANCO; fonte FEBRABAN
+finalidade_transferencia	FIN	catalogo_publico	F3	Códigos de finalidade de TED e de transferência do padrão bancário	SPDATA MFTIPODOC, MFTIPOTED; fonte FEBRABAN
+camara_compensacao	FIN	dominio	F3	Câmara ou arranjo usado na liquidação: compensação, TED, Pix, crédito interno	MV CAMARA_FINA
+leiaute_bancario	FIN	configuracao	F3	Leiaute de arquivo por banco e serviço (pagamento, cobrança, extrato), com versão e particularidades	SPDATA TBBANCOS (leiautes de cobrança e boleto); MV CONVENIO_BANCARIO
+adiantamento	FIN	principal	F3	Adiantamento concedido a fornecedor ou médico, com valor, conta de saída, saldo a compensar e prazo	SPDATA MFADIFOR; MV CCOR_FINANCEIRA, CCOR_FINANCEIRA_LCTO
+beneficiario_adiantamento	FIN	vinculo	F3	Profissional beneficiário do adiantamento quando pago a pessoa jurídica ou cooperativa	SPDATA MFADIFOR_TBCBOPRO
+compensacao_adiantamento	FIN	vinculo	F3	Uso do saldo do adiantamento na baixa de uma parcela a pagar, com valor compensado	SPDATA MFPAGADF; MV CCOR_FINANCEIRA_ITEM
+parcela_adiantamento	FIN	item	F7	Parcelamento da devolução ou da compensação programada do adiantamento	MV CCOR_FINANCEIRA_PARC
+prestacao_contas_adiantamento	FIN	principal	F8	Prestação de contas do adiantamento de viagem ou de despesa, com saldo devolvido e aprovação	MV CCOR_FINANCEIRA_PRST, CCOR_FINANCEIRA_CFIG
+item_prestacao_contas_adiantamento	FIN	item	F8	Despesa comprovada na prestação de contas, com natureza, centro de custo e comprovante anexo	MV CCOR_FINANCEIRA_PRST, CCOR_FINANCEIRA_ARQU, CCOR_FINANCEIRA_RATE; anexo pelo mecanismo arquivo
+previsao_financeira	FIN	principal	F8	Despesa ou receita prevista sem título, para o fluxo projetado, com recorrência e natureza	MV PREVISAO
+parcela_previsao_financeira	FIN	item	F8	Ocorrência mensal da previsão, com valor, data esperada e situação (aberta, realizada, cancelada)	MV PREVISAO_MVTO
+provisao_passivo	FIN	principal	F8	Passivo provisionado (honorário a pagar, tributo, férias), com competência, valor e reversão	MV MOV_HONORARIO_PASSIVO, PROVISIONAMENTO_CONTAS, PROVISAO_IMPOSTO_RETIDO
+ajuste_provisao_passivo	FIN	item	F8	Desconto, acréscimo ou reversão parcial aplicada a uma provisão	MV PROVISAO_DESC_ACRES
+conciliacao_previsao_realizado	FIN	vinculo	F8	Ligação entre previsão ou provisão e o título que a realizou, com diferença apurada	MV CONCILIACAO_CON_PAG_PREV_PROV
+encontro_contas	FIN	principal	F8	Compensação entre valores a pagar e a receber do mesmo parceiro, com saldo líquido e aprovação	MV ENCONTRO_CONTAS_FNFI
+item_encontro_contas	FIN	item	F8	Parcela a pagar ou a receber incluída no encontro de contas, com valor compensado	MV ENCONTRO_CONTAS_FNFI, NOTA_CREDITO_DEBITO_FNFI
+nota_credito_debito	FIN	principal	F8	Nota de crédito ou de débito emitida ou recebida de fornecedor ou cliente, que ajusta títulos	MV NOTA_CREDITO, NOTA_CREDITO_DEBITO, NOTA_CRE_DEB_SUPRI
+item_nota_credito_debito	FIN	item	F8	Linha da nota de crédito ou débito com natureza, centro de custo e valor	MV NOTA_CREDITO_DEBITO
+tributo_nota_credito_debito	FIN	item	F8	Tributo destacado ou retido na nota de crédito ou débito	MV NOTA_CREDITO_DEBITO_TRIBUTO
+motivo_nota_credito_debito	FIN	dominio	F8	Motivos de emissão da nota de crédito ou débito (bonificação, diferença de preço, multa contratual)	MV MOTIVO_LANC_NT_CRE_DEB_SUPRI
+titulo_receber	FIN	principal	F3	Título a receber de fonte pagadora, empresa ou particular, com origem (fatura, conta, acordo) e situação	SPDATA MFCTAREC; MV CON_REC, DUPLICATA; origem em fatura/conta (06)
+parcela_receber	FIN	item	F3	Parcela do título a receber com vencimento, valor, saldo e situação de cobrança	SPDATA MFCTAREC; MV ITCON_REC
+recebimento	FIN	principal	F3	Recebimento de parcela, total ou parcial, com data, conta de entrada, forma, glosa e retenções	SPDATA MFCTAREC, MFLANCTO; MV RECCON_REC
+recebimento_item_conta	FIN	item	F3	Valor recebido, glosado e em recurso por item de conta, vindo do demonstrativo do pagador	MV IT_RECEBIMENTO; depende de conta_hospitalar_item e demonstrativo_pagamento (06)
+renegociacao	FIN	principal	F3	Acordo que substitui parcelas em aberto por novas, com juros, desconto e termo aceito	SPDATA MFCABECRENEGO
+titulo_renegociado	FIN	vinculo	F3	Parcela original incluída numa renegociação, com saldo levado ao acordo	SPDATA MFCABECRENEGO
+cliente_financeiro	FIN	principal	F3	Devedor que não é paciente nem fonte pagadora (empresa, locatário, outro hospital), com dados de cobrança	SPDATA TBCLIENT
+ocorrencia_cobranca	FIN	historico	F7	Contato e providência de cobrança de um título (ligação, carta, protesto, acordo), com responsável	MV CON_REC_OBSERVACAO
+faixa_atraso_cobranca	FIN	configuracao	F7	Faixas de dias de atraso para a análise de carteira e a priorização da cobrança	MV LEGENDA_CURVA_ABCD
+credito_fonte_pagadora	FIN	principal	F3	Crédito da fonte pagadora recebido em conta antes da identificação da fatura, com saldo a aplicar	SPDATA MFCCCONV; nome conforme conflitos (fonte_pagadora)
+aplicacao_credito_fonte_pagadora	FIN	vinculo	F3	Aplicação do crédito da fonte pagadora na baixa de parcelas a receber	SPDATA MFCCCONV
+tipo_cobranca	FIN	dominio	F3	Modalidade de cobrança do título: carteira própria, boleto registrado, débito em conta, Pix	SPDATA MFTPCOBRANCA
+contrato_cobranca_bancaria	FIN	principal	F7	Contrato de cobrança com o banco: convênio, código do cedente, carteira, tarifas e instruções padrão	MV CONVENIO_BANCARIO; SPDATA TBBANCOS
+carteira_cobranca	FIN	configuracao	F7	Carteira de cobrança do contrato bancário, com faixa de nosso número, registro e leiaute	SPDATA TBBANCOS; MV CONVENIO_BANCARIO
+boleto	FIN	principal	F7	Boleto emitido para uma parcela a receber, com nosso número, linha digitável, código Pix e situação	MV TITULO_BANCARIO
+remessa_cobranca	FIN	principal	F7	Arquivo de remessa de boletos ao banco, com sequência e totais	MV LOTE_REM_ITCON_REC, LOTE_REC_COBRANCA
+item_remessa_cobranca	FIN	item	F7	Boleto e instrução incluídos na remessa (registro, baixa, alteração de vencimento, protesto)	MV LOTE_REM_ITCON_REC
+retorno_cobranca	FIN	principal	F7	Arquivo de retorno da cobrança lido do banco, com resumo de liquidações e rejeições	MV RETORNO_COBRANCA, SEGMENTO_RETORNO_COBRANCA
+item_retorno_cobranca	FIN	item	F7	Linha do retorno ligada ao boleto, com ocorrência, valor pago, juros, tarifa e data de crédito	MV RETORNO_COBRANCA, OCORRENCIA_RETORNO_COBRANCA
+ocorrencia_cobranca_bancaria	FIN	catalogo_publico	F7	Códigos de ocorrência do retorno de cobrança por banco e leiaute, com efeito na baixa	MV OCORRENCIA_RETORNO_COBRANCA; fonte FEBRABAN
+instrucao_cobranca	FIN	dominio	F7	Instruções enviadas ao banco: protesto, baixa por decurso, juros e multa, desconto até a data	MV CONVENIO_BANCARIO
+tarifa_bancaria	FIN	item	F7	Tarifa cobrada pelo banco na cobrança ou no pagamento, com origem no retorno e lançamento gerado	MV TARIFA_BANCARIA_RET
+mensagem_boleto	FIN	configuracao	F7	Mensagens impressas no boleto por carteira ou tipo de título	MV CONCOR_MSG_BOLETO
+portador_titulo	FIN	principal	F8	Portador que detém o título: carteira própria, banco em cobrança simples, desconto ou cessão	MV FINA_PORTADOR
+condicao_portador	FIN	configuracao	F8	Condições negociadas com o portador: taxa de desconto, prazo, limite e conta de crédito	MV FINA_CONTA_CONDICAO, FINA_CONTA
+operacao_cessao_recebivel	FIN	principal	F8	Operação de desconto ou cessão de recebíveis, com taxa, valor líquido creditado e recompra	MV FINA_CONTA_APLICAR
+item_operacao_cessao_recebivel	FIN	vinculo	F8	Parcela a receber cedida ou descontada na operação, com valor de face e deságio	MV FINA_CONTA_APLICAR
+banco	FIN	catalogo_publico	F3	Instituições financeiras com código de compensação e ISPB	SPDATA TBTABBCO, TBBANCOS; MV BANCO; fonte BACEN/FEBRABAN
+agencia_bancaria	FIN	principal	F3	Agência bancária com código, dígito, endereço e contato	SPDATA TBAGEBAN
+conta_bancaria	FIN	principal	F3	Conta bancária ou de caixa do estabelecimento, com tipo, saldo inicial, contas contábeis e sequências	SPDATA TBCTABAN; MV CON_COR, EMPRESA_LAN_CONCOR
+tipo_conta_bancaria	FIN	dominio	F3	Tipo de conta: corrente, aplicação, poupança, caixa interno, conta vinculada	SPDATA TBTPCONTA
+movimento_bancario	FIN	principal	F3	Débito ou crédito na conta bancária, com origem (baixa, transferência, tarifa, manual) e conciliação	SPDATA MFLANCTO; MV MOV_CONCOR
+tipo_lancamento_bancario	FIN	dominio	F3	Tipos de lançamento avulso na conta: tarifa, rendimento, estorno, depósito, saque, ajuste	MV LAN_CONCOR; SPDATA MFLANCTO
+transferencia_bancaria	FIN	principal	F3	Transferência entre contas do mesmo grupo, com movimento de saída e de entrada	SPDATA MFLANCTO
+saldo_diario_conta	FIN	historico	F3	Saldo fechado por conta e dia, com entradas, saídas e saldo conciliado	SPDATA MFSALDOS, MFSALATU; MV SALDO_DIA_DETALHE, SALDO_FINANCEIRO
+periodo_financeiro	FIN	principal	F3	Competência financeira por estabelecimento, com abertura, fechamento e reabertura autorizada	MV MES_ANO_FECH_FINANC, ANO_FECH_FINANC
+aplicacao_financeira	FIN	principal	F7	Aplicação financeira com instituição, produto, taxa, data de resgate e conta vinculada	MV CON_COR (contas de aplicação); SPDATA TBTPCONTA
+rendimento_aplicacao	FIN	item	F7	Rendimento, imposto e resgate mensais de uma aplicação financeira	MV CON_COR
+extrato_bancario	FIN	principal	F3	Extrato importado (OFX ou CSV) de uma conta, com período, saldo inicial e final	MV LCTO_EXTRATO_IMPORTADO
+linha_extrato	FIN	item	F3	Linha do extrato com data, histórico do banco, valor e situação de conciliação	MV LCTO_EXTRATO_IMPORTADO
+conciliacao_bancaria	FIN	principal	F3	Sessão de conciliação de uma conta e período, com quem confirmou e diferença restante	MV LCTO_EXTRATO_IMPORTADO
+item_conciliacao_bancaria	FIN	vinculo	F3	Ligação N:N entre linhas do extrato e movimentos bancários conciliados, com regra que sugeriu	MV LCTO_EXTRATO_IMPORTADO
+regra_conciliacao_bancaria	FIN	configuracao	F3	Regra de sugestão de conciliação por texto, valor, data e tolerância	new-sgh M32 conciliação por regra
+credito_nao_identificado	FIN	principal	F3	Crédito em conta sem origem conhecida, com prazo de identificação e destino final	new-sgh M32
+premissa_recebimento_fonte_pagadora	FIN	configuracao	F3	Prazo médio e índice de glosa esperados por fonte pagadora, usados no fluxo de caixa projetado	new-sgh M32; nome conforme conflitos (fonte_pagadora)
+cenario_fluxo_caixa	FIN	principal	F8	Cenário de simulação do fluxo de caixa, com premissas alteradas e horizonte	MV SIMULACAO_FC, CENARIO_FINANC_VALOR
+valor_cenario_fluxo_caixa	FIN	item	F8	Valor projetado por natureza e mês num cenário do fluxo de caixa	MV CENARIO_FINANC_VALOR, FINAN_VARIAVEL
+caixa	FIN	principal	F3	Ponto de caixa do balcão (recepção, tesouraria), com conta de destino e estabelecimento	MV CAIXA; dono 07 conforme conflitos
+operador_caixa	FIN	vinculo	F3	Usuários autorizados a operar cada caixa	MV USUARIO_CAIXA
+sessao_caixa	FIN	principal	F3	Abertura e fechamento do caixa por operador, com fundo de troco, totais por forma e diferença	MV ABRE_CAIXA, LOTE_CAIXA
+conferencia_sessao_caixa	FIN	item	F3	Contagem de fechamento por forma e espécie, com valor esperado, contado e quem conferiu	MV LOTE_CAIXA, DOC_CAIXA
+movimento_caixa	FIN	principal	F3	Entrada ou saída na sessão de caixa (recebimento, troco, troca de espécie, estorno)	MV MOV_CAIXA, EXTRA_CAIXA; dono 07 conforme conflitos
+sangria_caixa	FIN	item	F3	Retirada de numerário da sessão para cofre ou banco, com destino e responsável	MV EXTRA_CAIXA
+suprimento_caixa	FIN	item	F3	Reforço de troco na sessão de caixa, com origem e responsável	MV EXTRA_CAIXA
+recebimento_particular	FIN	principal	F3	Recebimento do paciente ou responsável no balcão, ligado à conta, ao adiantamento ou ao título	SPDATA FCRECIBO; MV DOC_CAIXA; conta_hospitalar (06); nome conforme conflitos
+meio_recebimento_particular	FIN	item	F3	Forma usada em cada parte do recebimento (dinheiro, cartão, Pix, transferência), com valor e autorização	SPDATA TBCADPAG; MV DOC_CAIXA
+forma_recebimento	FIN	dominio	F3	Formas de pagamento e recebimento aceitas, com parcelamento, prazo de crédito e conta de destino	SPDATA TBCADPAG
+origem_recebimento	FIN	dominio	F3	Origem do recebimento: à vista, débito, crédito à vista, crédito parcelado	SPDATA TBORIGEMRECEBIMENTO
+recibo	FIN	principal	F3	Recibo emitido ao pagador, com numeração, valor por extenso, referência e segunda via	SPDATA FCRECIBO; MV RECIBO, RECIBO_RESPONSAVEL; dono 07 conforme conflitos
+modelo_recibo	FIN	configuracao	F3	Modelo e numeração do recibo por estabelecimento e tipo de recebimento	MV RECIBO_PARAMETRO
+bandeira_cartao	FIN	dominio	F3	Bandeiras de cartão aceitas (débito e crédito)	SPDATA TBOBSREC; MV FIN_CAR
+administradora_cartao	FIN	principal	F3	Credenciadora ou administradora do cartão, com conta de crédito e contrato	MV FINA_ADMINISTRADORA, TEF_PARCEIRO
+taxa_administradora	FIN	configuracao	F3	Taxa por administradora, bandeira, tipo (débito ou crédito) e número de parcelas, em percentual ou valor	SPDATA TBTIPOCARTAO, TBTIPOTAXACARTAO; MV TEF_PARCEIRO_PARC
+terminal_cartao	FIN	principal	F7	Terminal ou integração de captura do cartão, ligado ao caixa e à administradora	MV TEF_PARCEIRO, TEF_TIPOMVTO
+transacao_cartao	FIN	principal	F3	Transação de cartão autorizada, com NSU, bandeira, parcelas, valor bruto e taxa	MV TEF_MOVIMENTO, TEF_FINCAR
+parcela_recebivel_cartao	FIN	item	F3	Parcela a receber da administradora, com data prevista, valor líquido, taxa e baixa	MV TEF_MOVIMENTO_PARC, TEF_MOVIMENTO_CNTA
+conciliacao_recebivel_cartao	FIN	vinculo	F8	Conciliação entre a parcela esperada e o crédito informado na agenda da administradora	MV TEF_MOVIMENTO_PARC, FINCAR_PL_CONTAS; arquivo da agenda pelo mecanismo integracao
+chave_pix_conta	FIN	item	F7	Chave Pix de uma conta bancária do estabelecimento, com tipo e situação	MV CON_COR_CHAVE_PIX
+cobranca_pix	FIN	principal	F7	Cobrança Pix (imediata ou com vencimento) gerada para parcela ou recebimento, com identificador e QR	MV PIX_MOVIMENTO_ENVIO, PIX_MOVIMENTO_FINAN
+retorno_pix	FIN	item	F7	Liquidação Pix recebida, com identificador fim a fim, pagador, valor e baixa automática	MV PIX_MOVIMENTO_RETORNO, PIX_MOVIMENTO_RET_PAG
+devolucao_pix	FIN	item	F7	Devolução total ou parcial de um Pix recebido, com motivo e identificador	MV PIX_MOVIMENTO_RETORNO, PIX_MOVIMENTO_ERRO
+adiantamento_paciente	FIN	principal	F7	Adiantamento ou caução do paciente particular, com saldo, tipo e vedação na urgência (Lei 12.653)	MV CAUCAO; caução é tipo de adiantamento conforme conflitos; depende de paciente (02)
+contrato_adiantamento_paciente	FIN	principal	F7	Contrato do particular eletivo com valor estimado, condições de pagamento e aceite	MV CONTRATO_ADIANTAMENTO
+item_contrato_adiantamento_paciente	FIN	item	F7	Procedimento previsto no contrato do particular, com valor estimado	MV CONTRATO_ADIANT_PRO_FAT; depende de procedimento (06)
+aplicacao_adiantamento_paciente	FIN	vinculo	F7	Uso do saldo do adiantamento na conta ou no título do paciente	MV CAUCAO
+devolucao_adiantamento_paciente	FIN	item	F7	Devolução do saldo não usado ao paciente, com forma e comprovante	MV CAUCAO
+regra_adiantamento_paciente	FIN	configuracao	F7	Regras de adiantamento por tipo de atendimento: percentual, prazo, bloqueio legal na urgência	MV CONTRATO_ADIANT_PARAMETRO
+centro_custo	FIN	principal	F3	Centro de custo do estabelecimento, com hierarquia, classificação, setor e vigência	MV por:CENTRO_CUSTO; SPDATA TBGRUDES (CC); dono 07 conforme conflitos; substitui centro_custo_gerencial (02)
+classificacao_centro_custo	FIN	dominio	F3	Classe do centro de custo para custeio: produtivo, auxiliar, administrativo, externo	MV GRUPO_DE_CUSTO; conflitos (dono 07)
+grupo_natureza_financeira	FIN	principal	F3	Grupo do plano gerencial de receitas e despesas	SPDATA TBGRUDES; MV CLASSIFICACAO_CONTA_FNFI
+subgrupo_natureza_financeira	FIN	principal	F3	Subgrupo do plano gerencial, entre o grupo e a natureza	SPDATA TBGRUDES; MV CLASSIFICACAO_CONTA_FNFI
+natureza_financeira	FIN	principal	F3	Item do plano gerencial, com conta contábil, conta de custo, natureza de rendimento e sinal	SPDATA TBITEDES; MV CONTA_FINANC
+rateio_lancamento	FIN	item	F3	Apropriação do título, baixa ou movimento por natureza e centro de custo, com percentual e valor	SPDATA MFLANGSI; MV RATCON_PAG, RAT_PAGCON_PAG, RAT_CONREC, RAT_RECCON_REC, RATPAG_DESC_ACRES
+reclassificacao_lancamento	FIN	historico	F3	Reclassificação da apropriação depois do lançamento, com rateio anterior, novo e autor	SPDATA MFLANGSI; lacuna D-CLASSIF-32
+regra_rateio_financeiro	FIN	configuracao	F3	Modelo de rateio reutilizável por natureza, com centros e percentuais	MV REGRA_RATEIO_FNFI
+item_regra_rateio_financeiro	FIN	item	F3	Centro de custo e percentual dentro de uma regra de rateio	MV REGRA_RATEIO_FNFI
+permissao_conta_bancaria	FIN	vinculo	F3	Contas bancárias que cada usuário pode ver e movimentar, por estabelecimento	SPDATA MFCTAUSU; MV FINA_PERMISSAO, FINAN_PERMISSAO
+permissao_tipo_lancamento	FIN	vinculo	F3	Tipos de credor ou lançamento que cada perfil pode usar em cada operação	SPDATA MFTIPOLANC_TBOPCOES; MV FUNCIONALIDADE_FNFI_USU
+tipo_lancamento_estabelecimento	FIN	vinculo	F3	Tipos de credor ou lançamento habilitados por estabelecimento	SPDATA MFPARAM_MFTIPOLANC
+contexto_trabalho_usuario	FIN	configuracao	F3	Estabelecimento e competência de trabalho do usuário por módulo (financeiro, nota, folha, ponto)	SPDATA MFPARUSU, NFSEPARUSU, FPPARAM_USUARIO, PEPARAM_USUARIO
+depara_conta_externa	FIN	configuracao	F3	De-para de evento, natureza e fonte pagadora para a conta do plano do escritório contábil	SPDATA TBINTCRC, RPINTEVE; MV DE_PARA_CONTABIL
+depara_centro_custo_externo	FIN	configuracao	F3	De-para do centro de custo próprio para o código usado pelo escritório contábil	MV DE_PARA_CENTRO_CUSTO
+depara_participante_externo	FIN	configuracao	F3	De-para de credor e devedor para o código do participante no sistema contábil externo	MV DE_PARA_FORNECEDOR
+lote_exportacao_contabil	FIN	principal	F3	Lote de lançamentos exportados ao escritório contábil, com competência, contagem, soma e conferência	MV IMP_CONTABIL, FINAN_EXTERNO
+item_lote_exportacao	FIN	item	F3	Lançamento exportado no lote, com débito, crédito, histórico e origem	MV IMP_CONTABIL; SPDATA TBINTCRC
+tipo_valor_integracao	FIN	dominio	F3	Tipo do valor levado à integração: faturado, pago, glosado, reapresentado	SPDATA TBTIPOLANCVLR
+tabela_fiscal_oficial	FIN	catalogo_publico	F3	Tabelas oficiais fiscais (CST, natureza do crédito, gênero, modelo de documento), com fonte e versão	SPDATA SDCSTPIS, SDCSTCOFINS, SDNATCREDITO, SDGENERO, SDTIPODOCTO, COTIPOITEM, DMCADLEIAUTE; MV CST_DI, CSOSN
+codigo_fiscal_oficial	FIN	catalogo_publico	F3	Código de uma tabela fiscal oficial, com descrição, vigência e atributos	SPDATA domínios fiscais de carga: SDINDICCONDPJ, SDINDICTPOPER, SDNATRETFONTE, SDNATRECEITA, TBIMUNIDADE_ISSQN, TBTRIBUTACAO_ISSQN, TBINDNIF, COINDICATVPRE, COINDICNATPJ, COSPEDTPDOC, COTPSUBSTECD, FPESOCENVIOREINFINFO, FPFORMATRIBRENDEXT; leiaute ESSERIE_R4000_* vai ao mecanismo integracao
+cfop	FIN	catalogo_publico	F3	Código fiscal de operação e prestação, com vigência e indicador de entrada ou saída	SPDATA SDCFOP; MV CFOP
+servico_lc116	FIN	catalogo_publico	F3	Itens da lista nacional de serviços (LC 116) com vigência e código nacional da NFS-e	SPDATA SDITEMSERVICO, TBSERVICO_NFSE_ITENS
+natureza_operacao	FIN	dominio	F3	Natureza de operação das notas (simples remessa, devolução, venda, conserto), com CFOP por destino	SPDATA TBNATOPE, TBTPNATOPENF
+escrituracao_entrada	FIN	principal	F3	Dados fiscais da nota de entrada para a EFD: chave, modelo, CFOP, natureza do crédito e participante	SPDATA SDGECADNFS; MV SPED_FISCAL; depende de nota de entrada (05)
+escrituracao_item_entrada	FIN	item	F3	Item da nota escriturado, com CFOP, CST de PIS e COFINS, base e crédito	SPDATA SDGELANNFS; MV TIPO_ENTRADA_CFOP
+dado_fiscal_item	FIN	configuracao	F3	Dados fiscais do produto ou serviço: NCM, gênero, CST padrão, tipo de item para a EFD	SPDATA SDGEITENS; depende de produto (05)
+dado_fiscal_titulo_pagar	FIN	item	F3	Dados para a EFD de serviço tomado sem nota de entrada: serviço, CST, natureza do crédito, base	SPDATA SDMFCONPAG, FPTP_SERV_NF_TO
+arquivo_efd_contribuicoes	FIN	principal	F3	Arquivo da EFD-Contribuições gerado por competência, com situação, recibo e retificação	SPDATA SDPARAM; MV EMPRESA_SPED_PIS_COFINS, SPED_PIS_COFINS_REG_0111, SPED_PIS_COFINS_REG_A100
+apuracao_pis_cofins	FIN	principal	F7	Apuração mensal de PIS e COFINS (débitos, créditos e saldo a recolher ou a compensar)	MV SPED_PIS_COFINS_REG_A170, EMPRESA_SPED_PIS_COFINS; SPDATA SDNATRECEITA
+entrada_servico	FIN	principal	F7	Entrada de serviço tomado registrada contra o pedido ou contrato, com nota de serviço e conclusão	MV ENT_SERV, ENT_SERV_CONCLUSAO, ENT_SERV_ENVIO_NFTS; areas-sem-dono 16 (dono 07)
+entrada_servico_item	FIN	item	F7	Item do serviço tomado, com quantidade, valor e centro de custo	MV ITENT_SERV; areas-sem-dono 16
+retencao_entrada_servico	FIN	item	F7	Tributo retido na entrada do serviço tomado, base da EFD-REINF R-2010 e R-4020	MV ITENT_SERV_IMPOSTO; areas-sem-dono 16
+tributo	FIN	dominio	F3	Tributos tratados (IRRF, INSS, ISS, PIS, COFINS, CSLL, IBS, CBS), com esfera e forma de apuração	SPDATA MFTPAPURACAO, MFTPCONTRIBUICAO; MV TRIBUTO_MUNICIPAL
+aliquota_tributo_vigencia	FIN	configuracao	F3	Alíquota e código de recolhimento do tributo por vigência	SPDATA TBINTIMP
+regra_retencao	FIN	configuracao	F3	Regra de retenção por tributo, tipo de serviço e participante: base, alíquota, mínimo e dispensa	SPDATA MFREFDES, MFTPCONTRIBUICAO; MV RETENCAO_TRIBUTO, NAT_TIPDET_CON_PAG, TIP_DET_RECCON_REC
+retencao_titulo	FIN	item	F3	Tributo retido em parcela a pagar ou a receber, com base, alíquota, valor e código de receita	SPDATA MFDESACR; MV ITRETENCAO_TRIBUTO
+regra_iss_municipio	FIN	configuracao	F3	Alíquota, retenção e local de incidência do ISS por município e serviço	SPDATA TBMUIBGE; MV SERVICO_NTFS, TRIBUTO_MUNICIPAL; município pelo catalogo_publico ibge
+orgao_arrecadador	FIN	principal	F3	Órgão credor de tributo (Receita Federal, INSS, município), usado na guia e no título	SPDATA TBORGAOPUBLICO
+enquadramento_tributario_participante	FIN	configuracao	F3	Regime e exceções tributárias do credor ou cliente (Simples, imunidade, isenção, decisão judicial)	MV IMPOSTO_FORNECEDOR, INSS_ESPECIAL; depende de fornecedor (05)
+codigo_receita_federal	FIN	catalogo_publico	F3	Códigos de receita para DARF e GPS por tributo e natureza, com vigência	SPDATA TBFINCODRECOL, RPCODIGO_RECEITA, FPCOD_GPS
+apuracao_retencao	FIN	principal	F7	Apuração por tributo, código de receita e período dos valores retidos, com total a recolher	MV FINAN_LOTE_TRIBUTO, FINAN_VERSAO_TRIBUTO, FINAN_LOTE_IMPOSTO
+item_apuracao_retencao	FIN	vinculo	F7	Retenção incluída na apuração, ligada à parcela de origem	MV FINAN_LOTE_TRIBUTO_IT
+guia_recolhimento	FIN	principal	F7	Guia de recolhimento (DARF, GPS, guia municipal) com vencimento, valores e título a pagar gerado	MV ARQUIVO_REMESSA_TRIBUTO; SPDATA TBFINCODRECOL
+declaracao_dctfweb	FIN	principal	F7	Declaração DCTFWeb por competência, com débitos, créditos vinculados, recibo e guia	MV FINAN_LOTE_TRIBUTO; liga eventos REINF e eSocial
+natureza_rendimento	FIN	catalogo_publico	F3	Natureza de rendimento da EFD-REINF com tributos incidentes e indicadores	SPDATA FPITENSNATRENDIMENTO, FPNATUR_REND; MV REINF_TABELA_01; dono 07 conforme conflitos
+grupo_natureza_rendimento	FIN	catalogo_publico	F3	Grupos da tabela de natureza de rendimentos	SPDATA FPGRUPONATRENDIMENTO
+natureza_rendimento_deducao	FIN	catalogo_publico	F3	Deduções permitidas por natureza de rendimento	SPDATA FPITENSNATREND_DEDUTIVEL
+natureza_rendimento_isencao	FIN	catalogo_publico	F3	Rendimentos isentos permitidos por natureza de rendimento	SPDATA FPITENSNATREND_RENDISENTO
+classificacao_servico_retencao	FIN	catalogo_publico	F3	Classificação de serviço prestado mediante cessão de mão de obra com retenção previdenciária	SPDATA FPCLASSIFSERV
+atividade_cprb	FIN	catalogo_publico	F3	Atividades sujeitas à contribuição sobre a receita bruta, com alíquota e vigência	SPDATA ESATVCOMERCIAL, ESTPAJUSTE, ESTPCODAJUSTE
+apuracao_cprb	FIN	principal	F7	Apuração da contribuição sobre a receita bruta por atividade, com ajustes, para o evento R-2060	SPDATA ESTPCODAJUSTE; MV REINF_EVENTOS
+evento_reinf	FIN	principal	F3	Evento da EFD-REINF (R-1000 a R-4099) por competência, com XML, situação e recibo	MV REINF, REINF_EVENTOS, REINF_XML, REINF_SERVICO_TOMADO, REINF_BEN_PAG
+item_evento_reinf	FIN	item	F3	Pagamento, serviço tomado ou beneficiário informado no evento, ligado à origem financeira	MV REINF_BEN_PAG, REINF_BEN_PAG_IMP, REINF_SERVICO_TOMADO_PRE_NF, REINF_BENEFICIARIO, REINF_DEPENDENTES
+lote_reinf	FIN	principal	F3	Lote de eventos enviado à Receita, com protocolo e situação	MV REINF_TRANS_RETORNO
+retorno_reinf	FIN	item	F3	Retorno do processamento por evento, com código, mensagem e recibo	MV REINF_TRANS_RETORNO, REINF_LOG_ERROS
+processo_tributario	FIN	principal	F3	Processo administrativo ou judicial que suspende tributo, com número, vara e decisão	MV REINF_PROCESSO_JUDICIAL, REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDPROC, FPINDICDECPRO
+suspensao_processo_tributario	FIN	item	F3	Indicativo de suspensão de exigibilidade do processo, com código, data e valor suspenso	MV REINF_PROCESSO_SUSPENSAO; SPDATA FPESOCINDSUSP
+beneficiario_exterior	FIN	principal	F7	Beneficiário residente no exterior, com país, NIF, relação com a fonte e forma de tributação	MV REINF_RESID_EXTERIOR; SPDATA FPINFOBENEFRENDEXT, FPFORMATRIBRENDEXT, TBINDNIF
+declaracao_dmed	FIN	principal	F3	Declaração anual DMED por estabelecimento, com responsável, leiaute, recibo e retificação	SPDATA DMCADLEIAUTE
+item_dmed	FIN	item	F3	Total recebido de pessoa física por titular no ano, com reembolsos	new-sgh M32 /financeiro/fiscal/dmed
+beneficiario_dmed	FIN	item	F3	Dependente ou beneficiário atendido, ligado ao titular, com valor recebido	new-sgh M32; depende de paciente (02)
+nota_servico	FIN	principal	F3	Nota fiscal de serviço eletrônica emitida, com tomador, RPS, número, situação e substituição	MV NOTA_FISCAL, NOTA_FISCAL_ELETRONICA_BASE; SPDATA NFSEEMPDESENV
+item_nota_servico	FIN	item	F3	Serviço da nota, com código municipal, item LC 116, quantidade e valor	MV ITNOTA_FISCAL, NOTA_FISCAL_ELETRONICA_ITENS
+tributo_nota_servico	FIN	item	F3	Tributo destacado ou retido na nota de serviço (ISS, IBS, CBS, federais), com base e alíquota	MV NOTA_FISCAL_TRIBUTO, NOTA_FISCAL_ELETRONICA_TRIB
+deducao_nota_servico	FIN	item	F3	Dedução da base do ISS na nota (material, subempreitada), com comprovante	MV DEDUCAO_NOTA_FISCAL, NOTA_FISCAL_RECEITA_EXCLUSAO
+lote_nota_servico	FIN	principal	F3	Lote de RPS enviado ao provedor municipal, com protocolo e situação	MV NOTA_FISCAL_ELETRONICA_LOT_ENV, NOTA_FISCAL_ELETRONICA_LOT_RSP
+evento_nota_servico	FIN	historico	F3	Eventos da nota: emissão, cancelamento, substituição, rejeição, com protocolo e motivo	MV HISTORICO_SITUACAO_NOTA_FISCAL, NOTA_FISCAL_ELETRONICA_CANC, NOTA_FISCAL_PROTOCOLO
+vinculo_nota_faturamento	FIN	vinculo	F3	Ligação da nota de serviço com a fatura ou a conta que ela documenta	MV ITFAT_NOTA_FISCAL, NOTA_FISCAL_FFCV_RPS; depende de fatura (06); ver nota_fatura (06)
+configuracao_nota_servico	FIN	configuracao	F3	Regras de emissão por tipo de faturamento: natureza, serviço, retenções padrão e texto	MV CONFIG_NOTA_FISCAL_POR_TIPO, NOTA_FISCAL_ELETRONICA_CONFIG; SPDATA NFSEPARUSU
+serie_documento_fiscal	FIN	configuracao	F3	Série e numeração de RPS, nota de serviço e nota de mercadoria por estabelecimento	MV NUMERACAO_NOTA
+provedor_nota_municipal	FIN	catalogo_publico	F3	Padrão ou provedor de NFS-e (nacional, ABRASF e outros), com versão do leiaute	SPDATA NFSEEMPDESENV; MV NFSE_CONTROLE_CIDADE
+municipio_provedor_nota	FIN	vinculo	F3	Município atendido por cada provedor de NFS-e, com endereço do serviço	SPDATA NFSEEMPDESENT; município pelo catalogo_publico ibge
+servico_municipal	FIN	configuracao	F3	Código do serviço na lista do município, ligado ao item LC 116, com alíquota	MV SERVICO_NTFS, NOTA_FISCAL_ELETRONICA_SERVICO
+classificacao_tributaria_ibs_cbs	FIN	catalogo_publico	F3	Classificação tributária do IBS e da CBS da reforma, com CST e redução	SPDATA NFSECLASSIFICACAO_TRIBUTARIA, TBINDICADOR_OPERA_NF
+nota_mercadoria	FIN	principal	F7	NF-e de saída de mercadoria (simples remessa, devolução, venda a terceiro), com chave e situação	MV PARAMETROS_NF_SIMPLES_REMESSA, FORMULARIO_NF_SIMPLES_REMESSA; SPDATA GEINFVENEXT
+item_nota_mercadoria	FIN	item	F7	Produto da NF-e de saída, com NCM, CFOP, quantidade, lote e valor	MV FORMULARIO_NF_SIMPLES_REMESSA; depende de produto e lote (05)
+tributo_item_nota_mercadoria	FIN	item	F7	ICMS, IPI, PIS, COFINS, IBS e CBS do item da NF-e de saída	MV ALIQUOTA_ICMS, INCIDENCIA_IPI
+referencia_nota_mercadoria	FIN	vinculo	F7	Documento referenciado pela NF-e (nota de entrada devolvida, remessa de conserto)	MV PARAMETROS_NF_SIMPLES_REMESSA
+evento_nota_mercadoria	FIN	historico	F7	Eventos da NF-e: autorização, cancelamento, carta de correção, inutilização	MV MOTIVO_CANCELA_NFSR
+ajuste_lalur	FIN	item	F7	Adição ou exclusão da parte A do LALUR por período, com conta e fundamento	MV DIGITACAO_PARTE_A_LALUR, ELALUR_PARTEA_SPED_ECF
+saldo_lalur_parte_b	FIN	principal	F7	Conta da parte B do LALUR (prejuízo, diferenças temporárias), com saldo e controle	MV DIGITACAO_PARTE_B_LALUR, ELALUR_PARTEB_SPED_ECF
+movimento_lalur_parte_b	FIN	item	F7	Lançamento na conta da parte B, com período, valor e origem	MV DIGITACAO_PARTE_B_LALUR, VALORES_ELALUR_SPED_ECF
+apuracao_irpj_csll	FIN	principal	F7	Apuração do IRPJ e da CSLL no lucro real, com base, adicional e provisão	MV SPED_ECF_IRPJ_CSLL, CONFIGURACAO_PROVISAO_LALUR
+configuracao_provisao_irpj_csll	FIN	configuracao	F7	Contas e regras para a provisão mensal de IRPJ e CSLL	MV CONFIGURACAO_PROVISAO_LALUR
+plano_contas	FIN	principal	F7	Plano de contas versionado por grupo de estabelecimentos, com vigência e máscara	MV PLANO_CONTAS, PLANO_CONTABIL, CONFIG_FCCT
+conta_contabil	FIN	principal	F7	Conta do plano, com nível, natureza, tipo (sintética ou analítica) e exigência de centro de custo	MV PLANO_CONTAS
+plano_referencial	FIN	catalogo_publico	F3	Planos referenciais da Receita para ECD e ECF por tipo de entidade	SPDATA COTIPOPLANOCONTAREFERENCIAL
+conta_referencial	FIN	catalogo_publico	F7	Conta do plano referencial da Receita, com vigência	MV PLANO_CONTAS_REF_SPED
+vinculo_conta_referencial	FIN	vinculo	F7	Mapeamento da conta própria para a conta referencial, por plano e ano	MV PLANO_CONTAS_DE_PARA, PLANO_CONTAS_SPED
+periodo_contabil	FIN	principal	F7	Competência contábil por estabelecimento, com fechamento e bloqueio	MV FECHAMENTO_DO_MES
+periodo_escrituracao	FIN	configuracao	F3	Período de escrituração contábil com vigência e forma (mensal, trimestral, anual)	SPDATA COPERIODESCRIT
+regra_bloqueio_periodo_contabil	FIN	configuracao	F3	Quem pode lançar ou desfazer em período fechado e quando exigir senha de liberação	SPDATA TBTIPOPERMISSAO, COTIPOSOLICITACAOSENHA
+lote_contabil	FIN	principal	F7	Lote de lançamentos contábeis por origem e competência, com totais e situação	MV LCTO_CONTABIL
+lancamento_contabil	FIN	principal	F7	Lançamento contábil com data, histórico, origem, estorno e documento	MV LCTO_CONTABIL, MVTO_AJUSTE_CONTABIL
+partida_contabil	FIN	item	F7	Débito ou crédito do lançamento por conta e centro de custo	MV LCTO_CONTABIL, LCTO_SETOR
+origem_lancamento_contabil	FIN	dominio	F3	Módulo de origem do lançamento contábil (financeiro, faturamento, estoque, folha, patrimônio, manual)	SPDATA COTP_ORIGEM_LANCAMENTO
+motivo_lancamento_contabil	FIN	dominio	F7	Motivos de lançamento manual e de estorno	MV MOTIVO_LCTO
+historico_padrao	FIN	dominio	F7	Históricos padronizados com variáveis para os lançamentos	MV LCTO_CONTABIL
+saldo_contabil_mensal	FIN	historico	F7	Saldo por conta e mês: inicial, débitos, créditos e final	MV SALDO_CONTABIL, SALDO_MENSAL, SALDO_MENSAL_EMP
+saldo_contabil_centro_mensal	FIN	historico	F7	Saldo por conta, centro de custo e mês	MV SALDO_MENSAL_SETOR, SALDO_MENSAL_SETOR_EMP
+conciliacao_conta_contabil	FIN	principal	F7	Conciliação de uma conta patrimonial no fim do mês, com composição e responsável	MV MVTO_AJUSTE_CONTABIL
+item_conciliacao_conta_contabil	FIN	item	F7	Parcela que compõe o saldo conciliado (título, adiantamento, provisão), com diferença	MV MVTO_AJUSTE_CONTABIL
+evento_contabil	FIN	dominio	F7	Catálogo dos fatos que cada módulo publica para contabilização (faturamento, baixa, consumo, folha)	MV MODELO_CONTABIL_EVENTO, CONFIG_LCTO_AUT
+regra_contabilizacao	FIN	configuracao	F7	Regra que transforma um evento de módulo em lançamento contábil	MV MODELO_CONTABIL, CONFIG_LCTO_AUT; SPDATA TBINTCRC, RPINTEVE, FPINTROTINA
+versao_regra_contabilizacao	FIN	historico	F7	Versão da regra com vigência, simulação e quem aprovou	MV MODELO_CONTABIL
+item_regra_contabilizacao	FIN	item	F7	Linha da regra: conta a débito e a crédito, centro de custo e fórmula do valor	MV MODELO_CONTABIL_MATRICIAL, FFCV_CLASS_CONTABIL, LCTO_FINANCEIRO, LANCAMENTO_PATRIMONIO_CTB, PL_INT_FOLHA, DEDUCAO_RECEITA
+fato_contabil	FIN	principal	F7	Fato publicado por um módulo para contabilização, com chave da origem, valor e competência	new-sgh M54.1
+leitura_fato_contabil	FIN	vinculo	F7	Registro de que um fato virou lançamento em uma versão de regra, para reprocesso idêntico	new-sgh M54.1
+modelo_demonstracao	FIN	configuracao	F7	Modelo de demonstração (balancete, DRE, balanço, DRE gerencial), com colunas e níveis	MV DRE, DRE_COLUNA, VISAO_CONTABIL
+linha_modelo_demonstracao	FIN	item	F7	Linha do modelo, com ordem, fórmula e sinal	MV DRE_SOMA, DRE_SEQ_NIVEL
+composicao_linha_demonstracao	FIN	vinculo	F7	Contas ou faixas de contas que compõem cada linha da demonstração	MV DRE_SOMA, DADOS_BALANCETE
+apuracao_resultado	FIN	principal	F7	Apuração e encerramento do resultado do exercício, com lançamentos gerados	MV FECHAMENTO_DO_MES, DADOS_BALANCETE
+nota_explicativa	FIN	item	F8	Nota explicativa associada a uma demonstração publicada	MV ORCA_NOTA_EXPLICATIVA
+arquivo_sped_contabil	FIN	principal	F7	Arquivo ECD ou ECF gerado por exercício, com situação, retificação, hash e recibo	MV SPED_ECF_LANCAMENTOS_DIVERSOS, TABELA_REGISTRO_U180; SPDATA COTPSUBSTECD
+signatario_escrituracao	FIN	vinculo	F7	Signatários da escrituração (contador, representante), com qualificação e certificado	MV AUDITORES_INDEPENDENTES_SPED
+auditor_independente	FIN	principal	F7	Auditor independente da escrituração, com registro e período	MV AUDITORES_INDEPENDENTES_SPED
+socio_titular_ecf	FIN	item	F7	Sócio ou titular informado na ECF, com participação e rendimentos	MV SPED_ECF_IDENT_SOCIOS_TITULAR, SPED_ECF_RENDIMENTOS_DIRI_CONS
+registro_empresa_junta	FIN	historico	F3	Registro na junta comercial (NIRE) por UF, com vigência	SPDATA CONIRE
+situacao_especial_empresa	FIN	historico	F3	Situação especial da empresa (cisão, fusão, extinção) com vigência, para a escrituração	SPDATA COSPEDHSTSEMP, COSPEDSITEMP
+grupo_consolidacao	FIN	principal	F8	Grupo de estabelecimentos consolidados, com moeda, plano gerencial comum e período	MV PLANO_CONTAS_GERENCIAL
+empresa_grupo_consolidacao	FIN	vinculo	F8	Estabelecimento membro do grupo de consolidação, com participação e vigência	MV PLANO_CONTAS_EMP_TRANSACAO; depende de estabelecimento (01)
+conta_gerencial_consolidada	FIN	principal	F8	Conta do plano gerencial comum do grupo	MV PLANO_CONTAS_GERENCIAL
+depara_conta_consolidacao	FIN	vinculo	F8	Mapeamento da conta de cada estabelecimento para a conta gerencial consolidada	MV PLANO_CONTAS_GERENCIAL, SETOR_GERENCIAL
+transacao_intercompanhia	FIN	principal	F8	Transação entre estabelecimentos do grupo, marcada para eliminação	MV CON_COR_EMP_TRANSACAO, CAIXA_EMP_TRANSACAO
+apuracao_consolidacao	FIN	principal	F8	Rodada de consolidação por período, com situação e responsável	MV LOTE_GERENCIAL
+eliminacao_consolidacao	FIN	item	F8	Lançamento de eliminação gerado na consolidação	MV LCTO_CONTABIL_GERENCIAL
+saldo_consolidado_mensal	FIN	historico	F8	Saldo consolidado por conta gerencial e mês	MV SALDO_MENSAL_GERENCIAL, DRE_GERENCIAL
+projeto	FIN	principal	F8	Projeto como centro de resultado (obra, pesquisa, convênio com verba), com orçamento e prazo	MV PROJETO, PROJETOS, PROJETO_CADASTRO
+etapa_projeto	FIN	item	F8	Etapa do projeto, com datas e valor previsto	MV PROJETO_ETAPA
+projeto_centro_custo	FIN	vinculo	F8	Centros de custo e estabelecimentos participantes do projeto	MV PROJETO_SETOR, PROJETO_EMP
+projeto_produto	FIN	vinculo	F8	Produtos ou serviços previstos no projeto	MV PROJETO_PRODUTO; depende de produto (05)
+apropriacao_projeto	FIN	vinculo	F8	Apropriação de título, lançamento ou consumo ao projeto	MV PROJETO_ORCAMENTARIO, GCTO_CONTRATO_PROJ
+versao_orcamento	FIN	principal	F7	Versão do orçamento anual (proposta, aprovada, revisada), com cenário e situação	MV PLANO_ORCAMENTARIO, ORCA_PLANO; SPDATA MOPARAM
+premissa_orcamento	FIN	item	F7	Premissa da versão (inflação, reajuste, ocupação), com valor e justificativa	MV PREMISSA, ORCA_VARIAVEL, ORCA_PECA_VARIAVEIS
+cenario_orcamento	FIN	dominio	F7	Cenários do orçamento (conservador, base, otimista)	MV CENARIO_ORCAMENTARIO
+linha_orcamento	FIN	item	F7	Linha da grade orçamentária por centro de custo e natureza ou conta	MV IT_PLANO_ORCAMENTARIO, ORCA_PECA_ITEM, ORCA_CONTA
+valor_orcado_mes	FIN	item	F7	Valor orçado da linha em cada mês	MV ORCA_PECA_ITEM_SETOR, PROJECAO_ORCAMENTARIA
+responsavel_orcamento	FIN	vinculo	F7	Usuário responsável por preencher e revisar cada centro de custo da versão	MV ORCA_PERFIL_USUA_SETOR, ORCA_PERFIL_USUA_CONTA
+aprovacao_orcamento	FIN	historico	F7	Envio, aprovação e devolução da versão, com autor e parecer	MV ORCA_CONTROLE_CONCLUSAO; mecanismo de aprovação do 01
+regra_controle_orcamentario	FIN	configuracao	F8	Regra de controle na operação: conferir saldo, bloquear ou alertar, por centro, natureza e documento	MV ORCA_CONTROLE, ORCA_CONTROLE_CONTA
+reserva_orcamentaria	FIN	principal	F8	Valor comprometido por solicitação, pedido, nota ou título, com consumo e liberação	MV ORCA_CONTROLE_MOV, ORCA_REALIZADO_MOV
+excecao_orcamentaria	FIN	principal	F8	Exceção justificada para operar sem saldo, com aprovação	MV ORCA_EXCECAO, ORCA_CONTROLE_PENDENCIAS
+remanejamento_orcamentario	FIN	principal	F8	Transferência de saldo entre linhas do orçamento, com aprovação	MV ORCA_RATEIO, ORCA_RATEIO_ORIGEM, ORCA_RATEIO_DESTINO
+ajuste_orcamento_nota	FIN	item	F8	Ajuste do comprometido quando a nota difere do pedido	MV ORCA_AJUSTE_NF, ORCA_AJUSTE_NF_RATEIO
+justificativa_variacao_orcamento	FIN	item	F8	Justificativa do desvio entre orçado e realizado por linha e mês	MV JUSTIFICATIVA_VARIACAO, ORCA_MOTIVO
+indicador_orcamentario	FIN	configuracao	F8	Indicador estatístico orçado (pacientes-dia, cirurgias, exames), com unidade e fórmula	MV INDICADOR_ORCAMENTARIO, ORCA_INDICADOR_COMP
+grupo_indicador_orcamentario	FIN	dominio	F8	Agrupamento dos indicadores orçamentários	MV ORCA_GRUPO_INDICADOR
+valor_estatistico_orcado	FIN	item	F8	Quantidade orçada e realizada do indicador por centro de custo e mês	MV ORCA_CONTROLE_ESTATISTICO, ORCA_CONTROLE_IND, BASE_ORCA_ITEM_ESTATISTICO
+programa_trabalho	FIN	principal	F8	Programa de trabalho do orçamento público, com função e subfunção	MV PROGRAMA_TRABALHO, ORCAMENTO_HOSPITALAR
+funcao_orcamentaria	FIN	catalogo_publico	F8	Funções e subfunções da classificação orçamentária pública	MV FUNCAO_ORCAMENTARIA
+teto_orcamentario	FIN	item	F8	Teto de gasto por programa, unidade e período	MV TETO_ORCAMENTARIO_UPS
+nota_empenho	FIN	principal	F8	Nota de empenho do gasto público, com credor, programa e valor	MV NOTA_EMPENHO, PEDIDO_EMPENHO_FORNECEDOR
+item_nota_empenho	FIN	item	F8	Item empenhado, ligado ao pedido de compra	MV NOTA_EMPENHO; depende de pedido de compra (05)
+liquidacao_empenho	FIN	item	F8	Liquidação do empenho contra a nota recebida, que gera o título a pagar	MV NOTA_EMPENHO
+contrato_fornecedor	FIN	principal	F7	Contrato com fornecedor ou prestador: objeto, vigência, valor global, saldo, gestor e situação	MV GCTO_CONTRATO, GCTO_CONTRATO_STAT; depende de fornecedor (05)
+tipo_contrato_fornecedor	FIN	dominio	F7	Tipos de contrato: serviço contínuo, locação, comodato, manutenção, fornecimento	MV GCTO_TIPO, GCTO_TIPO_EMPR
+parte_contrato	FIN	vinculo	F7	Partes e estabelecimentos do contrato, com papel (contratante, contratada, interveniente)	MV GCTO_CONTRATO_UNEG, GCTO_FORNECEDOR
+gestor_contrato	FIN	vinculo	F7	Gestor e fiscal do contrato, com período	MV GCTO_CONTRATO_USUA, GCTO_GESTAO
+item_contrato_fornecedor	FIN	item	F7	Item contratado, com unidade, quantidade, preço e saldo	MV GCTO_CONTRATO_ITEM, GCTO_CONTRATO_SUPR
+parcela_contrato_fornecedor	FIN	item	F7	Parcela prevista do contrato, com competência e valor, base do título	MV GCTO_CONTRATO_PARC, GCTO_CONTRATO_PERI
+rateio_contrato	FIN	item	F7	Rateio do contrato por centro de custo e natureza	MV GCTO_CONTRATO_RATE
+aditivo_contrato	FIN	principal	F7	Aditivo de prazo, valor ou objeto, com justificativa e assinatura	MV GCTO_CONTRATO_EVEN, GCTO_EVENTO, GCTO_TIPO_EVENTO
+reajuste_contrato	FIN	historico	F7	Reajuste aplicado ao contrato, com índice, período e percentual	MV GCTO_CONTRATO_EVEN; índice em valor_indice (06)
+medicao_contrato	FIN	principal	F7	Medição ou aceite do serviço do período, com nota vinculada e valor liberado	MV GCTO_CONTRATO_NOTA, GCTO_MODULO_NOTA
+ocorrencia_contrato	FIN	historico	F7	Ocorrência registrada na execução (atraso, falha, multa, notificação)	MV GCTO_OCORRENCIA, GCTO_MOTIVO, GCTO_PARADA
+anexo_contrato	FIN	item	F7	Metadado de documento do contrato (minuta, assinado, garantia), arquivo pelo mecanismo comum	MV GCTO_CONTRATO_ARQU, GCTO_ARQUIVO, GCTO_TIPO_DOCUMENTO
+garantia_contrato	FIN	item	F7	Garantia contratual (caução, seguro, fiança), com valor e validade	MV GCTO_CONTRATO_FORM
+clausula_contrato	FIN	item	F7	Cláusula relevante com prazo ou obrigação a acompanhar	MV GCTO_CONTRATO_TEXT, GCTO_TEXTO, GCTO_DATA
+sla_contrato	FIN	configuracao	F8	Acordo de nível de serviço por contrato e serviço, com meta e horário	MV GCTO_CONTRATO_SLA, SLA_MODELO, SLA_REGRA_HORA
+faixa_sla_contrato	FIN	item	F8	Faixa de desempenho do SLA com glosa ou multa correspondente	MV SLA_REGRA_FAIXA, SLA_MODELO_ITEM
+indicador_contrato	FIN	configuracao	F8	Indicador acompanhado no contrato, com fórmula e meta	MV GCTO_INDICADOR
+valor_indicador_contrato	FIN	item	F8	Valor apurado do indicador por período	MV GCTO_INDICADOR_VAL
+apontamento_producao_contrato	FIN	principal	F8	Apontamento da produção do terceiro no período para conferência	MV GCTO_APONTAMENTO, GCTO_LOTE_APONTAMENTO
+item_apontamento_producao	FIN	item	F8	Linha do apontamento com serviço, quantidade e valor	MV GCTO_APONTA_PROD, GCTO_ITLOTE_APONTAMENTO
+auditoria_contrato	FIN	principal	F8	Auditoria da execução do contrato, com roteiro e resultado	MV GCTO_AUDITORIA
+item_auditoria_contrato	FIN	item	F8	Item verificado na auditoria, com conformidade e evidência	MV GCTO_AUDITORIA_ITEM
+criterio_rateio	FIN	configuracao	F7	Critério de rateio de um centro para os demais (área, refeições, horas), com ordem sequencial	MV RATEIO_PADRAO, RATEIO_PONDERADO, REGRA_RATEIO_SETOR; SPDATA CTWTPREGRA
+destino_criterio_rateio	FIN	item	F7	Centro receptor e peso fixo do critério de rateio	MV REGRA_RATEIO_SETOR, RATEIO_PONDERADO
+tipo_dado_estatistico	FIN	dominio	F3	Tipos de dado estatístico do custeio (área, funcionários, pacientes-dia)	SPDATA CTTIPODADO; MV VARIAVEIS_PADRAO
+estatistica_centro_mes	FIN	item	F7	Quantidade do dado estatístico por centro de custo e mês	MV VARIAVEIS_PADRAO
+unidade_mensuracao_custo	FIN	dominio	F3	Unidade de produção do centro para custo unitário (paciente-dia, exame, refeição)	SPDATA TBUNIMEN
+conta_receita_custeio	FIN	configuracao	F3	Classes de receita do custeio (serviços, honorários, materiais) com origem no faturamento	SPDATA CTCTARECEITANCI
+apuracao_custo	FIN	principal	F7	Apuração mensal do custeio por absorção, com versão, situação e fechamento	MV ROTINAS_CUSTO, CUSTO_FINAL
+parcela_apuracao_custo	FIN	item	F7	Custo primário, recebido e repassado por centro e natureza na apuração	MV CUSTO_PRIMARIO, CUSTO_ABSORVIDO, CUSTO_FINAL
+custo_unitario_centro	FIN	item	F7	Custo unitário do centro por unidade produzida no mês	MV CUSTO_UNITARIO, CUSTO_MEDIO_MENSAL
+custo_conta_paciente	FIN	item	F7	Custo apurado por conta do paciente, com receita, margem e componentes	MV ITEM_RES_PROCEDIMENTO_SUS; depende de conta_hospitalar (06)
+exportacao_custo	FIN	principal	F7	Arquivo de custos exportado (ApuraSUS), com competência e situação	SPDATA CTWGRUPOEXPORTACAO
+grupo_exportacao_custo	FIN	configuracao	F7	Agrupamento dos centros e naturezas no leiaute de exportação de custos	SPDATA CTWGRUPOEXPORTACAO
+ficha_custo_padrao	FIN	principal	F8	Ficha técnica de custo-padrão por procedimento, com versão	MV CUSTO_FICHA, CUSTO_PRO_FAT
+item_ficha_custo_padrao	FIN	item	F8	Insumo, minuto de sala, gás ou diária previstos na ficha, com quantidade e custo	MV CUSTO_FICHA_ITEM
+custo_sala_cirurgica	FIN	configuracao	F8	Custo por minuto de sala cirúrgica por centro, com vigência	MV CUSTO_SALA_CIRURGIA
+custo_gas_medicinal	FIN	configuracao	F8	Custo por minuto de gás medicinal, com vigência	MV CUSTO_MINUTO_GAS
+custo_diaria_unidade	FIN	configuracao	F8	Custo-padrão da diária por unidade de internação	MV CUSTO_DIARIA_CENCIR
+grupo_bem	FIN	configuracao	F7	Grupo patrimonial com contas contábeis e taxas de depreciação fiscal e societária	MV BENS; conflitos (dono 07)
+bem_patrimonial	FIN	principal	F7	Bem do imobilizado, com origem (nota, doação), valor, localização, responsável e situação	MV BENS, SITUACAO_BENS, BENS_OBSERVACOES; usado na manutenção (04)
+origem_bem	FIN	dominio	F7	Origem de entrada do bem: compra, doação, comodato recebido, transferência	SPDATA GPORIGEM
+plaqueta_bem	FIN	item	F7	Plaqueta principal ou secundária do bem, com troca e motivo	MV BEM_PATRIMONIAL_PLACA, PLAQUETA_SECUNDARIA_BEM; nome conforme conflitos
+responsavel_bem	FIN	historico	F7	Responsável pela guarda do bem por período	SPDATA GPTP_RESPONSAVEL
+movimento_bem	FIN	historico	F7	Transferência do bem entre setores ou estabelecimentos, com aceite do destino	MV MOV_BENS; nome conforme conflitos
+baixa_bem	FIN	principal	F7	Baixa do bem (venda, doação, sinistro, obsolescência), com valor residual e lançamento	MV MOT_BAIXA
+motivo_baixa_bem	FIN	dominio	F7	Motivos de baixa do bem	MV MOT_BAIXA
+inventario_bem	FIN	principal	F7	Inventário patrimonial por local e data, com situação e responsáveis	MV INVENTARIO_PATRIMONIO; nome conforme conflitos
+item_inventario_bem	FIN	item	F7	Bem contado no inventário, com local encontrado e divergência	MV CONTAGEM_PATRIMONIO, BENS_CONTAGEM
+comodato_bem	FIN	principal	F7	Bem cedido ou recebido em comodato, com contraparte, prazo e contrato	MV ENTIDADE
+cota_depreciacao	FIN	item	F7	Cota mensal de depreciação do bem, imutável após o fechamento	MV DEPRECIA, ITDEPRECIA
+rateio_depreciacao	FIN	item	F7	Rateio da cota de depreciação por centro de custo	MV ITDEPRECIA_SETOR, BENS_DEPREC_SETOR
+coeficiente_turno	FIN	configuracao	F7	Coeficiente de aceleração da depreciação por turnos de uso	SPDATA GPCOEFICIENTE_DEPREC
+reavaliacao_bem	FIN	item	F8	Reavaliação ou teste de recuperabilidade do bem, com laudo e novo valor	MV BENS_REAVALIACAO
+agregacao_bem	FIN	item	F8	Valor agregado ao bem por melhoria ou componente	MV BENS_AGREGADOS, BENS_AGREGACAO_EXTRA
+imobilizado_andamento	FIN	principal	F8	Obra ou montagem em andamento, com custos acumulados até a ativação	MV IMOB_AND_BEM
+apropriacao_imobilizado_andamento	FIN	item	F8	Custo apropriado ao imobilizado em andamento, ligado ao título ou à nota	MV IMOB_AND_BEM
+apolice_seguro	FIN	principal	F8	Apólice de seguro patrimonial, com seguradora, vigência e prêmio	MV SEGUROS
+bem_segurado	FIN	vinculo	F8	Bem coberto pela apólice, com valor segurado	MV BENS_SEGURADOS, BENS_SEGURADOS_IOB
+recibo_autonomo	FIN	principal	F3	Recibo de pagamento a autônomo, com bruto, INSS, IRRF, ISS e líquido, base do título e do eSocial	SPDATA RPRPA; repasse em si é do 06 (conflitos); retencao_rpa (06) vira retencao_titulo
+item_recibo_autonomo	FIN	item	F3	Evento remunerado no recibo de autônomo (produção, plantão, ajuste), com valor	SPDATA RPRPA, RPEVENTO; evento_repasse (06)
+tabela_esocial	RH	catalogo_publico	F3	Tabelas oficiais do eSocial, da SEFIP, do CAGED e da RAIS, com fonte, número e versão	SPDATA FP*, ST*, PO* de carga-referencia (cerca de 200 domínios)
+codigo_esocial	RH	catalogo_publico	F3	Código de uma tabela trabalhista oficial, com descrição, vigência e atributos	SPDATA FPADMESOCIAL, FPAFAST_COD, FPCATCAUSACD, FPAGEACIDTRAB, FPCATCORPOATG, FPAGENSITDOEN, FPCATAGTGERDOE, FPCATCODACTRAB, FPCATLDOCORPO, FPCATNATLESAO, FPCATSITGERACD, FPDESCNATLES, FPPTCORPATING, FPSITGERACID, STTP_CAT, FPESOCADMESTAT, FPESOCAPRENDIZ, FPESOCCONTDEF, FPESOCEMPTRAB, FPESOCENTEDUC, FPESOCIAL_FMTRREBEEX, FPESOCINDEVTPER, FPESOCMOTREM, FPESOCSITEMP, FPESOCTPAPURIR, FPESOCTPPROVI, FPESOCTPSEGMAS, FPINDAQUIRURAL, FPINDICATADM, FPINDICNIF, FPLOCPRESTRAB, FPMOT_ADM, FPRET_RAIS, FPSENTENCAINSS, FPTIPOINDCPRB, FPTIPO_TRABALHADOR, FPTP_ADM_CAG, FPTP_ADM_RAIS, FPTPCONDIFER, FPTPCONTRIB, FPTPDESCINSS, FPTPDESFOCPRB, FPTPESTABELEC, FPTP_EST_FISICO, FPTPFATORELEV, FPTPINCCONT, FPTPINSCRICAO, FPTPISENMULTA, FPTPJORINTERM, FPTPLOTACAO, FPTPOBRA, FPTPOBRIGAECD, FPTPPRESTSERV, FPTPRETINSS, FPTPSITESPEC, FPVINC_RAIS, FPRESC_RAIS e demais domínios oficiais
+compatibilidade_codigo_esocial	RH	catalogo_publico	F3	Combinações válidas entre códigos oficiais (categoria × classificação tributária, lotação × FPAS)	SPDATA FPCATEGTRAB_FPCLASSIFTRIB, FPCATEGTRAB_FPLOTACAOTRIB, FPFPAS_FPCLASSIFTRIB, FPLOTACAOTRIB_FPCLASSIFTRIB
+leiaute_esocial	RH	catalogo_publico	F3	Versões do leiaute do eSocial por evento, com esquema de validação e vigência	SPDATA FPESOCARQXSD, FPESOCTVERSAOESOCIAL, FPTPARQESOC
+tipo_evento_esocial	RH	catalogo_publico	F3	Eventos do eSocial (S-1000 a S-5xxx), com classe, grupo e ordem de envio	SPDATA FPESOCEVENTO, FPESOCCLASSE, FPESOCTIPOEVENTPERIODIC
+regra_validacao_esocial	RH	catalogo_publico	F3	Regras de validação e de dependência entre eventos do manual de orientação	SPDATA FPESOCREGEVE, FPESOCDEPEND
+codigo_retorno_esocial	RH	catalogo_publico	F3	Códigos de resposta do processamento de lote e de evento	SPDATA FPESOCCADRESEV, FPESOCCADRESLT, FPESOCTPRESP
+categoria_trabalhador	RH	catalogo_publico	F3	Categorias de trabalhador com grupo, vigência e equivalência para FGTS e SEFIP	SPDATA FPCATEGTRAB, FPGRUPOTRAB, FPCATEG_FGTS, FPCAT_SEFIP
+natureza_rubrica	RH	catalogo_publico	F3	Naturezas das rubricas da folha com vigência (tabela 03)	SPDATA FPNATRUBRICA
+codigo_incidencia_rubrica	RH	catalogo_publico	F3	Códigos de incidência de INSS, IRRF, FGTS, PIS e contribuição sindical das rubricas	SPDATA FPRUBRICAINSS, FPRUBRICAIRRF, FPRUBRICAIRRF_GRUPO, FPRUBRICAFGTS, FPRUBRICAPISPASEP, FPRUBRICASIND
+fpas	RH	catalogo_publico	F3	Códigos FPAS de enquadramento previdenciário	SPDATA FPFPAS
+aliquota_terceiros	RH	catalogo_publico	F3	Alíquotas de outras entidades por FPAS e situação do contribuinte	SPDATA FPCODALIQFPAS, FPCODSIGLALIQ, FPCOD_TERC
+aliquota_rat_cnae	RH	catalogo_publico	F3	Alíquota do risco ambiental do trabalho por CNAE	SPDATA FPALIQRATCNAE
+fator_risco_ocupacional	RH	catalogo_publico	F3	Fatores de risco ambiental do trabalho (tabela 24), com grupo e detalhamento	SPDATA FPCATFATRISCO, FPRISCOCUP, FPSUBRISCOCUP, FPGRUPORISCO
+indicador_biologico	RH	catalogo_publico	F3	Indicador biológico por agente químico e material analisado, com limite (NR-7)	SPDATA FPAGENTQUIMIC, FPMATBIOLOGIC, FPMATANALISE
+cadastro_empregador	RH	configuracao	F7	Informações do empregador para o eSocial: classificação tributária, regime, indicativos e software	SPDATA FPPARAM, FPCLASSIFTRIB, FPESOCDESONER; substitui parametro_empregador
+lotacao_tributaria	RH	configuracao	F3	Lotação tributária com FPAS, terceiros e vigência	SPDATA FPLOTTRIBCAD, FPLOTACAOTRIB
+aliquota_rat_estabelecimento	RH	configuracao	F7	RAT e FAP do estabelecimento por vigência, com processo judicial se houver	SPDATA FPALIQRATCNAE
+responsavel_legal_empregador	RH	principal	F3	Responsável legal da empresa nas obrigações trabalhistas, com vigência	SPDATA FPRESP
+assessoria_externa	RH	principal	F3	Escritório contábil ou de folha que presta serviço ao estabelecimento, com tipo e contato	SPDATA FPTPACESSORIA
+sindicato	RH	principal	F7	Sindicato da categoria, com CNPJ, data-base e contribuições	SPDATA FPTP_EVENTO_SIND
+convencao_coletiva	RH	principal	F7	Convenção ou acordo coletivo por sindicato e vigência, com piso e reajuste	SPDATA FPTP_EVENTO_SIND
+clausula_convencao	RH	item	F7	Cláusula da convenção com efeito na folha (adicional, piso por cargo, benefício)	new-sgh M53
+colaborador	RH	principal	F7	Pessoa que trabalha no estabelecimento, ligada a profissional e usuário, com dados civis e documentos	new-sgh M52.1; SPDATA FPCOR, FPECIV; depende de profissional (02) e usuário (01)
+vinculo_trabalho	RH	principal	F7	Vínculo de trabalho (CLT, estatutário, estágio, temporário), com matrícula, categoria e admissão	SPDATA FPTP_FUNC, FPADMESOCIAL, FPTIPO_CONTRATO, FPTPREGIMETRA, FPTPREGIMEPRE
+tipo_colaborador	RH	dominio	F3	Tipos de colaborador do hospital (CLT, estagiário, autônomo, residente)	SPDATA FPTP_FUNC
+situacao_colaborador	RH	dominio	F3	Situações do colaborador (ativo, afastado, férias, desligado)	SPDATA FPSIT_FUNC, FPCONDFUNC
+trabalhador_sem_vinculo	RH	principal	F7	Trabalhador sem vínculo de emprego (autônomo, cooperado, diretor), com categoria, para eventos TSVE	SPDATA FPTPRESCDIRET; recibo_autonomo (07)
+cargo	RH	principal	F7	Cargo com CBO, descrição e requisitos	new-sgh M52.1; CBO pelo catalogo_publico cbo
+funcao	RH	principal	F7	Função exercida no setor, ligada ao cargo, com riscos e treinamentos exigidos	new-sgh M52.5
+historico_cargo	RH	historico	F7	Mudanças de cargo e função do vínculo, com motivo e data	new-sgh M52.1
+historico_salarial	RH	historico	F7	Salário contratual por vigência, com unidade de pagamento e motivo do reajuste	SPDATA FPTP_SAL
+lotacao	RH	historico	F7	Lotação do vínculo em setor e centro de custo por período	new-sgh M52.1; depende de setor (02) e centro_custo
+documento_colaborador	RH	item	F7	Documento do colaborador (CTPS, PIS, título, reservista, CNH), com número e validade	SPDATA FPBANCOPIS
+telefone_colaborador	RH	item	F3	Telefones e contatos do colaborador, com tipo	SPDATA FPTPTEL
+deficiencia_colaborador	RH	item	F7	Deficiência declarada, com tipo, reabilitação e cota	SPDATA FPTPDEFICIEN, FPBR_PDH
+dependente	RH	item	F7	Dependente do colaborador, com parentesco, efeito no IRRF e no salário-família	SPDATA FPTPDEPENDENT, FPTPDEPENDENTREINF
+validade_conselho	RH	historico	F7	Registro no conselho de classe e validade, com alerta de vencimento	new-sgh M52.1; registro do profissional em 02
+estrangeiro_colaborador	RH	item	F7	Dados do trabalhador imigrante: condição de ingresso e prazo de residência	SPDATA FPCOND_TRAB_IMIGRANTE, FPTEMPO_RESID_TRAB_IMIGRANTE
+estagio_colaborador	RH	item	F7	Termo de estágio, com nível, instituição de ensino, supervisor e prazo	SPDATA FPNIVELESTAG
+cessao_colaborador	RH	historico	F7	Cessão do colaborador a outro órgão ou empresa, com ônus e período	SPDATA FPTPONUS, FPTPONUSREMUN
+estabilidade_colaborador	RH	historico	F7	Garantia provisória de emprego, com motivo e período	SPDATA FPMOTESTABILI
+desligamento	RH	principal	F7	Desligamento do vínculo, com motivo, aviso prévio, data e códigos oficiais	SPDATA FPMOTDESLIG, FPRESC_CAUSA, FPCAUSA_AFASTAMENTO
+aviso_previo	RH	item	F7	Aviso prévio do desligamento, com tipo, dias, cumprimento e cancelamento	SPDATA FPTIPOAVISO, FPTPAVISORESC, FPESOCTPAVISO, FPESOCINDAVISO, FPMTCANCELAVI
+reintegracao_colaborador	RH	item	F7	Reintegração de empregado desligado, com tipo e processo	SPDATA FPTPREINTEG
+beneficio	RH	dominio	F3	Benefícios oferecidos (vale-transporte, vale-refeição, alimentação, plano de saúde)	SPDATA FPVALE, FPTPVALE
+beneficio_colaborador	RH	vinculo	F7	Benefício concedido ao colaborador, com quantidade, valor e desconto	SPDATA FPVALE
+regime_jornada	RH	configuracao	F7	Regime de jornada (12x36, 6x1, diarista), com carga semanal e regras de folga	SPDATA POTPTRABFOLGA, POTPJORNADA, FPESOCTPJORTRAB, FPTPREGJORNAD
+horario_jornada	RH	item	F7	Horário do regime por dia: entrada, saída e intervalos	SPDATA PODIA, PETPINTERVALO
+tipo_intervalo	RH	dominio	F3	Tipos de intervalo de jornada (refeição, descanso)	SPDATA PETPINTERVALO
+tipo_hora	RH	dominio	F3	Tipos de hora (normal, extra, noturna, falta, sobreaviso)	SPDATA POTPHORA
+tipo_contrato_temporario	RH	dominio	F3	Tipos de contrato temporário com limite semanal de horas	SPDATA POTPCONTTEMP, FPESOCTRABTEMP
+vigencia_regime_colaborador	RH	historico	F7	Regime de jornada do colaborador por período	new-sgh M52.2
+escala	RH	principal	F7	Escala do setor por período, com situação (rascunho, publicada, fechada)	SPDATA POPROGSIT; new-sgh M52.2
+alocacao_escala	RH	item	F7	Turno de um colaborador em um dia da escala, com setor e função	new-sgh M52.2
+publicacao_escala	RH	historico	F7	Publicação e republicação da escala, com quem publicou e alterações	new-sgh M52.2
+plantao	RH	principal	F7	Plantão presencial ou de sobreaviso, com profissional, setor e horário	new-sgh M52.3; repasse do plantão é do 06
+troca_plantao	RH	principal	F7	Troca ou cessão de plantão entre colaboradores, com aceite e aprovação	new-sgh M52.3
+acionamento_sobreaviso	RH	item	F7	Acionamento do sobreaviso, com chamada, chegada e horas devidas	new-sgh M52.3
+dimensionamento_enfermagem	RH	principal	F7	Dimensionamento de enfermagem por unidade e período pela resolução do COFEN	new-sgh M52.3; classificação de cuidado vem do 03
+parcela_dimensionamento	RH	item	F7	Parcela do cálculo por tipo de cuidado: pacientes, horas e profissionais	new-sgh M52.3
+parametro_dimensionamento	RH	configuracao	F7	Horas de enfermagem por tipo de cuidado e índice de segurança, por vigência da resolução	new-sgh M52.3
+relogio_ponto	RH	principal	F7	Relógio de ponto (REP), com tipo, número de fabricação e local	SPDATA POREPHOMOLOGADO, FPESOCPTOELET
+tipo_relogio_ponto	RH	dominio	F3	Tipos de registrador de ponto pela Portaria 671 (convencional, alternativo, programa)	SPDATA POREPHOMOLOGADO
+arquivo_ponto	RH	principal	F7	Arquivo do relógio (AFD) importado, com período, hash e conferência	new-sgh M52.4
+marcacao_ponto	RH	item	F7	Marcação original do colaborador, imutável, com origem e NSR	SPDATA POCLASSIFMARC
+classificacao_marcacao	RH	dominio	F3	Classificação da marcação (entrada, saída, intervalo)	SPDATA POCLASSIFMARC
+ajuste_ponto	RH	principal	F7	Inclusão ou desconsideração de marcação, com justificativa e aprovação por outra pessoa	new-sgh M52.4
+justificativa_ponto	RH	dominio	F3	Justificativas de ocorrência de ponto, com efeito no abono	SPDATA PEJUSTIF
+abrangencia_justificativa	RH	dominio	F3	Períodos e abrangência da justificativa de ponto (dia, turno, intervalo)	SPDATA PEPERIOD_JUSTIF
+tipo_movimento_ponto	RH	dominio	F3	Tipos de movimentação de ponto (falta, atraso, extra, abono)	SPDATA PETP_MOVIM
+apuracao_ponto	RH	principal	F7	Apuração diária do ponto contra a escala, com situação	SPDATA POPROSITUACAO
+item_apuracao_ponto	RH	item	F7	Horas apuradas por dia e tipo de hora	SPDATA POTPHORA
+regra_banco_horas	RH	configuracao	F3	Regra do banco de horas: tipo, início, limites e compensação	SPDATA POBANCOHRTP, POTPINIBANCO
+movimento_banco_horas	RH	item	F7	Crédito ou débito no banco de horas, com origem e saldo	new-sgh M52.4
+fechamento_ponto	RH	principal	F7	Fechamento mensal do ponto por colaborador, com espelho assinado	new-sgh M52.4
+integracao_ponto_folha	RH	configuracao	F3	De-para do tipo de hora apurada para a rubrica da folha	SPDATA PETP_INTEGR_EVENTO
+arquivo_aej	RH	principal	F7	Arquivo eletrônico de jornada gerado para fiscalização, com período e hash	new-sgh M52.4; Portaria 671
+rubrica	RH	principal	F3	Rubrica da folha com natureza, tipo, referência, fórmula e vigência	SPDATA FPEVENTO
+tipo_rubrica	RH	dominio	F3	Tipos de rubrica: provento, desconto, base, informativa	SPDATA FPTP_EVENTO
+tipo_referencia_rubrica	RH	dominio	F3	Unidade de referência da rubrica (horas, dias, percentual, valor)	SPDATA FPTP_REFER
+incidencia_rubrica	RH	vinculo	F3	Incidências tributárias da rubrica (INSS, IRRF, FGTS, sindical) por vigência	SPDATA FPRUBRICAINSS_FPEVENTO, FPRUBRICAIRRF_FPEVENTO, FPRUBRICAFGTS_FPEVENTO, FPRUBRICASIND_FPEVENTO
+formula_rubrica	RH	historico	F7	Versão da fórmula de cálculo da rubrica com vigência e teste	SPDATA FPEVENTO
+lancamento_automatico_rubrica	RH	configuracao	F3	Rubricas lançadas automaticamente por tipo de evento e estabelecimento	SPDATA FPTPEVENTOAUT, FPTPEVENTOAUT_TBEMPHOS
+tabela_legal_vigencia	RH	configuracao	F3	Tabela legal por vigência (IRRF, INSS, salário-família, teto, salário mínimo)	SPDATA TBTABIRR, FPHSTDIAAFAST
+faixa_tabela_legal	RH	item	F3	Faixa da tabela legal com limite, alíquota e parcela a deduzir	SPDATA TBTABIRR
+tributo_folha	RH	dominio	F3	Tributos e encargos da folha (FGTS, INSS, IRRF, PIS)	SPDATA TBTPTRIBUTO
+tipo_folha	RH	dominio	F3	Tipos de folha (mensal, adiantamento, 13º, férias, rescisão), com equivalência oficial	SPDATA FPTP_FOLHA, FPTPFOLHAESOC
+competencia_folha	RH	principal	F7	Competência da folha por estabelecimento e tipo, com abertura e fechamento	SPDATA FPREMESSA
+lancamento_variavel_folha	RH	item	F7	Lançamento variável da competência (hora extra, falta, adicional), com origem	new-sgh M53.2
+calculo_folha	RH	principal	F7	Cálculo da folha do colaborador na competência, com bruto, descontos, líquido e bases	new-sgh M53.2
+item_calculo_folha	RH	item	F7	Rubrica calculada, com referência, valor e memória de cálculo	new-sgh M53.2
+encargo_folha	RH	item	F7	Encargo patronal calculado (INSS, RAT, terceiros, FGTS) por colaborador e competência	SPDATA FPCODALIQFPAS
+afastamento	RH	principal	F7	Afastamento do colaborador, com motivo, período, atestado e efeito na folha	SPDATA FPMOTAFAST, FPESOCMOTAFAS, FPAFAST_COD, FPAFAST_RAIS
+motivo_afastamento	RH	dominio	F3	Motivos de afastamento usados pelo hospital, ligados ao código oficial	SPDATA FPMOTAFAST
+periodo_aquisitivo	RH	principal	F7	Período aquisitivo de férias, com faltas, direito e saldo	new-sgh M53.3
+programacao_ferias	RH	principal	F7	Programação de gozo de férias, com abono e adiantamento do 13º	SPDATA FPTPFERIAS
+tipo_ferias	RH	dominio	F3	Tipos de férias (normal, coletiva, abono)	SPDATA FPTPFERIAS
+recibo_ferias	RH	principal	F7	Recibo de férias calculado, com aviso e pagamento	new-sgh M53.3
+parcela_decimo_terceiro	RH	item	F7	Parcela do 13º salário, com base, média e pagamento	new-sgh M53.4
+rescisao	RH	principal	F7	Cálculo da rescisão, com verbas, multa, saque do FGTS e termo	SPDATA FPSAQUE
+tipo_rescisao	RH	configuracao	F3	Tipos de rescisão com os códigos oficiais de RAIS, SEFIP, CAGED e saque	SPDATA FPTIPORESC, FPRESC_CAGED, FPRESC_RAIS, FPRESC_SEFIP
+pensao_alimenticia	RH	item	F7	Pensão alimentícia descontada, com beneficiário, base e forma de pagamento	SPDATA FPTPPENSAOALI
+emprestimo_consignado	RH	item	F7	Empréstimo consignado em folha, com parcelas e instituição	new-sgh M53.2
+provisao_ferias_decimo	RH	item	F7	Provisão mensal de férias e 13º com encargos, por colaborador e centro	new-sgh M53.9
+lote_folha_externa	RH	principal	F7	Lote importado da folha calculada externamente, com competência e totais	new-sgh M53.1
+item_lote_folha_externa	RH	item	F7	Valor por colaborador e rubrica no lote da folha externa	new-sgh M53.1
+evento_esocial	RH	principal	F7	Evento do eSocial gerado, com XML, situação, recibo e retificação	SPDATA FPESOCORIRETIF
+lote_esocial	RH	principal	F7	Lote de eventos enviado, com protocolo e situação	new-sgh M53.7
+retorno_esocial	RH	item	F7	Retorno do processamento do evento, com código e mensagem	SPDATA FPESOCCADRESEV
+totalizador_esocial	RH	item	F7	Totalizador devolvido pelo governo (bases de INSS, FGTS e IRRF) por trabalhador	new-sgh M53.7
+processo_trabalhista	RH	principal	F7	Processo judicial ou administrativo trabalhista, com decisão e valores	SPDATA FPPROCTRAB_ESOCIAL_CR, FPTPPROCESSO, FPPROCESSOTEOR, FPESOCAUTORIA
+conciliacao_esocial	RH	principal	F7	Conferência entre bases do eSocial, folha e repasse por competência	new-sgh M53.6
+obrigacao_trabalhista	RH	principal	F7	Obrigação trabalhista por competência (FGTS Digital, SEFIP, CAGED, RAIS), com prazo e situação	SPDATA FPTP_ARQ_EMPREGADORWEB
+arquivo_obrigacao	RH	item	F7	Arquivo ou envio gerado para a obrigação, com recibo	new-sgh M53.8
+guia_fgts	RH	principal	F7	Guia do FGTS Digital, com valores e título a pagar	new-sgh M53.8
+depara_folha_financeiro	RH	configuracao	F3	De-para das rotinas e rubricas da folha para natureza financeira, conta e credor	SPDATA FPINTROTINA, FPINTAGRUP
+titulo_folha	RH	vinculo	F7	Título a pagar gerado pela competência da folha (líquido, encargos, pensão)	new-sgh M53.9
+custo_pessoal_centro	RH	item	F7	Custo de pessoal por centro de custo e competência, para custeio e contabilidade	new-sgh M53.9
+prontuario_ocupacional	RH	principal	F7	Prontuário ocupacional do colaborador, separado do prontuário assistencial	new-sgh M52.5
+programa_pcmso	RH	principal	F7	PCMSO por estabelecimento e período, com médico coordenador	new-sgh M52.5
+exame_pcmso_funcao	RH	item	F7	Exames exigidos por função, risco e tipo de ASO, com periodicidade	new-sgh M52.5
+aso	RH	principal	F7	Atestado de saúde ocupacional, com tipo, médico, conclusão e data	SPDATA FPASOTIPO, FPASORESULTADO, STTPASO
+exame_ocupacional	RH	item	F7	Exame do ASO, com ordem, resultado e interpretação	SPDATA FPASOEXAMEORD, FPASOINDRESUL, FPASOINTEXAME, STRESULT
+ambiente_trabalho	RH	principal	F7	Ambiente de trabalho com descrição, local e responsável pelos registros	new-sgh M52.5
+risco_funcao	RH	vinculo	F7	Fator de risco por ambiente e função, com intensidade, técnica e EPC	SPDATA FPEPC, FPGRAUEXPAGNOC, FPEXPAGNOCIVO, FPOCOR_SEFIP
+medida_controle_risco	RH	item	F7	Medida de controle do risco (EPC, administrativa, EPI), com eficácia	SPDATA STTPMEDIDAS
+laudo_ambiental	RH	principal	F7	Laudo ou programa ambiental (PGR, LTCAT), com responsável e vigência	new-sgh M52.5
+equipamento_protecao	RH	principal	F7	EPI com certificado de aprovação e validade, ligado ao produto de estoque	new-sgh M52.5; depende de produto (05)
+epi_funcao	RH	vinculo	F7	EPI exigido por função ou risco	new-sgh M52.5
+entrega_epi	RH	item	F7	Entrega de EPI ao colaborador, com ciência, quantidade e devolução	new-sgh M52.5
+comunicacao_acidente	RH	principal	F7	CAT com tipo, local, agente, parte atingida, lesão e atestado	SPDATA FPCATTIPO, FPCATTPEMIS, FPCATTPLOCACD, FPCATTPREG, STEMITENTE, STLOCAL, STFIL_PREV, FPTPACIDTRANS
+exposicao_biologica	RH	principal	F7	Acidente com material biológico, com fonte, condutas e acompanhamento	new-sgh M52.5; NR-32
+vacina_ocupacional	RH	dominio	F3	Vacinas exigidas para colaboradores, com esquema de doses	SPDATA FPVACINA, FPDOSE_VACINA
+vacina_colaborador	RH	item	F7	Dose aplicada no colaborador, com lote e data	SPDATA FPDOSE_VACINA
+curso	RH	principal	F7	Curso ou treinamento, com carga, conteúdo, código oficial e validade	SPDATA FPTP_TREINAMENTO_CAPACITACAO
+treinamento_obrigatorio_funcao	RH	vinculo	F7	Treinamentos exigidos por função e periodicidade (NR-32, acreditação)	new-sgh M52.6
+turma_treinamento	RH	principal	F7	Turma do curso, com data, instrutor e local	new-sgh M52.6
+presenca_treinamento	RH	item	F7	Presença e aproveitamento do colaborador na turma	new-sgh M52.6
+ciencia_procedimento	RH	item	F7	Ciência do colaborador em uma versão de POP ou norma	new-sgh M52.6; documento do POP é da qualidade (QUA)
+tabela_salarial	RH	configuracao	F8	Tabela salarial por vigência	new-sgh /pessoas/cargos
+faixa_salarial	RH	item	F8	Faixa e degrau salarial do cargo na tabela	new-sgh /pessoas/cargos
+vaga	RH	principal	F8	Vaga aberta por cargo e setor, com motivo e aprovação	new-sgh /pessoas/cargos
+candidato_vaga	RH	item	F8	Candidato da vaga, com etapa e resultado	new-sgh /pessoas/cargos
+modelo_avaliacao	RH	configuracao	F8	Modelo de avaliação de desempenho ou de experiência, com critérios e pesos	new-sgh /pessoas/avaliacoes
+criterio_avaliacao	RH	item	F8	Critério ou competência do modelo de avaliação	new-sgh /pessoas/avaliacoes
+ciclo_avaliacao	RH	principal	F8	Ciclo de avaliação com período e público	new-sgh /pessoas/avaliacoes
+avaliacao_desempenho	RH	principal	F8	Avaliação de um colaborador no ciclo, com avaliador e resultado	new-sgh /pessoas/avaliacoes
+item_avaliacao_desempenho	RH	item	F8	Nota e comentário por critério	new-sgh /pessoas/avaliacoes
+solicitacao_colaborador	RH	principal	F8	Solicitação do autosserviço (férias, ajuste, documento), com aprovação	new-sgh M52.6 "Meu espaço"
+tipo_solicitacao_colaborador	RH	dominio	F8	Tipos de solicitação do autosserviço e quem aprova	new-sgh M52.6

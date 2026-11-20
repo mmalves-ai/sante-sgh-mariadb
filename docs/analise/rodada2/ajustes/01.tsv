@@ -1,0 +1,28 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+dispositivo_usuario	ACEITA	dispositivo_usuario	ADM	principal	F8	Aparelho móvel do usuário, com plataforma, identificador, chave de notificação, validação por e-mail e situação (proposta em dois lotes, unificada)
+modelo_etiqueta	ACEITA	modelo_etiqueta	ADM	configuracao	F3	Leiaute de etiqueta por finalidade (estoque, esterilização, lactário, documento, unitarização): driver, colunas, tamanho e margens
+modelo_etiqueta_campo	ACEITA	modelo_etiqueta_campo	ADM	item	F3	Campo impresso no modelo de etiqueta: dado de origem, posição, tamanho, fonte, rotação e código de barras
+modelo_etiqueta_uso	ACEITA	modelo_etiqueta_uso	ADM	vinculo	F3	Onde cada modelo de etiqueta se aplica (local de estoque, estabelecimento, insumo), com número de cópias e impressora
+regra_alerta_paciente	ACEITA	regra_alerta_paciente	ADM	vinculo	F8	Pacientes específicos acompanhados por uma regra de alerta, para avisar a equipe quando um evento deles ocorrer
+ponderacao_procedimento	ACEITA	ponderacao_procedimento	REL	configuracao	F8	Peso e tempo padrão por procedimento, exame ou item prescrito, para medir produção ponderada e carga de trabalho
+apontamento_hora_iniciativa	ACEITA	apontamento_hora_iniciativa	REL	item	F8	Horas lançadas por data em cada ação de iniciativa, com classificação da hora (produtiva, extra)
+analise_objetivo_estrategico	ACEITA	analise_objetivo_estrategico	REL	item	F8	Análise periódica de desempenho de um objetivo estratégico: tendência, recomendação e responsável
+indicador_relacao	ACEITA	indicador_relacao	REL	vinculo	F8	Relação de causa e efeito ou de composição entre dois indicadores, para leitura conjunta
+iniciativa_estrategica_indicador	ACEITA	iniciativa_estrategica_indicador	REL	vinculo	F8	Indicadores que cada iniciativa ou ação pretende mover
+iniciativa_estrategica_nota	ACEITA	iniciativa_estrategica_nota	REL	item	F8	Comentário datado sobre uma iniciativa ou ação, com autor, texto e aviso aos participantes
+iniciativa_estrategica_participante	ACEITA	iniciativa_estrategica_participante	REL	vinculo	F8	Pessoas ou perfis ligados à iniciativa (responsável, equipe, leitor) e os avisos que recebem
+modelo_pauta_analise_critica	ACEITA	modelo_pauta_analise_critica	REL	configuracao	F8	Modelo de pauta da reunião de análise crítica de indicadores
+modelo_pauta_analise_critica_item	ACEITA	modelo_pauta_analise_critica_item	REL	item	F8	Bloco do modelo de pauta (gráfico, análise, plano de ação) com a ordem de apresentação
+fonte_referencia_indicador	ACEITA	fonte_referencia_indicador	REL	dominio	F8	Fonte de comparação externa de indicadores (associação, programa nacional, rede), com cor nos gráficos
+indicador_referencia	ACEITA	indicador_referencia	REL	vinculo	F8	Fontes de comparação externa aplicáveis a cada indicador
+tarefa_usuario	ACEITA	tarefa_usuario	ADM	principal	F8	Tarefa atribuída a um usuário, com categoria, prioridade, período, percentual concluído e situação
+proposta_iniciativa	ACEITA	proposta_iniciativa	REL	principal	F8	Proposta de projeto antes da aprovação: objetivo, produto, marcos, prioridade, custo estimado e parecer
+proposta_iniciativa_recurso	ACEITA	proposta_iniciativa_recurso	REL	item	F8	Recurso estimado da proposta: material a adquirir ou horas de pessoal por senioridade, com quantidade e custo
+calendario_expediente	FUNDIR	calendario_trabalho	CAD	configuracao	F8	Igual a calendario_trabalho (mesma origem de calendário de expediente, proposta em outro lote): fica só a do catálogo de cadastros
+calendario_expediente_usuario	ACEITA	calendario_trabalho_usuario	ADM	vinculo	F8	Calendário de expediente que vale para cada usuário a partir de uma data, usado para contar prazos de tratamento e de resposta
+regra_acao_automatica	ACEITA	regra_acao_automatica	ADM	configuracao	F8	Ação automática configurável sobre uma entidade do sistema, disparada quando as condições são atendidas
+regra_acao_automatica_condicao	ACEITA	regra_acao_automatica_condicao	ADM	item	F8	Condições da ação automática: campo, operador e valor comparado
+regra_acao_automatica_resultado	ACEITA	regra_acao_automatica_resultado	ADM	item	F8	Campos alterados pela ação automática e o valor gravado em cada um
+impressora_finalidade_estabelecimento	ACEITA	impressora_finalidade_estabelecimento	ADM	configuracao	F7	Impressora padrão, cópias e forma de impressão por finalidade no estabelecimento, usada quando a estação não define
+cadastro_padrao	ACEITA	cadastro_padrao	SIS	principal	F7	Biblioteca de registros-modelo de cadastro (itens, procedimentos, materiais) oferecida para carga na implantação
+tipo_cadastro_padrao	ACEITA	tipo_cadastro_padrao	SIS	dominio	F7	Tipos de cadastro da biblioteca de implantação (produto, procedimento, setor), com orientação de uso

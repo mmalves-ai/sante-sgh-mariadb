@@ -1,0 +1,49 @@
+funcionalidade	decisao	entidades_rodada1
+1	F7: base de 	`operadora_saude`, `parametro_operadora`, `responsavel_operadora`, `fatia_operadora_estabelecimento`
+2	F7: sem prod	`produto_plano`, `plano_comercializado`, `segmentacao_assistencial`, `contrato_plano`, `contratante_plano`, `aditivo_contrato_plano`, `cancelamento_contrato_plano`
+3	F7: núcleo d	`beneficiario_plano`, `vinculo_dependencia`, `carencia_aplicada`, `cobertura_parcial_temporaria`, `declaracao_saude`, `cartao_beneficiario`, `pedido_segunda_via_cartao`, `movimento_cadastral_beneficiario`, `consulta_elegibilidade_plano`
+4	F7: preço e 	`tabela_preco_faixa_etaria`, `faixa_etaria_preco`, `reajuste_contrato_plano`, `indice_reajuste_vigente`, `agrupamento_reajuste_coletivo`
+5	F7: sem cobr	`mensalidade_competencia`, `item_mensalidade`, `cobranca_beneficiario`, `baixa_cobranca_beneficiario`, `convenio_cobranca_bancaria`, `arquivo_retorno_cobranca`, `desconto_folha_contratante`, `ajuste_cobranca_contrato`
+6	F7: comum em	`regra_coparticipacao`, `lancamento_coparticipacao`, `regra_franquia_plano`, `limite_utilizacao_periodo`
+7	F7: a notifi	`ocorrencia_inadimplencia`, `notificacao_inadimplencia`, `acordo_parcelamento`, `parcela_acordo`
+8	F8: valor re	—
+9	F7: rede e s	`prestador_rede`, `contrato_rede_prestador`, `local_atendimento_rede`, `especialidade_atendida_rede`, `movimento_rede_ans`, `descredenciamento_prestador`, `qualificacao_prestador_rede`
+10	F7: sem paga	`tabela_remuneracao_rede`, `regra_valoracao_item`, `pacote_remuneracao_rede`, `calendario_pagamento_rede`, `pagamento_rede`, `retencao_pagamento_rede`, `adiantamento_rede`
+11	F7: prazos d	`pedido_autorizacao_plano`, `item_pedido_autorizacao`, `critica_pedido_autorizacao`, `decisao_auditoria_medica`, `junta_divergencia_tecnica`, `regra_cobertura_rol`, `auditor_designado`, `senha_autorizacao_plano`
+12	NAO: contrar	—
+13	F7: TISS 04.	`lote_conta_recebida`, `guia_conta_recebida`, `item_conta_recebida`, `glosa_conta_recebida`, `recurso_glosa_recebido`, `demonstrativo_analise_emitido`
+14	F7: a operad	`pedido_reembolso`, `item_pedido_reembolso`, `tabela_reembolso_referencia`, `pagamento_reembolso`
+15	F7: obrigató	`troca_tiss_operadora`, `demonstrativo_pagamento_emitido`, `cancelamento_guia_recebido`, `comunicacao_internacao_recebida`
+16	F3: o mesmo 	`terminologia`, `termo_terminologia`, `tabela_referencia_preco`, `vigencia_termo`
+17	NAO: leiaute	—
+18	F7: obrigaçã	`envio_ans`, `item_envio_ans`, `retorno_envio_ans`, `retrato_cadastral_ans`, `aviso_ressarcimento_sus`, `declaracao_servicos_medicos`
+19	F7 (só provi	`provisao_tecnica_competencia`, `mapa_conta_balancete_ans`
+20	F7: protocol	`protocolo_beneficiario`, `andamento_protocolo`, `demanda_reclamacao_ans`, `resposta_conclusiva_protocolo`
+21	F7: é por on	`conta_portal_prestador`, `permissao_portal_prestador`, `pedido_web_prestador`, `arquivo_enviado_prestador`
+22	F8: valor al	—
+23	F8: reduz si	—
+24	NAO: ferrame	—
+25	NAO: técnico	—
+26	F3: toda int	`sistema_externo`, `ponto_integracao`, `credencial_integracao`, `mensagem_saida`, `mensagem_entrada`, `tentativa_entrega`, `mapeamento_codigo_externo`, `falha_integracao`
+27	F3: o integr	`tipo_evento_publicado`, `assinatura_evento_parceiro`
+28	F3: laborató	`canal_hl7`, `perfil_mensagem_hl7`
+29	F3: uso diár	`interface_equipamento`, `modelo_comunicacao_interface`, `laboratorio_apoio`, `exame_apoio_catalogo`, `mapa_elemento_exame_apoio`, `mapa_material_apoio`, `pedido_apoio`, `resultado_apoio_recebido`, `layout_etiqueta_apoio`
+30	F3: as modal	`modalidade_imagem`, `item_lista_trabalho_imagem`, `status_execucao_imagem`, `visualizador_imagem`
+31	F3: o fatura	`transacao_tiss`, `servico_tiss_convenio`, `credencial_convenio`, `troca_tiss_prestador`, `consulta_elegibilidade_convenio`
+32	F3: está con	`sistema_regulacao`, `servico_regulacao`, `tabela_codigo_regulacao`, `valor_codigo_regulacao`, `solicitacao_regulacao_externa`
+33	F7: obrigaçã	`envio_rnds`, `versao_documento_rnds`, `identificador_paciente_externo`, `perfil_fhir_fixado`
+34	F7: exigênci	`envio_webservice_sus`, `retorno_webservice_sus`
+35	F8: nunca us	—
+36	F3: a confir	`pedido_mensagem_paciente`, `retorno_mensagem_paciente`, `modelo_mensagem_paciente`
+37	F3: parceiro	`parceiro_dados`, `pacote_parceiro`, `entrega_pacote_parceiro`, `finalidade_compartilhamento`
+38	F3: a comuni	`cliente_api`, `escopo_cliente_api`, `chave_api`, `chamada_api_registro`, `proposta_escrita_api`
+39	F8: comum em	—
+40	F3 (vínculo 	`portal_cotacao`, `vinculo_pedido_portal`
+41	F3: em uso, 	`conta_portal_paciente`, `perfil_portal_resultado`, `setor_publicado_portal`, `liberacao_resultado_portal`, `acesso_resultado_registro`
+42	F3: o autoca	`conta_portal_medico`, `pedido_vinculo_medico_externo`
+43	F3: configur	`perfil_prioridade_externa`, `classificacao_externa_recebida`
+44	F8: útil, de	—
+45	NAO: fora do	—
+46	NAO: a base 	—
+47	NAO: nenhum 	—
+48	NAO: técnico	—

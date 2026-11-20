@@ -1,0 +1,14 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+investimento_orcado	FIN	item	F7	Bem de natureza permanente previsto no orçamento de investimento, com quantidade, valor unitário e grupo patrimonial	MV BENS_ORCAMENTO
+cronograma_orcamento	FIN	item	F7	Etapas do ciclo orçamentário (abertura, preenchimento, revisão, aprovação) com datas previstas, realizadas e situação	MV BASE_ORCA_CRONOGRAMA
+consolidacao_orcamento	FIN	vinculo	F8	Versões de orçamento que compõem uma versão consolidada de rede ou grupo	MV BASE_ORCA_ORCA
+categoria_orcamentaria	FIN	dominio	F7	Categorias que agrupam e ordenam as linhas na apresentação do orçamento	MV CATEGORIA_ORCAMENTARIA
+tipo_bico_mamadeira	HOT	dominio	F8	Tipos de bico usados no preparo do lactário, conforme idade e necessidade do recém-nascido	MV BICO_MAMADEIRA
+boletim_informativo	PEP	principal	F7	Boletim do estado clínico do paciente internado para informar a família, com autor, situação e data	MV BOL_INF
+prazo_atendimento_manutencao	HOT	configuracao	F7	Prazo de atendimento e solução das ordens de manutenção por categoria e prioridade	MV CATEGORIA_ITEM_CONFIG_SLA
+permissao_adiantamento_usuario	FIN	vinculo	F7	O que cada usuário pode fazer nos adiantamentos (abrir, aprovar, fechar) por estabelecimento, setor e vigência	MV CCOR_FINANCEIRA_USUA
+centro_distribuicao_amostra	SADT	principal	F7	Central que recebe e redistribui amostras entre setores de diagnóstico ou unidades da rede	MV CENTRO_DISTRIBUICAO_AMOSTRA
+centro_distribuicao_amostra_setor	SADT	vinculo	F7	Setores de diagnóstico atendidos pela central de distribuição, indicando se só transfere	MV CENTRO_DISTRI_AMOS_SET_EXA
+cheque_emitido	FIN	principal	F3	Cheque emitido para pagamento, com talão, número, valor, favorecido, compensação e cancelamento	MV CHEQUE
+cheque_devolvido	FIN	principal	F3	Cheque recebido e devolvido pelo banco, com motivo, número da devolução, reapresentação e cobrança	MV CHE_DEVOL
+procedimento_cirurgico_exame	CC	vinculo	F7	Exame de imagem gerado automaticamente por procedimento e unidade (hemodinâmica)	MV CIRURGIA_EXAME_HEMODINAMICA

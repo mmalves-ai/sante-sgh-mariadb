@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	ABRE_CAIXA	TABELA	sessao_caixa	N	FIN	F3	
+DBAMV	ACAO_ANALISE_CULTURA	TABELA	conduta_analise_cultura	N	QUA	F7	
+DBAMV	ACAO_ANALISE_CULTURA_RESP	TABELA	conduta_analise_cultura	N	QUA	F7	desdobramento da conduta vira hierarquia no mesmo dominio
+DBAMV	ACAO_GRU	TABELA	classe_terapeutica	N	SUP	F7	acao terapeutica por grupo de farmacia vira hierarquia da classe
+DBAMV	ACAO_GRUPO_PERGUNTA_DOC	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	ACAO_PARECER_MEDICO	MECANISMO	historico_entidade:interconsulta	N	PEP	F3	
+DBAMV	ACAO_PERFIL_SEGMENTO	MECANISMO	framework	N	SIS	F3	caminho de tela por perfil
+DBAMV	ACAO_REGISTRO_FLUXO_ONCOLOGIA	TABELA	tipo_evento_oncologico	S	PEP	F8	
+DBAMV	ACAO_REGISTRO_FLX_ONCO_TP_PRES	TABELA	tipo_evento_oncologico_profissional	S	PEP	F8	
+DBAMV	ACAO_TERA	TABELA	classe_terapeutica	N	SUP	F7	
+DBAMV	ACA_PRO	TABELA	insumo	N	SUP	F3	classe terapeutica do produto vira referencia no insumo
+DBAMV	ACESSIBILIDADE_SIDRA	NAO		N	ADM		obsoleto
+DBAMV	ACESSO_DOCUMENTO	MECANISMO	arquivo	N	PEP	F3	binario do documento; metadado em anexo_prontuario
+DBAMV	ACESSO_PAGINA	MECANISMO	arquivo	N	PEP	F3	paginas do binario
+DBAMV	ACHADO_CIRURGICO	TABELA	achado_cirurgico_padrao	S	CC	F3	
+DBAMV	ACHADO_CIRURGICO_AVI_CIR	TABELA	descricao_cirurgica_achado	S	CC	F3	
+DBAMV	ACIDENTE_TRAB	TABELA	acidente_internacao	N	INT	F3	protocolos de acidente e sequela
+DBAMV	ACIDENTE_TRABALHO	TABELA	acidente_internacao	N	INT	F3	
+DBAMV	ACOMOD_PRO_FAT	TABELA	regra_diaria	N	INT	F3	item de diaria por acomodacao, plano e tipo de internacao
+DBAMV	ACOMPANHAMENTO_ORDEM_COMPRA	TABELA	pedido_compra_acompanhamento	N	SUP	F7	
+DBAMV	ACORDO_EQUIPE_MEDICA	TABELA	acordo_equipe_medica	N	FAT	F7	
+DBAMV	ACPR_TIMEOUT_BANCO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAMV	ACRESCIMO_DECRESCIMO_MANU_SERV	TABELA	servico_manutencao	N	HOT	F7	percentual legal com validade por servico
+DBAMV	ACRESCIMO_TEMPO_SCMA	TABELA	ajuste_tempo_marcacao	S	AGE	F7	
+DBAMV	ACRESC_DESCONTOS	TABELA	regra_desconto_grupo	N	FAT	F3	
+DBAMV	ACRESC_DESCONTOS_PROC	TABELA	regra_desconto_procedimento	S	FAT	F3	
+DBAMV	ACRO_CONFIG	TABELA	cota_enxoval_setor	N	HOT	F8	percentual de reposicao por setor
+DBAMV	ACRO_COTAS	TABELA	cota_enxoval_setor	N	HOT	F8	cota por unidade de internacao
+DBAMV	ACRO_COTAS_SETOR	TABELA	cota_enxoval_setor	N	HOT	F8	
+DBAMV	ACRO_DET_COTAS	TABELA	cota_enxoval_setor	N	HOT	F8	pecas e kits da cota
+DBAMV	ACRO_DET_COTAS_SETOR	TABELA	cota_enxoval_setor	N	HOT	F8	
+DBAMV	ACTE_TRM_INFO_SAUD	TABELA	aceite_termo_uso	N	ADM	F3	
+DBAMV	ADESAO_PROCESSO_PREGAO	TABELA	adesao_ata_registro_preco	N	SUP	F7	
+DBAMV	ADMISSAO_CO	TABELA	gestacao_paciente;partograma	N	PEP	F8	historico obstetrico na admissao do centro obstetrico
+DBAMV	AGDM_MOV_INV	TABELA	dispositivo_invasivo_evento	N	PEP	F3	agendamento de insercao ou troca
+DBAMV	AGENDA	TABELA	agenda_servico	N	AGE	F3	
+DBAMV	AGENDAMENTO_ONCOLOGICO	TABELA	marcacao_horario;sessao_quimioterapia	N	AGE	F3	
+DBAMV	AGENDAMENTO_RESERVA_NF	TABELA	serie_documento_fiscal	N	FIN	F3	reserva de numeracao por fonte pagadora
+DBAMV	AGENDA_CENTRAL	TABELA	agenda_servico;agenda_escala	N	AGE	F3	
+DBAMV	AGENDA_CENTRAL_CONVENIO	TABELA	agenda_fonte_pagadora	N	AGE	F3	
+DBAMV	AGENDA_CENTRAL_GRU_AGEN_PAC	TABELA	marcacao_horario	N	AGE	F3	marcacao de grupo de pacientes no horario
+DBAMV	AGENDA_CENTRAL_ITEM_AGENDA	TABELA	agenda_item_agendavel	N	AGE	F8	
+DBAMV	AGENDA_CENTRAL_SER_TIPO	TABELA	agenda_servico;cota_marcacao	N	AGE	F3	
+DBAMV	AGENDA_CENTRAL_USUARIO	TABELA	agenda_usuario	N	AGE	F3	
+DBAMV	AGENDA_FILA_ESPERA	TABELA	lista_espera	N	AGE	F3	
+DBAMV	AGENDA_GERADA	TABELA	geracao_grade	N	AGE	F3	
+DBAMV	AGENDA_GERADA_AUTOMATICA	MECANISMO	historico_entidade:geracao_grade	N	AGE	F3	log da geracao automatica
+DBAMV	AGENDA_ONCOLOGICA	TABELA	horario_agenda	N	AGE	F3	horarios livres do recurso oncologico
+DBAMV	AGENDA_REMESSA	TABELA	fechamento_competencia_fonte_pagadora	N	FAT	F3	
+DBAMV	AGENDA_TURMA	TABELA	turma_atividade;turma_encontro	N	AGE	F8	
+DBAMV	AGENDA_TURMA_CONVENIO	TABELA	turma_fonte_pagadora	N	AGE	F8	
+DBAMV	AGENDA_TURMA_FILA	TABELA	turma_participante	N	AGE	F8	situacao de espera
+DBAMV	AGENDA_TURMA_PACIENTE	TABELA	turma_participante	N	AGE	F8	
+DBAMV	AGENDA_TURMA_PRESTADOR	TABELA	turma_profissional	N	AGE	F8	
+DBAMV	AGE_CIR	TABELA	agendamento_cirurgico	N	CC	F3	
+DBAMV	AGE_CIR_EQUIPTO	TABELA	reserva_equipamento_cirurgia	N	CC	F8	
+DBAMV	AGE_CIR_LIVRE	TABELA	grade_sala_cirurgica	N	CC	F3	
+DBAMV	AGE_RX	TABELA	agenda_servico	N	AGE	F3	agenda de exame de imagem
+DBAMV	AGRUP	TABELA	classificacao_centro_custo	N	FIN	F3	agrupador de setores do orcamento
+DBAMV	AGRUPAMENTO	TABELA	grupo_faturamento	N	FAT	F3	agrupador usado na remessa por fonte pagadora
+DBAMV	AGRUPAMENTO_EXAME	TABELA	bancada_analitica	N	SADT	F3	
+DBAMV	AGRUPAMENTO_ITEM_CONTA	TABELA	conta_hospitalar_item	N	FAT	F3	item agrupado com lancamento pai
+DBAMV	AGRUPAMENTO_PSSD	TABELA	modelo_pesquisa_satisfacao	N	QUA	F8	
+DBAMV	AGRUPAMENTO_RESULTADO	TABELA	painel_resultado_grupo	N	PEP	F3	
+DBAMV	AGRUPA_ANTIMICROB	TABELA	painel_antibiograma_item	N	SADT	F7	
+DBAMV	AGRUPA_EVOL_ADMIN	TABELA	categoria_anotacao_administrativa	S	PEP	F8	
+DBAMV	AGRUPA_GERMES	TABELA	painel_antibiograma	N	SADT	F7	agrupamento de germes
+DBAMV	AGRUPA_REGRA_CRIA_CONTA_FFCV	TABELA	regra_criacao_conta_agrupamento	N	FAT	F8	
+DBAMV	AGRUP_SETORES	TABELA	classificacao_centro_custo	N	FIN	F3	setores do agrupador do orcamento
+DBAMV	AIH_ALTA_ADM	MECANISMO	integracao	N	SUS	F7	controle de exportacao de internacao e alta
+DBAMV	AIH_LONGA	TABELA	conta_aih	N	SUS	F7	sequencia de AIH de longa permanencia
+DBAMV	ALCADA_FFCV	TABELA	alcada_aprovacao	N	ADM	F3	
+DBAMV	ALCADA_GESTAO	TABELA	alcada_aprovacao;alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	ALCADA_TRANSF	TABELA	delegacao_aprovacao	N	ADM	F7	
+DBAMV	ALCADA_USUARIO	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	ALCA_APROVADOR	TABELA	aprovador_etapa	N	FIN	F8	
+DBAMV	ALCA_APROVADOR_MOB	TABELA	aprovador_etapa	N	FIN	F8	identificador do celular para aprovar
+DBAMV	ALCA_APROVADOR_STAT	MECANISMO	historico_entidade:aprovador_etapa	N	FIN	F8	
+DBAMV	ALCA_DEMANDA	TABELA	pedido_aprovacao	N	ADM	F3	
+DBAMV	ALCA_DEMANDA_AGRP	TABELA	pedido_aprovacao;agrupador_aprovacao	N	ADM	F3	
+DBAMV	ALCA_LOG	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	ALCA_PARAMETRO	MECANISMO	parametro	N	ADM	F3	
+DBAMV	ALCA_PERMISSAO	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	ALCA_PERMISSAO_AGRP	TABELA	alcada_aprovacao_nivel;agrupador_aprovacao	N	ADM	F3	
+DBAMV	ALCA_PONTO	TABELA	tipo_documento_aprovacao;alcada_aprovacao	N	ADM	F3	
+DBAMV	ALCA_PONTO_AGRP	TABELA	agrupador_aprovacao	N	FIN	F8	
+DBAMV	ALCA_PONTO_RESP	TABELA	resposta_padrao_aprovacao	N	FIN	F8	
+DBAMV	ALCA_PONTO_STAT	MECANISMO	historico_entidade:alcada_aprovacao	N	ADM	F3	
+DBAMV	ALCA_RUBRICA	TABELA	decisao_aprovacao	N	ADM	F3	
+DBAMV	ALIMENTO	TABELA	alimento_referencia	N	HOT	F8	
+DBAMV	ALIQUOTA_ICMS	TABELA	aliquota_tributo_vigencia	N	FIN	F3	
+DBAMV	ALTAS_REVELIA	TABELA	motivo_saida_hospitalar	N	INT	F3	motivos marcados como alta a revelia
+DBAMV	ALTERACAO_ITPRE_MED	TABELA	prescricao_item_velocidade	N	PEP	F3	
+DBAMV	ALTERACAO_SUB_IOB_BEM	MECANISMO	historico_entidade:bem_patrimonial	N	FIN	F7	reclassificacao do grupo do bem
+DBAMV	ALT_CONTA_MOV	NAO		N	FIN		tecnico do fornecedor sem equivalente
+DBAMV	AMOSTRA	TABELA	amostra_biologica	N	SADT	F3	
+DBAMV	AMOSTRA_ANALISE	TABELA	amostra_biologica	N	SADT	F3	amostra de requerente externo
+DBAMV	AMOSTRA_EXA_LAB	TABELA	amostra_biologica_exame	N	SADT	F3	
+DBAMV	AMOSTRA_INTERFACE	MECANISMO	integracao	N	INTG	F3	
+DBAMV	AMOSTRA_LOTE_AUTOMATICO	TABELA	lote_trabalho_item	N	SADT	F7	
+DBAMV	ANALISE_CULTURA	TABELA	analise_cultura_positiva	N	QUA	F7	
+DBAMV	ANALISE_CULTURA_ACAO	TABELA	analise_cultura_positiva	N	QUA	F7	
+DBAMV	ANEXOS_CENTRAL	MECANISMO	arquivo	N	SUP	F3	anexo de guia, ordem e solicitacao de compra
+DBAMV	ANEXOS_GUIA	TABELA	guia_anexo	N	FAT	F3	binario vai para arquivo
+DBAMV	ANEXOS_REP	MECANISMO	arquivo	N	FAT	F3	anexo do repasse
+DBAMV	ANEXO_AUTORIZACAO_APAC	MECANISMO	arquivo	N	SUS	F7	anexo da autorizacao
+DBAMV	ANEXO_FINAN_CONT	MECANISMO	arquivo	N	FIN	F3	
+DBAMV	ANEXO_FINAN_CONT_TIPO	MECANISMO	arquivo	N	FIN	F3	tipo do anexo vira metadado do armazenamento
+DBAMV	ANEXO_PRODUTO	MECANISMO	arquivo	N	SUP	F3	
+DBAMV	ANO_FECH_CONT	TABELA	periodo_contabil	N	FIN	F7	
+DBAMV	ANO_FECH_FINANC	TABELA	periodo_financeiro	N	FIN	F3	
+DBAMV	ANTIMICROB	TABELA	antimicrobiano	N	SADT	F7	
+DBAMV	ANTIMICROB_MIC	TABELA	ponto_corte_antimicrobiano	N	SADT	F7	
+DBAMV	ANT_PRO	TABELA	regra_liberacao_antimicrobiano	S	SUP	F7	
+DBAMV	APAC	TABELA	apac	N	SUS	F7	
+DBAMV	APAC_ASSOCIACAO	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	APAC_OUTROS	TABELA	laudo_apac	N	SUS	F7	complementos de oftalmologia
+DBAMV	APAC_PENDENTE	TABELA	apac	N	SUS	F7	
+DBAMV	APAC_QUIMIO_MEDICAMENTOS	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	APAC_SAUDE_AUDITIVA	TABELA	laudo_apac_auditiva	N	SUS	F7	
+DBAMV	APAC_SESSAO	TABELA	apac_sessao	N	SUS	F7	
+DBAMV	APARELHOS_EQUIPTO	TABELA	equipamento_saude;recurso_agendavel	N	HOT	F7	
+DBAMV	APARELHO_CIRURGIA	TABELA	procedimento_cirurgico_equipamento	S	CC	F3	
+DBAMV	APARELHO_CIRURGIA_SUB_GRUPOS	TABELA	procedimento_cirurgico_equipamento	S	CC	F3	
+DBAMV	APARELHO_ONCOLOGIA	TABELA	aparelho_radioterapia	N	PEP	F8	
+DBAMV	APARELHO_ONCOLOG_LAUD_SIA_APAC	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	APLICACAO	TABELA	aplicacao_financeira	N	FIN	F7	
+DBAMV	APOLICE	TABELA	cobertura_paciente	N	CAD	F3	
+DBAMV	APOLICE_ATENDIMENTO	TABELA	cobertura_atendimento	N	REC	F3	
+DBAMV	APROVADOR_RESPONSAVEL_OS	TABELA	oficina_manutencao_usuario	N	HOT	F7	
+DBAMV	APROVA_AVALIACAO_OS	TABELA	ordem_servico_manutencao_evento	N	HOT	F7	
+DBAMV	APR_CONTA_MEIO_MAG	TABELA	regra_apresentacao_tiss	N	FAT	F3	
+DBAMV	AQUISICAO_REGISTRO_PRECO	TABELA	solicitacao_compra;ata_registro_preco	N	SUP	F3	
+DBAMV	AREA	TABELA	area_atendimento_domiciliar	N	INT	F8	
+DBAMV	AREA_ATUACAO	TABELA	area_atuacao_medica	S	CAD	F7	
+DBAMV	AREA_ATUACAO_PRESTADOR	TABELA	profissional_area_atuacao	S	CAD	F7	
+DBAMV	AREA_BAIRRO	TABELA	area_atendimento_domiciliar_cep	N	INT	F8	
+DBAMV	AREA_COLETA_AMOSTRA	TABELA	area_coleta_domiciliar	S	SADT	F8	
+DBAMV	AREA_IRRADIADA	TABELA	regiao_irradiada	N	PEP	F8	
+DBAMV	AREA_PRESTADOR	TABELA	area_atendimento_domiciliar_profissional	N	INT	F8	
+DBAMV	AREA_TIPO_ENTREGA	TABELA	area_coleta_domiciliar_entrega	S	SADT	F8	
+DBAMV	ARGUMENTO_REG_LAY_ARQ	MECANISMO	integracao	N	INTG	F3	leiaute generico de arquivo eletronico
+DBAMV	ARMARIO_SAME	TABELA	local_arquivo	N	HOT	F3	
+DBAMV	ARMAZENAMENTO_CARACTERISTICA	TABELA	condicao_armazenamento	S	SUP	F7	
+DBAMV	ARMAZENA_DMED	NAO		N	FIN		tecnico do fornecedor sem equivalente
+DBAMV	ARQMAG_REMESSA	TABELA	arquivo_lote_tiss	N	FAT	F3	
+DBAMV	ARQUIVO_ATENDIMENTO	TABELA	anexo_prontuario	N	PEP	F3	
+DBAMV	ARQUIVO_ATENDIME_PESQUISA	TABELA	anexo_prontuario	N	PEP	F3	ligacao com pesquisa clinica
+DBAMV	ARQUIVO_DOCUMENTO	MECANISMO	arquivo	N	PEP	F3	binario; metadado em anexo_prontuario
+DBAMV	ARQUIVO_FEBRABAN	TABELA	remessa_bancaria	N	FIN	F3	
+DBAMV	ARQUIVO_INSS	TABELA	arquivo_obrigacao	N	RH	F7	
+DBAMV	ARQUIVO_PRESCRICAO	TABELA	anexo_prontuario	N	PEP	F3	
+DBAMV	ARQUIVO_REMESSA	TABELA	remessa_bancaria	N	FIN	F3	
+DBAMV	ARQUIVO_REMESSA_TRIBUTO	TABELA	remessa_bancaria	N	FIN	F3	pagamento de tributo
+DBAMV	ARQUIVO_RETORNO_PGTO	TABELA	retorno_bancario	N	FIN	F3	
+DBAMV	ARQUIVO_XML	MECANISMO	integracao	N	INTG	F3	importacao para custos
+DBAMV	ARSENAL	TABELA	endereco_armazem	N	SUP	F8	
+DBAMV	ASSINATURA_DIGITAL	TABELA	assinatura_documento	N	ADM	F3	
+DBAMV	ASSINATURA_DIGITAL_DIAGN	TABELA	assinatura_documento;laudo_diagnostico_versao	N	ADM	F3	
+DBAMV	ASSIN_DIGITAL_CLASRISCO	TABELA	assinatura_documento	N	ADM	F3	
+DBAMV	ASSOCIACAO	TABELA	dominio_sus	N	SUS	F3	associacoes do tratamento quimioterapico
+DBAMV	ASSOCIACAO_CONFIG_USU_SET	TABELA	usuario_unidade	N	ADM	F3	
+DBAMV	ASSOCIACAO_LAUDO_SIA_APAC	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	ASSOCIACAO_PROCEDIMENTO	TABELA	regra_critica_sus	N	SUS	F7	regra local de associacao de procedimentos
+DBAMV	ASSOCIA_EMPRESA	TABELA	empresa_grupo_consolidacao	N	FIN	F8	
+DBAMV	ATENDIME	TABELA	atendimento;internacao	N	REC	F3	
+DBAMV	ATENDIMENTO_AUTORIZA_CRDP_ACOM	TABELA	refeicao_acompanhante	N	HOT	F7	
+DBAMV	ATENDIMENTO_SUS_CIHA	TABELA	registro_ciha	N	SUS	F3	
+DBAMV	ATENDIMENTO_TIPO_AUDIT_ISOLAMT	TABELA	auditoria_isolamento	N	INT	F7	
+DBAMV	ATENDIMENTO_XML	MECANISMO	integracao	N	INTG	F3	importacao para custos
+DBAMV	ATENDIME_ANT_PRO	TABELA	auditoria_prescricao_ccih	N	PEP	F7	
+DBAMV	ATENDIME_CASOS_CONFIDENCIAL	TABELA	restricao_prontuario	N	ADM	F3	
+DBAMV	ATENDIME_CHAMADA_PAINEL	TABELA	chamada_painel	N	REC	F3	
+DBAMV	ATENDIME_CONSUMO	TABELA	conta_hospitalar	N	FAT	F3	conta de reposicao de consumo
+DBAMV	ATENDIME_GRUPO_ASSISTENCIAL	TABELA	estratificacao_risco_paciente	N	PEP	F8	
+DBAMV	ATENDIME_HCARE	TABELA	internacao_domiciliar	N	INT	F8	
+DBAMV	ATENDIME_INDICE_ASIS	TABELA	aplicacao_escala	N	PEP	F3	
+DBAMV	ATENDIME_INFO	TABELA	atendimento	N	REC	F3	
+DBAMV	ATENDIME_LAUDO_AIH	TABELA	laudo_internacao_sus	N	SUS	F7	
+DBAMV	ATENDIME_OBS_LACTARIO	TABELA	mapa_dieta	N	HOT	F3	
+DBAMV	ATENDIME_ORI_MEIO_MAG	TABELA	valor_atributo_guia	N	FAT	F3	
+DBAMV	ATENDIME_PRESTADOR_EXTERNO	TABELA	solicitante_externo	N	CAD	F3	
+DBAMV	ATENDIME_PROCEDIMENTO	TABELA	atendimento_procedimento	N	REC	F3	
+DBAMV	ATENDIME_PROC_PRO_INT	TABELA	atendimento_procedimento	N	REC	F3	
+DBAMV	ATENDIME_PROGRAMA	TABELA	programa_cuidado_paciente	N	PEP	F8	
+DBAMV	ATENDIME_PRO_INT	TABELA	atendimento_procedimento	N	REC	F3	
+DBAMV	ATENDIME_SESSAO	TABELA	sessao_terapeutica	N	AGE	F8	
+DBAMV	ATENDI_CONSULTA	NAO		N	AGE		obsoleto
+DBAMV	ATEN_PRES	TABELA	equipe_assistencial_paciente	N	PEP	F3	
+DBAMV	ATESTADOS	TABELA	documento_emitido	N	PEP	F3	
+DBAMV	ATE_MOTIVO	TABELA	atendimento	N	REC	F3	motivo de entrada
+DBAMV	ATIVIDADE	TABELA	programa_trabalho	N	FIN	F8	
+DBAMV	ATIVIDADE_SUB_AMOSTRA	TABELA	regra_subamostra	N	SADT	F7	
+DBAMV	ATIVIDADE_XML	MECANISMO	integracao	N	INTG	F3	importacao para custos
+DBAMV	ATI_FOR	TABELA	empresa_fornecedora_categoria	N	SUP	F3	
+DBAMV	ATI_MED	TABELA	funcao_equipe_cobranca	N	FAT	F3	
+DBAMV	ATI_MED_MEIO_MAG	TABELA	regra_apresentacao_tiss_item	N	FAT	F3	
+DBAMV	ATI_PRE	TABELA	profissional_funcao_equipe	S	FAT	F3	
+DBAMV	AUD_FATURA_FFCV	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBAMV	AUTOMATIZA_LANCAMENTO_AIH	TABELA	regra_profissional_automatico_aih	S	SUS	F7	
+DBAMV	AUTOMATIZA_SERVICO_SUS	TABELA	regra_servico_classificacao_sus	S	SUS	F7	
+DBAMV	AUTORIZACAO_ACESSO_PRONTUARIO	TABELA	autorizacao_acesso_prontuario_restrito	N	PEP	F8	
+DBAMV	AUTORIZACAO_APAC	TABELA	autorizacao_apac	N	SUS	F7	
+DBAMV	AUTORIZACAO_APAC_LOG	MECANISMO	historico_entidade:autorizacao_apac	N	SUS	F7	
+DBAMV	AUTORIZACAO_APAC_PENDENCIA	MECANISMO	historico_entidade:autorizacao_apac	N	SUS	F7	pendencias registradas
+DBAMV	AUTORIZACAO_CONVENIO_AGDM	TABELA	endpoint_tiss_fonte_pagadora	N	FAT	F3	
+DBAMV	AUTORIZACAO_GESTOR	TABELA	regra_critica_sus	N	SUS	F7	
+DBAMV	AUTORIZADOR	TABELA	autorizador_sus	S	SUS	F7	
+DBAMV	AUTORIZADORES_SOLICIT_EMAIL	TABELA	envio_email	N	ADM	F3	
+DBAMV	AUTORIZADOR_ACOMODACAO	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_CANCELAMENTO	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_CARATER	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_CONVENIO	TABELA	codigo_prestador_fonte_pagadora	N	FAT	F3	
+DBAMV	AUTORIZADOR_ELETRONICO	TABELA	endpoint_tiss_fonte_pagadora;credencial_fonte_pagadora	N	FAT	F3	
+DBAMV	AUTORIZADOR_INTERNACAO	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_OPERADORA	TABELA	sistema_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_ORDEM_COMPRA	TABELA	decisao_aprovacao	N	ADM	F3	
+DBAMV	AUTORIZADOR_REGIME	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZADOR_SOL_COM	TABELA	decisao_aprovacao	N	ADM	F3	
+DBAMV	AUTORIZADOR_TETO	TABELA	alcada_aprovacao_nivel	N	ADM	F3	
+DBAMV	AUTORIZADOR_TIPO_TRANSACAO	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	AUTORIZA_ITCON_PAG	TABELA	decisao_aprovacao	N	ADM	F3	

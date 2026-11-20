@@ -1,0 +1,36 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz	MV MOTIVO_SITUACAO_CONREC, MOTIVO_CANCELAMENTO_NFE, MOTIVO_CANCELA_NFSR, MOTIVO_CANC_NT_CRE_DEB_SUPRI
+motivo_cancelamento_transporte	INT	dominio	F8	Motivo para cancelar ou reprovar pedido de ambulância ou de transporte do paciente, com tipo de uso	MV MOTIVO_CANCELAMENTO_SOLIC_AMBU, MOTIVO_REPROVACAO_SOLIC_AMBU
+motivo_cancelamento_requisicao_transfusao	SADT	dominio	F3	Motivo para cancelar a requisição de hemocomponente ou um de seus itens	MV MOTIVO_CANC_SOL, MOTIVO_CANC_SOL_PBSA (referenciados por IT_SOLIC_SANGUE)
+motivo_cancelamento_cheque	FIN	dominio	F3	Motivo para cancelar cheque emitido, indicando se a folha fica inutilizada	MV MOTIVO_CHE_CANC
+motivo_devolucao_cheque	FIN	dominio	F7	Motivo de devolução de cheque recebido, seguindo as alíneas da compensação bancária	MV MOT_DEV_CHEQUES
+motivo_inventario_estoque	SUP	dominio	F7	Motivo que leva a abrir uma contagem de estoque (periódica, auditoria, divergência)	MV MOTIVO_CONTAGEM_ESTOQUE
+motivo_tramite_documento	HOT	dominio	F3	Motivo do envio de documento ou prontuário em protocolo entre setores	MV MOTIVO_ENVIO_MVTO (referenciado por IT_PROTOCOLO_DOC)
+motivo_movimentacao_conta_sus	SUS	dominio	F7	Motivo de transferir ou devolver conta de AIH ou APAC entre protocolos e competências, com vigência	MV MOT_MOVIMENTACAO_CONTA
+motivo_registro_fluxo_oncologico	PEP	dominio	F8	Motivo padronizado para registrar etapas e desvios no fluxo de tratamento oncológico	MV MOTIVO_PADRAO_REGISTRO_FLUXO (referenciado por REGISTRO_FLUXO_ONCOLOGIA)
+motivo_registro_fluxo_oncologico_categoria	PEP	vinculo	F8	Categorias de profissional que podem ou não usar cada motivo do fluxo oncológico	MV MOTIVO_PADRAO_REG_FLX_TP_PRES
+motivo_permanencia_programa	PEP	dominio	F8	Motivo para o paciente permanecer inscrito em programa de cuidado	MV MOTIVO_PERMANENCIA (referenciado por ATENDIME_PROGRAMA)
+motivo_reprovacao_agendamento_cirurgico	CC	dominio	F7	Motivo para reprovar o pedido de agendamento cirúrgico na aprovação, com ação seguinte	MV MOTIVO_REPROVACAO (referenciado por LOG_STATUS_APROVACAO_AVISO)
+motivo_restricao_exame	SADT	dominio	F7	Motivo que justifica restringir a solicitação de um exame, com orientação ao solicitante	MV MOTIVO_RESTRICAO_EXA_LAB
+motivo_bloqueio_visita	HOT	dominio	F8	Motivo para restringir ou bloquear visitas a um paciente ou de uma pessoa	MV MOTIVO_RESTRICAO_VISITA
+motivo_retificacao_laudo	SADT	dominio	F3	Motivo para retificar resultado ou laudo já liberado	MV MOTIVO_RETIFICACAO_EXAME
+motorista	CAD	principal	F8	Condutor de veículo próprio ou terceiro (ambulância, entregas), com documentos, habilitação, categorias e validade	MV MOTORISTA, MOTORISTA_ROMANEIO
+motivo_ausencia_documento_paciente	CAD	dominio	F3	Motivo para cadastrar paciente sem CPF ou cartão nacional de saúde	MV MOT_AUSENCIA_DOC_OBRIGATORIO
+motivo_baixa_estoque	SUP	dominio	F3	Motivo de baixa ou perda de insumo (vencido, avariado, extraviado), com efeito no índice de perdas e na validade	MV MOT_BAI, MT_BAIXA (referenciado por DET_ESTOQUE)
+motivo_adiantamento_paciente	FIN	dominio	F3	Motivo do depósito ou caução recebido do paciente	MV MOT_CAUCAO (referenciado por CAUCAO)
+motivo_devolucao_estoque	SUP	dominio	F3	Motivo de devolução de insumo ao estoque pelo setor ou pelo paciente	MV MOT_DEV (referenciado por DEV_PRE, SOLSAI_PRO, MVTO_ESTOQUE)
+motivo_bloqueio_sala_cirurgica	CC	dominio	F3	Motivo para interditar sala cirúrgica (manutenção, limpeza terminal, falta de equipe)	MV MOT_INTERDICAO_SAL_CIR (referenciado por INTERDICAO_SAL_CIR)
+motivo_ordem_servico_manutencao	HOT	dominio	F7	Motivo da ordem de serviço de manutenção, com tipo (corretiva, preventiva) e tipo de ordem	MV MOT_SERV, MOT_MANUT (referenciados por SOLICITACAO_OS)
+motivo_solicitacao_compra	SUP	dominio	F3	Motivo da solicitação de compra (reposição, item novo, urgência), por tipo de processo	MV MOT_PED (referenciado por SOL_COM)
+motivo_procura_atendimento	REC	dominio	F7	Motivo de procura informado na abertura do atendimento	MV MOT_ENT (referenciado por ATE_MOTIVO)
+reserva_estoque	SUP	principal	F7	Quantidade de insumo reservada para requisição até o atendimento, com solicitado, atendido e excluído	MV MOVIMENTACAO_RESERVA_PRODUTO
+concessao_beneficio	HOT	principal	F8	Entrega de benefício a paciente, acompanhante, profissional ou setor, com destinatário, confirmação e ajuste	MV MOVIMENTO_BENEFICIO, TIPO_DESTINATARIO_BENEFICIO
+atendimento_categoria_clinica	FAT	historico	F8	Períodos do atendimento em cada categoria clínica, com valor calculado pela faixa vigente	MV MOV_ATEND_CATEGORIA_CLINICA, MOV_CATEGORIA_CLINICA, IT_MOV_CATEGORIA_CLINICA
+emprestimo_insumo	SUP	principal	F7	Empréstimo de insumo feito a outra instituição ou recebido dela, com movimentos de saída e devolução	MV MOV_EMP
+pendencia_profissional	CAD	principal	F7	Pendência cadastral ou documental do profissional, com tipo, abertura, baixa e ocorrência	MV MOV_PENDENCIA_PREST
+atendimento_responsavel_historico	REC	historico	F3	Profissional responsável pelo atendimento em cada período, com especialidade, serviço e motivo da troca	MV MOV_PRESTADOR
+ocupacao_cbo_estabelecimento	SUS	vinculo	F7	Ocupações aceitas para cobrança SUS em cada estabelecimento	MV MULTI_EMPRESAS_CBO
+estabelecimento_repasse	FAT	configuracao	F3	Qual estabelecimento apura e qual paga o repasse dos atendimentos de cada estabelecimento faturador	MV MULTI_EMPRESAS_REPASSE, MULTI_EMPRESAS_PGTO_REP
+natureza_despesa	FIN	dominio	F8	Natureza de despesa orçamentária (elemento e subelemento) para empenho em hospital público, com vigência	MV NATUREZA, NATUREZA_DESPESA
+ocorrencia_profissional	CAD	principal	F7	Ocorrência registrada sobre o profissional (falta à agenda, atraso, conduta), com pontuação, conduta aplicada e anexo	MV OCO_MED
+oficina_manutencao_servico	HOT	vinculo	F7	Serviços de manutenção que cada oficina executa	MV OFI_SERV

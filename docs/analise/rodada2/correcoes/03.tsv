@@ -1,0 +1,24 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+SPDATA	HTPARAMORIGEMCABIMP	TABELA	cabecalho_impressao_documento	PEP	F3	configuração viva (79 linhas, migrar-crud) da origem do cabeçalho por documento; não é histórico
+DBAMV	SACR_TRIAGEM_ATENDIME_HIST_TIP	TABELA	tipo_registro_classificacao_risco	PEP	F3	lista código+descrição com dados: é domínio dos registros da classificação, não o histórico
+DBAMV	CONTROLE_NASCIMENTO_NORMA24	NAO		PEP		sem valor de negocio: controle regulatório de outro país (norma 24), como os demais catálogos da norma
+DBAMV	PW_CONFIG_TURNO_GRUPO_BAL_HID	TABELA	configuracao_balanco_setor	PEP	F3	turnos do balanço por setor cabem na configuração do balanço; setor_turno é CAD/F7 e quebrava a fase
+SPDATA	GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	PEP	F3	45 fichas de antimicrobiano no SPDATA (2020-2024): paridade F3
+DBAMV	AVALIACAO_ANTIMICROBIANO_PRSCT	TABELA	ficha_antimicrobiano;auditoria_prescricao_ccih	PEP	F3	acompanha ficha_antimicrobiano, que sobe para F3 (uso na Rede)
+DBAMV	PRES_ANTIMICROB	TABELA	ficha_antimicrobiano	PEP	F3	acompanha ficha_antimicrobiano, que sobe para F3 (uso na Rede)
+SPDATA	TBCBARAREACAOADVERSA	TABELA	manifestacao_alergica	PEP	F3	domínio CBARA com dados usado pelas alergias do paciente (PRALERGIAPAC 1001+): paridade F3
+SPDATA	TBCBARASEVERIDADE	TABELA	gravidade_reacao_adversa	PEP	F3	gravidade da alergia registrada hoje (alergia_paciente F3 tem gravidade): paridade F3
+SPDATA	TBTPPARTO	TABELA	tipo_parto	PEP	F3	domínio com dados (migrar-crud) e RN já é F3 em internacao_recem_nascido: paridade F3
+DBAMV	TIP_PARTO	TABELA	tipo_parto	PEP	F3	acompanha tipo_parto, que sobe para F3 (uso na Rede)
+SPDATA	TBTPRN	TABELA	condicao_recem_nascido	PEP	F3	domínio com dados (migrar-crud) ligado ao RN da internação: paridade F3
+DBAMV	CAD_RECEM_NASCIDO	TABELA	registro_nascimento;internacao_recem_nascido	PEP	F3	registro_nascimento sobe para F3: a Rede registra RN (tipo de parto, condição, desfecho)
+DBAMV	RECEM_NASCIDO	TABELA	registro_nascimento;internacao_recem_nascido	PEP	F3	registro_nascimento sobe para F3: a Rede registra RN (tipo de parto, condição, desfecho)
+DBAMV	RESPOSTAS_RN	TABELA	registro_nascimento;registro_assistencial_resposta	PEP	F3	registro_nascimento sobe para F3: a Rede registra RN (tipo de parto, condição, desfecho)
+DBAMV	CANCELAMENTO_DECL_NASC	TABELA	declaracao_nascido_vivo	PEP	F7	declaração de nascido vivo é obrigação legal (Lei 12.662/2012): F7, não F8
+DBAMV	PW_BALANCO_HIDRICO	TABELA	balanco_hidrico_paciente	PEP	F3	renome: balanco_hidrico é nome idêntico a tabela de origem (proibido)
+DBAMV	PW_GRUPO_BALANCO_HIDRICO	TABELA	grupo_balanco_hidrico;balanco_hidrico_paciente	PEP	F3	renome: balanco_hidrico é nome idêntico a tabela de origem (proibido)
+DBAMV	DOENCA_CRONICA	TABELA	condicao_cronica	PEP	F7	renome: doenca_cronica é nome idêntico a tabela de origem (proibido)
+DBAMV	PAINEL_CLINICO	TABELA	painel_resumo_clinico	PEP	F8	renome: painel_clinico é nome idêntico a tabela de origem (proibido)
+DBAMV	PAINEL_CLINICO_GRUPO	TABELA	painel_resumo_clinico_grupo	PEP	F8	renome: painel_clinico_grupo é nome idêntico a tabela de origem (proibido)
+DBAMV	PAINEL_CLINICO_PARAMETRO	TABELA	painel_resumo_clinico_item	PEP	F8	renome da família painel_clinico (nome idêntico a tabela de origem)
+DBAMV	PAINEL_CLINICO_TIPO_GRUPO	TABELA	tipo_grupo_painel_resumo_clinico	PEP	F8	renome da família painel_clinico (nome idêntico a tabela de origem)

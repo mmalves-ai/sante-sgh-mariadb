@@ -1,0 +1,235 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+pessoa_fisica	CAD	principal	F3	Pessoa natural única na rede, identificada por CPF e CNS; base comum de paciente, profissional, responsável e usuário	F1; SPDATA TBPESSOA; MV PACIENTE, PACIENTE_ADICIONAL, PACIENTE_IDENTIDADE
+pessoa_juridica	CAD	principal	F3	Pessoa jurídica única por CNPJ, com razão social, natureza jurídica e situação; base de mantenedora, fonte pagadora e empresa do profissional	F1; SPDATA TBPESSOA (CNPJ); dono proposto 02, o 07 referencia como fornecedor
+paciente	CAD	principal	F3	Papel de paciente da pessoa física: dados demográficos, sociais, nome social, situação de vida e marcações de atenção	F1; SPDATA RICADPAC; MV PACIENTE, PACIENTE_ADICIONAL; óbito como atributo derivado de declaracao_obito (conflitos.md)
+documento_pessoa	CAD	item	F3	Documentos de identificação da pessoa (identidade, CNH, passaporte, certidão), com número, órgão emissor, UF e validade	F1; SPDATA campos de RICADPAC, TBTPDOCUMENTO; MV PACIENTE_IDENTIDADE
+tipo_documento_identificacao	CAD	dominio	F3	Tipos de documento de identificação aceitos, com código para TISS, eSocial e cadastro nacional	F1/F15; SPDATA TBTPDOCUMENTO (8)
+orgao_emissor_documento	CAD	dominio	F3	Órgãos que emitem documento de identidade, com sigla e código usado nas trocas oficiais	F15; SPDATA TBORGAOEMIS (32); MV ORGAO_EMISSOR*
+prontuario_estabelecimento	CAD	vinculo	F3	Número de prontuário do paciente em cada estabelecimento, interno ou externo, com data de abertura e situação	F1; SPDATA RICADPAC (número), TBGERSEQ
+sequencia_prontuario	CAD	configuracao	F3	Regra de numeração do prontuário por estabelecimento e tipo (interno, externo): prefixo, próximo número e dígito	F1; SPDATA TBGERSEQ (8)
+paciente_versao	CAD	historico	F3	Retrato imutável do cadastro do paciente, com contatos, gravado a cada registro clínico ou mudança relevante	F8; SPDATA HTPACIENTE, HTPACTELEFONE; MV LOG_PACIENTE_ATENDIME*, MVTO_PACIENTE
+classe_paciente	CAD	dominio	F8	Categorias de paciente mantidas pelo hospital (colaborador, dependente, corpo clínico, estudo clínico) para regras e relatórios	F1; MV CATEGORIA_PACIENTE
+paciente_classe	CAD	vinculo	F8	Categorias atribuídas a cada paciente, com vigência e quem atribuiu	F1; MV CATEGORIA_PACIENTE
+condicao_especial	CAD	dominio	F8	Condições que pedem atenção no atendimento: mobilidade reduzida, intérprete de libras, acompanhante obrigatório	F1; MV CONDICOES_ESPECIAIS_PAC
+paciente_condicao_especial	CAD	vinculo	F8	Condições especiais declaradas pelo paciente, com origem da informação e validade	F1; MV CONDICOES_ESPECIAIS_PAC
+regra_campo_cadastro	CAD	configuracao	F3	Obrigatoriedade e visibilidade de cada campo do cadastro por módulo de recepção, tipo de atendimento e fonte pagadora	F2; SPDATA ATPARAMGERAL, REPARAM; MV CONFIGURACAO_PACIENTE*, CONFIGURA_PACIENTE
+modulo_recepcao	REC	dominio	F3	Contextos de recepção (interna, externa, diagnóstico) que separam regras de cadastro, cancelamento e impressão	F2/F32; SPDATA TBMODULO_RECEPCAO, TBMOTCANCMOD
+permissao_campo_cadastro	CAD	vinculo	F8	Campos do cadastro que cada perfil de usuário pode alterar depois de gravado	F2; MV USUARIO_COLUNA_CAD_PACIENTE
+endereco_pessoa	CAD	item	F3	Endereços da pessoa por finalidade (residencial, cobrança, correspondência), com CEP, município e vigência	F3; SPDATA campos de RICADPAC, TBCEP; MV ENDERECO_PACIENTE
+telefone_pessoa	CAD	item	F3	Telefones da pessoa com tipo, DDD, ramal, consentimento para mensagem e indicação de principal	F3; SPDATA HTPACTELEFONE, TBTIPOTELEFONE; MV CONTATO_PACIENTE
+email_pessoa	CAD	item	F3	Endereços eletrônicos da pessoa, com finalidade, verificação e consentimento de uso	F3; MV CONTATO_PACIENTE, OUTROS_CONTATOS_PACIENTE
+tipo_telefone	CAD	dominio	F3	Tipos de telefone (residencial, comercial, celular, recado)	F3; SPDATA TBTIPOTELEFONE (5)
+responsavel_paciente	CAD	vinculo	F3	Responsável legal, familiar, dependente ou contato de emergência do paciente, com parentesco, poderes e vigência	F4; SPDATA campos de responsável em RICADPAC, TBPARENTE; MV RESPONSAVEL
+tipo_parentesco	CAD	dominio	F3	Graus de parentesco usados em responsáveis, dependentes, titulares e visitantes	F4; SPDATA TBPARENTE (11)
+grupo_familiar	CAD	principal	F8	Núcleo familiar para atenção primária e programas de saúde, com endereço de referência	F4; MV PW_FAMILIA_ATN
+grupo_familiar_membro	CAD	vinculo	F8	Pacientes de cada núcleo familiar, com papel no grupo e vigência	F4; MV PW_FAMILIA_PACIENTE_ATN
+identificacao_biometrica	CAD	principal	F8	Foto e biometria cadastradas da pessoa, com método, consentimento e referência ao arquivo seguro	F5; MV FOTO_PACIENTE, BIOMETRIA_PACIENTE*, PESSOA_BIOMETRIA; binário pelo mecanismo arquivo
+tipo_autenticacao_biometrica	CAD	dominio	F8	Métodos de identificação positiva aceitos (digital, face, foto conferida)	F5; MV TIPO_AUTENTICACAO_BIOMETRIA*
+verificacao_biometrica	CAD	historico	F8	Cada conferência de identidade na recepção, no leito ou na guia, com resultado e local	F5; MV BIOMETRIA_PACIENTE
+pre_cadastro	CAD	principal	F3	Dados provisórios de quem marca sem prontuário, convertidos em paciente na chegada	F6; SPDATA REPACAGN, SIPACAGN; MV PRE_PACIENTE
+unificacao_cadastro	CAD	principal	F3	Fusão de cadastros duplicados de paciente: cadastro mantido, absorvido, responsável, motivo e possibilidade de desfazer	F7; SPDATA HTPRONTUNIF; MV LOG_UNIFICA_PACIENTE_INTEGRA, LOG_TRANSF_PACIENTE; dono 02 (conflitos.md)
+unificacao_cadastro_item	CAD	item	F3	Registros transferidos em cada fusão, por tabela e chave, para auditoria e reversão	F7; MV LOG_DOC_ORFAO_PACIENTE*; dono 02 (conflitos.md)
+suspeita_duplicidade	CAD	principal	F3	Pares de cadastros com indício de duplicidade, com pontuação, critério e decisão do analista	F7; carga do dia 0; dono 02 (conflitos.md)
+cobertura_paciente	CAD	principal	F3	Fonte pagadora e plano do paciente, com carteira, validade, titularidade e situação	F9; SPDATA RICADPAC_TBCONVEN; MV CARTEIRA, PACIENTE_CARTAO
+titular_cobertura	CAD	principal	F3	Titular ou segurado da cobertura quando difere do paciente, com documento e parentesco	F9; SPDATA RESEGUR; MV SEGURO_SAUDE_PAC, SEGURO_SAUDE_DEPEND
+bloqueio_carteira	CAD	principal	F7	Bloqueio de uma carteira ou cobertura para atendimento, com motivo, período e quem bloqueou	F9; MV PROIBICAO_CARTEIRA
+paciente_acesso_restrito	CAD	principal	F8	Marca de paciente confidencial ou de destaque, com motivo, vigência e regra de exibição do nome	F10; MV PW_CENTRAL_PACIENTE_VIP, ATENDIME_CASOS_CONFIDENCIAL; depende de quebra de vidro do 01
+liberacao_acesso_restrito	CAD	vinculo	F8	Profissionais ou equipes liberados para ver paciente confidencial, com período e justificativa	F10; MV PRESTADOR_LIBERA_ATD_CAS_CONF, PW_EQUIPE_PRONTUARIO_VIP
+linha_cuidado	CAD	dominio	F8	Programas de saúde e linhas de cuidado oferecidos (hipertensão, gestante, oncologia), com critério de entrada	F11; MV PROGRAMA_SAUDE
+estado_linha_cuidado	CAD	dominio	F8	Estados do paciente dentro do programa (incluído, ativo, alta, abandono)	F11; MV ESTADO_PACIENTE_PROG_SAUDE
+paciente_linha_cuidado	CAD	vinculo	F8	Inscrição do paciente em programa de saúde, com estado atual, profissional de referência e datas	F11; MV PACIENTE_PROGRAMA_SAUDE
+paciente_linha_cuidado_historico	CAD	historico	F8	Linha do tempo das mudanças de estado do paciente no programa	F11; MV HIST_PACIENTE_PROGRAMA_SAUDE
+linha_cuidado_item_agendavel	AGE	vinculo	F8	Itens agendáveis que fazem parte do roteiro de cada programa de saúde	F11/F45; MV PROGRAMA_SAUDE_ITENS_AGEND
+tipo_indicacao	REC	dominio	F3	Quem indicou o paciente ou o atendimento (colaborador, médico externo, hospital, parceiro, o próprio)	F12; SPDATA RETPINDATEND (7); MV TP_INDICACAO_AGENDA
+captacao_paciente	CAD	principal	F8	Registro de captação: quem indicou, campanha ou parceiro, data e conversão em atendimento	F12; MV INDICACAO_PACIENTE, PW_INDICACAO_PACIENTE, PW_CONFIG_INDICACAO_PACIENTE
+municipio_ibge	CAD	catalogo_publico	F3	Municípios com código oficial, UF e situação, carregados da fonte do instituto de geografia	F14; SPDATA TBMUIBGE; MV CIDADE*; catalogo_publico:ibge
+unidade_federativa	CAD	catalogo_publico	F3	Estados e Distrito Federal com sigla, código oficial e código usado na TISS	F14; SPDATA TBUF; MV UF*; catalogo_publico:ibge
+pais_referencia	CAD	catalogo_publico	F3	Países com códigos da Receita Federal, do eSocial e ISO	F14; SPDATA TBPAISES (279); MV PAIS*
+bairro	CAD	catalogo_publico	F3	Bairros e distritos por município, carregados com a base de endereçamento postal	F14; MV CEP_BAIRROS*
+logradouro_cep	CAD	catalogo_publico	F3	Base de CEP com logradouro, bairro, município e vigência, para preencher endereço	F14; SPDATA TBCEP, TBSUSCEP; MV CEP_LOGRADOUROS*, CEP_SUS*, família ECT_LOG_*
+especie_logradouro	CAD	catalogo_publico	F3	Espécies de logradouro (rua, avenida, travessa) com código eSocial e da base nacional de saúde	F14; SPDATA TBTIPLGR (239)
+area_ddd	CAD	catalogo_publico	F3	Códigos de área telefônica com UF e região, para validar e formatar telefones	F14; SPDATA TBDDD, TBDDDREGIAO
+classificacao_raca_cor	CAD	catalogo_publico	F3	Classificação de raça e cor oficial, com códigos para TISS, cadastro nacional e e-SUS	F15; SPDATA TBCOR (6); MV RACA_COR*
+povo_indigena	CAD	catalogo_publico	F7	Etnias e povos indígenas da tabela oficial da saúde indígena	F15; areas-sem-dono #11; SPDATA TBETNIA (1, só padrão); MV ETNIA*
+idioma_indigena	CAD	catalogo_publico	F7	Línguas indígenas da tabela oficial, para o cadastro nacional e a RNDS	F15; areas-sem-dono #11; MV LINGUA_INDIGENA
+nacionalidade	CAD	catalogo_publico	F3	Nacionalidades com códigos do eSocial e da escrituração fiscal	F15; SPDATA TBNACION (384), TBNACIONSPED (241); MV CIDADANIAS; areas-sem-dono #11
+crenca_religiosa	CAD	dominio	F3	Religiões e crenças declaradas, usadas em assistência espiritual e restrições de tratamento	F15; SPDATA TBRELIG (11); MV RELIGIAO
+nivel_escolaridade	CAD	dominio	F3	Níveis de escolaridade com código do eSocial e do e-SUS	F15; SPDATA TBESCOLARIDADE (12), TBGRAU_INST (17)
+estado_civil	CAD	dominio	F3	Estados civis aceitos no cadastro, com código para trocas oficiais	F15; SPDATA TBECIV (18)
+sexo	CAD	dominio	F3	Sexo atribuído ao nascimento, com códigos usados na TISS, no faturamento público e na RNDS	F15; SPDATA TBSEXO (3)
+identidade_de_genero	CAD	dominio	F3	Identidades de gênero para nome social e tratamento	F15; SPDATA TBGENERO_SOCIAL (2); MV IDENTIDADE_GENERO
+orientacao_sexual_declarada	CAD	dominio	F7	Orientações sexuais pedidas pelo cadastro nacional, de preenchimento opcional	F15; areas-sem-dono #11; MV ORIENTACAO_SEXUAL
+capacidade_civil	CAD	dominio	F3	Capacidade civil do paciente (plena, relativa, incapaz), que exige responsável legal	F15/F4; SPDATA TBCAPACIDADE_CIVIL (3)
+situacao_convivio_familiar	CAD	catalogo_publico	F7	Situação de convívio familiar da tabela do e-SUS	F15; SPDATA TBSITCONJUGAL (7); MV SITUACAO_FAMILIAR; areas-sem-dono #11
+condicao_vulnerabilidade	CAD	dominio	F7	Condições de vulnerabilidade social (situação de rua, migrante, privação de liberdade)	F15; SPDATA TBVULNERABILIDADE_SOCIAL (1, só padrão); MV VULNERABILIDADE_SOCIAL; areas-sem-dono #11
+paciente_vulnerabilidade	CAD	vinculo	F7	Vulnerabilidades declaradas do paciente, com data e informante	F15; MV VULNERABILIDADE_SOCIAL
+ocupacao_cbo	CAD	catalogo_publico	F3	Classificação oficial de ocupações, usada na profissão do paciente e no registro do profissional	F15/F17; SPDATA TBCBOSUS, FPCBO, TBOCUPAC, RICBOFMRPUSP; MV CBO*, CBOS*, TISS_VERSAO_CBOS*; catalogo_publico:cbo
+natureza_juridica	CAD	catalogo_publico	F3	Naturezas jurídicas da classificação nacional, para pessoas jurídicas e estabelecimentos	F23/F26; SPDATA FPNATJURIDICA (85); MV CONSTITUICAO_EMPRESA
+profissional	CAD	principal	F3	Papel de profissional da pessoa física: situação, tipo (corpo clínico, assistencial, externo) e dados de repasse	F16; SPDATA TBPROFIS (871); MV PRESTADOR
+profissional_versao	CAD	historico	F3	Retrato imutável do cadastro do profissional, com registros e contatos, no momento do ato clínico	F8/F16; SPDATA HTPROFIS, HTPROFISTEL; MV LOG_PRESTADOR*
+profissional_dado_fiscal	CAD	item	F3	Dados fiscais do profissional para repasse: regime, inscrição municipal, retenções e dependentes, com vigência	F16; SPDATA TBPROFIS (campos fiscais); usado pelo repasse do 07
+conta_bancaria_profissional	CAD	item	F3	Contas bancárias e chaves de pagamento instantâneo do profissional, com favorecido e principal	F16; SPDATA TBPROFIS (campos bancários)
+profissional_rqe	CAD	item	F3	Registros de qualificação de especialista do profissional, por conselho, UF e especialidade	F16; MV RQE_PRESTADOR
+profissional_documento	CAD	item	F7	Documentos do profissional com validade (diploma, certificado, seguro, alvará), com alerta de vencimento	F16; MV PRESTADOR_DOCUMENTO; binário pelo mecanismo arquivo
+profissional_assinatura	CAD	principal	F7	Imagem de assinatura e certificado digital do profissional para laudos e documentos, com vigência	F16; MV PRESTADOR_ASSINATURA; binário pelo mecanismo arquivo
+profissional_aviso	AGE	principal	F8	Avisos mostrados ao marcar ou atender com o profissional (férias, restrição, preferência), com vigência	F16; MV PRESTADOR_AVISO
+conselho_classe	CAD	catalogo_publico	F3	Conselhos profissionais com código da TISS e regra de formato da inscrição	F17; SPDATA TBCONSPROF (16); MV CONSELHO*; catalogo_publico:tiss
+sigla_conselho	CAD	catalogo_publico	F3	Siglas de inscrição válidas para cada conselho profissional, segundo a TISS	F17; SPDATA TBSIGLACONSPROF, TBCONSPROF_TBSIGLACONSPROF
+especialidade_medica	CAD	dominio	F3	Especialidades atendidas, médicas e de outras profissões, com faixa etária, sexo permitido e código para TISS e cadastro nacional	F17; SPDATA TBESPEC (100); MV ESPECIALID*, ESP_MED*
+especialidade_ocupacao	CAD	vinculo	F3	Ocupações oficiais que correspondem a cada especialidade	F17; SPDATA TBCBOSUS_TBESPEC (131)
+especialidade_procedimento	CAD	vinculo	F3	Procedimentos permitidos para cada especialidade	F17; SPDATA TBESPPRO; depende de procedimento (06)
+inscricao_conselho	CAD	item	F3	Registros do profissional em conselho, por UF e ocupação, com situação e vínculo público	F17; SPDATA TBCBOPRO; MV PRESTADOR_CBO; mudanças por historico_entidade:inscricao_conselho (HTTBCBOPRO)
+profissional_especialidade	CAD	vinculo	F3	Especialidades exercidas pelo profissional, com indicação de principal	F17; SPDATA TBMEDESP; MV ESPECIALIZACOES*
+lotacao_profissional	CAD	vinculo	F3	Lotação do profissional no estabelecimento: carga horária por tipo, vínculo de trabalho e ocupação	F18; SPDATA TBCBOPRO_TBUNIDAD (637), HTTBCBOPRO_TBUNIDAD; MV EMPRESA_PRESTADOR*, VINCULO_CNES*
+tipo_vinculo_trabalho	CAD	catalogo_publico	F3	Vínculos, tipos e subtipos de vínculo de trabalho da tabela do cadastro de estabelecimentos	F18; MV TIPO_VINCULO_CNES*, SUBTIPO_VINCULO_CNES*, PRESTADOR_TIPO_VINCULO*; catalogo_publico:cnes
+profissional_fonte_pagadora	CAD	vinculo	F3	Credenciamento do profissional em cada fonte pagadora, com código na operadora e vigência	F19; SPDATA TBCBOPRO_TBCONVEN; MV PRESTADOR_CONVENIO_LIBERADO
+solicitante_externo	CAD	principal	F3	Profissional de fora que pede consulta ou exame, com conselho, UF, ocupação e contato	F20; SPDATA TBMEDSOL; MV PRESTADOR_EXTERNO, PRESTADOR_REFERENCIA
+solicitante_externo_fonte_pagadora	CAD	vinculo	F3	Código do solicitante externo em cada fonte pagadora	F20; SPDATA TBMEDSOL_CODCON
+profissional_provisorio	CAD	principal	F8	Cadastro mínimo de quem atende antes do cadastro completo, com prazo e situação da regularização	F21; MV PRESTADOR_VINCULO
+profissional_provisorio_uso	CAD	item	F8	Atendimentos e pacientes ligados ao cadastro provisório, para regularizar depois	F21; MV PRESTADOR_VINCULO_ATENDIME, PRESTADOR_VINCULO_PACIENTE
+equipe_profissional	CAD	principal	F8	Equipe médica ou multiprofissional que atua em conjunto, com responsável e estabelecimento	F22; MV EQUIPE_PRESTADOR, PW_EQUIPE_ASSISTENCIAL; pessoa jurídica de repasse fica no 07
+equipe_profissional_membro	CAD	vinculo	F8	Profissionais de cada equipe, com papel e vigência	F22; MV EQUIP_PRESTADOR, PW_PRESTADOR_ASSISTENCIAL
+fonte_pagadora	CAD	principal	F3	Quem paga o atendimento (operadora, particular, público, empresa), com registro na agência, situação e tipo	F23; SPDATA TBCONVEN (77); MV CONVENIO*; termo único fonte_pagadora (conflitos.md)
+fonte_pagadora_versao	CAD	historico	F3	Retrato do nome e da classificação da fonte pagadora no momento do registro	F8/F23; SPDATA HTCONVEN (97)
+grupo_fonte_pagadora	CAD	dominio	F3	Agrupamentos de fontes pagadoras para relatórios e regras comuns	F23; SPDATA TBGRUCONVEN (2)
+fonte_pagadora_estabelecimento	CAD	vinculo	F3	Fonte pagadora em cada estabelecimento: código do contratado, situação e datas do contrato	F23/F25; MV EMPRESA_CONVENIO*, CONVENIO_CONF_TISS_CONTRATADO; contrato detalhado é do 06
+regra_atendimento_fonte_pagadora	REC	configuracao	F3	Exigências da fonte pagadora na recepção: carteira, validade, titular, guia, prazo de retorno e documentos	F23; SPDATA TBCONVEN (parte dos ~385 parâmetros); faturamento fica no 06
+plano_fonte_pagadora	CAD	principal	F7	Planos e categorias de cada fonte pagadora, com registro na agência, acomodação e situação	F24; MV CON_PLA*
+plano_fonte_pagadora_estabelecimento	CAD	vinculo	F7	Planos aceitos em cada estabelecimento, com vigência	F24; MV EMPRESA_CON_PLA*
+teto_plano	CAD	configuracao	F7	Teto de valor ou quantidade por plano e período, com ação ao atingir	F24; MV CON_PLA_TETO
+pendencia_plano	CAD	configuracao	F7	Pendências que o plano impõe antes do atendimento (carência, coparticipação, aviso)	F24; MV CON_PLA_PENDENCIA, CON_PLA_OBS
+documento_exigido_plano	CAD	configuracao	F7	Documentos exigidos pelo plano por tipo de atendimento	F24; MV DOCUMENTO_CONVENIO_PLANO
+configuracao_tiss_fonte_pagadora	CAD	configuracao	F3	Versão do padrão de troca, numeração e regras de preenchimento de guias por fonte pagadora	F25; SPDATA TBCONVEN (parâmetros TISS); MV CONVENIO_CONF_TISS; endereço de serviço é do 06
+faixa_numeracao_guia	CAD	configuracao	F3	Faixas de números de guia cedidas pela fonte pagadora, por tipo de guia e estabelecimento	F25; MV FAIXA_GUIA_CONVENIO
+faixa_numeracao_guia_uso	CAD	item	F3	Números consumidos de cada faixa, com a guia que usou, para evitar repetição	F25; MV ITEM_FAIXA_GUIA_CONVENIO
+rede	CAD	principal	F3	Grupo econômico que reúne mantenedoras e estabelecimentos, para relatórios e cadastros compartilhados	F26; conflitos.md (mantenedora e rede, sem empresa solta)
+mantenedora	CAD	principal	F3	Pessoa jurídica mantenedora dos estabelecimentos, com dados fiscais e de obrigações acessórias	F26; SPDATA TBEMPHOS; MV MULTI_EMPRESAS*
+estabelecimento	CAD	principal	F3	Hospital ou clínica com CNES, tipo, porte, esfera e perfil; escopo de dados e de acesso	F26; SPDATA TBHOSPIT, TBUNIDAD; MV MULTI_EMPRESAS, HOSPITAL_UNIFICADO; dono 02 (conflitos.md); credenciais no cofre
+logotipo_estabelecimento	CAD	item	F3	Logotipos do estabelecimento por finalidade de documento, com referência ao arquivo	F26; SPDATA TBEMPHOSLOGO; MV MULTI_EMPRESAS_LOGOMARCA*; dono 02 (conflitos.md)
+estabelecimento_responsavel	CAD	item	F3	Responsáveis técnico, clínico e administrativo do estabelecimento, com registro e vigência	F26; SPDATA TBUNIDAD (responsáveis)
+unidade_assistencial	CAD	principal	F3	Unidade de atendimento do estabelecimento (ambulatório, pronto atendimento, internação, diagnóstico)	F26; SPDATA TBUNIDAD (6); MV UNIDADE_ATENDIMENTO; dono 02, unidade_internacao especializa no 04
+perfil_unidade	CAD	dominio	F3	Perfis de unidade (ambulatório, pronto atendimento, internação, exames)	F26; SPDATA TBTIPOATEUNIDADE (5)
+porte_estabelecimento	CAD	dominio	F3	Porte do estabelecimento (pequeno, médio, grande, especial)	F26; SPDATA TBPORTE_HOSPITALAR (4)
+complexidade_estabelecimento	CAD	dominio	F3	Nível de complexidade assistencial do estabelecimento (básica, média, alta)	F26; SPDATA TBCOMPLEXIDADE_HOSPITALAR (3)
+esfera_administrativa	CAD	catalogo_publico	F3	Esferas administrativas do cadastro de estabelecimentos de saúde	F26; SPDATA TBESFERA_ADM (5); catalogo_publico:cnes
+tipo_estabelecimento	CAD	catalogo_publico	F3	Tipos de estabelecimento de saúde do cadastro nacional	F26; SPDATA TBTPESTABELECIMENTO (26); MV TIPO_EMPRESA*; catalogo_publico:cnes
+setor_funcional	CAD	principal	F3	Setor do estabelecimento (assistencial, apoio, administrativo), com unidade, centro de custo e situação	F27; MV SETOR*, SITUACAO_SETOR*, UNIDADE_SETOR; depende de centro_custo (07)
+clinica_assistencial	CAD	dominio	F3	Clínicas (médica, cirúrgica, obstétrica, pediátrica) com tipo usado na TISS e no faturamento público	F27; SPDATA TBCLINICA (7)
+ramal_setor	CAD	item	F7	Ramais e contatos internos de cada setor	F27; MV RAMAIS_SETOR, RAMAIS_SET_DET, RAMAIS_UNID
+setor_turno	CAD	configuracao	F7	Turnos de funcionamento de cada setor, usados em escala, passagem de plantão e livro de registros	F27; MV TURNO_SETOR*
+dia_nao_util	CAD	principal	F3	Feriado ou dia sem expediente com abrangência (nacional, estadual, municipal, estabelecimento), fixo ou móvel	F28; SPDATA TBFERIAD (11); MV FERIADO*, FERIADO_EMPRESA; dono 02 (conflitos.md)
+habilitacao_sus	CAD	catalogo_publico	F7	Habilitações do sistema público que um estabelecimento pode ter	F29; MV EMPRESA_HABILITACOES_SUS; catalogo_publico:cnes
+habilitacao_estabelecimento	CAD	vinculo	F7	Habilitações do estabelecimento, com portaria e vigência	F29; MV EMPRESA_HABILITACOES_SUS
+servico_classificacao	CAD	catalogo_publico	F7	Serviços especializados e classificações do cadastro nacional de estabelecimentos	F29; MV MULTI_EMPRESAS_SERVICO_CLASSIF; catalogo_publico:cnes
+servico_classificacao_estabelecimento	CAD	vinculo	F7	Serviços e classificações oferecidos pelo estabelecimento, com característica e vigência	F29; MV MULTI_EMPRESAS_SERVICO_CLASSIF
+servico_classificacao_setor	CAD	vinculo	F7	Serviços e classificações prestados por cada setor	F29; MV SETOR_SERVICO_CLASSIF_SUS
+remessa_cnes	CAD	principal	F7	Conferência e exportação periódica para o cadastro nacional de estabelecimentos, com competência e situação	F29; MV LOG_PROCESSA_SCNES
+critica_cnes	CAD	item	F7	Críticas encontradas antes da remessa (profissional sem cartão, carga horária, vínculo)	F29; MV CRITICA_PRESTADOR_SUS, PRESTADOR_SUS_CNS
+atendimento	REC	principal	F3	Cabeçalho único do atendimento (ambulatório, pronto atendimento, externo, internação): tipo, origem, caráter, regime	F30; SPDATA ATCABECATEND, RECADATE; MV ATENDIME, ATENDIME_INFO; a conta nasce por evento (06)
+atendimento_situacao_historico	REC	historico	F3	Mudanças de situação do atendimento (aberto, em atendimento, alta, cancelado), com momento e responsável	F30/F32; SPDATA RECADATE, REALTA
+atendimento_procedimento	REC	item	F3	Procedimentos pedidos na abertura do atendimento, com quantidade e solicitante	F30; SPDATA RECADATE; MV ATENDIME_PROCEDIMENTO; depende de procedimento (06)
+cobertura_atendimento	REC	vinculo	F3	Cobertura usada no atendimento: fonte pagadora, plano, carteira e ordem de cobrança	F30; SPDATA RESEGUR, RECADATE
+atendimento_conta	REC	vinculo	F3	Contas de faturamento geradas a partir do atendimento	F30; SPDATA ATCONTA; depende de conta_hospitalar (06)
+atendimento_senha	REC	vinculo	F3	Senhas de fila que deram origem ou acompanharam o atendimento	F30/F33; SPDATA ATCABECATEND_TBSENHAATEND
+categoria_atendimento	REC	dominio	F3	Tipos de atendimento (consulta, pronto atendimento, exame externo, internação), com código TISS	F30; MV TIP_ATE
+origem_entrada_atendimento	REC	dominio	F3	Origens do atendimento (demanda espontânea, encaminhado, agendado, transferido)	F30; MV ORI_ATE, USU_ORIGEM
+procedencia	REC	dominio	F3	Procedência do paciente (residência, outro serviço, via pública, judicial), com valor padrão	F30; SPDATA TBPROCED, TBPROCEDPADRAO
+carater_atendimento_tiss	REC	catalogo_publico	F3	Caráter do atendimento (eletivo, urgência) segundo o padrão de troca com operadoras	F30; MV CARATER_ATENDIMENTO*; catalogo_publico:tiss
+regime_atendimento	REC	catalogo_publico	F3	Regime de atendimento do padrão de troca (ambulatorial, internação, domiciliar, urgência)	F30; catalogo_publico:tiss
+forma_atendimento	REC	dominio	F7	Modalidade do atendimento (presencial, a distância, domiciliar)	F30/F55; MV MODALIDADE_ATENDIMENTO*
+grupo_atendimento	REC	dominio	F3	Grupos de atendimento usados para separar filas, relatórios e regras	F30; SPDATA TBCADGRUPOATEN (1)
+regra_origem_atendimento	REC	configuracao	F3	Combinações permitidas ou proibidas de origem, tipo de atendimento e fonte pagadora	F30; MV PROIB_ORIG_ATENDIME, REGRA_ATENDIMENTO, CONFIGURA_ATENDIMENTO
+regra_heranca_campo	REC	configuracao	F3	Campos copiados do atendimento anterior para a nova ficha, por tipo de atendimento	F31; SPDATA REPARATE
+valor_padrao_recepcao	REC	configuracao	F3	Valores padrão de campos da recepção por usuário ou estação (local, fonte pagadora, tipo)	F31; MV CONFIG_USUARIO_ATENDIME, IT_CONFIG_USUARIO_ATENDIME
+cancelamento_atendimento	REC	principal	F3	Cancelamento ou exclusão de atendimento com motivo, justificativa, responsável e efeito na conta	F32; SPDATA TBMOTEXC; MV LOG_EXCL_ATENDIME*
+motivo_cancelamento_operacao	REC	dominio	F3	Motivos de cancelamento de atendimento e de marcação	F32/F43; SPDATA TBMOTEXC (10); MV MOT_CANC*, MOT_CANCEL*
+motivo_cancelamento_operacao_escopo	REC	vinculo	F3	Em que módulo de recepção e tipo de operação (atendimento, marcação) cada motivo vale	F32; SPDATA TBMOTCANCMOD, TBMOTCANCTP, TBREFCANCMODTP
+motivo_encerramento_atendimento	REC	dominio	F3	Motivos de encerramento do atendimento externo, com o código do padrão de troca	F32; MV MOT_ALT*, TISS_VERSAO_MOT_ALT*; internação reusa (04)
+atendimento_pendencia	REC	principal	F7	Pendências que impedem encerrar o atendimento (documento, assinatura, autorização), com prazo e baixa	F32; MV PENDENCIA_ATENDIMENTO
+ponto_recepcao	REC	principal	F3	Recepção ou setor que emite e chama senhas, com texto de impressão e estabelecimento	F33; SPDATA TBRECEPCAO (11); MV FILA_SENHA_MULTI_EMPRESAS*
+guiche_recepcao	REC	principal	F3	Guichês de cada recepção	F33; SPDATA TBGUICHE (9)
+ocupacao_guiche	REC	historico	F3	Quem ocupou cada guichê e quando, para chamada e produtividade	F33; SPDATA TBSTATUSGUICHE
+gerador_senha	REC	configuracao	F3	Botões do totem e geradores de senha por recepção, agenda, especialidade e prioridade	F33; SPDATA TBGERASENHA (36); MV FILA_SENHA*, SACR_MAQUINA_FILA*, SACR_CONFIGURACAO_MVTOTEM*
+senha_emitida	REC	principal	F3	Senha emitida, com gerador, prioridade, momento e situação; o contador do dia vem desta tabela	F33; SPDATA TBSENHAATEND, TBULTSENHATEND (descartada)
+senha_emitida_marcacao	REC	vinculo	F3	Liga a senha à marcação da agenda que motivou a chegada	F33; SPDATA TBSENHAATEND_REPACAGD, TBSENHAATEND_SIPACAGD
+evento_senha	REC	historico	F3	Eventos da senha por local (chamar, atender, encaminhar, finalizar), com usuário e tempo	F33; SPDATA TBFLUXOATEND
+acao_fluxo_senha	REC	dominio	F3	Ações possíveis no fluxo da senha	F33; SPDATA TBACAOFLUXOSENHA (10)
+grupo_prioridade_legal	REC	dominio	F3	Grupos de prioridade legal (idoso, idoso acima de 80, gestante, pessoa com deficiência, autismo)	F33/F49; SPDATA TBGRUPOPRIORIDADE (10); MV PRIORID_PACIENTE
+balanceamento_chamada	REC	configuracao	F7	Proporção de chamadas prioritárias e comuns por recepção	F33; MV SACR_BALANCEADOR_CHAMADA
+painel_chamada	REC	configuracao	F3	Painel de chamada por local, com tipo, voz, layout e filas exibidas	F33; SPDATA PNCONFIG (5); MV MVPAINEL_CFG_VOZ
+tipo_painel	REC	dominio	F3	Tipos de painel (senha, atendimento, portal)	F33; SPDATA PNTIPO (3)
+chamada_painel	REC	principal	F3	Cada chamada exibida no painel, com senha ou paciente, local de destino e momento	F33; MV ATENDIME_CHAMADA_PAINEL*
+local_atendimento	REC	principal	F3	Consultório, sala ou ponto de atendimento, com painel, recepção e setor	F34; SPDATA TBLOCAL (31)
+local_atendimento_horario	REC	configuracao	F3	Horário de funcionamento do local por dia da semana e em dia não útil	F34; SPDATA TBLOCALHORA (31)
+local_atendimento_encaminhamento	REC	vinculo	F3	Locais para onde cada local pode encaminhar o paciente	F34; SPDATA TBLOCALENCATE
+local_atendimento_visibilidade	REC	vinculo	F3	Locais cujos atendimentos cada local pode consultar	F34; SPDATA TBLOCALPESATE
+modelo_ficha_impressa	REC	configuracao	F3	Modelos de ficha, guia e comprovante impressos na recepção, com título e conteúdo	F35; SPDATA REMODFIC, RETITFIC; MV CONFIGURACAO_COMPROVANTE_SETOR
+regra_impressao_ficha	REC	configuracao	F3	Quais fichas imprimir por fonte pagadora, especialidade, grupo de procedimento e unidade	F35; SPDATA RECONFIC, REESPFIC, REGRPFIC, REUNIFIC
+declaracao_comparecimento	REC	principal	F3	Declaração de comparecimento ou de acompanhante emitida, com período e emissor	F35; MV DECLARACAO_COMPARECIMENTO_ACOM, CONFIG_DECLARACAO
+regra_exigencia_autorizacao	REC	configuracao	F7	Quando a senha da operadora é exigida, por fonte pagadora, especialidade, serviço e setor, e sua validade	F37; MV ORIGEM_SENHA_AUT, CONVENIO_ORIGEM_SENHA_AUT, PW_CONFIG_TEMPO_AUTZ_CONVENIO; autorização e elegibilidade são do 06
+tipo_senha_autorizacao	REC	dominio	F7	Tipos de senha de autorização da operadora (consulta, exame, internação), com regra de formato	F37; MV ORIGEM_SENHA_AUT
+contato_ativo	REC	principal	F8	Tentativa de contato com o paciente (ligação, mensagem, e-mail), com motivo, canal e resultado	F39; MV LIGACAO_PACIENTE, LOG_ENVIO_EMAIL_SMS_PRE_AGE; envio pelo mecanismo integracao
+resultado_contato	REC	dominio	F8	Resultados de contato (atendeu, confirmou, recusou, sem resposta, número errado)	F39
+regra_lembrete_marcacao	AGE	configuracao	F8	Lembretes automáticos antes da marcação: antecedência, canal e modelo, por agenda ou item	F39; MV FSCC_CONFIG_EMAIL_SMS
+agenda_servico	AGE	principal	F3	Agenda de profissional, serviço ou exame: estabelecimento, setor, duração do horário, retorno e modo online	F40; SPDATA REAGENDA (138), SIAGENDA (40), AGCADAGENDA; MV AGENDA_CENTRAL
+categoria_agenda	AGE	dominio	F3	Tipos de agenda (consulta, exame, quimioterapia, plantão, fisioterapia, grupo)	F40; SPDATA AGTPAGENDA (8), RETPAGEN
+agenda_escala	AGE	configuracao	F3	Escala semanal da agenda: dia, hora inicial e final, intervalo e vagas por faixa	F40; SPDATA RECTRAGE (218), SICTRAGE (26); MV ESCALA_CENTRAL, ESCALA_CENTRAL_HORARIO
+agenda_escala_restricao	AGE	vinculo	F7	Fontes pagadoras, tipos de marcação e itens permitidos numa faixa da escala	F40; MV ESCALA_CENTRAL_CONVENIO, ESCALA_CENTRAL_ITEM_AGENDA, ESCALA_CENTRAL_SER_TIPO
+agenda_fonte_pagadora	AGE	vinculo	F3	Fontes pagadoras aceitas por agenda, com observação para marcação online	F40; SPDATA REAGENDA_TBCONVEN, SIAGENDA_TBCONVEN; MV AGENDA_CENTRAL_CONVENIO
+agenda_especialidade	AGE	vinculo	F3	Especialidades atendidas por agenda	F40; SPDATA REAGENDA_TBESPEC (995)
+agenda_usuario	AGE	vinculo	F3	Usuários que podem ver ou marcar numa agenda restrita	F40; MV USUARIO_AGENDA_CENTRAL, AGENDA_CENTRAL_USUARIO
+tipo_marcacao	AGE	dominio	F3	Tipos de marcação (primeira vez, retorno, encaixe, exame, procedimento)	F40/F42; MV AGENDA_CENTRAL_SER_TIPO, SER_DIS_TIP_MAR
+regra_retorno_consulta	AGE	configuracao	F3	Prazo de retorno sem nova cobrança por fonte pagadora, especialidade ou agenda	F40; SPDATA REAGENDA (retorno), AGCADMOTIVO
+geracao_grade	AGE	principal	F3	Pedido de geração da grade de horários de uma agenda para um período, com situação e responsável	F41; SPDATA REAGECRI, SIAGECRI; MV GERACAO_AGENDA, AGENDA_GERADA
+geracao_grade_periodo	AGE	item	F3	Períodos e dias da semana incluídos em cada geração de grade	F41; MV IT_GERACAO_AGENDA
+horario_agenda	AGE	principal	F3	Horário gerado da agenda, com recurso, situação (livre, ocupado, bloqueado) e vagas	F41; SPDATA REPACAGI, SIPACAGI
+marcacao_horario	AGE	principal	F3	Marcação do paciente ou pré-cadastro num horário: canal, fonte pagadora, solicitante, tipo e situação	F42; SPDATA REPACAGD, SIPACAGD; MV IT_AGENDA_CENTRAL
+marcacao_horario_item	AGE	item	F3	Procedimentos ou exames de uma marcação, com preparo e quantidade	F42; SPDATA SIPACAGD; MV IT_AGENDA_CENTRAL; depende de procedimento (06)
+marcacao_horario_historico	AGE	historico	F3	Mudanças de situação da marcação (marcada, confirmada, remarcada, chegou, faltou), com responsável	F42; MV MOVIMENTO_AGENDA_CENTRAL, IT_MOVIMENTO_AGENDA_CENTRAL, LOG_REAGENDAMENTO
+situacao_marcacao	AGE	dominio	F3	Situações da marcação, com ícone e correspondência para a marcação online	F42; SPDATA RESITAGE (14), TBSITAGE (16)
+canal_marcacao	AGE	dominio	F3	Canais de marcação (presencial, telefone, mensagem, portal)	F42; SPDATA RETIPAGE (4)
+motivo_marcacao	AGE	dominio	F3	Motivos da marcação ligados ao tipo de retorno	F42; SPDATA AGCADMOTIVO
+marcacao_equipamento	AGE	vinculo	F8	Equipamentos reservados para a marcação	F42/F45; MV IT_AGENDA_CENTRAL_EQUIPTO
+bloqueio_agenda	AGE	principal	F3	Bloqueio e desbloqueio de agenda ou recurso por período, com motivo e responsável	F43; SPDATA AGDIASINDISP; MV OPERA_AGENDA, LOG_OPERA_AGENDA_CENTRAL
+motivo_bloqueio_agenda	AGE	dominio	F3	Motivos de bloqueio de agenda (férias, congresso, manutenção de equipamento)	F43; MV JUSTIFICATIVA_AGENDAMENTO
+cancelamento_marcacao	AGE	principal	F3	Cancelamento de marcação com motivo, quem pediu, responsável e reaproveitamento do horário	F43; SPDATA RECANAGE, SICANAGE, SIPACAGD_EXCLUSAO; MV LOG_EXCLUSAO_AGENDAMENTO
+recurso_agendavel	AGE	principal	F3	Sala, equipamento ou cadeira agendável, com setor, tipo e capacidade	F44; SPDATA AGCADEIRA; MV RECURSO_CENTRAL, AGE_RX
+agenda_recurso	AGE	vinculo	F3	Recursos físicos usados por cada agenda	F44; MV RECURSO_CENTRAL
+item_agendavel	AGE	principal	F8	O que se agenda (exame, procedimento, sessão), com duração, preparo padrão e procedimento cobrado	F45; MV ITEM_AGENDAMENTO; depende de procedimento (06)
+orientacao_preparo	AGE	configuracao	F8	Orientação de preparo do item por estabelecimento e fonte pagadora, enviada ao paciente	F45; MV EMPRESA_ORIENTACOES_EXA_RX, ORIENTACAO_CONVENIO_ITEM_AGE
+item_agendavel_conflito	AGE	configuracao	F8	Itens que não podem ser marcados num intervalo entre si, com o intervalo mínimo	F45; MV ITEM_AGENDAMENTO_CONFLITO
+item_agendavel_pre_requisito	AGE	configuracao	F8	Itens ou condições exigidos antes de marcar outro item	F45; MV ITEM_AGENDAMENTO_PRE_REQ
+item_agendavel_composicao	AGE	item	F8	Itens que compõem um item composto (pacote de exames)	F45; MV ITEM_AGENDAMENTO_COMPOSICAO
+item_agendavel_recurso	AGE	vinculo	F8	Recursos e equipamentos que realizam ou são exigidos pelo item	F45; MV ITEM_AGENDAMENTO_RECURSO, ITEM_AGENDAMENTO_EQUIPTO
+item_agendavel_profissional	AGE	vinculo	F8	Profissionais habilitados a realizar cada item	F45; MV ITEM_AGENDAMENTO_PRESTADOR
+agenda_item_agendavel	AGE	vinculo	F8	Itens que podem ser marcados em cada agenda	F45; MV AGENDA_CENTRAL_ITEM_AGENDA
+perfil_marcacao	AGE	principal	F8	Perfil que define o que um grupo de usuários pode marcar	F46; MV PERFIL_AGENDAMENTO, PERFIL_AMBULATORIAL
+perfil_marcacao_escopo	AGE	item	F8	Recortes do perfil por fonte pagadora, especialidade, setor, serviço, unidade, item e tipo de profissional	F46; MV PERFIL_AMBULATORIAL_*, SETOR_PERFIL_AGENDAMENTO, SER_DIS_PERFIL_AGENDAMENTO, ITEM_AGENDAMENTO_PERFIL_AGDM
+perfil_marcacao_usuario	AGE	vinculo	F8	Usuários de cada perfil de agendamento	F46; MV USUARIO_PERFIL_AGENDAMENTO
+cota_marcacao	AGE	configuracao	F8	Cota de marcações por período, fonte pagadora, especialidade ou agenda, com ação ao esgotar	F47; MV RESTRICAO_AGENDAMENTO, COTA_PACIENTE
+prazo_aviso_marcacao	AGE	configuracao	F8	Antecedência mínima e máxima para marcar e texto de aviso ao paciente	F47; MV PRAZO_AGENDAMENTO_AVISO
+lista_espera	AGE	principal	F3	Pedido de vaga em espera, com especialidade ou item, prioridade, origem e situação	F48; MV AGENDA_FILA_ESPERA, FILA_ESPERA_AGENDAMENTO
+lista_espera_historico	AGE	historico	F3	Contatos e mudanças de situação do pedido em espera até a marcação ou desistência	F48; MV LOG_FILA_ESPERA_FSCC
+lista_espera_item	AGE	item	F8	Procedimentos pedidos pelo médico ou pela regulação que aguardam vaga dentro do pedido em espera	F53; MV SOLICITACAO_AGENDAMENTO, IT_SOLICITACAO_AGENDAMENTO
+paciente_prioridade_legal	AGE	vinculo	F3	Prioridade legal do paciente, com comprovação e validade (gestação até a data provável)	F49; MV PRIORID_PACIENTE_IT_AGEN_CTRAL, PRIORID_PACIENTE_PED_RX
+turma_atividade	AGE	principal	F8	Turma de atividade coletiva (grupo terapêutico, educação em saúde), com vagas e item agendável	F50; MV AGENDA_TURMA, GRUPO_AGENDA
+turma_escala	AGE	configuracao	F8	Dias e horários fixos da turma	F50; MV ESCALA_TURMA, ESCALA_TURMA_DIA_SEMANA, ESCALA_TURMA_HORARIO
+turma_profissional	AGE	vinculo	F8	Profissionais que conduzem a turma	F50; MV AGENDA_TURMA_PRESTADOR, ESCALA_TURMA_PRESTADOR
+turma_fonte_pagadora	AGE	vinculo	F8	Fontes pagadoras aceitas pela turma	F50; MV AGENDA_TURMA_CONVENIO
+turma_participante	AGE	vinculo	F8	Pacientes inscritos na turma, com situação e espera	F50; MV AGENDA_TURMA_PACIENTE, AGENDA_TURMA_FILA, GRUPO_AGENDA_PAC
+turma_encontro	AGE	principal	F8	Encontro realizado da turma, com data, local e profissional	F50; MV AGENDA_CENTRAL_GRU_AGEN_PAC
+turma_presenca	AGE	item	F8	Presença de cada participante em cada encontro	F50
+plano_sessao	AGE	principal	F8	Tratamento seriado: item, número de sessões, frequência, recurso e fase	F51; MV SOLIC_AGENDAMENTO, AGENDAMENTO_ONCOLOGICO
+sessao_terapeutica	AGE	item	F8	Cada sessão do tratamento, ligada à marcação e ao atendimento, com situação	F51; MV ATENDIME_SESSAO, AGENDA_ONCOLOGICA
+complexidade_sessao	AGE	dominio	F8	Complexidade da sessão para encaixe de cadeira (baixa, média, alta)	F51; SPDATA AGCOMPLEXIDADE (4, sem uso)
+duracao_sessao	AGE	dominio	F8	Faixas de duração da sessão (curta, média, longa)	F51; SPDATA AGDURACAO (4, sem uso)
+fase_tratamento	AGE	dominio	F8	Fases do plano terapêutico (inicial, intermediária, final)	F51; SPDATA AGGRPFASEEVOL (4, sem uso)
+area_atendimento_domiciliar	AGE	principal	F8	Área geográfica atendida pela equipe domiciliar, com estabelecimento responsável	F52; MV PW_AREA_PRESTADOR_DOMICILIAR
+area_atendimento_domiciliar_cep	AGE	item	F8	Faixas de CEP e bairros que compõem cada área domiciliar	F52
+area_atendimento_domiciliar_profissional	AGE	vinculo	F8	Profissionais escalados para cada área domiciliar	F52; MV PW_AREA_PRESTADOR_DOMICILIAR, PW_GERACAO_AGENDA_DOMICILIAR
+modo_agendamento_online	AGE	dominio	F3	Modos de marcação online (não, central telefônica, portal do paciente, ambos)	F54; SPDATA RETP_INTEG_AGENDA_ONLINE (4)
+pre_checkin	AGE	principal	F3	Pré-check-in feito pelo paciente antes da chegada: dados confirmados, documentos e termo	F54; MV SITE_AGENDAMENTO, REGISTRO_FLUXO_AGENDA
+confirmacao_marcacao	AGE	principal	F3	Pedido e resposta de confirmação da marcação, com canal e situação	F54; SPDATA TBESTADOCONFIRMACAO; MV AGENDA_REMESSA
+situacao_confirmacao	AGE	dominio	F3	Situações da confirmação (pendente, confirmada, recusada, sem resposta)	F54; SPDATA TBESTADOCONFIRMACAO (4)
+teleconsulta	AGE	principal	F8	Sala virtual de atendimento a distância ligada à marcação, com início, fim e situação	F55; termo de consentimento é do 03
+teleconsulta_participante	AGE	item	F8	Participantes da sala virtual (paciente, profissional, acompanhante, intérprete), com entrada e saída	F55

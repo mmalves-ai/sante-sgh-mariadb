@@ -1,0 +1,5 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+cnae_estabelecimento	FIN	vinculo	F3	Atividades econômicas autorizadas a cada estabelecimento para emitir nota de serviço, com situação	DBAMV CONFIG_NOTFIS_CNAE
+regra_prescricao_transferencia	PEP	configuracao	F3	O que acontece com a prescrição ativa quando o paciente muda de setor: mantém, suspende ou exige nova, por origem e destino	DBAMV CONFIG_PAGU_TRANSF_LEITO
+regra_grupo_faturamento_insumo	FAT	configuracao	F3	Grupo de faturamento padrão do insumo conforme categoria, setor e local de estoque, aplicado no cadastro e na importação	DBAMV CONFIGU_IMPORTACAO_GRU_FAT
+intervalo_minimo_servico	AGE	configuracao	F7	Intervalo mínimo entre marcações do mesmo serviço por fonte pagadora e tipo de marcação, para barrar repetição	DBAMV CONFIG_SERVICO_TEMPO_MINIMO

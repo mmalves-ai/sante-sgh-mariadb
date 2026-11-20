@@ -1,0 +1,4 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+tipo_entrada_enxoval	HOT	dominio	F8	Forma de entrada de peças no estoque do enxoval (compra, doação, reposição, devolução de setor)	DBAMV TP_ENTRADA (com dados), referida pelo estoque de roupa
+faixa_contagem_colonia	SADT	dominio	F7	Faixas de contagem de colônias usadas no laudo de cultura (por exemplo, abaixo ou acima de um limite de UFC/ml)	DBAMV COLONIA (com dados); colônias citadas em CULTURA e GERMES_CULTURA
+modo_ventilacao_mecanica	PEP	dominio	F3	Modos de ventilação mecânica invasiva e não invasiva para a prescrição do suporte ventilatório	SPDATA PRMODOVENT 10; prescricao_item_ventilacao cita o modo sem domínio próprio

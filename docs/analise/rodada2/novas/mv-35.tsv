@@ -1,0 +1,2 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+parecer_padrao_auditoria_antimicrobiano	PEP	configuracao	F7	Parecer predefinido da auditoria do antimicrobiano, com indicação de prorrogação permitida e estabelecimentos em que vale	DBAMV AUDIT_AUTO_PSIH; DBAMV AUDIT_AUTO_PSIH_EMPRESA

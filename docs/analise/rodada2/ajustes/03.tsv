@@ -1,0 +1,110 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+agrupador_historico_prontuario	ACEITA	agrupador_historico_prontuario	PEP	dominio	F7	Agrupadores que organizam a linha do tempo de documentos do prontuário (evoluções, exames, cirurgias)
+agrupador_historico_prontuario_tipo	ACEITA	agrupador_historico_prontuario_tipo	PEP	vinculo	F7	Tipos de documento clínico que compõem cada agrupador do histórico do prontuário
+alerta_item_diagnostico	ACEITA	alerta_item_diagnostico	PEP	configuracao	F7	Regra de alerta do item prescritível conforme diagnóstico, sexo e faixa de idade do paciente
+alerta_item_diagnostico_cid	ACEITA	alerta_item_diagnostico_cid	PEP	item	F7	Diagnósticos de uma regra de alerta do item, com tipo (contraindica ou exige) e mensagem exibida
+alerta_item_resultado_exame	ACEITA	alerta_item_resultado_exame	PEP	configuracao	F7	Regra que confere resultado recente de exame ao prescrever um item, por dose, sexo, idade e janela de dias
+alerta_item_resultado_exame_faixa	ACEITA	alerta_item_resultado_exame_faixa	PEP	item	F7	Exame, campo e faixas de valor que disparam a regra de alerta por resultado de exame
+balanco_hidrico	ACEITA	balanco_hidrico	PEP	principal	F3	Balanço hídrico do paciente por dia de referência e setor, com turnos, horário de fechamento e situação
+boletim_informativo	ACEITA	boletim_informativo	PEP	principal	F7	Boletim do estado clínico do paciente internado para informar a família, com autor, situação e data
+categoria_alergeno	ACEITA	categoria_alergeno	PEP	dominio	F3	Categorias do agente alérgeno (medicamento, alimento, ambiental, outros), para agrupar alertas e relatórios
+categoria_anotacao_administrativa	ACEITA	categoria_anotacao_administrativa	PEP	dominio	F8	Categorias que organizam as anotações administrativas do caso (serviço social, regulação, gestão de leito)
+classificacao_risco_situacao_alto_risco	ACEITA	classificacao_risco_situacao_alto_risco	PEP	vinculo	F7	Situações de alto risco marcadas numa classificação de risco, com data e hora do registro
+configuracao_balanco_setor	ACEITA	configuracao_balanco_setor	PEP	configuracao	F3	Regras do balanço hídrico por setor: turnos, horário de fechamento, idade pediátrica e grupos exibidos em ordem
+configuracao_balanco_turno	FUNDIR	setor_turno	CAD	configuracao	F3	Turnos do balanço hídrico de um setor, com nome, sigla e horário de início e fim
+conversao_unidade_afericao	ACEITA	conversao_unidade_afericao	PEP	configuracao	F8	Fator de conversão entre unidades de aferição (grama e quilo, centímetro e metro) para gráficos e cálculos
+copia_contingencia_prontuario	ACEITA	copia_contingencia_prontuario	PEP	configuracao	F8	Cópia local de contingência do prontuário por setor e tipo de documento, gerada periodicamente para consulta sem sistema
+correspondencia_cid_morfologia	ACEITA	correspondencia_cid_morfologia	PEP	catalogo_publico	F3	Morfologias tumorais compatíveis com cada CID de neoplasia, carregadas da classificação oncológica oficial
+cuidado_sugerido_achado	ACEITA	cuidado_sugerido_achado	PEP	vinculo	F8	Cuidado de enfermagem sugerido para cada achado do exame físico, com frequência padrão
+diagnostico_enfermagem_associado	ACEITA	diagnostico_enfermagem_associado	PEP	vinculo	F7	Diagnósticos que costumam ocorrer junto de outro, com tipo de ocorrência, para sugestão ao profissional
+doenca_cronica	ACEITA	doenca_cronica	PEP	dominio	F7	Doença crônica por CID que marca o paciente para acompanhamento e alertas
+dominio_diagnostico_enfermagem	ACEITA	dominio_diagnostico_enfermagem	PEP	dominio	F7	Domínios da taxonomia de diagnósticos de enfermagem, acima das classes, com vigência
+escala_clinica_regra_condicao	ACEITA	escala_clinica_regra_condicao	PEP	item	F7	Condição da regra de exibição: variável, faixa de valor ou resposta esperada
+escala_clinica_regra_exibicao	ACEITA	escala_clinica_regra_exibicao	PEP	configuracao	F7	Regra que mostra ou oculta o resultado da escala conforme as respostas dadas
+especialidade_classificacao_risco	ACEITA	especialidade_classificacao_risco	PEP	vinculo	F3	Especialidades de destino habilitadas na classificação de risco de cada estabelecimento
+especialidade_destino_parecer	ACEITA	especialidade_destino_parecer	PEP	configuracao	F7	Especialidades que podem receber parecer ou encaminhamento por setor de origem e tipo de atendimento
+estadio_clinico	ACEITA	estadio_clinico	PEP	dominio	F8	Estádios e códigos de estadiamento oncológico disponíveis para o registro do tumor
+evento_adverso	ACEITA	evento_adverso_padrao	PEP	dominio	F8	Evento adverso da terminologia padronizada de toxicidade, com definição e grupo, para registro estruturado na lista de problemas
+frequencia_administracao_setor	ACEITA	frequencia_administracao_setor	PEP	vinculo	F7	Setores onde uma frequência de administração pode ou não ser usada
+funcao_equipe_assistencial_escopo	ACEITA	funcao_equipe_assistencial_escopo	PEP	vinculo	F7	Estabelecimentos, setores e operadoras em que cada função da equipe assistencial pode ser usada
+grau_evento_adverso	ACEITA	grau_evento_adverso	PEP	item	F8	Graus de um evento adverso padronizado, com a descrição clínica de cada nível
+grupo_caracteristica_enfermagem	ACEITA	grupo_caracteristica_enfermagem	PEP	dominio	F7	Grupos e subgrupos que organizam características definidoras e fatores de risco ou relacionados dos diagnósticos de enfermagem
+grupo_evento_adverso	ACEITA	grupo_evento_adverso	PEP	dominio	F8	Grupos e subgrupos em árvore dos eventos adversos padronizados
+grupo_exibicao_prescricao	ACEITA	grupo_exibicao_prescricao	PEP	dominio	F3	Grupos de exibição da prescrição (dieta, cuidados, medicamentos), com ordem e uso na tela de favoritos
+grupo_exibicao_prescricao_item	ACEITA	grupo_exibicao_prescricao_item	PEP	vinculo	F3	Itens e esquemas de cada grupo de exibição da prescrição, com subgrupo, ordem e rótulo
+grupo_parametro_vital	ACEITA	grupo_parametro_vital	PEP	dominio	F3	Grupos de parâmetros vitais aferidos e exibidos juntos (sinais vitais, neurológico, dor)
+inclusao_protocolo_criterio	ACEITA	inclusao_protocolo_criterio	PEP	item	F7	Critérios atendidos ou recusados na inclusão do paciente no protocolo, com valor encontrado e motivo
+intencao_tratamento_oncologico	ACEITA	intencao_tratamento_oncologico	PEP	dominio	F3	Intenção do tratamento oncológico (curativa, paliativa, adjuvante), com o código correspondente da troca com convênios
+interacao_medicamento_exame	ACEITA	interacao_medicamento_exame	PEP	configuracao	F7	Efeito de um item prescritível sobre exames laboratoriais (eleva ou reduz o valor), para alerta na solicitação
+item_prescritivel_conflito	ACEITA	item_prescritivel_conflito	PEP	vinculo	F7	Par de itens que não podem ser prescritos juntos para o mesmo paciente
+item_prescritivel_dispositivo	ACEITA	item_prescritivel_dispositivo	PEP	vinculo	F7	Dispositivos de infusão ou administração compatíveis com o item prescritível
+item_prescritivel_frequencia	ACEITA	item_prescritivel_frequencia	PEP	vinculo	F3	Frequências aceitas para o item prescritível, com marca de uso frequente
+item_prescritivel_setor	ACEITA	item_prescritivel_setor	PEP	configuracao	F3	Regras do item prescritível por estabelecimento, setor ou sala: padronização, público aceito, uso restrito, bloqueio e posologia padrão
+item_prescritivel_sinonimo	ACEITA	item_prescritivel_sinonimo	PEP	item	F3	Palavras-chave e nomes alternativos que ajudam a achar o item na prescrição, com a origem do termo
+item_prescritivel_via	ACEITA	item_prescritivel_via	PEP	vinculo	F3	Vias de administração aceitas para o item prescritível, com marca de uso frequente
+justificativa_acesso_prontuario_restrito	FUNDIR	motivo_acesso_prontuario_restrito	PEP	dominio	F8	Justificativas padrão, classificadas por tipo, para pedir ou conceder acesso a prontuário restrito
+justificativa_padrao_medicacao	ACEITA	justificativa_padrao_medicacao	PEP	dominio	F8	Textos padrão de justificativa para preparo ou uso de medicação, escolhidos pelo prescritor ou pela farmácia
+liberacao_pendencia_assinatura	ACEITA	liberacao_pendencia_assinatura	PEP	historico	F7	Liberação temporária dada a profissional com assinaturas pendentes, com autorizador, vigência e desativação
+livro_registro_setor	ACEITA	livro_registro_setor	PEP	principal	F7	Livro eletrônico de registros e ocorrências do setor, aberto por data, com os lançamentos de cada turno
+livro_registro_setor_ocorrencia	ACEITA	livro_registro_setor_ocorrencia	PEP	item	F7	Ocorrência lançada no livro do setor, com turno, data e hora do fato, autor, lançamento retroativo e resposta encadeada
+marcador_tumoral	ACEITA	marcador_tumoral	PEP	vinculo	F8	Exame laboratorial que serve de marcador tumoral para um diagnóstico topográfico ou morfológico, para acompanhar o tumor
+marco_linha_tempo_paciente	ACEITA	marco_linha_tempo_paciente	PEP	item	F7	Marco registrado na linha do tempo do paciente, com data, autor, origem clínica, visibilidade, exclusão justificada e marco pai
+modelo_plano_cuidado	ACEITA	modelo_plano_cuidado	PEP	configuracao	F8	Modelo de plano de cuidado de conteúdo clínico licenciado ou próprio, com versão, situação e origem da carga
+modelo_plano_cuidado_codigo	ACEITA	modelo_plano_cuidado_codigo	PEP	vinculo	F8	Códigos de diagnóstico médico, de enfermagem ou de terminologia clínica que indicam o modelo de plano de cuidado
+modelo_plano_cuidado_elemento	ACEITA	modelo_plano_cuidado_elemento	PEP	item	F8	Elemento hierárquico do modelo: problema, objetivo, grupo de intervenção, intervenção, atividade, orientação educativa ou link
+motivo_acesso_prontuario_restrito	ACEITA	motivo_acesso_prontuario_restrito	PEP	dominio	F8	Motivos e justificativas padrão, classificados por tipo, para pedir ou conceder acesso a prontuário restrito
+motivo_nao_adesao_protocolo	ACEITA	motivo_nao_adesao_protocolo	PEP	dominio	F7	Motivos que impedem incluir o paciente num protocolo gerenciado, por tipo
+motivo_permanencia_programa	ACEITA	motivo_permanencia_programa	PEP	dominio	F8	Motivo para o paciente permanecer inscrito em programa de cuidado
+motivo_registro_fluxo_oncologico	ACEITA	motivo_registro_fluxo_oncologico	PEP	dominio	F8	Motivo padronizado para registrar etapas e desvios no fluxo de tratamento oncológico
+motivo_registro_fluxo_oncologico_categoria	ACEITA	motivo_registro_fluxo_oncologico_categoria	PEP	vinculo	F8	Categorias de profissional que podem ou não usar cada motivo do fluxo oncológico
+origem_informacao_alergia	ACEITA	origem_informacao_alergia	PEP	dominio	F3	Quem informou a alergia (paciente, familiar, profissional, documento externo), para dar grau de confiança ao registro
+painel_clinico	ACEITA	painel_clinico	PEP	configuracao	F8	Painel clínico do paciente por setor ou profissional, com período, frequência e atualização automática
+painel_clinico_grupo	ACEITA	painel_clinico_grupo	PEP	item	F8	Grupo de informações do painel clínico (documentos, sinais vitais, escalas, prescrição), com ordem
+painel_clinico_item	ACEITA	painel_clinico_item	PEP	item	F8	Informação exibida no grupo do painel clínico (sinal vital, escala, tipo de prescrição), com destaque e ordem
+parametro_vital_local_afericao	ACEITA	parametro_vital_local_afericao	PEP	vinculo	F7	Locais de aferição aceitos para cada parâmetro vital, com o local sugerido
+parametro_vital_posicao_afericao	ACEITA	parametro_vital_posicao_afericao	PEP	vinculo	F7	Posições do paciente aceitas para cada parâmetro vital, com a posição sugerida
+parecer_padrao_auditoria_antimicrobiano	ACEITA	parecer_padrao_auditoria_antimicrobiano	PEP	configuracao	F7	Parecer predefinido da auditoria do antimicrobiano, com indicação de prorrogação permitida e estabelecimentos em que vale
+pendencia_sala_atendimento	ACEITA	pendencia_sala_atendimento	PEP	principal	F7	Pendência de execução numa sala da urgência (medicação, coleta, exame) gerada pela prescrição ou pela classificação, até a liberação
+perfil_lista_atendimento	ACEITA	perfil_lista_atendimento	PEP	configuracao	F7	Perfil compartilhado da lista de atendimentos do profissional, com critérios de entrada, faixa etária, sexo e tipo de atendimento
+perfil_lista_atendimento_criterio	ACEITA	perfil_lista_atendimento_criterio	PEP	item	F7	Critério do perfil da lista: fonte pagadora, estabelecimento, especialidade, origem, profissional, serviço, setor ou etapa, com ordem
+periodo_consulta_sumario_alta	ACEITA	periodo_consulta_sumario_alta	PEP	dominio	F3	Janelas de tempo usadas para trazer procedimentos e exames ao sumário de alta (atendimento todo, últimas horas)
+posologia_padrao_componente	ACEITA	posologia_padrao_componente	PEP	item	F3	Componentes da posologia sugerida (diluente, solução), com quantidade, unidade e via
+posologia_padrao_item	ACEITA	posologia_padrao_item	PEP	configuracao	F3	Posologia sugerida de um item prescritível por setor: dose, via, frequência, duração e uso contínuo
+prazo_dispositivo_invasivo	ACEITA	prazo_dispositivo_invasivo	PEP	configuracao	F3	Tempo máximo de permanência e antecedência do aviso de troca do dispositivo invasivo por faixa etária
+prescricao_dieta_refeicao_item	ACEITA	prescricao_dieta_refeicao_item	PEP	item	F8	Alimento prescrito em cada refeição da dieta, com quantidade, medida caseira e substituto
+prescricao_exame_verificado	ACEITA	prescricao_exame_verificado	PEP	item	F8	Exame exigido pelo protocolo e conferido antes de liberar a prescrição do ciclo, com observação
+prescricao_item_justificativa	ACEITA	prescricao_item_justificativa	PEP	item	F3	Justificativa clínica exigida para um item prescrito (uso fora do padrão, dose acima do limite, item restrito), com tipo e autor
+prescricao_variavel_calculo	ACEITA	prescricao_variavel_calculo	PEP	item	F7	Valor informado de cada variável da fórmula de cálculo de dose usada na prescrição
+problema_paciente_conduta	ACEITA	problema_paciente_conduta	PEP	item	F7	Conduta registrada para um problema da lista de problemas do paciente
+profissional_referencia_paciente	ACEITA	profissional_referencia_paciente	PEP	historico	F8	Médico de referência do paciente por período, com motivo e justificativa de cada troca
+protocolo_gerenciado_prescricao	ACEITA	protocolo_gerenciado_prescricao	PEP	vinculo	F7	Protocolos de prescrição sugeridos ao incluir o paciente no protocolo gerenciado, por categoria profissional
+protocolo_gerenciado_setor	ACEITA	protocolo_gerenciado_setor	PEP	vinculo	F7	Setores em que o protocolo gerenciado é vigiado e se o alerta é disparado para a equipe do setor
+protocolo_prescricao_cid	ACEITA	protocolo_prescricao_cid	PEP	vinculo	F7	Diagnósticos que indicam cada protocolo de prescrição
+protocolo_prescricao_setor	ACEITA	protocolo_prescricao_setor	PEP	vinculo	F3	Setores em que cada protocolo de prescrição pode ser usado
+protocolo_prescricao_sintoma	ACEITA	protocolo_prescricao_sintoma	PEP	vinculo	F8	Sintomas ou achados de avaliação que sugerem cada protocolo de prescrição
+regiao_corporal_sistema	ACEITA	regiao_corporal_sistema	PEP	vinculo	F8	Liga cada região ou órgão do corpo aos sistemas corporais a que pertence, para o exame físico estruturado
+regra_antimicrobiano_estabelecimento	ACEITA	regra_antimicrobiano_estabelecimento	PEP	configuracao	F7	Regra de uso do antimicrobiano por estabelecimento: dias liberados, dose diária definida, vigilância e restrição
+regra_atuacao_categoria_profissional	ACEITA	regra_atuacao_categoria_profissional	PEP	configuracao	F3	O que cada categoria profissional pode fazer no prontuário e na prescrição: evoluir, prescrever, aprazar, checar, tipos de item e horários padrão
+regra_pendencia_prescricao	ACEITA	regra_pendencia_prescricao	PEP	configuracao	F7	Quando item prescrito sem registro gera pendência no prontuário, por setor, esquema e tipo de item, com tolerância
+regra_prescricao_transferencia	ACEITA	regra_prescricao_transferencia	PEP	configuracao	F3	O que acontece com a prescrição ativa quando o paciente muda de setor: mantém, suspende ou exige nova, por origem e destino
+regra_reducao_quantidade_prescricao	ACEITA	regra_reducao_quantidade_prescricao	PEP	configuracao	F7	Esquemas e itens cuja quantidade é recalculada quando se aplica um percentual de redução à prescrição
+regra_sugestao_diagnostico_enfermagem	ACEITA	regra_sugestao_diagnostico_enfermagem	PEP	configuracao	F7	Respostas do histórico de enfermagem que sugerem cada diagnóstico de enfermagem ao profissional
+resumo_estadiamento_tnm	ACEITA	resumo_estadiamento_tnm	PEP	dominio	F8	Resumo esquemático de estadiamento por localização anatômica primária e sublocalização, com a categoria TNM correspondente
+sinalizacao_paciente	ACEITA	sinalizacao_paciente	PEP	historico	F7	Sinalizador ligado ao paciente ou atendimento, com início, fim, documento de origem e quem ligou e desligou
+sinalizador_paciente	ACEITA	sinalizador_paciente	PEP	configuracao	F7	Sinalizador visual do paciente nas listas (cor, letra, ordem), com critérios automáticos de entrada e saída
+sinalizador_paciente_origem	ACEITA	sinalizador_paciente_origem	PEP	item	F7	Resposta de modelo ou campo de documento que liga automaticamente um sinalizador do paciente
+situacao_alto_risco	ACEITA	situacao_alto_risco	PEP	dominio	F7	Situações de alto risco do protocolo de triagem por índice de gravidade, organizadas em grupos, que elevam a prioridade
+subgrupo_item_prescricao	ACEITA	subgrupo_exibicao_prescricao	PEP	dominio	F8	Subgrupos de exibição dentro de cada tipo de item de prescrição, com ordem na tela e na impressão
+termo_consentimento_modelo_profissional	ACEITA	termo_consentimento_modelo_profissional	PEP	vinculo	F7	Profissionais que podem usar cada modelo de termo de consentimento, inclusive os modelos próprios do profissional
+texto_padrao_campo_contexto	ACEITA	texto_padrao_campo_contexto	PEP	item	F7	Condições do contexto (profissional, especialidade, setor, tipo de atendimento) que escolhem o texto inicial do campo
+texto_padrao_campo_modelo	ACEITA	texto_padrao_campo_modelo	PEP	configuracao	F7	Texto inicial sugerido para um campo de modelo clínico, ativado por um contexto de uso
+tipo_criterio_clinico	ACEITA	tipo_criterio_clinico	PEP	dominio	F7	Tipos de critério automático (diagnóstico, sinal vital, resultado, documento), com validação por valor ou faixa e seus parâmetros
+tipo_evento_oncologico	ACEITA	tipo_evento_oncologico	PEP	dominio	F8	Ações registráveis no acompanhamento do paciente oncológico, com indicação de uso pela equipe
+tipo_evento_oncologico_profissional	ACEITA	tipo_evento_oncologico_profissional	PEP	vinculo	F8	Tipos de profissional que podem ou não registrar cada ação do acompanhamento oncológico
+tipo_grupo_painel_clinico	ACEITA	tipo_grupo_painel_clinico	PEP	dominio	F8	Tipos de grupo do painel clínico, com identificador e detalhamento exibido
+tipo_notificacao_agravo	ACEITA	tipo_notificacao_agravo	PEP	dominio	F3	Modalidade da notificação compulsória (caso individual, surto, notificação negativa) conforme a vigilância
+tipo_validacao_dose_unidade	ACEITA	tipo_validacao_dose_unidade	PEP	vinculo	F3	Unidades de medida aceitas em cada tipo de validação de dose, para comparar a dose prescrita com o limite
+topografia_tumor	ACEITA	topografia_tumor	PEP	catalogo_publico	F8	Localizações topográficas da classificação internacional de doenças para oncologia, usadas no diagnóstico do tumor
+unidade_duracao_tratamento	ACEITA	unidade_duracao_tratamento	PEP	dominio	F3	Unidades de duração de tratamento na receita e na prescrição (dias, semanas, meses), com equivalência em dias
+versao_classificacao_clinica	ACEITA	versao_classificacao_clinica	PEP	catalogo_publico	F3	Versão vigente de cada classificação clínica oficial carregada (doenças, atenção primária, reações adversas)
+vinculo_supervisao_profissional	ACEITA	vinculo_supervisao_profissional	PEP	vinculo	F7	Profissional responsável por validar ou coassinar os documentos pendentes de outro (preceptor e residente, titular e auxiliar), com vigência

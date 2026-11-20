@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	PRESTADOR_ASSOCIADO	TABELA	equipe_prestador_rede	N	SGO	F7	
+DBAPS	PRESTADOR_ASSOCIADO_ENDERECO	TABELA	equipe_prestador_rede;local_atendimento_rede	N	SGO	F7	
+DBAPS	PRESTADOR_ASSOCIADO_ESPL	TABELA	equipe_prestador_rede;especialidade_atendida_rede	N	SGO	F7	
+DBAPS	PRESTADOR_ASSOCIADO_MES	MECANISMO	historico_entidade:equipe_prestador_rede	N	SGO	F7	retrato mensal do vínculo; vira linha do tempo do vínculo
+DBAPS	PRESTADOR_CAPTATION	TABELA	remuneracao_capitacao	N	SGO	F8	
+DBAPS	PRESTADOR_CREDITO_DEBITO	TABELA	lancamento_avulso_prestador	N	SGO	F7	
+DBAPS	PRESTADOR_DESCONTO_PRODUCAO	TABELA	lancamento_avulso_prestador	N	SGO	F7	
+DBAPS	PRESTADOR_DIARIA_TAXA	TABELA	tabela_remuneracao_rede_item	N	SGO	F7	
+DBAPS	PRESTADOR_ENDERECO	TABELA	local_atendimento_rede	N	SGO	F7	
+DBAPS	PRESTADOR_ENDERECO_AUTORIZADOR	TABELA	permissao_portal_prestador	N	SGO	F7	
+DBAPS	PRESTADOR_ENDERECO_CONTATO	TABELA	local_atendimento_rede	N	SGO	F7	
+DBAPS	PRESTADOR_ENDERECO_ESPL	TABELA	especialidade_atendida_rede	N	SGO	F7	
+DBAPS	PRESTADOR_EQUIPE_MEDICA	TABELA	item_faturavel_funcao_equipe	S	FAT	F7	
+DBAPS	PRESTADOR_EVENTUAL	TABELA	prestador_rede	N	SGO	F7	natureza eventual do prestador
+DBAPS	PRESTADOR_EVENTUAL_ME	TABELA	prestador_rede	N	SGO	F7	
+DBAPS	PRESTADOR_FATOR_URGENCIA	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	PRESTADOR_GLOSA	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	PRESTADOR_GLOSA_REFERENCIA	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	PRESTADOR_OBSERVACAO	MECANISMO	historico_entidade:prestador_rede	N	SGO	F7	observações datadas do prestador
+DBAPS	PRESTADOR_PCO_MOT_REST_POLIMED	TABELA	restricao_prestador_rede	N	SGO	F7	
+DBAPS	PRESTADOR_PENSAO	TABELA	pensao_prestador_rede	S	SGO	F7	
+DBAPS	PRESTADOR_PENSAO_FORNECEDOR	TABELA	pensao_prestador_rede	S	SGO	F7	
+DBAPS	PRESTADOR_POLIMED	MECANISMO	integracao	N	INTG	F7	parâmetros de retorno para sistema externo de autorização
+DBAPS	PRESTADOR_POLIMED_PMA	MECANISMO	integracao	N	INTG	F7	lista de prestadores exportados a sistema externo
+DBAPS	PRESTADOR_QUALIFICACAO	TABELA	qualificacao_prestador_rede	N	SGO	F7	
+DBAPS	PRESTADOR_REAJUSTE	TABELA	reajuste_contrato_rede	N	SGO	F7	
+DBAPS	PRESTADOR_REDE_REFERENCIADA	TABELA	rede_assistencial_local	N	SGO	F7	
+DBAPS	PRESTADOR_REGRA	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	PRESTADOR_RETENCAO_IMPOSTO	TABELA	retencao_titulo	N	FIN	F3	
+DBAPS	PRESTADOR_SERVICOS	TABELA	servico_prestado_rede	N	SGO	F7	
+DBAPS	PRESTADOR_SERVICOS_SADT	TABELA	servico_prestado_rede	N	SGO	F7	
+DBAPS	PRESTADOR_SERVICO_CLASSIF_REDE	TABELA	servico_prestado_rede	N	SGO	F7	
+DBAPS	PRESTADOR_TAG	TABELA	marcador_prestador_rede;marcador_rede	S	SGO	F8	
+DBAPS	PRESTADOR_TAXA_ADMINISTRATIVA	TABELA	taxa_prestador_rede	S	SGO	F7	
+DBAPS	PRESTADOR_TAXA_INTERCAMBIO	TABELA	taxa_prestador_rede	S	SGO	F7	
+DBAPS	PRESTADOR_TIPO_ATENDIMENTO	TABELA	contrato_rede_prestador	N	SGO	F7	
+DBAPS	PRESTADOR_TRIBUTO	TABELA	retencao_titulo	N	FIN	F3	
+DBAPS	PRESTADOR_UNIDADE_MEDIDA	TABELA	item_faturavel_unidade_medida	S	FAT	F7	
+DBAPS	PRESTADOR_VALORES_CH	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	PRESTADOR_VALORES_CH_GRU_PRO	TABELA	regra_valoracao_item;tabela_remuneracao_rede_item	N	SGO	F7	
+DBAPS	PRESTADOR_VALOR_PAGO_PADRAO	TABELA	regra_valoracao_item	N	SGO	F7	
+DBAPS	PROCEDIMENTO	TABELA	item_faturavel;regra_cobertura_rol;grupo_carencia_procedimento	N	FAT	F3	
+DBAPS	PROCEDIMENTO_BAIXO_RISCO	TABELA	regra_cobertura_rol	N	SGO	F7	
+DBAPS	PROCEDIMENTO_CID	TABELA	regra_critica_conta	N	SGO	F7	
+DBAPS	PROCEDIMENTO_CONTROLE_CRONICO	TABELA	criterio_elegibilidade_programa	N	SGO	F8	
+DBAPS	PROCEDIMENTO_EAN	TABELA	item_faturavel_codigo_barras	S	FAT	F8	
+DBAPS	PROCEDIMENTO_EQUIPE_MEDICA	TABELA	item_faturavel_funcao_equipe	S	FAT	F7	
+DBAPS	PROCEDIMENTO_ESPEC_POLIMED	MECANISMO	integracao	N	INTG	F7	restrição por especialidade exportada a sistema externo
+DBAPS	PROCEDIMENTO_HONORARIO_MEDICO	TABELA	preco_procedimento	N	FAT	F3	
+DBAPS	PROCEDIMENTO_IMPORTADO_TUSS	MECANISMO	historico_entidade:item_faturavel	N	FAT	F3	registro de troca de código na carga da terminologia
+DBAPS	PROCEDIMENTO_IMPOSTO	TABELA	item_faturavel_tributacao	S	FAT	F8	
+DBAPS	PROCEDIMENTO_ME	TABELA	item_faturavel;regra_cobertura_rol	N	FAT	F3	cópia por empresa vira escopo por estabelecimento
+DBAPS	PROCEDIMENTO_RELACIONADO	TABELA	item_faturavel_relacionado	N	FAT	F3	
+DBAPS	PROCEDIMENTO_REMOCAO_DENTE	TABELA	regra_cobertura_rol	N	SGO	F7	
+DBAPS	PROCEDIMENTO_SUS	MECANISMO	catalogo_publico:sigtap	N	SGO	F7	lista de procedimentos SUS para ressarcimento
+DBAPS	PROCEDIMENTO_TAXA_COMERCIALIZA	TABELA	taxa_manuseio_implante	N	SUP	F7	
+DBAPS	PROCEDIMENTO_UNIDADE_MEDIDA	TABELA	item_faturavel_unidade_medida	S	FAT	F7	
+DBAPS	PROCEDIMENTO_UNI_MED_TNUMM	TABELA	item_faturavel_unidade_medida	S	FAT	F7	
+DBAPS	PROCED_GRUPO_CARENCIA	TABELA	grupo_carencia_procedimento	N	SGO	F7	
+DBAPS	PROCED_PATOLOGIA	TABELA	criterio_elegibilidade_programa	N	SGO	F8	
+DBAPS	PROCED_PORTE_ANESTESICO	TABELA	preco_procedimento	N	FAT	F3	
+DBAPS	PROCED_PRESTADOR	TABELA	equivalencia_item_prestador_rede	S	SGO	F7	
+DBAPS	PROCED_PREST_EQUIPE_MEDICA	TABELA	item_faturavel_funcao_equipe	S	FAT	F7	
+DBAPS	PROCED_PROCED_TUSS	TABELA	termo_equivalencia	N	INTG	F3	
+DBAPS	PROCED_REGULACAO	TABELA	regra_cobertura_rol	N	SGO	F7	
+DBAPS	PROCED_SOLICIT_PORTAL	TABELA	regra_reembolso_plano	N	SGO	F7	
+DBAPS	PROCED_TIPO_ATENDIMENTO	TABELA	regra_cobertura_rol	N	SGO	F7	
+DBAPS	PROCED_TIPO_REGULACAO	TABELA	tipo_regulacao_cobertura	S	SGO	F7	
+DBAPS	PROCED_VIA_ACESSO	TABELA	regra_via_acesso	N	FAT	F3	
+DBAPS	PROCESS_CB	TABELA	lote_faturamento_plano;remessa_cobranca	N	SGO	F7	
+DBAPS	PROCESS_CB_CONTRATOS	TABELA	lote_faturamento_plano	N	SGO	F7	
+DBAPS	PROGRAMA_ATENDIMENTO	TABELA	programa_saude	N	SGO	F8	
+DBAPS	PROGRAMA_ATEND_ESPECIALIDADE	TABELA	programa_saude_procedimento	N	SGO	F8	
+DBAPS	PROGRAMA_ATEND_PROCEDIMENTO	TABELA	programa_saude_procedimento	N	SGO	F8	
+DBAPS	PROMOCAO_PLANO_FAIXA	TABELA	lancamento_programado_contrato	N	SGO	F7	
+DBAPS	PROPOSTA	TABELA	proposta_adesao	N	SGO	F8	
+DBAPS	PROPOSTA_PLANO_TABELA_PRECO	TABELA	proposta_adesao	N	SGO	F8	
+DBAPS	PROPOSTA_RESPOSNAVEL_CONT	TABELA	proposta_adesao	N	SGO	F8	
+DBAPS	PROPOSTA_SERVICOS_CONTRATO	TABELA	proposta_adesao	N	SGO	F8	
+DBAPS	PROPOSTA_USUARIO	TABELA	proposta_adesao_beneficiario	N	SGO	F8	
+DBAPS	PROPOSTA_USUARIO_ANEXO	MECANISMO	arquivo	N	SGO	F7	anexos da proposta no armazenamento de objetos, metadado em proposta_adesao
+DBAPS	PROPOSTA_USUARIO_SERVICOS	TABELA	proposta_adesao_beneficiario	N	SGO	F8	
+DBAPS	PROTOCOLO_CTAMED	TABELA	lote_conta_recebida	N	SGO	F7	
+DBAPS	PROTOCOLO_CTAMED_LOG	MECANISMO	trilha_auditoria	N	SGO	F7	quem cancelou ou excluiu o protocolo
+DBAPS	PROTOCOLO_LOTE_ANEXO	TABELA	troca_tiss_operadora	N	SGO	F7	
+DBAPS	PROTOCOLO_LOTE_ANEXO_GUIA	TABELA	troca_tiss_operadora	N	SGO	F7	
+DBAPS	PROTOCOLO_RECURSO_GLOSA	TABELA	recurso_glosa_recebido	N	SGO	F7	
+DBAPS	PROVISIONAMENTO_CONTAS	TABELA	provisao_tecnica_item	N	SGO	F7	
+DBAPS	PTU_A100_CONTRATO_DESTINO	TABELA	equivalencia_intercambio	S	SGO	F8	
+DBAPS	PTU_A100_R101	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R102	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R103	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R104	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R105	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R106	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R107	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R108	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R109	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_SIMPLES_R101	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_SIMPLES_R102	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A100_SIMPLES_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A105_R101	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1100_R101	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1100_R102	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1100_R103	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1100_R109	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R201	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R202	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R203	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R204	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R205	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R210	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R211	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1200_R215	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R301	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R302	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R303	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R304	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R305	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R306	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R307	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R308	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R309	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R310	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R311	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R316	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R317	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R318	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R319	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A1300_RELACAO_ARQUIVO	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A200_R201	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A200_R202	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A200_R209	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A200_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_CONFIG_PLANO_DES	TABELA	equivalencia_intercambio	S	SGO	F8	
+DBAPS	PTU_A300_R301	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_R302	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_R304	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_R306	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_R309	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A300_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R401	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R402	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R403	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R404	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R405	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R406	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R407	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R408	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R410	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R499	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A400_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R411	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R412	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R413	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R414	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R415	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R416	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R417	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R418	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R419	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A410_R420	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A450_R451	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A450_R452	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A450_R453	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A450_R454	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A450_R459	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R501	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R502	TABELA	fatura_intercambio	S	SGO	F8	
+DBAPS	PTU_A500_R503	TABELA	fatura_intercambio_item	S	SGO	F8	
+DBAPS	PTU_A500_R504	TABELA	fatura_intercambio_item	S	SGO	F8	
+DBAPS	PTU_A500_R505	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R506	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R507	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R508	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R509	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A500_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A510_R511	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A510_R512	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A515_R516	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A515_R517	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A515_R518	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A530_R531	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A530_R532	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A535_R536	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A535_R537	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R551	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R552	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R553	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R557	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R558	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R559	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A550_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R561	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R562	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R563	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R564	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R565	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R566	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R567	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R568	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A560_R569	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A580_R581	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A580_R998	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A580_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A600_R601	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A600_R602	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A600_R609	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A600_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R701	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R702	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R703	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R704	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R705	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R709	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A700_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A800_R801	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A800_R802	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A800_R809	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A800_R999	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A900_R901	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A900_R902	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A900_R903	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A900_R905	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio
+DBAPS	PTU_A900_R906	MECANISMO	integracao	N	INTG	F8	leiaute de registro do intercâmbio entre cooperativas; negócio em fatura_intercambio

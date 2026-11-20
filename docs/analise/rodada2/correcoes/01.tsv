@@ -1,0 +1,16 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+SPDATA	CCCADCIR_EXCLUSAO	TABELA	registro_excluido	ADM	F3	cirurgia excluída é cópia de registro excluído, como as demais cópias de exclusão; não é trilha
+SPDATA	PRTPNOTIFEMAIL	TABELA	canal_notificacao	ADM	F3	domínio vivo no SPDATA (migrar-crud): paridade exige o destino em F3
+SPDATA	DIPERMPS	TABELA	usuario_escopo;perfil_acao	ADM	F3	recorte por posto e setor de exame está em uso no SPDATA: paridade F3
+SPDATA	RETPAGEN	NAO		AGE		duplicado de categoria_agenda
+DBAMV	GERADOR_ETIQUETA	TABELA	modelo_etiqueta	ADM	F3	mesmas colunas dos leiautes de etiqueta (driver, colunas, margens): é modelo de etiqueta
+DBAMV	ITGERADOR_ETIQUETA	TABELA	modelo_etiqueta_campo	ADM	F3	posição, tamanho e fonte de cada objeto da etiqueta: é campo do modelo
+DBAMV	PAR_GERADOR_ETIQUETA	TABELA	modelo_etiqueta_campo	ADM	F3	parâmetro substituível impresso na etiqueta: é campo do modelo
+DBAMV	LOG_CONFIG_FFAS	MECANISMO	historico_entidade:parametro_valor	ADM	F3	log de mudança de configuração vira histórico do valor do parâmetro
+DBAMV	LOG_CONFIG_TELA_OBR_LOT_VLD	MECANISMO	historico_entidade:parametro_valor	ADM	F3	log de mudança de configuração vira histórico do valor do parâmetro
+DBAMV	CLASSRISCO_LOGS	TABELA	evento_sessao	ADM	F3	entrada e saída do usuário são eventos de sessão
+DBASGU	MOD_LOG_ACESSO_MV2000	TABELA	evento_sessao	ADM	F3	acesso por módulo dentro da conexão: detalhe do evento de sessão, como LOG_ACESSO_MV2000
+DBASGU	CONFIG_SGU	TABELA	politica_senha	ADM	F3	exigência de autenticação e biometria no acesso viram política; tablespace e job são técnicos
+DBAPORTAL	CONFIGURACAO_PARAMETRO_GLOBAL	NAO		REL		duplicado de preferencia_tela_usuario
+DBAPORTAL	PARAMETRO_GLOBAL	NAO		REL		duplicado de relatorio_parametro
+DBAPORTAL	PARAMETRO_GLOBAL_PORTLET	NAO		REL		duplicado de relatorio_parametro

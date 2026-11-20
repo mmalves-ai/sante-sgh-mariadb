@@ -1,0 +1,12 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+locacao_material	SUP	principal	F8	Material ou equipamento alugado de fornecedor e usado no paciente, com quantidade, data, saída de origem e devolução	DBAMV ITMVT_LOCACAO; devolução via ITORDEM_DEVOLUCAO
+insumo_palavra_chave	SUP	item	F8	Palavras-chave ligadas ao insumo para busca em compras, requisição e prescrição	DBAMV ITPAL_CHA, PAL_CHA
+prescricao_item_justificativa	PEP	item	F3	Justificativa clínica exigida para um item prescrito (uso fora do padrão, dose acima do limite, item restrito), com tipo e autor	DBAMV ITPRE_MED_JUSTIFICATIVA
+faixa_desconto_permanencia	FAT	configuracao	F8	Percentual de desconto aplicado conforme o dia de permanência na categoria clínica, por fonte pagadora	DBAMV IT_FAIXA_VALOR_CATEGORIA, CATEGORIA_CLINICA
+opcao_preferencia_profissional	CAD	dominio	F8	Opções de preferência que o profissional pode declarar (turno, local, condição de atendimento), mantidas pelo hospital	DBAMV IT_PREFERENCIA, PREFERENCIA, PRESTADOR_PREFERENCIA
+kit_documento_protocolo_item	HOT	item	F7	Tipo de documento que compõe um conjunto padrão enviado junto no protocolo de trâmite	DBAMV IT_DOCUMENTO_KIT, DOCUMENTO_KIT
+servico_lavanderia_cliente_item	HOT	item	F8	Peça e quantidade lavadas para cliente externo atendido pela lavanderia, com valor unitário e total	DBAMV IT_LAVAGEM_ROUPA_CLIENTE, LAVAGEM_ROUPA_CLIENTE
+projeto_mutirao_cirurgico_insumo	CC	item	F8	Insumo e item faturável previstos no projeto ou mutirão cirúrgico, com quantidade	DBAMV IT_PROJETO_PRODUTO
+projeto_mutirao_cirurgico_fornecedor	CC	vinculo	F8	Fornecedores participantes do projeto ou mutirão cirúrgico	DBAMV IT_PROJETO_FORNECEDOR
+agendamento_cirurgico_exame	CC	item	F7	Exame laboratorial ou de imagem pedido junto do agendamento cirúrgico, com quantidade e setor executante	DBAMV IT_AV_EXA_LAB, IT_AV_EXA_RX
+modelo_solicitacao_procedimento_item	INT	item	F8	Procedimento, quantidade e diagnóstico de um modelo de solicitação de internação ou cirurgia do profissional	DBAMV IT_SOLIC_PADR, SOLIC_ATD_PADR

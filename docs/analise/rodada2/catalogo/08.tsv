@@ -1,0 +1,341 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+operadora_saude	SGO	principal	F7	Operadora de plano registrada na ANS: registro, modalidade, pessoa jurídica, situação do registro e estabelecimentos atendidos	F1; DBAPS OPERADORA, CONFIG_INSTALACAO_MVSAUDE, ME_EMPRESA, MUNICIPIO_OPERADORA; depende de empresa (01) e pessoa jurídica do cadastro-base
+operadora_saude_historico	SGO	historico	F7	Linha do tempo do registro da operadora: modalidade, situação na ANS, capital e dados societários com vigência	F1; DBAPS HISTORICO_CAPITAL_SOCIAL, TRANSFERENCIA_CAPITAL_SOCIAL, MODELO_CAPITAL_SOCIAL
+responsavel_operadora	SGO	item	F7	Responsáveis da operadora perante a ANS (legal, técnico, administrativo, ouvidor) com período de exercício	F1; DBAPS RESP_PF_OPERADORA, RESP_PJ_OPERADORA, RESP_TECNICO_OPERADORA, ADMINISTRADOR_OPERADORA; depende de pessoa_fisica (02)
+operadora_saude_estabelecimento	SGO	vinculo	F7	Estabelecimentos do grupo em que a operadora atua, para separar dados e numeração por unidade	F1 (fatia_operadora_estabelecimento da rodada 1); DBAPS ME_EMPRESA, ME_CATEGORIA, ME_TABELA; depende de estabelecimento (01)
+canal_atendimento_operadora	SGO	item	F7	Canais divulgados ao beneficiário (central, ouvidoria, endereço, horário) exigidos na divulgação regulatória	F1/F20; DBAPS CONTATO_OPERADORA, TELEFONE_REPRES_OPERADORA, DEPTO_OPERADORA_EMAIL
+departamento_operadora	SGO	dominio	F7	Setores internos da operadora para roteamento de autorizações, protocolos e alertas	F1/F11/F20; DBAPS DEPTO_OPERADORA, DEPARTAMENTOS, DEPARTAMENTO_AUTORIZACAO, SERV_CAL_CEN_DEP_OPER
+documento_emitido_operadora	SGO	dominio	F7	Documentos que a operadora emite (guia, cartão, boleto, carta) com regra de nome social, observação e obrigatoriedade de campos	F1; SPDATA PSDOCIMPNOMESOCIAL (8), PSEMPEMITEOBS (5), CDPARDIGOBG (4); DBAPS MVS_TIPO_AUTORIZACAO_ETIQUETA; parâmetros soltos vão ao mecanismo parametro (01)
+produto_plano	SGO	principal	F7	Produto registrado na ANS: número de registro, tipo de contratação, abrangência, acomodação, fator moderador e situação	F2; DBAPS PLANO, PLANO_DE_SAUDE, AUTORIZACAO_ANS, AUTORIZACAO_ANS_TIPO_PLANO, ME_TIP_PLANO
+produto_plano_historico	SGO	historico	F7	Situação do registro do produto ao longo do tempo: ativo, suspensão de venda pela ANS, cancelamento e alterações	F2; DBAPS HIS_PLANO, PLANO_SUSPENSAO_VENDA, HIS_PLANO_AGENDAMENTO
+segmentacao_assistencial	SGO	catalogo_publico	F7	Segmentações assistenciais da ANS (ambulatorial, hospitalar com ou sem obstetrícia, odontológica, referência)	F2/F11; SPDATA PSGRUPOCLASSIF (5); DBAPS SEGMENTACAO_SIP_ITEM_ASSIS, GRUPO_DIREITO
+produto_plano_segmentacao	SGO	vinculo	F7	Segmentações cobertas por cada produto	F2; DBAPS SERVICOS_PLANO, GRUPO_DIREITO
+area_abrangencia_produto	SGO	item	F7	Municípios ou estados da área geográfica de cobertura de cada produto	F2; DBAPS GRUPO_MUNICIPIO_PLANO, GRUPO_ESTADO_PLANO, MUNICIPIO; depende de municipio_ibge (02)
+plano_comercializado	SGO	principal	F7	Plano vendido a partir de um produto: nome comercial, acomodação, rede, regra de coparticipação e franquia	F2; DBAPS PLANO, MOD_PLANO*, TIP_PLANO, PLANO_TAP
+classificacao_plano	SGO	dominio	F7	Classificação regulatória do plano: individual ou familiar, coletivo empresarial, coletivo por adesão	F2; SPDATA CDPLANOCLASSIF (3); DBAPS TIP_PLANO
+tipo_acomodacao_plano	SGO	dominio	F7	Padrões de acomodação contratada (enfermaria, apartamento) com o tipo de leito correspondente	F2; SPDATA CDACOMODTIPO (3); DBAPS TIPO_ACOMODACAO, TIP_ACOMODACAO, REGRA_TIP_ACOMODACAO; depende de tipo de leito (04)
+plano_grau_dependencia	SGO	vinculo	F7	Graus de dependência aceitos por plano ou contrato, com idade limite e exigência de documento	F2/F3; DBAPS PLANO_PARENTESCO, PLANO_PARENTESCO_CATEGORIA, EMPRESA_PARENTESCO, REGRA_CADASTRAMENTO_DEP_AGR
+servico_adicional_plano	SGO	principal	F7	Serviços opcionais vendidos junto ao plano (remoção, assistência, odontológico) com preço e vigência	F2; DBAPS SERVICO, SERVICOS_PLANO, VALORES_SERVICOS_PLANO
+servico_adicional_contrato	SGO	vinculo	F7	Serviços opcionais contratados em cada contrato ou por beneficiário, com valor e período	F2; DBAPS SERVICOS_CONTRATO, VALORES_SERVICOS_CONTRATO, SERVICOS_USUARIOS, SERV_USUARIO
+contratante_plano	SGO	principal	F7	Pessoa física ou jurídica contratante, inclusive administradora de benefícios e entidade de classe	F2; DBAPS EMPRESA, GRUPO_EMPRESA, TIP_EMPRESA, HIS_EMPRESA, CLIENTE; depende de pessoa_fisica (02) e pessoa jurídica do cadastro-base
+contrato_plano	SGO	principal	F7	Contrato de plano: contratante, tipo, vigência, dia de vencimento, responsável financeiro e situação	F2; DBAPS CONTRATO, MODELO_CONTRATO, CONTRATO_ENDERECO, CONTRATO_OBSERVACAO
+tipo_contrato_plano	SGO	dominio	F7	Tipos de contrato e de controle contratual (pessoa física, pessoa jurídica, com ou sem patrocínio)	F2; SPDATA CDTPCONTRATO (2), CDTPCTRCONTRAT (2); DBAPS CFG_TIPO_CONTRATO
+contrato_plano_oferta	SGO	vinculo	F7	Planos ofertados em cada contrato com a tabela de preço e a regra de elegibilidade aplicáveis	F2/F4; DBAPS PLANO_CONTRATO, MODELO_PLANO_CONTRATO, EMPRESA_MODELO_PLANO
+subdivisao_contrato_plano	SGO	item	F7	Lotações, subestipulantes ou centros de custo da contratante usados para faturar e agrupar beneficiários	F2/F5; DBAPS CONTRATO_CATEGORIA, CATEGORIA, CONTRATO_AGRUPAMENTO, HIS_CONTRATO_PAI
+aditivo_contrato_plano	SGO	item	F7	Aditivos do contrato: mudança de plano ofertado, preço, cláusula ou vigência, com data de efeito	F2; DBAPS ALTEMPRESA_CONTRATO, RENOVACAO_CONTRATO; documento assinado vai ao mecanismo arquivo
+contrato_plano_historico	SGO	historico	F7	Situação do contrato ao longo do tempo: ativo, suspenso, em cancelamento, cancelado, renovado	F2; DBAPS HIS_CONTRATO, HIS_CONTRATO_EMPRESA, HIS_CONTRATO_TEM
+cancelamento_contrato_plano	SGO	principal	F7	Pedido e efetivação do cancelamento do contrato, inclusive a pedido do titular, com motivo, aviso e data de efeito	F2; DBAPS DESLIGA_CONTRATO, DESLIGA_CONTRATO_AGENDAMENTO, CANC_CONT_COL_ADESAO, CONTRATOS_A_CANCELAR, TERMO_ADESAO_EXCLUSAO
+motivo_cancelamento_contrato	SGO	dominio	F7	Motivos de cancelamento ou baixa de contrato	F2/F7; SPDATA CDMOTIVOBAIXA (1); DBAPS MOTIVOS_CANCELAMENTO, STATUS_CANCELAMENTO
+beneficiario_plano	SGO	principal	F7	Beneficiário no contrato e plano: matrícula, código de controle da ANS, titular ou dependente, grau, datas e situação	F3; DBAPS USUARIO, USUARIO_PLANO, FAMILIA, IDENTIFICACAO_BENEFICIARIO; SPDATA PSBENEFI, PSBENCPL, PSPLNASS (descarte); depende de pessoa_fisica (02)
+movimento_cadastral_beneficiario	SGO	historico	F7	Inclusões, alterações, suspensões, exclusões e reativações do beneficiário, com motivo, data de efeito e origem	F3; DBAPS HIS_FAMILIA, DESLIGAMENTO, DESLIGAMENTO_FUTURO_BENEFC, LOTE_DESLIGAMENTO, SUSPENSAO_REATIVACAO_LOG; SPDATA PSATVASS (descarte)
+situacao_cadastral_beneficiario	SGO	dominio	F7	Situações cadastrais do beneficiário (ativo, suspenso, cancelado)	F3; SPDATA CDSTATUSCAD (4)
+motivo_movimento_cadastral	SGO	dominio	F7	Motivos de inclusão, suspensão, exclusão e reativação, por tipo de movimento e com código para o cadastro da ANS	F3; SPDATA CDMOTMOVIMCAD (12), PSMOTIVO (1); DBAPS MOTIVO_INCLUSAO, MOT_DESLIG, MOTIVO_USUARIO, MOTIVO_SUSPENSAO
+grau_dependencia	SGO	dominio	F7	Graus de dependência e parentesco com o titular, com o código exigido no cadastro de beneficiários da ANS	F3; DBAPS GRAU_DEPENDENCIA, GRAU_PARENTESCO, SIB_DEPENDENCIA
+categoria_beneficiario	SGO	dominio	F7	Categorias de vínculo com a contratante (empregado, agregado, aposentado, demitido, associado)	F3; DBAPS CATEGORIA_BENEFICIARIO, CONTRATO_CATEGORIA
+regra_maioridade_dependente	SGO	configuracao	F7	Regra de perda da condição de dependente por idade ou fim de estudo, com aviso e ação automática	F3; DBAPS MAIORIDADE_CONTRATUAL, MAIORIDADE_CONTRATUAL_TIPO, CONTRATO_MAIORIDADE, MULT_EMP_MAIORIDADE_CONTRAT
+manutencao_plano_ex_empregado	SGO	principal	F7	Direito de permanência do demitido ou aposentado no plano coletivo: base legal, prazo, contribuição e término	F3; DBAPS USUARIO_CONTRIBUICOES, CATEGORIA_BENEFICIARIO
+portabilidade_carencia	SGO	principal	F7	Pedido de portabilidade de carências recebido ou concedido: plano de origem, compatibilidade, prazos e decisão	F3 (regra da ANS, sem equivalente direto no recorte); DBAPS CARENCIA_USUARIO
+grupo_carencia	SGO	configuracao	F7	Grupos de procedimentos com prazo de carência próprio (urgência, consulta, parto, alta complexidade)	F3; DBAPS GRUPO_CARENCIA, AGRUPAMENTO_CARENCIA, ITAGRUPAMENTO_CARENCIA
+grupo_carencia_procedimento	SGO	vinculo	F7	Procedimentos de cada grupo de carência	F3; DBAPS PROCED_GRUPO_CARENCIA; depende de termo_terminologia (TUSS)
+carencia_plano	SGO	configuracao	F7	Prazo de carência de cada grupo por plano ou contrato, com redução e isenção negociadas	F3; DBAPS CARENCIA_PLANO, CONTRATO_GRUPO_CARENCIA, REST_PLANO_GRUCAR_QTDE
+carencia_aplicada	SGO	item	F7	Carências efetivas do beneficiário por grupo, com data de cumprimento e aproveitamento de plano anterior	F3; DBAPS CARENCIA_USUARIO, CARENCIA_PROC_USUARIO
+unidade_prazo	SGO	dominio	F7	Unidades de prazo e periodicidade usadas em carência, limite e contrato (dia, dia útil, mês, ano)	F3/F6/F9; SPDATA CDTPPERIODO (2), PSTPPERIODO (2), TBTPUNIDTEMPO (5); DBAPS PERIODO_EVENTO_PAGO
+modelo_questionario_saude	SGO	configuracao	F7	Modelo de questionário de saúde (declaração de saúde, avaliação de risco) com versão e vigência	F3/F23; DBAPS QUESTIONARIO, PERGUNTAS
+modelo_questionario_saude_pergunta	SGO	item	F7	Perguntas do modelo, com tipo de resposta, opções e doenças ou CID associados	F3/F23; DBAPS QUESTIONARIO_PERGUNTAS, RESPOSTAS_FECHADAS, PERG_RESP_PATOLOGIA
+declaracao_saude	SGO	principal	F7	Declaração de saúde preenchida na adesão, com entrevista qualificada e médico orientador	F3; DBAPS RESPOSTAS_QUESTIONARIO, PROPOSTA_USUARIO
+declaracao_saude_resposta	SGO	item	F7	Respostas da declaração de saúde por pergunta	F3; DBAPS RESPOSTAS_QUESTIONARIO
+doenca_preexistente_declarada	SGO	item	F7	Doenças ou lesões preexistentes declaradas ou identificadas, com CID e decisão de cobertura parcial ou agravo	F3; DBAPS PATOLOGIA_USUARIO, PATOLOGIA_CID, CID; depende de termo_terminologia (CID-10)
+cobertura_parcial_temporaria	SGO	principal	F7	Cobertura parcial temporária aplicada ao beneficiário: doença, início, prazo máximo e opção por agravo	F3; DBAPS PATOLOGIA_USUARIO, PROCED_PATOLOGIA
+cobertura_parcial_temporaria_procedimento	SGO	item	F7	Procedimentos suspensos pela cobertura parcial temporária enquanto ela vigora	F3; DBAPS PROCED_PATOLOGIA
+cartao_beneficiario	SGO	principal	F7	Cartão do beneficiário: número da via, validade, modelo, lote de emissão e situação (físico ou digital)	F3; DBAPS CARTEIRA, CARTEIRA_CONTRATO, MODELO_CARTEIRA, ITMODELO_CARTEIRA
+lote_emissao_cartao	SGO	principal	F7	Lote de emissão de cartões enviado à gráfica ou ao canal digital, com críticas	F3; DBAPS LOTE_CARTEIRA, ITLOTE_CARTEIRA, LOTE_CARTEIRA_ERROS
+regra_validade_cartao	SGO	configuracao	F7	Regra de validade do cartão por plano ou contrato (prazo, renovação, vínculo à vigência)	F3; DBAPS CONFIG_VALIDADE_CARTEIRA, ITMODELO_CRITERIO_CARTEIRA
+solicitacao_cartao_beneficiario	SGO	principal	F7	Pedido de emissão ou segunda via do cartão com motivo, cobrança de taxa e situação	F3; SPDATA CDMOTIVOSOLCART (3), CDSTATUSSOLCART (4); DBAPS MOTIVO_EMISSAO_CARTEIRA
+motivo_solicitacao_cartao	SGO	dominio	F7	Motivos de emissão ou segunda via do cartão (perda, roubo, dano, alteração)	F3; SPDATA CDMOTIVOSOLCART (3)
+situacao_solicitacao_cartao	SGO	dominio	F7	Situações do pedido de cartão (solicitado, emitido, entregue, cancelado)	F3; SPDATA CDSTATUSSOLCART (4)
+forma_emissao_documento	SGO	dominio	F7	Formas de emissão de cobrança e cartão (impresso, e-mail, aplicativo, gráfica)	F3/F5; SPDATA CDTPEMISSAO (8)
+consulta_elegibilidade_recebida	SGO	principal	F7	Consulta de elegibilidade recebida de prestador da rede, com beneficiário, resposta e motivo de negativa	F3 (conflitos: consulta_elegibilidade_recebida); DBAPS ELEG_BENFC_RADAR, RADAR_METODO_ELEG; TISS
+suspensao_atendimento_beneficiario	SGO	principal	F7	Suspensão de atendimento do beneficiário (inadimplência, decisão), com período e exceções de urgência	F3/F7; DBAPS SUSPENSAO_USUARIO, SUSPENSAO_USUARIO_ITEM, SUSPENSAO_USUARIO_EXCECAO, SUSPENSAO_USUARIO_EX_REC
+regra_suspensao_atendimento	SGO	configuracao	F7	Regra de suspensão por contrato ou plano: dias de atraso, procedimentos excetuados e reativação	F3/F7; DBAPS SUSPENSAO_USUARIO_REGRA, GUIA_SUSPENSAO_EXCECAO
+faixa_etaria_modelo	SGO	configuracao	F7	Conjunto de faixas etárias de preço (dez faixas da norma vigente, modelos anteriores) com a regra de variação	F4; SPDATA CDFAIXAETATP (3); DBAPS FAIXA_ETARIA, GRUPO_FAIXA_ETARIA
+faixa_etaria_modelo_item	SGO	item	F7	Faixas do modelo com idade inicial e final	F4; DBAPS FAIXA_ETARIA, GRUPO_FAIXA_ETARIA
+faixa_vidas_modelo	SGO	configuracao	F7	Faixas por número de vidas do contrato coletivo usadas no preço e no agrupamento de reajuste	F4; DBAPS FAIXA_VIDAS, GRUPO_FAIXA_VIDAS
+tabela_preco_plano	SGO	principal	F7	Tabela de preço do plano com vigência, modelo de faixas e situação	F4; DBAPS TABELA_PRECO, EMPRESA_TABELA_PRECO, EMPRESA_MODELO_RECEITA
+tabela_preco_plano_faixa	SGO	item	F7	Valor da mensalidade por faixa etária ou de vidas na tabela de preço	F4; DBAPS VALORES_TABELA, VALORES_TABELA_FAMILIA, VALORES_TABELA_COTA, EMPRESA_MODELO_RECEITA_FX_ETAR
+tabela_preco_contrato	SGO	vinculo	F7	Tabela de preço aplicada a cada contrato e plano ofertado, com valores negociados	F4; DBAPS VALORES_TABELA_CONTRATO, VALORES_TABELA_USUARIO
+indice_reajuste_plano	SGO	catalogo_publico	F7	Índices de reajuste com vigência: teto anual da ANS para individual e índices econômicos usados no coletivo	F4; DBAPS INDICE_REAJUSTE, ITINDICE_REAJUSTE, INDICE_REAJUSTE_RECEITA
+reajuste_contrato_plano	SGO	principal	F7	Reajuste anual ou por faixa aplicado a um contrato: índice, percentual, data-base e comunicação	F4; DBAPS REAJUSTE_COLETIVO, REAJUSTE_INDIVIDUAL, REAJUSTE_AUTOMATICO, REAJUSTE_ANALISE
+reajuste_contrato_plano_item	SGO	item	F7	Valor antes e depois do reajuste por beneficiário ou lançamento	F4; DBAPS ITEM_REAJUSTE_COLETIVO, ITEM_REAJUSTE_INDIVIDUAL, ALTERACOES_VALORES_REAJUSTE
+agrupamento_reajuste_coletivo	SGO	principal	F7	Agrupamento de contratos coletivos pequenos para reajuste único no período	F4; DBAPS AGRUPAMENTO_CONTRATO_COLETIVO, ITEM_REAJUSTE_AGRUPAMENTO
+agrupamento_reajuste_contrato	SGO	vinculo	F7	Contratos que compõem cada agrupamento de reajuste	F4; DBAPS AGRUPAMENTO_CONTRATO_COLETIVO, CONTRATO_AGRUPAMENTO
+estorno_reajuste	SGO	principal	F7	Estorno ou devolução de reajuste aplicado indevidamente, com valores por beneficiário	F4; DBAPS ESTORNO_REAJUSTE, ITESTORNO_REAJUSTE
+tipo_movimentacao_valor	SGO	dominio	F7	Tipos de alteração de valor (mensalidade, reajuste anual, mudança de faixa, adicional)	F4; SPDATA CDTPMOVVALOR (9)
+lote_faturamento_plano	SGO	principal	F7	Geração mensal das faturas da operadora por competência, com críticas, reprocessamento e cancelamento	F5; DBAPS LOTE_CANCELAMENTO_MENSALIDADE, ITEM_LOTE_CANCELAMENTO_MENS, CRITICA_APURACAO_FECHAMENTO
+fatura_plano	SGO	principal	F7	Fatura da competência por contrato ou responsável financeiro; gera o título a receber do financeiro	F5; DBAPS MENS_CONTRATO, MENS_CONTRATO_REC, FATURA; depende de titulo_receber (07)
+fatura_plano_item	SGO	item	F7	Lançamentos da fatura: mensalidade, coparticipação, adesão, pró-rata, acréscimo, desconto e taxa	F5; DBAPS ITMENS_CONTRATO, LCTO_MENSALIDADE, LCTO_MENS_PRORATA, LCTO_MEN_FAIX_ETAR
+mensalidade_beneficiario	SGO	item	F7	Valor de mensalidade de cada beneficiário na fatura, com faixa etária e plano	F5; DBAPS MENS_USUARIO, ITMENS_USUARIO, MENSALIDADE_USO
+origem_cobranca_plano	SGO	dominio	F7	Origens de cobrança (mensalidade, coparticipação, adesão, multa, avulsa, acordo)	F5; SPDATA CDORIGEMCOBR (4), PSORIGEMCOBR (7), PSTIPMEN (5), TBTIPOCOBRANCASGO (4)
+tipo_lancamento_fatura	SGO	dominio	F7	Tipos de lançamento e de evento gerador de valor a receber na fatura	F5; SPDATA CDTPLANCAMEN (4), CDTPEVTCTAREC (5)
+lancamento_programado_contrato	SGO	configuracao	F7	Acréscimos, descontos e cobranças recorrentes programados por contrato ou beneficiário, com vigência	F5 (ajuste_cobranca_contrato da rodada 1); SPDATA CDTPDESCACR (2); DBAPS CONTRATO_ACRES_DESC, CONTRATO_LCTO_MENS, CONTRATO_OUTRAS_RECEITAS, CONTRATO_TAXA_ADMINISTRATIVA
+forma_cobranca_plano	SGO	dominio	F7	Formas de cobrança (boleto, débito automático, cartão, desconto em folha, PIX)	F5; SPDATA CDTPCOBRANCA (5); DBAPS FORMA_PAGAMENTO
+contrato_forma_cobranca	SGO	configuracao	F7	Forma de cobrança por contrato ou responsável: dia de vencimento, conta de débito, cartão e envio	F5; DBAPS CONTRATO_DEB_AUT, CONTRATO_CARTAO_CREDITO, CFG_COBRANCA, ALTERACAO_DIA_VECTO; depende de conta_bancaria e carteira_cobranca (07)
+dia_vencimento_permitido	SGO	dominio	F7	Dias do mês aceitos para vencimento da fatura	F5; SPDATA CDDIAVENCCOB (31)
+mensagem_cobranca	SGO	configuracao	F7	Mensagens impressas na cobrança, com linha, prioridade, público e vigência	F5; SPDATA CDMSGCOBRANCA (9), CDMSGLINHA (7); DBAPS MSG_COBRANCA, TIPO_MSG_COBRANCA, FATURAMENTO_MENSAGEM
+preferencia_envio_cobranca	SGO	dominio	F7	Opções de envio da cobrança ao beneficiário (sem envio, e-mail, aplicativo, impresso)	F5; SPDATA TBENVCOBEMAIL (5)
+modelo_comunicacao_beneficiario	SGO	configuracao	F7	Modelos de carta e mensagem ao beneficiário (cobrança, aviso, extrato, reajuste); o envio sai pela plataforma de mensagens	F5/F7; SPDATA TBTPEMAILPLS (9); DBAPS CARTAS, RELATORIO_EMAIL_MENSAGEM
+remessa_desconto_folha	SGO	principal	F7	Remessa mensal de desconto em folha à contratante e conferência do retorno	F5; DBAPS MVS_ENVIO_FOLHA, MVS_CONFIRMA_RETORNO_FOLHA, MVS_HISTORICO_ENVIO_FOLHA, MENS_CONTRATO_ENVIADA_FOLHA
+remessa_desconto_folha_item	SGO	item	F7	Valor enviado e valor descontado por beneficiário na remessa de folha	F5; DBAPS MVS_ITEM_ENVIO_FOLHA, MVS_ITEM_RESTITUICAO_FOLHA, MVS_ITEM_VERBA_FOLHA
+regra_coparticipacao	SGO	configuracao	F7	Coparticipação por plano ou contrato: grupo de procedimento, tipo de guia, percentual ou valor, teto e vigência	F6; SPDATA CDTPCOPART (3), PSCOPARTTPGUIAQNDO (4); DBAPS RATEIO_COPART, RATEIO_COPART_COND, RATEIO_COPART_GRU_PRO, RATEIO_COPART_GRU_PRO_VAL
+teto_coparticipacao	SGO	configuracao	F7	Tetos de coparticipação por evento, mês ou ano e regras de urgência	F6; DBAPS RATEIO_COPART_TETO_URG, TETO_AGRUP_PROCED, TETO_FAIXA_SINISTRA
+condicao_cobranca_coparticipacao	SGO	dominio	F7	Condições que disparam a coparticipação na guia (diária, taxa, material, medicamento)	F6; SPDATA PSCOPARTTPGUIAQNDO (4)
+forma_pagamento_coparticipacao	SGO	dominio	F7	Modos de pagamento da coparticipação (na fatura, no balcão, no prestador)	F6; SPDATA CDPGTOCOOPART (2), CDPGTOBALCAOCP (4)
+lancamento_coparticipacao	SGO	principal	F7	Coparticipação apurada por item de guia ou conta, com regra aplicada e fatura de destino	F6; DBAPS ITMENS_USUARIO_COPART, ITGUIA_RATEIO_COPART, CONTA_MEDICA_COBRANCA_BENEFC
+regra_franquia_plano	SGO	configuracao	F7	Franquia por plano ou contrato: tipo, valor, grupo de procedimento e período de acúmulo	F6; SPDATA CDTPFRANQUIA (4); DBAPS GRUPO_FRANQUIA, ITGRUPO_FRANQUIA, ITGRUPO_FRANQUIA_CRITERIO, GRUPO_FRANQUIA_INTERNACAO
+regra_franquia_excecao	SGO	item	F7	Exceções à franquia por procedimento, prestador ou situação	F6; DBAPS FRANQUIA_EXCECAO, VALOR_FRANQUIA_EXCECAO
+isencao_franquia_beneficiario	SGO	item	F7	Isenção de franquia ou coparticipação concedida a beneficiário, com motivo e período	F6; DBAPS USUARIO_ISENCAO_FRANQUIA
+tipo_franquia	SGO	dominio	F7	Tipos de franquia (por evento, por período, por internação)	F6; SPDATA CDTPFRANQUIA (4)
+limite_utilizacao_periodo	SGO	configuracao	F7	Limite de quantidade ou valor por procedimento, grupo ou especialidade em um período	F6; SPDATA PSTPACUMULPOR (3), CDTPACUMULPOR (2); DBAPS LIMITE_COBRANCA, REST_PLANO_PROCED_QT, REST_PLANO_VOLUME_TOTAL
+nivel_acumulo_limite	SGO	dominio	F7	Nível em que o limite ou a franquia acumula (grupo, subgrupo, procedimento, família)	F6; SPDATA PSTPACUMULPOR (3), CDTPACUMULPOR (2)
+saldo_utilizacao_beneficiario	SGO	item	F7	Consumo acumulado do beneficiário por limite ou franquia no período, para a autorização e a fatura	F6; DBAPS GUIA_ETAPA_FRANQUIA, VALOR_FRANQUIA_GUIA
+ocorrencia_inadimplencia	SGO	principal	F7	Atraso de pagamento acompanhado por contrato: dias em atraso, fase, suspensão ou rescisão	F7; DBAPS INADIMPLENCIA, INADIMPLENCIA_ACOMPANHAMENTO, INADIMPLENCIA_REMOVIDA
+fase_cobranca_inadimplencia	SGO	dominio	F7	Fases do acompanhamento da inadimplência (aviso, notificação, suspensão, rescisão, acordo)	F7; DBAPS INADIMPLECIA_FASE_ACOMPANHAMEN, INADIMPLENCIA_FASE_ACOMPANHAME
+notificacao_inadimplencia	SGO	item	F7	Notificação obrigatória antes de suspender ou rescindir, com meio, data e comprovação de recebimento	F7; DBAPS CARTAS, RELATORIO_EMAIL_LOG
+acordo_inadimplencia	SGO	principal	F7	Acordo de regularização do contrato inadimplente; as parcelas são títulos renegociados do financeiro	F7 (acordo_parcelamento da rodada 1); DBAPS REPACTUACAO, REPACTUACAO_MENS_CONTRATO, REPACTUACAO_VALORES; depende de titulo_renegociado (07)
+acao_judicial_cobranca	SGO	principal	F8	Cobrança judicial de contrato inadimplente: processo, comarca, vara, valores e andamento	F7 (cobrança judicial adiada); DBAPS ACAO_JUDICIAL, COMARCA, VARA_CIVEL, TIPO_ACAO_JUDICIAL
+distribuicao_cobranca_terceiro	SGO	principal	F8	Envio de contratos inadimplentes a escritórios de cobrança, com período, comissão e retorno	F7; DBAPS DISTR_COBRANCA_CONTRATO, ITDISTR_COBRANCA_CONTRATO
+corretora_venda	SGO	principal	F8	Corretora ou unidade de venda credenciada, com contrato e regra de comissão	F8; DBAPS REPRESENTANTE, UNIDADE_VENDA, CONTRATO_UNIDADE_VENDA
+vendedor_plano	SGO	principal	F8	Vendedor ou corretor pessoa física, com categoria, corretora e situação	F8; DBAPS VENDEDOR, REP_VENDEDORES, CATEGORIA_VENDEDOR; SPDATA PSVENDAS (descarte)
+categoria_vendedor	SGO	dominio	F8	Categorias de vendedor para regra de comissão e meta	F8; DBAPS CATEGORIA_VENDEDOR
+papel_venda	SGO	dominio	F8	Papéis na venda (vendedor, supervisor, gerente, indicador, corretora)	F8; SPDATA CDVENDATPREP (6)
+equipe_venda	SGO	principal	F8	Equipe comercial com chefia, abrangência e estrutura hierárquica	F8; DBAPS CHEFIA_COMERCIAL, CHEFIA_COMERCIAL_ABRANGENCIA, ESTRUTURA_META_VENDA
+equipe_venda_membro	SGO	vinculo	F8	Vendedores de cada equipe com papel e período	F8; DBAPS CHEFIA_COMERCIAL_VENDEDOR
+metodo_venda	SGO	dominio	F8	Canais de venda (presencial, telefone, digital, empresa)	F8; DBAPS METODO_VENDA, METODO_VENDA_ESTRUTURA_VENDA
+meta_venda	SGO	principal	F8	Meta comercial por equipe, vendedor e período	F8; DBAPS META_VENDA
+meta_venda_item	SGO	item	F8	Meta por plano ou indicador (vidas, contratos, receita)	F8; DBAPS ITMETA_VENDA
+campanha_venda	SGO	principal	F8	Campanha comercial com período, planos e condições especiais	F8; DBAPS CAMPANHA_VENDA, CAMPANHA_ESTRUTURA_VENDA, PROMOCAO_PLANO_FAIXA
+campanha_venda_desconto	SGO	item	F8	Desconto da campanha por parcela ou faixa etária	F8; DBAPS CAMPANHA_DESCONTO_PARCELA, ITPROMOCAO_PLANO_FAIXA
+simulacao_preco	SGO	principal	F8	Simulação de preço para um grupo de vidas, com planos e faixas cotados	F8; DBAPS SIMULACAO_PRECO
+simulacao_preco_item	SGO	item	F8	Vidas por faixa e valor calculado na simulação	F8; DBAPS ITSIMULACAO_PRECO
+proposta_adesao	SGO	principal	F8	Proposta de adesão digital: contratante, plano, tabela, vendedor, documentos e situação de análise	F8; DBAPS PROPOSTA, PROPOSTA_PLANO_TABELA_PRECO, PROPOSTA_RESPOSNAVEL_CONT, PORTAL_ANALISA_HISTORICO_VENDA
+proposta_adesao_beneficiario	SGO	item	F8	Proponentes da proposta com dados, grau de dependência e serviços escolhidos	F8; DBAPS PROPOSTA_USUARIO, PROPOSTA_USUARIO_SERVICOS, PROPOSTA_SERVICOS_CONTRATO; anexos vão ao mecanismo arquivo
+regra_comissao	SGO	configuracao	F8	Regra de comissão por plano, corretora ou categoria: base de incidência, percentual e vigência	F8; DBAPS REGRA_COMISSAO, CONTRATO_REGRA_COMISSAO, UNIDADE_VENDA_REGRA_COMISSAO, REGRA_DISTRIBUICAO_COMISSAO
+regra_comissao_parcela	SGO	item	F8	Percentual de comissão por parcela paga e papel na venda	F8; DBAPS ITREGRA_COMISSAO, PARCELAS_COMISSAO, ITREGRA_DISTRIBUICAO_COMISSAO
+incidencia_comissao	SGO	dominio	F8	Bases de incidência da comissão (mensalidade, adesão, valor líquido)	F8; SPDATA CDINCIDECOMIS (4)
+comissao_venda	SGO	principal	F8	Apuração de comissão do período por vendedor ou corretora, gerando título a pagar	F8; DBAPS LOTE_COMISSAO, LOTE_COMISSAO_EVENTOS, DISTRIBUICAO_COMISSAO, REPASSE_COMISSAO_VENDA; depende de titulo_pagar (07)
+comissao_venda_item	SGO	item	F8	Comissão por contrato, beneficiário e parcela, inclusive estorno por saída precoce	F8; DBAPS USUARIO_COMISSAO, ITPARCELAS_COMISSAO, BENEFICIARIO_ESTORNO_COMISSAO, PENDENCIA_COMISSAO
+rede_assistencial	SGO	principal	F7	Rede assistencial nomeada (básica, ampliada) vinculada aos planos e informada no registro de prestadores	F9; DBAPS REDE_REFERENCIADA, VINCULACAO_RPS_ANS
+prestador_rede	SGO	principal	F7	Prestador credenciado ou próprio: pessoa, tipo, natureza, classificação, CNES e situação na rede	F9; DBAPS PRESTADOR, PRESTADOR_EVENTUAL, GRUPO_PRESTADOR; depende de pessoa_fisica, profissional (02) e CNES
+prestador_rede_historico	SGO	historico	F7	Mudanças de situação e de dados contratuais do prestador ao longo do tempo	F9; DBAPS PRESTADOR_OBSERVACAO, SITUACAO_ESPEC_PRESTADOR
+tipo_prestador_rede	SGO	dominio	F7	Tipos de prestador (consultório, clínica, hospital, laboratório, pronto-socorro)	F9; SPDATA TBTPPRESTADOR (8); DBAPS TIP_PRESTADOR
+natureza_prestador_rede	SGO	dominio	F7	Natureza do vínculo com a rede (contratada, própria, reembolso, eventual), com código da ANS	F9; SPDATA PSNATUREZAPS (5)
+local_atendimento_rede	SGO	item	F7	Endereços de atendimento do prestador com contato, horário e acessibilidade	F9; DBAPS PRESTADOR_ENDERECO, PRESTADOR_ENDERECO_CONTATO, MODELO_HORARIO
+rede_assistencial_local	SGO	vinculo	F7	Locais de atendimento de cada rede, com plano e período, base do guia de rede	F9; DBAPS PRESTADOR_REDE_REFERENCIADA, REST_PRES_PLANO, REST_PRES_PLANO_ENDERECO, REST_PRES_END_REDE_REFERENC
+especialidade_atendida_rede	SGO	vinculo	F7	Especialidades atendidas em cada local	F9; DBAPS ESPECIALIDADE_PRESTADOR, PRESTADOR_ENDERECO_ESPL, ESPECIAL_PREST_AREA_ATUACAO; depende de especialidade (02)
+servico_prestado_rede	SGO	vinculo	F7	Serviços e procedimentos habilitados por local de atendimento	F9; DBAPS PRESTADOR_SERVICOS, PRESTADOR_SERVICOS_SADT, PRESTADOR_SERVICO_CLASSIF_REDE, PROCED_PRESTADOR
+equipe_prestador_rede	SGO	vinculo	F7	Profissionais vinculados a clínica ou hospital credenciado	F9; DBAPS PRESTADOR_EQUIPE_MEDICA, PRESTADOR_ASSOCIADO, PRESTADOR_ASSOCIADO_ESPL; depende de profissional (02)
+restricao_prestador_rede	SGO	configuracao	F7	Exclusões de procedimento, grupo ou plano por prestador	F9; DBAPS REST_PRES_EXC_PROCED, REST_PRES_EXC_PLAN_CON, REST_PRES_GRU_PROCED, REST_PRES_PROCED, REST_PRES_GRU_DIREITO
+contrato_rede_prestador	SGO	principal	F7	Contrato com o prestador: objeto, tipo direto ou indireto, regime, vigência, reajuste e prazos de faturamento	F9/F10; SPDATA TBTPCONTRATOCREPLS (2), TBREGIMEATEND (3), TBTPVIGCONTRATO (2); DBAPS CONTRATO_PRESTADOR
+contrato_rede_prestador_clausula	SGO	item	F7	Cláusulas do contrato com prestador: favorecido, prazo, unidade de tempo, forma de reajuste	F9/F10; SPDATA TBTPFAVORECIDO (4), TBTPFORMAREAJ (8), TBTPUNIDTEMPO (5)
+tipo_contrato_rede	SGO	dominio	F7	Tipos de contratação do prestador (direta, indireta)	F9; SPDATA TBTPCONTRATOCREPLS (2)
+regime_atendimento_rede	SGO	dominio	F7	Regimes de atendimento contratados (ambulatorial, hospitalar, urgência)	F9; SPDATA TBREGIMEATEND (3)
+movimento_rede_ans	SGO	historico	F7	Movimentos do prestador no registro da ANS (inclusão, alteração, exclusão, reinclusão) com situação do envio	F9/F18; SPDATA TBSTATUSCREPLS (4); DBAPS RPS_PRESTADOR_EXCECAO, VINCULACAO_RPS_ANS
+situacao_movimento_rede	SGO	dominio	F7	Situações do movimento de credenciamento (inclusão, exclusão, reinclusão, alteração)	F9; SPDATA TBSTATUSCREPLS (4)
+descredenciamento_prestador	SGO	principal	F7	Descredenciamento com aviso prévio, motivo, prestador substituto equivalente e comunicação	F9; DBAPS DESLIGA_PRESTADOR, DESLIGA_PRESTADOR_ENDERECO, DESLIGAMENTO_FUTURO_PREST, MOT_DESLIG
+suspensao_prestador_rede	SGO	principal	F7	Suspensão temporária do prestador, com motivo e período	F9; DBAPS SUSPENSAO_PRESTADOR
+qualificacao_prestador_rede	SGO	item	F7	Atributos de qualificação divulgados (acreditação, título, certificação), com validade e comprovante	F9; DBAPS PRESTADOR_QUALIFICACAO, PRESTADOR_ACREDITACAO, QUALIFICACAO_PRESTADOR
+atributo_qualificacao_rede	SGO	catalogo_publico	F7	Atributos de qualificação da rede definidos pela ANS, por tipo de prestador	F9; DBAPS QUALIFICACAO_TIPO_PRESTADOR
+tabela_remuneracao_rede	SGO	principal	F7	Tabela negociada de remuneração da rede, com referência, edição e vigência	F10; DBAPS TABELA, VALORES_CH, PRESTADOR_VALORES_CH, INSTALA_TABELA_PROCED
+tabela_remuneracao_rede_item	SGO	item	F7	Valor, porte ou quantidade de unidade por procedimento ou item na tabela de remuneração	F10; DBAPS VALOR_REF_PROC, VALOR_CUSTO_PROC, VALOR_EXCECAO_PROC, PRESTADOR_VALORES_CH_GRU_PRO
+regra_valoracao_item	SGO	configuracao	F7	Regra que escolhe tabela, fator e acréscimo por prestador, plano, tipo de atendimento, urgência e vigência	F10; DBAPS REGRA_PAGAMENTO, ITREGRA_PAGAMENTO, ITREGRA_PAGTO_TABELA, ITREGRA_PAGTO_VIGENCIA, FATOR_URGENCIA, PRESTADOR_FATOR_URGENCIA
+pacote_remuneracao_rede	SGO	principal	F7	Pacote negociado com prestador: procedimento principal, valor global, vigência e o que inclui	F10; DBAPS PACOTE, PACOTE_VIGENCIA, KIT_PRESTADOR
+pacote_remuneracao_rede_item	SGO	item	F7	Itens incluídos ou excluídos do pacote	F10; DBAPS ITKIT, ITKIT_PRESTADOR, KIT
+reajuste_contrato_rede	SGO	historico	F7	Reajustes aplicados ao contrato com prestador: índice, percentual, data-base e acordo ou índice legal	F10; DBAPS PRESTADOR_REAJUSTE, REPASSE_ADITIVO, REPASSE_ADITIVO_PREST, ITREPASSE_ADITIVO
+classe_despesa_assistencial	SGO	dominio	F7	Classificação complementar da despesa assistencial para o contas a pagar e os relatórios da ANS	F10; SPDATA CDTPDESPCTAPGCM (2); DBAPS GRUPO_DESPESA, SUBGRUPO_DESPESA, CODIGO_DESPESA
+calendario_pagamento_rede	SGO	configuracao	F7	Calendário de entrega de contas, corte e pagamento da rede, com exceções	F10; DBAPS CALENDARIO_CONTA, CALENDARIO_CONTA_EXCECAO, CALENDARIO_CAMARA_COMPENSACAO, ITCALENDARIO_CAMARA_COMP
+lote_pagamento_rede	SGO	principal	F7	Pagamento da produção por prestador e competência; gera o título a pagar com retenções no financeiro	F10 (pagamento_rede da rodada 1); DBAPS PAGAMENTO_PRESTADOR, PGTO_PRESTADOR, REPASSE_PRESTADOR, CONFIG_REPASSE_PGTO_PRESTADOR; depende de titulo_pagar e retencao_titulo (07)
+lote_pagamento_rede_item	SGO	item	F7	Contas e guias incluídas no pagamento, com valor apresentado, glosado e pago	F10; DBAPS ITPAGAMENTO_PRESTADOR, ITPGTO_PRESTADOR, REPASSE_PRESTADORES
+lancamento_avulso_prestador	SGO	item	F7	Créditos e débitos avulsos do prestador (devolução, multa, bônus) aplicados no pagamento	F10; DBAPS PRESTADOR_CREDITO_DEBITO, PAGAMENTO_AVULSO, PAGAMENTO_AVULSO_ITEM, PRESTADOR_DESCONTO_PRODUCAO
+adiantamento_rede	SGO	principal	F7	Adiantamento ao prestador com compensação nos pagamentos seguintes	F10; DBAPS ADIANTAMENTO, CONSOLIDA_ADIANTA
+remuneracao_capitacao	SGO	configuracao	F8	Remuneração por pessoa coberta: valor por vida, população vinculada e período	F10; DBAPS PRESTADOR_CAPTATION; SPDATA TBTISSREMUNERAOPERPS (modelos de remuneração)
+limite_producao_prestador	SGO	configuracao	F8	Teto de produção por prestador, procedimento ou período, com regra de revisão	F10; DBAPS REVISAO_PRODUCAO, REVISAO_PRODUCAO_REGRA, REVISAO_PROD_QTD_ATEND, ITREVISAO_PRODUCAO
+pedido_autorizacao_plano	SGO	principal	F7	Pedido de autorização recebido: beneficiário, solicitante, executante, caráter, prazo regulatório, senha e validade	F11; DBAPS GUIA, GUIA_PRESTADOR, SOLICITACAO, GUIA_WEB; TISS
+pedido_autorizacao_plano_item	SGO	item	F7	Procedimentos, materiais e diárias pedidos, com quantidade solicitada e autorizada	F11; DBAPS ITGUIA, ITGUIA_DESPESA, ITGUIA_TAXA, ITGUIA_WEB
+pedido_autorizacao_plano_historico	SGO	historico	F7	Mudanças de situação e de etapa do pedido, com responsável e horário, para medir o prazo	F11; DBAPS GUIA_HISTORICO_RESPONSAVEL, ETAPA_AUTORIZACAO, GUIA_OCORRENCIA
+situacao_guia_plano	SGO	dominio	F7	Situações da guia de autorização (em análise, autorizada, negada, cancelada, executada)	F11; SPDATA CDGUIASTATUS (9)
+origem_guia_plano	SGO	dominio	F7	Origens do pedido de autorização (portal, central, troca eletrônica, balcão)	F11; SPDATA CDORIGEMGUIA (5), PSORIGEMGUIA (6)
+tipo_guia_plano	SGO	dominio	F7	Tipos de guia (consulta, SP/SADT, internação, odontológica, honorário) com o código do padrão TISS	F11; SPDATA CDTPGUIA (4), PSTIPOGUIA (4)
+critica_autorizacao	SGO	dominio	F7	Críticas automáticas do pedido (carência, inadimplência, cobertura, preexistência, limite)	F11; SPDATA PSCRITICA (7)
+critica_pedido_autorizacao	SGO	item	F7	Críticas encontradas em cada pedido, com liberação manual e responsável	F11; DBAPS ITGUIA_ERROS, GUIA_EXECUCAO_ERRO
+rol_procedimento_ans	SGO	catalogo_publico	F7	Procedimentos do rol da ANS por segmentação, com vigência	F11; DBAPS ROL_ANS; fonte ans_rol
+diretriz_utilizacao_ans	SGO	catalogo_publico	F7	Diretrizes de utilização e de cobertura do rol, com os critérios clínicos	F11; DBAPS ROL_ANS, PROCED_REGULACAO; fonte ans_rol
+regra_cobertura_rol	SGO	configuracao	F7	Regra de cobertura por procedimento: exige auditoria, perícia, diretriz ou junta	F11; DBAPS REGRA_PRESTADOR, PROCED_TIPO_REGULACAO, PROCED_REGULACAO, ESPECIALIDADE_AUTORIZACAO_ETQ
+restricao_cobertura_plano	SGO	configuracao	F7	Restrições por plano ou contrato: idade, sexo, quantidade, prestador e itens fora da cobertura	F11; DBAPS REST_PLANO_*, REST_CONT_*, PLANO_ITENS_SEM_COBERTURA, RESTRICAO, RESTRICAO_REGRA
+prazo_atendimento_regulatorio	SGO	configuracao	F7	Prazos máximos de atendimento e de resposta por tipo de pedido e caráter	F11; DBAPS SLA_AUTORIZACAO, PRAZO_SOLICIT_POSSIVEL
+regra_retorno_consulta	SGO	configuracao	F7	Regra de retorno sem nova cobrança: dias, mesmo prestador ou especialidade	F11; SPDATA CDTPRETCONS (5), PSTPRETORNO (5); DBAPS RETORNO_PROCEDIMENTO
+auditor_plano	SGO	principal	F7	Auditor médico, enfermeiro ou dentista, com especialidade, limite de alçada e situação	F11 (auditor_designado da rodada 1); DBAPS AUDITOR, AUDITORIA; depende de profissional (02)
+decisao_auditoria_medica	SGO	item	F7	Parecer de auditoria por item: autorizado, parcial ou negado, com justificativa clínica	F11; DBAPS AUDITORIA, ITAUDIT_TABELAS, MOTIVO_AUTORIZACAO
+negativa_cobertura	SGO	principal	F7	Negativa formal ao beneficiário, com motivo, cláusula ou norma e meio de entrega no prazo	F11; DBAPS GUIA_NEGATIVA, MOTIVO_GLOSA
+junta_divergencia_tecnica	SGO	principal	F7	Junta para divergência técnica: profissionais, desempatador, prazos e conclusão	F11; DBAPS AUDITORIA
+prorrogacao_internacao_plano	SGO	item	F7	Prorrogação de internação autorizada, com diárias adicionais e justificativa	F11; DBAPS GUIA_PRORROGACAO
+fornecimento_beneficiario	SGO	principal	F7	Fornecimento direto ao beneficiário (medicamento, material, órtese), da solicitação à entrega	F11; SPDATA PSFORNEMEMSIT (6); DBAPS ITGUIA_OCULOS
+situacao_fornecimento	SGO	dominio	F7	Situações do fornecimento (solicitado, autorizado, comprado, entregue, cancelado)	F11; SPDATA PSFORNEMEMSIT (6)
+lote_conta_recebida	SGO	principal	F7	Lote de contas recebido da rede: protocolo, prestador, competência, valor e situação de análise	F13; DBAPS LOTE, LOTE_PROTOCOLO_CTAMED, PROTOCOLO_CTAMED, REMESSA_PRESTADOR, ARQUIVO_CONTA_MEDICA
+guia_conta_recebida	SGO	principal	F7	Guia de cobrança recebida no lote, ligada à autorização e ao beneficiário	F13; DBAPS CONTA_MEDICA, CONTA_HOSPITALAR, CONTA_MEDICA_TISS, GUIA_TISS
+guia_conta_recebida_item	SGO	item	F7	Itens cobrados na guia com valor apresentado, calculado, glosado e liberado	F13; DBAPS ITCONTA_MEDICA, ITCONTA_HOSPITALAR, ITCONTA_MED, ITREMESSA_PRESTADOR, CONTA_MEDICA_PROCEDIMENTO_TISS
+guia_conta_recebida_equipe	SGO	item	F7	Equipe profissional informada em cada item da guia	F13; DBAPS CONTA_MEDICA_EQUIPE_TISS, ITREMESSA_PRESTADOR_EQUIPE, ITPRESTADOR_EQUIPE_MEDICA
+critica_conta_recebida	SGO	item	F7	Críticas automáticas da conta (sem autorização, duplicidade, valor, carência) com liberação	F13; DBAPS CTAMED_AMB_ERROS, CONTAH_REJEITADA, ITCONTA_MED_REJEITADA
+regra_critica_conta	SGO	configuracao	F7	Regras de crítica e glosa automática da conta por prestador, procedimento ou combinação	F13; DBAPS GLOSA_REFERENCIA, ITGLOSA_REFERENCIA, PRESTADOR_GLOSA, CONCOMITANTE, ITCONCOMITANTE
+auditoria_conta_recebida	SGO	item	F7	Parecer de auditoria médica ou de enfermagem sobre a conta	F13; DBAPS CONTA_HOSP_AUD_MED, CONTA_HOSP_AUD_ENF, ITCONTA_HOSP_AUD_MED, ITCONTA_HOSP_AUD_ENF
+glosa_conta_recebida	SGO	item	F7	Glosa aplicada pela operadora por item, com motivo padronizado e valor	F13; DBAPS CONTA_MEDICA_GLOSA, ITCONTA_MEDICA_GLOSA, GUIA_TISS_GLOSA, GUIA_MOTIVO_GLOSA; motivo pela terminologia TISS
+recurso_glosa_recebido	SGO	principal	F7	Recurso de glosa recebido do prestador, com protocolo, prazo e decisão	F13; DBAPS RECURSO_GLOSA, PROTOCOLO_RECURSO_GLOSA, RECURSO_GLOSA_GUIA
+recurso_glosa_recebido_item	SGO	item	F7	Itens recorridos com justificativa do prestador e valor acatado	F13; DBAPS RECURSO_GLOSA_ITGUIA, RECURSO_GLOSA_GUIA_GLOSA
+demonstrativo_analise_emitido	SGO	principal	F7	Demonstrativo de análise da conta enviado ao prestador	F13/F15; DBAPS TISS_DEM_ANA*
+pedido_reembolso	SGO	principal	F7	Pedido de reembolso do beneficiário: tipo, prestador, documentos, prazo legal e situação	F14; DBAPS REEMBOLSO, REEMBOLSO_ANEXO, SW_SOLICITACAO_REEMBOLSO; pagamento por titulo_pagar (07)
+pedido_reembolso_item	SGO	item	F7	Itens do reembolso com valor apresentado, valor de referência, glosa e valor reembolsado	F14; DBAPS ITREEMBOLSO, ITREEMBOLSO_GLOSA, ITREEMBOLSO_OCULOS, SW_SOLICITACAO_ITREEMBOLSO
+tipo_reembolso	SGO	dominio	F7	Tipos de reembolso (hospitalar, SP/SADT, materiais e medicamentos, transporte)	F14; SPDATA PSREEMBOLSOTP (4); DBAPS TIPO_REEMBOLSO
+tabela_reembolso_referencia	SGO	configuracao	F7	Tabela de referência de reembolso por plano e município, com vigência	F14; DBAPS TABELA_REEMBOLSO_MUNICIPIO, TABELA_REEMBOLSO_PADRAO, TABELA_REFERENCIA_REEMBOLSO
+tabela_reembolso_referencia_item	SGO	item	F7	Valor de referência por procedimento na tabela de reembolso	F14; DBAPS REEMBOLSO_TABELA_FATURAMENTO
+regra_reembolso_plano	SGO	configuracao	F7	Regra de reembolso do plano: multiplicador da tabela, livre escolha, limites e prazo	F14; DBAPS PLANO_REEMBOLSO
+troca_tiss_operadora	SGO	principal	F7	Transação TISS recebida ou enviada pela operadora: tipo, protocolo, prestador, situação e mensagem no motor	F15; DBAPS TISS_* (182), MV_TISS, MVS_TISS; mensagem bruta no mecanismo integracao
+comunicacao_internacao_recebida	SGO	principal	F7	Comunicação de internação ou alta de beneficiário enviada pelo prestador	F15; DBAPS TISS_* (comunicação de beneficiário)
+cancelamento_guia_recebido	SGO	principal	F7	Pedido de cancelamento de guia recebido do prestador e a resposta	F15; DBAPS TISS_* (cancelamento), MOT_CANCELAMENTO_GUIA
+demonstrativo_pagamento_emitido	SGO	principal	F7	Demonstrativo de pagamento enviado ao prestador por competência	F15; DBAPS TISS_DEM_PGT*, REPASSE_PRESTADOR_MENSAGEM
+demonstrativo_pagamento_emitido_item	SGO	item	F7	Lotes, protocolos, débitos e créditos que compõem o demonstrativo de pagamento	F15; DBAPS TISS_DEM_PGT*
+terminologia	INTG	principal	F3	Terminologia ou tabela de referência mantida (TUSS, CID-10, CBO, tabelas TISS e ANS, CBHPM) com fonte e dono	F16 (dono 08 nos conflitos); DBAPS TIPO_*, MOTIVO_*, STATUS_*, VIA_*; SPDATA TBTISSTERMO, TBTISS*, PSPRCANS
+terminologia_edicao	INTG	historico	F3	Edições publicadas de cada terminologia, com data, versão e situação da carga	F16; DBAPS EDICAO_BRASINDICE, INSTALA_TABELA_TNUM, PROCEDIMENTO_IMPORTADO_TUSS
+termo_terminologia	INTG	catalogo_publico	F3	Termos de cada terminologia: código, descrição, atributos e vigência; inclui listas fixas da ANS e do padrão de identificação	F16; SPDATA PSPRCANS (305), TBCLASSIFCREPLS, TBDISPONIBILSERV, TBISENCAOONUS, TBTISSREMUNERAOPERPS, TBTPFAVORECIDO, TBTPFORMAREAJ, TBTPVIGCONTRATO, CDTPDESPCTAPG, PSSIBCAMPOALT, TBSIPANSATO (75), TBSEXO_PIXPDQ, TBTPDOCUMENTO_PIXPDQ
+termo_terminologia_vigencia	INTG	historico	F3	Mudanças de descrição, atributo ou situação de cada termo entre edições	F16 (vigencia_termo da rodada 1)
+termo_atributo	INTG	item	F3	Atributos complementares de um termo (porte, unidade, grupo, sexo e idade permitidos)	F16; DBAPS PROCEDIMENTO_UNIDADE_MEDIDA, PROCED_PORTE_ANESTESICO, PROCED_VIA_ACESSO
+termo_equivalencia	INTG	vinculo	F3	Equivalência entre termos de terminologias diferentes (TUSS e SIGTAP, procedimento e grupo SIP), com vigência	F16/F18; SPDATA TBSIPANSPROC (1.000+); DBAPS PROCED_PROCED_TUSS, DEPARA_SUS, SIP_ITASSIST_PROCED
+tabela_referencia_procedimento	INTG	catalogo_publico	F3	Edição de tabela de honorários de referência, com portes e unidades de custo	F16 (tabela_referencia_preco da rodada 1; mat/med fica no 06); DBAPS CBHPM_CAP1..4, CBHPM_VAL_PORTE, VAL_POR_ANE
+tabela_referencia_procedimento_item	INTG	item	F3	Porte, valor e quantidade de filme ou unidade por procedimento na edição de referência	F16; DBAPS CBHPM_CAP*, POR_ANE
+capitulo_cid	INTG	catalogo_publico	F7	Capítulos da CID-10 com faixa de códigos	areas-sem-dono 21; DBAMV CAPITULO_CID; fonte cid10
+grupo_cid	INTG	catalogo_publico	F7	Grupos e subgrupos da CID-10 dentro de cada capítulo	areas-sem-dono 21; DBAMV GRUPO_CID*, SGRU_CID*; fonte cid10
+conjunto_valores	INTG	configuracao	F7	Conjunto de valores para perfis de troca clínica, com terminologia de origem e versão	F16/F33; perfis BR Core e RNDS
+conjunto_valores_termo	INTG	vinculo	F7	Termos incluídos em cada conjunto de valores	F16/F33
+termo_relacao	INTG	vinculo	F8	Relações hierárquicas e semânticas entre termos de terminologias clínicas extensas	areas-sem-dono 22; DBAMV SNOMEDCT*, TERMINOLOGIA_CLINICA
+regiao_anatomica	INTG	catalogo_publico	F8	Regiões, localizações e sublocalizações anatômicas codificadas	areas-sem-dono 22; DBAMV REGIAO_ANATOMICA*, LOCALIZACAO_ANATOMICA, SUBLOCALIZACAO_ANATOMICA
+taxa_saude_suplementar_vigencia	SGO	catalogo_publico	F7	Valores e meses de recolhimento da taxa de saúde suplementar por vigência	F18; SPDATA PSTPSVIGENCIA (2), PSTPSMESRECOL (6); DBAPS VALORES_TPS
+envio_ans	SGO	principal	F7	Envio regulatório à ANS ou à Receita (beneficiários, assistencial, econômico, prestadores, monitoramento, reajuste) com competência e arquivo	F18; DBAPS SIB, SIP_INFORMACAO, DIOPS_INFORMACAO, MONITORAMENTO_TISS, RPC_ENVIO, DMED_ENVIO; arquivo no mecanismo arquivo
+envio_ans_item	SGO	item	F7	Registro enviado (beneficiário, guia, prestador, quadro) com operação e referência à origem	F18; DBAPS SIB_USUARIO, SIP_ITEM_ASSIST*, MONIT_TISS_GUIA*, DIOPS_INFORMACAO_DET, RPC_CONTRATO
+envio_ans_retorno	SGO	item	F7	Retorno e críticas do órgão por envio e registro, com correção e reenvio	F18; DBAPS SIB_DEVOLUCAO, SIB_DEVOLUCAO_USUARIO, MONITORAMENTO_TISS_RETORNO, MONITORAMENTO_TISS_CRITICA, RPS_ERRO, SIP_ERRO, DIOPS_ERROS
+conferencia_cadastral_ans	SGO	principal	F7	Base de beneficiários devolvida pela ANS para conferência com o cadastro próprio	F18 (retrato_cadastral_ans da rodada 1); DBAPS SIB_USUARIO_ANS, USUARIO_MATRI_ANS
+conferencia_cadastral_ans_item	SGO	item	F7	Divergência por beneficiário entre a base da ANS e o cadastro, com correção	F18; DBAPS SIB_USUARIO_ANS, SIB_MUDANCA_CONTRATUAL_MANUAL, SIB_EXCLUSAO_MANUAL
+quadro_economico_ans	SGO	configuracao	F7	Leiaute dos quadros do envio econômico-financeiro: páginas, linhas, colunas e células	F18; DBAPS DIOPS_PAGINA, DIOPS_LINHA, DIOPS_COLUNA, DIOPS_CELULA, DIOPS_CONFIG_*
+quadro_economico_ans_conta	SGO	vinculo	F7	Contas contábeis que alimentam cada célula do quadro econômico-financeiro	F18/F19; DBAPS DIOPS_CONTA_CONTABIL_DEDUCAO, DIOPS_CFG_AGRUP_CONTRATO; depende de plano de contas (07)
+apuracao_taxa_saude_suplementar	SGO	principal	F7	Apuração da taxa de saúde suplementar por período, com vidas, valor e guia de recolhimento	F18; DBAPS VALORES_TPS; SPDATA PSTPSVIGENCIA, PSTPSMESRECOL
+ressarcimento_sus	SGO	principal	F7	Aviso de beneficiário atendido no SUS: competência, valores cobrados, prazos e pagamento	F18 (aviso_ressarcimento_sus da rodada 1); DBAPS RESSARCIMENTO_SUS, HISTORICO_RESSARCIMENTO_SUS
+ressarcimento_sus_atendimento	SGO	item	F7	Atendimentos identificados no aviso (internação, procedimento ambulatorial) com valor	F18; DBAPS RESSARCIMENTO_SUS_ANEXO, ITEM_RESSARCIMENTO_SUS_ANEXO, VALIDA_ITEM_RESS_SUS_ANEXO
+impugnacao_ressarcimento_sus	SGO	item	F7	Impugnação ou recurso de atendimento cobrado, com motivo técnico ou administrativo e decisão	F18; DBAPS RESSARCIMENTO_SUS_ANEXO
+declaracao_servicos_medicos	SGO	principal	F7	Declaração anual à Receita de valores pagos por beneficiário	F18; DBAPS DMED_CONFIGURACAO, DMED_ENVIO, DMED_ANEXO
+declaracao_servicos_medicos_item	SGO	item	F7	Valores por titular e dependente: mensalidades pagas e reembolsos	F18; DBAPS DMED_USUARIO, DMED_USUARIO_MENS_USUARIO, DMED_USUARIO_REEMBOLSO
+plano_contas_ans	SGO	catalogo_publico	F7	Plano de contas padrão da ANS para operadoras, com vigência	F19; DBAPS PLANO_CONTAS_ANS
+mapa_conta_balancete_ans	SGO	configuracao	F7	Correspondência entre a conta contábil própria e a conta do plano padrão da ANS	F19; DBAPS CONFIG_CONTA_CONTAB_FECH, CONFIG_CONTA_REG_AUX; depende de plano de contas (07)
+provisao_tecnica_competencia	SGO	principal	F7	Cálculo mensal das provisões técnicas da operadora, com método, base e lançamento contábil	F19; DBAPS PROVISIONAMENTO_CONTAS, GERACAO_PROVISAO_RISCO_MVS, SALDO_MENSAL_PROVISORIO
+provisao_tecnica_item	SGO	item	F7	Valor por tipo de provisão e conta contábil na competência	F19; DBAPS PROVISIONAMENTO_CONTAS
+protocolo_beneficiario	SGO	principal	F7	Protocolo de atendimento ao beneficiário com número regulatório, demanda, canal, prazo e situação	F20; DBAPS ATEND_CALL_CENTER, ATEND_CALL_CENTER_SERVICO, SW_ATEND_CALL_CENTER
+protocolo_beneficiario_andamento	SGO	item	F7	Andamentos do protocolo: fase, setor, mensagem e responsável	F20 (andamento_protocolo da rodada 1); DBAPS TRAMITE_PROTOCOLO_CALL_CENTER, TRAMITE_PROTOCOLO_MENSAGEM, ATEND_CALL_CENTER_FASES, ATEND_CALL_CENTER_OCORRENCIA
+protocolo_beneficiario_resposta	SGO	item	F7	Resposta conclusiva ao beneficiário, com meio de envio e data, dentro do prazo	F20 (resposta_conclusiva_protocolo da rodada 1); DBAPS ATEND_CALL_CENTER_FEEDBACK
+servico_atendimento_operadora	SGO	configuracao	F7	Tipos de demanda atendidos, com prazo de resposta, setor responsável e gravidade	F20; DBAPS SERVICO_CALL_CENTER, SERV_CALCEN_PRAZO_VALOR, SLA_CALL_CENTER, GRAVIDADE_CALL_CENTER, FASES_SAC
+origem_protocolo	SGO	dominio	F7	Origens do protocolo (central, portal, presencial, ANS)	F20; SPDATA SPORIGEM_ATEND (6); DBAPS ORIGEM_ATENDIMENTO
+motivo_contato_beneficiario	SGO	dominio	F7	Motivos de contato do beneficiário com a central	F20; SPDATA SPMOTLIG (1); DBAPS MOT_ATEND_CALL_CENTER, TIP_ATEND_CALL_CENTER
+vinculo_solicitante_protocolo	SGO	dominio	F7	Relação do solicitante com o titular (próprio, cônjuge, filho, procurador)	F20; SPDATA SPVINCULOTITULAR (8)
+demanda_nip	SGO	principal	F7	Reclamação recebida pela ANS (intermediação preliminar): prazo, resposta, reparação e classificação	F20 (demanda_reclamacao_ans da rodada 1); DBAPS CONFIG_RECLAMACAO_CALL_CENTER
+manifestacao_ouvidoria	SGO	principal	F7	Manifestação à ouvidoria em segunda instância, com prazo, conclusão e relatório anual	F20; DBAPS CONFIG_REA_CALL_CENTER, INFORMANTE_EXTERNO_CALL_CENTER
+conta_portal_prestador	SGO	principal	F7	Conta de acesso do prestador ao portal, com segundo fator e situação	F21; DBAPS PORTAL_LOGIN_TOKEN, PORTAL_TOKEN_SENHA, AUTWEB_TOKEN; depende da identidade do grupo 01
+permissao_portal_prestador	SGO	vinculo	F7	Funções do portal liberadas a cada conta e local de atendimento	F21; DBAPS AUTWEB_CONFIG, AUTWEB_CONFIG_CHAVES_EXIBICAO
+pedido_web_prestador	SGO	principal	F7	Pedido do prestador pelo portal: cadastro, alteração de dados, endereço, especialidade ou qualificação	F21; DBAPS SOLICITACAO_WEB_PRESTADOR, SOLICITACAO_WEB_PREST_ENDERECO, SOLICITACAO_WEB_PREST_ESPEC, SOLICITACAO_WEB_PREST_QUALI
+arquivo_enviado_prestador	SGO	principal	F7	Arquivo de lote enviado pelo portal, com validação de esquema, hash e lote gerado	F21; DBAPS AUTWEB_PRESTADOR_ARQUIVO, PORTAL_LOG_LOTE_GUIA_XML, LOTE_GUIA_WEB; binário no mecanismo arquivo
+regra_arquivo_prestador	SGO	configuracao	F7	Tipos de arquivo e documento aceitos por tipo de prestador, com validação exigida	F21; DBAPS REGRA_TP_ARQUIVO_PRESTADOR, PORTAL_TIPO_XML, PORTAL_CONFIG_VALIDA_XML, PORTAL_DOCUMENTO
+aviso_portal_prestador	SGO	principal	F7	Comunicados publicados à rede no portal, com público e período	F21; DBAPS AUTWEB_MURAL, AUTWEB_LINK
+conta_portal_beneficiario	SGO	principal	F8	Conta do beneficiário no portal e aplicativo, com segundo fator e consentimentos	F22; DBAPS PORTAL_CONFIG; depende da identidade do grupo 01
+conta_portal_contratante	SGO	principal	F8	Conta do gestor da contratante para movimentar beneficiários e ver faturas	F22; DBAPS PORTAL_CONFIG
+conta_portal_corretor	SGO	principal	F8	Conta do corretor para propostas, acompanhamento e comissão	F22; DBAPS PORTAL_CONFIG_CORRETOR, PORTAL_CONFIG_VENDA_DIA_VENC
+solicitacao_portal_beneficiario	SGO	principal	F8	Pedido pelo portal (segunda via, inclusão, exclusão, reativação, reembolso) com análise e resultado	F22; DBAPS SOLICITACAO_WEB, SW_REATIVACAO_BENEFICIARIO, HISTORICO_SOLICITACAO_WEB, SOLICITACAO_WEB_OBS_HISTORICO
+movimentacao_lote_contratante	SGO	principal	F8	Arquivo de inclusões e exclusões enviado pela contratante, com críticas e processamento	F22; DBAPS SOLICITACAO_WEB_DESLIGA_LOTE, SW_IMPORTA_ARQUIVO, TIPO_IMPORTA_ARQUIVO
+movimentacao_lote_contratante_item	SGO	item	F8	Movimento por beneficiário no arquivo da contratante, com resultado	F22; DBAPS SOLICITACAO_WEB_DESLIGA_LOTE
+pergunta_frequente	SGO	principal	F8	Perguntas frequentes publicadas no portal, por grupo	F22; DBAPS FAQ_GRUPO, FAQ_PERGUNTA, DICA_TELA
+programa_saude	SGO	principal	F8	Programa de promoção da saúde ou gestão de crônicos: objetivo, público, metas e registro na ANS	F23; DBAPS PROGRAMA_ATENDIMENTO, ITPROGRAMA_ATENDIMENTO
+programa_saude_plano	SGO	vinculo	F8	Planos e contratos em que o programa é oferecido	F23; DBAPS ITPROGRAMA_ATENDIMENTO_PLANO
+programa_saude_procedimento	SGO	vinculo	F8	Procedimentos previstos no programa, com frequência e isenção de coparticipação	F23; DBAPS PROGRAMA_ATEND_PROCEDIMENTO, ITPROGRAMA_ATENDIMENTO_PROC, ITPROGRAMA_ATEND_GRUPO_PROCED
+programa_saude_equipe	SGO	vinculo	F8	Profissionais e prestadores responsáveis pelo programa	F23; DBAPS PROGRAMA_ATEND_ESPECIALIDADE, GRUPO_CONTROLE_CRONICO_PREST
+grupo_risco_saude	SGO	dominio	F8	Grupos de risco ou condição crônica acompanhados (diabetes, hipertensão, gestante)	F23; DBAPS GRUPO_CONTROLE_CRONICO, PATOLOGIA
+criterio_elegibilidade_programa	SGO	configuracao	F8	Critério que torna o beneficiário elegível: CID, procedimento, idade, uso ou escore	F23; DBAPS CID_CONTROLE_CRONICO, PROCEDIMENTO_CONTROLE_CRONICO, PATOLOGIA_CID
+participante_programa	SGO	principal	F8	Beneficiário no programa: entrada, grupo de risco, responsável, saída e motivo	F23; DBAPS USUARIO_PROGRAMA_ATENDIMENTO, GRUPO_CONTROLE_CRONICO_USUARIO, USUARIO_PROG_ATEND_MEDICO
+avaliacao_risco_participante	SGO	principal	F8	Questionário de risco aplicado ao participante, com escore e data	F23; DBAPS QUESTIONARIO, RESPOSTAS_QUESTIONARIO
+avaliacao_risco_participante_resposta	SGO	item	F8	Respostas da avaliação de risco por pergunta	F23; DBAPS RESPOSTAS_QUESTIONARIO
+acompanhamento_programa	SGO	principal	F8	Contato, visita ou consulta agendada ou realizada com o participante, com resultado	F23; DBAPS AGENDA, AGENDA_CARTEIRA, HISTORICO_ATENDIMENTO_CRONICO, EMERGENCIA_CUSTO_CRONICO
+bonificacao_programa	SGO	configuracao	F8	Bônus ou desconto concedido pela participação no programa, conforme regra regulada	F23; DBAPS USUARIO_PROG_ATEND_RECEITA
+sistema_externo	INTG	principal	F3	Sistema externo integrado: fornecedor, finalidade, ambiente e responsável	F26; MVINTEGRA SISTEMA_TERCEIRO, SISTEMA_PROCESSO; DBAMV SISTEMA_INTEGRADO; SPDATA TBIDENTIFICACAOENDPOINT (57), TBREGUL_SISTEMA (2)
+ponto_integracao	INTG	principal	F3	Ponto de entrada ou saída: direção, padrão, transporte, endereço, ordem, retentativa e estabelecimento	F26; SPDATA TBENDPOINT (2), TBREGUL_ENDPOINT (3), FPESOCTPAMB (2); MVINTEGRA PROCESSO_INTEGRACAO, IMV_CONFIGURACAO_SAIDA
+operacao_ponto_integracao	INTG	item	F3	Operações e rotas de cada ponto, com tipo de documento e esquema esperado	F26; SPDATA TBENDPOINTURI (30), TBOPERSCHEMA (3); MVINTEGRA IMV_CONFIGURACAO_SAIDA_TP_DOC, IMV_CONFIGURACAO_REQUISICAO
+padrao_troca	INTG	dominio	F3	Padrões de troca suportados (TISS, HL7 v2, FHIR, próprio do parceiro, arquivo)	F26; SPDATA TBTPWEBSERV (2)
+esquema_mensagem	INTG	configuracao	F3	Versão de esquema ou leiaute por padrão, usado para validar mensagens	F26; DBAMV XML_SCHEMA, XML_TAG, XML_VERSAO; MVINTEGRA IMV_CONFIGURACAO_ELEMENTO_XML, IMV_CONFIGURACAO_ENTIDADE_XML
+credencial_integracao	INTG	principal	F3	Referência à credencial ou certificado no cofre, com validade e rotação; nunca guarda o segredo	F26; SPDATA SITPEQV (senhas de FTP), TBTISSWEBSERV, TBINFBANCO (descarte)
+mensagem_integracao_saida	INTG	principal	F3	Mensagem na fila de saída: evento de origem, ponto, chave de idempotência, situação e conteúdo	F26; MVINTEGRA IMV_MENSAGEM_SAIDA_PADRAO, IMV_MENSAGEM_SAIDA_FORMATADA, INTEGRA_SAIDA_*
+mensagem_integracao_entrada	INTG	principal	F3	Mensagem recebida: ponto, remetente, chave, situação de processamento e conteúdo	F26; MVINTEGRA INTEGRA_ENTRADA_*, IMV_LOG_REQUISICAO
+tentativa_entrega_mensagem	INTG	item	F3	Tentativas de entrega ou de processamento, com resposta, duração e erro	F26; MVINTEGRA IMV_MENSAGEM_SAIDA_PADRAO_STAT, IMV_REGISTRO_JOB
+falha_integracao	INTG	principal	F3	Falha que exige ação humana: mensagem, causa, responsável, tratamento e reprocessamento	F26; MVINTEGRA ERRO_PROCESSO, IMV_MENSAGEM_ERRO, VERIFICACAO_ERRO
+destinatario_falha_integracao	INTG	vinculo	F3	Pessoas ou grupos avisados de falha em cada ponto de integração	F26; MVINTEGRA IMV_CONFIG_ERRO_PROCESSO, IMV_CONFIG_ALERTA_EMAIL
+mapeamento_codigo_externo	INTG	vinculo	F3	Equivalência entre código interno e código do sistema externo, por domínio e sistema	F26; MVINTEGRA DEPARA; DBAMV PW_DE_PARA_*; SPDATA TBDIGITAL_ESPECIALIDADE (113)
+tipo_mapeamento_codigo	INTG	dominio	F3	Domínios que admitem equivalência externa (especialidade, procedimento, setor, convênio, sexo)	F26; DBAPS TIPO_PROCESSO_DE_PARA
+tipo_evento_publicado	INTG	configuracao	F3	Fatos de negócio publicáveis (paciente, atendimento, internação, leito, prescrição) com versão do conteúdo	F27; SPDATA TBSGHINTEGRADOR_TABELA (3), TBDIGITAL_INTEG_TYPE (60); MVINTEGRA IMV_ATENDIMENTO, IMV_LEITO, IMV_PRESCRICAO
+assinatura_evento_parceiro	INTG	vinculo	F3	Eventos que cada parceiro recebe, com ponto de saída, filtro, campos e situação	F27; SPDATA TBSGHINTEGRADOR_PARAM (1), TBDIGITAL_INTEG_FIELD (191)
+canal_hl7	INTG	configuracao	F3	Canal de mensageria clínica: endereço, porta, modo de confirmação e codificação	F28; MVINTEGRA HL7_VERSAO_TERCEIRO, AGFA_*
+evento_hl7	INTG	catalogo_publico	F3	Eventos e tipos de mensagem do padrão HL7 v2 por versão	F28; MVINTEGRA HL7_EVENTO, HL7_VERSAO, HL7_EVENTO_VERSAO
+perfil_mensagem_hl7	INTG	configuracao	F3	Perfil de mensagem por parceiro e evento: versão, segmentos exigidos e regras	F28; MVINTEGRA HL7_EVENTO_SEGMENTO, HL7_SEGMENTO
+perfil_mensagem_hl7_campo	INTG	item	F3	Mapeamento de segmento e campo do perfil para o dado interno, com valor fixo ou conversão	F28; MVINTEGRA HL7_SEGMENTO_MAPEAMENTO, HL7_VALOR_MAPEAMENTO, HL7_MAPM_SEGM_IMV_CNFG_ENT_XML
+exame_laboratorio_apoio	INTG	principal	F3	Catálogo de exames do laboratório externo: código, material, exigências, prazo e exame interno equivalente	F29; SPDATA SITBEXHP (1.000+); DBAMV LIS_EXA; depende de laboratorio_apoio e exame (05)
+elemento_exame_laboratorio_apoio	INTG	vinculo	F3	Equivalência dos campos de resultado do laboratório externo com os campos do exame interno	F29; SPDATA SITBELHP (1.000+)
+material_laboratorio_apoio	INTG	vinculo	F3	Equivalência de materiais e recipientes com o laboratório externo	F29; SPDATA SIMATHP (321)
+equivalencia_exame_equipamento	INTG	vinculo	F3	Equivalência de exames por interface de equipamento	F29; SPDATA SITBEXEQ (2); depende de interface_equipamento (05)
+remessa_laboratorio_apoio	INTG	principal	F3	Remessa de pedidos e amostras ao laboratório externo, com protocolo e situação	F29 (pedido_apoio da rodada 1); MVINTEGRA IMV_SOLICITACAO_SADT, IMV_AMOSTRA, IMV_CONTROLE_AMOSTRA; DBAMV AMOSTRA_INTERFACE
+remessa_laboratorio_apoio_item	INTG	item	F3	Exame e amostra enviados na remessa, com código externo e situação	F29; MVINTEGRA INTEGRA_SAIDA_EXAMES
+resultado_laboratorio_apoio	INTG	principal	F3	Resultado estruturado recebido do laboratório externo, aguardando conferência do responsável técnico	F29; MVINTEGRA IMV_RESULTADO_PSSD
+resultado_laboratorio_apoio_valor	INTG	item	F3	Valores recebidos por campo do resultado, com unidade, referência e campo interno	F29; MVINTEGRA IMV_RESULTADO_PSSD
+etiqueta_amostra_apoio	INTG	principal	F3	Etiqueta de amostra devolvida pelo laboratório externo por exame, para impressão na coleta	F29 (layout_etiqueta_apoio da rodada 1); SPDATA SIWSETIQUETA (72), SIWSLANCETQTA (128); DBAMV ETIQUETA_AMOSTRA_LAB_APOIO
+transacao_tiss_webservice	INTG	configuracao	F3	Transações de troca eletrônica com as operadoras e o esquema de cada uma	F31; SPDATA TBTISSSCHEMA (25), TBTISSURLWSSGH (11); endereço por operadora em endpoint_tiss_fonte_pagadora (06)
+credencial_fonte_pagadora	INTG	principal	F3	Credencial do hospital em cada operadora (login, código, certificado) por referência ao cofre	F31 (conflitos: credencial_fonte_pagadora); SPDATA TBTISSWEBSERV (2), TBCODATI (14)
+troca_tiss_prestador	INTG	principal	F3	Transação do hospital com a operadora: tipo, guia ou lote, protocolo, situação e mensagem no motor	F31; DBAMV INTEGRA_TISS_*, TISS_RETORNO_*, TISS_SOLICITA_STATUS_AUTORIZ, DEMONSTRATIVO_RETORNO_*; depende de lote_tiss e guia_tiss (06)
+tabela_codigo_regulacao	INTG	principal	F3	Tabelas de códigos exigidas pela central de regulação estadual	F32; SPDATA TBREGUL_TABELAS (20); serviços e solicitação ficam no 04
+valor_codigo_regulacao	INTG	item	F3	Valores de cada tabela da regulação com o código interno equivalente	F32; SPDATA TBREGUL_VLR_TABELAS (253)
+envio_rnds	INTG	principal	F7	Documento clínico enviado à rede nacional (vacina, sumário, resultado): tipo, paciente, identificador e situação	F33; DBAMV PW_ASSINANTE, PW_TIPO_REPOSITORIO; SPDATA TBDIGITAL_INTEG_TYPE
+envio_rnds_versao	INTG	historico	F7	Versões de um documento enviado (substituição, cancelamento) com identificador recebido	F33 (versao_documento_rnds da rodada 1)
+perfil_fhir	INTG	configuracao	F7	Perfis de troca clínica adotados, com versão fixada e conjunto de valores	F33 (perfil_fhir_fixado da rodada 1)
+identificador_externo_pessoa	INTG	vinculo	F3	Identificador da pessoa em cada sistema externo (rede nacional, parceiro, cadastro nacional)	F27/F33; DBAMV CNS_CADSUS; MVINTEGRA IMV_UNIFICA_PACIENTE, PACIENTE_SBS; depende de pessoa_fisica (02)
+envio_webservice_sus	INTG	principal	F7	Envio a serviço do SUS (rastreamento de câncer, cadastro de prestador) com protocolo e situação	F34; DBAMV PROTOCOLO_SISCAN, PRESTADOR_DATASUS; MVINTEGRA DATASUS_*
+envio_webservice_sus_retorno	INTG	item	F7	Resposta do serviço do SUS por envio, com críticas	F34 (retorno_webservice_sus da rodada 1); DBAMV RESPOSTA_SISCAN
+envio_prescricao_plataforma	INTG	principal	F8	Receita enviada a plataforma de prescrição digital, com identificador externo, situação e retorno validável	F35; SPDATA PRCABNEXODATA (1), PRLANCNEXODATA (1); depende de assinatura_documento (01)
+modelo_mensagem_paciente	INTG	configuracao	F3	Modelo de mensagem ao paciente (confirmação, lembrete, aviso) com variáveis e canal	F36; MVINTEGRA IMV_MENSAGEM_SMS, IMV_CONFIG_ALERTA_EMAIL
+regra_envio_mensagem_paciente	INTG	configuracao	F3	Gatilho, antecedência e periodicidade de envio por modelo e estabelecimento	F36; SPDATA TBSMSTPAGENDA (4)
+pedido_mensagem_paciente	INTG	principal	F3	Pedido de envio à plataforma de mensagens: paciente, modelo, origem e situação	F36; DBAPS SMS_ENVIO, SMS_AVULSO
+pedido_mensagem_paciente_retorno	INTG	item	F3	Retornos de entrega e resposta do paciente por pedido	F36 (retorno_mensagem_paciente da rodada 1)
+codigo_retorno_mensageria	INTG	dominio	F3	Situações e códigos de erro devolvidos pela plataforma de mensagens	F36; SPDATA TBSMSTPRETMSG (4), TBSMSTPERRO (6)
+parceiro_dados	INTG	principal	F3	Parceiro que recebe dados: finalidade, base legal, contrato e responsável	F37
+finalidade_compartilhamento	INTG	dominio	F3	Finalidades e bases legais de compartilhamento de dados	F37
+pacote_parceiro	INTG	configuracao	F3	Pacote de dados entregue a parceiro: conteúdo, formato, meio, agenda e anonimização	F37; SPDATA CTWGRUPOEXPORTACAO (3)
+pacote_parceiro_campo	INTG	item	F3	Campos ou visões incluídos no pacote, para minimização e revisão	F37
+entrega_pacote_parceiro	INTG	historico	F3	Entregas realizadas de cada pacote, com período, volume, hash e confirmação	F37
+cliente_api	INTG	principal	F3	Sistema cliente da API de integração, com responsável, ambiente e situação	F38
+escopo_api	INTG	dominio	F3	Escopos de operação da API (leitura, escrita, por recurso)	F38
+escopo_cliente_api	INTG	vinculo	F3	Escopos concedidos a cada cliente, com período	F38
+chave_api	INTG	item	F3	Chaves do cliente guardadas por resumo criptográfico, com validade e revogação	F38; chamadas registradas no mecanismo trilha_auditoria
+proposta_escrita_api	INTG	principal	F3	Escrita em dois tempos: alteração proposta pelo cliente, confirmação humana e resultado	F38
+vinculo_pedido_compra_portal	INTG	vinculo	F3	Pedido de compra ligado ao código da cotação no portal externo	F40 (vinculo_pedido_portal da rodada 1); SPDATA GEINTAPOIOCOT (225); portal_cotacao e pedido de compra ficam no 05
+conta_portal_paciente	INTG	principal	F3	Conta do paciente no portal de resultados, com segundo fator e situação	F41; DBAMV PLAUDOS_CONFIGURACOES; depende da identidade do grupo 01
+setor_publicado_portal	INTG	configuracao	F3	Setores e tipos de exame publicados no portal, com prazo e regra de liberação	F41; SPDATA SIMODULO_SIWEBATOS, SIWEBPARTPATU; perfil_portal_resultado fica no 05
+liberacao_resultado_portal	INTG	principal	F3	Resultado liberado para o portal: exame, paciente, data de publicação e retirada	F41; SPDATA SILIBERACAOEXAME (1.000+); DBAMV PLAUDOS_LOG_EXCLUSAO
+acesso_resultado_portal	INTG	historico	F3	Quem abriu cada resultado no portal, quando e de onde, para auditoria do paciente	F41 (acesso_resultado_registro da rodada 1)
+conta_portal_medico	INTG	principal	F3	Conta do médico externo no portal, ligada ao profissional por pessoa do hospital	F42; depende de profissional (02) e identidade (01)
+pedido_vinculo_medico_externo	INTG	principal	F3	Autocadastro do médico solicitante aguardando conferência e vínculo	F42; SPDATA TBMEDSOLWEBCAD (5)
+perfil_prioridade_externa	INTG	dominio	F3	Perfis de prioridade enviados ao sistema de triagem externo (gestante, idoso, cadeirante)	F43; SPDATA RETPPROTOLIFE (6)
+classificacao_externa_recebida	INTG	principal	F3	Classificação de risco recebida do sistema de triagem, ligada ao atendimento	F43; depende de atendimento (02)
+exportacao_erp	INTG	principal	F8	Lote de exportação ou importação com sistema de gestão corporativo: tipo, período, situação e conciliação	F39; MVINTEGRA INTEGRA_SAIDA_CONTABIL, INTEGRA_SAIDA_FINANCEIRO, IMV_CONTABIL, IMV_FINANCEIRO; DBAMV IMVSAP_*
+exportacao_erp_item	INTG	item	F8	Registro exportado ou importado no lote, com chave externa e resultado	F39; MVINTEGRA INTEGRA_SAIDA_MOV_ESTOQUE, INTEGRA_ENT_MOV_CONTABIL, INTEGRA_PLANO_CONTAS_DE_PARA
+dispositivo_acesso	INTG	principal	F8	Catraca ou leitor de portaria: local, sentido, endereço e situação	F44; MVINTEGRA INTEGRA_CRACHA
+regra_acesso_dispositivo	INTG	configuracao	F8	Quem passa em cada dispositivo e em que horário (visitante, acompanhante, colaborador)	F44
+evento_acesso_portaria	INTG	historico	F8	Passagens registradas por crachá, com sentido, horário e permissão ou recusa	F44; depende do crachá (M50.5)
+provedor_assinatura_nuvem	INTG	configuracao	F3	Provedor de assinatura digital em nuvem, com ponto de integração e formatos aceitos	SPDATA fora da matriz da rodada 1: TBSAFEWEB_*, TBVIDAAS_*; depende de politica_assinatura e assinatura_documento (01)
+formato_assinatura_icp	INTG	dominio	F3	Formatos de assinatura da infraestrutura de chaves públicas (padrões de documento e de PDF)	SPDATA TBSAFEWEB_FORMA_ASSIN_ICP (5), TBVIDAAS_FORMA_ASSIN_ICP (4)
+provedor_assinatura_formato	INTG	vinculo	F3	Formatos aceitos por cada provedor de assinatura em nuvem	SPDATA TBSAFEWEB_FORMA_ASSIN_ICP, TBVIDAAS_FORMA_ASSIN_ICP
+autorizacao_assinatura_nuvem	INTG	principal	F3	Autorização concedida pelo profissional ao provedor em nuvem: período, situação e tipo de atendimento	SPDATA TBSAFEWEB_SITAUTORIZA (3), TBSAFEWEB_TIPOATENDIMENTO (2); depende de profissional (02)

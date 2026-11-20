@@ -1,0 +1,7 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+texto_padrao_campo_modelo	PEP	configuracao	F7	Texto inicial sugerido para um campo de modelo clínico, ativado por um contexto de uso	DBAMV EDITOR_TEXTO_PADRAO; EDITOR_TEXTO_PADRAO_CONFIG
+texto_padrao_campo_contexto	PEP	item	F7	Condições do contexto (profissional, especialidade, setor, tipo de atendimento) que escolhem o texto inicial do campo	DBAMV EDITOR_TEXTO_PADR_CONFIG_PARAM
+impressora_finalidade_estabelecimento	ADM	configuracao	F7	Impressora padrão, cópias e forma de impressão por finalidade no estabelecimento, usada quando a estação não define	DBASGU MODULOS_IMPRESSORA
+conta_portal_paciente_dependente	INTG	vinculo	F7	Pacientes dependentes cujos resultados a conta do portal pode consultar, com parentesco e vigência	DBASGU PLAUDOS_USUARIOS_DEPENDENTES
+cadastro_padrao	SIS	principal	F7	Biblioteca de registros-modelo de cadastro (itens, procedimentos, materiais) oferecida para carga na implantação	MVBIKE ITEM_CADASTRO; ITEM_CADASTRO_CATALOGO; ITEM_CADASTRO_PADRAO; ITEM_REPOSITOR_CADASTRO
+tipo_cadastro_padrao	SIS	dominio	F7	Tipos de cadastro da biblioteca de implantação (produto, procedimento, setor), com orientação de uso	MVBIKE ITEM_TIPO_CADASTRO

@@ -1,0 +1,98 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+CRPERIOD	1	SIS	-	temporaria	descartar	Período de referência com única linha sentinela 1899; sem uso
+DIPERMPS	35	ADM	Administração > Perfis > Permissões por posto e ato	configuracao	descartar	Permissões legadas por posto e setor SADT para 1 usuário; absorvidas no RBAC
+FPCON	5	ADM	Administração > Auditoria > Conexões ao módulo RH (legado)	auditoria	descartar	Log de conexão ao módulo de folha, 5 linhas 2010-2018; sem valor
+GEHISUSU	2	SIS	Lixo: histórico de 2004	obsoleta	descartar	Duas linhas de histórico de usuário de 2004, sem uso
+GETRUFA	2	SIS	Enum de sistema: Sim/Não	dominio	descartar	Tabela auxiliar T/F sem valor de negócio; vira booleano
+HTALTESTRUTBD	847	SIS	Técnico: histórico de scripts de estrutura	obsoleta	descartar	Log de alterações de estrutura do banco do fornecedor
+HTTBHOSPIT	14	ADM	Administração > Auditoria > Dados do hospital	auditoria	migrar-leitura	Histórico de alterações do cadastro do hospital (2022-2026)
+IBE$VERSION_HISTORY	59	SIS	Técnico: ferramenta IBExpert	obsoleta	descartar	Versionamento de objetos da ferramenta IBExpert, sem valor de negócio
+OLD_TBMEDICO	1	SIS	Lixo: cadastro antigo de médicos	obsoleta	descartar	Cadastro de médicos anterior a TBPROFIS, 1 linha residual
+PELEIAUTEREP	1	SIS	Lixo: leiaute REP só com ID	obsoleta	descartar	Tabela de leiaute de REP com apenas ID, sem conteúdo
+PNCONFIGPORTAL	19	REL	Painéis > Portal de painéis (TV)	configuracao	migrar-crud	Painéis operacionais configurados (UTI, farmácia, mapa cirúrgico, laboratório)
+PREMAILCFG	2	ADM	Administração > Configurações > Servidor de e-mail	configuracao	migrar-crud	Servidor SMTP para envio de documentos (contém credencial)
+PREMAILMODULO	4	ADM	Administração > Configurações > E-mail > Módulos	dominio	migrar-crud	Módulos que enviam e-mail (oncologia, notificação, assinatura)
+PRJUSTIF_IMP_EXPORTACAO	1001	ADM	Administração > Auditoria > Impressão/exportação do prontuário	auditoria	migrar-leitura	Justificativas de impressão/exportação de documentos do prontuário (SBIS), 2020-2026
+PRTERMOACEITE	814	ADM	Segurança > Termo de aceite do PEP > Aceites	auditoria	migrar-leitura	Aceites do termo de uso do PEP por usuário (2022-2026)
+PRTERMOCAD	1	ADM	Segurança > Termo de aceite do PEP	configuracao	migrar-crud	Texto vigente do termo de concordância de uso do PEP
+PRTIPO_JUSTIF_EXPORTACAO	4	ADM	Cadastros > Domínios > Justificativas de exportação	dominio	migrar-crud	Justificativas padrão para impressão/exportação do prontuário
+REEXCATE	520	ADM	Administração > Auditoria > Atendimentos excluídos	auditoria	migrar-leitura	Atendimentos externos excluídos com justificativa e usuário (2020-02/2026)
+REPACAGD_EXCLUSAO	20	ADM	Administração > Auditoria > Marcações excluídas	auditoria	migrar-leitura	Cópia de marcações excluídas (01/2025 a 05/2026)
+RIALTA_EXCLUSAO	75	ADM	Administração > Auditoria > Cancelamentos de alta	auditoria	migrar-leitura	Altas hospitalares canceladas com dados anteriores (01/2025 a 06/2026)
+RIEXCINT	30	ADM	Administração > Auditoria > Internações excluídas	auditoria	migrar-leitura	Internações excluídas com justificativa (2020 a 03/2024)
+RPMATRIZ_GUT_DESCRICAO	15	ADM	Cadastros > Domínios > Matriz GUT > Graus	dominio	migrar-crud	Graus da matriz GUT por dimensão com pontuação
+RPMATRIZ_GUT_TIPO	3	ADM	Cadastros > Domínios > Matriz GUT	dominio	migrar-crud	Dimensões da matriz GUT: gravidade, urgência, tendência
+SILANEXATMP	16	SIS	Nenhuma (temporária de lançamento)	temporaria	descartar	Temporária de lançamento de exames, 16 linhas de 2020-2021, sem valor
+TBAGEUSE	29	ADM	Administração > Usuários > Tipos de agenda permitidos	vinculo	migrar-crud	Tipos de agenda acessíveis por usuário
+TBAGRUPRELAT	29	REL	Relatórios > Agrupamentos (eSocial/REINF)	configuracao	migrar-crud	Agrupamentos de relatórios de conferência eSocial e REINF
+TBAGRUPRELAT_TBEDITREL	61	REL	Relatórios > Agrupamentos > Relatórios do grupo	vinculo	migrar-crud	Relatórios por agrupamento e versão eSocial, com ordem
+TBALERTA	2	ADM	Administração > Alertas do sistema	configuracao	migrar-crud	Alertas configuráveis por cenário, sexo, idade e repetição
+TBALERTA_TBOPCOES_TBEVENTOS	2	ADM	Administração > Alertas do sistema > Gatilhos	vinculo	migrar-crud	Opção de menu e evento que disparam cada alerta
+TBBASEDADOS	3	SIS	Nenhuma (backup do legado)	configuracao	descartar	Nomes dos bancos Firebird para log de backup; sem uso na web
+TBBTNOPREL	3	REL	Relatórios > Botões de relatório em telas	configuracao	migrar-crud	Relatórios customizados associados a botões de telas
+TBCABTRILHA	1001	ADM	Administração > Auditoria > Trilha	auditoria	migrar-leitura	Cabeçalho da trilha de auditoria SBIS (2020 a 07/2026, >1 mi)
+TBCENARIO	1	ADM	Administração > Alertas do sistema > Cenários	dominio	migrar-crud	Cenários de alerta (pendências eSocial)
+TBCFGLOGIN	1	ADM	Administração > Segurança > Política de senha e sessão	configuracao	migrar-crud	Política de senha, bloqueio, expiração de sessão e termo de aceite
+TBCTRPRTUSU	1001	ADM	Administração > Usuários > Tipos de prontuário permitidos	vinculo	migrar-crud	Tipos de prontuário acessíveis por usuário (168 usuários)
+TBDIASEMANA	7	SIS	Domínio interno (enum)	dominio	migrar-leitura	Dias da semana
+TBDICIONARIO_TBUSERS	77	ADM	Preferências do usuário > Dicionário ortográfico	cadastro	migrar-crud	Palavras do dicionário pessoal do usuário (8 usuários)
+TBDIGITAR	3	ADM	Configurações > Domínios de obrigatoriedade	dominio	migrar-leitura	Opção de obrigatoriedade de campo (sim, não, obrigatório)
+TBDIGITAR_CNSCADPAC	4	ADM	Configurações > Domínios de obrigatoriedade	dominio	migrar-leitura	Obrigatoriedade do CNS no cadastro de paciente
+TBDIGITAR_FILIACAO	4	ADM	Configurações > Domínios de obrigatoriedade	dominio	migrar-leitura	Obrigatoriedade de filiação no cadastro (mãe, pai, ambos)
+TBEDITORTXT	4	SIS	Nenhuma (editor externo desktop)	dominio	descartar	Editores de texto desktop (Notepad/WordPad); sem sentido na web
+TBEDITPARAM	1001	REL	Relatórios > Editor de relatórios > Parâmetros	configuracao	migrar-crud	Parâmetros de entrada dos relatórios SQL
+TBEDITPESQ	41	REL	Relatórios > Editor de relatórios > Pesquisas de parâmetro	configuracao	migrar-crud	Browser de pesquisa associado a parâmetro de relatório
+TBEDITQRP	1001	REL	Relatórios > Editor de relatórios > Layout (legado)	configuracao	migrar-leitura	Componentes QuickReport do layout desktop; referência para refazer
+TBEDITREL	252	REL	Relatórios > Editor de relatórios	cadastro	migrar-crud	252 relatórios customizados com SQL livre por módulo
+TBEDITREL_AGENDA	2	REL	Relatórios > Envio agendado por e-mail	configuracao	migrar-crud	Agendamento de envio de relatório por e-mail
+TBEDITREL_AGENDA_LOG	1001	REL	Relatórios > Envio agendado > Log	historico	migrar-leitura	Log de envios agendados de relatórios (2020 a 07/2026)
+TBEDITREL_AGENDA_SITUACAO	4	REL	Relatórios > Envio agendado > Situações	dominio	migrar-leitura	Situações de envio (enviado, não enviado, não conectado)
+TBEDITREL_GRUUSU	52	REL	Relatórios > Editor de relatórios > Permissão por grupo	vinculo	migrar-crud	Grupos de usuários com acesso a cada relatório
+TBEDITREL_PRMODELOREL	1	REL	Relatórios > Editor de relatórios > Modelo PEP	vinculo	migrar-crud	Relatório vinculado a modelo de documento do PEP
+TBEDITREL_TBUSERS	15	REL	Relatórios > Editor de relatórios > Permissão por usuário	vinculo	migrar-crud	Usuários com acesso a cada relatório
+TBEVENTOS	117	ADM	Administração > Auditoria > Eventos auditáveis	configuracao	migrar-leitura	Eventos por opção de menu, necessários para ler a trilha
+TBGRUUSU	42	ADM	Administração > Grupos de usuários	cadastro	migrar-crud	42 grupos de permissão de usuários
+TBHISTSENHA	1001	ADM	Administração > Segurança > Histórico de senhas	historico	migrar-leitura	Hash+salt de senhas anteriores para regra de não reutilização
+TBLANTRALERTA	1001	ADM	Administração > Auditoria > Alertas da trilha	auditoria	migrar-leitura	Mensagens de alerta registradas por evento da trilha
+TBLANTRILHASGH	1001	ADM	Administração > Auditoria > Detalhe da trilha	auditoria	migrar-leitura	Tabela/registro afetado por cada evento da trilha
+TBLEITORBIOME	2	ADM	Configurações > Dispositivos > Leitores biométricos	dominio	migrar-leitura	Modelos de leitor biométrico suportados
+TBLGPDANONMOT	6	ADM	Administração > LGPD > Motivos de anonimização	dominio	migrar-crud	Bases legais LGPD para tratamento/anonimização
+TBLGPDANONUSERFUNCAO	2	ADM	Administração > LGPD > Funções do responsável	dominio	migrar-crud	Funções do responsável LGPD (DPO, outros)
+TBLOCAL_TBUSERS	1001	ADM	Administração > Usuários > Locais/consultórios do usuário	vinculo	migrar-crud	Vínculo usuário x local de atendimento/consultório
+TBMENSAG	98	ADM	Administração > Mensagens internas	historico	migrar-leitura	Mensagens internas entre usuários (2020-2024), envio e leitura
+TBMODULO	75	ADM	Administração > Segurança > Módulos do sistema	configuracao	migrar-crud	Módulos/executáveis do sistema (SGH, SGO, SGS) e textos de abertura
+TBMOVTERMSTATUS	5	ADM	Administração > LGPD > Status de termos	dominio	migrar-crud	Status do termo de consentimento LGPD (emitido, autorizado, revogado)
+TBNVLCRITICID	8	ADM	Administração > Auditoria > Níveis de criticidade	dominio	migrar-crud	Níveis de criticidade de eventos de auditoria (emergência a debug)
+TBOPCAOREL	3	REL	Relatórios > Configuração > Opções de relatório	configuracao	migrar-crud	Opções de menu de relatório por módulo
+TBOPCOES	1001	ADM	Administração > Segurança > Opções de menu	configuracao	migrar-crud	Árvore de opções de menu/funcionalidades auditáveis
+TBPAPEL	5	ADM	Administração > Segurança > Papéis SBIS	configuracao	migrar-crud	Papéis de segurança SBIS com limite de usuários
+TBPAPEL_TBOPCOES	520	ADM	Administração > Segurança > Papéis x opções	vinculo	migrar-crud	Opções de menu permitidas a cada papel de segurança
+TBPARAMOPREL	9	REL	Relatórios > Configuração > Parâmetros de botões	configuracao	migrar-crud	Parâmetros de componentes de botões de relatório
+TBPERMISSAO_SUS	1001	ADM	Administração > Usuários > Permissões SUS	configuracao	migrar-crud	Permissões finas por usuário no faturamento SUS (AIH, BPA, APAC)
+TBPERUSU	1001	ADM	Administração > Segurança > Permissões grupo x opção	vinculo	migrar-crud	Permissões de acesso por grupo de usuário e opção de menu
+TBPROCBACKUP	2	ADM	Administração > Backup > Tipos de processo	dominio	migrar-crud	Tipo de processo do log de backup (backup/restore)
+TBSCRSAC	18	SIS	Sem tela (controle de scripts 2005)	temporaria	descartar	Controle de execução de scripts de 2005; sem valor funcional
+TBSGHCONEXAO	1001	ADM	Administração > Auditoria > Últimas conexões	historico	migrar-leitura	Última conexão por usuário e módulo (2012-2026)
+TBSGHLOG	1001	SIS	Sem tela: arquivo frio de logs de erro do legado	auditoria	descartar	Log de erros SQL do executável legado; arquivar no dump, sem tela
+TBSGHSCR	1001	SIS	Sem tela (controle de scripts de atualização)	temporaria	descartar	Controle de scripts de atualização do banco legado; não migra
+TBSGHVERSAO	25	SIS	Sem tela (versões do executável)	historico	descartar	Versões de executável instaladas por módulo/estação; específico do fornecedor
+TBSITBACKUP	4	ADM	Administração > Backup > Situações	dominio	migrar-crud	Situação do processo de backup (andamento, concluído, falha)
+TBTERMCONREVTP	4	ADM	Administração > LGPD > Tipos de termo	dominio	migrar-crud	Tipos de termo LGPD (consentimento, revogação, anonimização)
+TBTESTE_ID	5	SIS	Sem tela (tabela de teste)	temporaria	descartar	Tabela de teste do fornecedor (Teste1 a Teste5)
+TBTIPOREPRE	2	ADM	Administração > LGPD > Tipos de representante	dominio	migrar-crud	Signatário do termo LGPD: paciente ou representante legal
+TBTPACAOAUDIT	29	ADM	Administração > Auditoria > Tipos de ação	dominio	migrar-crud	Tipos de evento auditável exigidos pela certificação SBIS
+TBTPCONSTRUT	2	ADM	Administração > Empresa > Indicador de construtora	dominio	carga-referencia	Indicador de empresa construtora (eSocial/REINF)
+TBTPCOOPERAT	4	ADM	Administração > Empresa > Indicador de cooperativa	dominio	carga-referencia	Indicador de cooperativa (eSocial/REINF)
+TBTPEMP	2	ADM	Administração > Empresa > Tipo de estabelecimento	dominio	migrar-crud	Matriz ou filial
+TBTPMINISTCER	4	ADM	Administração > Empresa > Ministério certificador	dominio	carga-referencia	Ministério que concede certificação de entidade beneficente
+TBTPPERM_RICADPAC	2	ADM	Administração > Segurança > Acesso ao prontuário	dominio	migrar-crud	Tipo de acesso ao prontuário restrito (restrito/consentido)
+TBUNIUSE	825	ADM	Administração > Usuários > Unidades do usuário	vinculo	migrar-crud	Unidades de atendimento acessíveis por usuário
+TBUSERCON	1001	ADM	Administração > Usuários > Convênios do usuário (legado)	vinculo	migrar-crud	Convênios permitidos ao usuário (modelo antigo por código)
+TBUSERMODULO	1001	ADM	Sem tela: estado de sessão do desktop	temporaria	descartar	Sessão aberta por usuário e módulo; estado transitório do legado
+TBUSERS	1001	ADM	Administração > Usuários	cadastro	migrar-crud	Usuários do sistema com grupo, status e política de senha
+TBUSERSCOMPL	962	ADM	Administração > Usuários > Preferências	configuracao	migrar-crud	Preferências do usuário (tela de chamada, multiterminal)
+TBUSERS_TBALERTA	1	ADM	Administração > Usuários > Alertas do usuário	vinculo	migrar-crud	Alertas assinados pelo usuário
+TBUSERS_TBCONVEN	1001	ADM	Administração > Usuários > Convênios do usuário	vinculo	migrar-crud	Convênios permitidos ao usuário
+TBUSERS_TBPAPEL	1001	ADM	Administração > Segurança > Usuários x papéis	vinculo	migrar-crud	Papéis SBIS atribuídos ao usuário
+TBUSUCPL	400	ADM	Administração > Usuários > Permissões complementares	configuracao	migrar-crud	Flags finas de permissão e vínculo profissional do usuário
+ZNOPERA	4	SIS	Sem tela (domínio do módulo zoonoses)	obsoleta	descartar	Domínio do módulo zoonoses sem movimento; recriar só se implantado

@@ -1,0 +1,30 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+calendario_expediente	ADM	configuracao	F8	Calendário de expediente nomeado, com dias e horários de trabalho, usado para contar prazos em horas úteis	DBAPORTAL USUARIO_CALENDARIO (CD_CALENDARIO); pai de calendario_expediente_usuario
+calendario_expediente_usuario	ADM	vinculo	F8	Calendário de expediente que vale para cada usuário a partir de uma data, usado para contar prazos de tratamento e de resposta	DBAPORTAL USUARIO_CALENDARIO
+consolidacao_orcamento	FIN	vinculo	F8	Versões de orçamento que compõem uma versão consolidada de rede ou grupo	MVCONT BASE_ORCA_ORCA (proposta também em mv-02)
+conta_orcamentaria	FIN	principal	F7	Conta do plano orçamentário com hierarquia, grau, natureza, tipo e regras de transferência e bloqueio	MVCONT ORCA_CONTA; MVCONT ORCA_PLANO_ESTR (proposta também em mv-12)
+conta_orcamentaria_composicao	FIN	item	F7	Composição de uma conta orçamentária a partir de outras contas ou premissas, com fórmula e meses de referência	MVCONT ORCA_CONTA_COMP; MVCONT ORCA_VARIAVEL_CNTA (proposta também em mv-08)
+conta_orcamentaria_estabelecimento	FIN	vinculo	F7	Conta orçamentária por estabelecimento, ligada à conta contábil e ao item de resultado correspondentes	MVCONT ORCA_CONTA_EMPR (proposta também em mv-12)
+conta_orcamentaria_indicador	FIN	vinculo	F8	Indicadores estatísticos que explicam cada conta orçamentária	MVCONT ORCA_CONTA_IND (proposta também em mv-12)
+contrato_fornecedor_grupo_insumo	FIN	vinculo	F7	Grupos e subgrupos de insumo cobertos pelo contrato, para sugerir o contrato na compra	MVCONT GCTO_CONTRATO_SUPR (proposta também em mv-06)
+cronograma_orcamento	FIN	item	F7	Etapas do ciclo orçamentário (abertura, preenchimento, revisão, aprovação) com datas previstas, realizadas e situação	MVCONT BASE_ORCA_CRONOGRAMA (proposta também em mv-02)
+evento_contrato	FIN	configuracao	F7	Evento programado do contrato (vencimento, reajuste, renovação), com gatilho em dias, aviso, canal e mudança de situação	MVCONT GCTO_CONTRATO_EVEN; MVCONT GCTO_EVENTO (proposta também em mv-06)
+fluxo_tratamento_incidente	QUA	configuracao	F7	Fluxo nomeado de tratamento das notificações de incidente por estabelecimento, com as etapas que a notificação percorre até o encerramento	DBAPORTAL WORKFLOW_OCORRENCIA
+fluxo_tratamento_incidente_etapa	QUA	item	F7	Etapa do fluxo de tratamento do incidente, com ordem, responsável (usuário, papel ou setor), prazo em horas e aviso por e-mail	DBAPORTAL TIPO_FLUXO_OCORRENCIA
+indice_reajuste	FIN	dominio	F7	Índice econômico de reajuste de contrato (IPCA, IGP-M, INPC), com periodicidade e tipo de valor	MVCONT GCTO_INDICADOR (proposta também em mv-06)
+indice_reajuste_valor	FIN	historico	F7	Valor do índice de reajuste por período de vigência	MVCONT GCTO_INDICADOR_VAL (proposta também em mv-06)
+modelo_peca_orcamentaria	FIN	configuracao	F8	Formulário de coleta do orçamento por área, com orientações, hierarquia e o que o preenchedor vê e edita	MVCONT ORCA_PECA (proposta também em mv-12)
+modelo_peca_orcamentaria_linha	FIN	item	F8	Linha ou bloco do formulário de coleta, com conta, fórmula, casas decimais, valor sugerido e edição permitida	MVCONT ORCA_CONTA_PECA; MVCONT ORCA_PECA_ITEM (proposta também em mv-08)
+modelo_peca_orcamentaria_setor	FIN	vinculo	F8	Centros de custo que preenchem cada linha do formulário de coleta	MVCONT ORCA_PECA_ITEM_SETOR (proposta também em mv-12)
+modelo_texto_contrato	FIN	configuracao	F7	Texto padrão de cláusula ou tópico para montar a minuta do contrato, com ordem e campos de mesclagem	MVCONT GCTO_TAGS; MVCONT GCTO_TEXTO (proposta também em mv-06)
+motivo_movimento_orcamento	FIN	dominio	F7	Motivos de transferência, ajuste ou revisão de valores orçados	MVCONT ORCA_MOTIVO (proposta também em mv-12)
+motivo_situacao_contrato	FIN	dominio	F7	Motivos para mudança de situação ou ocorrência do contrato, por estabelecimento	MVCONT GCTO_MOTIVO; MVCONT GCTO_MOTIVO_EMPR (proposta também em mv-06)
+plano_orcamentario	FIN	principal	F7	Plano de contas próprio do orçamento, com máscara, tipo e vigência, separado do plano contábil	MVCONT ORCA_PLANO (proposta também em mv-12)
+plano_orcamentario_estabelecimento	FIN	vinculo	F7	Estabelecimentos que usam cada plano orçamentário, com situação	MVCONT ORCA_PLANO_EMPR (proposta também em mv-12)
+realizado_orcamento	FIN	principal	F7	Valor realizado por conta orçamentária, centro de custo e mês, para comparar com o orçado	MVCONT ORCA_REALIZADO; MVCONT ORCA_REALIZADO_ITEM (proposta também em mv-12)
+realizado_orcamento_origem	FIN	item	F7	Documento de origem que compõe o realizado (nota, título, lançamento ou carga externa), com valor e data	MVCONT ORCA_EXTERNO; MVCONT ORCA_REALIZADO_MOV (proposta também em mv-12)
+situacao_contrato	FIN	dominio	F7	Fases do contrato (minuta, vigente, suspenso, encerrado), com indicação de ativo e dias de tolerância por estabelecimento	MVCONT GCTO_STATUS; MVCONT GCTO_STATUS_EMPR (proposta também em mv-06)
+tipo_conta_orcamentaria	FIN	dominio	F7	Tipos de conta orçamentária (receita, custo, despesa, investimento, estatística)	MVCONT ORCA_TIPO_CONTA (proposta também em mv-12)
+tipo_evento_contrato	FIN	dominio	F7	Tipos de evento e de data de referência usados nos eventos programados do contrato	MVCONT GCTO_DATA; MVCONT GCTO_DATA_EMPR; MVCONT GCTO_TIPO_EVENTO (proposta também em mv-06)
+tipo_origem_realizado	FIN	dominio	F7	Tipos de origem externa de valores realizados carregados no orçamento	MVCONT ORCA_TIPO_EXTERNO (proposta também em mv-12)
+versao_orcamento_peca	FIN	vinculo	F8	Formulários de coleta usados numa versão do orçamento	MVCONT ORCA_CONTROLE_PECA (proposta também em mv-12)

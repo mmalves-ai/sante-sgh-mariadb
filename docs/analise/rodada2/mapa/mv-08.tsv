@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	IMVAPP_ORGANIZACAO	TABELA	mapeamento_codigo_externo	N	INTG	F3	de-para da empresa com ERP corporativo externo
+DBAMV	IMVAPP_SETORMV_CCUSTO	TABELA	depara_centro_custo_externo	N	FIN	F3	
+DBAMV	IMVAPP_TIPO_TRANSACAO_AR	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	IMVAPP_TP_MVTO_ESTOQUE	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	IMVMICRODATA_RETORNO	MECANISMO	integracao	N	INTG	F3	retorno de laudos de sistema externo de imagem
+DBAMV	IMVSAP_EMPRESA	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAMV	IMVSAP_EXP_CAUCAO	TABELA	exportacao_erp_item	N	INTG	F8	
+DBAMV	IMVSAP_EXP_CONTA_REC	TABELA	exportacao_erp_item	N	INTG	F8	
+DBAMV	IMVSAP_INT_MGES	MECANISMO	integracao	N	INTG	F8	configuracao de caminhos de arquivo da exportacao
+DBAMV	IMVSAP_IT_PROTOCOLO	TABELA	exportacao_erp_item	N	INTG	F8	
+DBAMV	IMVSAP_PLANO	TABELA	depara_conta_externa	N	FIN	F3	
+DBAMV	IMVSAP_PROTOCOLO	TABELA	exportacao_erp	N	INTG	F8	
+DBAMV	IMVSAP_REL_MGES	TABELA	exportacao_erp_item	N	INTG	F8	
+DBAMV	IMVSAP_REL_NOTAS	TABELA	exportacao_erp_item	N	INTG	F8	
+DBAMV	IMVSAP_SETOR	TABELA	depara_centro_custo_externo	N	FIN	F3	
+DBAMV	INCENTIVO_DIFERENCIADO_SUS	TABELA	incentivo_contratual_sus	N	SUS	F3	
+DBAMV	INCIDENCIA_IPI	TABELA	codigo_fiscal_oficial	N	FIN	F3	tabela TIPI carregada como tabela fiscal oficial
+DBAMV	INCOMPAT_PROCEDIMENTO	TABELA	compatibilidade_procedimento	N	FAT	F7	
+DBAMV	INCONSIST_DISTRIBUICAO_FFCH	MECANISMO	historico_entidade:apuracao_custo	N	FIN	F7	log de inconsistencia da distribuicao de receita
+DBAMV	INDICACAO_AGENDA	TABELA	captacao_paciente;lista_espera	N	CAD	F8	
+DBAMV	INDICACAO_PACIENTE	TABELA	captacao_paciente	N	CAD	F8	
+DBAMV	INDICADOR_ESTATISTICA_HOSP	TABELA	fechamento_censo_unidade	N	INT	F3	
+DBAMV	INDICADOR_ORCAMENTARIO	TABELA	indicador_orcamentario	N	FIN	F8	
+DBAMV	INDICADOR_ORCAMENTARIO_SETOR	TABELA	indicador_orcamentario;valor_estatistico_orcado	N	FIN	F8	
+DBAMV	INDICADOR_SETOR	TABELA	destino_criterio_rateio	N	FIN	F7	pontos e fator por setor para rateio
+DBAMV	INDICE	TABELA	indice_cobranca	N	FAT	F3	
+DBAMV	INDICE_ACOMODACAO	TABELA	regra_repasse_item;fator_acomodacao	N	FAT	F3	percentual pago por acomodacao na regra
+DBAMV	INDICE_COBERTURA_PRODUTO	TABELA	parametro_reposicao	N	SUP	F3	
+DBAMV	INDICE_COBERTURA_SALDO	MECANISMO	datamart	N	REL	F7	foto de saldo para indice de cobertura
+DBAMV	INDICE_MOEDA	TABELA	cotacao_moeda	S	FIN	F7	
+DBAMV	INDICE_PRO_FAT	TABELA	regra_repasse_item	N	FAT	F3	
+DBAMV	IND_ONTIME	MECANISMO	datamart	N	REL	F7	resultado calculado de producao e receita por setor
+DBAMV	IND_PRODUTIVIDADE	MECANISMO	datamart	N	REL	F7	margem e ponto de equilibrio calculados
+DBAMV	INFECCAO	TABELA	caso_infeccao	N	QUA	F7	
+DBAMV	INFECCAO_TOPOGRAFIA	TABELA	caso_infeccao;sitio_infeccao	N	QUA	F7	
+DBAMV	INFLACAO_MENSAL_ORDEM_COMPRA	MECANISMO	parametro	N	SUP	F7	inflacao mensal usada na sugestao de compra
+DBAMV	INFORMACAO_ADICIONAL_INSTR	TABELA	produto_reprocessavel	N	CC	F7	
+DBAMV	INFORMACAO_ADIC_INSTR_ANEXO	MECANISMO	arquivo	N	CC	F7	anexo do instrumental; metadado em produto_reprocessavel
+DBAMV	INSS_ESPECIAL	TABELA	regra_retencao	N	FIN	F3	
+DBAMV	INSTITUICAO_EXTERNA	TABELA	instituicao_ensino	S	CAD	F7	
+DBAMV	INSTRUMENTAL_MEDICO	NAO		N			sem valor de negocio: catalogo regulatorio estrangeiro sem uso no Brasil
+DBAMV	INSTRUMENTO_REGISTRO_SUS	MECANISMO	catalogo_publico:sigtap	N	SUS	F3	
+DBAMV	INTERACTION_MESSAGES	MECANISMO	integracao	N	INTG	F3	mensagens de requisicao e resposta de servico
+DBAMV	INTERDICAO_AGENDAMENTO_ONCO	TABELA	bloqueio_agenda	N	AGE	F3	
+DBAMV	INTERDICAO_SAL_CIR	TABELA	bloqueio_sala_cirurgica	N	CC	F3	
+DBAMV	INTERVALO_DOSE	TABELA	vacina_dose	N	PEP	F7	
+DBAMV	INTERVALO_DOSE_VACINA	TABELA	vacina_dose	N	PEP	F7	
+DBAMV	INUTILIZA_FORMULARIO_NF	TABELA	inutilizacao_numeracao_fiscal	S	FIN	F7	
+DBAMV	INVASIVOS	TABELA	dispositivo_invasivo_paciente	N	PEP	F3	
+DBAMV	INVENTARIO	TABELA	inventario_estoque	N	SUP	F3	
+DBAMV	INVENTARIO_ACPR	TABELA	inventario_estoque	N	SUP	F3	coleta por dispositivo movel vira origem da contagem
+DBAMV	INVENTARIO_PATRIMONIO	TABELA	inventario_bem	N	FIN	F7	
+DBAMV	IOB	MECANISMO	integracao	N	INTG	F7	codigos de integracao com servico externo de legislacao contabil
+DBAMV	IPASGO	TABELA	tabela_referencia_procedimento_item	N	INTG	F3	tabela propria de convenio estadual
+DBAMV	IR	TABELA	faixa_tabela_legal	N	RH	F3	
+DBAMV	ISO_AVALIACAO	TABELA	avaliacao_fornecedor	N	SUP	F3	
+DBAMV	ISO_AVALIACAO_EXCECAO	TABELA	excecao_avaliacao_fornecedor	S	SUP	F7	
+DBAMV	ISO_FORMULA	TABELA	criterio_avaliacao_fornecedor	S	SUP	F7	
+DBAMV	ISO_HOMOLOGA	TABELA	homologacao_fornecedor	N	SUP	F8	
+DBAMV	ISO_ITAVALIACAO	TABELA	avaliacao_fornecedor_item	S	SUP	F7	
+DBAMV	ISO_ITPERGUNTA	TABELA	questionario_homologacao_pergunta	N	SUP	F8	
+DBAMV	ISO_PERGUNTA	TABELA	questionario_homologacao_pergunta	N	SUP	F8	
+DBAMV	ISO_RANKING	TABELA	faixa_avaliacao_fornecedor	S	SUP	F7	
+DBAMV	ISO_RESPOSTA	TABELA	avaliacao_fornecedor_item	S	SUP	F7	
+DBAMV	ITACAO_GRUPO_PERGUNTA_DOC	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	ITAGRUPAMENTO	TABELA	regra_criacao_conta_agrupamento	N	FAT	F8	
+DBAMV	ITANEXO_ORD_COM	MECANISMO	arquivo	N	SUP	F3	anexo do pedido de compra
+DBAMV	ITARQUIVO_FEBRABAN	TABELA	item_bordero	N	FIN	F3	
+DBAMV	ITARQUIVO_REMESSA	TABELA	item_bordero;retorno_bancario_item	N	FIN	F3	
+DBAMV	ITBAL_EST	TABELA	inventario_estoque_item;inventario_estoque_lote	N	SUP	F3	
+DBAMV	ITBLOQUEIO	TABELA	pendencia_conta	N	FAT	F3	atendimentos retidos num bloqueio de faturamento
+DBAMV	ITCAIXA_CIRURGICA	TABELA	caixa_instrumental_item	N	CC	F7	
+DBAMV	ITCHECK_LIST	TABELA	plano_preventivo_tarefa	N	HOT	F7	
+DBAMV	ITCOB_PRE	TABELA	conta_hospitalar_item;lancamento_origem_evento	N	FAT	F3	
+DBAMV	ITCOB_PRE_AMBU	TABELA	conta_hospitalar_item;lancamento_origem_evento	N	FAT	F3	
+DBAMV	ITCOB_PRE_AMBU_ESPELHO	MECANISMO	historico_entidade:conta_hospitalar_item	N	FAT	F3	copia de log do item cobrado
+DBAMV	ITCOB_PRE_ESPELHO	MECANISMO	historico_entidade:conta_hospitalar_item	N	FAT	F3	copia de log do item cobrado
+DBAMV	ITCOLETA_GLICEMIA_CAPILAR	TABELA	afericao_valor	N	PEP	F3	anexo da afericao pelo mecanismo arquivo
+DBAMV	ITCOLETA_GLICEMIA_CAPIL_AGRUPA	TABELA	afericao_valor	N	PEP	F3	
+DBAMV	ITCOLETA_SINAL_VITAL	TABELA	afericao_valor	N	PEP	F3	
+DBAMV	ITCOLETA_SINAL_VITAL_AGRUPADA	TABELA	afericao_valor	N	PEP	F3	
+DBAMV	ITCOL_PRO	TABELA	cotacao_resposta_item;cotacao_item	N	SUP	F3	
+DBAMV	ITCOL_SER	TABELA	cotacao_resposta_item;cotacao_item	N	SUP	F3	
+DBAMV	ITCONSUMO_PACIENTE	TABELA	dispensacao_item;consumo_cirurgia_item	N	SUP	F3	
+DBAMV	ITCONTAGEM	TABELA	inventario_estoque_item;inventario_estoque_lote	N	SUP	F3	
+DBAMV	ITCONTAGEM_DA_ABERTURA	TABELA	inventario_estoque_divergencia	N	SUP	F3	
+DBAMV	ITCONTAGEM_DA_ABERTURA_TEMP	NAO		N			tecnico do fornecedor sem equivalente: tabela temporaria de tela
+DBAMV	ITCONTAGEM_DOACAO	TABELA	inventario_estoque_item;inventario_estoque_lote	N	SUP	F3	
+DBAMV	ITCONTAGEM_KIT	TABELA	inventario_estoque_item	N	SUP	F3	
+DBAMV	ITCONTAGEM_SALDO_ANTERIOR	TABELA	inventario_estoque_item	N	SUP	F3	
+DBAMV	ITCONTAGEM_SELECAO	TABELA	inventario_estoque_item	N	SUP	F3	
+DBAMV	ITCONTRATO_MANUTENCAO	TABELA	contrato_servico_terceirizado_item	N	HOT	F8	
+DBAMV	ITCON_PAG	TABELA	parcela_pagar	N	FIN	F3	
+DBAMV	ITCON_PAG_COTA	TABELA	reserva_orcamentaria	N	FIN	F8	
+DBAMV	ITCON_REC	TABELA	parcela_receber	N	FIN	F3	
+DBAMV	ITCOTA	TABELA	linha_orcamento	N	FIN	F7	
+DBAMV	ITCULTURA	TABELA	resultado_sensibilidade	N	SADT	F7	
+DBAMV	ITCULTURA_MANUAL	TABELA	resultado_sensibilidade;analise_cultura_positiva	N	SADT	F7	
+DBAMV	ITCULTURA_MANUAL_AUX	NAO		N			tecnico do fornecedor sem equivalente: auxiliar de digitacao
+DBAMV	ITCUSTO_HOCA	TABELA	orcamento_internacao_domiciliar_item	N	INT	F8	
+DBAMV	ITDECLARACAO_IMPORTACAO	TABELA	declaracao_importacao_item	S	SUP	F7	
+DBAMV	ITDEPRECIA	TABELA	cota_depreciacao	N	FIN	F7	
+DBAMV	ITDEPRECIA_SETOR	TABELA	rateio_depreciacao	N	FIN	F7	
+DBAMV	ITDEV_FOR	TABELA	devolucao_fornecedor_item	N	SUP	F7	
+DBAMV	ITDEV_PRE	TABELA	devolucao_dispensacao_item	N	SUP	F3	
+DBAMV	ITDOA_PRO	TABELA	nota_entrada_item	N	SUP	F3	entrada por doacao
+DBAMV	ITDOCUMENTO_ACAO	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	ITDOC_ENT_ORD_COM	TABELA	nota_entrada	N	SUP	F3	vinculo da nota com o pedido
+DBAMV	ITEM	NAO		N			sem valor de negocio: esquema de demonstracao do banco
+DBAMV	ITEMPRESTI	TABELA	emprestimo_insumo_item	S	SUP	F3	
+DBAMV	ITEM_ADESAO_PESQUISA_PROC_PRG	TABELA	adesao_ata_registro_preco	N	SUP	F7	
+DBAMV	ITEM_ADESAO_PROCESSO_PREGAO	TABELA	adesao_ata_registro_preco	N	SUP	F7	
+DBAMV	ITEM_AGDM_SER_DIS_TIP_MAR	TABELA	agenda_item_agendavel	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO	TABELA	item_agendavel	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_COMPOSICAO	TABELA	item_agendavel_composicao	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_CONFLITO	TABELA	item_agendavel_conflito	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_EQUIPTO	TABELA	item_agendavel_recurso	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_PERFIL_AGDM	TABELA	perfil_marcacao_escopo	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_PRESTADOR	TABELA	item_agendavel_profissional	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_PRE_REQ	TABELA	item_agendavel_pre_requisito	N	AGE	F8	
+DBAMV	ITEM_AGENDAMENTO_RECURSO	TABELA	item_agendavel_recurso	N	AGE	F8	
+DBAMV	ITEM_AGENDMTO_ITEM_AGEN_CTRAL	TABELA	marcacao_horario_item	N	AGE	F3	
+DBAMV	ITEM_AGRUPAMENTO_EXAME	TABELA	kit_exame_item	N	SADT	F3	
+DBAMV	ITEM_APAC_NEFROLOGIA	TABELA	laudo_apac_nefrologia;apac	N	SUS	F7	
+DBAMV	ITEM_ATIVIDADE	TABELA	escala_clinica_opcao	N	PEP	F3	itens pontuados com peso
+DBAMV	ITEM_AVULSO_SOLICITACAO_CME	TABELA	solicitacao_material_esteril_item	N	CC	F7	
+DBAMV	ITEM_CADASTRO	TABELA	modelo_item_prontidao	N	SIS	F7	
+DBAMV	ITEM_CENARIO	TABELA	simulacao_receita_resultado	N	REL	F8	
+DBAMV	ITEM_CENARIO_CONSUMO	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBAMV	ITEM_CENARIO_FICHA_PRODUTO	TABELA	ficha_custo_padrao_item	N	FIN	F8	
+DBAMV	ITEM_CHECAGEM	TABELA	auditoria_checagem_item;grupo_conferencia_checagem	N	PEP	F8	
+DBAMV	ITEM_CHECAGEM_USUARIOS	TABELA	auditoria_checagem_auditor	N	PEP	F8	
+DBAMV	ITEM_CLASSIFICACAO_PROPOSTA	TABELA	proposta_licitacao_item	N	SUP	F7	
+DBAMV	ITEM_COLETA_PROCESSO_COMPRA	TABELA	cotacao_resposta_item;cotacao_item	N	SUP	F3	
+DBAMV	ITEM_COLETA_PRODUTO_ESTIMATIVA	TABELA	pesquisa_preco_item	N	SUP	F7	
+DBAMV	ITEM_COLETA_PRODUTO_LICITACAO	TABELA	proposta_licitacao_item	N	SUP	F7	
+DBAMV	ITEM_COLETA_PRODUTO_PERCENTUAL	TABELA	acrescimo_supressao_licitacao	S	SUP	F8	
+DBAMV	ITEM_COLETA_SERVICO_ESTIMATIVA	TABELA	pesquisa_preco_item	N	SUP	F7	
+DBAMV	ITEM_COLETA_SERVICO_LICITACAO	TABELA	proposta_licitacao_item	N	SUP	F7	
+DBAMV	ITEM_COLETA_SERVICO_PERCENTUAL	TABELA	acrescimo_supressao_licitacao	S	SUP	F8	
+DBAMV	ITEM_COMPOSICAO_SOLICIT_CME	TABELA	solicitacao_material_esteril_item	N	CC	F7	
+DBAMV	ITEM_CONFERENCIA_ENTRADA	TABELA	conferencia_recebimento_item	N	SUP	F3	
+DBAMV	ITEM_CONFERE_CONTAGEM	TABELA	inventario_estoque_item;inventario_estoque_lote	N	SUP	F3	
+DBAMV	ITEM_CONFIGURACAO_SLA	TABELA	prazo_atendimento_guia	N	FAT	F8	
+DBAMV	ITEM_CONSUMO	TABELA	consumo_utilidade	S	HOT	F8	
+DBAMV	ITEM_CONTAGEM_ABERTA	TABELA	inventario_estoque_item;inventario_estoque_lote	N	SUP	F3	
+DBAMV	ITEM_CONTAGEM_USUARIO	TABELA	inventario_estoque_item;inventario_estoque_contagem	N	SUP	F3	
+DBAMV	ITEM_CONTRATO_SUS	TABELA	meta_contratual_sus	N	SUS	F7	
+DBAMV	ITEM_CONTROLE_USUARIO_FFCV	TABELA	usuario_escopo	N	ADM	F7	
+DBAMV	ITEM_COTA_RESSUPRIMENTO	TABELA	cota_consumo_setor	N	SUP	F3	
+DBAMV	ITEM_CUSTO_DETALHE	TABELA	custo_conta_paciente	N	FIN	F7	
+DBAMV	ITEM_DESCARTE_AIH	TABELA	descarte_producao_sus	S	SUS	F7	
+DBAMV	ITEM_DESCARTE_APAC	TABELA	descarte_producao_sus	S	SUS	F7	
+DBAMV	ITEM_DESPESA	TABELA	classificacao_despesa	N	FAT	F3	
+DBAMV	ITEM_DE_GRU_FAT	NAO		N			duplicado de grupo_faturamento: copia achatada do grupo com contas contabeis
+DBAMV	ITEM_DE_TABELAS_PADROES	MECANISMO	framework	N	SIS	F3	dicionario de dados do produto
+DBAMV	ITEM_DE_TABELAS_PADROES_COL	MECANISMO	framework	N	SIS	F3	dicionario de dados do produto
+DBAMV	ITEM_DE_TABELAS_PADROES_COL2	MECANISMO	framework	N	SIS	F3	dicionario de dados do produto
+DBAMV	ITEM_DIGITACAO_PARTE_A_LALUR	TABELA	ajuste_lalur	N	FIN	F7	
+DBAMV	ITEM_ENDERECAMENTO	TABELA	reserva_endereco;insumo_endereco	N	SUP	F8	
+DBAMV	ITEM_ENDERECO_SEPARACAO	TABELA	ordem_separacao_item	N	SUP	F8	
+DBAMV	ITEM_FAIXA_GUIA_CONVENIO	TABELA	faixa_numeracao_guia_uso	N	FAT	F3	
+DBAMV	ITEM_FATURA	NAO		N			obsoleto: declaracao de servicos ao exterior extinta
+DBAMV	ITEM_GRUPO_CONTRATO_SUS	TABELA	grupo_procedimento_contrato_sus	S	SUS	F7	
+DBAMV	ITEM_GRU_LAUDO	TABELA	procedimento_laudo_sus	S	SUS	F7	
+DBAMV	ITEM_HORARIO_CONTRATADO	TABELA	contrato_prestador_repasse	N	FAT	F8	
+DBAMV	ITEM_HOSPITALAR	TABELA	item_prescritivel	N	PEP	F3	
+DBAMV	ITEM_IMPORTA_RECHARZO	MECANISMO	integracao	N	INTG	F7	area de importacao de retorno de recusas da operadora
+DBAMV	ITEM_INDICE_COBERTURA_SALDO	MECANISMO	datamart	N	REL	F7	foto de saldo para indice de cobertura
+DBAMV	ITEM_LAUDOS_SIH	TABELA	laudo_internacao_sus	N	SUS	F7	
+DBAMV	ITEM_LAUDO_AIH_ESPECIAL	TABELA	laudo_internacao_sus_especial	N	SUS	F7	
+DBAMV	ITEM_LAUDO_BPAI	TABELA	producao_ambulatorial_sus_item	N	SUS	F7	
+DBAMV	ITEM_LAUDO_SIA_APAC	TABELA	laudo_apac	N	SUS	F7	
+DBAMV	ITEM_LAUDO_SIA_APAC_AREA_CID	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	ITEM_LAUDO_SIA_APAC_AREA_IRRAD	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	ITEM_LAUDO_SIA_APAC_NEFROLOGIA	TABELA	laudo_apac_nefrologia	N	SUS	F7	
+DBAMV	ITEM_LAUDO_SIA_APAC_TRAT_REAL	TABELA	laudo_apac_oncologia	N	SUS	F7	
+DBAMV	ITEM_LISTA_RELATORIO_CSV	MECANISMO	framework	N	SIS	F3	linhas de exportacao de relatorio
+DBAMV	ITEM_LIVRO_ELETRONICO	TABELA	livro_registro_setor_ocorrencia	S	PEP	F7	
+DBAMV	ITEM_LOG_CONFCONSUMO	MECANISMO	historico_entidade:consumo_cirurgia_item	N	CC	F3	log da conferencia de consumo
+DBAMV	ITEM_LOG_CONTABIL	MECANISMO	historico_entidade:lote_contabil	N	FIN	F7	mensagens de validacao da contabilizacao
+DBAMV	ITEM_LOG_DANFE	MECANISMO	integracao	N	INTG	F3	erros da leitura da nota eletronica
+DBAMV	ITEM_LOG_RASTREABILIDADE	MECANISMO	historico_entidade:conta_hospitalar_item	N	FAT	F3	passos do lancamento automatico
+DBAMV	ITEM_MOVIMENTO_BENEFICIO	TABELA	beneficio_colaborador	N	RH	F7	
+DBAMV	ITEM_NOTA_EMPENHO	TABELA	nota_empenho_item	N	FIN	F8	
+DBAMV	ITEM_ORCAMENTO	TABELA	linha_orcamento;valor_orcado_mes	N	FIN	F7	
+DBAMV	ITEM_PECA_ORCAMENTARIA	TABELA	modelo_peca_orcamentaria_linha	S	FIN	F8	
+DBAMV	ITEM_PEDIDO_EMPENHO	TABELA	empenho_item	N	SUP	F7	
+DBAMV	ITEM_PEDIDO_SERVICO_EMPENHO	TABELA	empenho_item	N	SUP	F7	
+DBAMV	ITEM_PLANO_ORCAMENTARIO_CONSOL	TABELA	conta_orcamentaria_composicao	S	FIN	F7	
+DBAMV	ITEM_PLANO_ORCMT_COMPS_ORCD	TABELA	conta_orcamentaria_composicao	S	FIN	F7	
+DBAMV	ITEM_PRECAUCAO	TABELA	tipo_precaucao	N	INT	F7	
+DBAMV	ITEM_PREGAO	TABELA	processo_licitatorio_item	N	SUP	F7	
+DBAMV	ITEM_PRESUPOSTARIO	TABELA	elemento_despesa	S	FIN	F8	
+DBAMV	ITEM_PROCEDIMENTO_MATERIAL	TABELA	plano_sessao_material	S	AGE	F8	
+DBAMV	ITEM_PRODUCAO	TABELA	unidade_mensuracao_custo;tipo_dado_estatistico	N	FIN	F3	
+DBAMV	ITEM_PRODUCAO_CENARIO	TABELA	cenario_simulacao_parametro	N	REL	F8	
+DBAMV	ITEM_PRODUCAO_EMPR	TABELA	unidade_mensuracao_custo	N	FIN	F3	
+DBAMV	ITEM_PRODUTO_PRE_INTERN_CIR	TABELA	agendamento_cirurgico_material	N	CC	F3	
+DBAMV	ITEM_PROD_MENSAL	TABELA	estatistica_centro_mes	N	FIN	F7	
+DBAMV	ITEM_PROD_VARIAVEL	TABELA	criterio_rateio	N	FIN	F7	
+DBAMV	ITEM_PROTOCOLO_REMESSA_AIH	TABELA	remessa_sisaih	N	SUS	F7	
+DBAMV	ITEM_PROTOCOLO_REMESSA_APAC	TABELA	remessa_apac	N	SUS	F7	
+DBAMV	ITEM_PRO_FAT	TABELA	kit_material_item;kit_material_procedimento	N	SUP	F3	
+DBAMV	ITEM_RATEIO_REPASSE	TABELA	regra_rateio_repasse	N	FAT	F8	
+DBAMV	ITEM_REFEICAO_DIETA	TABELA	prescricao_dieta_refeicao_item	S	PEP	F8	
+DBAMV	ITEM_REGISTRO_PRECO	TABELA	empenho_item;ata_registro_preco_item	N	SUP	F7	
+DBAMV	ITEM_REQUISICAO_PRODUTO	TABELA	requisicao_material_item	N	SUP	F3	
+DBAMV	ITEM_RES	TABELA	natureza_financeira;conta_receita_custeio	N	FIN	F3	
+DBAMV	ITEM_RES_PROCEDIMENTO_SUS	TABELA	conta_receita_custeio;custo_conta_paciente	N	FIN	F3	
+DBAMV	ITEM_SEPARACAO	TABELA	ordem_separacao_item	N	SUP	F8	
+DBAMV	ITEM_SETOR	TABELA	destino_criterio_rateio	N	FIN	F7	
+DBAMV	ITEM_SINAL_VITAL_SEM_COLETA	TABELA	afericao_valor	N	PEP	F3	
+DBAMV	ITEM_SOLICITACAO_PROCES_CPR	TABELA	solicitacao_compra_item	N	SUP	F3	
+DBAMV	ITEM_TIPO_CADASTRO	TABELA	modelo_item_prontidao	N	SIS	F7	
+DBAMV	ITEM_VERIFICACAO_ROTATIVA_SALD	TABELA	inventario_estoque_item	N	SUP	F3	
+DBAMV	ITEM_VISAO_SETOR	MECANISMO	datamart	N	REL	F7	agrupamento de setores para visao gerencial
+DBAMV	ITENS_AGEND_DIAS_FALTA	TABELA	regra_marcacao_apos_falta	S	AGE	F8	
+DBAMV	ITENS_EXAMINAR	TABELA	achado_exame_fisico_padrao	N	PEP	F8	
+DBAMV	ITENS_PRESCRICAO_SUS	TABELA	lancamento_origem_evento	N	FAT	F3	
+DBAMV	ITENS_SD_FFIS	TABELA	conta_aih_procedimento	N	SUS	F7	
+DBAMV	ITENTREGA_EXAME_SADT	TABELA	entrega_resultado_item	N	SADT	F3	

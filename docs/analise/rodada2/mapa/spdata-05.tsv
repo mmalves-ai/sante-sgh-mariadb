@@ -1,0 +1,182 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+SPDATA	GEANTIMI	TABELA	liberacao_antimicrobiano;ficha_antimicrobiano	N	SUP	F3	
+SPDATA	GEARMLOC	TABELA	saldo_estoque_mensal	N	SUP	F3	
+SPDATA	GEATUALIZASALDO	TABELA	recalculo_saldo_estoque	N	SUP	F3	
+SPDATA	GEBARRAS	TABELA	insumo_codigo_barras	N	SUP	F3	
+SPDATA	GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	N	PEP	F7	
+SPDATA	GECADBAL	TABELA	inventario_estoque	N	SUP	F3	
+SPDATA	GECADDEV	TABELA	documento_estoque;devolucao_dispensacao	N	SUP	F3	
+SPDATA	GECADDISPENSACAO	TABELA	dispensacao	N	SUP	F3	
+SPDATA	GECADNFS	TABELA	nota_entrada;escrituracao_entrada	N	SUP	F3	
+SPDATA	GECADPED	TABELA	pedido_compra;cotacao;processo_licitatorio	N	SUP	F3	
+SPDATA	GECADSAI	TABELA	documento_estoque;requisicao_material	N	SUP	F3	
+SPDATA	GECADTER	TABELA	terceiro_destinatario	N	SUP	F3	
+SPDATA	GECADTRA	TABELA	documento_estoque	N	SUP	F3	
+SPDATA	GECAPELAMP	TABELA	capela_manipulacao	N	SUP	F7	módulo sem uso no hospital; estrutura mantida
+SPDATA	GECAPELAMP_GEGRUPOMP	TABELA	capela_manipulacao_grupo	N	SUP	F7	
+SPDATA	GECOMPRA	TABELA	nota_entrada_item;pedido_compra_item;insumo_fornecedor	N	SUP	F3	histórico derivado das entradas e pedidos
+SPDATA	GECONITL	TABELA	saldo_estoque_mensal	N	SUP	F3	
+SPDATA	GECTRLENTREGADOCSAIDA	TABELA	entrega_setor;entrega_setor_item	N	SUP	F3	
+SPDATA	GECTRVMM	TABELA	movimento_lote;lote_insumo	N	SUP	F3	modelo antigo de lote por documento
+SPDATA	GEDESCOM	TABELA	destino_entrega_compra	N	SUP	F3	
+SPDATA	GEDESPDS	TABELA	pedido_compra_item;processo_licitatorio_item	N	SUP	F3	descrição de serviço vira texto do item
+SPDATA	GEDIASEMANA	NAO		N	SUP		sem valor de negocio: dia da semana é enumeração fixa no código
+SPDATA	GEDISPHOR	TABELA	dose_dispensada;etiqueta_identificacao	N	SUP	F3	
+SPDATA	GEESTINI	TABELA	inventario_estoque	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GEFECMES	TABELA	fechamento_estoque	N	SUP	F3	
+SPDATA	GEGERSEQ	TABELA	sequencia_documento_estoque	N	SUP	F3	
+SPDATA	GEGRUPOMP	TABELA	grupo_manipulacao	N	SUP	F7	módulo sem uso no hospital; estrutura mantida
+SPDATA	GEGRUPOS	TABELA	grupo_insumo	N	SUP	F3	
+SPDATA	GEHORMED	TABELA	horario_padrao_medicacao	N	SUP	F3	
+SPDATA	GEINFVENEXT	TABELA	documento_estoque;terceiro_destinatario	N	SUP	F3	
+SPDATA	GEITEACAODOSE	TABELA	acao_dose	N	SUP	F3	
+SPDATA	GEITEMKITRAS	TABELA	kit_rastreavel_item;kit_rastreavel_lote	N	SUP	F3	
+SPDATA	GEITEMKITRAS_GELANDEV	TABELA	reposicao_kit_rastreavel;movimento_kit_rastreavel	N	SUP	F3	
+SPDATA	GEITEMKITRAS_GELANSAI	TABELA	movimento_kit_rastreavel	N	SUP	F3	
+SPDATA	GEITENS	TABELA	insumo;item_prescritivel;parametro_clinico_item;dado_fiscal_item	N	SUP	F3	
+SPDATA	GEITENS_TBPRINC	TABELA	insumo_principio_ativo	N	SUP	F3	
+SPDATA	GEKITITE	TABELA	kit_material_item	N	SUP	F3	
+SPDATA	GEKITKPI	TABELA	kit_material_item	N	SUP	F3	
+SPDATA	GEKITRAS	TABELA	kit_rastreavel	N	SUP	F3	
+SPDATA	GEKITS	TABELA	kit_material	N	SUP	F3	
+SPDATA	GEKONCDC	TABELA	consumo_centro_custo	N	SUP	F3	
+SPDATA	GELANBAL	TABELA	inventario_estoque_item;inventario_estoque_divergencia	N	SUP	F3	
+SPDATA	GELANDEV	TABELA	documento_estoque_item;devolucao_dispensacao_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELANDISPENSACAO	TABELA	dispensacao_item	N	SUP	F3	
+SPDATA	GELANESI	TABELA	inventario_estoque_item	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GELANNFS	TABELA	nota_entrada_item;nota_entrada_imposto;escrituracao_item_entrada	N	SUP	F3	
+SPDATA	GELANPAC	TABELA	documento_estoque_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELANPED	TABELA	pedido_compra_item;cotacao_item;cotacao_resposta_item	N	SUP	F3	
+SPDATA	GELANPEDENTREGA	TABELA	pedido_compra_entrega	N	SUP	F3	
+SPDATA	GELANSAI	TABELA	movimento_estoque;atendimento_requisicao	N	SUP	F3	
+SPDATA	GELANSAIREQ	TABELA	requisicao_material_item	N	SUP	F3	
+SPDATA	GELANTRA	TABELA	documento_estoque_item;movimento_estoque	N	SUP	F3	
+SPDATA	GELIMLOC	TABELA	parametro_reposicao	N	SUP	F3	
+SPDATA	GELOCARM	TABELA	local_estoque	N	SUP	F3	
+SPDATA	GELOCUSU	TABELA	local_estoque_usuario	N	SUP	F3	
+SPDATA	GENIVELSERV	TABELA	nivel_servico	N	SUP	F3	
+SPDATA	GENOMCOM	TABELA	apresentacao_comercial	N	SUP	F3	
+SPDATA	GEPADRAO_DATAMATRIX_QRCODE	TABELA	padrao_leitura_codigo	N	SUP	F3	
+SPDATA	GEPARAM	MECANISMO	parametro	N	SUP	F3	parâmetros soltos por usuário e empresa
+SPDATA	GEQTDELOTEVALLOTEDOCSAIDA	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALBAL	TABELA	inventario_estoque_lote	N	SUP	F3	
+SPDATA	GERASVALDEVLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALESTINI	TABELA	inventario_estoque_lote	N	SUP	F3	estoque inicial vira inventário de abertura
+SPDATA	GERASVALFINAL	TABELA	saldo_lote	N	SUP	F3	
+SPDATA	GERASVALINICIAL	TABELA	saldo_lote	N	SUP	F3	
+SPDATA	GERASVALNFS	TABELA	movimento_lote	N	SUP	F3	há datas inválidas a sanear
+SPDATA	GERASVALSAIDLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GERASVALTRANSFLOTE	TABELA	movimento_lote	N	SUP	F3	
+SPDATA	GEREFER	TABELA	categoria_contabil_insumo	N	SUP	F3	
+SPDATA	GESALCON	TABELA	saldo_consignado	N	SUP	F7	
+SPDATA	GESALDOKITRAS	TABELA	kit_rastreavel_item;kit_rastreavel_lote	N	SUP	F3	
+SPDATA	GESALDOS	TABELA	saldo_estoque_mensal;custo_medio_historico	N	SUP	F3	
+SPDATA	GESITUACAOPED	TABELA	situacao_pedido_compra	N	SUP	F3	
+SPDATA	GESUBGRU	TABELA	subgrupo_insumo	N	SUP	F3	
+SPDATA	GETABFUN	TABELA	pessoa_fisica;conta_bancaria_credor;regra_retencao	N	CAD	F3	
+SPDATA	GETPLANCTO	TABELA	tipo_movimento_estoque	N	SUP	F3	
+SPDATA	GETPSALDO	TABELA	saldo_estoque;saldo_consignado	N	SUP	F3	lista fixa vira atributo do saldo
+SPDATA	GEULTDOCGER	TABELA	sequencia_documento_estoque	N	SUP	F3	
+SPDATA	GEUNIPRESC	TABELA	insumo_unidade;unidade_prescricao;parametro_clinico_item	N	SUP	F3	
+SPDATA	GEUSERS	TABELA	local_estoque_usuario;usuario_estoque_centro_custo;usuario_estoque_classificacao	N	SUP	F3	
+SPDATA	GEUSERS_TBCENCUS	TABELA	usuario_estoque_centro_custo	N	SUP	F3	
+SPDATA	GEUSERS_TBCLASSI	TABELA	usuario_estoque_classificacao	N	SUP	F3	
+SPDATA	GEVALMEM	TABELA	lote_insumo	N	SUP	F3	datas inválidas a sanear
+SPDATA	GEVIASITEM	TABELA	insumo_via	N	SUP	F3	
+SPDATA	GPCOEFICIENTE_DEPREC	TABELA	coeficiente_turno	N	FIN	F7	
+SPDATA	GPORIGEM	TABELA	origem_bem	N	FIN	F7	
+SPDATA	GPPARAMG	MECANISMO	parametro	N	SUP	F7	módulo sem uso; parâmetros de depreciação e integração
+SPDATA	GPPARAMU	TABELA	contexto_trabalho_usuario	N	FIN	F3	
+SPDATA	GPTP_RESPONSAVEL	TABELA	tipo_responsavel_bem;responsavel_bem	S	FIN	F7	
+SPDATA	HTNOTEXAMESEXO	MECANISMO	historico_entidade:exame_item	N	SADT	F3	alertas de restrição por sexo; regra em restricao_exame
+SPDATA	PREXTRATOITEM_SUBST	TABELA	substituicao_dispensacao	N	SUP	F3	
+SPDATA	PREXTRATOITEM_TBSITFARM	TABELA	liberacao_farmaceutica_item	N	SUP	F3	
+SPDATA	PRINTEGRACAOESTOQUE	TABELA	dispensacao_item;horario_administracao	N	SUP	F3	vínculo horário prescrito x saída vira chave do item dispensado
+SPDATA	PRPARINTEGEST	TABELA	regra_integracao_prescricao	N	SUP	F3	
+SPDATA	SHBOLSA	TABELA	bolsa_hemocomponente	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHBOLSAHIST	TABELA	movimento_bolsa	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHCLIENT	TABELA	servico_hemoterapia_fornecedor	N	SADT	F7	só placeholder; recurso a construir
+SPDATA	SHCONDUTA	TABELA	conduta_reacao_transfusional	N	SADT	F7	só placeholder
+SPDATA	SHDOACAO	TABELA	doacao_sangue	N	SADT	F8	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHESTFINAL	TABELA	destino_final_bolsa	N	SADT	F7	só placeholder
+SPDATA	SHEXAME	TABELA	tipo_teste_imuno_hematologico	N	SADT	F7	só placeholder
+SPDATA	SHINTER	TABELA	tipo_reacao_transfusional	N	SADT	F7	só placeholder
+SPDATA	SHLOCAL	TABELA	local_guarda_hemocomponente	N	SADT	F7	só placeholder
+SPDATA	SHMOTDEV	TABELA	motivo_devolucao_bolsa	N	SADT	F7	só placeholder
+SPDATA	SHMOV	TABELA	tipo_movimento_bolsa	N	SADT	F7	
+SPDATA	SHPARAM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	só placeholder
+SPDATA	SHPERGUN	TABELA	pergunta_triagem_doador	N	SADT	F8	só placeholder
+SPDATA	SHREACAO	TABELA	tipo_reacao_transfusional	N	SADT	F7	só placeholder
+SPDATA	SHREQUISICAO	TABELA	requisicao_transfusao	N	SADT	F7	sem dados reais (placeholder 1899); conceito coberto, dados não migram
+SPDATA	SHRESPOSTA	TABELA	pergunta_triagem_doador;resposta_triagem_doador	N	SADT	F8	opções de resposta ficam na pergunta; só placeholder
+SPDATA	SHTECNIC	TABELA	profissional;ato_transfusional	N	CAD	F3	só placeholder
+SPDATA	SHTPTRANSF	TABELA	tipo_transfusao	N	SADT	F7	
+SPDATA	SIASSLAUDO_IMPRESSAO	TABELA	emissao_laudo	N	SADT	F3	
+SPDATA	SIASSLAUDO_IMP_SILANEXA	TABELA	emissao_laudo_exame	N	SADT	F3	
+SPDATA	SICADATE	TABELA	requisicao_exame;guia_fonte_pagadora	N	SADT	F3	
+SPDATA	SICADATE_EXCLUSAO	MECANISMO	historico_entidade:requisicao_exame	N	SADT	F3	cópia de exclusão vira histórico da requisição
+SPDATA	SICOLETE	TABELA	dispositivo_coleta	S	SADT	F3	
+SPDATA	SICTRPSR	TABELA	grupo_resposta	N	SADT	F3	
+SPDATA	SIESPEC	TABELA	especialidade_diagnostica	N	SADT	F3	
+SPDATA	SIEXAORC	TABELA	orcamento_particular_item	N	FAT	F3	
+SPDATA	SIFORMUL	TABELA	formula_calculo	N	SADT	F3	
+SPDATA	SIHISTVLREF	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIHISTVLREFELEMENTO	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIHISTVLREFEXAME	TABELA	faixa_referencia_versao	N	SADT	F3	
+SPDATA	SIKITEXA	TABELA	kit_exame	N	SADT	F3	
+SPDATA	SIKITHISTEXA	TABELA	kit_exame_versao	N	SADT	F3	
+SPDATA	SIKITHISTITE	TABELA	kit_exame_versao_item	S	SADT	F3	
+SPDATA	SIKITITE	TABELA	kit_exame_item	N	SADT	F3	
+SPDATA	SILANEXA	TABELA	exame_item	N	SADT	F3	
+SPDATA	SILIBERACAOEXAME	TABELA	liberacao_exame;liberacao_resultado_portal;acesso_resultado_portal	N	SADT	F3	
+SPDATA	SIMATERI	TABELA	material_biologico;de_para_material_apoio	N	SADT	F3	
+SPDATA	SIMETODO	TABELA	metodo_analitico	N	SADT	F3	
+SPDATA	SIMODULO	TABELA	setor_diagnostico	N	SADT	F3	
+SPDATA	SIMODULO_SIWEBATOS	TABELA	setor_publicado_portal	N	INTG	F3	
+SPDATA	SIOBSERV	TABELA	texto_padrao_resultado	N	SADT	F3	
+SPDATA	SIORCAME	TABELA	orcamento_particular	N	FAT	F3	
+SPDATA	SIPACSMODALID	TABELA	modalidade_imagem	N	SADT	F3	
+SPDATA	SIPACSVISIMG	TABELA	visualizador_imagem	N	SADT	F3	
+SPDATA	SIPARANA	TABELA	configuracao_setor_diagnostico	N	SADT	F3	
+SPDATA	SIPAREND	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor; campos obsoletos caem
+SPDATA	SIPARGER	TABELA	configuracao_setor_diagnostico	N	SADT	F3	
+SPDATA	SIPARHEM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARLAB	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor;interface_equipamento	N	SADT	F3	senha gerencial não migra
+SPDATA	SIPAROUT	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARRX	TABELA	configuracao_setor_diagnostico;responsavel_laudo_setor	N	SADT	F3	
+SPDATA	SIPARTM	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPARULT	TABELA	configuracao_setor_diagnostico	N	SADT	F3	uma linha por usuário vira regra por setor
+SPDATA	SIPOSRES	TABELA	resposta_padrao	N	SADT	F3	
+SPDATA	SIRECIPI	TABELA	recipiente_coleta	N	SADT	F3	
+SPDATA	SIRES01	TABELA	resultado_exame;resultado_analito;resultado_exame_versao	N	SADT	F3	HTML/PDF do laudo vai para arquivo
+SPDATA	SIRES01_DELETE	MECANISMO	historico_entidade:resultado_exame	N	SADT	F3	cópia de exclusão vira histórico do resultado
+SPDATA	SIRESOBS	TABELA	resultado_observacao	N	SADT	F3	
+SPDATA	SIRESPAD	TABELA	modelo_resultado;modelo_laudo	N	SADT	F3	
+SPDATA	SIRESVAR	TABELA	resultado_variavel_formula	N	SADT	F3	
+SPDATA	SISTATUS_AMOSTRA	TABELA	situacao_amostra	N	SADT	F3	
+SPDATA	SITABELE	TABELA	analito;exame_analito;faixa_referencia;unidade_resultado	N	SADT	F3	
+SPDATA	SITABPRO	TABELA	exame;exame_equivalencia_codigo;exame_material	N	SADT	F3	
+SPDATA	SITBGRAN	TABELA	secao_laudo_estruturado;grandeza_laudo	N	SADT	F3	
+SPDATA	SITECNIC	TABELA	profissional;responsavel_laudo_setor	N	CAD	F3	
+SPDATA	SIVARFORMULA	TABELA	variavel_formula	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL	TABELA	perfil_portal_resultado	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL_SIPACSMODALID	TABELA	perfil_portal_modalidade	N	SADT	F3	
+SPDATA	SIWEBCADPERFIL_TBUSERS	TABELA	perfil_portal_usuario	N	SADT	F3	
+SPDATA	SIWEBPARDATA	TABELA	perfil_portal_resultado	N	SADT	F3	lista fixa vira atributo do perfil
+SPDATA	SIWEBPARLAUDO	TABELA	modelo_impressao_laudo	N	SADT	F3	layout binário é refeito, não migra
+SPDATA	SIWEBPARPERFIL	TABELA	perfil_portal_resultado	N	SADT	F3	
+SPDATA	SIWEBPARTPATU	TABELA	perfil_portal_resultado	N	SADT	F3	lista fixa vira atributo do perfil
+SPDATA	SIWEBVISULIMG	TABELA	visualizador_imagem	N	SADT	F3	
+SPDATA	TBATIVID	TABELA	atividade_economica	N	SUP	F3	
+SPDATA	TBCATEGO	TABELA	categoria_fornecimento	N	SUP	F3	
+SPDATA	TBCATFOR	TABELA	empresa_fornecedora_categoria	N	SUP	F3	
+SPDATA	TBDISPON	TABELA	empresa_fornecedora	N	SUP	F3	lista fixa vira atributo do fornecedor
+SPDATA	TBFATORRH	TABELA	fator_rh	S	SADT	F7	
+SPDATA	TBFORNEC	TABELA	empresa_fornecedora;pessoa_juridica;pessoa_fisica;conta_bancaria_credor	N	SUP	F3	
+SPDATA	TBFORNECTEL	TABELA	empresa_fornecedora_contato	N	SUP	F3	
+SPDATA	TBGRUPOUNIDADEMEDIDA	TABELA	grupo_unidade_medida	N	SUP	F3	
+SPDATA	TBLABORA	TABELA	fabricante	N	SUP	F3	
+SPDATA	TBSITUACAOFARMACIA	TABELA	situacao_farmaceutica	N	SUP	F3	
+SPDATA	TBTP_ENV_LISTA_AVAL_FARM	TABELA	regra_envio_avaliacao_farmaceutica	N	SUP	F3	
+SPDATA	TBTPSANGUINEO	TABELA	grupo_sanguineo	S	SADT	F7	
+SPDATA	TBUNICON	TABELA	unidade_medida;insumo_unidade	N	SUP	F3	

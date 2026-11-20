@@ -1,0 +1,22 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+avaliacao_fornecedor_item	SUP	item	F7	Nota de cada critério ou pergunta na avaliação do fornecedor, com a resposta escolhida e a fórmula aplicada	DBAMV ISO_ITAVALIACAO, ISO_RESPOSTA
+criterio_avaliacao_fornecedor	SUP	configuracao	F7	Critério de nota do fornecedor (pontualidade, conformidade, atendimento) com fórmula, tipo de documento e se permite revisão	DBAMV ISO_FORMULA
+faixa_avaliacao_fornecedor	SUP	dominio	F7	Faixas de nota que classificam o fornecedor (ótimo, regular, reprovado), com limite inicial e final	DBAMV ISO_RANKING
+excecao_avaliacao_fornecedor	SUP	configuracao	F7	Casos em que a avaliação do fornecedor não se aplica ou usa outro critério, por fornecedor, ramo, local, tipo de entrada ou documento	DBAMV ISO_AVALIACAO_EXCECAO
+acrescimo_supressao_licitacao	SUP	historico	F8	Acréscimo ou supressão percentual de quantidade de item licitado ou contratado, com motivo, data, usuário e empenho afetado	DBAMV ITEM_COLETA_PRODUTO_PERCENTUAL, ITEM_COLETA_SERVICO_PERCENTUAL
+instituicao_ensino	CAD	dominio	F7	Instituição de ensino onde o profissional se formou ou especializou, com nome e sigla	DBAMV INSTITUICAO_EXTERNA
+cotacao_moeda	FIN	historico	F7	Valor da moeda ou índice em relação à moeda base por data, para conversão de títulos, compras e tabelas	DBAMV INDICE_MOEDA
+descarte_producao_sus	SUS	historico	F7	Registro de item de AIH ou APAC retirado do envio ao gestor, com motivo, observação e usuário	DBAMV ITEM_DESCARTE_AIH, ITEM_DESCARTE_APAC
+grupo_procedimento_contrato_sus	SUS	vinculo	F7	Procedimentos que compõem cada grupo usado nas metas do contrato com o gestor	DBAMV ITEM_GRUPO_CONTRATO_SUS
+plano_sessao_material	AGE	item	F8	Materiais e quantidade prevista por procedimento do tratamento seriado, para reserva e cobrança	DBAMV ITEM_PROCEDIMENTO_MATERIAL
+livro_registro_setor_ocorrencia	PEP	item	F7	Ocorrência lançada no livro do setor, com turno, data e hora do fato, autor, lançamento retroativo e resposta encadeada	DBAMV ITEM_LIVRO_ELETRONICO
+consumo_utilidade	HOT	principal	F8	Leitura e conta mensal de água, energia, gás e esgoto por unidade consumidora, com período, quantidade e valores	DBAMV ITEM_CONSUMO (proposta também em outro lote)
+declaracao_importacao_item	SUP	item	F7	Insumo da declaração de importação, com NCM, quantidade, valores em moeda e em real, seguro, frete e tributos aduaneiros	DBAMV ITDECLARACAO_IMPORTACAO
+emprestimo_insumo_item	SUP	item	F3	Insumo, unidade, quantidade e valor de cada empréstimo cedido ou recebido	DBAMV ITEMPRESTI
+inutilizacao_numeracao_fiscal	FIN	historico	F7	Faixa de numeração de nota fiscal inutilizada por estabelecimento e série, com motivo, protocolo e usuário	DBAMV INUTILIZA_FORMULARIO_NF
+regra_marcacao_apos_falta	AGE	configuracao	F8	Dias de espera após uma falta antes de nova marcação do mesmo item, impeditivo ou só aviso	DBAMV ITENS_AGEND_DIAS_FALTA
+prescricao_dieta_refeicao_item	PEP	item	F8	Alimento prescrito em cada refeição da dieta, com quantidade, medida caseira e substituto	DBAMV ITEM_REFEICAO_DIETA
+procedimento_laudo_sus	SUS	vinculo	F7	Procedimentos que exigem cada tipo de laudo SUS, com regra de informar procedimento e quantidade	DBAMV ITEM_GRU_LAUDO (proposta também em outro lote)
+modelo_peca_orcamentaria_linha	FIN	item	F8	Linha ou bloco do formulário de coleta, com conta, fórmula, casas decimais, valor sugerido e edição permitida	DBAMV ITEM_PECA_ORCAMENTARIA (proposta também em outro lote)
+conta_orcamentaria_composicao	FIN	item	F7	Composição de uma conta orçamentária a partir de outras contas ou premissas, com fórmula e meses de referência	DBAMV ITEM_PLANO_ORCAMENTARIO_CONSOL, ITEM_PLANO_ORCMT_COMPS_ORCD (proposta também em outro lote)
+elemento_despesa	FIN	dominio	F8	Elemento de despesa orçamentária em hierarquia, com classificação, conta contábil e projeto	DBAMV ITEM_PRESUPOSTARIO (proposta também em outro lote)

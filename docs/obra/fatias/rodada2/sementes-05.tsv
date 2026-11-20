@@ -1,0 +1,60 @@
+funcionalidade	decisao	entidades_rodada1
+Catálogo de exames laboratoriais: exame, material biológico, recipiente, método, setor executante, orientações de prepar	F3: base de 	exame, setor_diagnostico, exame_setor_executante, material_biologico, recipiente_coleta, metodo_analitico, orientacao_preparo, exame_equivalencia_codigo
+Catálogo de exames de imagem e métodos gráficos: modalidade, lateralidade, especialidade, exame secundário	F3: radiolog	modalidade_imagem, exame_lateralidade (as demais no catálogo único acima)
+Analitos, campos de resultado, faixas de referência versionadas, fórmulas, respostas e textos padrão	F3: o laudo 	analito, exame_analito, faixa_referencia, faixa_referencia_versao, formula_calculo, variavel_formula, grupo_resposta, resposta_padrao, texto_padrao_resultado, modelo_resultado
+Requisição de exames: atendimento de diagnóstico, itens solicitados, kits/baterias e trilha de exclusão	F3: núcleo d	requisicao_exame, item_exame, item_exame_evento, kit_exame, kit_exame_versao, kit_exame_item
+Restrições clínicas de solicitação: sexo, idade, material, horário e setor	F3: já em us	restricao_exame, excecao_restricao_exame
+Cotas e bloqueios por convênio, unidade ou último resultado; repetição proibida no mesmo dia	F8: reduz gl	—
+Coleta e amostra: código da amostra, etiqueta, posto de coleta, recoleta com motivo, rastreio de passagens e sub-amostra	F3: coleta e	amostra_biologica, amostra_biologica_evento, ponto_coleta, motivo_nova_coleta, modelo_etiqueta_amostra_biologica
+Mapa de trabalho e bancadas: distribuição dos exames por bancada, lote de trabalho, exames retidos	F3: a bancad	modelo_mapa_bancada, modelo_mapa_bancada_exame, bancada_analitica
+Soroteca, racks e expurgo de amostras armazenadas	F8: guarda e	—
+Resultado, conferência e liberação do laboratório: digitação/importação, observação, valor crítico com aviso, atraso, as	F3: núcleo d	resultado_exame, resultado_analito, resultado_observacao, liberacao_exame, regra_valor_critico, aviso_valor_critico, resultado_exame_excluido
+Autoliberação por regra e checagem de consistência (delta check, curva, substância interferente)	F8: produtiv	—
+Microbiologia estruturada: cultura, microrganismo isolado, antibiograma com CIM e interpretação	F7: hospital	microrganismo, antimicrobiano, painel_antibiograma, painel_antibiograma_item, resultado_cultura, isolado_microbiano, resultado_sensibilidade
+Interface com equipamentos de laboratório: cadastro da interface, modelo de comunicação, de-para de exames	F3: os 20 eq	interface_equipamento, modelo_comunicacao, equipamento_analitico, de_para_exame_equipamento, mensagem_equipamento
+Laboratório de apoio: catálogo do apoio, de-para de exame, analito e material, envio e retorno	F3: parte do	laboratorio_apoio, exame_apoio, de_para_analito_apoio, de_para_material_apoio, remessa_apoio, remessa_apoio_item
+Laboratório analítico de produtos: ensaios, programas de análise, laudos de produto	NAO: é para 	—
+Laudo de imagem e métodos gráficos: redação, modelos, palavras-chave, emissão com código de autenticação	F3: laudo em	laudo_diagnostico, laudo_diagnostico_versao, modelo_laudo, emissao_laudo, emissao_laudo_exame
+Laudo estruturado de métodos gráficos e hemodinâmica (ecocardiograma com grandezas, cateterismo)	F3: eco e he	secao_laudo_estruturado, grandeza_laudo, valor_grandeza_laudo
+Laudo estruturado de mamografia (categoria de achado) e anatomia patológica (cito e histopatológico)	F7: hospital	laudo_mama, achado_mama, laudo_anatomopatologico, grau_histologico
+Escala de execução e prioridade: plantões do executante por setor, dias e exames atendidos; prioridade do paciente	F3: a agenda	escala_execucao, escala_execucao_exame, prioridade_atendimento
+Integração com PACS/RIS: lista de trabalho DICOM, número de acesso, status do exame, visualizador, laudo externo	F3: as image	item_lista_trabalho_imagem, evento_status_imagem, visualizador_imagem
+Entrega de resultados e portal de laudos: prazo por setor e exame, protocolo de entrega, impressão, perfis do portal, au	F3: o portal	prazo_entrega_exame, entrega_resultado, perfil_portal_resultado, perfil_portal_setor, acesso_portal_resultado
+Consumo padrão de insumos e equipe por exame (contraste, kit do exame, baixa automática)	F8: automati	—
+Agência transfusional: requisição, amostra, imuno-hematologia, prova cruzada, estoque de bolsas, ato transfusional, reaç	F7: exigênci	requisicao_transfusao, amostra_pre_transfusional, bolsa_hemocomponente, movimento_bolsa, teste_imuno_hematologico, prova_compatibilidade, ato_transfusional, reacao_transfusional, servico_hemoterapia_fornecedor
+Busca ativa de resultados: acompanhamento de exames pendentes ou alterados depois da alta, equipe e histórico	F8: seguranç	—
+Parâmetros do diagnóstico por setor: numeração, impressão, responsável pelo laudo, obrigatoriedades	F3: necessár	parametro_diagnostico
+Orçamento de exames particulares e conversão em atendimento	F3: em uso n	orcamento_exame, orcamento_exame_item
+Cadastro de produto (material e medicamento): grupo, subgrupo, unidades e conversão, apresentação comercial, fabricante 	F3: base de 	insumo, grupo_insumo, subgrupo_insumo, categoria_contabil_insumo, unidade_medida, insumo_unidade, unidade_prescricao, apresentacao_comercial, fabricante, registro_sanitario, principio_ativo, insumo_principio_ativo, via_uso_medicamento, insumo_via, insumo_codigo_barras, classificacao_fiscal
+Governança do cadastro: solicitação e aprovação de item novo, padronização, unificação, de-para e substituição	F8: comissão	—
+Locais de estoque, parâmetros e permissões por usuário, local, classificação e centro de custo	F3: sem isso	local_estoque, local_estoque_usuario, usuario_estoque_classificacao, usuario_estoque_centro_custo, parametro_estoque
+Endereçamento de armazém e separação (picking)	F8: ganho em	—
+Documentos de movimentação de estoque: transferência entre locais, devolução interna, movimento direto, acerto com motiv	F3: moviment	documento_estoque, documento_estoque_item, tipo_movimento_estoque, motivo_ajuste_estoque, sequencia_documento
+Requisição ao estoque e atendimento: pedido do setor ou do paciente, atendimento parcial, sem saldo, romaneio, saída a t	F3: maior vo	requisicao_material, requisicao_material_item, atendimento_requisicao, terceiro_destinatario
+Dispensação ao paciente: por horário da prescrição, etiqueta de dose, entrega ao setor, regra de integração prescrição-e	F3: farmácia	dispensacao, dispensacao_item, dose_dispensada, entrega_setor, regra_integracao_prescricao, horario_padrao_medicacao
+Avaliação farmacêutica da prescrição: triagem, situação por horário, substituição, intervenção com tipo e desfecho	F3: a trilha	avaliacao_farmaceutica, avaliacao_farmaceutica_item, situacao_farmaceutica, intervencao_farmaceutica, tipo_intervencao_farmaceutica
+Controle de antimicrobianos: ficha de justificativa, liberação e auditoria do uso	F3: exigênci	ficha_antimicrobiano, liberacao_antimicrobiano
+Medicamentos controlados: livro de registro, termos de abertura e encerramento, perda, conferência, envio ao sistema nac	F3: obrigaçã	livro_controlado, termo_livro_controlado, lancamento_controlado, envio_controlado_nacional
+Fracionamento e unitarização de dose: ordem de unitarização, etiqueta por dose, rastreio do lote de origem	F7: a farmác	ordem_unitarizacao, ordem_unitarizacao_item, dose_unitarizada
+Manipulação e produção interna: ordem de manipulação ou produção, insumos, lote produzido, kit montado	F7: quimiote	capela_manipulacao, ordem_manipulacao, ordem_manipulacao_insumo, lote_produzido
+Kits e composição padrão: kit por procedimento ou cirurgia, kit rastreável e carrinho de emergência com saldo e reposiçã	F3: os carri	kit_material, kit_material_item, kit_rastreavel, kit_rastreavel_item, reposicao_kit_rastreavel
+Lote, validade e identificação: lote por movimento, validade, etiqueta com código de barras ou DataMatrix, identificador	F3: rastreio	lote_insumo, movimento_lote, padrao_leitura_codigo, etiqueta_identificacao
+Inventário e contagem: balanço por local, contagem cega e recontagem, divergência, conferência rotativa, estoque inicial	F3: o balanç	inventario_estoque, inventario_estoque_contagem, inventario_estoque_item, inventario_estoque_divergencia
+Saldo, custo médio, fechamento mensal, recálculo auditado e consumo por centro de custo	F3: base do 	saldo_estoque, saldo_estoque_mensal, custo_medio_historico, fechamento_estoque, consumo_centro_custo
+Reposição: estoque mínimo e máximo por local, nível de serviço, ponto de pedido, cobertura, cota de setor e sugestão de 	F3: mínimo e	parametro_reposicao, nivel_servico, cota_consumo_setor, sugestao_compra, sugestao_compra_item
+Solicitação de compra com aprovação por alçada e rateio entre setores	F3: a aprova	solicitacao_compra, solicitacao_compra_item, alcada_aprovacao, aprovacao_documento, rateio_solicitacao
+Cotação: coleta de preços por fornecedor, mapa comparativo, vencedor por item, portal de cotação externo	F3: o compra	cotacao, cotacao_fornecedor, cotacao_resposta_item, portal_cotacao, vinculo_portal_cotacao
+Pedido de compra: emissão, autorização, entregas programadas, acompanhamento, cancelamento justificado, histórico de com	F3: núcleo d	pedido_compra, pedido_compra_item, pedido_compra_entrega, situacao_pedido_compra, destino_entrega_compra
+Recebimento e entrada por nota fiscal: leitura do XML, conferência física e com o pedido, impostos, custo de entrada	F3: toda ent	nota_entrada, nota_entrada_item, nota_entrada_imposto, conferencia_recebimento, conferencia_recebimento_item
+Devolução ao fornecedor e notas de crédito ou débito de suprimentos	F7: devolver	devolucao_fornecedor, devolucao_fornecedor_item, nota_credito_debito_fornecedor
+Fornecedores: cadastro fiscal e bancário, contatos, categorias, autorização sanitária, avaliação e ocorrências	F3: comparti	empresa_fornecedora, empresa_fornecedora_contato, empresa_fornecedora_categoria, categoria_fornecimento, atividade_economica, empresa_fornecedora_autorizacao, avaliacao_fornecedor, ocorrencia_fornecedor
+Consignação: saldo do fornecedor no hospital, consumo que gera reposição e compra, percentual por faixa	F7: hospital	saldo_consignado, remessa_consignada, remessa_consignada_item, reposicao_consignada
+OPME: solicitação ligada à cirurgia, autorização da operadora, cotação, consumo em sala com rastreio por lote e série, c	F7: rastreio	solicitacao_opme, solicitacao_opme_item, autorizacao_opme, consumo_opme, rastreio_implante, conciliacao_opme, taxa_manuseio_implante
+Compras públicas: licitação, pregão, propostas, ata de registro de preço, empenho	F7: hospital	processo_licitatorio, processo_licitatorio_item, proposta_licitacao, ata_registro_preco, ata_registro_preco_item, empenho, empenho_item
+Gestão de contratos com fornecedores: vigência, aditivo, reajuste, SLA, apontamentos, alertas de vencimento	F8: valor re	—
+Tabelas de referência de preço de material e medicamento e vínculo do produto com elas	F3: o item d	insumo_referencia_preco (as tabelas de preço ficam no grupo do faturamento)
+CME: solicitação de material estéril, caixas e instrumental, ciclo de esterilização com indicadores, etiqueta, rastreio 	F7: a RDC 15	caixa_instrumental, caixa_instrumental_item, instrumental, equipamento_esterilizacao, ciclo_esterilizacao, ciclo_esterilizacao_item, indicador_ciclo, solicitacao_material_esteril, etiqueta_esteril
+Gases medicinais: consumo por paciente e setor	F8: custo e 	—
+Integrações específicas com portais de compra, de OPME e ERPs corporativos	NAO: as tabe	—
+Relatórios consolidados por empresa e rentabilidade de produto	NAO: cópia d	—
+Cubos analíticos de exames, estoque, compras e fornecedores	NAO: o data 	—

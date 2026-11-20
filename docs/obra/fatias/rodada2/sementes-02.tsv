@@ -1,0 +1,65 @@
+funcionalidade	decisao	entidades_rodada1
+CAD: cadastros-base		0
+REC: recepção e atendimento		0
+AGE: agenda		0
+Técnico do fornecedor, transversal		4
+**Total**		**4**
+1	F3: é o cora	`pessoa_fisica`, `paciente`, `documento_pessoa`, `prontuario_estabelecimento`, `sequencia_prontuario`
+2	F3: a recepç	`regra_campo_cadastro`
+3	F3: o modelo	`endereco_pessoa`, `telefone_pessoa`, `email_pessoa`
+4	F3: exigido 	`vinculo_responsavel`, `tipo_parentesco`
+5	F8: dá segur	—
+6	F3: o call c	`pre_cadastro`
+7	F3: a carga 	`unificacao_prontuario`, `suspeita_duplicidade`
+8	F3: prova le	`versao_paciente`, `versao_profissional`
+9	F3: sem cobe	`cobertura_paciente`, `titular_cobertura`
+10	F8: valor re	—
+11	F8: gestão p	—
+12	F3: campo da	`origem_indicacao`
+13	F7: declaraç	`registro_obito`
+14	F3: carga pú	`municipio_ibge`, `unidade_federativa`, `pais_referencia`, `logradouro_cep`, `especie_logradouro`, `area_ddd`
+15	F3: uma tabe	`tipo_dominio`, `valor_dominio`
+16	F3: sem ele 	`profissional`, `conta_bancaria_profissional`, `registro_especialista`
+17	F3: base de 	`conselho_classe`, `ocupacao_cbo`, `especialidade_medica`, `especialidade_ocupacao`, `inscricao_conselho`, `profissional_especialidade`, `especialidade_procedimento`
+18	F3: em uso e	`lotacao_profissional`, `tipo_vinculo_trabalho`
+19	F3: sai na g	`credenciamento_pagadora`
+20	F3: em uso n	`solicitante_externo`, `codigo_solicitante_pagadora`
+21	F8: útil em 	—
+22	F8: a pessoa	—
+23	F3: decompor	`fonte_pagadora`, `parametro_fonte_pagadora`, `grupo_fonte_pagadora`, `logotipo_fonte_pagadora`
+24	F7: hospital	`plano_fonte_pagadora`, `regra_plano`, `documento_exigido_plano`
+25	F3: a Rede S	`configuracao_tiss_pagadora`, `faixa_numeracao_guia`
+26	F3: multiest	`mantenedora`, `estabelecimento`, `unidade_assistencial`, `logotipo_estabelecimento`, `parametro_estabelecimento`
+27	F3: estrutur	`setor_funcional`, `clinica_assistencial`, `centro_custo_gerencial`, `ramal_setor`
+28	F3: a geraçã	`dia_nao_util`
+29	F7: hospital	`habilitacao_estabelecimento`, `servico_classificacao_estabelecimento`, `remessa_cnes`
+30	F3: centro d	`atendimento`, `cobertura_atendimento`, `vinculo_atendimento_conta`, `procedencia_paciente`, `regra_origem_atendimento`
+31	F3: agiliza 	`regra_heranca_campo`
+32	F3: cancelam	`encerramento_atendimento`, `motivo_cancelamento_operacao`
+33	F3: rotina d	`ponto_recepcao`, `guiche_recepcao`, `gerador_senha`, `senha_emitida`, `evento_senha`, `grupo_prioridade_legal`, `painel_chamada`, `chamada_painel`
+34	F3: a fila d	`local_atendimento`, `horario_local`, `encaminhamento_local`, `visibilidade_local`
+35	F3: as regra	`modelo_impresso`, `regra_impressao`, `emissao_declaracao`
+36	F3: a LGPD e	`modelo_termo`, `aceite_termo`
+37	F7: hospital	`autorizacao_operadora`, `consulta_elegibilidade`, `regra_exigencia_autorizacao`
+38	F7: hospital	`pedido_regulacao`, `evento_regulacao`
+39	F8: ganho de	—
+40	F3: agenda a	`agenda_servico`, `escala_semanal`, `pagadora_aceita_agenda`, `especialidade_agenda`, `categoria_agenda`, `permissao_agenda`
+41	F3: rotina m	`lote_geracao_grade`, `horario_disponivel`
+42	F3: maior vo	`marcacao_horario`, `historico_marcacao`, `motivo_marcacao`
+43	F3: em uso d	`bloqueio_agenda`, `cancelamento_marcacao`
+44	F3: mesmo mo	`recurso_fisico`, `recurso_agenda`
+45	F8: valor al	—
+46	F8: refina o	—
+47	F8: controle	—
+48	F3: a tela j	`pedido_lista_espera`
+49	F3: obrigaçã	`grupo_prioridade_legal` (compartilhada), `prioridade_marcacao`
+50	F8: reabilit	—
+51	F8: tela pro	—
+52	F8: linha de	—
+53	F8: fundir c	—
+54	F3: a Rede S	`modo_agendamento_online`, `pre_checkin`, `confirmacao_marcacao`
+55	F8: tela pro	—
+56	NAO: substit	—
+57	NAO: integra	—
+58	NAO: legado 	—
+59	NAO: o BI na	—

@@ -1,0 +1,12 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+faixa_etaria_referencia	CAD	dominio	F7	Faixas etárias nomeadas (idade inicial e final) usadas para estratificar indicadores, painéis e relatórios	DBAMV GF_FAIXA_ETARIA
+grupo_alimento	HOT	dominio	F8	Grupos de alimentos (cereais, laticínios, carnes, frutas) usados no cardápio e na composição nutricional	DBAMV GRUPO_ALIMENTAR
+agrupamento_unidade_negocio	FIN	dominio	F8	Agrupamento das unidades de negócio do estabelecimento para análise gerencial de resultado	DBAMV GRUPO_NEGOCIO
+unidade_negocio	FIN	principal	F8	Unidade de negócio (linha de serviço com resultado próprio), com agrupamento, estabelecimento e situação	DBAMV GRUPO_UNIDADE_NEGOCIO
+agrupamento_orcamentario	FIN	dominio	F7	Agrupamentos das linhas do orçamento (grupo e verba) para consolidar, aprovar e acompanhar o orçado	DBAMV GRUPO_ORCAMENTARIO, GRUPO_VERBA_ORCAMENTARIA
+procedimento_laudo_sus	SUS	vinculo	F7	Procedimentos que exigem cada tipo de laudo SUS, com regra de informar procedimento e quantidade	DBAMV GRU_LAUDO_PRO, GRU_LAUDO
+habilidade_profissional	CAD	dominio	F8	Habilidades ou competências técnicas reconhecidas do profissional (ex.: procedimento específico, idioma)	DBAMV HABILIDADE
+profissional_habilidade	CAD	vinculo	F8	Habilidades atribuídas a cada profissional, usadas em escala e agendamento	DBAMV HABILIDADE_PRESTADOR
+especialidade_classe_insumo	SUP	vinculo	F8	Classes e subgrupos de insumo liberados por especialidade médica para prescrição e padronização	DBAMV HAB_ESPEC
+profissional_referencia_paciente	PEP	historico	F8	Médico de referência do paciente por período, com motivo e justificativa de cada troca	DBAMV HISTORICO_PRESTADOR_REF_PAC
+motivo_nao_adesao_protocolo	PEP	dominio	F7	Motivos que impedem incluir o paciente num protocolo gerenciado, por tipo	DBAMV IMPEDIMENTO_ADESAO

@@ -1,0 +1,46 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+acordo_honorario_particular	ACEITA	acordo_honorario_particular	FAT	configuracao	F7	Honorário combinado entre paciente e profissional para um atendimento e procedimento, com vigência e desativação
+apuracao_repasse_rateio_setor	ACEITA	apuracao_repasse_rateio_setor	FAT	item	F8	Distribuição do valor apurado de repasse de um profissional entre os setores de origem da produção
+atendimento_categoria_clinica	ACEITA	atendimento_categoria_clinica	FAT	historico	F8	Períodos do atendimento em cada categoria clínica, com valor calculado pela faixa vigente
+autorizacao_servico_sus_paciente	ACEITA	autorizacao_servico_sus_paciente	SUS	principal	F7	Especialidade ou serviço que o gestor autorizou para o paciente ser atendido pelo SUS, com data e mensagem
+autorizador_sus	ACEITA	autorizador_sus	SUS	principal	F7	Profissional autorizador do gestor para laudos de internação e APAC, com documento, conselho e cartão de saúde
+conta_aih_registro_civil	ACEITA	conta_aih_registro_civil	SUS	item	F7	Dados do registro civil do recém-nascido informados na conta de internação SUS: declaração, cartório, livro, folha, termo e matrícula
+descarte_producao_sus	ACEITA	descarte_producao_sus	SUS	historico	F7	Registro de item de AIH ou APAC retirado do envio ao gestor, com motivo, observação e usuário
+estabelecimento_repasse	ACEITA	estabelecimento_repasse	FAT	configuracao	F3	Qual estabelecimento apura e qual paga o repasse dos atendimentos de cada estabelecimento faturador
+faixa_desconto_permanencia	ACEITA	faixa_desconto_permanencia	FAT	configuracao	F8	Percentual de desconto aplicado conforme o dia de permanência na categoria clínica, por fonte pagadora
+faixa_preco_acrescimo	FUNDIR	faixa_fator_tabela	FAT	configuracao	F7	Fator multiplicador por faixa de valor ou quantidade aplicado a uma tabela de preço
+formato_arquivo_conta	ACEITA	formato_arquivo_conta	FAT	dominio	F7	Formatos de arquivo de envio de contas à fonte pagadora fora do padrão nacional, com indicação de carga em massa
+formato_arquivo_conta_usuario	ACEITA	formato_arquivo_conta_usuario	FAT	vinculo	F7	Usuários autorizados a gerar cada formato de arquivo de contas
+grupo_procedimento_contrato_sus	ACEITA	grupo_procedimento_contrato_sus	SUS	vinculo	F7	Procedimentos que compõem cada grupo usado nas metas do contrato com o gestor
+item_faturavel_cid	ACEITA	item_faturavel_cid	FAT	vinculo	F7	Diagnósticos permitidos, padrão ou exigidos para um item faturável, como principal ou secundário
+item_faturavel_codigo_barras	ACEITA	item_faturavel_codigo_barras	FAT	vinculo	F8	Códigos de barras de produto aceitos para o item cobrado, para conferir material e medicamento na conta
+item_faturavel_funcao_equipe	ACEITA	item_faturavel_funcao_equipe	FAT	configuracao	F7	Funções de equipe aceitas na cobrança de cada item, com exceção por prestador ou estabelecimento
+item_faturavel_tributacao	ACEITA	item_faturavel_tributacao	FAT	configuracao	F8	Alíquota de ICMS, preço máximo de intercâmbio, taxa logística e área de livre comércio do item por vigência
+item_faturavel_unidade_medida	ACEITA	item_faturavel_unidade_medida	FAT	configuracao	F7	Unidade de medida da terminologia oficial do item, com fator de conversão e vigência, opcionalmente por prestador
+justificativa_excecao_cobertura	ACEITA	justificativa_excecao_cobertura	FAT	dominio	F7	Justificativas padronizadas para liberar excepcionalmente um item restrito pela fonte pagadora
+laudo_apac_odontologia	ACEITA	laudo_apac_odontologia	SUS	item	F7	Complemento odontológico do laudo de APAC: anomalias, oclusão, condição bucal e tratamento proposto
+ligacao_tarifada	ACEITA	ligacao_tarifada	FAT	principal	F7	Ligação telefônica feita do ramal do paciente, com data, duração, destino e valor para cobrança na conta
+mapeamento_resultado_laudo_apac	ACEITA	mapeamento_resultado_laudo_apac	SUS	configuracao	F7	Qual campo do resultado de exame alimenta cada campo do laudo de APAC, por tipo de atendimento e estabelecimento
+motivo_movimentacao_conta_sus	FUNDIR	motivo_transferencia_conta	FAT	dominio	F3	Motivos de transferência de conta ou de itens
+ocupacao_cbo_estabelecimento	ACEITA	ocupacao_cbo_estabelecimento	SUS	vinculo	F7	Ocupações aceitas para cobrança SUS em cada estabelecimento
+pacote_cid	ACEITA	pacote_cid	FAT	vinculo	F7	Diagnósticos que descaracterizam o pacote e levam a conta para cobrança aberta
+preco_negociado_procedimento	ACEITA	preco_negociado_procedimento	FAT	configuracao	F3	Valor fixo de procedimento acordado com a fonte pagadora e plano, por vigência, prestador ou setor, que prevalece sobre a tabela
+procedimento_laudo_sus	ACEITA	procedimento_laudo_sus	SUS	vinculo	F7	Procedimentos que exigem cada tipo de laudo SUS, com regra de informar procedimento e quantidade
+producao_fixa_setor_sus	ACEITA	producao_fixa_setor_sus	SUS	configuracao	F3	Quantidade padrão de procedimento público lançada por setor, instrumento e período na produção ambulatorial, com vigência
+profissional_funcao_equipe	ACEITA	profissional_funcao_equipe	FAT	vinculo	F3	Funções da equipe que cada profissional pode exercer na cobrança e no repasse
+protocolo_recebimento_guia	ACEITA	protocolo_recebimento_guia	FAT	item	F3	Guias e procedimentos do protocolo ou da consulta de situação, com valores informados, liberados, glosados e motivo de recusa
+regra_aceite_glosa	ACEITA	regra_aceite_glosa	FAT	configuracao	F7	Faixa de valor em que a glosa é aceita sem recurso, por fonte pagadora, tipo de conta e motivo
+regra_agrupamento_producao_sus	ACEITA	regra_agrupamento_producao_sus	SUS	configuracao	F7	Como cada procedimento é agrupado na produção ambulatorial SUS: por setor, profissional ou vínculo, com vigência
+regra_cobranca_atendimento	ACEITA	regra_cobranca_atendimento	FAT	configuracao	F7	Percentual de cobrança ou coparticipação por componente, grupo ou item definido para um atendimento específico, com senha e vigência
+regra_cobranca_excedente	FUNDIR	faixa_fator_tabela	FAT	configuracao	F7	Fator multiplicador por faixa de valor ou quantidade aplicado a uma tabela de preço
+regra_desconto_procedimento	ACEITA	regra_desconto_procedimento	FAT	configuracao	F3	Desconto ou acréscimo percentual do acordo para um procedimento específico, por tipo de atendimento
+regra_grupo_faturamento_insumo	ACEITA	regra_grupo_faturamento_insumo	FAT	configuracao	F3	Grupo de faturamento padrão do insumo conforme categoria, setor e local de estoque, aplicado no cadastro e na importação
+regra_profissional_automatico_aih	ACEITA	regra_profissional_automatico_aih	SUS	configuracao	F7	Profissional e CBO lançados automaticamente na conta de internação SUS por procedimento ou grupo
+regra_servico_classificacao_sus	ACEITA	regra_servico_classificacao_sus	SUS	configuracao	F7	Serviço e classificação SUS preenchidos automaticamente na produção conforme serviço do hospital e procedimento
+regra_transferencia_conta	ACEITA	regra_transferencia_conta	FAT	configuracao	F7	Regra de transferência ou espelhamento de conta entre estabelecimentos, com de-para de fonte pagadora, origem e setor
+regra_transferencia_item_estabelecimento	ACEITA	regra_transferencia_item_estabelecimento	FAT	configuracao	F7	Regra que leva itens lançados num estabelecimento para a conta de outro da rede, por fonte pagadora, grupo, item, setor ou profissional
+solicitacao_autorizacao_diagnostico	ACEITA	solicitacao_autorizacao_diagnostico	FAT	item	F7	Diagnósticos principal e secundários informados no pedido de autorização à operadora
+teto_cobranca_excecao	ACEITA	teto_cobranca_excecao	FAT	configuracao	F7	Exceção ao teto de custo mensal para um paciente, com período e justificativa
+tipo_desconto_repasse	ACEITA	tipo_desconto_repasse	FAT	dominio	F7	Tipos de desconto aplicáveis ao repasse do profissional (adiantamento, taxa, multa, custo), com situação
+valor_complementar_sus	ACEITA	valor_complementar_sus	SUS	configuracao	F7	Valor complementar ou contratado com o gestor local por procedimento da tabela unificada, por estabelecimento, unidade e vigência
+valor_indice_atendimento	ACEITA	valor_indice_atendimento	FAT	configuracao	F7	Valor de índice diferenciado por tipo e origem de atendimento num acordo, com grupo de procedimento

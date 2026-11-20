@@ -1,0 +1,26 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+requisito_acreditacao_indicador	QUA	vinculo	F8	Indicadores que medem o atendimento de cada requisito do manual de acreditação, com meta e valor atingido	DBAPORTAL CA_CARACTERISTICA_IVM
+requisito_acreditacao_nota	QUA	item	F8	Anotações datadas sobre um requisito de acreditação, com autor, título e texto formatado	DBAPORTAL CA_NOTA_CARACTERISTICA
+regra_classificacao_incidente	QUA	configuracao	F8	Regra nomeada que classifica notificações automaticamente a partir das respostas do formulário, pública ou do autor	DBAPORTAL CLASSIFICACAO; GRUPO_CLASSIFICACAO
+regra_classificacao_incidente_criterio	QUA	item	F8	Critério da regra de classificação: pergunta, operador, resposta esperada, conector lógico e ordem	DBAPORTAL FILTRO_CLASSIFICACAO
+calendario_trabalho	CAD	configuracao	F8	Calendário de expediente usado para calcular prazos e durações em horas úteis de planos e projetos	DBAPORTAL DIAS_CALENDARIO; EXCECAO
+calendario_trabalho_dia	CAD	item	F8	Horários de início e fim dos turnos de cada dia da semana no calendário de expediente	DBAPORTAL DIAS_CALENDARIO
+calendario_trabalho_excecao	CAD	item	F8	Período com expediente diferente do padrão no calendário, com horas produtivas e motivo	DBAPORTAL EXCECAO
+documento_qualidade_nota	QUA	item	F8	Comentário datado sobre um documento controlado, com autor, título, texto e aviso por e-mail	DBAPORTAL DOCUMENTO_NOTA
+apontamento_hora_iniciativa	REL	item	F8	Horas lançadas por data em cada ação de iniciativa, com classificação da hora (produtiva, extra)	DBAPORTAL DURACAO_ATIVIDADE; CLASSIFICACAO_HORA
+analise_objetivo_estrategico	REL	item	F8	Análise periódica de desempenho de um objetivo estratégico: tendência, recomendação e responsável	DBAPORTAL FICHA_OBJETIVO
+cenario_fluxo_caixa_conta	FIN	vinculo	F8	Contas bancárias que compõem o saldo inicial de cada cenário de fluxo de caixa	DBAPORTAL FLUXO_CAIXA_CONTAS
+etapa_fluxo_incidente	QUA	dominio	F7	Etapas do quadro de tratamento das notificações (triagem, análise, plano, encerramento), configuráveis	DBAPORTAL FLUXO_OCORRENCIA
+indicador_relacao	REL	vinculo	F8	Relação de causa e efeito ou de composição entre dois indicadores, para leitura conjunta	DBAPORTAL IND_CAUSA_EFEITO; PLANILHA_DECISAO
+iniciativa_estrategica_indicador	REL	vinculo	F8	Indicadores que cada iniciativa ou ação pretende mover	DBAPORTAL INICIATIVA_ACAO_INDICADOR
+iniciativa_estrategica_nota	REL	item	F8	Comentário datado sobre uma iniciativa ou ação, com autor, texto e aviso aos participantes	DBAPORTAL NOTA_INICIATIVA
+iniciativa_estrategica_participante	REL	vinculo	F8	Pessoas ou perfis ligados à iniciativa (responsável, equipe, leitor) e os avisos que recebem	DBAPORTAL PERFIL_INICIATIVA_ACAO; PUBLIC_USU_INIC_ACAO
+notificacao_incidente_nota	QUA	item	F7	Comentário datado no tratamento de uma notificação de incidente, com autor e título	DBAPORTAL NOTA_REG_OCORRENCIA
+modelo_pauta_analise_critica	REL	configuracao	F8	Modelo de pauta da reunião de análise crítica de indicadores	DBAPORTAL ITEM_TEMPLATE_IND_REUNIAO
+modelo_pauta_analise_critica_item	REL	item	F8	Bloco do modelo de pauta (gráfico, análise, plano de ação) com a ordem de apresentação	DBAPORTAL ITEM_TEMPLATE_IND_REUNIAO
+carteira_risco	QUA	principal	F8	Conjunto de riscos agrupados por área, processo ou projeto, com responsáveis e quem pode ver ou editar	DBAPORTAL MAPA; PERFIL_MAPA
+fonte_referencia_indicador	REL	dominio	F8	Fonte de comparação externa de indicadores (associação, programa nacional, rede), com cor nos gráficos	DBAPORTAL REFERENCIA
+indicador_referencia	REL	vinculo	F8	Fontes de comparação externa aplicáveis a cada indicador	DBAPORTAL IVM_REFERENCIA
+tarefa_usuario	ADM	principal	F8	Tarefa atribuída a um usuário, com categoria, prioridade, período, percentual concluído e situação	DBAPORTAL PENDENCIA
+proposta_iniciativa	REL	principal	F8	Proposta de projeto antes da aprovação: objetivo, produto, marcos, prioridade, custo estimado e parecer	DBAPORTAL PRE_PROJETO
+proposta_iniciativa_recurso	REL	item	F8	Recurso estimado da proposta: material a adquirir ou horas de pessoal por senioridade, com quantidade e custo	DBAPORTAL PRE_PROJETO_MATERIAL; PRE_PROJETO_RECURSO

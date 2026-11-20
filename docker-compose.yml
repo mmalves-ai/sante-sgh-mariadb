@@ -1,0 +1,25 @@
+# Banco Oracle de inspeção do dump TSTMV (export Data Pump 12.1.0.2 do ambiente de teste MV).
+# Só loopback. Senha em .env (permissão 600, fora de qualquer git).
+name: sante-sgh-oracle
+services:
+  oracle:
+    image: gvenzl/oracle-free:23.9-slim
+    container_name: sante-sgh-oracle
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ORACLE_PORTA:-1521}:1521"
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_SENHA}
+    volumes:
+      - sante-sgh-oracle-data:/opt/oracle/oradata
+      - ./dump:/opt/oracle/dump
+    shm_size: 1g
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
+volumes:
+  sante-sgh-oracle-data:
+    name: sante-sgh-oracle-data

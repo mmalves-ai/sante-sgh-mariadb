@@ -1,0 +1,228 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPS	HIS_MATRICULA_RH	MECANISMO	historico_entidade:beneficiario_plano	N	SGO	F7	historico do codigo do beneficiario na folha da contratante
+DBAPS	HIS_PLANO	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	
+DBAPS	HIS_PLANO_AGENDAMENTO	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	troca de plano agendada vira movimento com data de efeito futura
+DBAPS	HIS_PLANO_COMPLEMENTAR	TABELA	servico_adicional_contrato;movimento_cadastral_beneficiario	N	SGO	F7	
+DBAPS	HIS_TRANSF_TITULOS	MECANISMO	historico_entidade:fatura_plano	N	SGO	F7	transferencia de fatura entre contratos
+DBAPS	IDENTIFICACAO_BENEFICIARIO	MECANISMO	catalogo_publico:tiss	N	INTG		terminologia de tipo de identificacao do beneficiario
+DBAPS	IDENTIFICADOR_CAMPO_TISS	MECANISMO	catalogo_publico:tiss	N	INTG		identificadores de campo do padrao
+DBAPS	IMPORTACAO_MVS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPS	IMPORTACAO_PROCEDIMENTO	TABELA	importacao_tabela_diferenca	N	FAT	F3	linhas da carga de referencia de mat/med
+DBAPS	IMPORTACAO_PROCEDIMENTO_APRS	TABELA	importacao_tabela_diferenca	N	FAT	F3	apresentacoes encontradas na carga de referencia
+DBAPS	IMPORTACAO_PROCEDIMENTO_LABOR	TABELA	importacao_tabela_diferenca	N	FAT	F3	fabricantes encontrados na carga de referencia
+DBAPS	IMPORTACAO_UPLOAD	TABELA	lote_carga_legado	N	SIS	F3	
+DBAPS	IMPORTACAO_XML	MECANISMO	integracao	N	INTG		importacao de arquivo XML de guias
+DBAPS	IMPORTA_NOTA_FISCAL_ELET	MECANISMO	integracao	N	INTG		retorno de arquivo de nota de servico; final em nota_servico
+DBAPS	IMP_BAIXA_EVENTO_LIQUIDAR	MECANISMO	integracao	N	INTG		area de troca; final em lote_pagamento_rede_item
+DBAPS	IMP_BRAS	TABELA	tabela_remuneracao_rede_item	N	SGO	F7	percentual sobre preco de referencia por item na tabela da rede
+DBAPS	IMP_CADASTRO	MECANISMO	integracao	N	INTG		area de troca da carga de beneficiarios; final em beneficiario_plano
+DBAPS	IMP_CADASTRO_CONTRATO	MECANISMO	integracao	N	INTG		area de troca; final em contrato_plano
+DBAPS	IMP_CADASTRO_RECIPROCIDADE	MECANISMO	integracao	N	INTG		area de troca; final em reciprocidade_beneficiario
+DBAPS	IMP_CADASTRO_USUARIOS	MECANISMO	integracao	N	INTG		area de troca; final em beneficiario_plano
+DBAPS	IMP_CANCELA_MENS_CONTRATO	MECANISMO	integracao	N	INTG		area de troca; final em fatura_plano
+DBAPS	IMP_CARENCIA_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em carencia_aplicada
+DBAPS	IMP_CENTRO_DE_CUSTO	MECANISMO	integracao	N	INTG		carga do legado; final em subdivisao_contrato_plano
+DBAPS	IMP_COMISSAO_PHS	MECANISMO	integracao	N	INTG		carga do legado; final em comissao_venda
+DBAPS	IMP_CONTA_MEDICA	MECANISMO	integracao	N	INTG		carga do legado; final em guia_conta_recebida
+DBAPS	IMP_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em contrato_plano
+DBAPS	IMP_CONTRATO_DEB_AUT	MECANISMO	integracao	N	INTG		carga do legado; final em contrato_forma_cobranca
+DBAPS	IMP_CONTRATO_OBSERVACAO	MECANISMO	integracao	N	INTG		carga do legado; final em contrato_plano
+DBAPS	IMP_CONTRATO_OUTRAS_RECEITAS	MECANISMO	integracao	N	INTG		carga do legado; final em lancamento_programado_contrato
+DBAPS	IMP_CONT_INDIVID_CRITICAS	MECANISMO	integracao	N	INTG		criticas da carga de contrato individual
+DBAPS	IMP_DESLIGA_BENEFICIARIO	MECANISMO	integracao	N	INTG		area de troca; final em movimento_cadastral_beneficiario
+DBAPS	IMP_DESLIGA_PRESTADOR	MECANISMO	integracao	N	INTG		area de troca; final em descredenciamento_prestador
+DBAPS	IMP_DESLIGA_PRESTADOR_END	MECANISMO	integracao	N	INTG		area de troca; final em local_atendimento_rede
+DBAPS	IMP_EMPRESA	MECANISMO	integracao	N	INTG		carga do legado; final em contratante_plano
+DBAPS	IMP_ESPECIALIDADE_PRESTADOR	MECANISMO	integracao	N	INTG		carga do legado; final em especialidade_atendida_rede
+DBAPS	IMP_FAIXA_ETARIA	MECANISMO	integracao	N	INTG		carga do legado; final em faixa_etaria_modelo_item
+DBAPS	IMP_FAIXA_VIDAS	MECANISMO	integracao	N	INTG		carga do legado; final em faixa_vidas_modelo
+DBAPS	IMP_FATURA	MECANISMO	integracao	N	INTG		carga do legado; final em lote_conta_recebida
+DBAPS	IMP_FATURAMENTO_UNNIMAX	MECANISMO	integracao	N	INTG		arquivo de faturamento de terceiro; final em fatura_plano_item
+DBAPS	IMP_FORNEC_REEMBOLSO	MECANISMO	integracao	N	INTG		carga do legado; dados bancarios para pedido_reembolso
+DBAPS	IMP_FORN_DETALHAMENTO	MECANISMO	integracao	N	INTG		carga do legado; vinculo prestador e fornecedor
+DBAPS	IMP_GRUPO_FAIXA_ETARIA	MECANISMO	integracao	N	INTG		carga do legado; final em faixa_etaria_modelo
+DBAPS	IMP_GRUPO_FAIXA_VIDAS	MECANISMO	integracao	N	INTG		carga do legado; final em faixa_vidas_modelo
+DBAPS	IMP_GUIA	MECANISMO	integracao	N	INTG		carga do legado; final em pedido_autorizacao_plano
+DBAPS	IMP_HIS_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_HIS_EMPRESA	MECANISMO	integracao	N	INTG		carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_HIS_PLANO	MECANISMO	integracao	N	INTG		carga do legado; final em movimento_cadastral_beneficiario
+DBAPS	IMP_ITCONTA_MEDICA	MECANISMO	integracao	N	INTG		carga do legado; final em guia_conta_recebida_item
+DBAPS	IMP_ITCONTA_MEDICA_COBR	MECANISMO	integracao	N	INTG		carga do legado; final em lancamento_coparticipacao
+DBAPS	IMP_ITCONTA_MEDICA_PGTO	MECANISMO	integracao	N	INTG		carga do legado; final em guia_conta_recebida_equipe
+DBAPS	IMP_ITEM_LOTE_RECIPROCIDADE	MECANISMO	integracao	N	INTG		carga do legado; final em lote_reciprocidade_item
+DBAPS	IMP_ITEM_RECIPROCIDADE	MECANISMO	integracao	N	INTG		carga do legado; final em reciprocidade_movimento
+DBAPS	IMP_ITGUIA	MECANISMO	integracao	N	INTG		carga do legado; final em pedido_autorizacao_plano_item
+DBAPS	IMP_ITMENS_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em fatura_plano_item
+DBAPS	IMP_ITMENS_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em mensalidade_beneficiario
+DBAPS	IMP_ITMENS_USUARIO_COPART	MECANISMO	integracao	N	INTG		carga do legado; final em lancamento_coparticipacao
+DBAPS	IMP_ITREEMBOLSO	MECANISMO	integracao	N	INTG		carga do legado; final em pedido_reembolso_item
+DBAPS	IMP_LOTE	MECANISMO	integracao	N	INTG		carga do legado; final em lote_conta_recebida
+DBAPS	IMP_LOTE_RECIPROCIDADE	MECANISMO	integracao	N	INTG		carga do legado; final em lote_reciprocidade
+DBAPS	IMP_MENS_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em fatura_plano
+DBAPS	IMP_MENS_CONTRATO_REC	MECANISMO	integracao	N	INTG		carga do legado; final em baixa do titulo_receber
+DBAPS	IMP_MENS_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em mensalidade_beneficiario
+DBAPS	IMP_MEN_CON_REC_LCTO	MECANISMO	integracao	N	INTG		carga do legado; acrescimo e desconto na baixa do titulo_receber
+DBAPS	IMP_MIGRACAO_MENS_PHS	MECANISMO	integracao	N	INTG		carga do legado; final em fatura_plano
+DBAPS	IMP_PESSOA	MECANISMO	integracao	N	INTG		carga do legado; final em pessoa_fisica ou pessoa_juridica
+DBAPS	IMP_PESSOA_ENDERECO	MECANISMO	integracao	N	INTG		carga do legado; final no endereco da pessoa
+DBAPS	IMP_PLANO	MECANISMO	integracao	N	INTG		carga do legado; final em plano_comercializado
+DBAPS	IMP_PLANO_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em contrato_plano_oferta
+DBAPS	IMP_PRESTADOR	MECANISMO	integracao	N	INTG		carga do legado; final em prestador_rede
+DBAPS	IMP_PRESTADOR_ENDERECO	MECANISMO	integracao	N	INTG		carga do legado; final em local_atendimento_rede
+DBAPS	IMP_PRESTADOR_ENDERECO_CONTATO	MECANISMO	integracao	N	INTG		carga do legado; final em local_atendimento_rede
+DBAPS	IMP_PRESTADOR_ENDERECO_ESPL	MECANISMO	integracao	N	INTG		carga do legado; final em especialidade_atendida_rede
+DBAPS	IMP_PROCEDIMENTO	MECANISMO	integracao	N	INTG		carga do legado; final em item_faturavel
+DBAPS	IMP_PROCED_TIPO_ATENDIMENTO	MECANISMO	integracao	N	INTG		carga do legado; final em regra_cobertura_rol
+DBAPS	IMP_REATIVA_BENEFICIARIO	MECANISMO	integracao	N	INTG		area de troca; final em movimento_cadastral_beneficiario
+DBAPS	IMP_REATIVA_PRESTADOR	MECANISMO	integracao	N	INTG		area de troca; final em prestador_rede_historico
+DBAPS	IMP_REATIVA_PRESTADOR_END	MECANISMO	integracao	N	INTG		area de troca; final em local_atendimento_rede
+DBAPS	IMP_RECEITA_MENS_CONTRATO	MECANISMO	integracao	N	INTG		area de troca; final em fatura_plano_item
+DBAPS	IMP_RECIPROCIDADE	MECANISMO	integracao	N	INTG		carga do legado; final em reciprocidade_beneficiario
+DBAPS	IMP_REEMBOLSO	MECANISMO	integracao	N	INTG		carga do legado; final em pedido_reembolso
+DBAPS	IMP_REMCTA	MECANISMO	integracao	N	INTG		controle de arquivo de remessa de contas importado
+DBAPS	IMP_REMCTA_LOTES	MECANISMO	integracao	N	INTG		lotes do arquivo de remessa de contas importado
+DBAPS	IMP_REPRESENTANTE	MECANISMO	integracao	N	INTG		carga do legado; final em contratante_plano
+DBAPS	IMP_RESP_FINANCEIRO	MECANISMO	integracao	N	INTG		carga do legado; final em contrato_plano
+DBAPS	IMP_SERVICOS_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_SERVICOS_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_SERVICOS_USUARIOS	MECANISMO	integracao	N	INTG		carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em beneficiario_plano
+DBAPS	IMP_USUARIO_OBSERVACAO	MECANISMO	integracao	N	INTG		carga do legado; final em beneficiario_plano
+DBAPS	IMP_VALORES_SERVICOS_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em servico_adicional_contrato
+DBAPS	IMP_VALORES_TABELA_CONTRATO	MECANISMO	integracao	N	INTG		carga do legado; final em tabela_preco_contrato
+DBAPS	IMP_VALORES_TABELA_USUARIO	MECANISMO	integracao	N	INTG		carga do legado; final em mensalidade_beneficiario
+DBAPS	INADIMPLECIA_FASE_ACOMPANHAMEN	NAO		N	SGO		duplicado de INADIMPLENCIA_FASE_ACOMPANHAME
+DBAPS	INADIMPLENCIA	TABELA	ocorrencia_inadimplencia	N	SGO	F7	
+DBAPS	INADIMPLENCIA_ACOMPANHAMENTO	MECANISMO	historico_entidade:ocorrencia_inadimplencia	N	SGO	F7	andamento do acompanhamento da inadimplencia
+DBAPS	INADIMPLENCIA_FASE_ACOMPANHAME	TABELA	fase_cobranca_inadimplencia	N	SGO	F7	
+DBAPS	INADIMPLENCIA_REMOVIDA	TABELA	registro_excluido	N	ADM	F3	copia da inadimplencia excluida
+DBAPS	INDICADOR_ACIDENTE	MECANISMO	catalogo_publico:tiss	N	INTG		terminologia de indicador de acidente
+DBAPS	INDICE_REAJUSTE	TABELA	indice_reajuste_plano	N	SGO	F7	indice proprio de reajuste diferenciado
+DBAPS	INDICE_REAJUSTE_RECEITA	TABELA	indice_reajuste_tipo_lancamento	S	SGO	F7	
+DBAPS	INFORMANTE_EXTERNO_CALL_CENTER	TABELA	vinculo_solicitante_protocolo	N	SGO	F7	quem contata em nome do beneficiario
+DBAPS	INSS	TABELA	faixa_tabela_legal	N	RH	F3	faixas de retencao previdenciaria
+DBAPS	INSTALACAO_UNIMED_LOG	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPS	INSTALA_TABELA_PROCED	TABELA	tabela_referencia_procedimento_item	N	INTG	F3	carga inicial de portes e incidencias da tabela de referencia
+DBAPS	INSTALA_TABELA_TNUM	MECANISMO	catalogo_publico:tuss	N	INTG		terminologia de materiais e OPME
+DBAPS	IRRF	TABELA	faixa_tabela_legal	N	RH	F3	faixas do imposto de renda
+DBAPS	IRRF_PESSOA_JURIDICA	TABELA	regra_retencao	N	FIN	F3	
+DBAPS	ISS	TABELA	regra_iss_municipio	N	FIN	F3	
+DBAPS	ITAGRUPAMENTO_CARENCIA	TABELA	carencia_plano	N	SGO	F7	modelo de carencias por grupo com dias e sexo
+DBAPS	ITAGRUP_PROCED	TABELA	agrupamento_procedimento_item	S	SGO	F7	
+DBAPS	ITALERTA	TABELA	alerta_operadora_departamento	S	SGO	F7	
+DBAPS	ITANEXO_CONTA_MEDICA	MECANISMO	arquivo	N	SGO	F7	anexo da conta recebida; metadado em guia_conta_recebida
+DBAPS	ITAUDIT_TABELAS	MECANISMO	trilha_auditoria	N	ADM		campos auditados por tabela
+DBAPS	ITAUTO_EXCLUDENTE	TABELA	regra_critica_conta	N	SGO	F7	procedimentos mutuamente excludentes
+DBAPS	ITBOLETO	TABELA	boleto	N	FIN	F7	boleto que agrupa faturas
+DBAPS	ITCALENDARIO_CAMARA_COMP	TABELA	calendario_intercambio	S	SGO	F8	
+DBAPS	ITCONCOMITANTE	TABELA	regra_concomitancia_item	S	SGO	F7	
+DBAPS	ITCONCOMITANTE_VALOR_PROC	TABELA	regra_concomitancia_excecao	S	SGO	F7	
+DBAPS	ITCONFIGURAR_TABELAS	MECANISMO	framework	N	SIS		configuracao de campos de tela
+DBAPS	ITCONTAH_REJEITADA	TABELA	guia_conta_recebida_item	N	SGO	F7	conta rejeitada vira situacao da conta recebida
+DBAPS	ITCONTAH_REJEITADA_COBRANCA	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	ITCONTAH_REJEITADA_LOG	TABELA	critica_conta_recebida	N	SGO	F7	
+DBAPS	ITCONTA_HOSPITALAR	TABELA	guia_conta_recebida_item	N	SGO	F7	
+DBAPS	ITCONTA_HOSPITALAR_COBRANCA	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	ITCONTA_HOSPITALAR_COB_ADIC	TABELA	lancamento_coparticipacao	N	SGO	F7	cobranca adicional ao beneficiario
+DBAPS	ITCONTA_HOSPITALAR_FATURA	TABELA	lote_pagamento_rede_item	N	SGO	F7	
+DBAPS	ITCONTA_HOSP_AUD_ENF	TABELA	auditoria_conta_recebida	N	SGO	F7	
+DBAPS	ITCONTA_HOSP_AUD_MED	TABELA	auditoria_conta_recebida	N	SGO	F7	
+DBAPS	ITCONTA_MED	TABELA	guia_conta_recebida_equipe	N	SGO	F7	
+DBAPS	ITCONTA_MEDICA	TABELA	guia_conta_recebida_item	N	SGO	F7	
+DBAPS	ITCONTA_MEDICA_GLOSA	TABELA	glosa_conta_recebida	N	SGO	F7	
+DBAPS	ITCONTA_MED_RATEIO	TABELA	lancamento_coparticipacao	N	SGO	F7	rateio da coparticipacao por equipe
+DBAPS	ITCONTA_MED_REJEITADA	TABELA	guia_conta_recebida_equipe	N	SGO	F7	
+DBAPS	ITCONTA_MED_REJEITADA_LOG	TABELA	critica_conta_recebida	N	SGO	F7	
+DBAPS	ITDESPESA_PROCED	TABELA	classe_despesa_procedimento	S	SGO	F7	
+DBAPS	ITDISTR_COBRANCA_CONTRATO	TABELA	distribuicao_cobranca_terceiro	N	SGO	F8	
+DBAPS	ITEM_ARQUIVO_CONTA_MEDICA	MECANISMO	integracao	N	INTG		arquivo de contas da reciprocidade; final em guia_conta_recebida
+DBAPS	ITEM_ARQUIVO_FATURA_TAXA	MECANISMO	integracao	N	INTG		arquivo de taxas da reciprocidade; final em fatura_plano_item
+DBAPS	ITEM_ARQUIVO_PROCEDIMENTO	MECANISMO	integracao	N	INTG		arquivo de procedimentos da reciprocidade; final em guia_conta_recebida_item
+DBAPS	ITEM_AUTORIZACAO_RECIPROCIDADE	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	pedido vindo de reciprocidade
+DBAPS	ITEM_DESPESA	TABELA	classe_despesa_assistencial	N	SGO	F7	
+DBAPS	ITEM_DESPESA_A500	TABELA	regra_cobranca_intercambio	S	SGO	F8	
+DBAPS	ITEM_DESPESA_IMPOSTO	TABELA	regra_retencao	N	FIN	F3	retencao por classe de despesa e tipo de prestador
+DBAPS	ITEM_DESPESA_SETOR_HORA	TABELA	classe_despesa_centro_custo	S	SGO	F7	
+DBAPS	ITEM_ERRO_PROCESSO_REAJUSTE	MECANISMO	historico_entidade:reajuste_contrato_plano	N	SGO	F7	criticas do processamento de reajuste
+DBAPS	ITEM_GERACAO_SPED_PIS_COFINS	TABELA	apuracao_pis_cofins	N	FIN	F7	
+DBAPS	ITEM_GRUPO_MOTIVO_GLOSA	TABELA	motivo_glosa	N	FAT	F3	
+DBAPS	ITEM_LOG_IMPORTACAO_PROCED	TABELA	importacao_tabela_diferenca	N	FAT	F3	
+DBAPS	ITEM_LOG_PROCESSO_MVS	MECANISMO	trilha_auditoria	N	ADM		valor antigo e novo por campo
+DBAPS	ITEM_LOG_PROCESSO_REAJUSTE	TABELA	reajuste_contrato_plano	N	SGO	F7	
+DBAPS	ITEM_LOTE_CANCELAMENTO_MENS	TABELA	lote_cancelamento_fatura_item	S	SGO	F7	
+DBAPS	ITEM_LOTE_RECIPROCIDADE	TABELA	lote_reciprocidade_item	S	SGO	F8	
+DBAPS	ITEM_PONTO_ENTRADA	MECANISMO	framework	N	SIS		comandos de extensao do produto
+DBAPS	ITEM_REAJUSTE_AGRUPAMENTO	TABELA	agrupamento_reajuste_coletivo	N	SGO	F7	percentuais por lancamento no agrupamento
+DBAPS	ITEM_REAJUSTE_COLETIVO	TABELA	reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	ITEM_REAJUSTE_INDIVIDUAL	TABELA	reajuste_contrato_plano_item	N	SGO	F7	
+DBAPS	ITEM_RECIPROCIDADE	TABELA	reciprocidade_movimento	S	SGO	F8	
+DBAPS	ITEM_RESSARCIMENTO_SUS_ANEXO	TABELA	ressarcimento_sus_atendimento	N	SGO	F7	
+DBAPS	ITEM_TIPO_ATENDIMENTO	MECANISMO	framework	N	SIS		formulario de guia por versao do padrao
+DBAPS	ITESTORNO_REAJUSTE	TABELA	estorno_reajuste	N	SGO	F7	
+DBAPS	ITEXP_BENEFICIARIO	TABELA	envio_ans_item	N	SGO	F7	
+DBAPS	ITFAIXA_REAJUSTE	TABELA	faixa_reajuste_item	S	SGO	F7	
+DBAPS	ITFATOR_URGENCIA	TABELA	regra_valoracao_item	N	SGO	F7	fator de urgencia por procedimento
+DBAPS	ITFATOR_URGENCIA_DETALHE	TABELA	regra_valoracao_item	N	SGO	F7	fator de urgencia por dia e horario
+DBAPS	ITGERA_XML_TISS_CM	MECANISMO	integracao	N	INTG		selecao para geracao de arquivo TISS
+DBAPS	ITGLOSA_REFERENCIA	TABELA	regra_critica_conta	N	SGO	F7	glosa por referencia de procedimento
+DBAPS	ITGRUPO_FRANQUIA	TABELA	regra_franquia_plano	N	SGO	F7	
+DBAPS	ITGRUPO_FRANQUIA_CRITERIO	TABELA	regra_franquia_excecao	N	SGO	F7	
+DBAPS	ITGRUPO_FRANQUIA_CRIT_VALORES	TABELA	regra_franquia_excecao	N	SGO	F7	
+DBAPS	ITGRUPO_FRANQUIA_INTERNACAO	TABELA	regra_franquia_plano	N	SGO	F7	franquia de internacao por acomodacao
+DBAPS	ITGRUPO_IMPRESSAO_COBRANCA	TABELA	grupo_postagem_cobranca_municipio	S	SGO	F8	
+DBAPS	ITGRUPO_SINISTRA	TABELA	faixa_indicador	N	REL	F3	faixas de sinistralidade
+DBAPS	ITGRU_IMP_CAR	TABELA	carencia_impressa_cartao	S	SGO	F7	
+DBAPS	ITGUIA	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	
+DBAPS	ITGUIA_CONTA_CONTABIL_ERROS	MECANISMO	integracao	N	INTG		erros da contabilizacao de eventos
+DBAPS	ITGUIA_CTACTB	TABELA	lancamento_contabil	N	FIN	F7	contabilizacao do evento autorizado
+DBAPS	ITGUIA_DESPESA	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	outras despesas da guia
+DBAPS	ITGUIA_EQUIPE	TABELA	guia_conta_recebida_equipe	N	SGO	F7	
+DBAPS	ITGUIA_ERROS	TABELA	critica_pedido_autorizacao	N	SGO	F7	
+DBAPS	ITGUIA_EXECUCAO	TABELA	execucao_autorizacao_item	S	SGO	F7	
+DBAPS	ITGUIA_LEITURA_CONTRATUAL	TABELA	guia_leitura_contratual_item	S	SGO	F7	
+DBAPS	ITGUIA_MENSAGEM_ESPECIFICA	MECANISMO	integracao	N	INTG		mensagem de intercambio ligada ao item
+DBAPS	ITGUIA_MODELO	TABELA	modelo_pedido_autorizacao_item	S	SGO	F8	
+DBAPS	ITGUIA_NAO_EXCLUIR	NAO		N	SGO		copia/backup
+DBAPS	ITGUIA_OCULOS	TABELA	pedido_autorizacao_oculos	S	SGO	F8	
+DBAPS	ITGUIA_RATEIO_COPART	TABELA	lancamento_coparticipacao	N	SGO	F7	rateio da coparticipacao entre planos
+DBAPS	ITGUIA_TAXA	TABELA	lancamento_coparticipacao	N	SGO	F7	taxa administrativa sobre item da guia
+DBAPS	ITGUIA_WEB	TABELA	pedido_autorizacao_plano_item	N	SGO	F7	pedido feito pelo portal
+DBAPS	ITGUIA_WEB_EQUIPE	TABELA	guia_conta_recebida_equipe	N	SGO	F7	
+DBAPS	ITIMPORTA_NOTA_FISCAL_ELET	MECANISMO	integracao	N	INTG		retorno de nota de servico; final em nota_servico
+DBAPS	ITIMPORTA_NOTA_FISC_ELET_ERRO	MECANISMO	integracao	N	INTG		erros do retorno de nota de servico
+DBAPS	ITINDICE_REAJUSTE	TABELA	indice_reajuste_plano	N	SGO	F7	
+DBAPS	ITIVA	TABELA	aliquota_tributo_vigencia	N	FIN	F3	indice por vigencia e origem
+DBAPS	ITKIT	TABELA	pacote_remuneracao_rede_item	N	SGO	F7	
+DBAPS	ITKIT_PRESTADOR	TABELA	pacote_remuneracao_rede_item	N	SGO	F7	
+DBAPS	ITLANCAMENTO_HORA	TABELA	lancamento_avulso_prestador	N	SGO	F7	horas pagas ao prestador
+DBAPS	ITLCTO_MENSALIDADE	TABELA	tipo_lancamento_fatura_vigencia	S	SGO	F7	
+DBAPS	ITLOG_BAIXA_REJEITADA	TABELA	retorno_cobranca_item	N	FIN	F7	
+DBAPS	ITLOG_GLOSA_FATURA	MECANISMO	trilha_auditoria	N	ADM		filtros usados na glosa em bloco
+DBAPS	ITLOG_REAJUSTE_TABELA	TABELA	reajuste_contrato_rede	N	SGO	F7	
+DBAPS	ITLOG_REAJUSTE_TABELA_CRITICA	MECANISMO	historico_entidade:reajuste_contrato_rede	N	SGO	F7	criticas do reajuste da tabela da rede
+DBAPS	ITLOTE_CARTEIRA	TABELA	cartao_beneficiario	N	SGO	F7	
+DBAPS	ITLOTE_DESLIGAMENTO	TABELA	cancelamento_contrato_plano;notificacao_inadimplencia	N	SGO	F7	
+DBAPS	ITLOTE_DESLIGAMENTO_CRITICA	MECANISMO	historico_entidade:cancelamento_contrato_plano	N	SGO	F7	criticas do lote de desligamento
+DBAPS	ITLOTE_DESLIGAMENTO_MENS_CONTR	TABELA	ocorrencia_inadimplencia	N	SGO	F7	
+DBAPS	ITMENS_CONTRATO	TABELA	fatura_plano_item	N	SGO	F7	
+DBAPS	ITMENS_CONTRATO_ATUALIZACAO	TABELA	fatura_plano_item	N	SGO	F7	juros e multa na fatura
+DBAPS	ITMENS_CONTRATO_COBRANCA_BENEF	TABELA	fatura_plano_item;lancamento_coparticipacao	N	SGO	F7	
+DBAPS	ITMENS_CONTRATO_REPACTUACAO	TABELA	acordo_inadimplencia;titulo_renegociado	N	SGO	F7	
+DBAPS	ITMENS_USUARIO	TABELA	mensalidade_beneficiario	N	SGO	F7	
+DBAPS	ITMENS_USUARIO_COPART	TABELA	lancamento_coparticipacao	N	SGO	F7	
+DBAPS	ITMENS_USUARIO_LOG	MECANISMO	historico_entidade:mensalidade_beneficiario	N	SGO	F7	alteracao manual de valor
+DBAPS	ITMETA_VENDA	TABELA	meta_venda_item	N	SGO	F8	faixas de meta
+DBAPS	ITMODELO_CARTEIRA	TABELA	regra_numeracao_carteira_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_ACOMODACAO	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_CARTEIRA	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_CONTRATO	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_CONTRATO_CAT	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_ESPECIALID	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_FAMILIA	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_GRUPO_DIR	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_GRUPO_PROCED	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_MOT_USUARIO	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PARTICIPACAO	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PLANO	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PRESTADOR	TABELA	modelo_criterio_item	S	SGO	F7	
+DBAPS	ITMODELO_CRITERIO_PREST_CONTA	TABELA	modelo_criterio_item	S	SGO	F7	

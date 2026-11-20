@@ -1,0 +1,12 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+acao_imediata_incidente	ACEITA	acao_imediata_incidente	QUA	dominio	F7	Ações imediatas padronizadas que o notificante escolhe ao registrar um incidente, por estabelecimento
+requisito_acreditacao_indicador	ACEITA	requisito_acreditacao_indicador	QUA	vinculo	F8	Indicadores que medem o atendimento de cada requisito do manual de acreditação, com meta e valor atingido
+requisito_acreditacao_nota	ACEITA	requisito_acreditacao_nota	QUA	item	F8	Anotações datadas sobre um requisito de acreditação, com autor, título e texto formatado
+regra_classificacao_incidente	ACEITA	regra_classificacao_incidente	QUA	configuracao	F8	Regra nomeada que classifica notificações automaticamente a partir das respostas do formulário, pública ou do autor
+regra_classificacao_incidente_criterio	ACEITA	regra_classificacao_incidente_criterio	QUA	item	F8	Critério da regra de classificação: pergunta, operador, resposta esperada, conector lógico e ordem
+documento_qualidade_nota	ACEITA	documento_qualidade_nota	QUA	item	F8	Comentário datado sobre um documento controlado, com autor, título, texto e aviso por e-mail
+etapa_fluxo_incidente	FUNDIR	fluxo_tratamento_incidente_etapa	QUA	item	F7	Etapa do fluxo de tratamento de incidentes (triagem, análise, plano, encerramento); a lista de etapas é a própria configuração do fluxo
+notificacao_incidente_nota	ACEITA	notificacao_incidente_nota	QUA	item	F7	Comentário datado no tratamento de uma notificação de incidente, com autor e título
+carteira_risco	ACEITA	carteira_risco	QUA	principal	F8	Conjunto de riscos agrupados por área, processo ou projeto, com responsáveis e quem pode ver ou editar
+fluxo_tratamento_incidente	ACEITA	fluxo_tratamento_incidente	QUA	configuracao	F7	Fluxo nomeado de tratamento das notificações de incidente por estabelecimento, com as etapas que a notificação percorre até o encerramento
+fluxo_tratamento_incidente_etapa	ACEITA	fluxo_tratamento_incidente_etapa	QUA	item	F7	Etapa do fluxo de tratamento do incidente, com ordem, responsável (usuário, papel ou setor), prazo em horas e aviso por e-mail

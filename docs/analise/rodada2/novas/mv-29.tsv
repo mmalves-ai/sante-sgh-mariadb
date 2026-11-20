@@ -1,0 +1,34 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+credito_fatura_plano	SGO	principal	F7	Crédito do contratante na operadora (pagamento a maior, devolução, ajuste) com saldo a abater em faturas futuras	DBAPS.MENS_CONTRATO_CREDITO
+credito_fatura_plano_baixa	SGO	item	F7	Uso do crédito do contratante: valor liquidado, fatura ou título abatido e data	DBAPS.MENS_CONTRATO_CREDITO_REC
+fatura_plano_tributo	SGO	item	F7	Tributos calculados na geração da fatura do plano, por tipo de tributo e valor	DBAPS.MENS_CONTRATO_SUB_TRIBUT
+regra_numeracao_carteira	SGO	configuracao	F7	Modelo de formação e formatação do número do cartão do beneficiário por operadora, com quantidade de dígitos	DBAPS.MODELO_CARTEIRA; DBAPS.ME_GRU_IMP_CAR
+modelo_integralizacao_capital	SGO	configuracao	F8	Plano de integralização da cota de capital do cooperado: valor total, parcela mensal, número de meses e suspensão	DBAPS.MODELO_CAPITAL_SOCIAL
+modelo_contrato_plano	SGO	configuracao	F7	Modelo pronto de contrato de plano com regras padrão de cobrança, vigência e reajuste, copiado na criação de contratos	DBAPS.MODELO_CONTRATO
+modelo_contrato_plano_item	SGO	item	F7	Planos do modelo de contrato com tabela de preço e grupo de faixa etária a aplicar	DBAPS.MODELO_PLANO_CONTRATO
+modelo_contrato_lancamento	SGO	item	F7	Lançamentos adicionais do modelo de contrato (taxas e receitas recorrentes) com vigência e valor por faixa etária	DBAPS.MOD_CONTRATO_OUTRAS_RECEITAS; DBAPS.MOD_CONTR_LCTO_MEN_FAIX_ETAR; DBAPS.MOD_TITULO_CONTRATO_LCTO_MENS
+modelo_protocolo_atendimento	SGO	configuracao	F7	Combinação pronta de tipo, serviço, motivo e gravidade para abrir protocolo de atendimento a beneficiário, prestador ou empresa	DBAPS.MODELO_CRC
+modelo_criterio	SGO	configuracao	F7	Conjunto nomeado de critérios (plano, prestador, procedimento, atendimento) reutilizado em regras da operadora	DBAPS.MODELO_CRITERIO
+modelo_desconto_folha	SGO	configuracao	F7	Modelo de desconto em folha por órgão ou agrupamento: leiaute, receitas incluídas e geração automática por período	DBAPS.MODELO_FOLHA; DBAPS.MVS_AGRUPAMENTO_FOLHA; DBAPS.MVS_CONFIG_GERACAO_AUTO_FOLHA
+modelo_desconto_folha_lancamento	SGO	vinculo	F7	Tipos de lançamento da fatura enviados em cada modelo de desconto em folha	DBAPS.MODELO_FOLHA_LCTO_MENSALIDADE
+modelo_horario_atendimento	SGO	configuracao	F7	Modelo de horário de atendimento reutilizável pela operadora e pela rede, com situação	DBAPS.MODELO_HORARIO
+envio_ans_item_detalhe	SGO	item	F7	Procedimentos e itens de pacote de cada registro enviado no monitoramento assistencial, com tabela, código, quantidade e valores	DBAPS.MONIT_TISS_GUIA_PROC; DBAPS.MONIT_TISS_GUIA_PROC_DET
+motivo_decisao_autorizacao	SGO	dominio	F7	Motivos registrados ao autorizar, negar ou liberar em contingência um pedido de autorização	DBAPS.MOTIVO_AUTORIZACAO; DBAPS.MOTIVO_CONTIGENCIAL
+motivo_ajuste_fatura	SGO	dominio	F7	Motivos de acréscimo, desconto e ajuste manual aplicados na fatura do plano	DBAPS.MOTIVO_GENERICO_MVS
+regra_valor_motivo_glosa	SGO	configuracao	F7	Penalidade ou valor aplicado ao prestador por motivo de glosa: percentual, tipo de lançamento e vigência	DBAPS.MOTIVO_GLOSA_VALOR
+motivo_cancelamento_guia_plano	SGO	dominio	F7	Motivos de cancelamento de guia na operadora, por tipo e visibilidade no portal	DBAPS.MOT_CANCELAMENTO_GUIA
+area_atuacao_operadora	SGO	vinculo	F7	Municípios em que a operadora atua, usados em cadastro, rede e envios regulatórios	DBAPS.MUNICIPIO_OPERADORA
+migracao_plano_lote	SGO	principal	F7	Migração ou adaptação em lote de beneficiários para novo plano ou contrato: destino, tabela de preço, processamento e responsável	DBAPS.MVS_CLONAGEM_BENEFICIARIO; DBAPS.MVS_CLONAGEM_BENEFC_PLAN
+migracao_plano_lote_item	SGO	item	F7	Beneficiário titular ou dependente incluído na migração em lote, com indicação de migrar e situação	DBAPS.MVS_CLONAGEM_BENEFC_DEPENDT
+etiqueta_autorizacao_plano	SGO	principal	F8	Etiqueta de autorização prévia emitida ao beneficiário: número, validade, prestador indicado e guia em que foi usada	DBAPS.MVS_GUIA_AUTORIZACAO_ETIQUETA
+tipo_etiqueta_autorizacao	SGO	configuracao	F8	Tipos de etiqueta de autorização com validade e tipos de prestador em que a etiqueta é exigida	DBAPS.MVS_TIPO_AUTORIZACAO_ETIQUETA; DBAPS.MVS_PRESTADOR_AUTORIZACAO_ETQ
+restituicao_desconto_folha	SGO	principal	F7	Restituição ao servidor de valor descontado em folha indevidamente, por órgão, competência e matrícula	DBAPS.MVS_RESTITUICAO_FOLHA
+restituicao_desconto_folha_item	SGO	item	F7	Beneficiários e valores que compõem cada restituição de desconto em folha	DBAPS.MVS_ITEM_RESTITUICAO_FOLHA
+norma_regulatoria	SGO	dominio	F7	Normas da ANS vinculadas a contratos e produtos, com tipo e vigência	DBAPS.NORMA_ANS
+fatura_intercambio	SGO	principal	F8	Fatura de cobrança entre operadoras parceiras no atendimento recíproco, com refaturamento, vencimento e boleto	DBAPS.NOTAS_REFATURADAS_GERACAO_A500; DBAPS.PARAM_GERACAO_BOLETO_A560
+nota_fiscal_prestador_rede	SGO	item	F7	Nota fiscal apresentada pelo prestador para o lote de contas: número, série, emissão e valor	DBAPS.NOTA_FISCAL_PROTOCOLO
+grupo_patologia	SGO	dominio	F7	Grupos de doenças usados na declaração de saúde, na cobertura parcial temporária e no acompanhamento	DBAPS.PATOLOGIA
+grupo_patologia_cid	SGO	vinculo	F7	Códigos da CID que compõem cada grupo de doenças	DBAPS.PATOLOGIA_CID
+contribuicao_previdencia_pessoa	SGO	historico	F8	Períodos em que a pessoa contribui para a entidade de previdência patrocinadora, usados no preço do plano	DBAPS.PESSOA_PREVIDENCIA
+regra_preco_previdencia	SGO	configuracao	F8	Tabela de preço padrão por plano para contribuintes da entidade de previdência, com vigência	DBAPS.PLANO_PREVIDENCIA
+regra_preco_previdencia_condicao	SGO	item	F8	Condições (titular contribuinte, plano, parentesco) e a tabela de preço aplicada quando atendidas	DBAPS.PLANO_PREVIDENCIA_CONDICOES; DBAPS.PLANO_PREVIDENCIA_ACOES

@@ -1,0 +1,135 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+SPDATA	CDACOMODTIPO	TABELA	tipo_acomodacao_plano	N	SGO	F7	domínio de acomodação contratada do plano
+SPDATA	CDDIAVENCCOB	TABELA	dia_vencimento_permitido	N	SGO	F7	dias permitidos para vencimento da mensalidade
+SPDATA	CDFAIXAETATP	TABELA	faixa_etaria_modelo	N	SGO	F7	tipo de faixa vira atributo do modelo de faixa etária de preço
+SPDATA	CDGUIASTATUS	TABELA	situacao_guia_plano	N	SGO	F7	situações da guia de autorização
+SPDATA	CDINCIDECOMIS	TABELA	incidencia_comissao	N	SGO	F8	base de incidência da comissão de venda
+SPDATA	CDMOTIVOBAIXA	TABELA	motivo_cancelamento_contrato	N	SGO	F7	motivo de baixa do contrato; só linha padrão hoje
+SPDATA	CDMOTIVOSOLCART	TABELA	motivo_solicitacao_cartao	N	SGO	F7	motivos de emissão e segunda via do cartão
+SPDATA	CDMOTMOVIMCAD	TABELA	motivo_movimento_cadastral	N	SGO	F7	motivos de inclusão, suspensão e exclusão por tipo de movimento
+SPDATA	CDMSGCOBRANCA	TABELA	mensagem_cobranca	N	SGO	F7	mensagens da cobrança com prioridade
+SPDATA	CDMSGLINHA	TABELA	mensagem_cobranca	N	SGO	F7	posição de linha vira atributo da mensagem de cobrança
+SPDATA	CDORIGEMCOBR	TABELA	origem_cobranca_plano	N	SGO	F7	origens de cobrança unificadas
+SPDATA	CDORIGEMGUIA	TABELA	origem_guia_plano	N	SGO	F7	origens de guia unificadas
+SPDATA	CDPARDIGOBG	TABELA	documento_emitido_operadora	N	SGO	F7	opção de obrigatoriedade vira regra do documento emitido
+SPDATA	CDPGTOBALCAOCP	TABELA	forma_pagamento_coparticipacao	N	SGO	F7	formas de pagamento da coparticipação unificadas
+SPDATA	CDPGTOCOOPART	TABELA	forma_pagamento_coparticipacao	N	SGO	F7	modo de cobrança da coparticipação unificado
+SPDATA	CDPLANOCLASSIF	TABELA	classificacao_plano	N	SGO	F7	classificação regulatória do plano
+SPDATA	CDSTATUSCAD	TABELA	situacao_cadastral_beneficiario	N	SGO	F7	situações cadastrais do beneficiário
+SPDATA	CDSTATUSSOLCART	TABELA	situacao_solicitacao_cartao	N	SGO	F7	situações da solicitação de cartão
+SPDATA	CDTPACUMULPOR	TABELA	nivel_acumulo_limite	N	SGO	F7	critério de acúmulo unificado com o da operadora
+SPDATA	CDTPCOBRANCA	TABELA	forma_cobranca_plano	N	SGO	F7	formas de cobrança do plano
+SPDATA	CDTPCONTRATO	TABELA	tipo_contrato_plano	N	SGO	F7	tipo de contrato pessoa física ou jurídica
+SPDATA	CDTPCONTRCAIXA	TABELA	movimento_caixa	N	FIN	F3	tipo de controle vira natureza do movimento na sessão de caixa; conferir conteúdo na carga
+SPDATA	CDTPCOPART	TABELA	regra_coparticipacao	N	SGO	F7	percentual ou valor fixo vira forma de cálculo da regra de coparticipação
+SPDATA	CDTPCTRCONTRAT	TABELA	tipo_contrato_plano	N	SGO	F7	controle contratual fundido no tipo de contrato
+SPDATA	CDTPDESCACR	TABELA	lancamento_programado_contrato	N	SGO	F7	desconto ou acréscimo vira sinal do lançamento programado
+SPDATA	CDTPDESPCTAPG	TABELA	termo_terminologia	N	INTG	F3	grupos de despesa assistencial da ANS como lista fixa da terminologia
+SPDATA	CDTPDESPCTAPGCM	TABELA	classe_despesa_assistencial	N	SGO	F7	classificação complementar da despesa assistencial
+SPDATA	CDTPEMISSAO	TABELA	forma_emissao_documento	N	SGO	F7	formas de emissão de cobrança e cartão
+SPDATA	CDTPENDERECO	TABELA	endereco_pessoa	N	CAD	F3	tipo vira finalidade do endereço da pessoa
+SPDATA	CDTPEVTCTAREC	TABELA	tipo_lancamento_fatura	N	SGO	F7	evento gerador de valor a receber
+SPDATA	CDTPFRANQUIA	TABELA	tipo_franquia	N	SGO	F7	tipos de franquia
+SPDATA	CDTPGUIA	TABELA	tipo_guia_plano	N	SGO	F7	tipos de guia unificados
+SPDATA	CDTPLANCAMEN	TABELA	tipo_lancamento_fatura	N	SGO	F7	tipos de lançamento do beneficiário
+SPDATA	CDTPMOVVALOR	TABELA	tipo_movimentacao_valor	N	SGO	F7	tipos de alteração de valor
+SPDATA	CDTPPERIODO	TABELA	unidade_prazo	N	SGO	F7	unidade de período unificada
+SPDATA	CDTPRETCONS	TABELA	regra_retorno_consulta	N	AGE	F3	tipo de retorno vira critério da regra de retorno
+SPDATA	CDVENDATPREP	TABELA	papel_venda	N	SGO	F8	papéis comerciais na venda
+SPDATA	CTWGRUPOEXPORTACAO	TABELA	grupo_exportacao_custo;exportacao_custo	N	FIN	F7	destinos de exportação de custos
+SPDATA	FPESOCTPAMB	TABELA	ponto_integracao	N	INTG	F3	ambiente e endereço de serviço viram ponto de integração; carga de referência
+SPDATA	GEINTAPOIOCOT	TABELA	vinculo_pedido_compra_portal;vinculo_portal_cotacao	N	INTG	F3	pedido de compra ligado à cotação no portal externo
+SPDATA	GEPORTALCOMPRAS	TABELA	portal_cotacao	N	SUP	F3	portais de cotação configurados
+SPDATA	INTEGRA_BI	MECANISMO	datamart	N	REL	F3	fila de exclusões do ETL legado; o data mart é gerado do modelo e não migra
+SPDATA	PRCABEARQINTEGRAQT	TABELA	esquema_mensagem	N	INTG	F3	campos do arquivo de quimioterapia viram leiaute no motor de integração
+SPDATA	PRCABNEXODATA	TABELA	envio_prescricao_plataforma	N	INTG	F8	retorno da receita digital; uma linha de 2022
+SPDATA	PRLANCNEXODATA	TABELA	envio_prescricao_plataforma	N	INTG	F8	documento enviado à receita digital; linha de teste não migra
+SPDATA	PSATVASS	TABELA	movimento_cadastral_beneficiario	N	SGO	F7	conceito coberto; linha placeholder de 1899 não migra
+SPDATA	PSBENCPL	TABELA	beneficiario_plano	N	SGO	F7	conceito coberto; linha placeholder não migra
+SPDATA	PSBENEFI	TABELA	beneficiario_plano	N	SGO	F7	conceito coberto; linha placeholder não migra
+SPDATA	PSBENTMP	NAO		N	SGO		tecnico do fornecedor sem equivalente: tabela de trabalho com linha placeholder de 1899
+SPDATA	PSCOPARTTPGUIAQNDO	TABELA	condicao_cobranca_coparticipacao	N	SGO	F7	condições que disparam coparticipação na guia
+SPDATA	PSCRITICA	TABELA	critica_autorizacao	N	SGO	F7	críticas automáticas de autorização
+SPDATA	PSDOCIMPNOMESOCIAL	TABELA	documento_emitido_operadora	N	SGO	F7	regra de nome social por documento emitido
+SPDATA	PSEMPEMITEOBS	TABELA	documento_emitido_operadora	N	SGO	F7	público da observação vira regra do documento emitido
+SPDATA	PSFORNEMEMSIT	TABELA	situacao_fornecimento	N	SGO	F7	situações de fornecimento ao beneficiário
+SPDATA	PSGRUPOCLASSIF	TABELA	segmentacao_assistencial	N	SGO	F7	grupos ANS de classificação viram segmentação assistencial
+SPDATA	PSMOTIVO	TABELA	motivo_movimento_cadastral	N	SGO	F7	motivo de baixa de beneficiário unificado
+SPDATA	PSNATUREZAPS	TABELA	natureza_prestador_rede	N	SGO	F7	natureza da rede com código ANS
+SPDATA	PSORIGEMCOBR	TABELA	origem_cobranca_plano	N	SGO	F7	origens de cobrança unificadas
+SPDATA	PSORIGEMGUIA	TABELA	origem_guia_plano	N	SGO	F7	origens de guia unificadas
+SPDATA	PSPLNASS	TABELA	beneficiario_plano	N	SGO	F7	plano do beneficiário; linha placeholder de 1899 não migra
+SPDATA	PSPRCANS	TABELA	termo_terminologia;terminologia	N	INTG	F3	classificação ANS de procedimentos como terminologia mantida
+SPDATA	PSREEMBOLSOTP	TABELA	tipo_reembolso	N	SGO	F7	tipos de reembolso
+SPDATA	PSSIBCAMPOALT	TABELA	termo_terminologia	N	INTG	F3	campos retificáveis do cadastro ANS como lista fixa
+SPDATA	PSTIPMEN	TABELA	origem_cobranca_plano	N	SGO	F7	tipo de mensalidade fundido na origem de cobrança
+SPDATA	PSTIPOGUIA	TABELA	tipo_guia_plano	N	SGO	F7	tipos de guia unificados
+SPDATA	PSTPACUMULPOR	TABELA	nivel_acumulo_limite	N	SGO	F7	nível de acúmulo do limite
+SPDATA	PSTPPERIODO	TABELA	unidade_prazo	N	SGO	F7	periodicidade do limite unificada
+SPDATA	PSTPRETORNO	TABELA	regra_retorno_consulta	N	AGE	F3	critério de retorno vira atributo da regra de retorno
+SPDATA	PSTPSMESRECOL	TABELA	taxa_saude_suplementar_vigencia	N	SGO	F7	meses de recolhimento da taxa por vigência
+SPDATA	PSTPSVIGENCIA	TABELA	taxa_saude_suplementar_vigencia;apuracao_taxa_saude_suplementar	N	SGO	F7	valores da taxa por vigência
+SPDATA	PSVENDAS	TABELA	proposta_adesao;comissao_venda;vendedor_plano	N	SGO	F8	conceito coberto; linha placeholder de 1899 não migra
+SPDATA	RETPPROTOLIFE	TABELA	perfil_prioridade_externa	N	INTG	F3	perfis de prioridade enviados à triagem externa
+SPDATA	SIMATHP	TABELA	material_laboratorio_apoio;de_para_material_apoio	N	INTG	F3	de-para de material com o laboratório de apoio
+SPDATA	SITBELHP	TABELA	elemento_exame_laboratorio_apoio;de_para_analito_apoio	N	INTG	F3	de-para de elemento de exame com o apoio
+SPDATA	SITBEXEQ	TABELA	equivalencia_exame_equipamento;de_para_exame_equipamento	N	INTG	F3	equivalência de exame por interface
+SPDATA	SITBEXHP	TABELA	exame_laboratorio_apoio	N	SADT	F3	catálogo de exames do apoio
+SPDATA	SITPEQV	TABELA	interface_equipamento;credencial_integracao;equipamento_analitico	N	SADT	F3	senhas não migram em claro: vão ao cofre por referência
+SPDATA	SITPEQVMODELO	TABELA	modelo_comunicacao	N	SADT	F3	modelos de comunicação de interface
+SPDATA	SITPEQV_SITPEQVMODELO	TABELA	interface_equipamento	N	SADT	F3	modelo vira atributo da configuração da interface
+SPDATA	SIWSETIQUETA	TABELA	modelo_etiqueta_amostra_biologica;etiqueta_amostra_apoio	N	SADT	F3	leiaute de etiqueta devolvido pelo apoio
+SPDATA	SIWSLANCETQTA	TABELA	etiqueta_amostra_apoio	N	INTG	F3	etiqueta devolvida por exame
+SPDATA	SPMOTLIG	TABELA	motivo_contato_beneficiario	N	SGO	F7	motivo de contato com a central
+SPDATA	SPORIGEM_ATEND	TABELA	origem_protocolo	N	SGO	F7	origens do protocolo de atendimento
+SPDATA	SPVINCULOTITULAR	TABELA	vinculo_solicitante_protocolo	N	SGO	F7	vínculo do solicitante com o titular
+SPDATA	TBCEPPARAMCAB	MECANISMO	integracao	N	INTG	F3	leiaute posicional da carga de CEP fica no motor de integração
+SPDATA	TBCEPPARAMPOS	MECANISMO	integracao	N	INTG	F3	posições do leiaute da carga de CEP ficam no motor de integração
+SPDATA	TBCLASSIFCREPLS	TABELA	termo_terminologia	N	INTG	F3	classificação de prestador da ANS como lista fixa
+SPDATA	TBDIGITAL_ESPECIALIDADE	TABELA	mapeamento_codigo_externo	N	INTG	F3	especialidades do parceiro como equivalência de código
+SPDATA	TBDIGITAL_INTEG_FIELD	TABELA	assinatura_evento_parceiro	N	INTG	F3	campos monitorados por tipo de integração
+SPDATA	TBDIGITAL_INTEG_TYPE	TABELA	tipo_evento_publicado;envio_rnds	N	INTG	F3	tipos de integração viram fatos publicáveis
+SPDATA	TBDISPONIBILSERV	TABELA	termo_terminologia	N	INTG	F3	disponibilidade do serviço da ANS como lista fixa
+SPDATA	TBENDPOINT	TABELA	ponto_integracao	N	INTG	F3	endereços externos por identificação
+SPDATA	TBENDPOINTINTERNALSERVICE	NAO		N	INTG		tecnico do fornecedor sem equivalente: endereços de serviços internos do fornecedor
+SPDATA	TBENDPOINTURI	TABELA	operacao_ponto_integracao	N	INTG	F3	rotas por ponto de integração
+SPDATA	TBENVCOBEMAIL	TABELA	preferencia_envio_cobranca	N	SGO	F7	opções de envio da cobrança
+SPDATA	TBIDENTIFICACAOENDPOINT	TABELA	sistema_externo	N	INTG	F3	catálogo de serviços integrados
+SPDATA	TBINFBANCO	TABELA	credencial_integracao	N	INTG	F3	segredo não migra; recriar só a referência no cofre
+SPDATA	TBISENCAOONUS	TABELA	termo_terminologia	N	INTG	F3	isenção de ônus da ANS como lista fixa
+SPDATA	TBMEDSOLWEBCAD	TABELA	pedido_vinculo_profissional_externo	N	INTG	F3	autocadastro de solicitante aguardando vínculo
+SPDATA	TBOPERSCHEMA	TABELA	operacao_ponto_integracao	N	INTG	F3	operações de serviço web
+SPDATA	TBREGIMEATEND	TABELA	regime_atendimento_rede	N	SGO	F7	regime ambulatorial ou hospitalar no contrato
+SPDATA	TBREGUL_ENDPOINT	TABELA	ponto_integracao;central_reguladora	N	INTG	F3	endereços dos serviços da regulação estadual
+SPDATA	TBREGUL_SERVICO	TABELA	servico_regulacao	N	INT	F7	serviços ofertados à central de regulação
+SPDATA	TBREGUL_SISTEMA	TABELA	central_reguladora;sistema_externo	N	INT	F7	sistemas de regulação integrados
+SPDATA	TBREGUL_TABELAS	TABELA	tabela_codigo_regulacao	N	INTG	F3	tabelas de códigos da regulação
+SPDATA	TBREGUL_VLR_TABELAS	TABELA	valor_codigo_regulacao	N	INTG	F3	valores das tabelas da regulação
+SPDATA	TBSAFEWEB_FORMA_ASSIN_ICP	TABELA	formato_assinatura_icp;provedor_assinatura_formato	N	INTG	F3	formatos de assinatura por provedor
+SPDATA	TBSAFEWEB_SITAUTORIZA	TABELA	autorizacao_assinatura_nuvem	N	INTG	F3	situação vira atributo da autorização em nuvem
+SPDATA	TBSAFEWEB_TIPOATENDIMENTO	TABELA	autorizacao_assinatura_nuvem	N	INTG	F3	tipo de atendimento vira atributo da autorização
+SPDATA	TBSEXO_PIXPDQ	TABELA	termo_terminologia;sexo	N	INTG	F3	códigos de sexo do padrão de identificação
+SPDATA	TBSGHINTEGRADOR_PARAM	TABELA	assinatura_evento_parceiro	N	INTG	F3	liga e desliga vira situação da assinatura de eventos
+SPDATA	TBSGHINTEGRADOR_TABELA	TABELA	tipo_evento_publicado	N	INTG	F3	entidades replicadas viram fatos publicáveis
+SPDATA	TBSIPANSATO	TABELA	termo_terminologia	N	INTG	F3	grupos de eventos do SIP como terminologia
+SPDATA	TBSIPANSPROC	TABELA	termo_equivalencia	N	INTG	F3	procedimento por grupo SIP com vigência
+SPDATA	TBSMSTPAGENDA	TABELA	regra_envio_mensagem_paciente	N	INTG	F3	periodicidade do envio agendado
+SPDATA	TBSMSTPERRO	TABELA	codigo_retorno_mensageria	N	INTG	F3	códigos de erro do provedor de mensagens
+SPDATA	TBSMSTPRETMSG	TABELA	codigo_retorno_mensageria	N	INTG	F3	situações de retorno da mensagem
+SPDATA	TBSTATUSCREPLS	TABELA	situacao_movimento_rede	N	SGO	F7	situações do movimento de credenciamento
+SPDATA	TBTIPOCOBRANCASGO	TABELA	origem_cobranca_plano	N	SGO	F7	tipos de cobrança fundidos na origem de cobrança
+SPDATA	TBTISSREMUNERAOPERPS	TABELA	termo_terminologia;remuneracao_capitacao	N	INTG	F3	modelos de remuneração do prestador como lista fixa
+SPDATA	TBTISSSCHEMA	TABELA	transacao_tiss_webservice	N	INTG	F3	transações e esquemas da troca TISS
+SPDATA	TBTISSURLWSSGH	TABELA	transacao_tiss_webservice;endpoint_tiss_fonte_pagadora	N	INTG	F3	endereço por transação TISS
+SPDATA	TBTISSWEBSERV	TABELA	endpoint_tiss_fonte_pagadora;credencial_fonte_pagadora	N	FAT	F3	endereço por fonte pagadora; credencial vai ao cofre
+SPDATA	TBTPCONTRATOCREPLS	TABELA	tipo_contrato_rede	N	SGO	F7	contratação direta ou indireta
+SPDATA	TBTPDOCUMENTO_PIXPDQ	TABELA	termo_terminologia	N	INTG	F3	tipos de certidão do padrão de identificação
+SPDATA	TBTPEMAILPLS	TABELA	modelo_comunicacao_beneficiario	N	SGO	F7	modelos de e-mail ao beneficiário
+SPDATA	TBTPEXPIPERGS	TABELA	mapeamento_codigo_externo	N	INTG	F3	tipo de prestador para exportação vira equivalência de código externo
+SPDATA	TBTPFAVORECIDO	TABELA	contrato_rede_prestador_clausula;termo_terminologia	N	SGO	F7	favorecido da cláusula contratual
+SPDATA	TBTPFORMAREAJ	TABELA	contrato_rede_prestador_clausula;termo_terminologia	N	SGO	F7	forma de reajuste da cláusula contratual
+SPDATA	TBTPPRESTADOR	TABELA	tipo_prestador_rede	N	SGO	F7	tipos de prestador credenciado
+SPDATA	TBTPUNIDTEMPO	TABELA	unidade_prazo	N	SGO	F7	unidade de prazo unificada
+SPDATA	TBTPVIGCONTRATO	TABELA	contrato_rede_prestador;termo_terminologia	N	SGO	F7	tipo de vigência vira atributo do contrato com prestador
+SPDATA	TBTPWEBSERV	TABELA	padrao_troca	N	INTG	F3	padrão do serviço web
+SPDATA	TBVIDAAS_FORMA_ASSIN_ICP	TABELA	formato_assinatura_icp;provedor_assinatura_formato	N	INTG	F3	formatos de assinatura por provedor

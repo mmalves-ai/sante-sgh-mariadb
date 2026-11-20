@@ -1,0 +1,14 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAPS	ITBOLETO	TABELA	boleto_parcela	FIN	F7	item do boleto que agrupa mensalidades: precisa de tabela de ligação, não cabe no próprio boleto
+DBAMV	LEGENDAS_FINANCEIRAS	MECANISMO	framework	SIS	F3	colunas descricao/parametro/tela/codigo: legenda de tela, não modelo de recibo
+DBAMV	CHEQUE	TABELA	cheque_emitido	FIN	F7	SPDATA não tem cheque com dados (análise 07: meio em desuso); não é paridade F3
+DBAMV	CHEQUE_STATUS	MECANISMO	historico_entidade:cheque_emitido	FIN	F7	segue a fase do cheque emitido, sem uso na Rede
+DBAMV	CHE_DEVOL	TABELA	cheque_devolvido	FIN	F7	SPDATA não tem cheque com dados; não é paridade F3
+DBAMV	MOTIVO_CHE_CANC	TABELA	motivo_cancelamento_cheque	FIN	F7	domínio do cheque, sem uso na Rede
+DBAMV	TALAO	TABELA	talao_cheque	FIN	F7	talão de cheque sem uso na Rede; não é paridade F3
+DBAMV	CON_PAG_DECLARACAO_IMPORTACAO	TABELA	declaracao_importacao;titulo_pagar	SUP	F7	módulo e fase divergiam do catálogo (declaracao_importacao é SUP F7)
+DBAMV	VERBA_ORCAMENTARIA	TABELA	verba_orcamentaria	FIN	F7	fase divergia do catálogo (verba_orcamentaria é F7)
+SPDATA	FPPARAM	TABELA	cadastro_empregador	RH	F3	dados do contribuinte alimentam o R-1000 da EFD-REINF, obrigação vigente da Rede (F3)
+SPDATA	FPPARAMVIG	MECANISMO	historico_entidade:cadastro_empregador	RH	F3	segue cadastro_empregador, que passa a F3 pela EFD-REINF
+SPDATA	TBTPCONSTRUT	TABELA	cadastro_empregador	RH	F3	indicativo de construtora é campo do R-1000 da EFD-REINF (F3), não só do eSocial
+SPDATA	TBTPCOOPERAT	TABELA	cadastro_empregador	RH	F3	indicativo de cooperativa é campo do R-1000 da EFD-REINF (F3), não só do eSocial

@@ -1,0 +1,88 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+agrupamento_orcamentario	FUNDIR	verba_orcamentaria	FIN	dominio	F7	Verba e grupo do orçamento em hierarquia, distribuídos por categoria de gasto, para consolidar, aprovar e acompanhar o orçado
+agrupamento_unidade_negocio	ACEITA	agrupamento_unidade_negocio	FIN	dominio	F8	Agrupamento das unidades de negócio do estabelecimento para análise gerencial de resultado
+aliquota_tributo_excecao	ACEITA	aliquota_tributo_excecao	FIN	configuracao	F8	Alíquota diferenciada de tributo sobre consumo por procedimento, receita ou setor, com vigência
+arquivo_efd_fiscal	ACEITA	arquivo_efd_fiscal	FIN	principal	F7	Arquivo da escrituração fiscal digital de ICMS e IPI por competência, com finalidade (original ou retificação) e situação
+categoria_orcamentaria	ACEITA	categoria_orcamentaria	FIN	dominio	F7	Categoria de gasto do orçamento (custeio, investimento, pessoal) que agrupa e ordena as linhas na apresentação
+cenario_fluxo_caixa_conta	ACEITA	cenario_fluxo_caixa_conta	FIN	vinculo	F8	Contas bancárias que compõem o saldo inicial de cada cenário de fluxo de caixa
+cheque_devolvido	ACEITA	cheque_devolvido	FIN	principal	F3	Cheque recebido e devolvido pelo banco, com motivo, número da devolução, reapresentação e cobrança
+cheque_emitido	ACEITA	cheque_emitido	FIN	principal	F3	Cheque emitido para pagamento, com talão, número, valor, favorecido, compensação e cancelamento
+cnae_estabelecimento	ACEITA	cnae_estabelecimento	FIN	vinculo	F3	Atividades econômicas autorizadas a cada estabelecimento para emitir nota de serviço, com situação
+competencia_orcamento	ACEITA	competencia_orcamento	FIN	item	F7	Competência mensal da versão do orçamento, com abertura, fechamento e responsável pelo fechamento
+condicao_pagamento	ACEITA	condicao_pagamento	FIN	dominio	F3	Condição de pagamento negociada (à vista, 30/60/90 dias), com número de parcelas e prazos, usada em compras e títulos
+condicao_pagamento_parcela	ACEITA	condicao_pagamento_parcela	FIN	item	F3	Parcela da condição de pagamento, com número, prazo em dias e percentual do total
+conferencia_saldo_fechamento	ACEITA	conferencia_saldo_fechamento	FIN	configuracao	F7	Contas contábeis cujo saldo é conferido antes de fechar a competência, com tipo de saldo e vigência
+configuracao_efd_contribuicoes	ACEITA	configuracao_efd_contribuicoes	FIN	configuracao	F7	Configuração da escrituração de PIS e Cofins por estabelecimento: situações tributárias, incidência e regime
+consolidacao_orcamento	ACEITA	consolidacao_orcamento	FIN	vinculo	F8	Versões de orçamento que compõem uma versão consolidada de rede ou grupo
+conta_orcamentaria	ACEITA	conta_orcamentaria	FIN	principal	F7	Conta do plano orçamentário com hierarquia, grau, natureza, tipo e regras de transferência e bloqueio
+conta_orcamentaria_composicao	ACEITA	conta_orcamentaria_composicao	FIN	item	F7	Composição de uma conta orçamentária a partir de outras contas ou premissas, com fórmula e meses de referência
+conta_orcamentaria_estabelecimento	ACEITA	conta_orcamentaria_estabelecimento	FIN	vinculo	F7	Conta orçamentária por estabelecimento, ligada à conta contábil e ao item de resultado correspondentes
+conta_orcamentaria_indicador	ACEITA	conta_orcamentaria_indicador	FIN	vinculo	F8	Indicadores estatísticos que explicam cada conta orçamentária
+contrato_fornecedor_grupo_insumo	ACEITA	contrato_fornecedor_grupo_insumo	FIN	vinculo	F7	Grupos e subgrupos de insumo cobertos pelo contrato, para sugerir o contrato na compra
+cotacao_moeda	ACEITA	cotacao_moeda	FIN	historico	F7	Valor da moeda ou índice em relação à moeda base por data, para conversão de títulos, compras e tabelas
+cronograma_orcamento	ACEITA	cronograma_orcamento	FIN	item	F7	Etapas do ciclo orçamentário (abertura, preenchimento, revisão, aprovação) com datas previstas, realizadas e situação
+declaracao_dctfweb_item	ACEITA	declaracao_dctfweb_item	FIN	item	F7	Débito declarado na competência por tributo e código de receita, com vencimento, valor e título de origem
+declaracao_importacao	FUNDIR	declaracao_importacao	SUP	principal	F7	Declaração de importação de insumo ou equipamento, com fornecedor, moeda, câmbio, desembaraço, títulos a pagar e entrada no estoque
+deducao_iss_periodo	ACEITA	deducao_iss_periodo	FIN	item	F7	Dedução do ISS apurada no período de escrituração, com tipo de obrigação, processo judicial e valor
+elemento_despesa	ACEITA	elemento_despesa	FIN	dominio	F8	Elemento e subelemento de despesa orçamentária em hierarquia, com classificação, conta contábil, projeto e vigência, para empenho
+empresa_fornecedora_estabelecimento	ACEITA	empresa_fornecedora_estabelecimento	FIN	vinculo	F3	Dados do fornecedor por estabelecimento: conta contábil, conta orçamentária, setor responsável e condição de pagamento padrão
+entrada_servico_cambio	ACEITA	entrada_servico_cambio	FIN	item	F8	Conversão de entrada de serviço contratada em moeda estrangeira: moeda, índice, data da cotação e valores convertidos
+equivalencia_conta_contabil	ACEITA	equivalencia_conta_contabil	FIN	vinculo	F7	Correspondência entre contas de versões diferentes do plano de contas, usada na troca do plano e na migração de saldos
+evento_contrato	ACEITA	evento_contrato	FIN	configuracao	F7	Evento programado do contrato (vencimento, reajuste, renovação), com gatilho em dias, aviso, canal e mudança de situação
+excecao_consumo_custo	ACEITA	excecao_consumo_custo	FIN	configuracao	F8	Insumos, classes, setores ou fontes pagadoras excluídos da apropriação de consumo ao custo com base no faturamento
+fase_orcamentaria	ACEITA	fase_orcamentaria	FIN	dominio	F8	Fases da execução orçamentária (previsto, reservado, empenhado, liquidado, pago)
+formula_orcamentaria	ACEITA	formula_orcamentaria	FIN	configuracao	F8	Fórmula de cálculo de premissa do orçamento, com blocos de execução, resultado esperado e homologação
+formula_orcamentaria_parametro	ACEITA	formula_orcamentaria_parametro	FIN	item	F8	Parâmetro de entrada da fórmula orçamentária e o valor informado em cada bloco
+indice_reajuste	ACEITA	indice_reajuste	FIN	dominio	F7	Índice econômico de reajuste de contrato (IPCA, IGP-M, INPC), com periodicidade e tipo de valor
+indice_reajuste_valor	ACEITA	indice_reajuste_valor	FIN	historico	F7	Valor do índice de reajuste por período de vigência
+informacao_economica_ecf	ACEITA	informacao_economica_ecf	FIN	item	F7	Valores declaratórios diversos da escrituração fiscal anual (royalties, exportação, doações, pagamentos ao exterior) por exercício
+inutilizacao_numeracao_fiscal	ACEITA	inutilizacao_numeracao_fiscal	FIN	historico	F7	Faixa de numeração de nota fiscal inutilizada por estabelecimento e série, com motivo, protocolo e usuário
+investimento_orcado	ACEITA	investimento_orcado	FIN	item	F7	Bem de natureza permanente previsto no orçamento de investimento, com quantidade, valor unitário e grupo patrimonial
+lancamento_peca_orcamentaria	ACEITA	lancamento_peca_orcamentaria	FIN	item	F8	Valor ou quantidade informada no formulário de coleta por linha, mês e centro de custo, antes da consolidação
+modelo_peca_orcamentaria	ACEITA	modelo_peca_orcamentaria	FIN	configuracao	F8	Formulário de coleta do orçamento por área, com orientações, hierarquia e o que o preenchedor vê e edita
+modelo_peca_orcamentaria_linha	ACEITA	modelo_peca_orcamentaria_linha	FIN	item	F8	Linha ou bloco do formulário de coleta, com conta, fórmula, casas decimais, valor sugerido e edição permitida
+modelo_peca_orcamentaria_setor	ACEITA	modelo_peca_orcamentaria_setor	FIN	vinculo	F8	Centros de custo que preenchem cada linha do formulário de coleta
+modelo_texto_contrato	ACEITA	modelo_texto_contrato	FIN	configuracao	F7	Texto padrão de cláusula ou tópico para montar a minuta do contrato, com ordem e campos de mesclagem
+moeda	ACEITA	moeda	FIN	dominio	F7	Moeda usada em valores de títulos, tabelas de preço e consolidação, com símbolo, casas decimais e arredondamento
+motivo_adiantamento_paciente	ACEITA	motivo_adiantamento_paciente	FIN	dominio	F3	Motivo do depósito ou caução recebido do paciente
+motivo_cancelamento_cheque	ACEITA	motivo_cancelamento_cheque	FIN	dominio	F3	Motivo para cancelar cheque emitido, indicando se a folha fica inutilizada
+motivo_cancelamento_documento_fiscal	ACEITA	motivo_cancelamento_documento_fiscal	FIN	dominio	F3	Motivo para cancelar nota de serviço, nota de mercadoria ou nota de crédito e débito, com o código exigido pelo provedor municipal ou pela Sefaz
+motivo_devolucao_cheque	ACEITA	motivo_devolucao_cheque	FIN	dominio	F7	Motivo de devolução de cheque recebido, seguindo as alíneas da compensação bancária
+motivo_movimento_orcamento	ACEITA	motivo_movimento_orcamento	FIN	dominio	F7	Motivos de transferência, ajuste ou revisão de valores orçados
+motivo_situacao_contrato	ACEITA	motivo_situacao_contrato	FIN	dominio	F7	Motivos para mudança de situação ou ocorrência do contrato, por estabelecimento
+natureza_despesa	FUNDIR	elemento_despesa	FIN	dominio	F8	Elemento e subelemento de despesa orçamentária em hierarquia, com classificação, conta contábil, projeto e vigência, para empenho
+obra_construcao_civil	ACEITA	obra_construcao_civil	FIN	principal	F7	Obra de construção civil inscrita no cadastro nacional da Receita, com matrícula, vigência e indicador, usada em retenções e escrituração
+obra_construcao_civil_vinculo	ACEITA	obra_construcao_civil_vinculo	FIN	vinculo	F7	Liga a obra aos estabelecimentos do grupo e aos fornecedores que nela prestam serviço
+orcamento_receita_fonte_pagadora	ACEITA	orcamento_receita_fonte_pagadora	FIN	item	F8	Linha de receita orçada por fonte pagadora e setor, para planejar o orçamento de receita
+pagamento_pix	ACEITA	pagamento_pix	FIN	principal	F7	Pagamento a credor por Pix, com chave ou código copia e cola, título pago, situação e confirmação do banco
+permissao_adiantamento_usuario	ACEITA	permissao_adiantamento_usuario	FIN	vinculo	F7	O que cada usuário pode fazer nos adiantamentos (abrir, aprovar, fechar) por estabelecimento, setor e vigência
+plano_orcamentario	ACEITA	plano_orcamentario	FIN	principal	F7	Plano de contas próprio do orçamento, com máscara, tipo e vigência, separado do plano contábil
+plano_orcamentario_estabelecimento	ACEITA	plano_orcamentario_estabelecimento	FIN	vinculo	F7	Estabelecimentos que usam cada plano orçamentário, com situação
+programa_trabalho_acao	ACEITA	programa_trabalho_acao	FIN	item	F8	Atividade ou ação ligada ao programa de trabalho do orçamento público, com datas previstas e realizadas
+rateio_orcamento_setor	ACEITA	rateio_orcamento_setor	FIN	configuracao	F8	Rateio de contas do orçamento de um centro de custo de origem para centros de destino
+realizado_orcamento	ACEITA	realizado_orcamento	FIN	principal	F7	Valor realizado por conta orçamentária, centro de custo e mês, para comparar com o orçado
+realizado_orcamento_origem	ACEITA	realizado_orcamento_origem	FIN	item	F7	Documento de origem que compõe o realizado (nota, título, lançamento ou carga externa), com valor e data
+receita_centro_custo_mensal	ACEITA	receita_centro_custo_mensal	FIN	principal	F7	Receita apurada por centro de custo, fonte pagadora e competência (serviço, honorário, mat/med, glosa) para o resultado do custeio
+regra_alocacao_receita_custo	ACEITA	regra_alocacao_receita_custo	FIN	configuracao	F7	Regra que destina a receita faturada a um centro de custo conforme item, grupo, setor, serviço, especialidade ou profissional
+regra_deducao_nota_servico	ACEITA	regra_deducao_nota_servico	FIN	configuracao	F7	Regra por fonte pagadora e grupo de item que diz quais parcelas do valor são deduzidas na nota fiscal de serviço
+regra_importacao_custo	ACEITA	regra_importacao_custo	FIN	configuracao	F8	Setor e natureza de custo que recebem valores importados de outros módulos (repasse médico) no custeio, com vigência
+regra_pis_cofins_conta	ACEITA	regra_pis_cofins_conta	FIN	configuracao	F7	CST de PIS e COFINS e natureza do crédito por conta contábil, para a escrituração das contribuições
+regra_servico_compartilhado	ACEITA	regra_servico_compartilhado	FIN	configuracao	F8	Centro de serviço compartilhado entre estabelecimentos e como seu custo é transferido entre origem e destino, com vigência
+reserva_numero_nota	ACEITA	reserva_numero_nota	FIN	item	F7	Número e série de nota fiscal reservados para uma fonte pagadora antes da emissão, com baixa ou cancelamento da reserva
+saldo_contabil_auxiliar_mensal	ACEITA	saldo_contabil_auxiliar_mensal	FIN	historico	F7	Saldo mensal da conta contábil aberto por auxiliar (participante ou detalhe), com e sem apuração de resultado
+saldo_financeiro_periodo	ACEITA	saldo_financeiro_periodo	FIN	historico	F7	Saldo inicial, débitos e créditos de portador, cliente ou credor por exercício e fechamento financeiro
+situacao_contrato	ACEITA	situacao_contrato	FIN	dominio	F7	Fases do contrato (minuta, vigente, suspenso, encerrado), com indicação de ativo e dias de tolerância por estabelecimento
+talao_cheque	ACEITA	talao_cheque	FIN	principal	F3	Talão de cheques da conta bancária, com faixa de numeração inicial, final e próxima folha a emitir
+tipo_conta_orcamentaria	ACEITA	tipo_conta_orcamentaria	FIN	dominio	F7	Tipos de conta orçamentária (receita, custo, despesa, investimento, estatística)
+tipo_custo	ACEITA	tipo_custo	FIN	dominio	F7	Classificação do custo para a apuração (direto, indireto, fixo, variável)
+tipo_empenho	ACEITA	tipo_empenho	FIN	dominio	F8	Espécie do empenho no orçamento público (ordinário, estimativo, global)
+tipo_evento_contrato	ACEITA	tipo_evento_contrato	FIN	dominio	F7	Tipos de evento e de data de referência usados nos eventos programados do contrato
+tipo_movimento_caixa	ACEITA	tipo_movimento_caixa	FIN	dominio	F3	Tipos de entrada ou saída avulsa no caixa fora do recebimento de conta
+tipo_nota_credito_debito	ACEITA	tipo_nota_credito_debito	FIN	configuracao	F7	Tipo de nota de crédito ou débito, com conta contábil, documento financeiro, formulário e se gera título a receber
+tipo_origem_realizado	ACEITA	tipo_origem_realizado	FIN	dominio	F7	Tipos de origem externa de valores realizados carregados no orçamento
+tipo_plano_orcamentario	ACEITA	tipo_plano_orcamentario	FIN	dominio	F7	Tipos de plano orçamentário (operacional, investimento, consolidado), indicando se consolida outros planos
+tipo_responsavel_bem	ACEITA	tipo_responsavel_bem	FIN	dominio	F7	Tipo de responsável pela guarda do bem (colaborador, médico, cooperativa, terceiro)
+unidade_negocio	ACEITA	unidade_negocio	FIN	principal	F8	Unidade de negócio (linha de serviço com resultado próprio), com agrupamento, estabelecimento e situação
+unidade_negocio_setor	ACEITA	unidade_negocio_setor	FIN	vinculo	F8	Setores que compõem cada unidade de negócio, para apurar receita e custo por linha de serviço
+verba_orcamentaria	ACEITA	verba_orcamentaria	FIN	dominio	F7	Verba e grupo do orçamento em hierarquia, distribuídos por categoria de gasto, para consolidar, aprovar e acompanhar o orçado
+versao_orcamento_peca	ACEITA	versao_orcamento_peca	FIN	vinculo	F8	Formulários de coleta usados numa versão do orçamento

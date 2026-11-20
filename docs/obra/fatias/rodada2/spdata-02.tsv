@@ -1,0 +1,176 @@
+tabela	linhas	modulo	tela_funcao	natureza	destino_matriz	descricao
+AGCADAGENDA	1	AGE	Agenda > Agendas por cadeira/sala > Cadastro de agendas	cadastro	migrar-crud	"Agendas de recursos (cadeira/terapia); só linha ""não informado"", criar por padrão"
+AGCADEIRA	1	AGE	Agenda > Agendas por cadeira/sala > Cadeiras e faixas	cadastro	migrar-crud	Cadeiras/poltronas da agenda (quimio/terapias) com duração e complexidade; só default
+AGCADMOTIVO	1	AGE	Cadastros > Domínios > Motivos de agendamento	dominio	migrar-crud	Motivos de agendamento ligados ao tipo de retorno; só default
+AGCOMPLEXIDADE	4	AGE	Cadastros > Domínios > Complexidade do agendamento	dominio	migrar-crud	Níveis de complexidade (baixa, média, alta) para encaixe de cadeiras
+AGDIASINDISP	1	AGE	Agenda > Bloqueios e indisponibilidades	movimento	descartar	Indisponibilidades de agenda/cadeira; única linha fictícia 1899, tela nova por padrão de mercado
+AGDURACAO	4	AGE	Cadastros > Domínios > Durações de atendimento	dominio	migrar-crud	Faixas de duração (curta, média, longa) para agenda por cadeira
+AGGRPFASEEVOL	4	AGE	Cadastros > Domínios > Fases de evolução do tratamento	dominio	migrar-crud	Fases do plano terapêutico (inicial, intermediário, final) para agenda de terapias
+AGPARAM	1	AGE	Administração > Parâmetros > Agenda de terapias	configuracao	migrar-crud	Parâmetros da agenda por cadeira e geração de planejamento do PEP
+AGTPAGENDA	8	AGE	Cadastros > Domínios > Tipos de agenda	dominio	migrar-crud	Tipos de agenda: consultas, exames, quimioterapia, plantão, bloco, fisioterapia, grupos
+ATCABECATEND	1001	REC	Recepção > Atendimentos (cabeçalho unificado)	movimento	migrar-movimento	Cabeçalho unificado de atendimento (PA, ambulatório, internação), gerado por triggers, 2019-2026
+ATCABECATEND_TBSENHAATEND	1001	REC	Recepção > Senhas > Vínculo senha x atendimento	vinculo	migrar-movimento	Liga senha de chamada do totem/painel ao atendimento
+ATCONTA	1001	REC	Recepção > Atendimentos > Contas do atendimento	vinculo	migrar-movimento	Liga atendimento unificado às contas de faturamento geradas
+ATPARAMGERAL	3	CAD	Administração > Parâmetros > Cadastro de paciente por módulo	configuracao	migrar-crud	Campos obrigatórios do cadastro de paciente por módulo, biometria, TCLE, guia
+FPCBO	1001	CAD	Cadastros > Domínios > CBO (ocupações)	dominio	carga-referencia	Classificação Brasileira de Ocupações; útil ao cadastro de profissionais
+FPNATJURIDICA	85	CAD	Cadastros > Domínios > Natureza jurídica	dominio	carga-referencia	Tabela de natureza jurídica (CONCLA/IBGE) para empresas e fornecedores
+GETABDCB	1001	CAD	Cadastros > Referências > DCB	dominio	carga-referencia	Denominações Comuns Brasileiras (ANVISA) com código CAS
+GETABVIA	26	CAD	Cadastros > Domínios > Vias de administração	dominio	migrar-crud	Vias de administração com mapeamento TISS
+HTCIAP	686	CAD	Consulta somente leitura: snapshot HT da CIAP	historico	migrar-leitura	Snapshot da classificação CIAP-2 vigente no registro
+HTCID	1001	CAD	Consulta somente leitura: snapshot HT do CID	historico	migrar-leitura	Snapshot do CID-10 vigente no momento do registro
+HTCONVEN	97	CAD	Consulta somente leitura: snapshot HT do convênio	historico	migrar-leitura	Snapshot do nome/classificação do convênio no registro
+HTPACIENTE	1001	CAD	Consulta somente leitura: snapshot HT do paciente	historico	migrar-leitura	Snapshot imutável do cadastro do paciente no registro clínico
+HTPACTELEFONE	1001	CAD	Consulta somente leitura: snapshot HT dos telefones do paciente	historico	migrar-leitura	Telefones do snapshot de paciente
+HTPRINC	137	CAD	Consulta somente leitura: snapshot HT do princípio ativo	historico	migrar-leitura	Snapshot de princípios ativos usados em prescrição/alergia
+HTPROCTO	1001	CAD	Consulta somente leitura: snapshot HT do procedimento	historico	migrar-leitura	Snapshot do procedimento vinculado ao atendimento
+HTPROFIS	1001	CAD	Consulta somente leitura: snapshot HT do profissional	historico	migrar-leitura	Snapshot imutável do cadastro do profissional
+HTPROFISTEL	204	CAD	Consulta somente leitura: snapshot HT dos telefones do profissional	historico	migrar-leitura	Telefones do snapshot de profissional
+HTPRONTUNIF	6	CAD	Cadastros > Pacientes > Unificação de prontuários	auditoria	migrar-leitura	Registro de unificações de prontuário (2020-2025)
+HTTBCBOPRO	1001	CAD	Administração > Auditoria > Vínculos profissionais	auditoria	migrar-leitura	Histórico de alterações do vínculo profissional x CBO x conselho
+HTTBCBOPRO_TBUNIDAD	647	CAD	Administração > Auditoria > Vínculos profissional x unidade	auditoria	migrar-leitura	Histórico de carga horária do profissional por unidade
+PNCONFIG	5	REC	Recepção > Painéis e senhas > Configuração por local	configuracao	migrar-crud	Configuração de painel de chamada/senha por local
+PNTIPO	3	REC	Recepção > Painéis e senhas > Tipos de painel	dominio	migrar-crud	Tipos de painel: senha, atendimento, portal
+REAGECRI	1001	AGE	Agenda > Gerar/abrir agenda por período	movimento	migrar-movimento	Gerações de agenda por período e dias da semana (2020 a 08/2026)
+REAGENDA	138	AGE	Agenda > Cadastro de agendas	cadastro	migrar-crud	Agendas ambulatoriais por profissional/serviço (138), duração de slot, retorno
+REAGENDA_TBCONVEN	1001	AGE	Agenda > Cadastro de agendas > Convênios aceitos	vinculo	migrar-crud	Convênios aceitos por agenda, com observação para agendamento online
+REAGENDA_TBESPEC	995	AGE	Agenda > Cadastro de agendas > Especialidades	vinculo	migrar-crud	Especialidades atendidas por agenda
+REALTA	782	REC	Atendimento > Alta do atendimento externo	historico	migrar-leitura	Altas de atendimento ambulatorial/PA; só jan-abr/2020 (legado)
+RECADATE	1001	REC	Atendimento > Abertura de atendimento (ficha ambulatorial/PA)	movimento	migrar-movimento	Ficha de atendimento externo; trigger gera faturamento
+RECANAGE	1001	AGE	Agenda > Cancelamentos	historico	migrar-leitura	Marcações canceladas com motivo e usuário (03/2020 a 08/2026)
+RECONFIC	317	REC	Configurações > Recepção > Fichas impressas por convênio	configuracao	migrar-crud	Fichas/guias a imprimir por convênio no atendimento externo
+RECTRAGE	218	AGE	Agenda > Escala semanal	configuracao	migrar-crud	Escala semanal da agenda: dia, horário inicial/final, intervalo
+REESPFIC	600	REC	Configurações > Recepção > Fichas impressas por especialidade	configuracao	migrar-crud	Fichas a imprimir por especialidade no atendimento externo
+REGRPFIC	20	REC	Configurações > Recepção > Fichas impressas por grupo	configuracao	migrar-crud	Fichas a imprimir por grupo de procedimento
+REMODFIC	6	REC	Configurações > Recepção > Modelos de ficha	configuracao	migrar-crud	Modelos de ficha/guia impressos no atendimento externo
+REPACAGD	1001	AGE	Agenda > Marcação de consultas	movimento	migrar-movimento	Marcações de consulta com canal, convênio e solicitante (2020 a 09/2026)
+REPACAGI	1001	AGE	Agenda > Grade de horários	movimento	migrar-movimento	Slots gerados da agenda com situação e ocupação (até 09/2026)
+REPACAGN	1001	AGE	Agenda > Marcação > Pacientes sem prontuário	movimento	migrar-movimento	Pré-cadastro de pacientes agendados ainda sem prontuário
+REPARAM	1	REC	Configurações > Parâmetros da recepção/agenda	configuracao	migrar-crud	Parâmetros da recepção externa: numeração, painel, obrigatoriedades (~250)
+REPARATE	1	REC	Configurações > Recepção > Herança do atendimento anterior	configuracao	migrar-crud	Campos copiados do atendimento anterior na nova ficha
+RESEGUR	1001	REC	Atendimento > Dados do segurado/titular	movimento	migrar-movimento	Titular/segurado do convênio por registro de atendimento (~135 mil)
+RESITAGE	14	AGE	Cadastros > Domínios > Situações de agendamento	dominio	migrar-crud	Situações: aguardando, confirmado, realizado, cancelado, faltou, feriado
+RETIPAGE	4	AGE	Cadastros > Domínios > Canais de agendamento	dominio	migrar-crud	Canal da marcação: presencial, telefone, WhatsApp
+RETITFIC	5	REC	Configurações > Recepção > Títulos de ficha	configuracao	migrar-crud	Títulos de fichas/guias externas: ambulatorial, consulta, SP/SADT
+RETPAGEN	1	AGE	Cadastros > Domínios > Tipos de agenda	dominio	migrar-crud	Tipos de agenda (só não informado; ligado a AGTPAGENDA)
+RETPINDATEND	7	REC	Cadastros > Domínios > Indicação do atendimento	dominio	migrar-crud	Quem indicou: funcionário, médico externo, hospital, parceiro, paciente
+RETP_INTEG_AGENDA_ONLINE	4	AGE	Cadastros > Domínios > Modos de agendamento online	dominio	migrar-crud	Agendamento online: não, call center, portal do paciente, ambos
+REUNIFIC	36	REC	Configurações > Recepção > Fichas impressas por unidade	configuracao	migrar-crud	Fichas a imprimir por unidade de atendimento
+RICADPAC	1001	CAD	Cadastros > Pacientes	cadastro	migrar-crud	Cadastro mestre de pacientes (prontuário) com demografia e documentos
+RICADPAC_TBCONVEN	1001	CAD	Cadastros > Pacientes > Convênios do paciente	vinculo	migrar-crud	Convênios vinculados ao paciente
+RICBOFMRPUSP	1001	CAD	Cadastros > Domínios > Ocupações (tabela FMRP-USP)	dominio	carga-referencia	Tabela de ocupações padrão FMRP-USP; referência legada
+RIPROCFMRPUSP	1001	CAD	Cadastros > Domínios > Procedimentos (tabela FMRP-USP)	dominio	carga-referencia	Tabela de procedimentos FMRP-USP; referência legada
+SIAGECRI	1001	AGE	Agenda SADT > Gerar agenda de exames	movimento	migrar-movimento	Gerações de agenda SADT por período (2020 a 06/2026)
+SIAGENDA	40	AGE	Agenda SADT > Cadastro de agendas de exames	cadastro	migrar-crud	Agendas de exames SADT (40) por setor, duração e retorno
+SIAGENDA_TBCONVEN	968	AGE	Agenda SADT > Cadastro de agendas > Convênios aceitos	vinculo	migrar-crud	Convênios aceitos por agenda SADT
+SICANAGE	1001	AGE	Agenda SADT > Cancelamentos	movimento	migrar-movimento	Cancelamentos de marcações da agenda de exames, 2020 a 07/2026
+SICTRAGE	26	AGE	Agenda SADT > Escala semanal da agenda	configuracao	migrar-crud	Escala semanal de horários das agendas de exames por dia/intervalo
+SIPACAGD	1001	AGE	Agenda SADT > Marcação de exames	movimento	migrar-movimento	Marcações da agenda de exames com dados do paciente e solicitante
+SIPACAGD_EXCLUSAO	1	AGE	Administração > Auditoria > Exclusões de marcação SADT	auditoria	migrar-leitura	Cópia de marcação SADT excluída (1 registro, 2025)
+SIPACAGI	1001	AGE	Agenda SADT > Grade de horários	movimento	migrar-movimento	Grade gerada de horários/slots da agenda de exames, até 09/2026
+SIPACAGN	1001	AGE	Agenda SADT > Pacientes agendados sem prontuário	movimento	migrar-movimento	Dados cadastrais provisórios de agendados SADT (2020 a 08/2026)
+TBACAOFLUXOSENHA	10	REC	Cadastros > Domínios > Ações do fluxo de senha	dominio	migrar-leitura	Ações do fluxo de atendimento (chamar, atender, encaminhar, finalizar)
+TBALERGIA	50	CAD	Cadastros > Clínicos > Alergias	cadastro	migrar-crud	Alergias/alérgenos com tipo e tipo de notificação
+TBALERGIA_TBPRINC	4	CAD	Cadastros > Clínicos > Alergias > Princípios ativos	vinculo	migrar-crud	Alergia associada a princípio ativo para alerta de prescrição
+TBCADGRUPOATEN	1	REC	Cadastros > Domínios > Grupos de atendimento	dominio	migrar-crud	Grupo do atendimento (só Não Informado), usado no cabeçalho
+TBCAPACIDADE_CIVIL	3	CAD	Cadastros > Domínios > Capacidade civil	dominio	migrar-leitura	Capacidade civil do paciente (capaz, incapaz, relativamente)
+TBCBARAAGENTE	152	CAD	Cadastros > Clínicos > CBARA > Agentes	dominio	carga-referencia	Agentes alérgenos da CBARA com sinônimos
+TBCBARACATEGORIA	4	CAD	Cadastros > Clínicos > CBARA > Categorias	dominio	carga-referencia	Categorias de agentes alérgenos CBARA
+TBCBARACLASSIFREACAO	2	CAD	Cadastros > Clínicos > CBARA > Classificação de reação	dominio	carga-referencia	Classificação de reação adversa CBARA
+TBCBARANOTIFICACAO	3	CAD	Cadastros > Clínicos > CBARA > Notificação	vinculo	carga-referencia	Tipo de notificação de alergia x severidade CBARA
+TBCBARAORIGEMINFO	5	CAD	Cadastros > Clínicos > CBARA > Origem da informação	dominio	carga-referencia	Origem/informante da alergia CBARA
+TBCBARAREACAOADVERSA	28	CAD	Cadastros > Clínicos > CBARA > Reações adversas	dominio	carga-referencia	Reações adversas CBARA com CID-10/CIAP
+TBCBARASEVERIDADE	3	CAD	Cadastros > Clínicos > CBARA > Severidade	dominio	carga-referencia	Severidade de reação alérgica CBARA
+TBCBOPRO	1001	CAD	Cadastros > Profissionais > Registros profissionais (CBO/Conselho)	cadastro	migrar-crud	Registros do profissional: CBO, conselho, UF, vínculo, SUS
+TBCBOPRO_TBCONVEN	1001	CAD	Cadastros > Profissionais > Convênios credenciados	vinculo	migrar-crud	Convênios em que o registro profissional é credenciado
+TBCBOPRO_TBUNIDAD	637	CAD	Cadastros > Profissionais > Carga horária por unidade	vinculo	migrar-crud	Carga horária CNES do profissional por unidade
+TBCBOSUS	1001	CAD	Cadastros > Geral > CBO	dominio	carga-referencia	Classificação Brasileira de Ocupações (CBO) oficial
+TBCBOSUS_TBESPEC	131	CAD	Cadastros > Especialidades > CBOs da especialidade	vinculo	migrar-crud	Vínculo CBO x especialidade
+TBCENCUS	99	CAD	Cadastros > Estrutura > Centros de custo	cadastro	migrar-crud	99 centros de custo com classificação, rateio e contábil
+TBCEP	1001	CAD	Cadastros > Geral > CEP	dominio	carga-referencia	Base de CEPs/logradouros (~860 mil) por município IBGE
+TBCIAP	686	CAD	Cadastros > Clínicos > CIAP	dominio	carga-referencia	Classificação Internacional de Atenção Primária (CIAP-2)
+TBCID10	1001	CAD	Cadastros > Clínicos > CID-10	dominio	carga-referencia	CID-10 com agravos notificáveis, sexo e flags oncológicas
+TBCIDMORF	1001	CAD	Cadastros > Clínicos > CID morfologia	vinculo	carga-referencia	Vínculo CID principal x CID morfológico (CID-O)
+TBCLASSIFALERGIA	3	CAD	Cadastros > Domínios > Classificação de alergia	dominio	migrar-crud	Classificação de alergia (alimentar, medicamentosa, outros)
+TBCLINICA	7	CAD	Cadastros > Estrutura > Clínicas	cadastro	migrar-crud	Clínicas (médica, cirúrgica, obstétrica, pediátrica) com tipo TISS
+TBCOMPLEXIDADE_HOSPITALAR	3	CAD	Cadastros > Estrutura > Domínios do hospital	dominio	migrar-leitura	Complexidade do hospital (média, alta)
+TBCONSPROF	16	CAD	Cadastros > Profissionais > Conselhos profissionais	dominio	migrar-crud	Conselhos profissionais com código TISS
+TBCONSPROF_TBSIGLACONSPROF	9	CAD	Cadastros > Profissionais > Conselhos > Siglas	vinculo	migrar-crud	Siglas válidas por conselho profissional
+TBCONVEN	77	CAD	Cadastros > Convênios > Convênios/Operadoras	cadastro	migrar-crud	77 convênios com ~385 parâmetros de faturamento e TISS
+TBCOR	6	CAD	Cadastros > Domínios > Raça/cor	dominio	carga-referencia	Raça/cor IBGE
+TBCTRDTH	75	CAD	Cadastros > Tabelas de preço > Diárias e taxas (cabeçalho)	cadastro	migrar-crud	Cabeçalhos das tabelas de diárias/taxas por operadora
+TBCTRMEM	78	CAD	Cadastros > Tabelas de preço > Mat/Med (cabeçalho)	cadastro	migrar-crud	Cabeçalhos de tabelas mat/med (Brasíndice, Simpro, operadoras)
+TBCTRTHM	99	CAD	Cadastros > Tabelas de preço > Honorários (cabeçalho)	cadastro	migrar-crud	99 tabelas de honorários (AMB, CBHPM, TUSS, operadoras)
+TBDDD	67	CAD	Cadastros > Geral > DDD	dominio	carga-referencia	Códigos DDD por UF e região
+TBDDDREGIAO	58	CAD	Cadastros > Geral > Regiões de DDD	dominio	carga-referencia	Regiões das áreas de DDD
+TBECIV	18	CAD	Cadastros > Domínios > Estado civil	dominio	migrar-crud	Estados civis por sexo
+TBEMISSORA	1001	CAD	Cadastros > Geral > Emissoras de rádio/TV	dominio	carga-referencia	Lista nacional de emissoras; sem FK, uso não identificado
+TBEMPHOS	1	CAD	Cadastros > Estrutura > Empresa	cadastro	migrar-crud	Empresa mantenedora com dados fiscais, SPED e eSocial
+TBEMPHOSLOGO	1	CAD	Cadastros > Estrutura > Empresa > Logotipos	cadastro	migrar-crud	Logotipos da empresa e prefeitura para documentos
+TBESCOLARIDADE	12	CAD	Cadastros > Domínios > Escolaridade	dominio	migrar-crud	Níveis de escolaridade do paciente
+TBESFERA_ADM	5	CAD	Cadastros > Estrutura > Domínios do hospital	dominio	carga-referencia	Esfera administrativa CNES
+TBESPEC	100	CAD	Cadastros > Especialidades	cadastro	migrar-crud	100 especialidades com faixa etária, sexo e código D4H
+TBESPPRO	1001	CAD	Cadastros > Especialidades > Procedimentos por especialidade	vinculo	migrar-crud	Pares procedimento x especialidade permitidos
+TBESTADOCONFIRMACAO	4	AGE	Cadastros > Domínios > Estados de confirmação	dominio	migrar-leitura	Estado de confirmação de agendamento (confirmado, refutado)
+TBETNIA	1	CAD	Cadastros > Domínios > Etnias	dominio	carga-referencia	Etnias indígenas (1 registro carregado)
+TBFERIAD	11	CAD	Cadastros > Atendimento > Feriados	cadastro	migrar-crud	Feriados fixos e móveis, facultativos
+TBFLUXOATEND	1001	REC	Atendimento > Fluxo do paciente por local	movimento	migrar-movimento	Eventos do fluxo de senha por local (chamar, atender), 2020-2026
+TBGENERO_SOCIAL	2	CAD	Cadastros > Domínios > Gênero/nome social	dominio	migrar-crud	Identidades de gênero para nome social
+TBGERASENHA	36	REC	Recepção > Configuração de geradores de senha	configuracao	migrar-crud	Geradores/botões de senha por recepção, agenda e especialidade
+TBGERSEQ	8	CAD	Configurações > Numeração de prontuário	configuracao	migrar-crud	Sequências de numeração de prontuário interno/externo
+TBGRAU_INST	17	CAD	Cadastros > Domínios > Grau de instrução (eSocial)	dominio	carga-referencia	Grau de instrução com código eSocial
+TBGRUCONVEN	2	CAD	Cadastros > Convênios > Grupos de convênio	dominio	migrar-crud	Agrupamento de convênios
+TBGRUPOPRIORIDADE	10	REC	Cadastros > Atendimento > Grupos de prioridade	dominio	migrar-crud	Grupos de prioridade legal da senha (idoso, gestante, TEA)
+TBGUICHE	9	REC	Cadastros > Atendimento > Guichês	cadastro	migrar-crud	Guichês por recepção
+TBHISTBR	1001	CAD	Cadastros > Tabelas de preço > Mat/Med > Histórico Brasíndice	historico	migrar-leitura	Histórico de referência Brasíndice por item mat/med
+TBHOSPIT	1	CAD	Cadastros > Estrutura > Hospital	cadastro	migrar-crud	Hospital (CNES, AIH, teto, provedor); contém credenciais
+TBLOCAL	31	REC	Cadastros > Atendimento > Locais de atendimento	cadastro	migrar-crud	Locais/consultórios com painel, encaminhamento e recepção
+TBLOCALENCATE	3	REC	Cadastros > Atendimento > Locais > Encaminhamentos	vinculo	migrar-crud	Locais para onde cada local pode encaminhar
+TBLOCALHORA	31	REC	Cadastros > Atendimento > Locais > Horário de funcionamento	configuracao	migrar-crud	Horário de funcionamento por dia da semana e feriado
+TBLOCALPESATE	16	REC	Cadastros > Atendimento > Locais > Locais pesquisados	vinculo	migrar-crud	Locais cujos atendimentos cada local pode pesquisar
+TBMEDESP	1001	CAD	Cadastros > Profissionais > Especialidades do profissional	vinculo	migrar-crud	Vínculo profissional (CRM/CBO) x especialidade
+TBMEDSOL	1001	CAD	Cadastros > Profissionais > Médicos solicitantes externos	cadastro	migrar-crud	Médicos solicitantes externos com conselho, UF e CBO
+TBMEDSOL_CODCON	1001	CAD	Cadastros > Profissionais > Solicitantes > Código por convênio	vinculo	migrar-crud	Código do médico solicitante em cada convênio
+TBMODULO_RECEPCAO	3	REC	Cadastros > Domínios > Módulos de recepção	dominio	migrar-crud	Recepção interna, externa e SADT para parâmetros gerais
+TBMOTCANCMOD	3	REC	Cadastros > Domínios > Cancelamento > Módulos	dominio	migrar-crud	Módulo de origem do cancelamento (recepção interna/externa/SADT)
+TBMOTCANCTP	2	REC	Cadastros > Domínios > Cancelamento > Tipos	dominio	migrar-crud	Tipo de cancelamento: agendamento ou atendimento
+TBMOTEXC	10	REC	Cadastros > Domínios > Motivos de exclusão de atendimento	dominio	migrar-crud	Motivos de exclusão/cancelamento de conta ou atendimento
+TBMUIBGE	1001	CAD	Cadastros > Referências > Municípios IBGE	cadastro	carga-referencia	Municípios IBGE com regras de retenção de ISS
+TBNACION	384	CAD	Cadastros > Referências > Nacionalidades	dominio	carga-referencia	Nacionalidades com código eSocial e SPED
+TBNACIONSPED	241	CAD	Cadastros > Referências > Nacionalidades SPED	dominio	carga-referencia	Tabela de nacionalidades do SPED
+TBOBSREC	5	REC	Cadastros > Domínios > Bandeiras de cartão	dominio	migrar-crud	Bandeiras de cartão aceitas no recebimento (Visa, Master, Elo)
+TBOCUPAC	354	CAD	Cadastros > Referências > Ocupações	dominio	carga-referencia	Ocupações/profissões (CBO antiga) para cadastro de pessoas
+TBORGAOEMIS	32	CAD	Cadastros > Domínios > Órgãos emissores	dominio	carga-referencia	Órgãos emissores de documento de identidade
+TBPAISES	279	CAD	Cadastros > Referências > Países	dominio	carga-referencia	Países com códigos Receita Federal e eSocial
+TBPARENTE	11	CAD	Cadastros > Domínios > Graus de parentesco	dominio	migrar-crud	Graus de parentesco para responsáveis, dependentes e visitantes
+TBPESQUIPLANO	4	REC	Cadastros > Domínios > Pesquisa de plano de saúde	dominio	migrar-crud	Resposta da pesquisa se paciente possui plano/cartão desconto
+TBPESSOA	1001	CAD	Cadastros > Pessoas (CPF/CNPJ)	cadastro	migrar-crud	Registro único de pessoa física/jurídica por CPF/CNPJ
+TBPORTE_HOSPITALAR	4	CAD	Cadastros > Domínios > Porte hospitalar	dominio	migrar-crud	Porte do hospital (pequeno, médio, grande)
+TBPRINC	138	CAD	Cadastros > Farmacologia > Princípios ativos	cadastro	migrar-crud	Princípios ativos (DCB) com classe terapêutica e unidade padrão
+TBPROCED	1	REC	Cadastros > Domínios > Procedências	dominio	migrar-crud	Procedência do paciente no atendimento/internação
+TBPROCEDPADRAO	4	REC	Cadastros > Domínios > Procedências padrão	dominio	migrar-crud	Procedência padrão (retorno, demanda espontânea, referenciada, judicial)
+TBPROFIS	871	CAD	Cadastros > Profissionais	cadastro	migrar-crud	Cadastro mestre de profissionais com dados fiscais, bancários e repasse
+TBRECEPCAO	11	REC	Recepção > Configuração > Recepções/setores de senha	configuracao	migrar-crud	Setores de recepção com texto de impressão de senha
+TBREFCANCMODTP	5	REC	Cadastros > Domínios > Cancelamento > Módulo x tipo	vinculo	migrar-crud	Combinações válidas de módulo e tipo de cancelamento
+TBRELIG	11	CAD	Cadastros > Domínios > Religiões	dominio	migrar-crud	Religiões para cadastro de paciente
+TBSENHAATEND	1001	REC	Recepção > Painel de senhas > Senhas emitidas	movimento	migrar-movimento	Senhas de atendimento emitidas, chamadas e situação (2020-2026)
+TBSENHAATEND_REPACAGD	1001	REC	Recepção > Senhas > Vínculo com agendamento de consulta	vinculo	migrar-movimento	Liga senha emitida ao agendamento ambulatorial
+TBSENHAATEND_SIPACAGD	1001	REC	Recepção > Senhas > Vínculo com agendamento SADT	vinculo	migrar-movimento	Liga senha emitida ao agendamento de exame SADT
+TBSEXO	3	CAD	Cadastros > Domínios > Sexo	dominio	migrar-crud	Sexo biológico (masculino, feminino, ambos)
+TBSIGLACONSPROF	8	CAD	Cadastros > Domínios > Siglas de conselho profissional	dominio	carga-referencia	Siglas de inscrição em conselho profissional (TISS)
+TBSITAGE	16	AGE	Cadastros > Domínios > Situações de agenda	dominio	migrar-crud	Situações do agendamento com ícone e integração agenda online
+TBSITCONJUGAL	7	CAD	Cadastros > Domínios > Situação de convívio	dominio	carga-referencia	Situação conjugal/familiar padrão e-SUS
+TBSTATUSGUICHE	4	REC	Recepção > Painel de senhas > Guichês em uso	configuracao	migrar-crud	Guichê ocupado por usuário em cada recepção/local
+TBSUSCEP	1001	CAD	Cadastros > Referências > CEP (base SUS)	cadastro	carga-referencia	Base de CEP do SUS com IBGE e vigência (~877 mil)
+TBTIPLGR	239	CAD	Cadastros > Referências > Tipos de logradouro	dominio	carga-referencia	Tipos de logradouro com código eSocial
+TBTIPO_ATENDIMENTO	2	REC	Cadastros > Domínios > Tipo de pré-atendimento	dominio	migrar-crud	Pré-atendimento interno ou externo
+TBTIPOATEUNIDADE	5	CAD	Cadastros > Domínios > Tipos de atendimento da unidade	dominio	migrar-crud	Perfil da unidade (ambulatório, PA, internação, exames)
+TBTIPO_PROCEDIMENTO	4	REC	Cadastros > Domínios > Tipos de lançamento do pré-atendimento	dominio	migrar-crud	Tipo de lançamento (SH, SP, recurso complementar, mat/med)
+TBTIPOTELEFONE	5	CAD	Cadastros > Domínios > Tipos de telefone	dominio	migrar-crud	Tipos de telefone (residencial, comercial, celular)
+TBTPDOCUMENTO	8	CAD	Cadastros > Domínios > Tipos de documento	dominio	migrar-crud	Tipos de documento de identificação (RG, CPF, CNH, CNPJ)
+TBTPESTABELECIMENTO	26	CAD	Cadastros > Domínios > Tipos de estabelecimento CNES	dominio	carga-referencia	Tipos de estabelecimento de saúde CNES
+TBUF	30	CAD	Cadastros > Referências > Unidades federativas	dominio	carga-referencia	UFs com código TISS
+TBULTSENHATEND	1001	REC	Sem tela: contador diário de senhas	temporaria	descartar	Última senha emitida por gerador e dia; reconstruível das senhas
+TBUNIDAD	6	CAD	Cadastros > Estrutura > Unidades de atendimento	cadastro	migrar-crud	Unidades de atendimento com CNES, tetos SUS e responsáveis
+TBUNIDADEMEDIDA	36	CAD	Cadastros > Domínios > Unidades de medida clínicas	dominio	migrar-crud	Unidades de medida para sinais vitais, gases e doses
+TBUNID_IDADE	3	CAD	Cadastros > Domínios > Unidades de idade	dominio	migrar-crud	Unidade de idade (anos, meses, dias)
+TBVULNERABILIDADE_SOCIAL	1	CAD	Cadastros > Domínios > Vulnerabilidade social	dominio	migrar-crud	Condições de vulnerabilidade social do paciente

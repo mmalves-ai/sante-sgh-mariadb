@@ -1,0 +1,179 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+acao_judicial_beneficiario	ACEITA	acao_judicial_beneficiario	SGO	principal	F7	Decisão judicial que obriga a operadora a cobrir ou manter beneficiário: processo, vara, vigência, setor responsável e aviso
+acionista_operadora	ACEITA	acionista_operadora	SGO	item	F7	Composição societária da operadora: acionista pessoa física ou jurídica, quantidade de ações e percentual
+acordo_inadimplencia_fatura	ACEITA	acordo_inadimplencia_fatura	SGO	item	F7	Faturas e lançamentos incluídos no acordo de regularização, com valor, juros, multa e estorno
+agenda_comercial	ACEITA	agenda_comercial	SGO	principal	F8	Compromissos da equipe de vendas e pós-venda com contratantes e contratos: visita, local, situação e responsável
+agenda_comercial_material	ACEITA	agenda_comercial_material	SGO	item	F8	Material de divulgação entregue em cada compromisso comercial, com quantidade
+agrupamento_prestador_rede	ACEITA	agrupamento_prestador_rede	SGO	dominio	F7	Agrupamentos de prestadores da rede usados em regras de valoração, pagamento e relatório
+agrupamento_procedimento	ACEITA	agrupamento_procedimento	SGO	configuracao	F7	Agrupamento nomeado de procedimentos da operadora usado em coparticipação, franquia, limite, cobertura, crítica e relatórios
+agrupamento_procedimento_item	ACEITA	agrupamento_procedimento_item	SGO	item	F7	Procedimentos que compoem cada agrupamento
+agrupamento_procedimento_plano	ACEITA	grupo_procedimento_operadora	SGO	dominio	F7	Árvore de grupos de procedimentos da operadora usada em cobertura, carência, coparticipação, franquia e limites
+alcada_autorizador_plano	ACEITA	alcada_autorizador_plano	SGO	configuracao	F7	Nível e poderes do analista de autorização: liberar procedimento, guia, limite, prorrogação e exclusão
+alerta_cadastral_operadora	FUNDIR	alerta_operadora	SGO	principal	F7	Aviso sobre beneficiário, contratante ou prestador exibido ao autorizar, atender ou faturar, com vigência e bloqueio
+alerta_operadora	ACEITA	alerta_operadora	SGO	principal	F7	Aviso sobre beneficiário, contratante ou prestador exibido ao autorizar, atender ou faturar, com vigência e bloqueio
+alerta_operadora_departamento	ACEITA	alerta_operadora_departamento	SGO	vinculo	F7	Departamentos que recebem cada alerta, com vigencia, bloqueio do atendimento e acao judicial ligada
+alteracao_vencimento_contrato	ACEITA	alteracao_vencimento_contrato	SGO	historico	F7	Troca do dia de vencimento do contrato com dia anterior, novo, valor proporcional cobrado e competência do ajuste
+apuracao_ato_cooperativo	ACEITA	apuracao_ato_cooperativo	SGO	principal	F8	Apuração mensal de valores e percentuais por natureza de ato cooperativo
+apuracao_fator_custeio	ACEITA	apuracao_fator_custeio	SGO	principal	F8	Apuração mensal do fator de rateio entre custo e despesa da operadora, com fator calculado e aplicado
+area_atuacao_operadora	ACEITA	area_atuacao_operadora	SGO	vinculo	F7	Municípios em que a operadora atua, usados em cadastro, rede e envios regulatórios
+ativo_garantidor_operadora	ACEITA	ativo_garantidor_operadora	SGO	principal	F7	Imóveis e aplicações da operadora informados à ANS: registro, avaliação, valor contábil, custódia e vínculo assistencial
+avaliacao_protocolo_beneficiario	ACEITA	avaliacao_protocolo_beneficiario	SGO	item	F8	Retorno do beneficiário sobre o atendimento do protocolo, com classificação e comentário
+aviso_atendimento_intercambio	ACEITA	aviso_atendimento_intercambio	SGO	item	F8	Aviso prévio de conta de beneficiário de parceira, por prestador, lote e guia, com movimento e erro de envio
+beneficiario_intercambio	ACEITA	beneficiario_intercambio	SGO	principal	F8	Beneficiário de outra operadora atendido na rede própria ou credenciada: origem, plano, contato, período habitual
+calendario_compensacao_intercambio	ACEITA	calendario_compensacao_intercambio	SGO	configuracao	F8	Calendário de acerto financeiro entre operadoras parceiras, com vigência e envio de arquivos
+calendario_intercambio	ACEITA	calendario_compensacao_intercambio_item	SGO	item	F8	Datas mensais do calendário de compensação entre operadoras parceiras: envio, contestação, leitura e relatórios
+campanha_venda_participante	ACEITA	campanha_venda_participante	SGO	vinculo	F8	Equipes e vendedores participantes de cada campanha, com suspensão e regra de comissão de exceção
+cancelamento_guia_recebido_item	ACEITA	cancelamento_guia_recebido_item	SGO	item	F7	Guias incluídas em um pedido de cancelamento recebido, com a situação de cada uma na resposta
+carencia_impressa_cartao	ACEITA	carencia_impressa_cartao	SGO	vinculo	F7	Grupos de carencia exibidos no cartao do beneficiario por modelo de impressao
+cargo_dirigente_operadora	ACEITA	cargo_dirigente_operadora	SGO	dominio	F7	Cargos de administração da operadora com o código exigido no envio econômico à ANS
+carteira_contratos_plano	ACEITA	carteira_contrato_plano	SGO	dominio	F7	Carteira que agrupa contratos para gestão comercial e cobrança, com conta de recebimento própria
+classe_despesa_centro_custo	ACEITA	classe_despesa_centro_custo	SGO	vinculo	F7	Centro de custo e conta contabil usados por classe de despesa no lancamento de horas
+classe_despesa_procedimento	ACEITA	classe_despesa_procedimento	SGO	vinculo	F7	Procedimentos classificados em cada classe de despesa assistencial, com vigencia
+conta_portal_paciente_dependente	ACEITA	conta_portal_paciente_dependente	INTG	vinculo	F7	Pacientes dependentes cujos resultados a conta do portal pode consultar, com parentesco e vigência
+contato_contratante_plano	ACEITA	contato_contratante_plano	SGO	item	F7	Representantes da contratante para contato: nome, cargo, telefone e e-mail
+contestacao_cobranca_intercambio	ACEITA	contestacao_cobranca_intercambio	SGO	item	F8	Contestação de valor cobrado entre operadoras parceiras, por item, com motivo, aceite ou rejeição
+contrato_plano_observacao	ACEITA	contrato_plano_observacao	SGO	item	F7	Observações datadas do contrato por tipo, com autor, para consulta no atendimento e na cobrança
+contribuicao_previdencia_pessoa	ACEITA	contribuicao_previdencia_pessoa	SGO	historico	F8	Períodos em que a pessoa contribui para a entidade de previdência patrocinadora, usados no preço do plano
+credito_fatura_plano	ACEITA	credito_fatura_plano	SGO	principal	F7	Crédito do contratante na operadora (pagamento a maior, devolução, ajuste) com saldo a abater em faturas futuras
+credito_fatura_plano_baixa	ACEITA	credito_fatura_plano_baixa	SGO	item	F7	Uso do crédito do contratante: valor liquidado, fatura ou título abatido e data
+critica_fechamento_competencia_plano	ACEITA	critica_fechamento_competencia_plano	SGO	item	F7	Críticas da apuração do fechamento mensal da operadora (saldos, provisões), com ação sugerida e resolução
+critica_pedido_reembolso	ACEITA	critica_pedido_reembolso	SGO	item	F7	Críticas do pedido de reembolso por procedimento, com motivo de glosa e liberação manual
+critica_recurso_glosa	ACEITA	critica_recurso_glosa	SGO	item	F7	Críticas encontradas no recurso de glosa recebido, por guia ou item, com liberação
+documento_orientacao_contratual	FUNDIR	guia_leitura_contratual	SGO	principal	F7	Guia de leitura do contrato exigido pela norma da agência reguladora, por produto: texto, versão, vigência e situação
+documento_orientacao_contratual_entrega	ACEITA	guia_leitura_contratual_entrega	SGO	item	F7	Entrega do guia de leitura a cada contrato, com validade, data de entrega e observação
+envio_ans_item_detalhe	FUNDIR	envio_ans_item_procedimento	SGO	item	F7	Procedimentos e itens de pacote de cada guia enviada no monitoramento assistencial, com tabela, código, quantidade e valores
+envio_ans_item_procedimento	ACEITA	envio_ans_item_procedimento	SGO	item	F7	Procedimentos e itens de pacote de cada guia enviada no monitoramento assistencial, com tabela, código, quantidade e valores
+equivalencia_intercambio	ACEITA	equivalencia_intercambio	SGO	configuracao	F8	De-para de contrato, plano e lançamento recebidos no intercâmbio entre operadoras para os cadastros próprios
+equivalencia_item_prestador_rede	ACEITA	equivalencia_item_prestador_rede	SGO	vinculo	F7	Código e descrição que o prestador usa para cada item, com o item equivalente e o tipo de valor
+etapa_protocolo_beneficiario	ACEITA	etapa_protocolo_beneficiario	SGO	dominio	F7	Etapas do protocolo de atendimento ao beneficiário, com indicação de etapa inicial e de conclusão
+etiqueta_autorizacao_plano	ACEITA	etiqueta_autorizacao_plano	SGO	principal	F8	Etiqueta de autorização prévia emitida ao beneficiário: número, validade, prestador indicado e guia em que foi usada
+execucao_autorizacao_item	ACEITA	execucao_autorizacao_item	SGO	item	F7	Cada execucao de item autorizado (sessao, dose), com executor, data, cancelamento e conta onde entrou
+faixa_reajuste	FUNDIR	regra_reajuste_sinistralidade	SGO	configuracao	F7	Regra de reajuste coletivo por faixa de valor apurado (sinistralidade ou mensalidade): grupo, período de apuração e vigência
+faixa_reajuste_item	FUNDIR	regra_reajuste_sinistralidade_faixa	SGO	item	F7	Faixa de valor inicial e final apurado com o percentual de reajuste aplicado em cada uma
+fatura_intercambio	ACEITA	fatura_intercambio	SGO	principal	F8	Fatura de atendimentos cobrada ou recebida de operadora parceira: arquivo, valores acordados, taxa, situação e cancelamento
+fatura_intercambio_item	ACEITA	fatura_intercambio_item	SGO	item	F8	Atendimento ou serviço cobrado na nota de intercâmbio, com beneficiário, item, quantidade e valor
+fatura_plano_tributo	ACEITA	fatura_plano_tributo	SGO	item	F7	Tributos calculados na geração da fatura do plano, por tipo de tributo e valor
+funcao_equipe_procedimento_rede	ACEITA	funcao_equipe_procedimento_rede	SGO	configuracao	F7	Funções de equipe aceitas na cobrança de cada procedimento por prestador
+funcao_portal_prestador	ACEITA	funcao_portal_prestador	SGO	dominio	F7	Funções oferecidas no portal ao prestador (autorização, faturamento, protocolo), base das permissões por conta
+gravidade_protocolo_beneficiario	ACEITA	gravidade_protocolo_beneficiario	SGO	dominio	F7	Níveis de gravidade do protocolo de atendimento, usados para prioridade e prazo
+grupo_economico_contratante	ACEITA	grupo_economico_contratante	SGO	principal	F7	Grupo econômico de contratantes em árvore, com documento, saldo controlado e uso no reajuste e na comissão
+grupo_patologia	ACEITA	grupo_patologia	SGO	dominio	F7	Grupos de doenças usados na declaração de saúde, na cobertura parcial temporária e no acompanhamento
+grupo_patologia_cid	ACEITA	grupo_patologia_cid	SGO	vinculo	F7	Códigos da CID que compõem cada grupo de doenças
+grupo_postagem_cobranca	ACEITA	grupo_postagem_cobranca	SGO	configuracao	F8	Agrupamento de cobrancas para impressao e postagem por regiao
+grupo_postagem_cobranca_municipio	ACEITA	grupo_postagem_cobranca_municipio	SGO	vinculo	F8	Municipios de cada grupo de postagem de cobranca, com vigencia
+grupo_procedimento_plano	FUNDIR	agrupamento_procedimento	SGO	configuracao	F7	Agrupamento nomeado de procedimentos da operadora usado em coparticipação, franquia, limite, cobertura, crítica e relatórios
+guia_conta_recebida_declaracao	ACEITA	guia_conta_recebida_declaracao	SGO	item	F7	Declarações de nascido vivo e de óbito informadas na guia de internação recebida
+guia_conta_recebida_diagnostico	ACEITA	guia_conta_recebida_diagnostico	SGO	item	F7	Diagnósticos da guia de cobrança recebida, inclusive causa do óbito na internação
+guia_leitura_contratual	ACEITA	guia_leitura_contratual	SGO	principal	F7	Guia de leitura do contrato exigido pela norma da agência reguladora, por produto: texto, versão, vigência e situação
+guia_leitura_contratual_item	ACEITA	guia_leitura_contratual_item	SGO	item	F7	Topicos do guia de leitura com resumo e a pagina do contrato onde o tema esta
+incidencia_lancamento_fatura	ACEITA	incidencia_lancamento_fatura	SGO	configuracao	F7	Lançamentos da fatura sobre os quais um desconto ou acréscimo incide, em geral ou por contrato
+indice_reajuste_tipo_lancamento	ACEITA	indice_reajuste_tipo_lancamento	SGO	vinculo	F7	Tipos de lancamento da fatura reajustados por um indice diferenciado
+intercambio_autorizacao	ACEITA	autorizacao_intercambio	SGO	principal	F8	Autorização trocada com operadora parceira no intercâmbio, com mensagens, justificativas e resposta
+intercambio_operadora_lote	FUNDIR	lote_reciprocidade	SGO	principal	F8	Lote de movimentos ou atendimentos em reciprocidade com operadora parceira: período, contratante, tipo de processo, leiaute e situação
+item_assistencial_ans	ACEITA	item_assistencial_ans	SGO	configuracao	F7	Itens assistenciais do envio trimestral de produção assistencial à ANS, em árvore, com código do leiaute e ordem
+item_assistencial_ans_criterio	ACEITA	item_assistencial_ans_criterio	SGO	item	F7	Critério que enquadra o evento no item assistencial: procedimento, especialidade, despesa, CID, idade, permanência, guia, regime, segmentação
+lancamento_conta_beneficiario	ACEITA	lancamento_conta_beneficiario	SGO	historico	F7	Créditos e débitos em conta corrente do beneficiário ligados a guia, competência e operação
+lancamento_programado_contrato_faixa	ACEITA	lancamento_programado_contrato_faixa	SGO	item	F7	Valor ou percentual do lançamento programado por faixa etária, parentesco e tipo de beneficiário
+limite_producao_prestador_faixa	ACEITA	limite_producao_prestador_faixa	SGO	item	F8	Faixas de quantidade atendida no período com o fator de pagamento aplicado a cada faixa na revisão da produção
+livro_auxiliar_operadora	ACEITA	livro_auxiliar_operadora	SGO	principal	F7	Livro auxiliar contábil exigido da operadora por tipo (contraprestações, eventos a liquidar) e competência
+livro_auxiliar_operadora_item	ACEITA	livro_auxiliar_operadora_item	SGO	item	F7	Linha do livro auxiliar: conta contábil, contrato ou prestador, documento, datas e valores
+lote_cancelamento_fatura	ACEITA	lote_cancelamento_fatura	SGO	principal	F7	Cancelamento em bloco de faturas da operadora, com motivo, responsavel e situacao
+lote_cancelamento_fatura_item	ACEITA	lote_cancelamento_fatura_item	SGO	item	F7	Fatura incluida no cancelamento em bloco, com situacao, observacao e liberacao da coparticipacao
+lote_faturamento_plano_critica	ACEITA	lote_faturamento_plano_critica	SGO	item	F3	Erro ou aviso por contrato ou fatura numa geração de faturas, com tipo e resolução
+lote_faturamento_plano_escopo	ACEITA	lote_faturamento_plano_escopo	SGO	item	F3	Contratos, beneficiários, contas e reembolsos selecionados por filtro numa geração de faturas
+lote_pagamento_rede_tributo	ACEITA	lote_pagamento_rede_tributo	SGO	item	F7	Tributos calculados no pagamento do prestador: base, alíquota, dedução, retenção e documento gerado
+lote_reciprocidade	ACEITA	lote_reciprocidade	SGO	principal	F8	Lote de movimentos ou atendimentos em reciprocidade com operadora parceira: período, contratante, tipo de processo, leiaute e situação
+lote_reciprocidade_item	ACEITA	lote_reciprocidade_item	SGO	item	F8	Movimento incluido no lote de reciprocidade, com rejeicao, importacao do retorno e atualizacao
+marcador_prestador_rede	ACEITA	marcador_prestador_rede	SGO	vinculo	F8	Marcadores atribuídos a cada prestador da rede, com quem incluiu e quando
+marcador_rede	ACEITA	marcador_rede	SGO	dominio	F8	Marcadores livres para classificar e buscar prestadores no guia de rede e nos relatórios
+material_divulgacao	ACEITA	material_divulgacao	SGO	principal	F8	Material de divulgação usado nas visitas comerciais e à rede, com descrição e estoque
+material_divulgacao_estoque	ACEITA	material_divulgacao_estoque	SGO	historico	F8	Quantidade em estoque do material de divulgação por vigência e estabelecimento
+mensagem_cartao_beneficiario	ACEITA	mensagem_cartao_beneficiario	SGO	configuracao	F8	Texto impresso no cartão do beneficiário conforme o serviço ou lançamento contratado, com vigência
+mensagem_pedido_autorizacao	ACEITA	mensagem_pedido_autorizacao	SGO	item	F8	Conversa entre prestador e analista sobre um pedido de autorização, com origem, leitura e anexo
+migracao_plano_lote	ACEITA	migracao_plano_lote	SGO	principal	F7	Migração ou adaptação em lote de beneficiários para novo plano ou contrato: destino, tabela de preço, processamento e responsável
+migracao_plano_lote_item	ACEITA	migracao_plano_lote_item	SGO	item	F7	Beneficiário titular ou dependente incluído na migração em lote, com indicação de migrar e situação
+modelo_contrato_lancamento	ACEITA	modelo_contrato_plano_lancamento	SGO	item	F7	Lançamentos adicionais do modelo de contrato (taxas e receitas recorrentes) com vigência e valor por faixa etária
+modelo_contrato_plano	ACEITA	modelo_contrato_plano	SGO	configuracao	F7	Modelo pronto de contrato de plano com regras padrão de cobrança, vigência e reajuste, copiado na criação de contratos
+modelo_contrato_plano_item	ACEITA	modelo_contrato_plano_item	SGO	item	F7	Planos do modelo de contrato com tabela de preço e grupo de faixa etária a aplicar
+modelo_criterio	ACEITA	modelo_criterio	SGO	configuracao	F7	Conjunto nomeado de critérios (plano, prestador, procedimento, atendimento) que delimita onde uma regra de isenção, valoração ou pagamento se aplica
+modelo_criterio_item	ACEITA	modelo_criterio_item	SGO	item	F7	Valor do critério por dimensão: plano, contrato, prestador, endereço, procedimento, programa, tipo de atendimento ou acomodação
+modelo_criterio_rede	FUNDIR	modelo_criterio	SGO	configuracao	F7	Conjunto nomeado de critérios (plano, prestador, procedimento, atendimento) que delimita onde uma regra de isenção, valoração ou pagamento se aplica
+modelo_criterio_rede_item	FUNDIR	modelo_criterio_item	SGO	item	F7	Valor do critério por dimensão: plano, contrato, prestador, endereço, procedimento, programa, tipo de atendimento ou acomodação
+modelo_desconto_folha	ACEITA	modelo_desconto_folha	SGO	configuracao	F7	Modelo de desconto em folha por órgão ou agrupamento: leiaute, receitas incluídas e geração automática por período
+modelo_desconto_folha_lancamento	ACEITA	modelo_desconto_folha_lancamento	SGO	vinculo	F7	Tipos de lançamento da fatura enviados em cada modelo de desconto em folha
+modelo_horario_atendimento	ACEITA	modelo_horario_atendimento	SGO	configuracao	F7	Modelo de horário de atendimento reutilizável pela operadora e pela rede, com situação
+modelo_integralizacao_capital	ACEITA	modelo_integralizacao_capital	SGO	configuracao	F8	Plano de integralização da cota de capital do cooperado: valor total, parcela mensal, número de meses e suspensão
+modelo_pedido_autorizacao	ACEITA	modelo_pedido_autorizacao	SGO	configuracao	F8	Modelo de pedido de autorização frequente, salvo pela operadora ou pelo prestador no portal, para preencher a solicitação mais rápido
+modelo_pedido_autorizacao_item	ACEITA	modelo_pedido_autorizacao_item	SGO	item	F8	Itens do modelo de pedido, inclusive regiao e face de dente no odontologico
+modelo_pedido_portal_prestador	FUNDIR	modelo_pedido_autorizacao	SGO	configuracao	F8	Modelo de pedido de autorização frequente, salvo pela operadora ou pelo prestador no portal, para preencher a solicitação mais rápido
+modelo_protocolo_atendimento	ACEITA	modelo_protocolo_atendimento	SGO	configuracao	F7	Combinação pronta de tipo, serviço, motivo e gravidade para abrir protocolo de atendimento a beneficiário, prestador ou empresa
+motivo_ajuste_fatura	ACEITA	motivo_ajuste_fatura	SGO	dominio	F7	Motivos de acréscimo, desconto e ajuste manual aplicados na fatura do plano
+motivo_cancelamento_guia_plano	ACEITA	motivo_cancelamento_guia_plano	SGO	dominio	F7	Motivos de cancelamento de guia na operadora, por tipo e visibilidade no portal
+motivo_cortesia_autorizacao	ACEITA	motivo_cortesia_autorizacao	SGO	dominio	F7	Motivos ou destinos de autorização concedida por cortesia, fora da cobertura contratada
+motivo_decisao_autorizacao	ACEITA	motivo_decisao_autorizacao	SGO	dominio	F7	Motivos registrados ao autorizar, negar ou liberar em contingência um pedido de autorização
+norma_regulatoria	ACEITA	norma_regulatoria	SGO	dominio	F7	Normas da ANS que exigem adequação de contrato ou produto (adaptação, migração, reajuste), com número e vigência
+nota_fiscal_prestador_rede	ACEITA	nota_fiscal_prestador_rede	SGO	principal	F7	Nota fiscal apresentada pelo prestador para o lote de contas: número, série, emissão e valor
+nota_prestador_lote_conta	ACEITA	nota_fiscal_prestador_rede_lote	SGO	vinculo	F7	Nota fiscal apresentada pelo prestador e os lotes ou protocolos de contas que ela cobre, com valor por lote
+observacao_beneficiario	ACEITA	beneficiario_plano_observacao	SGO	item	F7	Anotações registradas sobre o beneficiário, com tipo, autor e data
+ocorrencia_pedido_autorizacao	ACEITA	ocorrencia_pedido_autorizacao	SGO	item	F7	Ocorrências classificadas registradas no pedido de autorização, com autor e observação
+ocorrencia_protocolo_beneficiario	ACEITA	ocorrencia_protocolo_beneficiario	SGO	item	F7	Denúncia ou reclamação registrada no protocolo: informante, prestador ou contratante citado, gravidade e encerramento
+operadora_congenere	ACEITA	operadora_congenere	SGO	principal	F8	Operadora parceira em acordo de atendimento recíproco: registro, dados cadastrais, hierarquia e câmara de acerto
+operadora_congenere_municipio	ACEITA	operadora_congenere_municipio	SGO	vinculo	F8	Municípios em que cada operadora parceira atua, usados para direcionar o atendimento recíproco
+participacao_societaria_operadora	ACEITA	participacao_societaria_operadora	SGO	item	F7	Empresas controladas, coligadas ou dependentes da operadora, com CNPJ, ações, percentual e tipo de vínculo
+pedido_autorizacao_oculos	ACEITA	pedido_autorizacao_oculos	SGO	item	F8	Grau das lentes por olho e justificativa no pedido de oculos do beneficiario
+pedido_autorizacao_plano_anexo	ACEITA	pedido_autorizacao_plano_anexo	SGO	item	F7	Anexo clínico do pedido de autorização (quimioterapia, radioterapia, órtese e prótese, situação odontológica inicial) com dados clínicos e resposta
+pedido_autorizacao_plano_diagnostico	ACEITA	pedido_autorizacao_plano_diagnostico	SGO	item	F7	Diagnósticos informados no pedido de autorização e em seus anexos, com tipo e ordem
+pedido_reembolso_glosa	ACEITA	pedido_reembolso_glosa	SGO	item	F7	Glosas por item do pedido de reembolso, com motivo padronizado, valor e responsável
+pedido_reembolso_oculos	ACEITA	pedido_reembolso_oculos	SGO	item	F8	Dados da receita oftalmológica no reembolso de óculos ou lentes: graus por olho, distância e justificativa
+pendencia_reajuste_contrato	ACEITA	pendencia_reajuste_contrato	SGO	item	F7	Contratos que o processamento de reajuste não reajustou, com motivo, responsável e autorização para seguir
+pensao_prestador_rede	ACEITA	pensao_prestador_rede	SGO	configuracao	F7	Desconto de pensão judicial no pagamento do prestador: percentual ou valor, processo, favorecido e vigência
+percentual_funcao_equipe_rede	ACEITA	percentual_funcao_equipe_rede	SGO	configuracao	F7	Percentual de remuneração por função na equipe (cirurgião, auxiliar, anestesista) por prestador, com vigência
+plano_intercambio	ACEITA	plano_intercambio	SGO	configuracao	F8	Plano de operadora parceira reconhecido no atendimento recíproco: carteira, categoria, acomodação, cobertura e regras locais
+procedimento_unidade_conversao	ACEITA	procedimento_unidade_conversao	SGO	configuracao	F7	Unidades em que o procedimento pode ser cobrado, com fator de conversão e indicação da unidade padrão
+protocolo_beneficiario_servico	ACEITA	protocolo_beneficiario_servico	SGO	vinculo	F7	Tipos de serviço tratados em cada protocolo de atendimento
+provisao_tecnica_base_evento	ACEITA	provisao_tecnica_base_evento	SGO	item	F7	Eventos com data de ocorrência, aviso e valor usados como base no cálculo das provisões técnicas
+reciprocidade_beneficiario	ACEITA	reciprocidade_beneficiario	SGO	principal	F8	Beneficiario atendido por outra operadora em acordo de reciprocidade: matricula externa, adesao, exclusao e validade do cartao
+reciprocidade_movimento	ACEITA	reciprocidade_movimento	SGO	historico	F8	Pedidos de inclusao ou exclusao do beneficiario na operadora parceira, com motivo, data e envio do arquivo
+regra_ato_cooperativo	ACEITA	regra_ato_cooperativo	SGO	configuracao	F8	Grupos de contas que separam ato cooperativo principal, auxiliar e não cooperativo, com vigência
+regra_cobranca_intercambio	ACEITA	regra_cobranca_intercambio	SGO	configuracao	F8	Tipo de lancamento de cobranca usado por classe de despesa e tipo de credenciamento na fatura de intercambio
+regra_concomitancia	ACEITA	regra_concomitancia	SGO	configuracao	F7	Regra de procedimentos realizados no mesmo ato com reducao de valor do procedimento secundario
+regra_concomitancia_excecao	ACEITA	regra_concomitancia_excecao	SGO	item	F7	Percentuais de honorario, filme e custo operacional por procedimento e tipo de atendimento, com vigencia
+regra_concomitancia_item	ACEITA	regra_concomitancia_item	SGO	item	F7	Procedimentos abrangidos pela regra de concomitancia, com ativacao e inativacao
+regra_distribuicao_analise	ACEITA	regra_distribuicao_analise	SGO	configuracao	F8	Distribuição automática de contratos ou pedidos entre analistas, com quantidade, prioridade e vigência
+regra_documento_solicitacao_portal	ACEITA	regra_documento_solicitacao_portal	SGO	configuracao	F8	Documentos obrigatórios no pedido pelo portal conforme tipo de beneficiário, parentesco e idade
+regra_fator_custeio	ACEITA	regra_fator_custeio	SGO	configuracao	F8	Grupos e contas contábeis que formam o rateio de custo da operadora, com vigência
+regra_favorecido_pagamento_rede	ACEITA	regra_favorecido_pagamento_rede	SGO	configuracao	F7	Define a quem se paga o procedimento executado por um prestador: ele mesmo ou o prestador principal, com vigência
+regra_livro_auxiliar_ans	ACEITA	regra_livro_auxiliar_ans	SGO	configuracao	F7	Montagem dos registros auxiliares exigidos pela ANS: contas, filtros, processos e relatórios por tipo de livro
+regra_numeracao_carteira	ACEITA	regra_numeracao_carteira	SGO	configuracao	F7	Modelo de formação e formatação do número do cartão do beneficiário por operadora, com quantidade de dígitos
+regra_numeracao_carteira_item	ACEITA	regra_numeracao_carteira_item	SGO	item	F7	Partes do numero do cartao em ordem: tamanho, origem do valor, digito verificador e separador
+regra_preco_previdencia	ACEITA	regra_preco_previdencia	SGO	configuracao	F8	Tabela de preço padrão por plano para contribuintes da entidade de previdência, com vigência
+regra_preco_previdencia_condicao	ACEITA	regra_preco_previdencia_condicao	SGO	item	F8	Condições (titular contribuinte, plano, parentesco) e a tabela de preço aplicada quando atendidas
+regra_reajuste_sinistralidade	ACEITA	regra_reajuste_sinistralidade	SGO	configuracao	F7	Regra de reajuste coletivo por faixa de valor apurado (sinistralidade ou mensalidade): grupo, período de apuração e vigência
+regra_reajuste_sinistralidade_faixa	ACEITA	regra_reajuste_sinistralidade_faixa	SGO	item	F7	Faixa de valor inicial e final apurado com o percentual de reajuste aplicado em cada uma
+regra_subsidio_coparticipacao	ACEITA	regra_subsidio_coparticipacao	SGO	configuracao	F8	Modelo de subsídio da coparticipação pago pela contratante, com condições por plano
+regra_subsidio_coparticipacao_item	ACEITA	regra_subsidio_coparticipacao_item	SGO	item	F8	Grupo de procedimento, programa ou concomitância subsidiados, com percentual, valor, teto e vigência
+regra_titulo_receita_contrato	ACEITA	regra_titulo_receita_contrato	SGO	configuracao	F7	Tipos de receita do contrato que geram título a pagar ao fornecedor do serviço agregado
+regra_valor_motivo_glosa	ACEITA	regra_valor_motivo_glosa	SGO	configuracao	F7	Penalidade ou valor aplicado ao prestador por motivo de glosa: percentual, tipo de lançamento e vigência
+repasse_beneficiario_intercambio	ACEITA	repasse_beneficiario_intercambio	SGO	principal	F8	Transferência de contrato ou beneficiários entre operadora de origem e de destino, em repasse ou compartilhamento de risco
+repasse_beneficiario_intercambio_item	ACEITA	repasse_beneficiario_intercambio_item	SGO	item	F8	Beneficiários e produtos transferidos, com carteira de origem, mensalidade, período e cancelamento
+repasse_beneficiario_operadora	FUNDIR	repasse_beneficiario_intercambio	SGO	principal	F8	Transferência de contrato ou beneficiários entre operadora de origem e de destino, em repasse ou compartilhamento de risco
+repasse_servico_adicional	ACEITA	repasse_servico_adicional	SGO	configuracao	F8	Regra de repasse ao fornecedor do serviço adicional por parcela, em valor ou percentual, com vigência
+repasse_servico_adicional_item	ACEITA	repasse_servico_adicional_item	SGO	item	F8	Valor repassado ao fornecedor do serviço adicional por beneficiário e mensalidade
+restituicao_desconto_folha	ACEITA	restituicao_desconto_folha	SGO	principal	F7	Restituição ao servidor de valor descontado em folha indevidamente, por órgão, competência e matrícula
+restituicao_desconto_folha_item	ACEITA	restituicao_desconto_folha_item	SGO	item	F7	Beneficiários e valores que compõem cada restituição de desconto em folha
+restricao_cobertura_plano_item	ACEITA	restricao_cobertura_plano_item	SGO	item	F7	Itens da restrição: procedimento ou grupo, ação, especialidade, quantidade, período e exceções
+situacao_dentaria_beneficiario	ACEITA	situacao_dentaria_beneficiario	SGO	historico	F7	Dentes extraídos ou tratados do beneficiário, com procedimento, guia de origem e data, para validar a cobertura odontológica
+suspensao_operadora_congenere	ACEITA	suspensao_operadora_congenere	SGO	historico	F8	Períodos de suspensão do atendimento a beneficiários de uma operadora parceira, com caráter e observação
+taxa_administrativa_contrato	ACEITA	taxa_administrativa_contrato	SGO	configuracao	F7	Taxa de administração cobrada no contrato de custo operacional: classificação, abrangência, percentual ou valor e vigência
+taxa_administrativa_contrato_procedimento	ACEITA	taxa_administrativa_contrato_procedimento	SGO	item	F7	Taxa de administração específica por procedimento, grupo ou tipo de guia no contrato de custo operacional
+taxa_prestador_rede	ACEITA	taxa_prestador_rede	SGO	configuracao	F7	Taxa administrativa ou de intercâmbio aplicada à produção do prestador, em percentual e com vigência
+tipo_ativo_garantidor	ACEITA	tipo_ativo_garantidor	SGO	dominio	F7	Tipos de imóvel e de aplicação financeira usados na classificação dos ativos garantidores informados à ANS
+tipo_compromisso_operadora	ACEITA	tipo_compromisso_operadora	SGO	dominio	F8	Tipos de compromisso da agenda da operadora, com público-alvo e cor de exibição
+tipo_etiqueta_autorizacao	ACEITA	tipo_etiqueta_autorizacao	SGO	configuracao	F8	Tipos de etiqueta de autorização com validade e tipos de prestador em que a etiqueta é exigida
+tipo_lancamento_fatura_vigencia	ACEITA	tipo_lancamento_fatura_vigencia	SGO	historico	F7	Valor ou percentual padrao de cada tipo de lancamento da fatura por vigencia
+tipo_observacao_operadora	ACEITA	tipo_observacao_operadora	SGO	dominio	F7	Tipos de observação registrável em contrato, beneficiário e prestador, por estabelecimento
+tipo_regulacao_cobertura	ACEITA	tipo_regulacao_cobertura	SGO	dominio	F7	Tipos de regra regulatória do procedimento (diretriz, protocolo, cobertura obrigatória) mostrados na autorização
+token_atendimento_beneficiario	ACEITA	token_atendimento_beneficiario	SGO	principal	F7	Código de uso único gerado pelo beneficiário para confirmar presença no prestador, com validade e uso
+transferencia_capital_cooperado	ACEITA	transferencia_capital_cooperado	SGO	principal	F8	Transferência de cotas de capital entre prestadores cooperados, com valores, datas e aprovação
+verba_desconto_folha	ACEITA	verba_desconto_folha	SGO	configuracao	F7	Rubricas de desconto em folha por órgão contratante e tipo de beneficiário, com código no arquivo e forma de cálculo
+vinculo_funcional_beneficiario	ACEITA	vinculo_funcional_beneficiario	SGO	vinculo	F7	Matrícula funcional do beneficiário no órgão ou secretaria contratante, com admissão, desligamento e base para desconto em folha

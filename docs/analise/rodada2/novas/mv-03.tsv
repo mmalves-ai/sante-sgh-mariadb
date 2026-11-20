@@ -1,0 +1,10 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+condicao_pagamento	SUP	dominio	F3	Condições de pagamento aceitas em compras e contas a pagar (à vista, 30/60/90 dias), com parcelas, prazo e dias fora do mês	DBAMV CONDICOES_PAGAMENTO, CNDC_PGMNT_BIONEXO, CNDC_PGMNT_MERC_ELETRONICO
+obra_construcao_civil	FIN	principal	F7	Obra de construção civil inscrita no cadastro nacional da Receita, com matrícula, vigência e indicador, usada em retenções e escrituração	DBAMV CNO
+obra_construcao_civil_vinculo	FIN	vinculo	F7	Liga a obra aos estabelecimentos do grupo e aos fornecedores que nela prestam serviço	DBAMV CNO_FORNECEDOR, CNO_MULTI_EMPRESA
+declaracao_importacao	FIN	principal	F8	Declaração de importação de insumo ou equipamento, com número, data, desembaraço, código de importação e títulos a pagar ligados	DBAMV CON_PAG_DECLARACAO_IMPORTACAO, CODIGO_IMPORTACAO_DI
+consumo_utilidade	HOT	principal	F8	Leitura e conta mensal de água, energia, gás e esgoto por unidade consumidora, com período, quantidade e valores	DBAMV CONSUMO
+atalho_contador_celula	SADT	configuracao	F8	Tecla de atalho de cada tipo de célula no contador diferencial do hemograma, por versão do exame, com contagem absoluta ou relativa	DBAMV CONTADOR_CELULA, COMENTARIO_CAMPO
+custo_fixo_producao	SUP	dominio	F7	Custos fixos (energia, mão de obra, embalagem) somados ao custo do lote produzido no próprio hospital	DBAMV CUSTO_FIXO_PRODUCAO
+lote_produzido_custo	SUP	item	F7	Custo fixo apropriado a cada lote produzido, com quantidade, valor unitário e total	DBAMV CUSTO_FIXO_PRODUCAO_ITENT_PRO
+classificacao_risco_area	CAD	dominio	F8	Cor de risco atribuída a uma área do território atendido, usada para classificar o risco de adoecer das famílias	DBAMV COR_AREA_FAMILIA

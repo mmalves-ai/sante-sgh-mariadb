@@ -1,0 +1,3 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+demanda_nip_andamento	SGO	item	F7	Andamentos da reclamação recebida da agência: prazo, resposta enviada, reparação, anexos e classificação final	exigencia legal (intermediacao preliminar da ANS); demanda_nip sem linha do tempo
+acao_judicial_beneficiario_andamento	SGO	item	F7	Andamentos da ação judicial do beneficiário: intimação, prazo de cumprimento, providência tomada e responsável	cumprimento de decisao judicial com prazo; acao_judicial_beneficiario sem andamentos

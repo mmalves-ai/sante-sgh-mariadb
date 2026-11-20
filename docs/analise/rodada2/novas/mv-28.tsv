@@ -1,0 +1,23 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+modelo_criterio_rede	SGO	configuracao	F7	Conjunto reutilizável de critérios que delimita onde uma regra de valoração ou pagamento da rede se aplica	DBAPS ITMODELO_CRITERIO_*, ITREGRA_CRITERIO
+modelo_criterio_rede_item	SGO	item	F7	Elemento do conjunto de critérios: prestador, endereço, procedimento, programa, tipo de atendimento ou tipo de plano	DBAPS ITMODELO_CRITERIO_PREST_ENDER, _PREST_XML, _PROCEDIMENTO, _PROG_ATEND, _TIPO_ATEND, _TIP_PLANO
+nota_prestador_lote_conta	SGO	vinculo	F7	Nota fiscal apresentada pelo prestador e os lotes ou protocolos de contas que ela cobre, com valor por lote	DBAPS ITNOTA_FISCAL_PROTOCOLO
+percentual_funcao_equipe_rede	SGO	configuracao	F7	Percentual de remuneração por função na equipe (cirurgião, auxiliar, anestesista) por prestador, com vigência	DBAPS ITPRESTADOR_EQUIPE_MEDICA
+funcao_equipe_procedimento_rede	SGO	configuracao	F7	Funções de equipe aceitas na cobrança de cada procedimento por prestador	DBAPS ITPROCED_PREST_EQUIPE_MEDICA
+pedido_reembolso_glosa	SGO	item	F7	Glosas por item do pedido de reembolso, com motivo padronizado, valor e responsável	DBAPS ITREEMBOLSO_GLOSA
+pedido_reembolso_oculos	SGO	item	F8	Dados da receita oftalmológica no reembolso de óculos ou lentes: graus por olho, distância e justificativa	DBAPS ITREEMBOLSO_OCULOS
+repasse_servico_adicional	SGO	configuracao	F8	Regra de repasse ao fornecedor do serviço adicional por parcela, em valor ou percentual, com vigência	DBAPS ITREGRA_REPASSE_SERVICO
+repasse_servico_adicional_item	SGO	item	F8	Valor repassado ao fornecedor do serviço adicional por beneficiário e mensalidade	DBAPS ITREPASSE_ADITIVO
+aliquota_tributo_excecao	FIN	configuracao	F8	Alíquota diferenciada de tributo sobre consumo por procedimento, receita ou setor, com vigência	DBAPS IVA_EXCECAO_PROCEDIMENTO, IVA_EXCECAO_RECEITA
+provisao_tecnica_base_evento	SGO	item	F7	Eventos com data de ocorrência, aviso e valor usados como base no cálculo das provisões técnicas	DBAPS LAYOUT_PEONA
+mensagem_cartao_beneficiario	SGO	configuracao	F8	Texto impresso no cartão do beneficiário conforme o serviço ou lançamento contratado, com vigência	DBAPS LCTO_MENSALIDADE_MSG_CARTEIRA
+incidencia_lancamento_fatura	SGO	configuracao	F7	Lançamentos da fatura sobre os quais um desconto ou acréscimo incide, em geral ou por contrato	DBAPS LCTO_MEN_INCIDENCIA, LCTO_MEN_INCIDENCIA_CONTRATO
+livro_auxiliar_operadora	SGO	principal	F7	Livro auxiliar contábil exigido da operadora por tipo (contraprestações, eventos a liquidar) e competência	DBAPS LIVRO_RECEITAS_EMITIDAS, LIVRO_RECEITAS_RECEBIDAS, LIVRO_SALDO_*
+livro_auxiliar_operadora_item	SGO	item	F7	Linha do livro auxiliar: conta contábil, contrato ou prestador, documento, datas e valores	DBAPS LIVRO_RECEITAS_EMITIDAS, LIVRO_RECEITAS_RECEBIDAS, LIVRO_SALDO_A_RECEBER, LIVRO_SALDO_EVENT_LIQUIDAR, LIVRO_SALDO_FAT_ANTECIPADO
+lote_faturamento_plano_critica	SGO	item	F3	Erro ou aviso por contrato ou fatura numa geração de faturas, com tipo e resolução	DBAPS LOG_GER_MENS_ERRO, LOG_GER_MENS_AUDITORIA, LOG_GER_LOTE_ERRO
+lote_faturamento_plano_escopo	SGO	item	F3	Contratos, beneficiários, contas e reembolsos selecionados por filtro numa geração de faturas	DBAPS LOG_GER_MENS_BENEF, LOG_GER_MENS_CONTRATO, LOG_GER_MENS_CONTAS_MEDICAS, LOG_GER_MENS_REEMBOLSO
+transferencia_capital_cooperado	SGO	principal	F8	Transferência de cotas de capital entre prestadores cooperados, com valores, datas e aprovação	DBAPS LOG_TRANSF_CAPITAL_SOCIAL
+intercambio_operadora_lote	SGO	principal	F8	Lote de atendimentos em intercâmbio com outra operadora: parceira, período, tipo de processo e situação	DBAPS LOTE_RECIPROCIDADE
+intercambio_autorizacao	SGO	principal	F8	Autorização trocada com operadora parceira no intercâmbio, com mensagens, justificativas e resposta	DBAPS JUSTIFICATIVA_AUTORIZACAO_RCPR, MENSAGEM_AUTORIZACAO_RECIPR
+material_divulgacao	SGO	principal	F8	Material de divulgação usado nas visitas comerciais e à rede, com descrição e estoque	DBAPS MATERIAL_MARKETING
+material_divulgacao_estoque	SGO	historico	F8	Quantidade em estoque do material de divulgação por vigência e estabelecimento	DBAPS MATERIAL_ESTOQUE

@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	GERA_ARQMAG_DIPRECA	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_ENSA	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPE	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPSA	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_IPSM	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_PLANSERV	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_TJDFT	MECANISMO	integracao	N	INTG		controle de remessa de arquivo de convênio no motor de integração
+DBAMV	GERA_ARQMAG_UNI_LONDRINA	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_ARQMAG_UNI_POA	MECANISMO	integracao	N	INTG		leiaute de arquivo de convênio gerado pelo motor de integração
+DBAMV	GERA_RETORNO_IPE	MECANISMO	integracao	N	INTG		retorno de arquivo de convênio lido pelo motor de integração
+DBAMV	GERMES	TABELA	microrganismo	N	SADT	F7	
+DBAMV	GERMES_CULTURA	TABELA	isolado_microbiano	N	SADT	F7	
+DBAMV	GERMES_CULT_MANUAL	TABELA	isolado_microbiano	N	SADT	F7	cultura manual entra no mesmo isolado
+DBAMV	GERMES_REG_INF	TABELA	caso_infeccao_microrganismo	N	QUA	F7	
+DBAMV	GERME_ANTIMICROBIANO	TABELA	painel_antibiograma;painel_antibiograma_item;perfil_multirresistencia	N	SADT	F7	
+DBAMV	GERME_REGULACAO	TABELA	valor_codigo_regulacao;quadro_clinico_regulacao	N	INTG	F3	códigos de germe exigidos pela central de regulação
+DBAMV	GESTAO_AMBULANCIA_CONFIG	TABELA	regra_cobranca_ambulancia	N	FAT	F8	
+DBAMV	GF_ALERTAS	TABELA	alerta_fluxo_unidade;regra_alerta_destinatario	N	REL	F8	
+DBAMV	GF_DADOS	MECANISMO	datamart	N	REL		consolidação do quadro de fluxo, gerada do modelo
+DBAMV	GF_DADOS_INTERNACAO	MECANISMO	datamart	N	REL		cópia de dados de atendimento para o quadro de fluxo
+DBAMV	GF_FAIXA_ETARIA	TABELA	faixa_etaria_referencia;apuracao_indicador_estrato	S	CAD	F7	
+DBAMV	GF_INDICADORES	TABELA	indicador;meta_tempo_etapa	N	REL	F3	
+DBAMV	GF_LOG_EXPORTACAO_DADOS	MECANISMO	integracao	N	INTG		log de exportação de dados
+DBAMV	GF_META	TABELA	meta_indicador	N	REL	F3	
+DBAMV	GF_PROTOCOLO_MULTI_EMPRESA	TABELA	protocolo_classificacao_estabelecimento	N	QUA	F3	
+DBAMV	GF_USUARIO_ALERTA	TABELA	regra_alerta_destinatario	N	ADM	F7	contato vem do usuário
+DBAMV	GLOBAL_PL_CONTAS	TABELA	regra_contabil_receita	N	FAT	F3	
+DBAMV	GLOSA20_ITEM	TABELA	glosa_item	N	FAT	F3	
+DBAMV	GLOSA20_MVTO	TABELA	glosa	N	FAT	F3	
+DBAMV	GLOSA20_VALOR	TABELA	glosa_item;glosa_rateio	N	FAT	F3	
+DBAMV	GLOSAS	TABELA	glosa;glosa_item	N	FAT	F3	
+DBAMV	GLOSAS_SIA_SUS	TABELA	rejeicao_sus	N	SUS	F7	
+DBAMV	GLOSAS_SITUACAO	TABELA	glosa	N	FAT	F3	situação vira campo da glosa
+DBAMV	GLOSAS_SUS	TABELA	rejeicao_sus;reapresentacao_sus	N	SUS	F7	
+DBAMV	GLOSAS_TISS	TABELA	motivo_glosa	N	FAT	F3	carga da terminologia TISS
+DBAMV	GLOSA_LEGADO	NAO		N	FAT		tecnico do fornecedor sem equivalente: controle de script de migração
+DBAMV	GLOSA_RETRO	NAO		N	FAT		duplicado de glosa: mesma estrutura, carga retroativa
+DBAMV	GRAFICO_EVO_INFEC	NAO		N	QUA		tecnico do fornecedor sem equivalente: tabela temporária de gráfico por sessão
+DBAMV	GRAFICO_PADRAO	NAO		N	REL		tecnico do fornecedor sem equivalente: tabela temporária de gráfico
+DBAMV	GRAFICO_PADRAO_CRESCIMENTO	NAO		N	PEP		tecnico do fornecedor sem equivalente: temporária de gráfico; curva vem de curva_referencia
+DBAMV	GRAU_DA_CONTA	TABELA	plano_contas	N	FIN	F7	níveis da máscara do plano
+DBAMV	GRAU_DA_CONTA_GERENCIAL	TABELA	conta_gerencial_consolidada	N	FIN	F8	níveis do plano gerencial
+DBAMV	GRAU_HISTOPATOLOGICO	TABELA	grau_histologico	N	SADT	F7	
+DBAMV	GRAU_INCAPACIDADE_SIDRA	NAO		N	PEP		sem valor de negocio: lista regulatória de outro país
+DBAMV	GRAU_INS	TABELA	nivel_escolaridade	N	CAD	F3	
+DBAMV	GRAVA_EVENTO_ATUALIZADO_FFAS	NAO		N	SUS		copia/backup
+DBAMV	GRAVIDADE_PACIENTE_SIDRA	NAO		N	PEP		sem valor de negocio: lista regulatória de outro país
+DBAMV	GRP_ORI_ATE	TABELA	origem_entrada_atendimento	N	REC	F3	agrupamento vira atributo da origem
+DBAMV	GRUPAMENTO_ESTADIO	TABELA	regra_grupo_estadio	N	PEP	F8	
+DBAMV	GRUPO_AGENDA	TABELA	turma_atividade	N	AGE	F8	
+DBAMV	GRUPO_AGENDA_PAC	TABELA	turma_participante	N	AGE	F8	
+DBAMV	GRUPO_ALIMENTAR	TABELA	grupo_alimento	S	HOT	F8	
+DBAMV	GRUPO_ASSISTENCIAL	TABELA	grupo_atendimento	N	REC	F3	
+DBAMV	GRUPO_BARRA	TABELA	padrao_leitura_codigo	N	SUP	F3	
+DBAMV	GRUPO_CHECAGEM	TABELA	modelo_checklist_cirurgia	N	CC	F7	grupos de checagem usados no aviso de cirurgia
+DBAMV	GRUPO_CID	TABELA	grupo_cid	N	INTG	F7	catalogo_publico cid10
+DBAMV	GRUPO_CID_AUXILIAR	TABELA	grupo_cid	N	INTG	F7	catalogo_publico cid10
+DBAMV	GRUPO_CIRURGIA	TABELA	grupo_procedimento_cirurgico	N	CC	F3	
+DBAMV	GRUPO_CONTA	TABELA	conta_contabil	N	FIN	F7	tipo da conta vira natureza da conta
+DBAMV	GRUPO_CONTRATO_SUS	TABELA	contrato_gestor_sus	N	SUS	F7	
+DBAMV	GRUPO_DE_CUSTO	TABELA	classificacao_centro_custo	N	FIN	F3	
+DBAMV	GRUPO_EXA_LAB_SET_EXA	TABELA	exame_setor_executante	N	SADT	F3	
+DBAMV	GRUPO_FATURAMENTO_SUS	TABELA	grupo_faturamento;grupo_sigtap	N	FAT	F3	
+DBAMV	GRUPO_HABILITACOES_SUS	TABELA	habilitacao_sigtap	N	SUS	F3	
+DBAMV	GRUPO_ITEM_CHECAGEM	TABELA	item_checklist_cirurgia	N	CC	F7	
+DBAMV	GRUPO_MENU_ORCAMENTO	MECANISMO	framework	N	SIS		permissão de menu
+DBAMV	GRUPO_NEGOCIO	TABELA	agrupamento_unidade_negocio	S	FIN	F8	
+DBAMV	GRUPO_ORCAMENTARIO	TABELA	agrupamento_orcamentario	S	FIN	F7	
+DBAMV	GRUPO_PATOLOGIA_GES	NAO		N	PEP		sem valor de negocio: garantia regulatória de outro país
+DBAMV	GRUPO_PERGUNTA	TABELA	modelo_secao	N	PEP	F3	
+DBAMV	GRUPO_PERGUNTAS	TABELA	modelo_secao	N	PEP	F3	
+DBAMV	GRUPO_PERGUNTA_DOC	TABELA	modelo_campo;modelo_campo_opcao	N	PEP	F3	
+DBAMV	GRUPO_PROCEDIMENTOS	TABELA	grupo_sigtap	N	SUS	F3	
+DBAMV	GRUPO_PROCEDIMENTO_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT		
+DBAMV	GRUPO_PROCESSO	TABELA	perfil_acesso	N	ADM	F3	
+DBAMV	GRUPO_REPASSE	TABELA	grupo_repasse;grupo_repasse_profissional	N	FAT	F3	
+DBAMV	GRUPO_SAUDE_AUDITIVA	TABELA	dominio_sus	N	SUS	F3	justificativa do laudo de saúde auditiva
+DBAMV	GRUPO_SUSPENSAO	TABELA	motivo_suspensao_cirurgia	N	CC	F3	agrupamento vira classificação do motivo
+DBAMV	GRUPO_UNIDADE	TABELA	grupo_unidade_medida	N	SUP	F3	
+DBAMV	GRUPO_UNIDADE_NEGOCIO	TABELA	unidade_negocio	S	FIN	F8	
+DBAMV	GRUPO_USUARIOS	TABELA	usuario_perfil	N	ADM	F3	
+DBAMV	GRUPO_USUARIO_ORCAMENTO	TABELA	perfil_acesso;responsavel_orcamento	N	ADM	F3	
+DBAMV	GRUPO_VAL_CONVENIO	TABELA	contrato_fonte_pagadora_versao	N	FAT	F3	
+DBAMV	GRUPO_VERBA_ORCAMENTARIA	TABELA	agrupamento_orcamentario	S	FIN	F7	
+DBAMV	GRU_ATE	TABELA	dominio_sus	N	SUS	F3	
+DBAMV	GRU_ATE_SSM_ALT	NAO		N	SUS		obsoleto: codificação anterior à tabela unificada
+DBAMV	GRU_ATE_TAB_SIASUS	NAO		N	SUS		obsoleto: codificação anterior à tabela unificada
+DBAMV	GRU_CID	TABELA	grupo_cid	N	INTG	F7	catalogo_publico cid10
+DBAMV	GRU_DOC	TABELA	tipo_documento_clinico	N	PEP	F3	
+DBAMV	GRU_ESQ	TABELA	tipo_item_prescricao	N	PEP	F3	
+DBAMV	GRU_FAT	TABELA	grupo_faturamento	N	FAT	F3	
+DBAMV	GRU_IT_CHE_AVI_CIR	TABELA	confirmacao_checklist_cirurgia	N	CC	F7	
+DBAMV	GRU_LAUDO	TABELA	tipo_laudo_apac	N	SUS	F7	
+DBAMV	GRU_LAUDO_PRO	TABELA	procedimento_laudo_sus	S	SUS	F7	
+DBAMV	GRU_PRO	TABELA	grupo_faturamento;subgrupo_faturamento	N	FAT	F3	
+DBAMV	GRU_PRO_HIERARQUIZADO	TABELA	grupo_faturamento	N	FAT	F3	hierarquia de grupos
+DBAMV	GRU_PRO_ITEM_RES	TABELA	conta_receita_custeio	N	FIN	F3	
+DBAMV	GRU_PRO_SUS	TABELA	grupo_sigtap	N	SUS	F3	
+DBAMV	GRU_RES	TABELA	linha_modelo_demonstracao	N	FIN	F7	grupos do demonstrativo de resultado
+DBAMV	GRU_SETOR_REP_PLANTAO	TABELA	grupo_setor_plantao	N	FAT	F8	
+DBAMV	GRU_SIPAC	NAO		N	SUS		obsoleto: sistema público substituído
+DBAMV	GRU_SSM	NAO		N	SUS		obsoleto: codificação anterior à tabela unificada
+DBAMV	GRU_TRA	TABELA	classe_terapeutica	N	SUP	F7	
+DBAMV	GUIA	TABELA	guia_fonte_pagadora	N	FAT	F3	
+DBAMV	GUIAS_LOG_BLOCO	MECANISMO	historico_entidade:guia_fonte_pagadora	N	FAT	F3	
+DBAMV	GUIA_ATENDIMENTO_NORMA24	NAO		N	INTG		sem valor de negocio: obrigação regulatória de outro país
+DBAMV	GUIA_ATENDIME_OBITO_NORMA24	NAO		N	INTG		sem valor de negocio: obrigação regulatória de outro país
+DBAMV	GUIA_ATENDIME_PROC_NORMA24	NAO		N	INTG		sem valor de negocio: obrigação regulatória de outro país
+DBAMV	GUIA_ATENDIME_RN_NORMA24	NAO		N	INTG		sem valor de negocio: obrigação regulatória de outro país
+DBAMV	GUIA_NASCIMENTO_NORMA24	NAO		N	INTG		sem valor de negocio: obrigação regulatória de outro país
+DBAMV	HABILIDADE	TABELA	habilidade_profissional	S	CAD	F8	
+DBAMV	HABILIDADE_PRESTADOR	TABELA	profissional_habilidade	S	CAD	F8	
+DBAMV	HABILITACOES_SUS	TABELA	habilitacao_sigtap	N	SUS	F3	
+DBAMV	HAB_ESPEC	TABELA	especialidade_classe_insumo	S	SUP	F8	
+DBAMV	HISTORICO_AGENDA_ONCOLOGICA	TABELA	geracao_grade	N	AGE	F3	
+DBAMV	HISTORICO_ANALISE_CULTURA	MECANISMO	historico_entidade:resultado_cultura	N	SADT	F7	
+DBAMV	HISTORICO_ASSOCIACAO_PROCED	TABELA	compatibilidade_sigtap	N	SUS	F3	
+DBAMV	HISTORICO_CUSTO	TABELA	custo_unitario_centro	N	FIN	F7	
+DBAMV	HISTORICO_DILIGENCIA_DIAGN	TABELA	pedido_compra_acompanhamento	N	SUP	F7	
+DBAMV	HISTORICO_GUIA	TABELA	guia_historico	N	FAT	F3	
+DBAMV	HISTORICO_ISO_AVALIACAO	MECANISMO	historico_entidade:avaliacao_fornecedor	N	SUP	F3	
+DBAMV	HISTORICO_IT_KIT_SUSPENSO_CME	TABELA	pacote_esteril_conteudo	N	CC	F7	
+DBAMV	HISTORICO_PADRAO	TABELA	historico_padrao	N	FIN	F7	
+DBAMV	HISTORICO_PAGAMENTO	TABELA	recibo	N	FIN	F3	
+DBAMV	HISTORICO_PRESTADOR_REF_PAC	TABELA	profissional_referencia_paciente	S	PEP	F8	
+DBAMV	HISTORICO_PRORROGACAO	TABELA	prorrogacao_parcela	N	FIN	F3	
+DBAMV	HISTORICO_REVERSAO_AGRUPAMENTO	MECANISMO	historico_entidade:conta_hospitalar_item	N	FAT	F3	
+DBAMV	HISTORICO_SITUACAO_NOTA_FISCAL	TABELA	evento_nota_servico	N	FIN	F3	
+DBAMV	HISTORICO_SOLICITACAO_CME	MECANISMO	historico_entidade:solicitacao_material_esteril	N	CC	F7	
+DBAMV	HISTORICO_TRANSFERENCIA_OFIC	TABELA	ordem_servico_manutencao_evento	N	HOT	F7	
+DBAMV	HISTORICO_TROCA_PRO_INV	TABELA	dispositivo_invasivo_evento	N	PEP	F3	
+DBAMV	HISTORICO_UNIFICACAO_CONTA	TABELA	conta_hospitalar_unificacao	N	FAT	F8	
+DBAMV	HIS_MED	TABELA	profissional_aviso	N	AGE	F8	
+DBAMV	HORARIO_CONTRATADO	TABELA	contrato_prestador_repasse	N	FAT	F8	
+DBAMV	HORARIO_ESPECIAL	TABELA	acrescimo_horario_especial	N	FAT	F3	
+DBAMV	HORARIO_ESPECIAL_FNRM	TABELA	valor_hora_plantao	N	FAT	F8	
+DBAMV	HORARIO_ESPECIAL_PROCED	TABELA	acrescimo_horario_procedimento	N	FAT	F3	
+DBAMV	HORARIO_GRU_REP	TABELA	regra_repasse	N	FAT	F3	faixa de horário da regra
+DBAMV	HORARIO_PAINEL_ATENDIMENTO	TABELA	sessao_quimioterapia	N	PEP	F8	
+DBAMV	HORA_COMPONT_IT_PRESCRIC_CSMD	TABELA	horario_administracao	N	PEP	F3	
+DBAMV	HOSPITAL	TABELA	estabelecimento;mantenedora	N	CAD	F3	
+DBAMV	HOSPITAL_SER_FAT	TABELA	serie_documento_fiscal	N	FIN	F3	
+DBAMV	HOSPITAL_UNIFICADO	TABELA	rede	N	CAD	F3	
+DBAMV	HOSPITAL_UNIFICADO_EMPRESA	TABELA	estabelecimento	N	CAD	F3	participação na rede
+DBAMV	HRITPRE_CONS	TABELA	horario_administracao	N	PEP	F3	
+DBAMV	HRITPRE_CONS_DUPLA_CHECAGEM	TABELA	administracao_dupla_checagem	N	PEP	F3	
+DBAMV	HRITPRE_MED	TABELA	horario_administracao	N	PEP	F3	
+DBAMV	HRITPRE_MED_PREPARO	TABELA	ordem_manipulacao	N	SUP	F7	
+DBAMV	HRITPRE_MED_PREPARO_COMP	TABELA	ordem_manipulacao_insumo;conferencia_manipulacao	N	SUP	F7	
+DBAMV	HRITPRE_MED_PRE_DOSAGEM	TABELA	ordem_manipulacao_insumo	N	SUP	F7	
+DBAMV	HRITPRE_VOL	TABELA	horario_administracao	N	PEP	F3	
+DBAMV	HRITSOLSAI_PRO	TABELA	dose_dispensada	N	SUP	F3	
+DBAMV	HRPAD_SETOR	TABELA	grade_horario_unidade	N	PEP	F3	
+DBAMV	HRTIP_FRE	TABELA	horario_padrao_medicacao	N	SUP	F3	
+DBAMV	HR_CEN_CIR	TABELA	unidade_cirurgica	N	CC	F3	horário de funcionamento
+DBAMV	HR_CPNT_IT_PRESC_CSMD_DP_CHEC	TABELA	administracao_dupla_checagem	N	PEP	F3	
+DBAMV	HR_EQUIPE_MEDICA	TABELA	equipe_profissional	N	CAD	F8	
+DBAMV	HR_SAL_CIR	TABELA	grade_sala_cirurgica	N	CC	F3	
+DBAMV	IDENTIDADE_GENERO	TABELA	identidade_de_genero	N	CAD	F3	
+DBAMV	IDENTIFICADOR_ETIQUETA	TABELA	etiqueta_identificacao	N	SUP	F3	
+DBAMV	IDENTIFICADOR_ETIQUETA_AUX	NAO		N	SUP		tecnico do fornecedor sem equivalente: sequência de numeração
+DBAMV	IDENTIFICADOR_ETIQUETA_CHECG	TABELA	administracao_lote_lido	N	PEP	F7	
+DBAMV	IDENTIFICADOR_ETIQUETA_CME	TABELA	pacote_esteril	N	CC	F7	
+DBAMV	IMG_ADM	MECANISMO	arquivo	N	REC		foto da admissão; metadado no atendimento
+DBAMV	IMG_ADM_FRENTE	MECANISMO	arquivo	N	REC		documento digitalizado da admissão
+DBAMV	IMG_ADM_VERSO	MECANISMO	arquivo	N	REC		documento digitalizado da admissão
+DBAMV	IMG_ALTA	MECANISMO	arquivo	N	INT		imagem da alta; metadado na alta
+DBAMV	IMG_ALTA_FRENTE	MECANISMO	arquivo	N	INT		documento digitalizado da alta
+DBAMV	IMG_ALTA_VERSO	MECANISMO	arquivo	N	INT		documento digitalizado da alta
+DBAMV	IMG_CX_KIT	MECANISMO	arquivo	N	CC		foto da caixa; metadado em caixa_instrumental
+DBAMV	IMG_DOC_FRENTE	MECANISMO	arquivo	N	HOT		documento do visitante; metadado na visita
+DBAMV	IMG_DOC_VERSO	MECANISMO	arquivo	N	HOT		documento do visitante; metadado na visita
+DBAMV	IMG_IT_CX_KIT	MECANISMO	arquivo	N	CC		foto do item; metadado em caixa_instrumental_item
+DBAMV	IMG_PRODUTO	MECANISMO	arquivo	N	SUP		foto do insumo; metadado no insumo
+DBAMV	IMOB_AND_BEM	TABELA	apropriacao_imobilizado_andamento;imobilizado_andamento	N	FIN	F8	
+DBAMV	IMPEDIMENTO_ADESAO	TABELA	motivo_nao_adesao_protocolo	S	PEP	F7	
+DBAMV	IMPORTACAO_AUTOMATICA	TABELA	regra_integracao_prescricao	N	SUP	F3	
+DBAMV	IMPORTACAO_DCTF	MECANISMO	integracao	N	INTG		área de troca de importação fiscal
+DBAMV	IMPORTACAO_FPO	MECANISMO	integracao	N	INTG		linhas do arquivo; dado final em programacao_orcamentaria_sus
+DBAMV	IMPORTACAO_LAUDOS_ACH	MECANISMO	integracao	N	INTG		importação de laudos do gestor
+DBAMV	IMPORTACAO_LAUDOS_SIH	MECANISMO	integracao	N	INTG		troca de laudos com o gestor
+DBAMV	IMPORTACAO_ORCAMENTARIA	TABELA	versao_orcamento	N	FIN	F7	
+DBAMV	IMPORTACAO_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT		
+DBAMV	IMPORTA_MOV_CAIXA	MECANISMO	integracao	N	INTG		importação de movimento de caixa
+DBAMV	IMPORTA_RECHARZO	MECANISMO	integracao	N	INTG		importação de fatura externa
+DBAMV	IMPORTA_REG_AMB	MECANISMO	integracao	N	INTG		controle de importação de contas
+DBAMV	IMPORTA_REG_FAT	MECANISMO	integracao	N	INTG		controle de importação de contas
+DBAMV	IMPORT_ATEND	MECANISMO	integracao	N	INTG		padrões da importação de atendimentos
+DBAMV	IMPORT_ATEND_PRO_FAT	MECANISMO	integracao	N	INTG		itens padrão da importação de atendimentos
+DBAMV	IMPORT_TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de migração
+DBAMV	IMPOSTO_CUSTO_ORCAMENTO	NAO		N	FIN		tecnico do fornecedor sem equivalente: interface entre módulos dele
+DBAMV	IMPOSTO_FORNECEDOR	TABELA	enquadramento_tributario_participante	N	FIN	F3	
+DBAMV	IMPRESSAO	MECANISMO	framework	N	SIS		fila de impressão
+DBAMV	IMPRESSAO_AUTORIZACAO_AIH	TABELA	lote_laudo_sus	N	SUS	F7	
+DBAMV	IMPRESSAO_PALM	MECANISMO	parametro	N	SUP		
+DBAMV	IMPRESSORA_BARRA	TABELA	impressora	N	ADM	F3	
+DBAMV	IMPRESSORA_TERMINAL	TABELA	impressora;estacao_impressora	N	ADM	F3	
+DBAMV	IMPRESSORA_TERMINAL_USUARIO	TABELA	estacao_impressora	N	ADM	F3	
+DBAMV	IMPRESSORA_UNITARIZACAO	TABELA	impressora	N	ADM	F3	
+DBAMV	IMPRIME_ETIQUETA_KIT	NAO		N	SUP		tecnico do fornecedor sem equivalente: temporária de impressão
+DBAMV	IMP_ACPR_ERR	MECANISMO	integracao	N	INTG		log de erro de importação
+DBAMV	IMP_BPA_EXTERNO	MECANISMO	integracao	N	INTG		área de troca; dado final em producao_ambulatorial_sus_item
+DBAMV	IMP_BRA	TABELA	equivalencia_matmed_produto;referencia_emissao_matmed	N	FAT	F3	
+DBAMV	IMP_CHEQUE	MECANISMO	integracao	N	INTG		controle de importação
+DBAMV	IMP_CONTABIL	MECANISMO	integracao	N	INTG		log de erro de importação contábil
+DBAMV	IMP_ERRO_LOG	MECANISMO	framework	N	SIS		log do serviço de impressão
+DBAMV	IMP_FAT	MECANISMO	integracao	N	INTG		controle de importação de produção SUS
+DBAMV	IMP_FCCT	MECANISMO	integracao	N	INTG		área de troca de lançamentos contábeis
+DBAMV	IMP_FCCT_ERR	MECANISMO	integracao	N	INTG		log de erro de importação contábil
+DBAMV	IMP_GASTO_SALA	TABELA	estacao_impressora	N	ADM	F3	impressora do gasto de sala
+DBAMV	IMP_GUIA_XML	MECANISMO	integracao	N	INTG		área de troca de importação de XML
+DBAMV	IMP_IPASGO	TABELA	equivalencia_item_fonte_pagadora	N	FAT	F3	
+DBAMV	IMP_PARAMETRO	MECANISMO	framework	N	SIS		parâmetros da fila de impressão
+DBAMV	IMP_REGISTRO_GIW	MECANISMO	framework	N	SIS		servidor de impressão
+DBAMV	IMP_REGISTRO_TERMINAL	MECANISMO	framework	N	SIS		agente de impressão
+DBAMV	IMP_SIMPRO	TABELA	equivalencia_matmed_produto;referencia_emissao_matmed	N	FAT	F3	
+DBAMV	IMP_TAB_FAT_FONASA	NAO		N	FAT		sem valor de negocio: tabela pública de outro país, temporária
+DBAMV	IMP_TRACE	MECANISMO	framework	N	SIS		rastreio da fila de impressão
+DBAMV	IMP_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT		
+DBAMV	IMVAPP_CONVENIO_TP_ATENDIMENTO	MECANISMO	integracao	N	INTG		configuração de integração com sistema externo
+DBAMV	IMVAPP_ESTOQUE_SUBINVETORY	MECANISMO	integracao	N	INTG		de-para de estoque com sistema externo
+DBAMV	IMVAPP_LOG_INTEGRACAO	MECANISMO	integracao	N	INTG		log de integração

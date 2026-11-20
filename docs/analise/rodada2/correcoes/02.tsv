@@ -1,0 +1,8 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAMV	CON_PLA	TABELA	plano_fonte_pagadora	CAD	F3	plano da fonte pagadora e paridade (SPDATA TBTIPPLANO, cobertura_paciente F3 depende dele)
+DBAMV	CATEGORIA_PLANO	TABELA	plano_fonte_pagadora	CAD	F3	plano da fonte pagadora e paridade (SPDATA TBTIPPLANO)
+DBAMV	SUB_PLANO	TABELA	plano_fonte_pagadora	CAD	F3	plano da fonte pagadora e paridade (SPDATA TBTIPPLANO)
+DBAMV	TIP_SITUACAO	TABELA	situacao_atendimento	REC	F3	lista fechada de situacoes (atende, alta, triagem), nao historico; o historico referencia este dominio
+DBAMV	PROBLEMA_SAUDE_SIDRA	NAO		CAD		sem valor de negocio: localizacao de outro pais (as demais tabelas da mesma familia ja sao NAO)
+DBAMV	LOG_ATUALIZA_CEP	MECANISMO	integracao	CAD	F3	log da carga da base de enderecamento; carga de referencia e do motor de integracao, nao da fonte ibge
+SPDATA	RICBOFMRPUSP	TABELA	ocupacao_cbo	CAD	F3	ocupacao legada com dados: de-para para a ocupacao oficial na migracao do paciente (o catalogo ja a cita)

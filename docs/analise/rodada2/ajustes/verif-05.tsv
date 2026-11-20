@@ -1,0 +1,22 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+insumo_classe_terapeutica	ACEITA	insumo_classe_terapeutica	SUP	vinculo	F7	Classes terapêuticas de cada medicamento, permitindo mais de uma por insumo, para relatório, padronização e substituição
+ficha_antimicrobiano	ACEITA	ficha_antimicrobiano	PEP	principal	F3	Justificativa de uso do antimicrobiano: indicação, sítio, cultura, tempo previsto e reavaliação
+acao_dose	ACEITA	acao_dose	SUP	dominio	F3	O que o sistema faz quando a dose prescrita passa do limite do item: nada, avisar ou bloquear
+centro_distribuicao_amostra	ACEITA	polo_triagem_amostra	SADT	principal	F7	Central que recebe e redistribui amostras entre setores de diagnóstico ou unidades da rede, com horário em que o roteamento fica suspenso
+centro_distribuicao_amostra_setor	ACEITA	polo_triagem_amostra_setor	SADT	vinculo	F7	Setores de diagnóstico atendidos pela central de distribuição, indicando se só transfere
+custo_fixo_producao	ACEITA	custo_indireto_producao	SUP	dominio	F7	Custos fixos (energia, mão de obra, embalagem) somados ao custo do lote produzido no próprio hospital
+custo_fixo_producao_valor	ACEITA	custo_indireto_producao_valor	SUP	historico	F7	Valor de cada custo fixo da produção própria por vigência
+declaracao_importacao	ACEITA	registro_importacao	SUP	principal	F7	Declaração de importação de insumo, com fornecedor, moeda, câmbio, transportador, frete e despesas aduaneiras rateadas na entrada no estoque
+declaracao_importacao_item	ACEITA	registro_importacao_item	SUP	item	F7	Insumo da declaração de importação, com NCM, quantidade, valores em moeda e em real, seguro, frete e tributos aduaneiros
+faixa_percentual_consignado	ACEITA	faixa_taxa_consignacao	SUP	configuracao	F7	Percentual sobre o consumo de consignado por faixa de valor e fornecedor
+fonte_recurso	ACEITA	origem_recurso_compra	SUP	dominio	F7	Fonte do recurso público que financia a compra
+forma_farmaceutica	ACEITA	forma_apresentacao_medicamento	SUP	dominio	F3	Formas farmacêuticas do medicamento (comprimido, solução injetável, pomada), usadas no cadastro do insumo e na prescrição
+exame_local_anatomico_coleta	ACEITA	exame_sitio_anatomico_coleta	SADT	vinculo	F7	Locais anatômicos de coleta aceitos para cada exame
+local_anatomico_coleta	ACEITA	sitio_anatomico_coleta	SADT	dominio	F7	Sítio anatômico da coleta (ferida, cateter, região do corpo), exigido em cultura e anatomia patológica
+lote_trabalho	ACEITA	grupo_trabalho_bancada	SADT	principal	F7	Corrida ou lote de trabalho gerado para uma bancada, com data, analista e equipamento
+lote_trabalho_item	ACEITA	grupo_trabalho_bancada_item	SADT	item	F7	Exame ou amostra incluída no lote de trabalho, com posição e situação (processado, retido, repetir)
+modalidade_licitacao	ACEITA	modalidade_compra_publica	SUP	dominio	F7	Modalidade de contratação pública (pregão, concorrência, dispensa, inexigibilidade)
+motivo_cancelamento_exame	ACEITA	motivo_cancelamento_item_exame	SADT	dominio	F3	Motivo para cancelar ou excluir exame pedido (pedido em duplicidade, recusa do paciente, amostra inviável)
+rack_amostra	ACEITA	suporte_guarda_amostra	SADT	principal	F8	Rack ou caixa de armazenamento, com linhas, colunas e o equipamento onde está
+rack_amostra_exame	ACEITA	suporte_guarda_amostra_exame	SADT	vinculo	F7	Exames aceitos em cada rack de amostras, para alocação exclusiva na bancada
+tipo_embalagem	ACEITA	tipo_embalagem_insumo	SUP	dominio	F7	Tipos de embalagem do produto (frasco, ampola, blister, caixa), usados na análise e no cadastro

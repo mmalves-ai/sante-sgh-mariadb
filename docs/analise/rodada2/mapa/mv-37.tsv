@@ -1,0 +1,379 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBACP	USUARIO_PORTAL_PAGINA	MECANISMO	framework	N	SIS	F3	
+DBACP	USUARIO_PORTAL_PAPEL	TABELA	usuario_perfil	N	ADM	F3	
+DBACP	USUARIO_SISTEMA_LICENCA	NAO		N	SIS		tecnico do fornecedor sem equivalente: licenca
+DBACP	VISAO_PORTLET_UNIVERSAL	MECANISMO	framework	N	SIS	F3	
+DBAMV	BATCH_JOB_EXECUTION	TABELA	execucao_rotina	N	SIS	F3	
+DBAMV	BATCH_JOB_EXECUTION_CONTEXT	MECANISMO	framework	N	SIS	F3	
+DBAMV	BATCH_JOB_EXECUTION_PARAMS	MECANISMO	framework	N	SIS	F3	
+DBAMV	BATCH_JOB_INSTANCE	MECANISMO	framework	N	SIS	F3	
+DBAMV	BATCH_STEP_EXECUTION	TABELA	execucao_rotina_etapa	N	SIS	F3	
+DBAMV	BATCH_STEP_EXECUTION_CONTEXT	MECANISMO	framework	N	SIS	F3	
+DBAMV	CG_CODE_CONTROLS	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerador de telas
+DBAMV	CG_FORM_HELP	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerador de telas
+DBAMV	CG_REF_CODES	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerador de telas
+DBAMV	EDITOR_CAMPO	TABELA	modelo_campo	N	PEP	F3	
+DBAMV	EDITOR_CAMPO_PROP_VAL	TABELA	modelo_campo	N	PEP	F3	
+DBAMV	EDITOR_CAMPO_VALOR	TABELA	modelo_campo_opcao	N	PEP	F3	
+DBAMV	EDITOR_CONFIGURACAO	MECANISMO	parametro	N	ADM	F3	
+DBAMV	EDITOR_DOCUMENTO	TABELA	modelo_documento_clinico	N	PEP	F3	
+DBAMV	EDITOR_GRUPO	TABELA	modelo_secao	N	PEP	F3	
+DBAMV	EDITOR_GRUPO_CAMPO	TABELA	modelo_campo	N	PEP	F3	
+DBAMV	EDITOR_GRUPO_DOCUMENTO	TABELA	modelo_documento_clinico	N	PEP	F3	
+DBAMV	EDITOR_HIST_REGISTRO	TABELA	registro_assistencial_versao	N	PEP	F3	
+DBAMV	EDITOR_HIST_REG_CAMPO	TABELA	registro_assistencial_versao	N	PEP	F3	
+DBAMV	EDITOR_HIST_VER_DOCUMENTO	MECANISMO	historico_entidade:modelo_documento_versao	N	PEP	F3	
+DBAMV	EDITOR_JOB	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_LAYOUT	TABELA	modelo_layout	N	PEP	F3	
+DBAMV	EDITOR_LAYOUT_CAMPO	TABELA	modelo_layout	N	PEP	F3	
+DBAMV	EDITOR_LAYOUT_REGRA	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	EDITOR_MAPEAMENTO_CAMPO	NAO		N	SIS		tecnico do fornecedor sem equivalente: migracao entre editores
+DBAMV	EDITOR_MAPEAMENTO_DOCUMENTO	NAO		N	SIS		tecnico do fornecedor sem equivalente: migracao entre editores
+DBAMV	EDITOR_MAPEAMENTO_REGISTRO	NAO		N	SIS		tecnico do fornecedor sem equivalente: migracao entre editores
+DBAMV	EDITOR_PATCH	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de correcao
+DBAMV	EDITOR_PROPRIEDADE	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_REGISTRO	TABELA	registro_assistencial	N	PEP	F3	
+DBAMV	EDITOR_REGISTRO_CAMPO	TABELA	registro_assistencial_resposta	N	PEP	F3	
+DBAMV	EDITOR_REGRA	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	EDITOR_REGRA_CAMPO	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	EDITOR_REGRA_CAMPO_VALOR_FILT	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	EDITOR_REGRA_CONDICAO	TABELA	modelo_regra	N	PEP	F3	
+DBAMV	EDITOR_TEMP	NAO		N	SIS		sem valor de negocio: arquivo temporario
+DBAMV	EDITOR_TEXTO_PADRAO	TABELA	texto_padrao_campo_modelo	S	PEP	F7	
+DBAMV	EDITOR_TEXTO_PADRAO_CONFIG	TABELA	texto_padrao_campo_modelo	S	PEP	F7	
+DBAMV	EDITOR_TEXTO_PADR_CONFIG_PARAM	TABELA	texto_padrao_campo_contexto	S	PEP	F7	
+DBAMV	EDITOR_TIPO_CONECTOR	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_ITEM	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_LAYOUT	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_OPERACAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_REGRA	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_VERSAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_VISUALIZACAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_TIPO_VSLZ_PROP	MECANISMO	framework	N	SIS	F3	
+DBAMV	EDITOR_VERSAO_DOCUMENTO	TABELA	modelo_documento_versao	N	PEP	F3	
+DBAMV	GCM_ITEM_BANCO	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de versao
+DBAMV	GCM_SCRIPT	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de versao
+DBAMV	GCM_VERSAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de versao
+DBAMV	MENU_CAT	NAO		N	SIS		sem valor de negocio: tabela de exemplo
+DBAMV	MENU_ITM	NAO		N	SIS		sem valor de negocio: tabela de exemplo
+DBAMV	MENU_SOUL	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_CALENDARIOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_DETALHES_TRABALHO	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_ESTADO_AGENDADOR	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS_AGENDADOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS_DISPARADOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS_PAUSADOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS_SIMPLES	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_GATILHOS_TEXTOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	PW_QRTZ_TRAVAS	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_AGENTS_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_AGENTS_PROPS_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_BATCH_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_CHECKLIST	NAO		N	SIS		tecnico do fornecedor sem equivalente: servidor de relatorios
+DBAMV	REPORTS_MONITOR_REQUEST	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_MONITOR_TIME	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_PRINTERS_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_REPOSITORY_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	REPORTS_SCHEDULE_INFO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_ACAO_MENSAGEM	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_DICIONARIO_TERMOS	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_FORMATACAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_HISTORICO_TRADUCAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_IDIOMA	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_MENSAGEM	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_MENU_SOUL	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_OBJETO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_PROPRIEDADE	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_TABELA_DOMINIO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_TEXTO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_TRADUCAO	MECANISMO	framework	N	SIS	F3	
+DBAMV	RMI_TRADUCAO_LOG	MECANISMO	framework	N	SIS	F3	
+DBAMV	VERSAO	TABELA	modelo_resultado	N	SADT	F3	
+DBAMV	VERSAO_CABECALHO_RODAPE	TABELA	resultado_exame	N	SADT	F3	
+DBAMV	VERSAO_ENSAIO	TABELA	modelo_resultado	N	SADT	F3	
+DBAMV	VERSAO_EXAME_PADRAO_SETOR	TABELA	modelo_resultado	N	SADT	F3	
+DBAMV	VERSAO_INICIO_LAUDO	TABELA	modelo_impressao_laudo	N	SADT	F3	
+DBAMV	VERSAO_PADRAO_BIKE	NAO		N	SIS		copia/backup
+DBAPORTAL	MENU_CONFIG	MECANISMO	framework	N	SIS	F3	
+DBASGU	AS_CONFIG	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_EXECUCAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_SCRIPT	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_SCRIPT_ERROS	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_SCRIPT_ETAPAS	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_SCRIPT_ETAPAS_SQL	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_SISTEMAS	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AS_STATUS	NAO		N	SIS		tecnico do fornecedor sem equivalente: atualizador de versao
+DBASGU	AUT_MOD	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBASGU	AUT_TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente: permissao por tabela do banco
+DBASGU	BIOMETRIA_USUARIOS	TABELA	biometria_usuario	N	ADM	F8	
+DBASGU	CDDL_DATNETS	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de conexao/licenca
+DBASGU	CE_EXCESSAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_EXCESSAO_CLIENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_OBJETO	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_OBJETO_COLUNA	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_OBJETO_DETALHE	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_OBJETO_TEXTO	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_RESULTA	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_RESULTA_COMANDO	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CE_RESULTA_OBJETO	NAO		N	SIS		tecnico do fornecedor sem equivalente: comparador de esquema
+DBASGU	CG_FORM_HELP	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerador de telas
+DBASGU	CHECAGEM_IMPLANTACAO	TABELA	item_prontidao	N	SIS	F7	
+DBASGU	CLIENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: cadastro de clientes/produtos do fornecedor
+DBASGU	CRMI	TABELA	comunicado	N	ADM	F3	
+DBASGU	CRMI_CONTROLE_EXIBICAO	TABELA	comunicado_ciencia	N	ADM	F3	
+DBASGU	CRMI_HOSPITAL	TABELA	comunicado_destinatario	N	ADM	F3	
+DBASGU	CRMI_SISTEMA	TABELA	comunicado_destinatario	N	ADM	F3	
+DBASGU	CRMI_TIPO	TABELA	tipo_comunicado	N	ADM	F3	
+DBASGU	DIRETRIZ_SENHA	TABELA	politica_senha	N	ADM	F3	
+DBASGU	DOCUMENTOS	TABELA	modelo_documento_clinico	N	PEP	F3	
+DBASGU	ESTAT_CON_MULT	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de conexao/licenca
+DBASGU	ESTAT_CON_MV	TABELA	evento_sessao	N	ADM	F3	
+DBASGU	GRUPO_USUARIO	TABELA	perfil_acesso	N	ADM	F3	
+DBASGU	HORARIO_VERAO	NAO		N	SIS		obsoleto: horario de verao extinto no Brasil em 2019
+DBASGU	HOSPITAL	TABELA	estabelecimento	N	CAD	F3	
+DBASGU	IMPLANTACAO	TABELA	implantacao_estabelecimento	N	SIS	F7	
+DBASGU	ITGRUPO_USUARIO	TABELA	usuario_perfil	N	ADM	F3	
+DBASGU	ITPARAM_COND_MODULO	MECANISMO	parametro	N	ADM	F3	
+DBASGU	ITPARAM_MODULO	MECANISMO	parametro	N	ADM	F3	
+DBASGU	MENSAGEM	TABELA	mensagem_interna	N	ADM	F3	
+DBASGU	MENU	MECANISMO	framework	N	SIS	F3	
+DBASGU	MENU_PROCESSO	MECANISMO	framework	N	SIS	F3	
+DBASGU	MODELO_PROCESSO	NAO		N	SIS		tecnico do fornecedor sem equivalente: maquina virtual de processo
+DBASGU	MODULOS	TABELA	modulo_sistema	N	ADM	F3	
+DBASGU	MODULOS_IMPRESSORA	TABELA	impressora_finalidade_estabelecimento	S	ADM	F7	
+DBASGU	MODULO_MENU_PROCESSO	MECANISMO	framework	N	SIS	F3	
+DBASGU	MODULO_MENU_PROCESSO_PARAMETRO	MECANISMO	framework	N	SIS	F3	
+DBASGU	MOD_LOG_ACESSO_MV2000	MECANISMO	trilha_auditoria	N	ADM	F3	
+DBASGU	MOD_SIS	TABELA	modulo_sistema	N	ADM	F3	
+DBASGU	MV_ADM	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	MV_ADM_CNPJ	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	MV_ADM_MODULO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	PAPEL	TABELA	perfil_acesso	N	ADM	F3	
+DBASGU	PAPEL_ACOES_FSCC	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_ACOES_LAPROD	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_ACOES_PSDI	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_ACOES_PSSD	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_CMP	NAO		N	SIS		copia/backup
+DBASGU	PAPEL_CONF_MOD	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_MOD	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_MOD_CMP	NAO		N	SIS		copia/backup
+DBASGU	PAPEL_SIS	TABELA	perfil_acao	N	ADM	F3	
+DBASGU	PAPEL_TAB	NAO		N	SIS		tecnico do fornecedor sem equivalente: permissao por tabela do banco
+DBASGU	PAPEL_USUARIOS	TABELA	usuario_perfil	N	ADM	F3	
+DBASGU	PER_CON	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de conexao/licenca
+DBASGU	PER_MULT	NAO		N	SIS		tecnico do fornecedor sem equivalente: controle de conexao/licenca
+DBASGU	PESQUISA_MENU	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_AGRUPAMENTO	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_ENTIDADE	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_FILTRO	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_IMAGEM	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_MODULO	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_ORDENACAO	MECANISMO	framework	N	SIS	F3	
+DBASGU	PESQUISA_MENU_PALAVRA_CHAVE	MECANISMO	framework	N	SIS	F3	
+DBASGU	PLAUDOS_LOG_USUARIOS	TABELA	acesso_resultado_portal	N	INTG	F3	
+DBASGU	PLAUDOS_PERFIS	TABELA	perfil_portal_resultado	N	SADT	F3	
+DBASGU	PLAUDOS_TOKENS_PERSISTENTES	MECANISMO	framework	N	SIS	F3	
+DBASGU	PLAUDOS_USUARIOS	TABELA	conta_portal_paciente	N	INTG	F3	
+DBASGU	PLAUDOS_USUARIOS_DEPENDENTES	TABELA	conta_portal_paciente_dependente	S	INTG	F7	
+DBASGU	PLAUDOS_USUARIOS_PERFIS	TABELA	perfil_portal_usuario	N	SADT	F3	
+DBASGU	PRESTADOR_USUARIO	TABELA	usuario_vinculo_profissional	N	ADM	F3	
+DBASGU	PROCESSO	TABELA	modelo_item_prontidao	N	SIS	F7	
+DBASGU	PROCESSOS_USUARIOS	MECANISMO	framework	N	SIS	F3	
+DBASGU	PRODUTO_SISTEMA	NAO		N	SIS		tecnico do fornecedor sem equivalente: cadastro de clientes/produtos do fornecedor
+DBASGU	RELATORIO_CABECALHO_COLUNA	TABELA	relatorio_coluna	N	REL	F3	
+DBASGU	RN_CONTROLE_EVENTO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_EVENTO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_EVENTO_EXECUCAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_EXECUCAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_IMPORTA	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_IMPORTA_COLUNA	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_ITEM_CONTROLE_EVENTO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	RN_RASTRO	NAO		N	SIS		tecnico do fornecedor sem equivalente: codigo dinamico no banco
+DBASGU	SERVICO_ENVIO_EMAIL	TABELA	envio_email	N	ADM	F3	
+DBASGU	SGU_MENSAGENS_AUDITORIA	TABELA	envio_email	N	ADM	F3	
+DBASGU	SISTEMA	TABELA	modulo_sistema	N	ADM	F3	
+DBASGU	SISTEMA_USUARIOS	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBASGU	TABELAS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	TAB_ENTIDADE	MECANISMO	framework	N	SIS	F3	
+DBASGU	TAB_SIS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	TAG_CAMPO_EMAIL	TABELA	modelo_email_campo	N	ADM	F3	
+DBASGU	TERMO_USO	TABELA	termo_uso_versao	N	ADM	F3	
+DBASGU	TIPO_EMAIL	TABELA	finalidade_email	N	ADM	F3	
+DBASGU	USUARIOS	TABELA	usuario;credencial_usuario	N	ADM	F3	
+DBASGU	USUARIOS_MASTER	TABELA	usuario	N	ADM	F3	
+DBASGU	USUARIOS_MENU	TABELA	usuario_acao_excecao	N	ADM	F3	
+DBASGU	USUARIO_BANCADA	TABELA	usuario_escopo	N	ADM	F7	
+DBASGU	USUARIO_EMPRESA_COLETA	TABELA	usuario_escopo	N	ADM	F7	
+DBASGU	USUARIO_LEITO	TABELA	usuario_escopo	N	ADM	F7	
+DBASGU	USUARIO_LOCAL_SOROTECA	TABELA	usuario_escopo	N	ADM	F7	
+DBASGU	USUARIO_MENSAGEM	TABELA	mensagem_interna_destinatario	N	ADM	F3	
+DBASGU	USUARIO_MENU_FAVORITO	TABELA	favorito_usuario	N	ADM	F3	
+DBASGU	USUARIO_PRESTADOR_LAB	TABELA	usuario_vinculo_profissional	N	ADM	F3	
+DBASGU	VALIDACAO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBASGU	VERSAO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBATUALIZA	AREA_NEGOCIO	TABELA	meta_implantacao	N	SIS	F7	
+DBATUALIZA	CONCEITO_META	TABELA	meta_implantacao	N	SIS	F7	
+DBATUALIZA	DIAG_CONCEITO	TABELA	meta_implantacao	N	SIS	F7	
+DBATUALIZA	DIAG_META	TABELA	meta_implantacao	N	SIS	F7	
+DBATUALIZA	DICCONFIGURACAO	MECANISMO	parametro	N	ADM	F3	
+DBATUALIZA	DICTRADUCAO_CONTEUDO	TABELA	mapa_identificador_legado	N	SIS	F3	
+DBATUALIZA	ITITEM_CENARIO	TABELA	cenario_homologacao	N	SIS	F7	
+DBATUALIZA	METAS_DIAG_PROCESSOS_EMP	TABELA	meta_indicador	N	REL	F3	
+DBATUALIZA	METAS_DIAG_PROCESSOS_ROTINA	TABELA	rotina_agendada	N	SIS	F3	
+DBATUALIZA	RANGE	TABELA	meta_implantacao	N	SIS	F7	
+DBATUALIZA	RISCO_AFERICAO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+DBATUALIZA	RISCO_CID	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+DBATUALIZA	RISCO_CLINICO	TABELA	regra_risco_clinico	N	REL	F8	
+DBATUALIZA	RISCO_LABORATORIO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+DBATUALIZA	RISCO_MEDICAMENTO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+DBATUALIZA	TAB5W2H	TABELA	acao_plano_qualidade	N	QUA	F7	
+DBATUALIZA	TAB5W2H_RESPONSAVEL	TABELA	acao_plano_qualidade	N	QUA	F7	
+GCMMV	AGENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	AMBIENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	ITEM	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	ITEM_AMBIENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	ITEM_BANCO	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	ITEM_SERVIDOR	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	ITEM_STATUS	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	PLANO_EXECUCAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	SERVIDOR	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	SERVIDOR_CONFIGURACAO	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	TIPO_LOG	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+GCMMV	TIPO_SERVIDOR	NAO		N	SIS		tecnico do fornecedor sem equivalente: gerencia de instalacao
+MVBIKE	ACAO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ACAO_ABA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ACAO_ABA_PERFIL	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ACELERADOR	TABELA	lote_carga_legado_tabela	N	SIS	F3	
+MVBIKE	ACELERADOR_EXECUCAO	TABELA	lote_carga_legado	N	SIS	F3	
+MVBIKE	ACELERADOR_LAYOUT_COL	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	AGRUPADOR_TEMA_CLINICO	TABELA	tema_clinico	N	REL	F8	
+MVBIKE	ATENDIME_PENDENCIAS	MECANISMO	datamart	N	REL	F8	
+MVBIKE	ATENDIME_PERMANENCIA	MECANISMO	datamart	N	REL	F8	
+MVBIKE	CENARIO_PROCESSO_FUNC	TABELA	cenario_homologacao	N	SIS	F7	
+MVBIKE	CENTRAL_PARAMETRIZACAO	TABELA	modelo_item_prontidao	N	SIS	F7	
+MVBIKE	CENTRAL_PARAMETRIZACAO_PLAN	TABELA	item_prontidao	N	SIS	F7	
+MVBIKE	CENTRAL_TABELA_DEPENDENTE	TABELA	modelo_item_prontidao	N	SIS	F7	
+MVBIKE	CLIENTE	NAO		N	SIS		tecnico do fornecedor sem equivalente: cadastro de clientes/produtos do fornecedor
+MVBIKE	CLIENTE_EMPRESA	NAO		N	SIS		tecnico do fornecedor sem equivalente: cadastro de clientes/produtos do fornecedor
+MVBIKE	CLIENTE_TORRE_EMPRESA	NAO		N	SIS		tecnico do fornecedor sem equivalente: cadastro de clientes/produtos do fornecedor
+MVBIKE	DADOS_MESTRES_CONSOLIDADOS	TABELA	item_prontidao	N	SIS	F7	
+MVBIKE	DEPARTAMENTO_DIMENSAO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAGNOSTICO_CONTATO_PREST	TABELA	regra_alerta_destinatario	N	ADM	F7	
+MVBIKE	DIAGNOSTICO_CONTATO_USUAR	TABELA	regra_alerta_destinatario	N	ADM	F7	
+MVBIKE	DIAGNOSTICO_PROCESSOS	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAGNOSTICO_PROCESSOS_APR	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAGNOSTICO_PROCESSOS_APR_A	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAGNOSTICO_PROCESSO_ANALITICO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAGNOSTICO_PROCESSO_SINTETICO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAG_PROCESSO_CARGA_ANALITICO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAG_PROCESSO_CARGA_CONTATO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DIAG_PROCESSO_CARGA_SINTETICO	MECANISMO	datamart	N	REL	F8	
+MVBIKE	DICCONFIGURACAO	MECANISMO	parametro	N	ADM	F3	
+MVBIKE	EMPRESA	NAO		N	SIS		duplicado de estabelecimento
+MVBIKE	EMPRESA_CONSOLIDADORA	TABELA	empresa_grupo_consolidacao	N	FIN	F8	
+MVBIKE	EXPORT_MODELO	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	EXPORT_MODELO_TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	GRF_ACAO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_ACAO_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_ALINHAMENTO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_CAMPO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_CAMPO_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_CONDICAO_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_EVENTO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_FORM	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_FORM_ACAO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_GRUPO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_LISTA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_METODO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_OPCAO_LISTA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_OPERADOR_COMPARACAO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_TIPO_ACAO_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_TIPO_CAMPO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_TIPO_EVENTO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_TP_VL_ACAO_REGRA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRF_VL_CHECKBOX	MECANISMO	framework	N	SIS	F3	
+MVBIKE	GRUPAMENTO_ESTADIO_INSTALL	TABELA	regra_grupo_estadio	N	PEP	F8	
+MVBIKE	GRUPAMENTO_ESTADIO_RESTANTES	TABELA	regra_grupo_estadio	N	PEP	F8	
+MVBIKE	GRUPAMENTO_ESTADIO_ZERO	TABELA	regra_grupo_estadio	N	PEP	F8	
+MVBIKE	GRUPO_DIAG_PROCESSOS	TABELA	indicador	N	REL	F3	
+MVBIKE	ITACELERADOR_EXECUCAO	TABELA	divergencia_carga	N	SIS	F3	
+MVBIKE	ITCENTRAL_PARAMETRIZACAO_COL	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	ITEM_CADASTRO	TABELA	cadastro_padrao	S	SIS	F7	
+MVBIKE	ITEM_CADASTRO_CATALOGO	TABELA	cadastro_padrao	S	SIS	F7	
+MVBIKE	ITEM_CADASTRO_LOG	MECANISMO	historico_entidade:cadastro_padrao	S	SIS	F7	
+MVBIKE	ITEM_CADASTRO_PADRAO	TABELA	cadastro_padrao	S	SIS	F7	
+MVBIKE	ITEM_CENARIO	TABELA	cenario_homologacao	N	SIS	F7	
+MVBIKE	ITEM_CENARIO_PLAN	TABELA	item_prontidao	N	SIS	F7	
+MVBIKE	ITEM_CLASSIFICACAO	TABELA	cenario_homologacao	N	SIS	F7	
+MVBIKE	ITEM_CONTROLE_CADASTRO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ITEM_DE_TABELAS_PADROES	TABELA	modelo_item_prontidao	N	SIS	F7	
+MVBIKE	ITEM_DE_TABELAS_PADROES_COL	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	ITEM_ESTRUTURA_CADASTRO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ITEM_ICONE	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ITEM_LISTA_CADASTRO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ITEM_PAINEL	TABELA	painel_tv_bloco	N	REL	F3	
+MVBIKE	ITEM_PAINEL_PERSPECTIVAS	TABELA	painel_tv_bloco	N	REL	F3	
+MVBIKE	ITEM_PERMISSAO_CADASTRO	TABELA	usuario_acao_excecao	N	ADM	F3	
+MVBIKE	ITEM_PROCESSOS_HOMOLOGACAO	TABELA	cenario_homologacao	N	SIS	F7	
+MVBIKE	ITEM_REPOSITOR_CADASTRO	TABELA	cadastro_padrao	S	SIS	F7	
+MVBIKE	ITEM_TIPO_CADASTRO	TABELA	tipo_cadastro_padrao	S	SIS	F7	
+MVBIKE	ITITEM_CENARIO	TABELA	cenario_homologacao	N	SIS	F7	
+MVBIKE	ITMINERADOR_CADASTRO	TABELA	mapa_identificador_legado	N	SIS	F3	
+MVBIKE	ITPERSPECTIVA_ESTRATEGICA	TABELA	objetivo_estrategico_indicador	N	REL	F8	
+MVBIKE	MAIL_CONFIG	TABELA	servidor_email	N	ADM	F3	
+MVBIKE	MENU	MECANISMO	framework	N	SIS	F3	
+MVBIKE	METAS_DIAG_PROCESSOS	TABELA	indicador	N	REL	F3	
+MVBIKE	METAS_DIAG_PROCESSOS_DEP	TABELA	meta_indicador	N	REL	F3	
+MVBIKE	METAS_DIAG_PROCESSOS_EMP	TABELA	meta_indicador	N	REL	F3	
+MVBIKE	METAS_DIAG_PROCESSOS_GRUPO	TABELA	indicador	N	REL	F3	
+MVBIKE	METAS_DIAG_PROCESSOS_REL	TABELA	indicador	N	REL	F3	
+MVBIKE	METAS_DIAG_PROCESSOS_ROTINA	TABELA	rotina_agendada	N	SIS	F3	
+MVBIKE	MINERADOR_CADASTRO	TABELA	lote_carga_legado	N	SIS	F3	
+MVBIKE	MINERADOR_CADASTRO_RES	TABELA	mapa_identificador_legado	N	SIS	F3	
+MVBIKE	MODULO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	ORIGEM_DADO	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	PAINEL	TABELA	painel_tv	N	REL	F3	
+MVBIKE	PAINEL_GRUPO	TABELA	painel_tv_bloco	N	REL	F3	
+MVBIKE	PAINEL_GRUPO_ITEM	TABELA	painel_tv_bloco	N	REL	F3	
+MVBIKE	PERFIL	TABELA	perfil_acesso	N	ADM	F3	
+MVBIKE	PERFIL_MENU	TABELA	perfil_acao	N	ADM	F3	
+MVBIKE	PERFIL_MODULO	TABELA	perfil_acao	N	ADM	F3	
+MVBIKE	PERFIL_SUBMENU	TABELA	perfil_acao	N	ADM	F3	
+MVBIKE	PERSPECTIVA_ESTRATEGIA	TABELA	perspectiva_estrategica	N	REL	F8	
+MVBIKE	PERSPECTIVA_ESTRATEGICA	TABELA	perspectiva_estrategica	N	REL	F8	
+MVBIKE	PLANO_ACAO	TABELA	plano_acao_qualidade	N	QUA	F7	
+MVBIKE	PRESTADOR_TEMP	NAO		N	SIS		copia/backup
+MVBIKE	PROCESSOS_AUDITADOS	TABELA	meta_indicador	N	REL	F3	
+MVBIKE	PROCESSO_CONTROLE_EXECUCAO	TABELA	rotina_agendada	N	SIS	F3	
+MVBIKE	RISCO_AFERICAO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	RISCO_ALTA	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	RISCO_CID	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	RISCO_CLINICO	TABELA	regra_risco_clinico	N	REL	F8	
+MVBIKE	RISCO_DOSE	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	RISCO_LABORATORIO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	RISCO_MEDICAMENTO	TABELA	regra_risco_clinico_criterio	N	REL	F8	
+MVBIKE	ROTINA_CARGA	TABELA	rotina_agendada	N	SIS	F3	
+MVBIKE	SERVICOS_DISPONIVEIS	MECANISMO	datamart	N	REL	F8	
+MVBIKE	SERVICOS_TABELAS	MECANISMO	datamart	N	REL	F8	
+MVBIKE	SISTEMA_RESPONSAVEL	TABELA	implantacao_estabelecimento	N	SIS	F7	
+MVBIKE	SUBMENU	MECANISMO	framework	N	SIS	F3	
+MVBIKE	SUBMENU_ITEM	MECANISMO	framework	N	SIS	F3	
+MVBIKE	TAB_DIAGNOSTICO_PROCESSOS_A	MECANISMO	datamart	N	REL	F8	
+MVBIKE	TAREFA	TABELA	rotina_agendada	N	SIS	F3	
+MVBIKE	TEMA_CLINICO	TABELA	tema_clinico	N	REL	F8	
+MVBIKE	TIPO_ACAO	MECANISMO	framework	N	SIS	F3	
+MVBIKE	TIPO_ACAO_CARGA	MECANISMO	framework	N	SIS	F3	
+MVBIKE	TIPO_COMUNICACAO	TABELA	canal_notificacao	N	ADM	F8	
+MVBIKE	TIPO_MENU	MECANISMO	framework	N	SIS	F3	
+MVBIKE	TIPO_STATUS	MECANISMO	framework	N	SIS	F3	
+MVBIKE	TIPO_TEMA_CLINICO	TABELA	tema_clinico	N	REL	F8	
+MVBIKE	UNIMED_OBJ	NAO		N	SIS		tecnico do fornecedor sem equivalente: dicionario de colunas/exportacao
+MVBIKE	USUARIO	TABELA	usuario	N	ADM	F3	
+MVBIKE	USUARIO_PERFIL	TABELA	usuario_perfil	N	ADM	F3	
+MVBIKE	USUARIO_TIPO_CONTATO	TABELA	preferencia_canal_usuario	N	ADM	F8	
+MVBIKE	VMAT_DIAGNOSTICO_PROCESSOS	MECANISMO	datamart	N	REL	F8	
+MVONEPASS	ACCREDIT_USER	TABELA	vinculo_identidade_externa	N	ADM	F7	
+MVONEPASS	ACCREDIT_USER_HISTORY	MECANISMO	historico_entidade:vinculo_identidade_externa	N	ADM	F7	
+MVONEPASS	USER_HASH	TABELA	credencial_usuario	N	ADM	F3	

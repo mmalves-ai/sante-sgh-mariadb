@@ -1,0 +1,63 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+agenda_servico_tipo_marcacao	ACEITA	agenda_servico_tipo_marcacao	AGE	vinculo	F3	Tipos de marcação aceitos por cada serviço agendável (primeira vez, retorno, encaixe)
+agrupamento_setor	ACEITA	agrupamento_setor	CAD	dominio	F7	Visão que agrupa setores para relatórios e análises gerenciais, por estabelecimento
+ajuste_tempo_marcacao	ACEITA	ajuste_tempo_marcacao	AGE	dominio	F7	Acréscimo ou redução de minutos sobre a duração padrão do item marcado (paciente idoso, sedação, acesso difícil)
+area_atuacao_medica	ACEITA	area_atuacao_medica	CAD	dominio	F7	Áreas de atuação médica reconhecidas pelo conselho, complementares à especialidade, com código usado no intercâmbio entre operadoras
+atendimento_responsavel_historico	ACEITA	atendimento_responsavel_historico	REC	historico	F3	Profissional responsável pelo atendimento em cada período, com especialidade, serviço e motivo da troca
+calendario_trabalho	ACEITA	calendario_trabalho	CAD	configuracao	F8	Calendário de expediente usado para calcular prazos e durações em horas úteis de planos e projetos
+calendario_trabalho_dia	ACEITA	calendario_trabalho_dia	CAD	item	F8	Horários de início e fim dos turnos de cada dia da semana no calendário de expediente
+calendario_trabalho_excecao	ACEITA	calendario_trabalho_excecao	CAD	item	F8	Período com expediente diferente do padrão no calendário, com horas produtivas e motivo
+categoria_profissional	ACEITA	categoria_profissional	CAD	dominio	F3	Categoria do profissional (médico, enfermeiro, técnico, fisioterapeuta), com conselho e o que pode registrar: prescrição, evolução, parecer, laudo
+classe_fonte_pagadora	ACEITA	classe_fonte_pagadora	CAD	dominio	F3	Classe da fonte pagadora usada no atendimento e na conta (particular, convênio, público, gratuidade, seguro de trânsito)
+classe_socioeconomica	ACEITA	classe_socioeconomica	CAD	dominio	F8	Faixas de classe socioeconômica para perfil de beneficiário e segmentação comercial
+classificacao_risco_area	ACEITA	classificacao_risco_area	CAD	dominio	F8	Cor de risco atribuída a uma área do território atendido, usada para classificar o risco de adoecer das famílias
+comarca_judicial	ACEITA	comarca_judicial	CAD	dominio	F7	Comarcas e varas usadas para registrar processos judiciais do grupo
+conduta_ocorrencia_profissional	ACEITA	conduta_ocorrencia_profissional	CAD	dominio	F7	Medidas aplicáveis ao profissional após ocorrência (advertência verbal, escrita, suspensão)
+correspondencia_setor_estabelecimento	ACEITA	correspondencia_setor_estabelecimento	CAD	vinculo	F7	Correspondência entre setores de estabelecimentos diferentes da rede, para transferência e consolidação
+distrito_sanitario	ACEITA	distrito_sanitario	CAD	dominio	F7	Distrito sanitário do município, com código externo, usado no endereço e nos relatórios públicos
+estabelecimento_externo	ACEITA	estabelecimento_externo	CAD	principal	F3	Estabelecimento de saúde externo (hospital, posto, policlínica) que encaminha, recebe transferência ou pede exame, com CNES, regional e contato
+estabelecimento_solicitante	FUNDIR	estabelecimento_externo	CAD	principal	F3	Estabelecimento de saúde externo (hospital, posto, policlínica) que encaminha, recebe transferência ou pede exame, com CNES, regional e contato
+estrutura_organizacional	ACEITA	estrutura_organizacional	CAD	principal	F7	Nó da estrutura organizacional hierárquica (diretoria, gerência, coordenação), com setor ligado e nó pai
+faixa_etaria	ACEITA	faixa_etaria	CAD	dominio	F3	Faixas de idade nomeadas (idade inicial e final) usadas em regra, estatística, custo, indicador, painel e relatório
+faixa_etaria_referencia	FUNDIR	faixa_etaria	CAD	dominio	F3	Faixas de idade nomeadas (idade inicial e final) usadas em regra, estatística, custo, indicador, painel e relatório
+forca_militar	ACEITA	forca_militar	CAD	dominio	F8	Forças e corporações militares (Exército, Marinha, Aeronáutica, polícia) para cadastro de beneficiário de hospital militar
+habilidade_profissional	ACEITA	habilidade_profissional	CAD	dominio	F8	Habilidades ou competências técnicas reconhecidas do profissional (ex.: procedimento específico, idioma)
+instituicao_ensino	ACEITA	instituicao_ensino	CAD	dominio	F7	Instituição de ensino onde o profissional se formou ou especializou, com nome e sigla
+intervalo_minimo_servico	ACEITA	intervalo_minimo_servico	AGE	configuracao	F7	Intervalo mínimo entre marcações do mesmo serviço por fonte pagadora e tipo de marcação, para barrar repetição
+item_agendavel_especialidade	ACEITA	item_agendavel_especialidade	AGE	vinculo	F3	Especialidades que podem realizar ou marcar cada item agendável
+item_agendavel_orientacao_fonte_pagadora	ACEITA	item_agendavel_orientacao_fonte_pagadora	AGE	vinculo	F8	Orientação ao paciente específica da fonte pagadora para um item agendável, exibida na marcação
+local_fisico	ACEITA	local_fisico	CAD	principal	F7	Local físico (sala, andar, ambiente) ligado a setor, com responsável e código de barras para patrimônio
+motivo_ausencia_documento_paciente	ACEITA	motivo_ausencia_documento_paciente	CAD	dominio	F3	Motivo para cadastrar paciente sem CPF ou cartão nacional de saúde
+motivo_procura_atendimento	ACEITA	motivo_procura_atendimento	REC	dominio	F7	Motivo de procura informado na abertura do atendimento
+motorista	ACEITA	motorista	CAD	principal	F8	Condutor de veículo próprio ou terceiro (ambulância, entregas), com documentos, habilitação, categorias e validade
+ocorrencia_profissional	ACEITA	ocorrencia_profissional	CAD	principal	F7	Ocorrência registrada sobre o profissional (falta à agenda, atraso, conduta), com pontuação, conduta aplicada e anexo
+opcao_preferencia_profissional	ACEITA	opcao_preferencia_profissional	CAD	dominio	F8	Opções de preferência que o profissional pode declarar (turno, local, condição de atendimento), mantidas pelo hospital
+pendencia_profissional	ACEITA	pendencia_profissional	CAD	principal	F7	Pendência cadastral ou documental do profissional, com tipo, abertura, baixa e ocorrência
+plano_sessao_material	ACEITA	plano_sessao_material	AGE	item	F8	Materiais e quantidade prevista por procedimento do tratamento seriado, para reserva e cobrança
+posto_graduacao_militar	ACEITA	posto_graduacao_militar	CAD	dominio	F7	Posto ou graduação militar do paciente ou dependente, para hospitais que atendem forças armadas e auxiliares
+profissional_area_atuacao	ACEITA	profissional_area_atuacao	CAD	vinculo	F7	Áreas de atuação de cada profissional, com registro no conselho quando houver
+profissional_equipamento	FUNDIR	profissional_recurso_agendavel	AGE	vinculo	F8	Recursos agendáveis (sala, equipamento) que cada profissional usa, reserva ou está habilitado a operar, usado na agenda de exames
+profissional_formacao	ACEITA	profissional_formacao	CAD	item	F7	Formação do profissional: grau de instrução, título, número da cédula profissional e indicação da principal
+profissional_habilidade	ACEITA	profissional_habilidade	CAD	vinculo	F8	Habilidades atribuídas a cada profissional, usadas em escala e agendamento
+profissional_instituicao_externa	ACEITA	profissional_instituicao_externa	CAD	vinculo	F8	Instituições externas em que o profissional atua ou é referência, com período
+profissional_recurso_agendavel	ACEITA	profissional_recurso_agendavel	AGE	vinculo	F8	Recursos agendáveis (sala, equipamento) que cada profissional usa, reserva ou está habilitado a operar, usado na agenda de exames
+profissional_unidade_atuacao	ACEITA	profissional_unidade_atuacao	CAD	vinculo	F7	Unidades de internação em que o profissional atua, para listas de pacientes e passagem de plantão
+protocolo_tratamento_seriado	ACEITA	protocolo_tratamento_seriado	AGE	configuracao	F8	Modelo de tratamento em sessões por diagnóstico: total de dias, ciclos, intervalo, faixa de idade e procedimento
+protocolo_tratamento_seriado_dependencia	ACEITA	protocolo_tratamento_seriado_dependencia	AGE	vinculo	F8	Protocolos que correm nos mesmos ciclos de outro protocolo, com a ordem de execução
+recusa_rede_credenciada	ACEITA	recusa_rede_credenciada	AGE	historico	F8	Recusa do paciente em ser atendido na rede credenciada oferecida para um item agendável, com data e usuário
+regiao_geografica	ACEITA	regiao_geografica	CAD	dominio	F7	Região ou zona geográfica interna, em níveis, que agrupa municípios, bairros e endereços para relatórios, rede e áreas de atuação
+regional_saude	ACEITA	regional_saude	CAD	dominio	F7	Regional ou diretoria de saúde que agrupa municípios, usada na divisão de vagas e cotas
+regra_marcacao_apos_falta	ACEITA	regra_marcacao_apos_falta	AGE	configuracao	F8	Dias de espera após uma falta antes de nova marcação do mesmo item, impeditivo ou só aviso
+regra_redistribuicao_vaga	ACEITA	regra_redistribuicao_vaga	AGE	configuracao	F8	Libera um percentual das vagas não usadas de um serviço ou tipo de marcação para outro, dias antes da data, com vigência
+regra_redistribuicao_vaga_profissional	ACEITA	regra_redistribuicao_vaga_profissional	AGE	vinculo	F8	Profissionais cujas agendas seguem a regra de redistribuição de vagas
+servico_atendimento	ACEITA	servico_atendimento	REC	dominio	F3	Serviço clínico em que o atendimento é aberto (ortopedia, cardiologia), com especialidade, anamnese padrão e caução exigida
+sinonimo_especialidade	ACEITA	sinonimo_especialidade	CAD	item	F8	Termos populares de cada especialidade usados na busca do guia de rede e do portal
+situacao_posse_plano	ACEITA	situacao_posse_plano	CAD	dominio	F3	Resposta do paciente sobre ter plano de saúde ou cartão de desconto, usada na captação e no perfil
+tipo_local_fisico	ACEITA	tipo_local_fisico	CAD	dominio	F7	Tipos de local físico do hospital (prédio, andar, sala, área externa)
+tipo_ocorrencia_profissional	ACEITA	tipo_ocorrencia_profissional	CAD	dominio	F7	Tipos de ocorrência registrada sobre o profissional, com pontuação usada no acompanhamento de conduta
+tipo_pendencia_profissional	ACEITA	tipo_pendencia_profissional	CAD	dominio	F7	Tipos de pendência cadastral ou documental do profissional
+tipo_turma_atividade	ACEITA	tipo_turma_atividade	AGE	dominio	F8	Tipos de turma de atividade coletiva (grupo terapêutico, educação em saúde, reabilitação)
+turno_padrao	ACEITA	turno_padrao	CAD	dominio	F7	Turnos padrão do hospital (manhã, tarde, noite) com hora de início e fim, usados em filtros e escalas
+unidade_idade	ACEITA	unidade_idade	CAD	dominio	F3	Unidade em que a idade é expressa (anos, meses, dias), usada em regras por faixa etária
+unidade_saude_regional	FUNDIR	estabelecimento_externo	CAD	principal	F3	Estabelecimento de saúde externo (hospital, posto, policlínica) que encaminha, recebe transferência ou pede exame, com CNES, regional e contato
+zona_geografica	FUNDIR	regiao_geografica	CAD	dominio	F7	Região ou zona geográfica interna, em níveis, que agrupa municípios, bairros e endereços para relatórios, rede e áreas de atuação

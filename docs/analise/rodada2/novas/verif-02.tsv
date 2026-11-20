@@ -1,0 +1,5 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+situacao_atendimento	REC	dominio	F3	Situações possíveis do atendimento (aberto, em triagem, em atendimento, alta, cancelado), indicando as que encerram ou contam como triagem	DBAMV TIP_SITUACAO; o histórico de situação do atendimento não tinha domínio
+tipo_endereco	CAD	dominio	F3	Finalidade do endereço da pessoa (residencial, comercial, cobrança, correspondência)	endereco_pessoa sem domínio de tipo; telefone_pessoa já tem tipo_telefone
+tipo_deficiencia	CAD	dominio	F7	Tipos de deficiência declarados no cadastro (física, auditiva, visual, intelectual, múltipla), conforme a lei de inclusão	Lei 13.146/2015 e cadastro individual do SUS; o catálogo só tinha deficiencia_colaborador (RH)
+paciente_deficiencia	CAD	vinculo	F7	Deficiências declaradas pelo paciente, com informante, data e necessidade de apoio no atendimento	Lei 13.146/2015; complementa grupo_prioridade_legal e condicao_especial

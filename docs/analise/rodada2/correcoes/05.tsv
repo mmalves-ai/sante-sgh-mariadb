@@ -1,0 +1,45 @@
+esquema	tabela	destino_tipo	destino	modulo	fase	motivo
+DBAMV	ITFORMULA	TABELA	formula_padrao_manipulacao_item;kit_material_item	SUP	F7	item da fórmula: segue o cabeçalho (fórmula de produção ou kit cirúrgico, conforme o tipo), não só kit
+DBAMV	FORMULA	TABELA	formula_padrao_manipulacao;kit_material	SUP	F7	o tipo da fórmula separa produção própria de kit cirúrgico (tem cirurgia e caixa cirúrgica)
+DBAMV	CLASSIFICACAO_PROPOSTA	TABELA	cotacao_fornecedor	SUP	F3	proposta por fornecedor (total, frete, condição, resposta) é cabeçalho, não item de preço
+DBAMV	HISTORICO_ANALISE_CULTURA	TABELA	leitura_cultura	SADT	F7	leitura datada da cultura por item é dado clínico; a tabela própria já existe
+DBAMV	ACA_PRO	TABELA	insumo_classe_terapeutica	SUP	F7	N:N insumo x classe terapêutica (chave composta); coluna única no insumo perde classes
+DBAMV	CONDICOES_PAGAMENTO	TABELA	condicao_pagamento	FIN	F3	módulo do destino é FIN no catálogo
+DBAMV	ITMVTO_ESTOQUE_SOMA_SAIDA	NAO		SUP		duplicado de movimento_estoque (agregado de saídas derivado do razão de estoque)
+SPDATA	GECADANTIMI	TABELA	ficha_antimicrobiano;liberacao_antimicrobiano	PEP	F3	fichas em uso na Rede (45); paridade com GEANTIMI, que já é F3
+DBAMV	AMOSTRA_LOTE_AUTOMATICO	TABELA	grupo_trabalho_bancada_item	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	CENTRO_DISTRIBUICAO_AMOSTRA	TABELA	polo_triagem_amostra	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	CENTRO_DISTRI_AMOS_SET_EXA	TABELA	polo_triagem_amostra_setor	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	CON_PAG_DECLARACAO_IMPORTACAO	TABELA	registro_importacao;titulo_pagar	SUP	F7	nome do destino igual a tabela de origem; renomeado; fase alinhada ao destino (F7)
+DBAMV	CUSTO_FIXO_PRODUCAO	TABELA	custo_indireto_producao	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	DECLARACAO_IMPORTACAO	TABELA	registro_importacao	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	DECLARACAO_IMP_CONCLUSAO	MECANISMO	historico_entidade:registro_importacao	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	DUPLICATA_DI	TABELA	parcela_pagar;registro_importacao	FIN	F3	nome do destino igual a tabela de origem; renomeado
+DBAMV	EXA_LAB_LOCAL_ANATOMICO_COLETA	TABELA	exame_sitio_anatomico_coleta;sitio_anatomico_coleta	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	FAIXA_PERCENTUAL_CONSIGNADO	TABELA	faixa_taxa_consignacao	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	FONTE_RECURSO	TABELA	origem_recurso_compra	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	FORMA_FARMACEUTICA	TABELA	forma_apresentacao_medicamento	SUP	F3	nome do destino igual a tabela de origem; renomeado
+DBAMV	FRETE_DECLARACAO_IMPORTACAO	TABELA	registro_importacao	SUP	F7	nome do destino igual a tabela de origem; renomeado; fase alinhada ao destino (F7)
+DBAMV	FRETE_DI	TABELA	registro_importacao	SUP	F7	nome do destino igual a tabela de origem; renomeado; fase alinhada ao destino (F7)
+DBAMV	ITDECLARACAO_IMPORTACAO	TABELA	registro_importacao_item	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	LOCAL_ANATOMICO_COLETA	TABELA	sitio_anatomico_coleta	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	LOTE_BANCADA	TABELA	grupo_trabalho_bancada	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	LOTE_TRABALHO	TABELA	grupo_trabalho_bancada	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	MODALIDADE_LICITACAO	TABELA	modalidade_compra_publica	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	MOTIVO_CANCELAMENTO_EXAME	TABELA	motivo_cancelamento_item_exame	SADT	F3	nome do destino igual a tabela de origem; renomeado
+DBAMV	MOT_CANCEL_AMOSTRA	TABELA	motivo_cancelamento_item_exame	SADT	F3	nome do destino igual a tabela de origem; renomeado
+DBAMV	MOT_EXC_RX	TABELA	motivo_cancelamento_item_exame	SADT	F3	nome do destino igual a tabela de origem; renomeado
+DBAMV	ORIGEM_MATERIAL_EMPENHO	TABELA	origem_recurso_compra	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	PASTA_TRABALHO_CONTEUDO	TABELA	grupo_trabalho_bancada_item	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	PASTA_TRABALHO_PSSD	TABELA	grupo_trabalho_bancada	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	PERCENTUAL_CONSIGNADO	TABELA	faixa_taxa_consignacao	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	PLANO_INTERNO	TABELA	modalidade_compra_publica	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	RACK	TABELA	suporte_guarda_amostra	SADT	F8	nome do destino igual a tabela de origem; renomeado
+DBAMV	RACK_EXA_LAB	TABELA	suporte_guarda_amostra_exame	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	RECEPCAO_AMOSTRA	TABELA	polo_triagem_amostra	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	SOROTECA_RACK	TABELA	suporte_guarda_amostra	SADT	F8	nome do destino igual a tabela de origem; renomeado
+DBAMV	TIPO_EMBALAGEM	TABELA	tipo_embalagem_insumo	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	TIPO_MODALIDADE	TABELA	modalidade_compra_publica	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	TOPOGRAFIA_EXAME	TABELA	sitio_anatomico_coleta	SADT	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	VALOR_CUSTO_FIXO_PRODUCAO	TABELA	custo_indireto_producao_valor	SUP	F7	nome do destino igual a tabela de origem; renomeado
+DBAMV	VINCULACAO	TABELA	origem_recurso_compra	SUP	F7	nome do destino igual a tabela de origem; renomeado

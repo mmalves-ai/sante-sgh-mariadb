@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAPORTAL	CA_AREA_USUARIO	TABELA	usuario_escopo	N	ADM	F7	
+DBAPORTAL	CA_CARACTERISTICA	TABELA	requisito_acreditacao	N	QUA	F8	
+DBAPORTAL	CA_CARACTERISTICA_DOCUMENTO	TABELA	documento_qualidade_referencia	N	QUA	F8	
+DBAPORTAL	CA_CARACTERISTICA_IVM	TABELA	requisito_acreditacao_indicador	S	QUA	F8	
+DBAPORTAL	CA_COMPONENTE	TABELA	requisito_acreditacao	N	QUA	F8	
+DBAPORTAL	CA_ELEMENTO_CENTRO_CUSTO	TABELA	autoavaliacao_acreditacao_item;requisito_acreditacao_setor	N	QUA	F8	
+DBAPORTAL	CA_ELEMENTO_MEDIDA	TABELA	requisito_acreditacao	N	QUA	F8	
+DBAPORTAL	CA_NOTA_CARACTERISTICA	TABELA	requisito_acreditacao_nota	S	QUA	F8	
+DBAPORTAL	CENTRO_CUSTO	TABELA	centro_custo	N	FIN	F3	
+DBAPORTAL	CENTRO_RESP	TABELA	centro_custo	N	FIN	F3	centro de responsabilidade vira nivel da hierarquia de centros de custo
+DBAPORTAL	CLASSIFICACAO	TABELA	regra_classificacao_incidente	S	QUA	F8	
+DBAPORTAL	CLASSIFICACAO_HORA	TABELA	apontamento_hora_iniciativa	S	REL	F8	lista curta vira classificacao do apontamento
+DBAPORTAL	CLASSIFICACAO_IMPACTO	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	CLASSIFICACAO_PROBABILIDADE	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	CONTATO	TABELA	pessoa_fisica	N	CAD	F3	
+DBAPORTAL	CONTATO_TELEFONE	TABELA	telefone_pessoa	N	CAD	F3	
+DBAPORTAL	CONTA_CLOUD	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	COR_MATRIZ	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	DADOS_INTEGRACAO_TEMP	MECANISMO	integracao	N	INTG	F8	area de troca temporaria
+DBAPORTAL	DATABASECHANGELOG	MECANISMO	framework	N	SIS	F3	controle de versao do esquema
+DBAPORTAL	DATABASECHANGELOGLOCK	MECANISMO	framework	N	SIS	F3	trava do controle de versao do esquema
+DBAPORTAL	DEBUG_FORM	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	DEBUG_IVM	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	DEBUG_KPI	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	DEBUG_TM	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	DETALHE_FILTRO_INI_ACAO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	DETALHE_FILTRO_OCORRENCIA	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	DIAS_CALENDARIO	TABELA	calendario_trabalho;calendario_trabalho_dia	S	CAD	F8	
+DBAPORTAL	DIMENSAO	MECANISMO	datamart	N	REL	F3	dimensao de analise de indicadores
+DBAPORTAL	DIMENSAO_IND_PRIMARIO	MECANISMO	datamart	N	REL	F3	dimensoes por indicador no data mart
+DBAPORTAL	DIMENSIONALIDADE	MECANISMO	datamart	N	REL	F3	atributo de dimensao da ferramenta de BI
+DBAPORTAL	DIVISAO_SETOR	TABELA	setor_funcional	N	CAD	F3	subdivisao vira hierarquia de setor
+DBAPORTAL	DI_INDICE_TEMP	MECANISMO	integracao	N	INTG	F8	carga temporaria de indices
+DBAPORTAL	DOCUMENTO	TABELA	documento_qualidade	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_ACESSO_PUBLICACAO	TABELA	documento_qualidade_distribuicao	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_ANEXO	MECANISMO	arquivo	N	QUA	F8	anexo; metadado em documento_qualidade_versao
+DBAPORTAL	DOCUMENTO_EXTERNO	TABELA	documento_qualidade	N	QUA	F8	origem externa do documento
+DBAPORTAL	DOCUMENTO_EXTERNO_VERSAO	TABELA	documento_qualidade_versao	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_HISTORICO	TABELA	documento_qualidade_aprovacao;documento_qualidade_versao	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_INDICADOR	TABELA	indicador_versao	N	REL	F3	formulario como fonte do indicador
+DBAPORTAL	DOCUMENTO_INDICADOR_REUNIAO	MECANISMO	arquivo	N	REL	F8	anexo; metadado em reuniao_analise_critica
+DBAPORTAL	DOCUMENTO_INICIATIVA	MECANISMO	arquivo	N	REL	F8	anexo; metadado em iniciativa_estrategica
+DBAPORTAL	DOCUMENTO_INTERNO_VERSAO	TABELA	documento_qualidade_versao	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_LINK	TABELA	documento_qualidade_referencia	N	QUA	F8	
+DBAPORTAL	DOCUMENTO_NOTA	TABELA	documento_qualidade_nota	S	QUA	F8	
+DBAPORTAL	DUMMY_SEQ	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	DURACAO_ATIVIDADE	TABELA	apontamento_hora_iniciativa	S	REL	F8	
+DBAPORTAL	DW_DATAMART	MECANISMO	datamart	N	REL	F3	configuracao do data mart
+DBAPORTAL	DW_DATAMART_TABELA	MECANISMO	datamart	N	REL	F3	configuracao do data mart
+DBAPORTAL	DW_IVM	MECANISMO	datamart	N	REL	F3	fato de indicador por setor
+DBAPORTAL	DW_TABELA	MECANISMO	datamart	N	REL	F3	configuracao do data mart
+DBAPORTAL	ENDERECO	TABELA	endereco_pessoa	N	CAD	F3	
+DBAPORTAL	ESTAT_CON_MULT	NAO		N	SIS		sem valor de negocio
+DBAPORTAL	ESTAT_CON_MV	MECANISMO	trilha_auditoria	N	ADM	F3	registro de conexoes
+DBAPORTAL	ESTQ_CONS_TEMP	NAO		N	SUP		copia/backup
+DBAPORTAL	ESTRATEGIA	TABELA	mapa_estrategico	N	REL	F8	
+DBAPORTAL	ESTRATEGIA_ANALISE_CC	TABELA	reuniao_analise_critica	N	REL	F8	analise critica da estrategia por competencia
+DBAPORTAL	ESTRATEGIA_MAPA_DIAGRAMA	TABELA	mapa_estrategico	N	REL	F8	desenho do mapa
+DBAPORTAL	ESTRATEGIA_MAPA_IMAGEM	MECANISMO	arquivo	N	REL	F8	imagem; metadado em mapa_estrategico
+DBAPORTAL	ESTRATEGIA_OBJETIVO_INDICADOR	TABELA	objetivo_estrategico_indicador	N	REL	F8	
+DBAPORTAL	ESTRATEGIA_TEMA_ESTRATEGICO	TABELA	tema_estrategico	N	REL	F8	
+DBAPORTAL	EVENTO_SENTINELA	TABELA	tipo_incidente;indicador	N	QUA	F7	evento sentinela e marcado no tipo e monitorado por indicador
+DBAPORTAL	EXCECAO	TABELA	calendario_trabalho_excecao	S	CAD	F8	
+DBAPORTAL	EXEC_FORMULA	MECANISMO	framework	N	SIS	F3	fila do agendador de calculo
+DBAPORTAL	FATOR_RISCO	TABELA	causa_risco	N	QUA	F8	
+DBAPORTAL	FICHA_INDICADOR_DOCUMENTO	MECANISMO	arquivo	N	REL	F3	anexo; metadado em analise_critica_indicador
+DBAPORTAL	FICHA_IVM	TABELA	analise_critica_indicador	N	REL	F7	
+DBAPORTAL	FICHA_IVM_FAVORITOS	TABELA	painel_gerencial_item	N	REL	F3	lista pessoal de indicadores vira painel do usuario
+DBAPORTAL	FICHA_IVM_TEMP	NAO		N	REL		copia/backup
+DBAPORTAL	FICHA_OBJETIVO	TABELA	analise_objetivo_estrategico	S	REL	F8	
+DBAPORTAL	FICHA_OBJ_TEMP	NAO		N	REL		copia/backup
+DBAPORTAL	FICHA_PESSOA_ANALISE	TABELA	analise_critica_indicador	N	REL	F7	responsaveis da analise
+DBAPORTAL	FICHA_RISCO	TABELA	avaliacao_risco	N	QUA	F8	
+DBAPORTAL	FILTRO_AUTOMATION	MECANISMO	framework	N	SIS	F3	filtro de automacao de tela
+DBAPORTAL	FILTRO_CLASSIFICACAO	TABELA	regra_classificacao_incidente_criterio	S	QUA	F8	
+DBAPORTAL	FILTRO_DINAMICO_DOCUMENTO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FILTRO_DOCUMENTO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FILTRO_INICIATIVA_ACAO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FILTRO_OCORRENCIA	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FILTRO_PADRAO_DOCUMENTO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FILTRO_PADRAO_PROJETO	TABELA	preferencia_tela_usuario	N	ADM	F3	filtro salvo de tela
+DBAPORTAL	FLUXO_CAIXA	TABELA	cenario_fluxo_caixa	N	FIN	F8	
+DBAPORTAL	FLUXO_CAIXA_CONTAS	TABELA	cenario_fluxo_caixa_conta	S	FIN	F8	
+DBAPORTAL	FLUXO_DOC_USUARIO_PAPEL	TABELA	documento_qualidade_aprovacao	N	QUA	F8	etapas e responsaveis do fluxo do documento
+DBAPORTAL	FLUXO_OCORRENCIA	TABELA	etapa_fluxo_incidente	S	QUA	F7	
+DBAPORTAL	FLUXO_QUADRO_OCORRENCIA	TABELA	notificacao_incidente_evento	N	QUA	F7	
+DBAPORTAL	FORMULA	TABELA	indicador_versao	N	REL	F3	
+DBAPORTAL	FORMULARIO	TABELA	campo_tipo_incidente	N	QUA	F7	formulario da notificacao por tipo
+DBAPORTAL	FORMULARIO_ORGANIZACAO	TABELA	campo_tipo_incidente	N	QUA	F7	escopo do formulario por estabelecimento
+DBAPORTAL	FUNCAO	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	FUNCAO_MODULO_SISTEMA	MECANISMO	framework	N	SIS	F3	funcao de modulo do produto
+DBAPORTAL	GESTAO	TABELA	grupo_indicador	N	REL	F3	
+DBAPORTAL	GESTAO_COMPETENCIA	TABELA	apuracao_indicador	N	REL	F3	abertura e fechamento da competencia
+DBAPORTAL	GRUPO_ANALISE	TABELA	classificacao_centro_custo	N	FIN	F3	
+DBAPORTAL	GRUPO_CLASSIFICACAO	TABELA	regra_classificacao_incidente	S	QUA	F8	
+DBAPORTAL	GRUPO_CONTABIL	TABELA	conta_contabil	N	FIN	F7	grupo vira conta sintetica
+DBAPORTAL	GRUPO_INDICADOR	TABELA	grupo_indicador	N	REL	F3	
+DBAPORTAL	GRUPO_PROJETO	TABELA	iniciativa_estrategica	N	REL	F8	programa de projetos vira iniciativa mae
+DBAPORTAL	GR_MP_RISCO_CLASSIFICACAO	TABELA	avaliacao_risco	N	QUA	F8	
+DBAPORTAL	GR_RESP_RISCO_CLASSIFICACAO	TABELA	avaliacao_risco	N	QUA	F8	
+DBAPORTAL	GUT_ITEM_ISHIKAWA	TABELA	analise_incidente_causa	N	QUA	F7	priorizacao da causa
+DBAPORTAL	HISTORICO_REG_OCORRENCIA	TABELA	notificacao_incidente_evento	N	QUA	F7	
+DBAPORTAL	INDICADOR	TABELA	indicador	N	REL	F3	
+DBAPORTAL	INDICADOR_ANALISE_CRITICA	TABELA	analise_critica_indicador	N	REL	F7	
+DBAPORTAL	INDICADOR_OCORRENCIA	TABELA	indicador_versao	N	REL	F3	tipo de incidente como fonte do indicador
+DBAPORTAL	INDICADOR_PRIMARIO	TABELA	indicador_versao	N	REL	F3	
+DBAPORTAL	INDICADOR_REUNIAO	TABELA	analise_critica_indicador;reuniao_analise_critica	N	REL	F7	
+DBAPORTAL	IND_CAUSA_EFEITO	TABELA	indicador_relacao	S	REL	F8	
+DBAPORTAL	IND_VISUALIZACAO	TABELA	painel_gerencial_item	N	REL	F3	
+DBAPORTAL	IND_VISUALIZACAO_IND_REUNIAO	TABELA	reuniao_analise_critica	N	REL	F8	graficos exibidos na reuniao
+DBAPORTAL	IND_VISUALIZACAO_TEMP	NAO		N	REL		copia/backup
+DBAPORTAL	INICIATIVA_ACAO	TABELA	iniciativa_estrategica;iniciativa_estrategica_acao;acao_plano_qualidade	N	REL	F8	
+DBAPORTAL	INICIATIVA_ACAO_ACHADO	TABELA	acao_plano_qualidade	N	QUA	F7	origem da acao em achado de auditoria
+DBAPORTAL	INICIATIVA_ACAO_INDICADOR	TABELA	iniciativa_estrategica_indicador	S	REL	F8	
+DBAPORTAL	INICIATIVA_ACAO_OBJETIVO	TABELA	iniciativa_estrategica_objetivo	N	REL	F8	
+DBAPORTAL	INICIATIVA_ACAO_REG_OCO_CR	TABELA	acao_plano_qualidade	N	QUA	F7	acao ligada a causa raiz
+DBAPORTAL	INICIATIVA_ACAO_SINC	MECANISMO	integracao	N	INTG	F8	sincronia com ferramenta externa de projetos
+DBAPORTAL	INICIATIVA_CR_ISHIKAWA	TABELA	acao_plano_qualidade	N	QUA	F7	acao ligada a causa raiz
+DBAPORTAL	INICIATIVA_INDICADOR_REUNIAO	TABELA	reuniao_analise_critica_deliberacao	N	REL	F8	
+DBAPORTAL	INI_ACAO_DELETADOS	MECANISMO	trilha_auditoria	N	ADM	F3	registro de exclusao
+DBAPORTAL	INTEGRACAO_PESSOA	TABELA	identificador_externo_pessoa	N	INTG	F3	
+DBAPORTAL	ISHIKAWA_OCORRENCIA	TABELA	analise_incidente	N	QUA	F7	metodo causa e efeito
+DBAPORTAL	ITEM_CAUSA_RAIZ_ISHIKAWA	TABELA	analise_incidente_causa	N	QUA	F7	
+DBAPORTAL	ITEM_QUESTIONARIO_ANALISE	TABELA	modelo_checklist_qualidade_item	N	QUA	F7	
+DBAPORTAL	ITEM_TEMPLATE_IND_REUNIAO	TABELA	modelo_pauta_analise_critica_item;modelo_pauta_analise_critica	S	REL	F8	
+DBAPORTAL	ITLAN_MED_TEMP	NAO		N	REL		copia/backup: area temporaria da simulacao de receita
+DBAPORTAL	ITREG_FAT_TEMP	NAO		N	REL		copia/backup: area temporaria da simulacao de receita
+DBAPORTAL	IT_CONFIGURACAO	MECANISMO	parametro	N	ADM	F3	configuracao solta
+DBAPORTAL	IT_KPI_IMP_VALOR_INDICADOR	MECANISMO	integracao	N	INTG	F3	importacao de valores; destino final em apuracao_indicador
+DBAPORTAL	IVM	TABELA	indicador;indicador_versao	N	REL	F3	
+DBAPORTAL	IVM_DIMENSIONALIDADE	TABELA	apuracao_indicador_estrato	N	REL	F7	
+DBAPORTAL	IVM_FAIXA	TABELA	faixa_indicador	N	REL	F3	
+DBAPORTAL	IVM_FONTE_FORMULA	TABELA	indicador_versao	N	REL	F3	
+DBAPORTAL	IVM_FONTE_INDICADOR	TABELA	indicador_versao	N	REL	F3	
+DBAPORTAL	IVM_GRUPO_INDICADOR	TABELA	indicador;grupo_indicador	N	REL	F3	
+DBAPORTAL	IVM_LINK	TABELA	indicador_versao	N	REL	F3	
+DBAPORTAL	IVM_REFERENCIA	TABELA	indicador_referencia	S	REL	F8	
+DBAPORTAL	IVM_USUARIO_EMAIL	TABELA	assinatura_alerta	N	ADM	F3	
+DBAPORTAL	JAVA$CLASS$MD5$TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	KPI_IMP_VALOR_INDICADOR	MECANISMO	integracao	N	INTG	F3	lote de importacao de valores
+DBAPORTAL	LINK	MECANISMO	parametro	N	ADM	F3	endereco e logotipo da instalacao
+DBAPORTAL	LISTA_FIXA_DIMENSAO	MECANISMO	datamart	N	REL	F3	valor fixo de dimensao
+DBAPORTAL	MAPA	TABELA	carteira_risco	S	QUA	F8	
+DBAPORTAL	MAPA_RISCO	TABELA	risco_institucional	N	QUA	F8	
+DBAPORTAL	MAPA_RISCO_AUDITORIA	TABELA	risco_institucional_controle	N	QUA	F8	
+DBAPORTAL	MAPA_RISCO_AUDITORIA_DOC_ANEXO	MECANISMO	arquivo	N	QUA	F8	anexo; metadado em risco_institucional_controle
+DBAPORTAL	MATRIZ_RISCO	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	MENSAGEM	TABELA	mensagem_interna	N	ADM	F3	
+DBAPORTAL	MENSAGEM_NOTICIA	TABELA	comunicado	N	ADM	F3	
+DBAPORTAL	MENSAGEM_PORTAL	MECANISMO	framework	N	SIS	F3	textos de mensagem do produto
+DBAPORTAL	META_INDICADOR	TABELA	meta_indicador	N	REL	F3	
+DBAPORTAL	META_MENSAL	TABELA	meta_indicador	N	REL	F3	
+DBAPORTAL	METODO_DETECCAO_OCORRENCIA	TABELA	metodo_deteccao_incidente	N	QUA	F7	
+DBAPORTAL	METODO_DETECCAO_OCOR_ORG	TABELA	metodo_deteccao_incidente	N	QUA	F7	escopo por estabelecimento
+DBAPORTAL	MODULO_PERM_USUARIO_TEMP	NAO		N	ADM		copia/backup
+DBAPORTAL	MODULO_SISTEMA	TABELA	modulo_sistema	N	ADM	F3	
+DBAPORTAL	MUDANCA_SETOR	MECANISMO	historico_entidade:usuario_unidade	N	ADM	F3	lotacao do usuario com vigencia
+DBAPORTAL	NIVEL_IMPACTO	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	NIVEL_PROBABILIDADE	TABELA	escala_avaliacao_risco	N	QUA	F8	
+DBAPORTAL	NOTA_INICIATIVA	TABELA	iniciativa_estrategica_nota	S	REL	F8	
+DBAPORTAL	NOTA_REG_OCORRENCIA	TABELA	notificacao_incidente_nota	S	QUA	F7	
+DBAPORTAL	NOTIFICACAO	TABELA	notificacao_usuario	N	ADM	F3	
+DBAPORTAL	OBJETIVO	TABELA	objetivo_estrategico	N	REL	F8	
+DBAPORTAL	OBJETIVO_CAUSA_EFEITO	TABELA	objetivo_estrategico_relacao	N	REL	F8	
+DBAPORTAL	OBJETIVO_CONTRIBUICAO	TABELA	objetivo_estrategico_relacao	N	REL	F8	
+DBAPORTAL	OBJETO_DE_PARA	TABELA	mapeamento_codigo_externo	N	INTG	F3	
+DBAPORTAL	OCORRENCIA	TABELA	tipo_incidente	N	QUA	F7	
+DBAPORTAL	OCORRENCIA_DOCUMENTO	MECANISMO	arquivo	N	QUA	F7	anexo; metadado em notificacao_incidente
+DBAPORTAL	OCORRENCIA_WORKFLOW_FORMULARIO	TABELA	campo_tipo_incidente	N	QUA	F7	
+DBAPORTAL	ORDEM_ESTRATEGIA_PERSPECTIVA	TABELA	mapa_estrategico;perspectiva_estrategica	N	REL	F8	
+DBAPORTAL	ORDENACAO_PREFERENCIA	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBAPORTAL	ORGANIZACAO	TABELA	estabelecimento	N	CAD	F3	
+DBAPORTAL	ORGANIZACAO_TELEFONE	TABELA	telefone_pessoa	N	CAD	F3	
+DBAPORTAL	ORG_COMPETENCIA_CONFIG	MECANISMO	parametro	N	ADM	F3	dias de abertura e fechamento da competencia
+DBAPORTAL	PAPEL_EVENTO_SENT	TABELA	regra_alerta_destinatario	N	ADM	F7	
+DBAPORTAL	PARA_MENSAGEM	TABELA	mensagem_interna_destinatario	N	ADM	F3	
+DBAPORTAL	PENDENCIA	TABELA	tarefa_usuario	S	ADM	F8	
+DBAPORTAL	PENDENCIA_IVM	TABELA	analise_critica_indicador	N	REL	F7	pendencia de analise do indicador
+DBAPORTAL	PERFIL_INICIATIVA_ACAO	TABELA	iniciativa_estrategica_participante	S	REL	F8	
+DBAPORTAL	PERFIL_KPI	TABELA	usuario_escopo	N	ADM	F7	
+DBAPORTAL	PERFIL_MAPA	TABELA	usuario_escopo	N	ADM	F7	acesso a carteira de riscos
+DBAPORTAL	PERFIL_REUNIAO	TABELA	reuniao_analise_critica_participante	N	REL	F8	
+DBAPORTAL	PERFIL_SETOR	TABELA	usuario_escopo	N	ADM	F7	
+DBAPORTAL	PERFIL_TIPO_OCORRENCIA	TABELA	usuario_escopo;regra_alerta_destinatario	N	ADM	F7	
+DBAPORTAL	PERGUNTA	TABELA	campo_tipo_incidente	N	QUA	F7	
+DBAPORTAL	PERGUNTA_DOC_INDICADOR	TABELA	indicador_versao	N	REL	F3	pergunta do formulario como fonte do indicador
+DBAPORTAL	PERGUNTA_ORGANIZACAO	MECANISMO	parametro	N	ADM	F3	perguntas do perfil do estabelecimento
+DBAPORTAL	PERGUNTA_ORGANIZACAO_TEMP	NAO		N	ADM		copia/backup
+DBAPORTAL	PERSPECTIVA	TABELA	perspectiva_estrategica	N	REL	F8	
+DBAPORTAL	PERSPECTIVA_ORGANIZACAO	TABELA	perspectiva_estrategica	N	REL	F8	
+DBAPORTAL	PESSOAS_REUNIAO	TABELA	reuniao_analise_critica_participante	N	REL	F8	
+DBAPORTAL	PESSOA_EVENTO_SENT	TABELA	regra_alerta_destinatario	N	ADM	F7	
+DBAPORTAL	PESSOA_INTEGRACAO	TABELA	identificador_externo_pessoa	N	INTG	F3	
+DBAPORTAL	PESSOA_OUT	MECANISMO	integracao	N	INTG	F8	area de exportacao de pessoas
+DBAPORTAL	PLANILHA_DECISAO	TABELA	indicador_relacao	S	REL	F8	
+DBAPORTAL	PLAN_TABLE	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	PLSQL_PROFILER_DATA	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	PLSQL_PROFILER_RUNS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	PLSQL_PROFILER_UNITS	NAO		N	SIS		tecnico do fornecedor sem equivalente
+DBAPORTAL	PRATICA_CONTROLE	TABELA	controle_risco	N	QUA	F8	
+DBAPORTAL	PRATICA_CONTROLE_DOCUMENTO	TABELA	documento_qualidade_referencia	N	QUA	F8	
+DBAPORTAL	PRATICA_CONTROLE_DOC_ANEXO	MECANISMO	arquivo	N	QUA	F8	anexo; metadado em controle_risco
+DBAPORTAL	PREFERENCIA_GRAFICO	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBAPORTAL	PREFERENCIA_IND_VISUALIZACAO	TABELA	painel_gerencial_item	N	REL	F3	
+DBAPORTAL	PREFERENCIA_OCORRENCIA	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBAPORTAL	PREFERENCIA_PROJETOS	TABELA	preferencia_tela_usuario	N	ADM	F3	
+DBAPORTAL	PRE_PROJETO	TABELA	proposta_iniciativa	S	REL	F8	
+DBAPORTAL	PRE_PROJETO_MATERIAL	TABELA	proposta_iniciativa_recurso	S	REL	F8	
+DBAPORTAL	PRE_PROJETO_RECURSO	TABELA	proposta_iniciativa_recurso	S	REL	F8	
+DBAPORTAL	PROCESSO	TABELA	processo_institucional	N	QUA	F8	
+DBAPORTAL	PROCESSO_DOCUMENTO	TABELA	documento_qualidade_referencia	N	QUA	F8	
+DBAPORTAL	PROCESSO_DOC_ANEXO	MECANISMO	arquivo	N	QUA	F8	anexo; metadado em processo_institucional
+DBAPORTAL	PROGRAMA	TABELA	painel_gerencial	N	REL	F3	programa de indicadores vira painel
+DBAPORTAL	PROGRAMA_INDICADOR	TABELA	painel_gerencial_item	N	REL	F3	
+DBAPORTAL	PUBLIC_USU_INIC_ACAO	TABELA	iniciativa_estrategica_participante	S	REL	F8	
+DBAPORTAL	QUESTIONARIO_ANALISE	TABELA	modelo_checklist_qualidade	N	QUA	F7	
+DBAPORTAL	REFERENCIA	TABELA	fonte_referencia_indicador	S	REL	F8	
+DBAPORTAL	REFERENCIA_MV	NAO		N	REL		tecnico do fornecedor sem equivalente
+DBAPORTAL	REGISTRO_OCORRENCIA	TABELA	notificacao_incidente	N	QUA	F7	
+DBAPORTAL	REGRA_GP	TABELA	usuario_escopo	N	ADM	F7	regra de acesso padrao a projetos
+DBAPORTAL	REG_EVENTO_SENT	TABELA	notificacao_incidente	N	QUA	F7	registro de evento sentinela
+DBAPORTAL	REG_OCORRENCIA_CAUSA_RAIZ	TABELA	analise_incidente_causa	N	QUA	F7	

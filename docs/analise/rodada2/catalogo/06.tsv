@@ -1,0 +1,355 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+contrato_fonte_pagadora	FAT	principal	F3	Acordo comercial do hospital com a fonte pagadora ou plano, com vigência, situação e regras gerais de cobrança	R1#1; SP: colunas de contrato de TBCONVEN; MV: CONVENIO_PRO_FAT; dep: fonte_pagadora, plano_fonte_pagadora (02); conflitos: termo fonte_pagadora
+contrato_fonte_pagadora_versao	FAT	historico	F3	Aditivos e versões do acordo comercial, com vigência, para valorar a conta pela regra da data do atendimento	R1#1; SP: TBHIST* por convênio; MV: GRUPO_VAL_CONVENIO
+contrato_tabela_vigencia	FAT	configuracao	F3	Qual tabela de preço vale para cada tipo de item (honorário externo, internação, diária, mat/med) em cada vigência do acordo	R1#1; SP: TBHISTTABMM, TBHISTTABTHME, TBHISTTABTHMI, TBHISTTABDTH; MV: CONVENIO_PRO_FAT
+regra_percentual_cobranca	FAT	configuracao	F3	Percentual ou valor fixo sobre honorário, anestesia, filme, horário e mat/med aplicado pelo acordo a cada tabela	R1#1; SP: TBPERTHM, TBPERMEM; MV: EXCECAO_PERCENTUAL_COBRANCA
+regra_desconto_grupo	FAT	configuracao	F3	Desconto ou acréscimo percentual do acordo por grupo e subgrupo de despesa	R1#1; SP: TBSUBDES; MV: TAB_FAT_GRU_PRO
+regra_via_acesso	FAT	configuracao	F3	Percentual pago por procedimento em cirurgia múltipla, conforme a via de acesso (única, mesma, diferentes)	R1#1; SP: TBFORMULAPAGTO, TBTISSVIAACES
+item_isento_cobranca	FAT	configuracao	F3	Itens que o acordo manda não cobrar da fonte pagadora, com vigência e motivo	R1#1; MV: CONVENIO_PRO_FAT_ISENTO
+teto_cobranca	FAT	configuracao	F3	Valor máximo de cobrança por item, grupo ou conta definido no acordo com a fonte pagadora	R1#1; MV: CONV_PLAN_VAL_TETO, VAL_TETO_CPM_EXCECAO
+item_alto_custo_contrato	FAT	configuracao	F3	Itens de alto custo com regra própria no acordo (cobrança à parte, autorização ou preço negociado)	R1#1; MV: PRO_FAT_ALTO_CUSTO
+referencia_emissao_matmed	FAT	configuracao	F3	Qual referência (preço máximo ao consumidor ou de fábrica, código e descrição) sai na conta de mat/med por fonte pagadora	R1#1; SP: TBEMIREF
+referencia_emissao_matmed_excecao	FAT	configuracao	F3	Exceção da referência de emissão para um item de mat/med específico numa fonte pagadora	R1#1; SP: TBEMIREFMATMED
+diaria_por_plano_local	FAT	configuracao	F3	Diária aplicada por acordo, tipo de plano (apartamento, enfermaria) e local de cobrança da conta	R1#1; SP: TBTIPPLCONV; dep: plano_fonte_pagadora (02)
+calendario_entrega_fatura	FAT	configuracao	F3	Dias de entrega da fatura e prazo de pagamento combinados com cada fonte pagadora	R1#1; SP: TBENTCON; MV: CRONOGRAMA_RECEB_CONV_FFCV; dep: premissa de recebimento (07)
+regra_consistencia_lancamento	FAT	configuracao	F3	Regras tipadas do acordo que validam o lançamento: material obrigatório, item de referência inativo, data base do cálculo, requisitante	R1#1 lacuna 10; SP: TBCONVCONSMAT, TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVMEDREQATD, TBCONVCOBTXPA, TBCONVPERCTAPAC, TBTPOBRIGAMAT (opções como enumeração)
+tipo_servico_contratado	FAT	dominio	F3	Tipos de serviço que podem ser contratados com a fonte pagadora (internação, laboratório, imagem, terapia)	R1#1; SP: TBSRVCON
+contrato_servico	FAT	vinculo	F3	Serviços cobertos por cada acordo com a fonte pagadora, com vigência	R1#1; SP: TBSRVCON; MV: TISS_CONF_SERVICO_CONV
+coparticipacao_contrato	FAT	configuracao	F3	Coparticipação do beneficiário por plano: por valor ou percentual, com limite e itens alcançados	R1#19; SP: TBTIPCOPART, TBTIPPLANO; dep: plano_fonte_pagadora (02); lado operadora é regra_coparticipacao (08)
+fator_acomodacao	FAT	configuracao	F7	Multiplicador do honorário ou da taxa conforme a acomodação do paciente, por acordo e vigência	R1#5; MV: INDICE_ACOMODACAO*
+item_faturavel	FAT	principal	F3	Cadastro único do que pode ser cobrado (procedimento, taxa, diária, gás, pacote, mat/med), com grupo, tipo e situação	R1#2; SP: TBTIPPRO, TBTABTHM, TBTABDTH; MV: PRO_FAT*; dep: produto (05) para mat/med
+item_faturavel_relacionado	FAT	vinculo	F3	Itens ligados a outro item faturável (hierarquia, item acessório lançado junto, equivalente)	R1#2; MV: PRO_FAT_HIERARQUIZADO*, VAL_PRO_RELACIONADO*
+grupo_faturamento	FAT	dominio	F3	Grupos de faturamento que organizam os itens cobráveis e os relatórios da conta	R1#2; MV: GRU_FAT*, GRU_PRO*
+subgrupo_faturamento	FAT	dominio	F3	Subdivisão do grupo de faturamento, usada em desconto por grupo e no repasse	R1#2; SP: TBSUBDES; MV: GRU_PRO*
+classificacao_despesa	FAT	dominio	F3	Classificação da despesa do item com o código correspondente da TISS (taxa, diária, gás, material, medicamento)	R1#2; SP: TBCLASSI; MV: TIP_DETALHE_GRU_FAT
+tipo_lancamento	FAT	dominio	F3	Natureza do lançamento: serviço hospitalar, honorário profissional, serviço complementar, mat/med	R1#2; SP: TBTPLANC
+terminologia_tipo_lancamento	FAT	vinculo	F3	Qual terminologia TUSS se aplica a cada tipo de lançamento da conta na hora da guia	R1#7; SP: TBTISSTERMO_TBTPLANC; dep: terminologia (08)
+local_cobranca	FAT	dominio	F3	Locais de cobrança da conta (UTI, apartamento, pronto atendimento, exames)	R1#2; SP: TBLOCCON
+grupo_ato	FAT	dominio	F3	Grupos de ato profissional (patologia clínica, radiologia, cardiologia, filme) usados na valoração	R1#2; SP: TBTABATO
+tipo_atendimento_tabela	FAT	dominio	F3	Tipos de atendimento a que um item da tabela se aplica (consulta, exame, internação, presencial)	R1#2; SP: TBITEATE, TBCTRTAT
+tipo_servico_faturavel	FAT	dominio	F3	Classificação do item faturável por tipo de serviço, usada em regra, relatório e repasse	R1#2; SP: TBTIPPRO
+funcao_equipe_cobranca	FAT	dominio	F3	Função do profissional considerada na cobrança e no repasse: titular, auxiliares, anestesista	R1#15; SP: TBCOSPPROF, TBTPPROFPROC; grau TUSS (TBGRAUPARTPROC, TBTISSPOSPROF) em terminologia (08)
+item_faturavel_acomodacao	FAT	vinculo	F7	Restrição ou variação do item faturável por tipo de acomodação	R1#2; MV: ACOMOD_PRO_FAT
+tipo_conta	FAT	dominio	F3	Tipo de conta do paciente: ambulatorial, externa, internação, particular, SUS	R1#12; SP: RECONTAS x RICONTAS
+tabela_preco	FAT	principal	F3	Tabela de preço de procedimentos e serviços (AMB, CBHPM, TUSS, própria ou da operadora) com origem e moeda de cálculo	R1#3; SP: TBPROCTO, FCPROCUNIBHMED; MV: TAB_FAT*
+versao_tabela_preco	FAT	historico	F3	Edição publicada de uma tabela de preço, com data de vigência e origem da carga	R1#3; SP: HTPROCTO; MV: TAB_FAT*
+preco_procedimento	FAT	item	F3	Procedimento dentro da tabela: código, porte, quantidade de índices, filme, auxiliares e equivalência TUSS	R1#3; SP: TBTABTHM, TBPROCTO, FCREFUND; MV: VAL_PRO*
+preco_procedimento_valor	FAT	historico	F3	Valores do procedimento na tabela (índice, custo operacional, filme, anestesia) por vigência	R1#3; SP: TBVLRTHM; MV: VAL_PRO*, VAL_HONO
+faixa_fator_tabela	FAT	configuracao	F7	Fator multiplicador por faixa de valor ou quantidade aplicado a uma tabela de preço	R1#3; MV: FAIXA_FATORES_TABFAT, VAL_EXCED
+lote_reajuste	FAT	principal	F3	Reajuste aplicado em lote a uma tabela ou acordo, com percentual, escopo, autor e possibilidade de desfazer	R1#3; new-sgh: reajuste em lote
+lote_reajuste_item	FAT	item	F3	Valor anterior e novo de cada preço alterado por um lote de reajuste, para auditoria e desfazer	R1#3
+importacao_tabela	FAT	principal	F3	Carga de tabela de preço ou de referência de mat/med, com arquivo, edição, contagem e situação	R1#3, R1#6; MV: IMP_SIMPRO, LOG_BRASINDICE, LOG_SIMPRO
+importacao_tabela_diferenca	FAT	item	F3	Diferença encontrada na carga (item novo, preço alterado, item retirado) para conferência antes de aplicar	R1#3
+preco_diaria_taxa	FAT	item	F3	Diária, taxa, gás ou pacote dentro da tabela, com unidade e equivalência TUSS	R1#4; SP: TBTABDTH
+preco_diaria_taxa_valor	FAT	historico	F3	Valor da diária ou taxa na tabela por vigência	R1#4; SP: TBVLRDTH
+diaria_taxa_centro_custo	FAT	vinculo	F3	Diária ou taxa associada ao centro de custo que a gera, por tabela	R1#4; SP: TBDTHCDC; dep: centro_custo (07)
+indice_cobranca	FAT	dominio	F3	Índices de valoração (coeficiente de honorário, custo operacional, filme, porte)	R1#5; SP: TBINDICE; MV: VAL_INDICE*
+valor_indice	FAT	historico	F3	Valor monetário do índice por acordo ou tabela e vigência	R1#5; SP: TBINDICE; MV: VAL_INDICE
+valor_indice_item	FAT	configuracao	F3	Valor de índice específico para um procedimento numa fonte pagadora, com vigência	R1#5; SP: TBINDPRO
+valor_indice_grupo	FAT	configuracao	F7	Valor de índice diferenciado por grupo de procedimento num acordo	R1#5; MV: VAL_INDICE_GRU_PRO*
+valor_indice_setor	FAT	configuracao	F8	Valor de índice diferenciado por setor executante num acordo	R1#5; MV: VAL_INDICE_SETOR
+porte_procedimento	FAT	dominio	F3	Portes de honorário e de anestesia (escala da CBHPM e de tabelas próprias)	R1#5; MV: PORTE_MEDICO*, PORTE_CIRURGIA*
+valor_porte_medico	FAT	historico	F3	Valor de cada porte de honorário por acordo ou tabela e vigência	R1#5; SP: TBPORMED; MV: VAL_PORTE_MEDICO*
+valor_porte_anestesico	FAT	historico	F3	Valor de cada porte anestésico por tabela e vigência	R1#5; SP: FCPORANE; MV: VAL_PORTE*
+fonte_referencia_matmed	FAT	dominio	F3	Publicações de referência de preço de mat/med (Brasíndice, Simpro, CMED, tabela própria)	R1#6
+edicao_referencia_matmed	FAT	historico	F3	Edição importada de uma referência de mat/med, com data de publicação e vigência	R1#6; SP: TBVERSAOBRASIN; MV: BRASIND, SIMPRO*
+item_referencia_matmed	FAT	principal	F3	Item da referência de mercado: código, apresentação, fabricante, unidade e situação	R1#6; SP: TBMATMED, TBHISTBR; MV: SIMPRO, BRASIND
+preco_referencia_matmed	FAT	historico	F3	Preço de fábrica e máximo ao consumidor do item de referência por edição e vigência	R1#6; SP: TBVLRMEM; MV: PRECOS_SIMPRO*
+equivalencia_matmed_produto	FAT	vinculo	F3	Liga o produto do estoque ao item de referência de mercado usado para precificar a conta	R1#6 lacuna 1 (reprodução mat/med 0,75%); dep: produto (05)
+equivalencia_matmed_fonte_pagadora	FAT	vinculo	F3	Código e descrição do item de mat/med na tabela de cada operadora	R1#6; SP: TBREFUNI; MV: VAL_PROD_CONV
+equivalencia_matmed_tuss	FAT	vinculo	F3	De-para do item de referência de mat/med para o código TUSS, com vigência	R1#6; SP: TBREFMEMTUSS
+preco_negociado_matmed	FAT	configuracao	F3	Preço fixo de um mat/med negociado com a fonte pagadora, que prevalece sobre a referência	R1#6; SP: TBPERMEM (valor fixo); MV: VAL_PROD_CONV
+versao_padrao_tiss	FAT	catalogo_publico	F3	Versões do padrão TISS (troca, monitoramento) com vigência e esquema aceito	R1#7; SP: TBVERSAOTISS, TBVERSAOTISSPAD, TBVERSAOTISSMONIT; MV: TISS_VERSAO*; termos TUSS em terminologia/termo_terminologia (08)
+termo_versao_tiss	FAT	catalogo_publico	F3	Quais termos de uma terminologia TUSS valem em cada versão do padrão TISS	R1#7; SP: TBCBOANS_TBVERSAOTISS; MV: TISS_VERSAO_CBOS; dep: termo_terminologia (08)
+forma_envio_tuss	FAT	catalogo_publico	F3	Forma de envio exigida pela ANS para cada código TUSS (individual, consolidado), com vigência	R1#7; SP: TBTISSFORMAENV
+codigo_prestador_fonte_pagadora	FAT	principal	F3	Código do hospital, setor ou profissional junto à fonte pagadora, com dados bancários e valor de consulta	R1#8; SP: FCCODCON, FCCPSCON, TBCODATI; credencial de portal vai ao cofre de segredos; dep: profissional (02)
+usuario_codigo_prestador	FAT	vinculo	F3	Usuários autorizados a operar com cada código de prestador na fonte pagadora	R1#8; SP: TBCODATI_TBUSERS
+credenciamento_cobranca	FAT	vinculo	F3	Quem pode cobrar o quê em cada fonte pagadora: profissional ou prestador, tipo de conta e ato, com vigência	R1#8; SP: TBCREMED, TBCREPRS, TBMEDSOL_CODCON; MV: PRES_CON, PREST_CONV_CREDENC
+excecao_credenciamento	FAT	configuracao	F3	Exceção ao credenciamento por procedimento, equipe ou plano	R1#8; MV: PRES_CON_EXCECAO, PRESTADOR_CONVENIO_LIBERADO
+item_sem_executante	FAT	configuracao	F7	Itens que a fonte pagadora aceita sem profissional executante informado	R1#8; MV: PRO_FAT_SEM_PRESTADOR
+equivalencia_item_fonte_pagadora	FAT	vinculo	F3	Código de faturamento do item do hospital (exame, serviço) em cada fonte pagadora e tipo de conta	R1#9; SP: SIREFCON
+atributo_guia_fonte_pagadora	FAT	configuracao	F3	Campo adicional que uma operadora exige na guia (por exemplo, classificação oncológica), com tipo e obrigatoriedade	R1#10; SP: TBTPCLASSIFUNIBH, TBTPFASEUNIBH, TBTPPERFILUNIBH, TBTPTRATUNIBH, TBSTATUSPROCESSA
+atributo_guia_opcao	FAT	dominio	F3	Valores possíveis de cada campo adicional da operadora na guia	R1#10; SP: TBTPCLASSIFUNIBH, TBTPFASEUNIBH, TBTPPERFILUNIBH, TBTPTRATUNIBH
+valor_atributo_guia	FAT	item	F3	Valor informado de um campo adicional da operadora numa guia específica	R1#10
+restricao_cobertura_fonte_pagadora	FAT	configuracao	F7	Item que a fonte pagadora não cobre ou cobre com condição, para bloquear o lançamento antes da glosa	areas-sem-dono 14; MV: PROIBICAO*, REGRA_PROIBICAO_VALOR; SP: TBPROENF (restrição clínica, grupo 05)
+restricao_cobertura_criterio	FAT	item	F7	Critério da restrição de cobertura: setor, faixa de idade, horário, prestador, carteira ou empresa	areas-sem-dono 14; MV: PROIBICAO_SETOR, PROIBICAO_IDADE, PROIBICAO_HORA, PREST_GRU_PRO_PROIBIDO, PREST_ORI_PROIBIDO, PROIBICAO_CARTEIRA
+restricao_cobertura_excecao	FAT	principal	F7	Liberação excepcional de item restrito para um atendimento, com justificativa, documento e autor	areas-sem-dono 14; MV: PROIBICAO_EXCEPCIONAL*, IT_PROIBICAO_EXCEPCIONAL
+compatibilidade_procedimento	FAT	configuracao	F7	Pares de procedimentos compatíveis ou incompatíveis na mesma conta para uma fonte pagadora	areas-sem-dono 14; MV: COMPAT_PROCEDIMENTO, INCOMPAT_PROCEDIMENTO
+conta_hospitalar	FAT	principal	F3	Conta do paciente por atendimento e fonte pagadora: abertura, competência, valores, situação e fechamento	R1#12; SP: FCCTAEXT, RECONTAS, RICONTAS; MV: REG_FAT*, REG_AMB*; dep: atendimento, vinculo_atendimento_conta (02)
+conta_hospitalar_periodo	FAT	item	F3	Período parcial da conta de internação (faixa de data e hora e competência) faturado em separado	R1#12; SP: FCFAIPAC, RICONTAS
+situacao_conta	FAT	dominio	F3	Situações da conta: aberta, em conferência, auditada, fechada, faturada, cancelada	R1#12
+etapa_conta	FAT	dominio	F3	Etapas do fluxo da conta (lançamento, conferência, auditoria, pendência, remessa)	R1#12; MV: SETOR_FATURAMENTO
+conta_hospitalar_etapa	FAT	historico	F3	Linha do tempo da conta: cada mudança de etapa ou situação com data, responsável e motivo	R1#12; MV: LOG_* da conta (trilha própria do negócio)
+conta_hospitalar_diagnostico	FAT	item	F3	CIDs da conta (principal e secundários) usados na guia, na CIHA e na auditoria	R1#12; MV: CID_REG_FAT; dep: CID em terminologia (08)
+conta_hospitalar_segurado	FAT	item	F3	Dados do segurado na conta: carteira, validade, titular e dados funcionais do servidor	R1#12; SP: FCDIAEXT, FCDIAINT; dep: cobertura_paciente (02)
+motivo_cancelamento_conta	FAT	dominio	F3	Motivos de cancelamento da conta	R1#12; MV: CANC_REG_FAT, CANC_REG_AMB
+motivo_reabertura_conta	FAT	dominio	F3	Motivos de reabertura de conta já fechada	R1#12; new-sgh: reabrir conta
+celula_faturamento	FAT	dominio	F7	Equipes ou setores de faturamento responsáveis pelas contas	R1#12; MV: SETOR_FATURAMENTO
+celula_faturamento_fonte_pagadora	FAT	vinculo	F7	Fontes pagadoras e tipos de conta atendidos por cada equipe de faturamento	R1#12; MV: SETOR_FATURAMENTO
+conta_hospitalar_unificacao	FAT	historico	F8	Junção de contas do mesmo paciente numa só, com as contas de origem e o autor	R1#12; MV: CONTA_UNIFICADA
+regra_fechamento_automatico_conta	FAT	configuracao	F8	Condições para fechar a conta sem intervenção (tipo, fonte pagadora, prazo após alta, sem pendência)	R1#12; MV: CONFIG_FECHA_CONTA_AUT
+regra_criacao_conta	FAT	configuracao	F8	Regra que cria ou quebra a conta automaticamente por origem, setor, fonte pagadora ou período	R1#13; MV: REGRA_CRIA_CONTA_FFCV, RELACIONADO_REGRA_CRIA_CONTA
+regra_criacao_conta_agrupamento	FAT	configuracao	F8	Critérios de agrupamento de atendimentos na mesma conta dentro de uma regra de criação	R1#13; MV: AGRUPA_REGRA_CRIA_CONTA_FFCV*
+regra_criacao_conta_excecao	FAT	configuracao	F8	Exceções à regra de criação ou quebra de conta	R1#13; MV: EXCECAO_REGRA_CRIA_CONTA_FFCV
+transferencia_conta	FAT	principal	F3	Troca de fonte pagadora, conta ou estabelecimento de itens já lançados, com motivo e autor	R1#14; SP: RITRFCON; MV: TRANSFERE_CONTAS, TRANSFERE_EMPRESA_CONVENIO
+transferencia_conta_item	FAT	item	F3	Itens movidos numa transferência, com conta de origem e destino e o valor recalculado	R1#14; MV: ALT_CONTA_MOV
+motivo_transferencia_conta	FAT	dominio	F3	Motivos de transferência de conta ou de itens	R1#14; MV: MOTIVO_TRANSFERENCIA
+conta_hospitalar_item	FAT	item	F3	Item lançado na conta (procedimento, taxa, diária, mat/med, honorário) com quantidade, valores, executante e situação	R1#15; SP: FCLANEXT, REPROEXT, RIPROEXT; MV: ITREG_FAT*, ITREG_AMB*
+conta_hospitalar_item_participante	FAT	item	F3	Profissionais do item (equipe), com função, grau de participação TUSS e valor de cada um	R1#15; MV: ITLAN_MED*; dep: profissional (02)
+conta_hospitalar_item_memoria	FAT	historico	F3	Memória do preço do item: tabela, versão, índice, percentuais e regras aplicadas no cálculo	R1#15; observação de modelagem 06
+conta_hospitalar_item_autorizacao	FAT	vinculo	F3	Sequencial do item na guia TISS e a autorização ou senha que o cobre	R1#15; SP: FCLANEXTSEQITEM
+origem_lancamento	FAT	dominio	F3	Origens do lançamento: manual, prescrição, diagnóstico, centro cirúrgico, kit, regra, importação	R1#16
+regra_lancamento	FAT	configuracao	F3	Regra que gera itens na conta a partir de um evento clínico ou administrativo	R1#16; MV: REGRA*
+regra_lancamento_item	FAT	item	F3	Itens que a regra lança, com quantidade e condição	R1#16; MV: ITREGRA*
+regra_lancamento_excecao	FAT	configuracao	F3	Exceção à regra de lançamento por fonte pagadora, setor ou item	R1#16; MV: ITREGRA_EXCECAO*, ITREGRA_EXCECAO_PRO_FAT*, REG_EXC_MATMED
+kit_cobranca	FAT	configuracao	F3	Conjunto de itens cobrados juntos (kit de procedimento ou de sala)	R1#16; MV: CONTA_KIT
+kit_cobranca_item	FAT	item	F3	Itens e quantidades de cada kit de cobrança	R1#16; MV: CONTA_KIT
+lancamento_origem_evento	FAT	principal	F3	Evento de origem recebido (prescrição, exame, cirurgia) e o item que gerou, para rastreio e item tardio	R1#16 lacuna 9; MV: ITPRE_FAT, ITCOB_PRE*
+horario_normal_tabela	FAT	configuracao	F3	Horário de expediente por tabela, fora do qual vale o acréscimo de urgência	R1#17; SP: FCHORATE; dep: dia_nao_util (02)
+acrescimo_horario_especial	FAT	configuracao	F3	Percentual de acréscimo por faixa de horário especial (noturno, fim de semana, feriado) por acordo	R1#17; SP: TBPERTHM; MV: HORARIO_ESPECIAL*
+acrescimo_horario_procedimento	FAT	configuracao	F3	Acréscimo de horário especial específico de um procedimento ou grupo	R1#17; MV: ITHORARIO_ESPECIAL*, HORARIO_ESPECIAL_PROCED
+ajuste_conta	FAT	principal	F3	Acréscimo ou desconto manual na conta, com motivo, valor, autor e aprovação	R1#18; MV: ACRESC_DESCONTOS*, DESC_ACRES_CONTA; alçada pelo mecanismo alcada_aprovacao (01)
+ajuste_conta_item	FAT	item	F3	Distribuição do ajuste entre os itens ou grupos da conta	R1#18; MV: CONTA_ACRES_DET
+motivo_ajuste_conta	FAT	dominio	F3	Motivos de acréscimo e desconto na conta	R1#18; MV: DESCONTOS_ACRESCIMOS*
+regra_ajuste_permitido	FAT	configuracao	F7	Limites de ajuste por fonte pagadora, motivo e grupo de item, com exceções	R1#18; MV: PERM_ACRES_DESCONTO, EXCECAO_ACRES_DESC
+franquia_contrato	FAT	configuracao	F8	Franquia de valor ou quantidade no acordo, abaixo da qual o hospital não cobra ou cobra diferente	R1#19; MV: FRANQUIAS*, FRANQUIA_VALOR_TOTAL*, VAL_PONTO_FRANQUIA
+franquia_contrato_excecao	FAT	configuracao	F8	Itens ou situações excluídos da franquia	R1#19; MV: FRANQUIAS_EXCECAO
+regra_desconto_volume	FAT	configuracao	F8	Desconto comercial concedido conforme o volume faturado à fonte pagadora	R1#19; MV: FAIXA_DESCONTO, REG_DESC_EMP_CON_PLA
+regra_desconto_volume_faixa	FAT	item	F8	Faixas de volume e percentual de desconto da regra comercial	R1#19; MV: ITFAIXA_DESCONTO
+conta_hospitalar_franquia	FAT	item	F8	Franquia ou desconto de volume efetivamente aplicado à conta, com a observação	R1#19; MV: CONTA_FRANQUIADESC_OBS, FRANQUIA_DESCONTO_OBS
+pacote	FAT	principal	F3	Pacote de cobrança (cirurgia, exame, tratamento) com preço fechado por fonte pagadora e acomodação	R1#20; SP: TBPACTHM; MV: PACOTE*
+pacote_versao	FAT	historico	F3	Versões do pacote com vigência, preço e composição	R1#20; MV: PACOTE*
+pacote_contrato	FAT	vinculo	F3	Fontes pagadoras, planos e locais em que o pacote vale	R1#20; SP: TBPACTHM (por convênio e local)
+pacote_item_incluso	FAT	item	F3	Itens incluídos no pacote, com quantidade limite	R1#20; MV: PACOTE_PRO_FAT*
+pacote_excecao	FAT	item	F3	Itens que ficam fora do pacote e são cobrados à parte	R1#20; MV: PACOTE_EXCECAO*
+pacote_teto	FAT	configuracao	F3	Tetos do pacote (dias, quantidade, valor) que, superados, levam à descaracterização	R1#20; MV: PACOTE_TETOS
+pacote_diaria_acomodacao	FAT	configuracao	F3	Diária adicional do pacote por tipo de acomodação	R1#20; MV: DIARIA_TIPO_ACOMODACAO_PACOTE*
+conta_hospitalar_pacote	FAT	vinculo	F3	Pacote aplicado à conta, com a versão e o valor cobrado	R1#20; MV: CONTA_PACOTE*
+descaracterizacao_pacote	FAT	principal	F3	Saída do caso do pacote para cobrança aberta, com motivo, data e autor	R1#20; MV: LOG_DESCARACTERIZACAO_PACO*
+motivo_descaracterizacao_pacote	FAT	dominio	F3	Motivos de descaracterização de pacote (intercorrência, permanência, item extra)	R1#20; MV: MOTIVO_DESCARACT_PACOTE*
+auditoria_conta	FAT	principal	F3	Auditoria da conta por enfermeiro ou médico auditor, interno ou da operadora, com resultado	R1#21; SP: FCCTAAUD; MV: AUDITORIA_CONTA*, AUDITORIA_PARCIAL
+auditoria_conta_versao	FAT	historico	F3	Retrato da conta antes e depois da auditoria, gravado por versão	R1#21; SP: FCCTAAUD (cópia pré/pós); MV: ITREG_FAT_ORIGINAL*, ITREG_FAT_ESPELHO (sem tabela espelho)
+auditoria_conta_item	FAT	item	F3	Item auditado: valor original, valor aceito, glosa interna e motivo	R1#21; SP: FCLANAUD
+tipo_auditoria	FAT	dominio	F3	Tipos de auditoria (enfermagem, médica, parcial, externa, presencial)	R1#21; MV: AUDITORIA_PARCIAL, AUDITORIA_IN_LOCO
+motivo_auditoria	FAT	dominio	F3	Motivos de ajuste aplicados pelo auditor	R1#21; MV: MOTIVO_AUDITORIA
+empresa_auditoria_externa	FAT	principal	F3	Empresas de auditoria médica externa a serviço das operadoras	R1#21; SP: FCEMPAUDPLANSERV; MV: EMPRESA_AUDITORIA_FFCV
+item_dispensado_auditoria	FAT	configuracao	F3	Itens que uma fonte pagadora dispensa da auditoria	R1#21; MV: PRO_DSP_AUDIT_CONV
+visita_auditoria_externa	FAT	principal	F7	Visita do auditor da operadora ao hospital, com contas analisadas e conclusão	R1#21; MV: AUDITORIA_IN_LOCO
+tipo_pendencia_conta	FAT	dominio	F3	Tipos de pendência que travam a conta (falta de CID, assinatura, guia, laudo)	R1#22; SP: TBIRREGULARID, TBIRREGCTRCTA; MV: TIPO_PENDENCIA; conflitos: pendencia comum a decidir
+tipo_pendencia_conta_modulo	FAT	vinculo	F3	Módulos em que cada tipo de pendência se aplica	R1#22; SP: TBIRREGULARID_TBMODULO
+pendencia_conta	FAT	principal	F3	Pendência aberta na conta, com período, responsável, justificativa e resolução	R1#22; SP: FCIRREGULARID; MV: PENDENCIA_CONTA, IT_PENDENCIA; protocolo entre setores em protocolo_tramite (04)
+justificativa_pendencia	FAT	dominio	F7	Justificativas padronizadas para pendência não resolvida	R1#22; MV: TIPO_JUSTIFICATIVA_PENDENCIA
+regra_cobranca_ambulancia	FAT	configuracao	F8	Cobrança de remoção por quilômetro ou por trajeto, por fonte pagadora e tipo de ambulância	R1#23; MV: REGRA_COBRANCA_AMBULANCIA_KM, REGRA_COBRANCA_AMBULANCIA_TRAJ
+regra_cobranca_ligacao	FAT	configuracao	F8	Cobrança de ligação telefônica tarifada do quarto, por tipo de ligação	R1#23; MV: REGRA_LIGACAO, TIPO_LIGACAO_TARIFADOR
+tipo_ligacao_tarifada	FAT	dominio	F8	Tipos de ligação tarifada (local, interurbano, celular)	R1#23; MV: TIPO_LIGACAO
+guia_fonte_pagadora	FAT	principal	F3	Guia da fonte pagadora no hospital: número, senha, tipo, validade, responsável e situação	R1#24; SP: FCGUIAS, RICGUIAS, SICADATE (senha); MV: GUIA*, USUARIO_RESP_GUIA
+guia_fonte_pagadora_item	FAT	item	F3	Itens autorizados na guia, com quantidade solicitada e liberada	R1#24; MV: IT_GUIA*
+guia_anexo	FAT	item	F3	Metadado de documento anexado à guia (laudo, pedido), com o binário no armazenamento de objetos	R1#24; MV: ANEXOS_GUIA*
+guia_pendencia	FAT	item	F3	Pendência da guia com a operadora (falta documento, em análise), com motivo e prazo	R1#24; MV: MOTIVO_PENDENCIA_GUIA*
+motivo_pendencia_guia	FAT	dominio	F3	Motivos de pendência de guia	R1#24; MV: MOTIVO_PENDENCIA_GUIA
+guia_historico	FAT	historico	F3	Linha do tempo da guia: mudanças de situação, responsável e observações	R1#24; MV: LOG_GUIA*, LOG_GUIA_OBS*
+sequencial_guia	FAT	configuracao	F3	Contador de número de guia, transação e lote TISS por fonte pagadora e tipo de guia	R1#24; SP: TBSEGUIA; MV: TISS_NR_GUIA
+faixa_numeracao_guia	FAT	configuracao	F7	Faixa de números de guia fornecida pela operadora, com consumo controlado	R1#24; MV: FAIXA_GUIA_CONVENIO, ITEM_FAIXA_GUIA_CONVENIO; conflito: mesmo nome proposto pelo 02 (com configuracao_tiss_pagadora), dono proposto 06
+fluxo_guia_etapa	FAT	configuracao	F7	Etapas do fluxo de guias (centro cirúrgico, internação) por fonte pagadora	R1#24; MV: FSCC_CONFIG_WORKFLOW_GUIAS*
+fluxo_guia_usuario	FAT	vinculo	F7	Usuários responsáveis por cada etapa do fluxo de guias	R1#24; MV: FSCC_CONFIG_WORKFLOW_GUIA_USU
+prazo_atendimento_guia	FAT	configuracao	F8	Prazo esperado por etapa da guia e alerta quando vence	R1#24; MV: CONTROLE_SLA_GUIA_FFCV, CONFIGURACAO_SLA, SLA_*
+guia_fonte_pagadora_opme	FAT	item	F7	OPME autorizado na guia: item, fabricante, cotação escolhida e valor liberado	R1#25; MV: VAL_OPME_IT_GUIA*, LOG_ITEM_GUIA_OPME; dep: solicitacao_opme, solicitacao_opme_item, autorizacao_opme (05, D1)
+limite_opme_procedimento	FAT	configuracao	F7	Valor ou quantidade máxima de OPME aceita por procedimento e fonte pagadora	R1#25; MV: CONF_LIMITE_OPME_OC, CAT_PROD_OPME_ALCADA; alçada pelo mecanismo alcada_aprovacao (01)
+consulta_elegibilidade	FAT	principal	F7	Consulta de elegibilidade do beneficiário à operadora pelo TISS, com resposta e motivo de negativa	R1#26; MV: TISS_SOL_ELEG, TISS_RETORNO_ELEG*; conflitos D10: dono 06
+comunicacao_beneficiario	FAT	principal	F7	Aviso de internação ou alta enviado à operadora pelo TISS	R1#26; MV: TISS_COMUNICACAO_BENEFICIARIO, COMUNICACAO_BENEFICIARIO
+comunicacao_beneficiario_recibo	FAT	item	F7	Recibo devolvido pela operadora para o aviso de internação ou alta	R1#26; MV: TISS_RECIBO_COMUNICACAO_BENFC
+solicitacao_autorizacao	FAT	principal	F7	Pedido eletrônico de autorização prévia (consulta, SADT, internação, prorrogação, quimio, radio, OPME) com tipo	R1#27; MV: TISS_SOL_GUIA*, INTEGRA_TISS_SOLICITACAO*; conflitos: dono 06; dep: autorizacao_internacao (04)
+solicitacao_autorizacao_item	FAT	item	F7	Itens pedidos na autorização, com código TUSS, quantidade e justificativa	R1#27; MV: TISS_ITSOL_GUIA*, TISS_ITSOL_OP_GUIA
+solicitacao_autorizacao_anexo_clinico	FAT	item	F7	Dados clínicos do anexo de quimioterapia, radioterapia ou OPME (CID, estadiamento, ciclos, finalidade)	R1#27; MV: TISS_RET_SOL_QUIMIO; SP: TBTISSESTTUMOR, TBTISSFINTRAT, TBTISSTPQUIMIO (termos em 08)
+resposta_autorizacao	FAT	principal	F7	Resposta da operadora: senha, validade, situação e glosa prévia	R1#27; MV: TISS_RETORNO_SOLICITACAO*
+resposta_autorizacao_item	FAT	item	F7	Resposta por item: quantidade autorizada, negada e motivo	R1#27; MV: TISS_RETORNO_SOLICITACAO_PR_GL
+consulta_situacao_autorizacao	FAT	principal	F7	Consulta automática do andamento de autorização pendente na operadora	R1#27; MV: TISS_SOLICITA_STATUS_AUTORIZ
+cancelamento_guia	FAT	principal	F7	Pedido de cancelamento de guia enviada pelo TISS e o retorno da operadora	R1#28; MV: TISS_SOL_CANCELA_GUIA, TISS_RETORNO_CANCELA_GUIA; SP: TBTISSSITCANC
+cancelamento_guia_item	FAT	item	F7	Guias ou itens incluídos no pedido de cancelamento	R1#28; MV: TISS_ITSOL_CANCELA_GUIA
+envio_documento_tiss	FAT	principal	F7	Envio de documentos anexos à operadora pelo TISS, com protocolo de retorno	R1#28; MV: TISS_ENVIO_DOCUMENTOS, TISS_RETORNO_DOCUMENTOS
+envio_documento_tiss_item	FAT	item	F7	Documentos de um envio, com metadado e referência ao armazenamento de objetos	R1#28
+guia_tiss	FAT	principal	F3	Guia TISS montada da conta (consulta, SP/SADT, resumo de internação, honorário, outras despesas)	R1#29; MV: TISS_GUIA*; SP: TBTISSTPGUIA (tipo em terminologia 08)
+guia_tiss_procedimento	FAT	item	F3	Procedimentos da guia TISS com código, data, via, técnica e valores	R1#29; MV: TISS_ITGUIA*
+guia_tiss_profissional	FAT	item	F3	Equipe da guia TISS: profissional, conselho, CBO e grau de participação	R1#29; MV: TISS_ITGUIA_EQU*; SP: TBTISSCONSPROF
+guia_tiss_despesa	FAT	item	F3	Outras despesas da guia TISS (taxas, diárias, gases, mat/med) com unidade e referência	R1#29; MV: TISS_ITGUIA_OUT*
+guia_tiss_opme	FAT	item	F3	OPME informado na guia TISS com registro, fabricante e valor	R1#29; MV: TISS_ITGUIA_OP
+guia_tiss_diagnostico	FAT	item	F3	CIDs informados na guia TISS	R1#29; MV: TISS_ITGUIA_CID
+regra_montagem_guia	FAT	configuracao	F3	Regras configuráveis de montagem da guia TISS (agrupar, separar, campo a preencher)	R1#29; SP: TBTISSPARDEF; MV: TISS_CONFIG_ATEND*
+regra_montagem_guia_tipo	FAT	vinculo	F3	Regras de montagem que valem para cada tipo de guia	R1#29; SP: TBTISSTPGUIA_TBTISSPARDEF
+regra_apresentacao_tiss	FAT	configuracao	F3	Como cada fonte pagadora quer a TISS: versão, guias usadas, numeração, impressão e geração por tipo de conta	R1#30; SP: TBTISS, TBTISSEMIEXP, TBTISSGERSPSADTPS; MV: CONVENIO_CONF_TISS*, TISS_CONV_IMPRESSAO_GUIA
+regra_apresentacao_tiss_item	FAT	configuracao	F3	Apresentação de um procedimento ou serviço numa fonte pagadora (guia, código, agrupamento)	R1#30; MV: CONFIG_TISS_CONV_APRS_PCD*, TISS_CONF_SERVICO_CONV
+valor_padrao_campo_tiss	FAT	configuracao	F3	Valor padrão de campo da guia TISS por fonte pagadora e regra de montagem	R1#30; SP: TBCONVEN_TBTISSPARDEF
+fatura_fonte_pagadora	FAT	principal	F3	Fatura enviada à fonte pagadora na competência, com total, vencimento e situação de recebimento	R1#31; MV: FATURA*, REMESSA_FATURA*; dep: titulo_receber (07)
+fatura_fonte_pagadora_conta	FAT	item	F3	Contas que compõem a fatura, com valor apresentado	R1#31; MV: ITEM_FATURA
+lote_tiss	FAT	principal	F3	Lote TISS de guias (envio normal ou de recurso), com número, hash e situação	R1#31; SP: FCTISSLOTEPROT; MV: TISS_LOTE*, REMESSA_GLOSA*
+lote_tiss_conta	FAT	vinculo	F3	Contas e guias remetidas em cada lote TISS	R1#31; SP: FCCTAEXT_FCTISSLOTEPROT; MV: TISS_LOTE_GUIA*
+arquivo_lote_tiss	FAT	item	F3	Arquivo XML gerado para o lote, com SHA-256, caminho no armazenamento e validação no esquema	R1#31; observação de modelagem 06
+protocolo_recebimento	FAT	principal	F3	Protocolo devolvido pela operadora ao receber o lote, com data e situação	R1#31; SP: FCTISSLOTEPROT; MV: TISS_PROTOCOLO, TISS_RETORNO_PROTOCOLO
+protocolo_recebimento_situacao	FAT	historico	F3	Consultas de situação do protocolo e a resposta da operadora ao longo do tempo	R1#31; MV: TISS_RETORNO_STATUS; SP: TBTISSSITPROT (termo em 08)
+endpoint_tiss_fonte_pagadora	FAT	configuracao	F3	Canal de envio TISS por fonte pagadora (portal, serviço web), endereço e versão; credencial fica no cofre	R1#31; SP: TBTISSWEBSERV, TBTISSURLWSSGH, TBTISSFORMAENVPAD; MV: SITE_INTEGRA_CONVENIO
+pre_remessa	FAT	principal	F8	Conferência das contas antes da remessa, com críticas resolvidas e liberação	R1#31; MV: PRE_REMESSA_FFCV, ITPRE_REMESSA_FFCV
+pre_remessa_conta	FAT	item	F8	Contas de uma pré-remessa e o resultado da conferência de cada uma	R1#31; MV: ITPRE_REMESSA_FFCV
+competencia_faturamento	FAT	principal	F3	Competência mensal do faturamento por estabelecimento, com abertura e fechamento	R1#32; MV: LOG_COMPETENCIA_FATURAMENTO*
+competencia_faturamento_historico	FAT	historico	F3	Aberturas, fechamentos e reaberturas da competência com autor e motivo	R1#32; MV: LOG_COMPETENCIA_FATURAMENTO
+fechamento_competencia_fonte_pagadora	FAT	principal	F3	Fechamento do mês por fonte pagadora, com totais apresentados e data	R1#32; SP: FCFECMES; MV: CONTAS_FORMACAO_FFCV
+competencia_trabalho_usuario	FAT	configuracao	F3	Competência em que cada usuário trabalha por módulo (convênio, SUS ambulatorial, AIH, RPA)	R1#32, R1#53, R1#45; SP: FCPARUSU, FAPARUSU, FIPARUSU, RPPARUSUEMP; MV: USU_PERMISSAO_COMPETENCIA*
+demonstrativo_pagamento	FAT	principal	F3	Demonstrativo de pagamento da operadora: período, valor bruto, deduções e líquido	R1#33; MV: TISS_RETORNO_DEMON_PAG*; SP: MFCCCONV (07)
+demonstrativo_pagamento_item	FAT	item	F3	Linhas do demonstrativo de pagamento por protocolo ou guia	R1#33; MV: TISS_RETORNO_DEMON_PAG_DA
+demonstrativo_deducao	FAT	item	F3	Débitos e créditos do demonstrativo (IRRF, ISS, INSS, ajustes)	R1#33; SP: TBTISSTPDEBCRE, TBTISSCATDESP
+demonstrativo_analise_conta	FAT	principal	F3	Demonstrativo de análise de conta: valores informados, processados e liberados por guia	R1#33; MV: TISS_RETORNO_DEMON_CONTA; SP: TBTISSTPDEMONS
+demonstrativo_analise_conta_item	FAT	item	F3	Análise por procedimento ou item, com valor glosado e código do motivo	R1#33; MV: TISS_RETORNO_DEMON_CONTA_PROC
+conciliacao_item	FAT	vinculo	F3	Liga a linha do demonstrativo ao item da conta, com diferença e situação	R1#33; SP: FCLANEXT (valor pago no item)
+solicitacao_demonstrativo	FAT	principal	F7	Pedido de demonstrativo à operadora pelo TISS	R1#33; MV: TISS_SOL_DEMON, DEMONSTRATIVO_RETORNO_LOTE
+glosa	FAT	principal	F3	Glosa sofrida numa conta ou guia, com origem (demonstrativo, auditoria) e valor	R1#34; SP: FCLANEXT; MV: GLOSAS*, MOV_GLOSAS*
+glosa_item	FAT	item	F3	Item glosado com valor, motivo e decisão (aceitar ou recorrer)	R1#34; SP: FCLANEXT; MV: ITMOV_GLOSAS*
+motivo_glosa	FAT	catalogo_publico	F3	Motivos de glosa da TUSS com vigência e se admitem reapresentação	R1#34; SP: TBMOTGLO; MV: MOTIVO_GLOSA*, MOTIVO_ITEM_GLOSA*
+grupo_motivo_glosa	FAT	dominio	F3	Grupos de motivo de glosa (elegibilidade, guia, material, cobrança) para análise	R1#34; SP: FCTPMOTGLOSA
+motivo_glosa_fonte_pagadora	FAT	vinculo	F7	De-para do código de glosa próprio da operadora para o motivo TUSS	R1#34
+recurso_glosa	FAT	principal	F3	Recurso de glosa enviado à operadora, com justificativa, prazo e lote	R1#34; SP: FCTISSLOTEPROT; MV: TISS_GUIA_JUSTIFICA_GLOSA*, TISS_GUIA_REAPRESENTACAO
+recurso_glosa_item	FAT	item	F3	Itens recorridos com justificativa e valor pleiteado	R1#34; MV: JUSTIFICA_GLOSA*
+justificativa_glosa_padrao	FAT	dominio	F7	Textos padrão de justificativa de recurso por motivo de glosa	R1#34; MV: JUSTIFICA_GLOSA, MOTIVO_RECURSO_GLOSA
+desfecho_glosa	FAT	dominio	F3	Desfechos da glosa: aceita, recorrida, revertida, mantida, reapresentada	R1#34; MV: TISS_RETORNO_RECURSO
+prazo_recurso_fonte_pagadora	FAT	configuracao	F3	Prazo para recorrer de glosa em cada fonte pagadora	R1#34
+glosa_rateio	FAT	item	F8	Rateio do valor glosado entre itens, profissionais e centros de custo	R1#34; MV: RAT_MOV_GLOSAS
+nota_fatura	FAT	vinculo	F3	Liga a fatura ou conta à nota fiscal de serviço emitida	R1#36; SP: FCTPPGTONFSE; MV: ITFAT_NOTA_FISCAL*; dep: nota fiscal (07)
+regra_contabil_receita	FAT	configuracao	F3	Conta contábil da receita faturada, glosada e recebida por grupo de faturamento e fonte pagadora	R1#37; SP: TBINTCRC; MV: FFCV_CLASS_CONTABIL, CONFIG_FFCV_CLASS_CONTABIL*, CONTA_GRU_FAT
+lancamento_contabil_receita	FAT	principal	F3	Evento de receita gerado pelo faturamento e enviado à contabilidade	R1#37; MV: INTEGRA_SAIDA_FATURAMENTO; dep: lancamento_contabil (07)
+mensagem_faturamento	FAT	configuracao	F7	Mensagens e observações padrão impressas na conta ou na fatura por fonte pagadora	R1#38; MV: MENSAGEM_CONFIG_FATURAMENTO*; parâmetros soltos pelo mecanismo parametro
+orcamento_particular	FAT	principal	F3	Orçamento ao paciente particular, com validade, aceite e conta gerada	R1#40; SP: FCORCAME; MV: VAL_PROC_ORCAMENTO*; conflitos: dono 06
+orcamento_particular_item	FAT	item	F3	Itens do orçamento de qualquer tipo (procedimento, exame, diária, mat/med, honorário)	R1#40; MV: ITVAL_PROC_ORCAMENTO*
+modelo_orcamento	FAT	configuracao	F3	Modelo de orçamento padrão por procedimento e acomodação	R1#40; SP: FCORCPAD
+modelo_orcamento_item	FAT	item	F3	Itens e honorários da equipe no modelo de orçamento	R1#40; SP: FCORLAME
+regra_repasse	FAT	configuracao	F3	Regra de repasse por produção de um profissional ou grupo, com favorecido e vigência	R1#43; SP: TBREPGER; MV: REG_REPASSE*
+regra_repasse_item	FAT	item	F3	Critério e valor da regra: fonte pagadora, procedimento, especialidade, função, horário e percentual	R1#43; SP: TBREPGER; MV: ITREG_REPASSE*, REG_REP_EQP
+regra_repasse_versao	FAT	historico	F3	Versões da regra de repasse com vigência e autor	R1#43; MV: ITREG_REPASSE_VIGENCIA, CTRL_ALTERA_REGRA_REPASSE*
+regra_repasse_profissional	FAT	vinculo	F3	Profissionais aos quais a regra de repasse se aplica	R1#43; SP: TBREPGER_TBCBOPRO; dep: profissional (02)
+grupo_repasse	FAT	dominio	F3	Grupos de profissionais com a mesma regra de repasse	R1#43; MV: GRUPO_REPASSE
+grupo_repasse_profissional	FAT	vinculo	F7	Profissionais ou prestadores de cada grupo de repasse	R1#43; MV: PRESTADOR_GRUPO_REPASSE
+acordo_equipe_medica	FAT	configuracao	F7	Divisão combinada do honorário entre membros de uma equipe médica	R1#43; MV: ACORDO_EQUIPE_MEDICA, VALOR_ACORDO_MEDICO_PAC
+condicao_liberacao_repasse	FAT	configuracao	F7	Quando o repasse é liberado: ao faturar, ao receber, após auditoria, por fonte pagadora	R1#44; MV: REG_REPASSE_POS_ANAL, REPASSE_CONTROLE_CONTAS
+producao_repasse	FAT	principal	F3	Item faturado enviado ao repasse, com profissional, função, valor base e situação	R1#44; SP: FCINTEGRPA; MV: REPASSE_CONTA; conflitos: item_repasse
+apuracao_repasse	FAT	principal	F3	Apuração periódica do repasse por estabelecimento e competência	R1#44; MV: REPASSE, GERACAO_REPASSE*, MULTI_EMPRESAS_REPASSE*
+apuracao_repasse_item	FAT	item	F3	Valor apurado de cada produção na apuração, com a regra usada	R1#44; MV: IT_REPASSE; conflitos: nome único item_apuracao_repasse
+evento_repasse	FAT	configuracao	F3	Eventos de repasse ou RPA (consulta, exame, honorário) com regras fiscais	R1#44; SP: RPEVENTO
+evento_repasse_incidencia	FAT	configuracao	F3	Natureza da rubrica e incidência de INSS e IRRF de cada evento	R1#45; SP: RPEVENTOESOC; dep: tabela_esocial (07)
+evento_repasse_contabil	FAT	configuracao	F3	Grupo financeiro e conta contábil de cada evento de repasse	R1#44; SP: RPINTEVE
+lancamento_repasse	FAT	principal	F3	Lançamento de evento de repasse por favorecido (médico, empresa), com profissional beneficiário	R1#44; SP: RPLANEVE, RPLANEVE_TBCBOPRO; MV: REPASSE_PRESTADOR
+lancamento_repasse_base	FAT	item	F3	Composição da base de cálculo e dos impostos de cada lançamento de repasse	R1#44; SP: RPLANEVE_COMPOSICAOBASE
+estorno_repasse	FAT	principal	F3	Estorno de repasse por glosa, cancelamento ou ajuste, ligado à produção de origem	R1#44
+ajuste_repasse	FAT	principal	F7	Acréscimo ou desconto manual no repasse do profissional, com motivo e aprovação	R1#44; MV: LOG_PAGTO_REPASSE_ACRES_DESC
+rpa	FAT	principal	F3	Recibo de pagamento de autônomo emitido ao profissional, com competência e totais	R1#45; SP: RPRPA, RPRPA_TBCBOPRO
+rpa_lancamento	FAT	vinculo	F3	Lançamentos de repasse agrupados em cada RPA	R1#45; SP: RPLANRPA
+rpa_retencao	FAT	item	F3	Retenções do RPA (INSS, IRRF, ISS) com base, alíquota e valor	R1#45; dep: natureza_rendimento (07)
+tipo_deducao_irrf	FAT	dominio	F3	Deduções admitidas no IRRF do autônomo (previdência, pensão, dependentes, simplificado)	R1#45; SP: RPDEDUTIVEL
+tipo_rendimento_isento	FAT	dominio	F3	Tipos de rendimento isento de IR segundo a tabela da Receita e do eSocial	R1#45; SP: RPRENDISENTO
+dependente_irrf_prestador	FAT	item	F3	Dependentes declarados pelo profissional autônomo para dedução do IRRF	R1#45
+empresa_calculo_cumulativo_rpa	FAT	configuracao	F3	Estabelecimentos somados no cálculo cumulativo de impostos do RPA	R1#45; SP: RPEMPCALCIMP
+cooperativa_medica	FAT	principal	F3	Cooperativa médica com dados bancários e alíquotas de retenção	R1#46; SP: TBCOOPER
+membro_cooperativa	FAT	vinculo	F3	Profissionais vinculados a cada cooperativa para receber o repasse	R1#46; SP: TBCRECOO; conflitos: nome único membro_cooperativa
+prestador_terceiro	FAT	principal	F3	Prestador terceiro (empresa médica, laboratório) com dados de repasse, custo e CNES	R1#46; SP: TBPRESER; dep: fornecedor (05)
+tipo_prestador_repasse	FAT	dominio	F3	Tipos de favorecido: médico, empresa médica, fornecedor, vendedor	R1#46; SP: RPTIPOPRESTADOR, TBRPATPREPASSE
+favorecido_repasse	FAT	configuracao	F3	Para quem vai o repasse de cada profissional (ele, sua empresa, cooperativa ou terceiro) com vigência	R1#46; SP: TBRPATPREPASSE; MV: REG_REP_SUBCONTRATADA
+regra_credito_producao	FAT	configuracao	F3	Regra de crédito da produção de contas por profissional e fonte pagadora	R1#46; SP: FCCRECUN
+regra_repasse_plantao	FAT	configuracao	F8	Remuneração de plantão por setor: valor por plantão ou por hora, com regras de revisão	R1#47; MV: REPASSE_PLANTAO, REG_REPASSE_PLANTAO_SETOR, REG_REVISA_PLANTAO_SETOR, CONF_PERM_REP_PLANTAO; dep: escala, plantao (07)
+valor_hora_plantao	FAT	configuracao	F8	Valor da hora de plantão por setor, faixa de horário e tipo de dia	R1#47; MV: REPASSE_PLANTAO_VALOR_HORA, REGRA_VALOR_PLANTAO_SETOR
+grupo_setor_plantao	FAT	configuracao	F8	Grupos de setores com a mesma remuneração de plantão	R1#47; MV: GRU_SETOR_REP_PLANTAO, IT_GRU_SETOR_REP_PLANTAO
+regra_repasse_valor_fixo	FAT	configuracao	F8	Valor fixo mensal pago ao profissional ou equipe, com vigência	R1#47; MV: REPASSE_VALOR_FIXO
+regra_repasse_minimo_garantido	FAT	configuracao	F8	Mínimo garantido ao profissional: se a produção não alcança, a apuração complementa	R1#47; MV: REPASSE_VALOR_MINIMO
+regra_repasse_variavel	FAT	configuracao	F8	Remuneração variável por produtividade ou resultado, com indicador e período	R1#48; MV: REG_REP_VARIAVEL, REG_REPASSE_PROD, REG_REPASSE_PROD_EXCECAO
+regra_repasse_variavel_faixa	FAT	item	F8	Faixas escalonadas da remuneração variável e o percentual ou valor de cada uma	R1#48; MV: FAIXA_REP_VARIAVEL, ITREG_REP_ESCALONAMENTO, ITREG_REPASSE_PROD
+equipe_repasse_variavel	FAT	principal	F8	Equipe que divide a remuneração variável	R1#48; MV: EQUIPE_REP_VARIAVEL
+equipe_repasse_variavel_membro	FAT	item	F8	Membros da equipe de remuneração variável com a cota de cada um	R1#48; MV: IT_EQUIPE_REP_VARIAVEL
+indicador_produtividade	FAT	dominio	F8	Indicadores usados na remuneração variável (produção, satisfação, tempo, resultado)	R1#48; MV: IND_PRODUTIVIDADE
+regra_repasse_resultado	FAT	configuracao	F8	Percentual do resultado do serviço distribuído aos profissionais	R1#48; MV: REPASSE_PERC_RESULTADO
+regra_rateio_repasse	FAT	configuracao	F8	Rateio do repasse ou do custo do prestador entre setores	R1#49; MV: REG_REPASSE_RATEIO, REPASSE_PRESTADOR_RATEIO_SETOR, RATEIO_REPASSE
+regra_rateio_repasse_setor	FAT	item	F8	Setores e percentuais de cada regra de rateio do repasse	R1#49; MV: ITEM_RATEIO_REPASSE, ITREG_REPASSE_RATEIO; dep: centro_custo (07)
+custo_prestador	FAT	configuracao	F8	Despesas descontadas do repasse do profissional (sala, material, secretaria), com vigência	R1#49; MV: REPASSE_CUSTOS_PREST
+desconto_custo_repasse	FAT	item	F8	Custo do prestador efetivamente descontado numa apuração de repasse	R1#49; MV: REPASSE_CUSTOS
+contrato_prestador_repasse	FAT	principal	F8	Contrato de prestação de serviço do profissional ou empresa que fundamenta o repasse	R1#49; MV: REPASSE_GCTO_CONTRATO; dep: contratos (07)
+competencia_sigtap	SUS	catalogo_publico	F3	Competência da tabela unificada carregada, com data de publicação e situação da carga	R1#50; MV: CARGA_SUS_SIGTAP
+procedimento_sigtap	SUS	catalogo_publico	F3	Procedimento da tabela unificada por competência: complexidade, financiamento, idade, sexo, permanência	R1#50; SP: TBPROSUS, HTPROSUS; MV: PROCEDIMENTO_SUS*
+procedimento_sigtap_valor	SUS	catalogo_publico	F3	Valores do procedimento por competência (serviço hospitalar, profissional, ambulatorial)	R1#50; SP: TBVLRSUS; MV: PROCEDIMENTO_SUS_VALOR*
+grupo_sigtap	SUS	catalogo_publico	F3	Hierarquia da tabela unificada: grupo, subgrupo e forma de organização por competência	R1#50; SP: TBGRUSUS, TBSUBSUS, TBFORSUS; MV: GRU_PRO_SUS, SUB_GRU_PRO_SUS
+dominio_sigtap	SUS	catalogo_publico	F3	Listas auxiliares da tabela unificada (modalidade, complexidade, financiamento, instrumento, leito, rubrica)	R1#50; SP: TBMODALI, TBCOMPLEXSUS, TBTIPFINANC, TBSUBTIPFINANC, TBREGSUS, TBTIPLEI, TBATRIBCOMPL, TBMOTCOB; MV: RUBRICA_SUS*, INSTRUMENTO_REGISTRO_SUS*
+habilitacao_sigtap	SUS	catalogo_publico	F3	Habilitações do Ministério da Saúde e seus grupos, por competência	R1#50, R1#61; SP: TBHABSUS, TBGRUHAB; MV: HABILITACOES_SUS*, GRUPO_HABILITACOES_SUS*
+servico_classificacao_sigtap	SUS	catalogo_publico	F3	Serviços especializados e classificações da tabela unificada, por competência	R1#50; SP: TBSERSUS, TBCLSERV; MV: SERVICO_SUS*, SERVICO_CLASSIFICACAO_SUS
+procedimento_sigtap_cid	SUS	catalogo_publico	F3	CIDs principais e secundários compatíveis com cada procedimento, por competência	R1#50; SP: TBSUSCID, TBCIDSEC; MV: PROCEDIMENTO_SUS_CID*
+procedimento_sigtap_cbo	SUS	catalogo_publico	F3	Ocupações (CBO) que podem executar cada procedimento, por competência	R1#50; SP: TBSUSCBO; MV: PROCEDIMENTO_SUS_CBO*
+procedimento_sigtap_habilitacao	SUS	catalogo_publico	F3	Habilitações exigidas por procedimento, por competência	R1#50; SP: TBPROHAB; MV: PROCEDIMENTO_SUS_HABILITACAO*
+procedimento_sigtap_incremento	SUS	catalogo_publico	F3	Percentual de incremento do procedimento conforme a habilitação do estabelecimento	R1#50, R1#58; SP: TBINCPRO; MV: VALOR_AIH_INCREMENTO
+procedimento_sigtap_leito	SUS	catalogo_publico	F3	Especialidades de leito em que o procedimento pode ser realizado, por competência	R1#50; SP: TBPROLEI; MV: PROCEDIMENTO_SUS_ESPEC_LEITO
+procedimento_sigtap_servico	SUS	catalogo_publico	F3	Serviço e classificação exigidos por procedimento, por competência	R1#50; SP: TBCLSPRO, FACSEPRO; MV: PROCEDIMENTO_SUS_SER_CLA
+procedimento_sigtap_registro	SUS	catalogo_publico	F3	Instrumentos de registro (BPA, AIH, APAC, RAAS) principal e complementar de cada procedimento	R1#50; SP: TBPROREG, TBPROREGCOMP
+procedimento_sigtap_opm	SUS	catalogo_publico	F3	OPM compatíveis com cada procedimento e quantidade máxima por instrumento	R1#50; SP: TBSUSOPM, TBCOMPRO
+procedimento_sigtap_atributo	SUS	catalogo_publico	F3	Demais atributos do procedimento por competência (modalidade, tipo de prestador, motivo de cobrança, detalhe, regra condicionada)	R1#50; SP: TBATRIBPRO, TBMODSUS, TBPRESTP, TBMOCOBP, TBORIGEM, TBPROLOC, TBPRONIV; MV: PROCEDIMENTO_SUS_DETALHE, PROCEDIMENTO_SUS_REGRA, REGRA_CONDICIONADA_SUS
+compatibilidade_sigtap	SUS	catalogo_publico	F3	Compatibilidades e incompatibilidades entre procedimentos (principal e secundário) por instrumento	R1#50; SP: TBCOMREG, TBAPACS; MV: PROCEDIMENTO_SUS_COMPAT*, PROCEDIMENTO_SUS_INCOMPAT
+equivalencia_sigtap_item	SUS	vinculo	F3	De-para do item faturável do hospital para o procedimento da tabela unificada, usado na CIHA	R1#51; SP: FCCTRLANCIHA; MV: PROCEDIMENTO_SUS_PRO_FAT, PRO_FAT_SUS
+regra_geracao_ciha	SUS	configuracao	F3	Quais atendimentos e fontes pagadoras entram na CIHA e como cada um é informado	R1#51; MV: REGRA_GERACAO_CIHA, PRODUCAO_CONVENIO_CIHA
+equivalencia_cid_ciha	SUS	vinculo	F7	Troca de CID não aceito pela CIHA pelo CID válido correspondente	R1#51; MV: CIHA_DE_PARA_CID
+remessa_ciha	SUS	principal	F3	Remessa mensal da CIHA, com competência, arquivo, hash e situação de envio	R1#51; MV: GERACAO_CIHA, CONTROLE_PERIODO_CIHA
+registro_ciha	SUS	item	F3	Atendimento informado na CIHA (gerado ou manual), com paciente, CNS ou CPF e fonte pagadora	R1#51, R1#52; MV: PRODUCAO_CIHA, LANCAMENTO_MANUAL_CIHA; dep: paciente e CNS (02)
+registro_ciha_procedimento	SUS	item	F3	Procedimentos e quantidades de cada atendimento da CIHA	R1#51; SP: FCCTRLANCIHA
+critica_ciha	SUS	item	F3	Crítica de validação de um registro da CIHA antes do envio	R1#51; MV: CRITICA_CIHA*
+dominio_sus	SUS	dominio	F3	Listas fechadas dos instrumentos SUS fora da tabela unificada (motivo de saída, caráter, credor, tipo de APAC, tipo de UTI)	R1#53; SP: TBALTSUS, TBCARATERATEND, FGTBTPCREDOR, FHCLASSIFDIAG, FHJUSTPACDESC, TBTPAPAC, TBLOCSUS, TBASSOCI, TBDRS, FHLEITOUTITP, FAHEMO*, TBLOCPRI, TBGRUATE, TBTIPATE, TBPRESUS, TBPRESSE, TBNIVSUS, TBNIVEL, TBFONTE_ORCAMENTARIA_SUS
+competencia_sus	SUS	principal	F7	Competência de produção SUS por instrumento (BPA, APAC, AIH), com abertura, fechamento e envio	R1#53; MV: COMPETENCIA; parâmetros do instrumento pelo mecanismo parametro (FAPARAM, FAPARAMA, FIPARAM)
+critica_sus	SUS	item	F7	Crítica prévia de uma produção SUS (BPA, APAC, AIH) com regra violada e situação	R1#53; MV: CRITICA_SIA_BPA, CRITICA_APAC, CRITICA_AIH
+regra_critica_sus	SUS	configuracao	F7	Regras locais de crítica e exportação e as exceções autorizadas	R1#53; MV: REGRA_EXPORTACAO_SUS, CAD_EXCECOES_FAT_SIASUS, REGRA_SUS
+motivo_descarte_sus	SUS	dominio	F7	Motivos para descartar uma produção SUS sem enviar	R1#53; MV: MOTIVO_DESCARTE_SUS
+permissao_setor_sus	SUS	vinculo	F7	Setores cuja produção SUS cada usuário pode digitar e faturar	R1#53; MV: SETOR_USUARIO_FATURAMENTO_SUS; SP: TBPERMISSAO_SUS
+programacao_orcamentaria_sus	SUS	principal	F7	Programação físico-orçamentária pactuada com o gestor por competência	R1#54; MV: FPO, IMPORTACAO_FPO
+programacao_orcamentaria_sus_item	SUS	item	F7	Quantidade e valor programados por procedimento ou grupo na competência	R1#54; MV: FPO, PROCEDIMENTO_SUS_TETO_UPS
+teto_financeiro_sus	SUS	configuracao	F7	Teto financeiro por setor, financiamento e competência	R1#54; MV: TETO_ORCAMENTARIO_SETOR
+cota_procedimento_sus	SUS	configuracao	F7	Cota de procedimentos por município de origem, setor e competência	R1#54; MV: COTA_COMPETENCIA, COTA_MUNICIPIO
+transferencia_cota_sus	SUS	historico	F7	Remanejamento de cota entre setores ou municípios, com autor e motivo	R1#54; MV: TRANSFERENCIA_COTA
+solicitante_sus	SUS	principal	F3	Profissional solicitante externo (CNS, conselho) informado em BPA e APAC	R1#55; SP: FAMEDSOL
+producao_ambulatorial_sus	SUS	principal	F7	Produção ambulatorial SUS por competência e folha (consolidado ou individualizado)	R1#55; MV: FAT_SIA, PRODUCAO_BPA, FOLHA_BPA, EVE_SIASUS
+producao_ambulatorial_sus_item	SUS	item	F7	Linha do BPA: procedimento, paciente quando individualizado, CBO, quantidade e CID	R1#55; MV: LAUDO_BPAI, IMP_BPA_EXTERNO
+remessa_bpa	SUS	principal	F7	Arquivo do BPA da competência, com hash, caminho e situação	R1#55; MV: REMESSA_BPA
+laudo_apac	SUS	principal	F7	Laudo para emissão de APAC: paciente, procedimento, CID, justificativa e solicitante	R1#56; MV: LAUDO_APAC, LAUDO_SIA_APAC
+tipo_laudo_apac	SUS	dominio	F7	Tipos de laudo de APAC (oncologia, nefrologia, saúde auditiva, medicamento, cirurgia)	R1#56; MV: TIPO_LAUDO_APAC*, TIPO_LAUDO_SIA
+laudo_apac_oncologia	SUS	item	F7	Complemento oncológico do laudo: localização, estadiamento, metástase, finalidade e esquema	R1#56; MV: LAUDO_APAC_METASTASE; SP: TBLOCPRI; areas-sem-dono 7
+laudo_apac_nefrologia	SUS	item	F7	Complemento de terapia renal do laudo: acesso vascular, exames, situação em lista de transplante	R1#56; MV: ITEM_LAUDO_SIA_APAC_NEFROLOGIA; SP: FAHEMOACEVASC, FAHEMOCARTRAT, FAHEMOCONTRAN, FAHEMOSITTRAN
+laudo_apac_auditiva	SUS	item	F7	Complemento de saúde auditiva do laudo: exames, aparelho e acompanhamento	R1#56
+laudo_apac_medicamento	SUS	item	F8	Complemento de medicamento especializado do laudo: peso, altura, dose e período	R1#56; MV: LAUDO_APAC (medicamentos)
+autorizacao_apac	SUS	principal	F7	Autorização do gestor para o laudo, com número da APAC e validade	R1#56; MV: AUTORIZACAO_APAC
+apac	SUS	principal	F7	APAC faturada na competência (inicial, continuidade, única, encerramento), com motivo de saída	R1#56; MV: APAC, TIP_ATE_APAC
+apac_procedimento	SUS	item	F7	Procedimentos principal e secundários da APAC com quantidade e CBO	R1#56
+apac_sessao	SUS	item	F7	Sessões realizadas no período da APAC (diálise, radioterapia)	R1#56; MV: APAC_SESSAO
+remessa_apac	SUS	principal	F7	Arquivo de APAC da competência, com hash, caminho e situação	R1#56; MV: REMESSA_APAC
+laudo_internacao_sus	SUS	principal	F7	Laudo para solicitação de internação SUS: paciente, procedimento, CID, caráter e solicitante	R1#57; MV: LAUDO_AIH, LAUDOS_SIH
+laudo_internacao_sus_especial	SUS	item	F7	Procedimentos especiais pedidos no laudo (OPM, sangue, diárias de acompanhante)	R1#57; MV: LAUDO_AIH_ESPECIAL, ITEM_LAUDO_AIH_ESPECIAL
+lote_laudo_sus	SUS	principal	F7	Lote de laudos enviados ao gestor para autorização	R1#57; MV: LOTE_LAUDOS_SIH, PRODUCAO_LAUDOS_SUS
+autorizacao_internacao_sus	SUS	principal	F7	Autorização do gestor com número da AIH, situação, devolução e motivo	R1#57; MV: AUTORIZACAO_GESTOR*, CONTROLE_AUTORIZACAO_AIH, DEVOLUCAO_AUTORIZACAO_AIH
+faixa_numeracao_aih	SUS	configuracao	F7	Faixa de números de AIH recebida do gestor e o consumo	R1#57
+conta_aih	SUS	principal	F7	Conta da internação SUS: AIH, datas, motivo de saída, valores calculados e situação	R1#58; MV: VALOR_AIH, PRODUCAO_AIH, FFIS_ITENS_ATENDIMENTO
+conta_aih_procedimento	SUS	item	F7	Procedimentos realizados na AIH com quantidade, data, CBO e valor	R1#58
+conta_aih_profissional	SUS	item	F7	Profissionais da AIH com CNS, CBO, documento e credor do valor	R1#58; MV: VALOR_AIH_EQUIPE; SP: FGTBTPCREDOR
+conta_aih_opm	SUS	item	F7	OPM utilizados na AIH com registro, lote, fabricante e nota	R1#58; SP: TBFABOPM
+conta_aih_diagnostico	SUS	item	F7	CIDs secundários da AIH com classificação (preexistente ou adquirido)	R1#58; MV: CID_CONTA_SUS; SP: FHCLASSIFDIAG
+conta_aih_incremento	SUS	item	F7	Incrementos aplicados à AIH pela habilitação, com percentual e valor	R1#58; MV: VALOR_AIH_INCREMENTO, REG_FAT_INCENTIVO_SUS
+remessa_sisaih	SUS	principal	F7	Arquivo de AIH da competência, com hash, caminho, protocolo e situação	R1#58; MV: PROTOCOLO_REMESSA_AIH
+leito_uti_habilitado	SUS	configuracao	F3	Quantidade de leitos de UTI habilitados por tipo, unidade e competência	R1#59; SP: FHLEITOUTI; MV: CAPACIDADE_UTI_SUS, ESPECIALIDADE_UTI_SUS*
+diaria_uti_sus	SUS	item	F7	Diárias de UTI cobradas na AIH por tipo e período, com corte pela capacidade habilitada	R1#59; MV: DIARIA_UTI_SUS, CORTE_DIARIA_UTI_SUS, REGISTRO_UTI_SUS, TIP_ACOM_UTI_SUS*
+retorno_sus	SUS	principal	F7	Retorno do processamento do gestor por competência e instrumento, com valores aprovados	R1#60
+rejeicao_sus	SUS	item	F7	Produção rejeitada ou glosada pelo gestor, com motivo oficial e valor	R1#60; MV: GLOSAS_SUS, GLOSAS_SIA_SUS, LOG_GLOSA_AIH
+motivo_rejeicao_sus	SUS	catalogo_publico	F7	Motivos oficiais de rejeição do processamento SIA e SIH	R1#60; MV: MOTIVO_GLOSA_BPA
+justificativa_rejeicao_sus	SUS	dominio	F7	Justificativas padrão usadas ao reapresentar produção rejeitada	R1#60; MV: JUSTIFICA_GLOSA_SUS*
+reapresentacao_sus	SUS	principal	F7	Reapresentação de produção rejeitada em competência posterior, com a correção feita	R1#60
+regra_prestador_sus	SUS	configuracao	F7	Procedimentos e serviços permitidos conforme o tipo de prestador e a natureza do estabelecimento	R1#61; MV: TIPO_PREST_SIA*; dep: habilitacao_estabelecimento, servico_classificacao_estabelecimento (02)
+regra_repasse_sus	SUS	configuracao	F7	Regra de distribuição do valor SUS (serviço profissional, ambulatorial) aos profissionais	R1#62; MV: REG_REPASSE_SIA, REG_REPASSE_SIH, ITREG_REPASSE_SIH, IT_REG_REPASSE_SIA
+producao_repasse_sus	SUS	item	F7	Valor da produção SUS atribuído a cada profissional para o repasse	R1#62; MV: IT_REPASSE_SIA, IT_REPASSE_SIH
+regra_rateio_sadt_aih	SUS	configuracao	F7	Rateio do valor de SADT da AIH entre os setores e profissionais executantes	R1#62; MV: RATEIO_SADT_SIH
+dominio_contratualizacao_sus	SUS	dominio	F3	Listas da contratualização SUS (periodicidade, rede assistencial, complexidade, tipo de indicador, escore, esfera)	R1#63; SP: CMPERIODO, CMREDEASSIST, CMTIPOCOMPLEXIDADESP, CMTPAFERICAO, CMTPCONTRATO, CMTPDADOS, CMTPINDICADOR, CMTPITEMINDIC, CMTPORCAMENTO, CMESCORE
+contrato_gestor_sus	SUS	principal	F7	Contrato do hospital com o gestor SUS: esfera, vigência, valores pré e pós-fixados	R1#63
+contrato_gestor_sus_orcamento	SUS	item	F7	Componentes do orçamento do contrato (pré-fixado, pós-fixado, incentivos) por período	R1#63; SP: CMTPORCAMENTO
+meta_contratual_sus	SUS	item	F7	Metas quantitativas e qualitativas do contrato com periodicidade e peso	R1#63
+indicador_contratual_sus	SUS	configuracao	F7	Indicador que mede a meta: fórmula, fonte, tipo de dado e escore	R1#63; SP: CMTPINDICADOR
+indicador_contratual_sus_item	SUS	item	F7	Itens que compõem o indicador contratual	R1#63; SP: CMTPITEMINDIC
+afericao_meta_sus	SUS	principal	F7	Aferição periódica da meta: valor alcançado, escore e repercussão financeira	R1#63; SP: CMTPAFERICAO, CMESCORE
+incentivo_contratual_sus	SUS	configuracao	F3	Incentivos financeiros do contrato SUS e regra de concessão	R1#63; SP: CMINCENTIVO; MV: REG_FAT_INCENTIVO_SUS
+registro_raas	SUS	principal	F8	Registro de ações ambulatoriais de saúde (atenção psicossocial ou domiciliar) por paciente e competência	R1#64; MV: RAAS; SP: TBREGSUS (só o instrumento)
+registro_raas_procedimento	SUS	item	F8	Ações e procedimentos realizados no registro de ações ambulatoriais	R1#64; MV: RAAS
+remessa_raas	SUS	principal	F8	Arquivo do registro de ações ambulatoriais da competência, com críticas e situação	R1#64; MV: CRITICA_RAAS
+inscricao_transplante	SUS	principal	F8	Receptor inscrito na central estadual de transplante, com órgão, situação e prioridade	R1#65; MV: CADASTRO_TRANSPLANTE_RGCT
+notificacao_doador	SUS	principal	F8	Potencial doador notificado à central estadual, com causa, órgãos e desfecho	R1#65; MV: CADASTRO_TRANSPLANTE_CMN
+inscricao_transplante_historico	SUS	historico	F8	Mudanças da inscrição ou notificação enviadas à central, com data e autor	R1#65; MV: LOG_ALT_CAD_TRANSPLAN_RGCT

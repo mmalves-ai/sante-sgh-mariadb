@@ -1,0 +1,94 @@
+tabela_nova	acao	destino_final	modulo	tipo	fase	descricao
+acrescimo_supressao_licitacao	ACEITA	acrescimo_supressao_licitacao	SUP	historico	F8	Acréscimo ou supressão percentual de quantidade de item licitado ou contratado, com motivo, data, usuário e empenho afetado
+alerta_contagem_celular	ACEITA	alerta_contagem_celular	SADT	configuracao	F8	Condição sobre a contagem diferencial de células que dispara mensagem ao analista na bancada
+amostra_analise_ensaio	ACEITA	amostra_analise_ensaio	SADT	item	F8	Ensaio executado em uma amostra de análise, com unidade, referência, valor, ordem e situação
+area_coleta_domiciliar	ACEITA	area_coleta_domiciliar	SADT	configuracao	F8	Região atendida pela coleta domiciliar de amostras e entrega de resultados, com taxa de deslocamento
+area_coleta_domiciliar_entrega	ACEITA	area_coleta_domiciliar_entrega	SADT	item	F8	Taxa por forma de entrega do resultado em cada região de coleta domiciliar
+assunto_processo_compra	ACEITA	assunto_processo_compra	SUP	dominio	F8	Assuntos do acompanhamento do processo de compra ou pagamento, com exigências de contato, número do processo e empenho
+atalho_contador_celula	ACEITA	atalho_contador_celula	SADT	configuracao	F8	Tecla de atalho de cada tipo de célula no contador diferencial do hemograma, por versão do exame, com contagem absoluta ou relativa
+avaliacao_fornecedor_item	ACEITA	avaliacao_fornecedor_item	SUP	item	F7	Nota de cada critério ou pergunta na avaliação do fornecedor, com a resposta escolhida e a fórmula aplicada
+avaliacao_tecnica_produto	ACEITA	avaliacao_tecnica_produto	SUP	principal	F8	Produto em avaliação técnica para padronização, com especificação, forma farmacêutica, via, parecer e situação
+avaliacao_tecnica_produto_marca	ACEITA	avaliacao_tecnica_produto_marca	SUP	vinculo	F8	Fabricantes e marcas avaliados para cada produto em avaliação técnica, com resultado
+centro_distribuicao_amostra	ACEITA	centro_distribuicao_amostra	SADT	principal	F7	Central que recebe e redistribui amostras entre setores de diagnóstico ou unidades da rede, com horário em que o roteamento fica suspenso
+centro_distribuicao_amostra_setor	ACEITA	centro_distribuicao_amostra_setor	SADT	vinculo	F7	Setores de diagnóstico atendidos pela central de distribuição, indicando se só transfere
+classificacao_resultado_cultura	ACEITA	classificacao_resultado_cultura	SADT	dominio	F7	Conclusões possíveis de uma cultura (positiva, negativa, contaminada, sem crescimento), com sigla e grupo de classificação
+condicao_armazenamento	ACEITA	condicao_armazenamento	SUP	dominio	F7	Condição ou restrição de guarda do insumo (refrigerado, protegido da luz, inflamável, controlado)
+condicao_pagamento	ACEITA	condicao_pagamento	FIN	dominio	F3	Condições de pagamento aceitas em compras e contas a pagar (à vista, 30/60/90 dias), com parcelas, prazo e dias fora do mês
+conhecimento_transporte	ACEITA	conhecimento_transporte	SUP	principal	F7	Conhecimento de transporte do frete de uma entrada de mercadoria, com transportador, número, vencimento e título a pagar
+criterio_avaliacao_fornecedor	ACEITA	criterio_avaliacao_fornecedor	SUP	configuracao	F7	Critério de nota do fornecedor (pontualidade, conformidade, atendimento) com fórmula, tipo de documento e se permite revisão
+custo_fixo_producao	ACEITA	custo_fixo_producao	SUP	dominio	F7	Custos fixos (energia, mão de obra, embalagem) somados ao custo do lote produzido no próprio hospital
+custo_fixo_producao_valor	ACEITA	custo_fixo_producao_valor	SUP	historico	F7	Valor de cada custo fixo da produção própria por vigência
+declaracao_importacao	ACEITA	declaracao_importacao	SUP	principal	F7	Declaração de importação de insumo, com fornecedor, moeda, câmbio, transportador, frete e despesas aduaneiras rateadas na entrada no estoque
+declaracao_importacao_item	ACEITA	declaracao_importacao_item	SUP	item	F7	Insumo da declaração de importação, com NCM, quantidade, valores em moeda e em real, seguro, frete e tributos aduaneiros
+destino_romaneio_entrega	FUNDIR	destino_entrega_compra	SUP	dominio	F3	Destino das entregas do romaneio, com endereço completo e situação
+diligencia_amostra	ACEITA	diligencia_amostra	SADT	principal	F8	Pedido de averiguação sobre amostra ou coleta com atraso ou problema, com responsável, situação e resposta
+dispositivo_coleta	ACEITA	dispositivo_coleta	SADT	dominio	F3	Dispositivo usado na coleta da amostra (sistema a vácuo, seringa, swab), com orientação de uso
+emprestimo_insumo	ACEITA	emprestimo_insumo	SUP	principal	F3	Empréstimo de insumos cedido a outra instituição ou recebido dela, com local, previsão de devolução, valor, situação e movimentos
+emprestimo_insumo_item	ACEITA	emprestimo_insumo_item	SUP	item	F3	Insumo, unidade, quantidade e valor de cada empréstimo cedido ou recebido
+ensaio_analise	ACEITA	ensaio_analise	SADT	principal	F8	Ensaio do laboratório de análises de produtos e ambiente, com versão e situação
+ensaio_analise_produto	ACEITA	ensaio_analise_produto	SADT	vinculo	F8	Produtos ou matrizes para os quais o ensaio está habilitado
+ensaio_analise_programa	ACEITA	ensaio_analise_programa	SADT	vinculo	F8	Programas de análise que incluem o ensaio, com prazo em dias e horas
+ensaio_analise_unidade	ACEITA	ensaio_analise_unidade	SADT	vinculo	F8	Unidades analíticas que executam cada ensaio, com a unidade padrão
+equipe_licitacao	ACEITA	equipe_licitacao	SUP	principal	F7	Servidores habilitados a compor comissão de pregão ou de licitação, com função e vigência
+equipe_licitacao_processo	ACEITA	equipe_licitacao_processo	SUP	vinculo	F7	Membros da comissão designados para cada processo licitatório, com o papel de cada um
+especialidade_classe_insumo	ACEITA	especialidade_classe_insumo	SUP	vinculo	F8	Classes e subgrupos de insumo liberados por especialidade médica para prescrição e padronização
+exame_local_anatomico	ACEITA	exame_local_anatomico_coleta	SADT	vinculo	F7	Locais anatômicos de coleta aceitos para cada exame
+excecao_avaliacao_fornecedor	ACEITA	excecao_avaliacao_fornecedor	SUP	configuracao	F7	Casos em que a avaliação do fornecedor não se aplica ou usa outro critério, por fornecedor, ramo, local, tipo de entrada ou documento
+faixa_avaliacao_fornecedor	ACEITA	faixa_avaliacao_fornecedor	SUP	dominio	F7	Faixas de nota que classificam o fornecedor (ótimo, regular, reprovado), com limite inicial e final
+fator_rh	ACEITA	fator_rh	SADT	dominio	F7	Fator Rh (positivo ou negativo), registrado junto com o grupo sanguíneo na tipagem e nas bolsas
+forma_entrega_resultado	ACEITA	forma_entrega_resultado	SADT	dominio	F7	Formas de entrega do laudo ao paciente (balcão, portal, correio, e-mail), indicando se cobra taxa
+forma_farmaceutica	ACEITA	forma_farmaceutica	SUP	dominio	F3	Formas farmacêuticas do medicamento (comprimido, solução injetável, pomada), usadas no cadastro do insumo e na prescrição
+grupo_sanguineo	ACEITA	grupo_sanguineo	SADT	dominio	F7	Grupo sanguíneo do sistema ABO, usado na tipagem do paciente, nas bolsas e nas provas de compatibilidade
+insumo_palavra_chave	ACEITA	insumo_palavra_chave	SUP	item	F8	Palavras-chave ligadas ao insumo para busca em compras, requisição e prescrição
+kit_exame_versao_item	ACEITA	kit_exame_versao_item	SADT	item	F3	Exame e quantidade de cada versão do kit de exames, para reproduzir a composição vigente na data do pedido
+locacao_material	ACEITA	locacao_material	SUP	principal	F8	Material ou equipamento alugado de fornecedor e usado no paciente, com quantidade, data, saída de origem e devolução
+local_entrega_resultado	ACEITA	local_entrega_resultado	SADT	dominio	F7	Local padrão para entrega de laudos e resultados, com endereço e contato
+local_estoque_classificacao	ACEITA	local_estoque_classificacao	SUP	vinculo	F3	Grupos, subgrupos ou insumos que cada local de estoque pode guardar e movimentar
+local_estoque_transferencia	ACEITA	local_estoque_transferencia	SUP	vinculo	F3	Locais de destino autorizados a receber transferência de cada local de estoque
+lote_etiqueta_coleta	ACEITA	lote_etiqueta_coleta	SADT	principal	F7	Lote de etiquetas de coleta pré-impressas para setor solicitante externo, com faixa numérica e quem gerou
+lote_produzido_custo	ACEITA	lote_produzido_custo	SUP	item	F7	Custo fixo apropriado a cada lote produzido, com quantidade, valor unitário e total
+modalidade_analise_produto	ACEITA	modalidade_analise_produto	SUP	dominio	F8	Modalidade de análise técnica de produto (amostra, documental, laboratorial) na qualificação para compra
+motivo_baixa_estoque	ACEITA	motivo_baixa_estoque	SUP	dominio	F3	Motivo de baixa ou perda de insumo (vencido, avariado, extraviado), com efeito no índice de perdas e na validade
+motivo_cancelamento_requisicao_transfusao	ACEITA	motivo_cancelamento_requisicao_transfusao	SADT	dominio	F3	Motivo para cancelar a requisição de hemocomponente ou um de seus itens
+motivo_compra_publica	ACEITA	motivo_compra_publica	SUP	dominio	F7	Motivos padronizados de cancelamento de pedido e de desclassificação de fornecedor em compras públicas
+motivo_devolucao_estoque	ACEITA	motivo_devolucao_estoque	SUP	dominio	F3	Motivo de devolução de insumo ao estoque pelo setor ou pelo paciente
+motivo_inventario_estoque	ACEITA	motivo_inventario_estoque	SUP	dominio	F7	Motivo que leva a abrir uma contagem de estoque (periódica, auditoria, divergência)
+motivo_liberacao_resultado	ACEITA	motivo_liberacao_resultado	SADT	dominio	F7	Motivo exigido para liberar resultado fora da faixa plausível, com situação ativa
+motivo_restricao_exame	ACEITA	motivo_restricao_exame	SADT	dominio	F7	Motivo que justifica restringir a solicitação de um exame, com orientação ao solicitante
+motivo_retificacao_laudo	ACEITA	motivo_retificacao_laudo	SADT	dominio	F3	Motivo para retificar resultado ou laudo já liberado
+motivo_solicitacao_compra	ACEITA	motivo_solicitacao_compra	SUP	dominio	F3	Motivo da solicitação de compra (reposição, item novo, urgência), por tipo de processo
+nota_entrada_atendimento	ACEITA	nota_entrada_atendimento	SUP	vinculo	F7	Atendimentos ligados a uma nota de entrada, para material consignado ou comprado para uso direto no paciente
+nota_entrada_cambio	ACEITA	nota_entrada_cambio	SUP	item	F8	Conversão de nota de entrada emitida em moeda estrangeira: moeda, índice, data da cotação e valores convertidos
+parecer_padrao_analise_produto	ACEITA	parecer_padrao_analise_produto	SUP	dominio	F8	Texto padrão do parecer por modalidade e resultado da análise técnica de produto
+pedido_compra_parcela	ACEITA	pedido_compra_parcela	SUP	item	F3	Parcela de pagamento prevista no pedido de compra, com vencimento e valor, que alimenta a previsão do contas a pagar
+pendencia_processo_compra	ACEITA	pendencia_processo_compra	SUP	item	F7	Pendência no andamento da solicitação ou cotação por item, com tipo de justificativa, responsável e liberação
+planejamento_consumo_insumo	FUNDIR	programacao_suprimento	SUP	principal	F7	Quantidade planejada de cada insumo por ano e mês, base para compra programada e orçamento de suprimentos
+prazo_requisicao_material	ACEITA	prazo_requisicao_material	SUP	configuracao	F7	Prazo de entrega e janela de dias do mês em que cada estabelecimento ou setor pode abrir requisição ao almoxarifado
+programa_avaliacao_produto	ACEITA	programa_avaliacao_produto	SUP	dominio	F8	Programas ou frentes de avaliação de produtos (padronização, qualificação de marca, teste em uso)
+programacao_suprimento	ACEITA	programacao_suprimento	SUP	principal	F7	Programação anual de consumo e compra por insumo e unidade, base para empenho e compra programada
+programacao_suprimento_periodo	ACEITA	programacao_suprimento_periodo	SUP	item	F7	Quantidade programada e saldo da programação por mês ou semana
+rack_amostra_exame	ACEITA	rack_amostra_exame	SADT	vinculo	F7	Exames aceitos em cada rack de amostras, para alocação exclusiva na bancada
+referencia_bibliografica_analise	ACEITA	referencia_bibliografica_analise	SADT	dominio	F8	Referência normativa ou bibliográfica citada para fundamentar o resultado de uma análise laboratorial
+regra_liberacao_antimicrobiano	ACEITA	regra_liberacao_antimicrobiano	SUP	configuracao	F7	Regra de liberação do antimicrobiano por produto: dias liberados sem ficha, dose de referência e bloqueio da dispensação
+regra_parcelamento_entrega_compra	ACEITA	regra_parcelamento_entrega_compra	SUP	configuracao	F7	Programação padrão de entregas parceladas da solicitação de compra por insumo, classe ou estoque, com intervalo e quantidade
+regra_pedido_exame_automatico	ACEITA	regra_pedido_exame_automatico	SADT	configuracao	F7	Regra e exceções da geração automática de pedido de exame por tipo de atendimento, fonte pagadora e setor
+regra_prioridade_etiqueta_amostra	ACEITA	regra_prioridade_etiqueta_amostra	SADT	configuracao	F8	Prioridade e prefixo na impressão de etiquetas de amostra conforme tipo de atendimento, tipo de fonte pagadora e terminal
+regra_prioridade_etiqueta_amostra_fonte_pagadora	ACEITA	regra_prioridade_etiqueta_amostra_fonte_pagadora	SADT	vinculo	F8	Fontes pagadoras alcançadas por uma regra de prioridade de etiqueta de amostra
+regra_requisicao_intercompanhia	ACEITA	regra_requisicao_intercompanhia	SUP	configuracao	F8	Regra do fluxo de requisição entre estabelecimentos: estoque de origem, destinos aceitos, transferência automática e documento fiscal gerado
+regra_resposta_pergunta_exame	ACEITA	regra_resposta_pergunta_exame	SADT	configuracao	F7	Conduta para cada resposta da pergunta do pedido de exame: mensagem exibida e se impede a realização
+regra_subamostra_recipiente	ACEITA	regra_subamostra_recipiente	SADT	item	F7	Recipientes e quantidades de sub-amostras que cada regra gera, com o recipiente sugerido por padrão
+requerente_analise	ACEITA	requerente_analise	SADT	principal	F8	Empresa ou pessoa que pede análises ao laboratório, com contato e tipo; dados cadastrais na pessoa jurídica
+requerente_analise_atividade	ACEITA	requerente_analise_atividade	SADT	vinculo	F8	Ramos de atividade econômica do requerente de análises
+reserva_estoque	ACEITA	reserva_estoque	SUP	principal	F7	Quantidade de insumo e lote reservada para requisição, solicitação ou kit, abatida do saldo disponível até o atendimento ou a baixa
+resultado_padrao_ensaio	ACEITA	resultado_padrao_ensaio	SADT	dominio	F8	Resultados padronizados usados para registrar a conclusão das análises de ensaio feitas em produtos
+servico_contratavel	ACEITA	servico_contratavel	SUP	principal	F3	Serviço que pode ser comprado ou contratado, com unidade, tributação, conta contábil e tempo previsto
+servico_domiciliar_exame	ACEITA	servico_domiciliar_exame	SADT	item	F8	Coleta domiciliar ou entrega de laudo ligada ao pedido de exame, com endereço, data, contato e valor
+setor_executante_padrao	ACEITA	regra_setor_executante	SADT	configuracao	F3	Setor executante sugerido por unidade de origem, setor solicitante e tipo de item prescrito
+setor_executante_padrao_horario	ACEITA	regra_setor_executante_horario	SADT	item	F3	Janela de horário ou feriado em que outro setor executante assume no lugar do padrão
+sobra_fracionamento	ACEITA	sobra_fracionamento	SUP	item	F7	Sobra de dose fracionada por atendimento e item dispensado, com quantidade e abertura do frasco, para reaproveitar antes de nova saída
+solicitacao_compra_entrega	ACEITA	solicitacao_compra_entrega	SUP	item	F7	Entrega parcelada pedida para o item da solicitação de compra, com data, quantidade atendida e cancelada
+solicitacao_compra_fonte_recurso	ACEITA	solicitacao_compra_fonte_recurso	SUP	vinculo	F7	Quantidade de cada item da solicitação de compra ou serviço custeada por cada fonte de recurso
+tipo_combustivel	ACEITA	tipo_combustivel	SUP	dominio	F8	Combustíveis usados pelos veículos de entrega, para controle de abastecimento no romaneio
+tipo_compra_importacao	ACEITA	tipo_compra_importacao	SUP	dominio	F8	Modalidade da compra internacional informada na declaração de importação
+tipo_documento_processo_compra	ACEITA	tipo_documento_processo_compra	SUP	dominio	F8	Documentos que tramitam no processo de compra ou pagamento, indicando se gera lançamento, exige favorecido ou envia aviso
+tipo_embalagem	ACEITA	tipo_embalagem	SUP	dominio	F7	Tipos de embalagem do produto (frasco, ampola, blister, caixa), usados na análise e no cadastro

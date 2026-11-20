@@ -1,0 +1,70 @@
+funcionalidade	decisao	entidades_rodada1
+Títulos a pagar: parcelas, baixa, descontos e acréscimos, prorrogação e devolução ao fornecedor	F3: núcleo d	`titulo_pagar`, `parcela_pagar`, `baixa_titulo`, `ajuste_titulo`, `tipo_credor`, `documento_origem_titulo`, `motivo_prorrogacao`
+Aprovação de pagamentos por alçada (valor-limite por usuário e bloqueio)	F3: o new-sg	`alcada_financeira`, `limite_alcada_usuario`, `pedido_aprovacao`, `decisao_aprovacao`
+Fluxo de aprovação configurável por pontos, agrupadores e respostas, com aprovação pelo celular	F8: valor re	—
+Borderô e pagamento eletrônico (remessa e retorno bancário, dados bancários e chave Pix do credor)	F3: em uso	`bordero_pagamento`, `item_bordero`, `remessa_bancaria`, `retorno_bancario`, `ocorrencia_bancaria`, `conta_bancaria_credor`, `forma_pagamento_credor`
+Adiantamento a fornecedor e a médico, com compensação na baixa (e prestação de contas com anexos, no MV)	F3: em uso. 	`adiantamento`, `compensacao_adiantamento`, `beneficiario_adiantamento`
+Previsão e provisão de pagamentos (despesa prevista, honorário provisionado como passivo)	F8	—
+Encontro de contas entre o que se paga e o que se recebe do mesmo parceiro	F8	—
+Nota de crédito e de débito com tributos (fornecedor e cliente)	F8	—
+Títulos a receber de convênio e de particular, com baixa por demonstrativo, glosa no item e renegociação	F3: em uso	`titulo_receber`, `parcela_receber`, `recebimento`, `recebimento_item_conta`, `renegociacao`, `titulo_renegociado`, `cliente_financeiro`
+Conta corrente do convênio (créditos recebidos antes de identificar a fatura)	F3: em uso	`credito_convenio`, `aplicacao_credito_convenio`
+Cobrança bancária com boleto (carteira, remessa, retorno, ocorrências, tarifas e mensagens)	F7: um hospi	`carteira_cobranca`, `boleto`, `remessa_cobranca`, `retorno_cobranca`, `tarifa_bancaria`
+Portador do título (carteira simples, desconto e cessão de recebíveis)	F8: antecipa	—
+Contas bancárias, movimento bancário, transferências, saldos diários e fechamento do período financeiro	F3: em uso	`banco`, `agencia_bancaria`, `conta_bancaria`, `movimento_bancario`, `transferencia_bancaria`, `saldo_diario_conta`, `periodo_financeiro`
+Conciliação bancária pelo extrato importado (sugestão por regra, confirmação humana, crédito não identificado)	F3: já const	`extrato_bancario`, `linha_extrato`, `conciliacao_bancaria`, `credito_nao_identificado`
+Fluxo de caixa realizado e projetado (no MV, também com simulação de cenários)	F3: já const	`premissa_recebimento_convenio` (o resto é calculado sobre títulos, movimentos e saldos)
+Caixa do balcão: abertura e fechamento por operador, recebimento do particular, troca de espécie e recibo	F3: o partic	`sessao_caixa`, `recebimento_balcao`, `forma_recebimento`, `recibo`, `sangria_caixa`
+Cartão de débito e crédito: bandeira, parcelas, taxa da administradora e conciliação dos recebíveis	F3: bandeira	`bandeira_cartao`, `administradora_cartao`, `taxa_administradora`, `transacao_cartao`, `parcela_recebivel_cartao`
+Pix com cobrança, retorno e baixa automática	F7: um hospi	`chave_pix_conta`, `cobranca_pix`, `retorno_pix`
+Cheques (talão, emissão, devolução)	NAO: meio em	—
+Caução e adiantamento do paciente particular, com contrato por procedimento	F7: comum no	`adiantamento_paciente`, `contrato_adiantamento_paciente`, `aplicacao_adiantamento_paciente`
+Plano gerencial de receitas e despesas (grupo, subgrupo, item) e rateio do lançamento por centro de custo	F3: em uso	`grupo_natureza_financeira`, `natureza_financeira`, `rateio_lancamento`, `regra_rateio_financeiro`
+Permissões do financeiro por conta bancária, empresa e tipo de lançamento; empresa e competência de trabalho por usuário	F3: em uso	`permissao_conta_bancaria`, `permissao_tipo_lancamento`, `parametro_financeiro`, `contexto_trabalho_usuario`
+Exportação dos lançamentos ao escritório contábil, com de-para por evento e lote conferível	F3: é como a	`depara_conta_externa`, `lote_exportacao_contabil`, `item_lote_exportacao`
+Multimoeda, variação cambial e plano de contas internacional	NAO: fora do	—
+Técnico do fornecedor: logs, tempos de espera, controle de processamento	NAO: técnico	—
+Escrituração fiscal das entradas e EFD-Contribuições (CFOP, CST do PIS e da COFINS, natureza do crédito, dados fiscais d	F3: em uso. 	`escrituracao_entrada`, `escrituracao_item_entrada`, `dado_fiscal_item`, `tabela_fiscal_oficial`, `codigo_fiscal_oficial`
+Retenções na fonte (IR, contribuição previdenciária, ISS, PIS, COFINS e CSLL) no pagamento, no serviço tomado e no receb	F3: em uso	`tributo`, `aliquota_tributo_vigencia`, `regra_retencao`, `retencao_titulo`, `regra_iss_municipio`, `orgao_arrecadador`
+Apuração dos tributos retidos e guia de recolhimento (DARF), com envio da DCTFWeb	F7: obrigaçã	`codigo_receita_federal`, `apuracao_retencao`, `guia_recolhimento`
+EFD-REINF (séries R-2000 e R-4000), com processos, beneficiários e retorno	F3: obrigaçã	`natureza_rendimento`, `evento_reinf`, `lote_reinf`, `retorno_reinf`, `processo_tributario`
+DMED (recebimentos de pessoa física por titular)	F3: obrigaçã	`declaracao_dmed`, `item_dmed`
+NFS-e dos serviços hospitalares: emissão, lote, cancelamento, substituição, deduções e IBS/CBS da reforma	F3: o hospit	`nota_servico`, `item_nota_servico`, `tributo_nota_servico`, `lote_nota_servico`, `evento_nota_servico`, `provedor_nota_municipal`, `servico_municipal`
+NF-e de mercadoria: simples remessa, devolução e venda a terceiro	F7: devoluçã	`natureza_operacao`, `nota_mercadoria`, `item_nota_mercadoria`, `evento_nota_mercadoria`
+LALUR e e-LALUR (partes A e B, provisão de IRPJ e CSLL) para o lucro real	F7: um hospi	`ajuste_lalur`, `saldo_lalur_parte_b`, `apuracao_irpj_csll`
+Declaração de importação (rateio de custos e duplicata em moeda)	NAO: o hospi	—
+Plano de contas versionado e plano referencial da Receita	F7: a Rede v	`plano_contas`, `conta_contabil`, `conta_referencial`, `vinculo_conta_referencial`
+Lançamentos contábeis (automáticos, manuais e estornos), razão, saldos mensais, conciliação de contas e encerramento do 	F7	`lote_contabil`, `lancamento_contabil`, `partida_contabil`, `saldo_contabil_mensal`, `periodo_contabil`, `conciliacao_conta_contabil`, `historico_padrao`
+Regras de contabilização automática dos módulos (faturamento, financeiro, estoque, patrimônio, folha, repasse)	F7: a export	`regra_contabilizacao`, `versao_regra_contabilizacao`, `fato_contabil`, `leitura_fato_contabil`
+Demonstrações: balancete, diário, DRE e balanço, com apuração do resultado	F7	`modelo_demonstracao`, `linha_modelo_demonstracao`, `apuracao_resultado`
+SPED contábil (ECD) e ECF, com termos, signatários e situação especial	F7: obrigaçã	`arquivo_sped_contabil`, `signatario_escrituracao`, `registro_empresa_junta`, `situacao_especial_empresa`
+Consolidação gerencial de várias empresas (plano gerencial comum, eliminação das transações entre empresas, DRE consolid	F8: valor al	—
+Projetos como centro de resultado (etapas, setores, produtos, modelo contábil próprio)	F8: útil par	—
+Orçamento empresarial: versões do ano, premissas, cenários, grade por centro e conta, aprovação	F7: item de 	`versao_orcamento`, `linha_orcamento`, `valor_orcado_mes`, `aprovacao_orcamento`
+Controle orçamentário na compra e no pagamento (saldo conferido, bloqueio, exceção justificada, ajuste da nota)	F8	—
+Orçamento estatístico e indicadores orçamentários por setor	F8	—
+Orçamento público: programa de trabalho, função orçamentária, teto e empenho	F8: só se o 	—
+Gestão de contratos com fornecedores: vigência, aditivo, reajuste, saldo, ocorrências e avaliação (no MV, também SLA, fó	F7: auditori	`contrato_fornecedor`, `parte_contrato`, `aditivo_contrato`, `reajuste_contrato`, `ocorrencia_contrato`, `anexo_contrato`, `avaliacao_fornecedor`
+Custeio por absorção: classificação dos centros, estatísticas do mês, rateio sequencial, custo e margem por conta, expor	F7: item de 	`classificacao_centro_custo`, `criterio_rateio`, `estatistica_centro_mes`, `apuracao_custo`, `parcela_apuracao_custo`, `custo_conta_paciente`, `exportacao_custo`
+Custo-padrão por procedimento (ficha técnica de insumos, sala, gases e diária)	F8: base par	—
+Plano de apuração de um sistema estrangeiro de seguridade	NAO: regra d	—
+Bens: cadastro a partir da nota ou da doação, plaqueta, transferência com aceite, comodato, baixa e inventário	F7: o imobil	`bem_patrimonial`, `grupo_bem`, `plaqueta`, `movimentacao_bem`, `baixa_bem`, `inventario_patrimonial`, `item_inventario`, `comodato_bem`
+Depreciação mensal com coeficiente por turno e rateio por centro de custo	F7	`cota_depreciacao`, `rateio_depreciacao`, `coeficiente_turno`
+Reavaliação, agregação de valor, imobilizado em andamento e seguro dos bens	F8	—
+Repasse médico: regras por convênio, procedimento e profissional; apuração do faturado; lançamento de eventos; recibo de	F3: em uso m	`regra_repasse`, `versao_regra_repasse`, `apuracao_repasse`, `item_apuracao_repasse`, `lancamento_repasse`, `base_calculo_repasse`, `recibo_autonomo`, `evento_repasse`, `cooperativa_medica`, `cooperado`
+Repasse de plantão pela escala e pelo valor-hora, com revisão do plantão realizado	F8: já exist	—
+Remuneração variável: produtividade, valor mínimo garantido, valor fixo, percentual do resultado e custo do prestador	F8: modelo d	—
+Colaborador: admissão ligada ao profissional e ao usuário, vínculos, lotação, dependentes, desligamento e validade do co	F7: o legado	`colaborador`, `vinculo_trabalho`, `lotacao`, `dependente`, `desligamento`, `cargo`, `validade_conselho`
+"Escala de trabalho: regimes de jornada, montagem e publicação, plantão, sobreaviso, troca e cessão, ""quem está de plantã"	F7: o hospit	`regime_jornada`, `vigencia_regime_colaborador`, `escala`, `plantao`, `troca_plantao`, `acionamento_sobreaviso`
+Dimensionamento de enfermagem pela resolução do COFEN, com as parcelas	F7: exigênci	`dimensionamento_enfermagem`, `parcela_dimensionamento`
+Ponto eletrônico: arquivo do relógio (AFD), ajustes aprovados por outra pessoa, apuração contra a escala, banco de horas	F7: Portaria	`arquivo_ponto`, `marcacao_ponto`, `ajuste_ponto`, `justificativa_ponto`, `apuracao_ponto`, `movimento_banco_horas`, `fechamento_ponto`
+Folha de pagamento: rubricas e incidências, cálculo mensal, férias, 13º, rescisão, holerite e paralelo com a folha exter	F7: o hospit	`rubrica`, `incidencia_rubrica`, `tabela_legal_vigencia`, `competencia_folha`, `calculo_folha`, `item_calculo_folha`, `afastamento`, `periodo_aquisitivo`, `programacao_ferias`, `recibo_ferias`, `parcela_decimo_terceiro`, `rescisao`, `lote_folha_externa`
+eSocial: eventos de tabela, não periódicos e periódicos, lotes, retorno e conciliação com o repasse	F7	`parametro_empregador`, `evento_esocial`, `lote_esocial`, `retorno_esocial`, `tabela_esocial`
+Obrigações trabalhistas: FGTS Digital, SEFIP, CAGED e RAIS	F7	`obrigacao_trabalhista`, `arquivo_obrigacao`, `guia_fgts`
+Integração da folha com o financeiro, a contabilidade e o custo de pessoal por centro	F7	`depara_folha_financeiro`, `titulo_folha`, `custo_pessoal_centro`
+SESMT: prontuário ocupacional, ASO, PCMSO, CAT, EPI por função, riscos, vacinas e acidente com material biológico	F7: NR-7, NR	`prontuario_ocupacional`, `aso`, `exame_ocupacional`, `comunicacao_acidente`, `entrega_epi`, `risco_funcao`, `vacina_colaborador`, `exposicao_biologica`
+Treinamentos e POP: cursos, turmas, presença e ciência por versão	F7: a NR-32 	`curso`, `turma_treinamento`, `presenca_treinamento`, `ciencia_procedimento`
+Cargos, faixas salariais e vagas; avaliação de desempenho e de experiência	F8: gestão, 	—
+Autosserviço do colaborador (holerite, férias, ponto, solicitações) e indicadores de pessoas	F8: liga jun	—
+Desconto em folha do consumo do colaborador (refeição, saldo devedor)	NAO: customi	—
+Habilidades do prestador para alocação	NAO: duplica	—

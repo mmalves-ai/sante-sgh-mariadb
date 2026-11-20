@@ -1,0 +1,3 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+classe_fonte_pagadora	CAD	dominio	F3	Classe da fonte pagadora usada no atendimento e na conta (particular, convênio, público, gratuidade, seguro de trânsito)	SPDATA TBCLASSC (8), TBFONTE_PAGADORA (12)
+funcao_portal_prestador	SGO	dominio	F7	Funções oferecidas no portal ao prestador (autorização, faturamento, protocolo), base das permissões por conta	SPDATA PFPORTALOPCAO (8)

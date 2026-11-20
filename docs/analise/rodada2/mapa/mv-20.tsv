@@ -1,0 +1,223 @@
+esquema	tabela	destino_tipo	destino	nova	modulo	fase	motivo
+DBAMV	SOL_PRONT	TABELA	solicitacao_prontuario	N	HOT	F3	
+DBAMV	SOROTECA_ACERVO	TABELA	guarda_amostra	N	SADT	F8	
+DBAMV	SOROTECA_COMP_REGRA_EXP_RES	TABELA	regra_descarte_amostra	N	SADT	F8	
+DBAMV	SOROTECA_CONFIG	MECANISMO	parametro	N	SADT	F8	forma de armazenamento das amostras por estabelecimento
+DBAMV	SOROTECA_CONGELADOR	TABELA	equipamento_guarda_amostra	N	SADT	F8	
+DBAMV	SOROTECA_MOTIVO	TABELA	motivo_retirada_amostra	N	SADT	F8	
+DBAMV	SOROTECA_MOVIMENTO	TABELA	movimento_guarda_amostra	N	SADT	F8	
+DBAMV	SOROTECA_RACK	TABELA	rack_amostra	N	SADT	F8	
+DBAMV	SOROTECA_REGRA_EXP_CON	TABELA	regra_descarte_amostra	N	SADT	F8	
+DBAMV	SOROTECA_REGRA_EXP_RES	TABELA	regra_descarte_amostra	N	SADT	F8	
+DBAMV	SOS_CIRURGIA	TABELA	descricao_cirurgica;intercorrencia_cirurgica	N	CC	F3	
+DBAMV	SOS_CIRURGIA_PADRAO	TABELA	texto_padrao_cirurgia	N	CC	F3	
+DBAMV	SOS_CONTROLE_CIRU	TABELA	grade_sala_cirurgica	N	CC	F3	
+DBAMV	SOS_IT_AGENDA_CIRU	TABELA	agendamento_cirurgico;agendamento_cirurgico_procedimento	N	CC	F3	
+DBAMV	SOS_PRO_UTILIZADO	TABELA	procedimento_cirurgico	N	CC	F3	itens faturaveis habilitados como cirurgia
+DBAMV	SPED_ECF_IDENT_SOCIOS_TITULAR	TABELA	socio_titular_ecf	N	FIN	F7	
+DBAMV	SPED_ECF_IRPJ_CSLL	TABELA	apuracao_irpj_csll	N	FIN	F7	
+DBAMV	SPED_ECF_LANCAMENTOS_DIVERSOS	TABELA	informacao_economica_ecf;arquivo_sped_contabil	S	FIN	F7	
+DBAMV	SPED_ECF_RENDIMENTOS_DIRI_CONS	TABELA	socio_titular_ecf	N	FIN	F7	rendimentos de dirigentes e socios
+DBAMV	SPED_FISCAL	TABELA	arquivo_efd_fiscal	S	FIN	F7	
+DBAMV	SPED_FISCAL_DEDUCAO_ISS	TABELA	deducao_iss_periodo;processo_tributario	S	FIN	F7	
+DBAMV	SPED_LOG_FORNECEDOR	MECANISMO	historico_entidade:empresa_fornecedora	N	SUP	F3	alteracoes cadastrais exigidas na escrituracao
+DBAMV	SRECURSO	TABELA	recurso_agendavel	N	AGE	F3	
+DBAMV	SRV_PROTO	NAO		N	ADM		tecnico do fornecedor sem equivalente (registro de servicos do produto)
+DBAMV	SRV_PROTO_TEMP	NAO		N	ADM		tecnico do fornecedor sem equivalente (area temporaria do registro de servicos)
+DBAMV	SSM_ALTERADO	TABELA	procedimento_sigtap_valor	N	SUS	F3	codificacao anterior a tabela unificada
+DBAMV	STATUS_ARQUIVO_ATENDIMENTO	TABELA	documento_digitalizado;anexo_prontuario	N	HOT	F3	situacao do anexo
+DBAMV	STATUS_ATIVIDADE	TABELA	programa_trabalho	N	FIN	F8	situacao da atividade orcamentaria (inferido)
+DBAMV	STATUS_CENTRO_CIRURGICO	TABELA	situacao_bloco	N	CC	F3	
+DBAMV	STATUS_CENTRO_CIRURGICO_PADRAO	NAO		N	CC		duplicado de situacao_bloco (carga padrao do fornecedor)
+DBAMV	STATUS_DEV_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_ENTRADA_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_ENT_PRO_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_LAUDOS_SIH	MECANISMO	historico_entidade:laudo_internacao_sus	N	SUS	F3	situacao do laudo junto ao gestor
+DBAMV	STATUS_MOV_BENS_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_MOV_SALA	TABELA	situacao_bloco	N	CC	F3	
+DBAMV	STATUS_MVTO_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_OS_SPED_TER	MECANISMO	integracao	N	INTG	F7	situacao do envio a escrituracao terceirizada
+DBAMV	STATUS_REFEICAO	TABELA	mapa_dieta	N	HOT	F3	fechamento da refeicao do dia
+DBAMV	SUBGRUPO_CID_AUXILIAR	TABELA	grupo_cid	N	INTG	F7	
+DBAMV	SUBGRUPO_SSM	TABELA	grupo_sigtap	N	SUS	F3	codificacao anterior a tabela unificada
+DBAMV	SUBLOCALIZACAO_ANATOMICA	TABELA	regiao_anatomica	N	INTG	F8	
+DBAMV	SUBSTANCIA	TABELA	principio_ativo	N	SUP	F3	
+DBAMV	SUBSTANCIA_INTERFERENCIA_RES	TABELA	substancia_interferente	N	SADT	F8	
+DBAMV	SUBSTANCIA_TRIAGEM	TABELA	alergia_paciente;alergia_paciente_principio	N	PEP	F3	
+DBAMV	SUBSTITUICAO_PRODUTOS	TABELA	substituicao_insumo	N	SUP	F8	
+DBAMV	SUBS_INTERACAO	TABELA	interacao_medicamentosa	N	PEP	F3	
+DBAMV	SUBS_PAC	TABELA	alergia_paciente;alergia_paciente_principio	N	PEP	F3	
+DBAMV	SUBS_PRO	TABELA	insumo_principio_ativo	N	SUP	F3	
+DBAMV	SUBTIPO_VINCULO_CNES	MECANISMO	catalogo_publico:cnes	N	CAD	F3	
+DBAMV	SUB_AMOSTRA_PROCESSO	TABELA	amostra_biologica;regra_subamostra	N	SADT	F3	
+DBAMV	SUB_CLAS	TABELA	subgrupo_insumo	N	SUP	F3	
+DBAMV	SUB_CLAS_RELATORIO_SCCOM	MECANISMO	datamart	N	REL	F7	consolidacao de relatorios entre unidades
+DBAMV	SUB_GRUPO_CIRURGIA	TABELA	grupo_procedimento_cirurgico	N	CC	F3	
+DBAMV	SUB_GRUPO_CIR_FORMULA	TABELA	kit_material_procedimento	N	SUP	F7	
+DBAMV	SUB_GRUPO_PROCEDIMENTOS	TABELA	grupo_sigtap	N	SUS	F3	
+DBAMV	SUB_GRUPO_PROCEDIMENTO_TUSS	MECANISMO	catalogo_publico:tuss	N	FAT	F3	
+DBAMV	SUB_GRU_PRO_HIERARQUIZADO	TABELA	subgrupo_faturamento	N	FAT	F3	
+DBAMV	SUB_GRU_PRO_SUS	TABELA	grupo_sigtap	N	SUS	F3	
+DBAMV	SUB_IOB	TABELA	grupo_bem	N	FIN	F7	
+DBAMV	SUB_IOB_EMPRESA	TABELA	grupo_bem;regra_contabilizacao	N	FIN	F7	contas do grupo por estabelecimento
+DBAMV	SUB_IOB_EMPRESA_LOG	MECANISMO	historico_entidade:grupo_bem	N	FIN	F7	
+DBAMV	SUB_IOB_EMPRESA_TRANSACAO	TABELA	regra_contabilizacao;transacao_intercompanhia	N	FIN	F7	
+DBAMV	SUB_ITEM_RUBRICA	TABELA	subgrupo_natureza_financeira	N	FIN	F3	
+DBAMV	SUB_PLANO	TABELA	plano_fonte_pagadora	N	CAD	F7	
+DBAMV	SUPORTE_O2_REGULACAO	TABELA	suporte_oxigenio	N	INT	F7	
+DBAMV	TABELAS	MECANISMO	framework	N	SIS	F3	dicionario de tabelas do produto
+DBAMV	TABELAS_FILHAS	MECANISMO	framework	N	SIS	F3	dicionario de tabelas do produto
+DBAMV	TABELAS_MODULOS	MECANISMO	framework	N	SIS	F3	dicionario de tabelas do produto
+DBAMV	TABELAS_OCX	NAO		N	SIS		tecnico do fornecedor sem equivalente (componentes de interface antigos)
+DBAMV	TABELA_CNS	TABELA	terminologia	N	INTG	F3	
+DBAMV	TABELA_CONCORRENCIA_GRU_FAT	NAO		N	FAT		sem valor de negocio (rateio entre previdencias de saude estrangeiras)
+DBAMV	TABELA_CONCORRENCIA_GRU_PRO	NAO		N	FAT		sem valor de negocio (rateio entre previdencias de saude estrangeiras)
+DBAMV	TABELA_CONCORRENCIA_PRO_FAT	NAO		N	FAT		sem valor de negocio (rateio entre previdencias de saude estrangeiras)
+DBAMV	TABELA_GERAL	NAO		N	SIS		tecnico do fornecedor sem equivalente (comandos de banco)
+DBAMV	TABELA_IMPORTACAO	MECANISMO	integracao	N	INTG	F3	controle de importacao de arquivo
+DBAMV	TABELA_PROIB_EXCS	MECANISMO	framework	N	SIS	F3	regra de exclusao do produto
+DBAMV	TABELA_REGISTRO_U180	TABELA	tabela_fiscal_oficial	N	FIN	F3	
+DBAMV	TABELA_REGISTRO_U182	TABELA	tabela_fiscal_oficial	N	FIN	F3	
+DBAMV	TABELA_REGISTRO_X390	TABELA	tabela_fiscal_oficial	N	FIN	F3	
+DBAMV	TABELA_REG_LAY_ARQ	MECANISMO	integracao	N	INTG	F3	montagem de arquivo eletronico
+DBAMV	TABLE_CONFIG	NAO		N	SIS		sem valor de negocio (tabela de exemplo)
+DBAMV	TAB_CHAVES_TEMPORARIA	NAO		N	SIS		tecnico do fornecedor sem equivalente (area temporaria)
+DBAMV	TAB_CONVENIO	TABELA	preco_negociado_procedimento	S	FAT	F3	
+DBAMV	TAB_FAT	TABELA	tabela_preco	N	FAT	F3	
+DBAMV	TAB_FAT_GRU_PRO	TABELA	regra_desconto_grupo	N	FAT	F3	
+DBAMV	TAB_IMPORTA_INTEG	MECANISMO	integracao	N	INTG	F3	controle de importacao de arquivo
+DBAMV	TAB_OCOR	TABELA	motivo_nao_administracao	N	PEP	F3	ocorrencias da checagem da prescricao
+DBAMV	TAB_PAGINAS	MECANISMO	framework	N	SIS	F3	controle de impressao
+DBAMV	TAB_REIMPRESSAO	TABELA	registro_reimpressao	N	ADM	F3	
+DBAMV	TAB_RELATORIOS_EXECUTADOS	TABELA	execucao_relatorio	N	REL	F3	
+DBAMV	TAB_SIASUS	TABELA	procedimento_sigtap	N	SUS	F3	
+DBAMV	TAB_SIASUS_ESTADIO	TABELA	procedimento_sigtap_atributo	N	SUS	F3	
+DBAMV	TAB_SIASUS_FINALIDADE_TRAT	TABELA	procedimento_sigtap_atributo	N	SUS	F3	
+DBAMV	TAB_SIASUS_HABILITACOES_SUS	TABELA	procedimento_sigtap_habilitacao	N	SUS	F3	
+DBAMV	TAB_SIASUS_PREST	TABELA	procedimento_sigtap_atributo	N	SUS	F3	
+DBAMV	TAB_SSM_APAC	TABELA	compatibilidade_sigtap	N	SUS	F3	
+DBAMV	TAG_DIRF	NAO		N	FIN		obsoleto (declaracao extinta, substituida pela escrituracao de retencoes)
+DBAMV	TAG_DMED	TABELA	declaracao_dmed	N	FIN	F3	
+DBAMV	TALAO	TABELA	talao_cheque	S	FIN	F3	
+DBAMV	TARIFA_BANCARIA_RET	TABELA	tarifa_bancaria	N	FIN	F7	
+DBAMV	TAXA_EXTRA_IPE	TABELA	regra_lancamento	N	FAT	F3	taxa extra por fonte pagadora e origem
+DBAMV	TAXA_MANUSEIO_OPME	TABELA	taxa_manuseio_implante	N	SUP	F7	
+DBAMV	TAXA_OBSERVACAO	TABELA	regra_lancamento	N	FAT	F3	cobranca de observacao por horas
+DBAMV	TAXA_RPA_OBS_FFCV	TABELA	regra_lancamento	N	FAT	F3	cobranca de repouso e observacao
+DBAMV	TBL_JOB_AVICIR_ATENDIME	NAO		N	SIS		tecnico do fornecedor sem equivalente (area de trabalho de rotina)
+DBAMV	TB_FSCC_REL_OCIOSIDADE	MECANISMO	datamart	N	REL	F7	ociosidade de sala cirurgica
+DBAMV	TEF_FINCAR	TABELA	bandeira_cartao	N	FIN	F3	
+DBAMV	TEF_MOVIMENTO	TABELA	transacao_cartao	N	FIN	F3	
+DBAMV	TEF_MOVIMENTO_CNTA	TABELA	parcela_recebivel_cartao;transacao_cartao	N	FIN	F3	
+DBAMV	TEF_MOVIMENTO_PARC	TABELA	parcela_recebivel_cartao	N	FIN	F3	
+DBAMV	TEF_PARCEIRO	TABELA	terminal_cartao;administradora_cartao	N	FIN	F7	
+DBAMV	TEF_PARCEIRO_PARC	TABELA	taxa_administradora	N	FIN	F3	
+DBAMV	TEF_TIPOMVTO	TABELA	terminal_cartao	N	FIN	F7	
+DBAMV	TERCEIROS	TABELA	prestador_terceiro	N	FAT	F3	
+DBAMV	TERMINOLOGIA_CLINICA	TABELA	terminologia	N	INTG	F3	
+DBAMV	TERMOS_MULTI_EMP	TABELA	termo_consentimento_modelo	N	PEP	F3	
+DBAMV	TERMO_CONSENTIMENTO_PCD_PRES	TABELA	termo_consentimento_modelo;termo_consentimento_procedimento	N	PEP	F3	
+DBAMV	TERMO_CONSENTIMENTO_PROCED	TABELA	termo_consentimento_modelo;termo_consentimento_procedimento	N	PEP	F3	
+DBAMV	TERMO_LIVRO_PSICOTROPICO	TABELA	termo_livro_controlado;livro_controlado	N	SUP	F3	
+DBAMV	TERMO_PORTARIA	TABELA	termo_livro_controlado	N	SUP	F3	
+DBAMV	TETO_ORCAMENTARIO_GRP_PRC_SUS	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	
+DBAMV	TETO_ORCAMENTARIO_GRU_SUBG_SUS	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	
+DBAMV	TETO_ORCAMENTARIO_PROCED_SUS	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	
+DBAMV	TETO_ORCAMENTARIO_SETOR	TABELA	teto_financeiro_sus	N	SUS	F7	
+DBAMV	TETO_ORCAMENTARIO_SET_PRC_SUS	TABELA	programacao_orcamentaria_sus_item;teto_financeiro_sus	N	SUS	F7	
+DBAMV	TETO_ORCAMENTARIO_UPS	TABELA	programacao_orcamentaria_sus	N	SUS	F7	
+DBAMV	TETO_ORCAM_UPS_GRU_PRC_SUS	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	
+DBAMV	TETO_ORC_GRU_SUBG_PRC_SUS	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	
+DBAMV	TET_ORC	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	codificacao anterior a tabela unificada
+DBAMV	TET_ORC_SSM	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	codificacao anterior a tabela unificada
+DBAMV	TET_ORC_SUB_GRU	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	codificacao anterior a tabela unificada
+DBAMV	TET_ORC_SUB_GRU_SSM	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	codificacao anterior a tabela unificada
+DBAMV	TET_ORC_UPS	TABELA	programacao_orcamentaria_sus	N	SUS	F7	
+DBAMV	TET_ORC_UPS_GRU_SSM	TABELA	programacao_orcamentaria_sus_item	N	SUS	F7	codificacao anterior a tabela unificada
+DBAMV	TEXTOS_ATD	TABELA	registro_assistencial	N	PEP	F3	
+DBAMV	TEXTOS_PAD_ATD	TABELA	nota_predefinida	N	PEP	F8	
+DBAMV	TEXTOS_PAD_OCORRENCIA	TABELA	nota_predefinida	N	PEP	F8	
+DBAMV	TEXTOS_PAD_PSSD	TABELA	modelo_laudo	N	SADT	F3	
+DBAMV	TEXTO_GERACAO_CIHA	TABELA	remessa_ciha	N	SUS	F3	
+DBAMV	TEXTO_PADRAO_EDITOR	TABELA	nota_predefinida	N	PEP	F8	
+DBAMV	TEXTO_PADRAO_EDITOR_USUARIO	TABELA	nota_predefinida	N	PEP	F8	texto restrito por usuario
+DBAMV	TEX_EVO	TABELA	nota_predefinida	N	PEP	F8	
+DBAMV	TEX_EVO_EMPRESA	TABELA	nota_predefinida	N	PEP	F8	escopo por estabelecimento
+DBAMV	TEX_RX	TABELA	modelo_laudo	N	SADT	F3	
+DBAMV	TICKETGRANTINGTICKET	MECANISMO	framework	N	ADM	F3	sessao de login unico
+DBAMV	TIPO_ADVERTENCIA	TABELA	conduta_ocorrencia_profissional	S	CAD	F7	
+DBAMV	TIPO_AMBULANCIA	TABELA	categoria_ambulancia	N	INT	F8	
+DBAMV	TIPO_AMOSTRA	TABELA	material_biologico	N	SADT	F3	
+DBAMV	TIPO_AQUISICAO	TABELA	origem_bem	N	FIN	F7	
+DBAMV	TIPO_ARQUIVO_CONTA_ENVIO	TABELA	formato_arquivo_conta	S	FAT	F7	
+DBAMV	TIPO_ARQUIVO_CONTA_ENVIO_USU	TABELA	formato_arquivo_conta_usuario	S	FAT	F7	
+DBAMV	TIPO_ASSUNTO_GERENCM_PROC	TABELA	assunto_processo_compra	S	SUP	F8	
+DBAMV	TIPO_ATENDIMENTO_APAC	TABELA	dominio_sus	N	SUS	F3	
+DBAMV	TIPO_AUDITORIA_ISOLAMENTO	TABELA	criterio_auditoria_isolamento	N	INT	F7	
+DBAMV	TIPO_AUDIT_PSIH	TABELA	tipo_auditoria_ccih	N	PEP	F7	
+DBAMV	TIPO_AUTENTICACAO_BIOMETRIA	TABELA	tipo_autenticacao_biometrica	N	CAD	F8	
+DBAMV	TIPO_AVISO_CIRURGIA	TABELA	carater_cirurgia;carater_cirurgia_contato	S	CC	F3	
+DBAMV	TIPO_AVISO_CIRURGIA_EMAIL	TABELA	carater_cirurgia_contato	S	CC	F7	
+DBAMV	TIPO_AVISO_CIRURGIA_TELEFONE	TABELA	carater_cirurgia_contato	S	CC	F7	
+DBAMV	TIPO_BENEFICIARIO	TABELA	categoria_beneficiario	N	SGO	F7	
+DBAMV	TIPO_BENEFICIO	TABELA	tipo_beneficio_concedido	S	HOT	F8	
+DBAMV	TIPO_BLOQUEIO_HORARIO	TABELA	motivo_bloqueio_agenda	N	AGE	F3	
+DBAMV	TIPO_CARGO_PLANO	TABELA	plano_preventivo_tarefa	N	HOT	F7	cargo executor da tarefa preventiva
+DBAMV	TIPO_CATEGORIA_CONVENIO	TABELA	fonte_pagadora	N	CAD	F3	
+DBAMV	TIPO_CLASSIFICACAO_USUARIO	TABELA	classificador_habilitado	N	QUA	F7	usuario habilitado a classificar por estacao (inferido)
+DBAMV	TIPO_COMBUSTIVEL_ROMANEIO	TABELA	tipo_combustivel	S	SUP	F8	
+DBAMV	TIPO_COMPRA_DI	TABELA	tipo_compra_importacao	S	SUP	F8	
+DBAMV	TIPO_CONSUMO	TABELA	tipo_consumo_utilidade	S	HOT	F8	
+DBAMV	TIPO_CUSTO	TABELA	tipo_custo	S	FIN	F7	
+DBAMV	TIPO_DESTINATARIO_BENEFICIO	TABELA	tipo_destinatario_beneficio	S	HOT	F8	
+DBAMV	TIPO_DE_DESPESA	TABELA	grupo_natureza_financeira;natureza_financeira	N	FIN	F3	
+DBAMV	TIPO_DIETA	TABELA	modalidade_dieta	N	HOT	F3	
+DBAMV	TIPO_DIETA_REFEICAO	TABELA	modalidade_dieta_refeicao	S	HOT	F7	
+DBAMV	TIPO_DOCUMENTO	TABELA	tipo_anexo	N	PEP	F3	
+DBAMV	TIPO_DOCUMENTO_ANEXO	TABELA	tipo_anexo	N	PEP	F3	
+DBAMV	TIPO_DOCUMENTO_CFOP	TABELA	natureza_operacao;cfop	N	FIN	F3	
+DBAMV	TIPO_DOCUMENTO_CIRURGICO	TABELA	tipo_documento_pre_operatorio;documento_exigido_cirurgia	N	CC	F8	
+DBAMV	TIPO_DOCUMENTO_CONVENIO	TABELA	documento_exigido_plano	N	CAD	F7	
+DBAMV	TIPO_DOCUMENTO_GERENCM_PROC	TABELA	tipo_documento_processo_compra	S	SUP	F8	
+DBAMV	TIPO_DOCUMENTO_SAME	TABELA	tipo_documento_arquivo	N	HOT	F7	
+DBAMV	TIPO_EMAIL_DESTINATARIO	TABELA	regra_alerta_destinatario	N	ADM	F7	
+DBAMV	TIPO_EMAIL_OFICINA	TABELA	oficina_manutencao;regra_alerta_destinatario	N	HOT	F7	
+DBAMV	TIPO_EMBALAGEM	TABELA	tipo_embalagem	S	SUP	F7	
+DBAMV	TIPO_EMPENHO	TABELA	tipo_empenho	S	FIN	F8	
+DBAMV	TIPO_EMPRESA	TABELA	tipo_estabelecimento	N	CAD	F3	
+DBAMV	TIPO_ENTRADA_CFOP	TABELA	cfop;tipo_entrada_estoque	N	FIN	F3	
+DBAMV	TIPO_ENTREGA_RESULTADO	TABELA	forma_entrega_resultado	S	SADT	F7	
+DBAMV	TIPO_EQUIPE_SAUDE_FAMILIA	MECANISMO	catalogo_publico:cnes	N	CAD	F3	
+DBAMV	TIPO_ESTABELECIMENTO_SAUDE	TABELA	tipo_estabelecimento	N	CAD	F3	
+DBAMV	TIPO_ESTERILIZACAO	TABELA	metodo_esterilizacao	N	CC	F7	
+DBAMV	TIPO_EXTRA_CAIXA	TABELA	tipo_movimento_caixa	S	FIN	F3	
+DBAMV	TIPO_FINANCIAMENTO	TABELA	dominio_sigtap	N	SUS	F3	
+DBAMV	TIPO_IDENTIFICADOR_PESSOA	TABELA	tipo_documento_identificacao	N	CAD	F3	
+DBAMV	TIPO_INTERNACAO	TABELA	modalidade_internacao	N	INT	F3	
+DBAMV	TIPO_ITEM_HOSPITALAR	TABELA	tipo_servico_faturavel	N	FAT	F3	
+DBAMV	TIPO_JUSTIFICATIVA_PENDENCIA	TABELA	justificativa_pendencia	N	FAT	F7	
+DBAMV	TIPO_LAUDO_APAC	TABELA	tipo_laudo_apac	N	SUS	F7	
+DBAMV	TIPO_LAUDO_SIA	TABELA	tipo_laudo_apac	N	SUS	F7	
+DBAMV	TIPO_LEITO_REGULACAO	TABELA	tipo_leito_regulado	N	INT	F7	
+DBAMV	TIPO_LIGACAO	TABELA	tipo_ligacao_tarifada	N	FAT	F8	
+DBAMV	TIPO_LIGACAO_TARIFADOR	TABELA	regra_cobranca_ligacao	N	FAT	F8	
+DBAMV	TIPO_LIMPEZA	TABELA	modalidade_limpeza	N	HOT	F3	
+DBAMV	TIPO_LOCAL	TABELA	tipo_local_fisico	S	CAD	F7	
+DBAMV	TIPO_LOGRADOURO	TABELA	especie_logradouro	N	CAD	F3	
+DBAMV	TIPO_MICRODATA	TABELA	mapeamento_codigo_externo	N	INTG	F3	de-para com sistema externo de imagem
+DBAMV	TIPO_MODALIDADE	TABELA	modalidade_licitacao	N	SUP	F7	
+DBAMV	TIPO_NOTA_CRED_DEB	TABELA	tipo_nota_credito_debito	S	FIN	F7	
+DBAMV	TIPO_OCORRENCIA	TABELA	tipo_incidente	N	QUA	F7	
+DBAMV	TIPO_OCORRENCIA_MEDICA	TABELA	tipo_ocorrencia_profissional	S	CAD	F7	
+DBAMV	TIPO_ORCAMENTO	TABELA	programa_trabalho	N	FIN	F8	tipo de orcamento do programa de trabalho
+DBAMV	TIPO_ORIENTACAO_EXAME	TABELA	orientacao_preparo	N	SADT	F3	
+DBAMV	TIPO_OS	TABELA	tipo_ordem_servico	S	HOT	F7	
+DBAMV	TIPO_PACIENTE	TABELA	classe_paciente	N	CAD	F8	
+DBAMV	TIPO_PACIENTE_ITENS_EXAMINAR	TABELA	achado_exame_fisico_padrao	N	PEP	F8	
+DBAMV	TIPO_PENDENCIA	TABELA	tipo_pendencia_conta;atendimento_pendencia	N	FAT	F3	
+DBAMV	TIPO_PENDENCIA_PREST	TABELA	tipo_pendencia_profissional	S	CAD	F7	
+DBAMV	TIPO_PLANO_ORCAMENTARIO	TABELA	tipo_plano_orcamentario	S	FIN	F7	
+DBAMV	TIPO_PREST_SIA	TABELA	dominio_sigtap	N	SUS	F3	
+DBAMV	TIPO_PRIORIDADE_INTERNACAO	TABELA	nivel_prioridade	N	PEP	F3	
+DBAMV	TIPO_PROCEDENCIA_RP	TABELA	procedencia	N	REC	F3	
+DBAMV	TIPO_PROCEDIMENTO_PLANO	TABELA	plano_preventivo_tarefa	N	HOT	F7	procedimento da tarefa preventiva

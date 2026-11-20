@@ -1,0 +1,412 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+paciente_acompanhado	PEP	principal	F3	Paciente marcado pelo profissional para acompanhar na lista de trabalho, com início, fim e motivo	MV: PW_FAVORITO_PACIENTE*, PW_LISTA_EM_ATENDIMENTO; depende: paciente (02), atendimento (02), usuario (01)
+painel_filtro_usuario	PEP	configuracao	F3	Filtro salvo pelo profissional na lista de pacientes: unidade, setor, leito, classificação e situação	SPDATA: PRFAVORITO (672), PRAGRUP_PRFILTROCLASSIF; MV: PW_CENARIO*
+painel_coluna_usuario	PEP	configuracao	F3	Colunas que o profissional escolheu ver na lista de pacientes, com ordem e largura	SPDATA: PRFAVORITO_EXIBIR (1001+); MV: PW_CENARIO*
+coluna_painel_paciente	PEP	dominio	F3	Colunas disponíveis para a lista e a busca de pacientes (leito, dias de internação, alergia, pendências)	SPDATA: PRCAMPOSLOCALIZACAOPACIENTE (13)
+classificacao_filtro_painel	PEP	dominio	F3	Agrupadores usados para classificar e filtrar pacientes no painel do profissional	SPDATA: PRFILTROCLASSIF (1), PRAGRUP_PRFILTROCLASSIF
+lista_trabalho_setor	PEP	configuracao	F7	Definição da lista de trabalho por setor e tipo de atendimento: critérios de entrada, ordenação e prazos de pendência	MV: PEP_SETOR_LISTA_PACIENTE, PW_SETOR_TIPO_ATENDIMENTO; depende: setor (02)
+filtro_resultado_usuario	PEP	configuracao	F3	Filtro salvo pelo profissional para consultar resultados de exames (grupos, período, exames escolhidos)	SPDATA: PRFILTROUSUARIO (140)
+configuracao_setor_prontuario	PEP	configuracao	F3	Regras do prontuário por setor e tipo de atendimento: modelos padrão, tolerância de registro retroativo e assinatura exigida	MV: PW_CONFIGURACAO_PADRAO_ITEM*, PEPWEB_PARAMETROS, PW_SETOR_TIPO_ATENDIMENTO; SPDATA: PRPARAM, PRPARAM_CHECAGEM, PRPARAM_PRESCFUTURA (escalares vão para parametro do 01); SPDATA PRLOCPACDEFAULT e PRPARRECMED vão para parametro e preferencia_usuario (01); PRTPATEND fica no atendimento (02)
+local_assistencia	PEP	dominio	F3	Local de assistência que agrupa setores para o prontuário (UTI, enfermaria, pronto atendimento, ambulatório)	SPDATA: PRLOCAL_ASSISTENCIA (44); depende: setor (02)
+pedido_acesso_prontuario_restrito	PEP	principal	F8	Pedido de um profissional para abrir prontuário de paciente restrito, com motivo, prazo e situação	MV: PW_CENTRAL_ACESSO_SOLICITADO; depende: restricao_prontuario (01)
+autorizacao_acesso_prontuario_restrito	PEP	principal	F8	Autorização concedida pela equipe responsável ou pelo paciente (com senha) para o acesso ao prontuário restrito	MV: PW_CENTRAL_ACESSO_AUTORIZADO, PW_CENTRAL_PACIENTE_VIP
+configuracao_prontuario_restrito	PEP	configuracao	F8	Quem pode autorizar, validade da autorização, uso de senha do paciente e limite de acessos no prontuário restrito	MV: PW_CONFIG_PADRAO_PRONT_VIP*
+equipe_assistencial_paciente	PEP	principal	F3	Equipe que cuida do paciente em um atendimento, base do vínculo assistencial que libera o acesso e as pendências	MV: PW_EQUIPE_ASSISTENCIAL; depende: atendimento (02)
+equipe_assistencial_membro	PEP	item	F3	Profissional da equipe do paciente, com função, especialidade, responsável principal e período de participação	MV: PW_PRESTADOR_ASSISTENCIAL; depende: profissional (01/02), especialidade (02)
+funcao_equipe_assistencial	PEP	dominio	F3	Funções na equipe assistencial (médico assistente, plantonista, residente, enfermeiro de referência)	MV: PW_CAD_FUNCAO_MEDICA
+equipe_assistencial_padrao	PEP	configuracao	F7	Equipe fixa por setor ou serviço, sugerida automaticamente ao paciente que entra no setor	MV: PW_EQUIPE_ASSISTENCIAL
+equipe_assistencial_padrao_membro	PEP	item	F7	Profissionais e funções da equipe padrão de um setor ou serviço	MV: PW_PRESTADOR_ASSISTENCIAL
+tipo_documento_clinico	PEP	dominio	F3	Tipo de documento do prontuário (evolução, anamnese, admissão, sumário, receita, atestado), com regras de assinatura e fluxo	SPDATA: PRTPASSINATURA (84); MV: PW_TIPO_DOCUMENTO*
+modelo_documento_clinico	PEP	principal	F3	Modelo de documento clínico montado no construtor, com tipo, finalidade e situação	SPDATA: PREVOLUCAO (67); MV: EDITOR_DOCUMENTO*
+modelo_documento_versao	PEP	historico	F3	Versão publicada de um modelo, congelando campos, regras e layout usados pelos registros feitos nela	SPDATA: HTCABECFORMULCOMP (15), HTFORMULCOMP (255); MV: EDITOR_VERSAO_DOCUMENTO*
+modelo_secao	PEP	item	F3	Seção ou aba de um modelo, que agrupa campos e controla a ordem de preenchimento	MV: EDITOR_LAYOUT*, PAGU_OBJETO*
+modelo_campo	PEP	item	F3	Campo ou pergunta de uma versão do modelo, com tipo, obrigatoriedade, unidade e destino estruturado	SPDATA: PRPERGUNTA (1001+), PRPADEVOL (1001+); MV: EDITOR_CAMPO*
+modelo_campo_opcao	PEP	item	F3	Opção de resposta de um campo, com código, rótulo, ordem e pontuação	SPDATA: PRRESPOSTA (1001+), PRCADRESP (1001+); MV: EDITOR_CAMPO*
+modelo_regra	PEP	configuracao	F3	Regra do modelo: habilitar, exigir, calcular ou preencher um campo a partir de outros	MV: EDITOR_REGRA*
+modelo_layout	PEP	configuracao	F3	Disposição dos campos na tela e na impressão de uma versão do modelo	SPDATA: PRFORMULCOMP (1001+), HTFORMULCOMP; MV: EDITOR_LAYOUT*
+tipo_campo_modelo	PEP	dominio	F3	Tipos de campo do construtor (texto, número, data, lista, tabela, desenho, assinatura, componente)	SPDATA: PRTPPERGUNTA (24), PRTPCOMP (7)
+unidade_resposta	PEP	dominio	F3	Unidades de medida usadas nas respostas numéricas dos modelos	SPDATA: PRUNIDRESPOSTA (6)
+destino_campo_estruturado	PEP	dominio	F3	Dado estruturado que um campo alimenta (sinal vital, alergia, CID, balanço), usado para extrair a resposta	SPDATA: PRTIPOPERGPAR (30)
+modelo_especialidade	PEP	vinculo	F3	Especialidades que podem usar cada modelo de documento clínico	SPDATA: PREVOLESPEC (1001+); depende: especialidade (02)
+modelo_acomodacao	PEP	vinculo	F3	Tipos de acomodação ou atendimento em que cada modelo é oferecido	SPDATA: PREVOLTIPOACO (64)
+modelo_setor	PEP	vinculo	F3	Setores em que cada modelo é liberado ou sugerido como padrão	MV: PW_CONFIGURACAO_PADRAO_ITEM*; depende: setor (02)
+imagem_anotacao_modelo	PEP	dominio	F3	Imagem de base (mapa do corpo, odontograma) para anotação dentro de um modelo; o arquivo vai para o armazenamento	SPDATA: PRPAREVOLIMG (1), PRLANIMAGTMP (1)
+informacao_clinica_operadora	PEP	dominio	F3	Informação clínica exigida por fonte pagadora (ex.: indicação, estadiamento), ligada a campos dos modelos	SPDATA: PRINFOPERGOPERADORA (28)
+grupo_informacao_clinica_operadora	PEP	dominio	F3	Agrupador das informações clínicas enviadas às fontes pagadoras	SPDATA: PRTPINFOPERGOPERADORA (7)
+formato_envio_operadora	PEP	configuracao	F3	Formato de envio das informações clínicas por fonte pagadora, com campos e ordem	SPDATA: PRDADOSENVIOOPERADORA (15); depende: fonte_pagadora (02/06)
+resposta_informacao_operadora	PEP	configuracao	F3	Respostas aceitas por tipo de informação clínica enviada à fonte pagadora	SPDATA: PRTPRESPOSTA (26)
+registro_assistencial	PEP	principal	F3	Registro clínico feito em modelo (evolução, anamnese, admissão, sumário), com autor, data clínica, situação e versão	SPDATA: PRCABEVOL (1001+); MV: EDITOR_REGISTRO*, PW_DOCUMENTO_CLINICO*; índices de busca SPDATA PRMAQUINABUSCA e PRMAQBUSCAPRESC são regenerados (framework)
+registro_assistencial_resposta	PEP	item	F3	Resposta de cada campo do registro clínico, com valor tipado e opção escolhida	SPDATA: PREVOLPAC (1001+), PRCONTEVOL (1001+); MV: EDITOR_REGISTRO_CAMPO*
+registro_assistencial_versao	PEP	historico	F3	Versão anterior de um registro corrigido, ligada ao original, com motivo e autor da correção	MV: EDITOR_HIST_REGISTRO*; SPDATA: HTATENDIMENTO, HTATENDRESP (fotografias)
+registro_assistencial_rascunho	PEP	principal	F3	Rascunho do registro clínico ainda não confirmado, com as respostas e a alergia em edição	SPDATA: PRCABEVOLTMP, PREVOLPACTMP, PRALERGIAPACTMP, PRALERGIAPACTMP_TBPRINC
+registro_assistencial_supervisao	PEP	item	F3	Coassinatura do preceptor sobre registro de residente ou acadêmico, com aceite, ajuste ou recusa	Lacuna D-PREC-2 do new-sgh; depende: assinatura_documento (01)
+motivo_suspensao_registro	PEP	dominio	F3	Motivos para suspender ou tornar sem efeito um registro clínico	MV: EDITOR_HIST_REGISTRO*
+motivo_reavaliacao_medica	PEP	dominio	F3	Motivos de reavaliação médica do paciente registrados na evolução	SPDATA: PRREAV_MEDICA (4)
+identificacao_paciente_documento	PEP	dominio	F3	Formas de identificar o paciente no cabeçalho dos documentos (nome social, prontuário, leito)	SPDATA: PRCAB_IDENTIFIC_PAC (2)
+registro_tempo_evento	PEP	principal	F3	Marcação do horário de evento clínico crítico do atendimento (porta-eletrocardiograma, porta-balão, trombólise)	SPDATA: PRLANCREGISTROTEMPO (2)
+tipo_evento_tempo	PEP	dominio	F3	Eventos clínicos com tempo medido e meta (chegada, eletrocardiograma, balão, antibiótico)	SPDATA: PRLANCREGISTROTEMPO
+sistema_corporal	PEP	dominio	F8	Sistemas do corpo usados no exame físico estruturado (cardiovascular, respiratório, neurológico)	MV: PW_EXAME_FISICO
+regiao_corporal	PEP	dominio	F8	Regiões e órgãos do corpo, em árvore, para marcar achados no mapa corporal	MV: PW_ORGAO_CORPO_HUMANO, PW_ITEM_ORGAO_CORPO_HUMANO
+achado_exame_fisico_padrao	PEP	dominio	F8	Achados padronizados por sistema ou região para seleção rápida no exame físico	MV: PW_EXAME_FISICO
+exame_fisico_achado	PEP	item	F8	Achado do exame físico ligado ao registro clínico, com sistema, região, lado e descrição	MV: PW_EXA_FIS_PART_CORP_HUM; depende: registro_assistencial
+nota_soap	PEP	principal	F8	Nota clínica em quatro partes (subjetivo, objetivo, avaliação e plano) do atendimento ambulatorial	MV: PW_SOAP, PW_SOAP_SUBJETIVO, PW_SOAP_OBJETIVO, PW_SOAP_AVALIACAO, PW_SOAP_PLANO
+nota_soap_codigo	PEP	item	F8	Motivo de consulta, problema ou procedimento codificado na nota, por parte da nota	MV: PW_SOAP_CIAP; depende: termo_terminologia (08, CIAP-2)
+correspondencia_ciap_cid	PEP	vinculo	F8	Correspondência entre código da classificação de atenção primária e os CID possíveis	MV: PW_CIAP_CID_POSSIVEL_ATN, PW_CIAP_ATN; SPDATA: TBVERSAOCIAP; depende: termo_terminologia (08)
+configuracao_nota_soap	PEP	configuracao	F8	Configuração da nota em quatro partes por especialidade: campos obrigatórios e sinais vitais exibidos	MV: PW_CONFIG_SOAP
+escala_clinica	PEP	dominio	F3	Escala, índice prognóstico ou questionário pontuado (Glasgow, NEWS, Braden, Morse, APACHE)	SPDATA: PRINDICEAGRUPAMENTO (21); MV: PAGU_FORMULA*, PW_QUESTIONARIO
+escala_clinica_versao	PEP	historico	F3	Versão da escala com variáveis, pontos e faixas vigentes a partir de uma data	MV: PAGU_FORMULA*
+escala_clinica_variavel	PEP	item	F3	Variável ou pergunta da escala, com tipo de resposta e origem automática (sinal vital, exame)	SPDATA: PRINDICEVARIAVEL (109)
+escala_clinica_opcao	PEP	item	F3	Resposta possível de uma variável, com a pontuação correspondente	SPDATA: PRGLASGOW (30); MV: PAGU_AVALIACAO*
+escala_clinica_faixa	PEP	item	F3	Faixa de pontuação da escala, com interpretação, cor e conduta sugerida	SPDATA: PRINDICEPONTUACAO (121)
+escala_clinica_setor	PEP	vinculo	F7	Escalas exigidas por setor, com periodicidade de reavaliação e gatilho de alerta	MV: PW_QUESTIONARIO; depende: setor (02)
+aplicacao_escala	PEP	principal	F3	Aplicação de uma escala ao paciente, com pontuação total, faixa obtida e próxima reavaliação	MV: PW_PONTUACAO_PACIENTE, PAGU_AVALIACAO*
+aplicacao_escala_item	PEP	item	F3	Resposta de cada variável na aplicação da escala, com os pontos obtidos	MV: PAGU_AVALIACAO*
+alergeno	PEP	dominio	F3	Agente que causa alergia ou intolerância (medicamento, alimento, látex, contraste, ambiental)	MV: SUBSTANCIA*; SPDATA: TBVERSAOCBARA
+alergeno_principio_ativo	PEP	vinculo	F3	Princípios ativos ligados a um alergeno, usados no alerta de alergia da prescrição	MV: SUBSTANCIA*; depende: principio_ativo (05)
+tipo_alergia	PEP	dominio	F3	Tipos de reação registrada (alergia, intolerância, reação a medicamento, efeito adverso)	SPDATA: TBTPALERGIA (5)
+manifestacao_alergica	PEP	dominio	F7	Manifestações clínicas da reação alérgica (urticária, broncoespasmo, anafilaxia)	MV: PW_ALERGIA_PAC*
+alergia_paciente	PEP	principal	F3	Alergia ou intolerância do paciente, ou a declaração de que nega alergias, com gravidade, certeza e origem	SPDATA: PRALERGIAPAC (1001+); MV: PW_ALERGIA_PAC*, SUBS_PAC*; depende: paciente (02)
+alergia_paciente_principio	PEP	vinculo	F3	Princípios ativos a que o paciente é alérgico, registrados no próprio alerta	SPDATA: PRALERGIAPAC_TBPRINC (1001+); depende: principio_ativo (05)
+alergia_paciente_manifestacao	PEP	vinculo	F7	Manifestações observadas em cada alergia do paciente	MV: PW_ALERGIA_PAC*
+alergia_paciente_evento	PEP	historico	F3	Mudanças na alergia do paciente (inclusão, confirmação, inativação), com autor e motivo	MV: HIST_SUBS_PAC*
+acao_alerta_alergia	PEP	dominio	F3	Ação do alerta de alergia na prescrição (avisar, exigir justificativa, bloquear)	SPDATA: TBTPNOTIFICACAOALERGIA (3)
+problema_paciente	PEP	principal	F3	Problema ou diagnóstico na lista de problemas do paciente, com CID, situação, início e resolução	MV: PW_PROBLEMA*, PW_PROBLEMA_PACIENTE; depende: catalogo_publico:cid10
+problema_paciente_versao	PEP	historico	F3	Versões de um problema da lista (mudança de situação, certeza ou código)	MV: PW_PROBLEMA*
+diagnostico_atendimento	PEP	principal	F3	Diagnóstico do atendimento, principal ou secundário, que vai para a conta, o sumário e as notificações	MV: DIAGNOSTICO_ATENDIME*, CID_PEP_ATE; depende: atendimento (02), catalogo_publico:cid10; SPDATA: TBVERSAOCID (1)
+situacao_problema	PEP	dominio	F3	Situações de um problema ou diagnóstico (ativo, controlado, resolvido, descartado)	SPDATA: TBLISTADIAGNOSTICOSITUACAO (7), TBLANC_DIAG_STATUS (7)
+tipo_diagnostico	PEP	dominio	F3	Tipo do diagnóstico no atendimento (principal, secundário, de entrada, de saída)	SPDATA: TBLISTADIAGNOSTICOTIPO (2), TBLANC_DIAG_MANTER (2)
+certeza_diagnostico	PEP	dominio	F3	Grau de certeza do diagnóstico (suspeito, provável, confirmado)	SPDATA: TBLISTADIAGNOSTICOESTADO (2)
+sujeito_cuidado	PEP	dominio	F3	Quem é o sujeito do cuidado no diagnóstico (o paciente, o feto, a mãe, a família)	SPDATA: TBLANC_DIAG_SUJ_CUID (2)
+classificacao_problema	PEP	dominio	F3	Classificação do item da lista de problemas (problema clínico, condição, risco)	SPDATA: TBLISTAPROBLEMACLASSIF (2)
+presenca_admissao	PEP	dominio	F3	Indicador de que a condição já existia na admissão (sim, não, indeterminado)	SPDATA: PRTIPOPRESENTEADMISSAO (3)
+nota_paciente	PEP	principal	F8	Nota ou lembrete livre sobre o paciente, com tipo, visibilidade, validade e autor	MV: PW_OBSERVACAO_PACIENTE; SPDATA: PRTPNOTALEMB (2)
+tipo_nota_paciente	PEP	dominio	F8	Tipos de nota livre sobre o paciente (lembrete, aviso à equipe, preferência)	SPDATA: PRTPNOTALEMB (2)
+nota_predefinida	PEP	dominio	F8	Textos prontos para notas e lembretes frequentes	MV: PW_OBSERVACAO_PREDEFINIDA
+reacao_adversa_paciente	PEP	principal	F7	Reação adversa a medicamento no paciente, ligada ao item prescrito, com gravidade, causalidade e desfecho	MV: PW_EVENTO_ADVERSO_PAC*; depende: prescricao_item, problema_paciente
+reacao_adversa_evento	PEP	historico	F7	Evolução da reação adversa (registro, avaliação pela farmácia, notificação, encerramento)	MV: PW_HIST_EVENTO_ADVERSO_PAC*
+gravidade_reacao_adversa	PEP	dominio	F7	Graus de gravidade da reação adversa a medicamento	MV: PW_GRAU_EVENTO_ADVERSO*
+causalidade_reacao_adversa	PEP	dominio	F7	Classificação de causalidade da reação (definida, provável, possível, duvidosa)	MV: PW_EVENTO_ADVERSO_PAC*
+medicamento_uso_previo	PEP	principal	F7	Medicamento que o paciente usa em casa, com dose, frequência, fonte da informação e última tomada	MV: PW_MEDICAMENTO_USO, PRE_USO; depende: insumo (05)
+reconciliacao_medicamentosa	PEP	principal	F7	Reconciliação de medicamentos na admissão, na transferência ou na alta, com responsável e conclusão	MV: PW_MEDICAMENTO_USO
+reconciliacao_item	PEP	item	F7	Decisão sobre cada medicamento na reconciliação (manter, suspender, trocar, ajustar) e o item prescrito gerado	MV: PRE_USO
+decisao_reconciliacao	PEP	dominio	F7	Decisões possíveis na reconciliação de cada medicamento	MV: PRE_USO
+prescricao	PEP	principal	F3	Prescrição do atendimento com vigência, prescritor, situação, urgência e ligação à anterior	SPDATA: PRPRESC (1001+); MV: PRE_MED*; depende: atendimento (02)
+prescricao_item	PEP	item	F3	Item prescrito, com tipo, item prescritível, frequência, via, início, fim, urgência e situação	SPDATA: PRLANGERAL (1001+); MV: ITPRE_MED*
+prescricao_item_medicamento	PEP	item	F3	Detalhe do medicamento prescrito: dose, unidade, diluição, tempo de infusão, finalidade e cálculo de dose	SPDATA: PRPRESCMED (1001+); MV: ITPRE_MED*
+prescricao_item_solucao	PEP	item	F3	Detalhe da solução ou infusão contínua: volume, velocidade, tipo de infusão e bomba	SPDATA: PRPRESCSOL (1001+)
+prescricao_item_solucao_componente	PEP	item	F3	Componente da solução prescrita, com quantidade e unidade	SPDATA: PRPRESCSOL; MV: ITPRE_MED*
+prescricao_item_solucao_etapa	PEP	item	F3	Etapa ou fase do esquema de uma solução, com volume, horário e velocidade	SPDATA: PRITENSESQ (1001+)
+prescricao_item_velocidade	PEP	historico	F3	Mudanças de velocidade de infusão de uma solução durante a vigência	SPDATA: PRVELOCINFUSAO (1001+)
+prescricao_item_dieta	PEP	item	F3	Dieta prescrita: tipo, via, consistência, volume e horários	SPDATA: PRPRESCDIETA (1001+); MV: PRESCRICAO_DIETA; depende: modalidade_dieta, via_dieta (04); cadastros de dieta SPDATA PRCARACTDIE, PRCARACT_TBDIETAS, PRHORPAD, PRTPREFEIC, PRVIAADMIN ficam no 04
+prescricao_item_dieta_caracteristica	PEP	vinculo	F3	Características marcadas na dieta prescrita (hipossódica, pastosa, sem lactose)	SPDATA: PRCARACTLAN (1001+); depende: caracteristica_dieta (04)
+prescricao_item_cuidado	PEP	item	F3	Cuidado de enfermagem prescrito, com frequência e orientação	MV: ITPRE_MED*; SPDATA: TBPROENF
+prescricao_item_procedimento	PEP	item	F3	Procedimento ou exame prescrito, com a situação e a requisição gerada	SPDATA: PRPRESCPROCED (1001+); depende: requisicao_exame (05)
+prescricao_item_ventilacao	PEP	item	F3	Suporte ventilatório prescrito (invasivo, não invasivo, oxigênio), com modo e parâmetros	SPDATA: PRPRESCVI (1001+), PRPRESCVNI (1001+); depende: modo_ventilatorio (04); SPDATA: PRMODOVENT (10) fica em modo_ventilatorio (04)
+prescricao_item_hemocomponente	PEP	item	F3	Hemocomponente prescrito, com quantidade, indicação, urgência e a requisição transfusional	SPDATA: PRPRESCHEMO (910); depende: requisicao_transfusao (05); SPDATA: PRHEMOTLAN (1) vira item_prescritivel de tipo hemocomponente
+prescricao_item_glicemia	PEP	item	F3	Controle glicêmico prescrito com horários de glicemia e a escala de insulina a aplicar	SPDATA: PRITENSGLICEMIA (1001+)
+prescricao_item_material	PEP	item	F3	Material, fórmula manipulada ou item avulso prescrito, com quantidade	SPDATA: PRITENSGERAL (1001+)
+prescricao_item_se_necessario	PEP	vinculo	F3	Condições se necessário de um item prescrito (dor, febre, náusea), com dose máxima no período	SPDATA: PRSENECESSARIO_PRPRESCMED (1001+), PRSENECESSARIO_PRPRESCPROCED (1001+)
+prescricao_protocolo_aplicado	PEP	vinculo	F3	Protocolos ou kits aplicados em uma prescrição	SPDATA: PRPRESC_PRPROTGERAL (1001+)
+prescricao_evento	PEP	historico	F3	Mudanças de situação da prescrição e dos itens (liberação, suspensão, cancelamento, renovação), com autor e motivo	MV: LOG_PRESCRICAO*, HRITPRE_MED*
+planejamento_prescricao	PEP	principal	F3	Prescrição futura planejada para data ou evento (pós-operatório, próximo dia), liberada no momento certo	SPDATA: PRPLANPRESC (15), PRPARAM_PRESCFUTURA
+situacao_prescricao	PEP	dominio	F3	Situações da prescrição e do item (rascunho, liberada, suspensa, encerrada)	SPDATA: TBSITUACAOMP (7)
+motivo_situacao_prescricao	PEP	dominio	F3	Motivos para suspender, cancelar ou alterar a prescrição ou o item	SPDATA: TBMOTIVOMP (1)
+regra_transicao_situacao_prescricao	PEP	configuracao	F3	Mudanças de situação permitidas na prescrição e quem pode fazê-las	SPDATA: TBTPSITUACAOMP (6)
+situacao_procedimento_prescrito	PEP	dominio	F3	Situações do procedimento ou exame prescrito (pedido, coletado, realizado, cancelado)	SPDATA: TBSTATUSPROCEDIMENTO (8)
+tipo_item_prescricao	PEP	dominio	F3	Tipos de item de prescrição (medicamento, solução, dieta, cuidado, procedimento, ventilação, hemocomponente)	SPDATA: PRTPLAN (19)
+tipo_item_prescricao_via	PEP	vinculo	F3	Vias de administração permitidas por tipo de item	SPDATA: PRTPLAN_GETABVIA (10)
+tipo_item_prescricao_frequencia	PEP	vinculo	F3	Frequências permitidas por tipo de item	SPDATA: PRTPLAN_PRFREQUENCIA (100)
+tipo_item_prescricao_infusao	PEP	vinculo	F3	Tipos de infusão permitidos por tipo de item	SPDATA: PRTPLAN_PRTPINFUSAO (15)
+tipo_item_prescricao_unidade	PEP	vinculo	F3	Unidades de prescrição permitidas por tipo de item	SPDATA: PRUNITPLAN (3)
+tipo_infusao	PEP	dominio	F3	Formas de administração e infusão (bolus, contínua, intermitente, em bomba)	SPDATA: PRTPINFUSAO (8); MV: FOR_APL*
+unidade_infusao	PEP	dominio	F3	Unidades de velocidade de infusão (ml/h, gotas/min, mcg/kg/min)	SPDATA: PRUNIDINFUSAO (4)
+finalidade_terapeutica	PEP	dominio	F3	Finalidades do medicamento prescrito (profilática, terapêutica, empírica, dirigida)	SPDATA: PRFINALIDADETRAT (9); MV: FINALIDADE_TRATAMENTO*
+utilizacao_item_prescricao	PEP	dominio	F3	Forma de utilização do item na prescrição (medicamento, uso em bomba, material)	SPDATA: PRFA_UTILIZACAO (3)
+opcao_periodo	PEP	dominio	F3	Períodos de referência para horários e doses (manhã, tarde, noite, dia todo)	SPDATA: PROPCAOPERIODO (4)
+tipo_oxigenoterapia	PEP	dominio	F3	Dispositivos de oxigenoterapia (cateter nasal, máscara, Venturi, alto fluxo)	SPDATA: PROXIGENOTERAPIA (7)
+via_aerea	PEP	dominio	F3	Vias aéreas para o suporte ventilatório (tubo, traqueostomia, máscara)	SPDATA: PRVIAAEREA (4)
+regra_requisicao_farmacia	PEP	configuracao	F3	Como a prescrição gera a requisição à farmácia por público e setor (por horário, por dia, por item)	SPDATA: PRTPREQUISICAO (4); depende: requisicao de estoque (05)
+campo_autopreenchido_prescricao	PEP	configuracao	F3	Campos da prescrição preenchidos automaticamente a partir de outro dado (peso, alergia, diagnóstico)	SPDATA: TBTABELA_CAMPO (6), PRPRESC_AUTOPREENCHIDO (1001+)
+configuracao_impressao_prescricao	PEP	configuracao	F3	Layout e tamanho de fonte da impressão da prescrição por setor	SPDATA: PRLAYIMPPRESC (4), PRPARTAMPADPRESC (3)
+item_prescritivel	PEP	principal	F3	Item que pode ser prescrito, com tipo, produto ligado, apresentação padrão, via, frequência e unidade	MV: TIP_PRESC*; SPDATA: PRITEM_GEITENS (1001+); depende: insumo (05), procedimento (02/06)
+parametro_clinico_item	PEP	configuracao	F3	Parâmetros clínicos do item prescritível: dose mínima e máxima, diluição padrão, alto risco e controle especial	SPDATA: PRITEM_GEITENS (1001+); MV: PW_DOSE_MAXIMA
+item_nao_padronizado	PEP	principal	F3	Medicamento não padronizado pedido pelo prescritor, com justificativa e aprovação	SPDATA: PRITEMNAOPAD (29)
+item_nao_padronizado_via	PEP	vinculo	F3	Vias permitidas para o item não padronizado	SPDATA: PRITEMNAOPAD_GETABVIA (31)
+item_nao_padronizado_principio	PEP	vinculo	F3	Princípios ativos do item não padronizado, para o alerta de alergia e interação	SPDATA: PRITEMNAOPAD_TBPRINC (3); depende: principio_ativo (05)
+frequencia_administracao	PEP	dominio	F3	Frequências de administração (de 6 em 6 horas, 1 vez ao dia, contínuo, agora), com intervalo e número de doses	SPDATA: PRFREQUENCIA (21); MV: TIP_FRE*, TIP_ESQ*
+frequencia_horario_relativo	PEP	item	F3	Horários relativos de uma frequência (em jejum, antes do almoço, ao deitar)	SPDATA: PRHRRELATIVA (13)
+horario_padrao_dose	PEP	configuracao	F3	Horários padrão por número de doses no dia, usados no aprazamento	SPDATA: TBHORARIODOSE (231), TBNUMDOSE (26)
+via_de_uso	PEP	dominio	F3	Vias de administração (oral, intravenosa, subcutânea, sonda), com forma e restrições	SPDATA: TBDIGITAL_VIAACESSO (64); MV: PRESCRICAO_MEDICA_VIA
+unidade_prescricao	PEP	dominio	F3	Unidades em que se prescreve a dose (mg, ml, UI, gotas), com conversão para a unidade do produto	MV: TIP_PRESC*; depende: unidade_medida (05); conflito D4
+grade_horario_unidade	PEP	configuracao	F3	Grade de horário de medicação por unidade ou bloco de internação, com início do dia e turnos	SPDATA: TBHORMED (3), TBHORMED_RIBLOCOS (7), TBHORMED_TBUNIDAD (2)
+condicao_se_necessario	PEP	dominio	F3	Condições para dar o item só se necessário (dor, febre, náusea, agitação)	SPDATA: PRSENECESSARIO (5)
+cuidado_enfermagem	PEP	dominio	F3	Cuidados e procedimentos de enfermagem prescritíveis, com frequência padrão	SPDATA: TBPROENF (200)
+kit_cuidado_enfermagem	PEP	configuracao	F3	Kit de materiais associado a um procedimento de enfermagem, para baixa e cobrança	SPDATA: TBKITPRO (13)
+kit_cuidado_enfermagem_item	PEP	item	F3	Material e quantidade de um kit de procedimento de enfermagem	SPDATA: TBKITPRO; depende: insumo (05)
+formula_calculo_dose	PEP	configuracao	F3	Fórmula de cálculo de dose (por peso, superfície corporal, função renal)	SPDATA: PRFORMULA (1)
+variavel_calculo_dose	PEP	dominio	F3	Variáveis usadas no cálculo de dose (peso, altura, superfície corporal, depuração), com unidade	SPDATA: PRPARVARCAD (29), PRPARVARUNIRESP (17)
+referencia_dose	PEP	dominio	F3	Referência da dose prescrita (por quilo, por metro quadrado, dose fixa)	SPDATA: TBREFERENCIA (2)
+protocolo_prescricao	PEP	principal	F3	Protocolo de prescrição pronto (pós-operatório, sepse, dor), com situação e especialidade	SPDATA: PRPROTGERAL (377); MV: PRE_PAD*
+protocolo_prescricao_item	PEP	item	F3	Item do protocolo de prescrição, com todos os detalhes do item prescrito	MV: ITPRE_PAD*
+protocolo_prescricao_especialidade	PEP	vinculo	F3	Especialidades que podem usar cada protocolo de prescrição	SPDATA: PRPROTGERALESP (18)
+kit_prescricao	PEP	principal	F3	Kit de medicamentos ou de soluções que entra na prescrição de uma vez	SPDATA: PRKITMED (282), PRKITSOL (44)
+kit_prescricao_item	PEP	item	F3	Item do kit de prescrição, com dose, via e frequência	SPDATA: PRITENSKITMED (877), PRKITSOLITENS (169)
+favorito_prescritor	PEP	configuracao	F3	Itens ou protocolos favoritos do prescritor para uso rápido	MV: PW_FAVORITO_PRESCRICAO
+interacao_medicamentosa	PEP	configuracao	F3	Interação entre dois princípios ativos, com gravidade, tipo, probabilidade, efeito e conduta	MV: SUBS_INTERACAO; depende: principio_ativo (05)
+gravidade_interacao	PEP	dominio	F3	Graus de gravidade da interação medicamentosa	SPDATA: TBGRAUGRAVINT (3)
+acao_gravidade_interacao	PEP	configuracao	F3	Ação do sistema para cada gravidade de interação (avisar, justificar, bloquear)	SPDATA: TBACAOGRAUGRA (3)
+classificacao_interacao	PEP	dominio	F3	Classificação da interação medicamentosa (farmacocinética, farmacodinâmica)	SPDATA: TBCLASSINTMED (7)
+tipo_interacao	PEP	dominio	F3	Tipos de interação (medicamento com medicamento, com alimento, com exame)	SPDATA: TBTPINTMED (3)
+probabilidade_interacao	PEP	dominio	F3	Probabilidade documentada da interação	SPDATA: TBPROBOCINTMED (2)
+forma_validacao_interacao	PEP	dominio	F3	Forma de validar a interação (por princípio, por classe terapêutica)	SPDATA: TBTPVALIDINTERACAO (2)
+limite_dose_principio	PEP	configuracao	F3	Dose máxima e mínima por princípio ativo, via, faixa etária e peso, por dose e por dia	MV: PW_DOSE_MAXIMA; SPDATA: TBUNIDMEDIDA_PRINC_VALID (4)
+tipo_validacao_dose	PEP	dominio	F3	Tipos de validação de dose (por dose, por dia, por quilo, cumulativa)	SPDATA: TBPRINC_VALIDACAO (4)
+restricao_posologia	PEP	configuracao	F3	Restrição de uso por idade, sexo, gestação, via ou forma farmacêutica	MV: PW_RESTRICAO_POSOLOGIA
+ajuste_dose_renal	PEP	configuracao	F7	Ajuste de dose por faixa de depuração renal ou função hepática	MV: PW_RESTRICAO_POSOLOGIA
+regra_duplicidade_terapeutica	PEP	configuracao	F3	Regra de duplicidade: mesmo princípio, mesma classe ou mesma via ao mesmo tempo	SPDATA: PRVALIDARMEDDUPLICPRESC (2)
+interacao_medicamento_alimento	PEP	configuracao	F7	Interação entre princípio ativo e alimento ou nutriente, para a prescrição e a nutrição	MV: SUBS_INTERACAO
+compatibilidade_endovenosa	PEP	configuracao	F8	Compatibilidade entre medicamentos na mesma via ou em Y, e com os diluentes	Recurso novo; depende: principio_ativo (05)
+configuracao_alerta_prescricao	PEP	configuracao	F3	Alertas de prescrição ativos por estabelecimento ou setor, e se exigem justificativa ou bloqueiam	MV: PW_CONFIG_ALERTAS_PRE_MED*; depende: regra_alerta (01)
+tipo_alerta_clinico	PEP	dominio	F3	Tipos de alerta clínico (alergia, dose, duplicidade, interação, alta vigilância)	SPDATA: PRTPALERTA (2)
+decisao_alerta	PEP	item	F3	Alerta disparado num item prescrito e a resposta do prescritor (aceitou, ajustou, justificou)	MV: PW_ITPRE_MED_ALERTA*
+avaliacao_farmaceutica	PEP	principal	F3	Avaliação da prescrição pelo farmacêutico, com situação, autor e tempo de resposta	MV: PW_AVALIACAO_PRE_MED*; conflito D4 (05 só liberação e dispensação)
+avaliacao_farmaceutica_item	PEP	item	F3	Parecer do farmacêutico sobre cada item prescrito (aprovado, com ressalva, recusado, trocado)	MV: PW_AVALIACAO_ITPRE_MED*
+intervencao_farmaceutica	PEP	item	F3	Intervenção do farmacêutico, com tipo, proposta, aceite do prescritor e desfecho	MV: PW_AVALIACAO_ITPRE_MED*
+tipo_intervencao_farmaceutica	PEP	dominio	F3	Tipos de intervenção farmacêutica (dose, via, diluição, interação, troca por padronizado)	MV: PW_TIPO_INTERVENCAO
+desfecho_intervencao_farmaceutica	PEP	dominio	F3	Desfechos da intervenção (aceita, aceita com ajuste, recusada, sem resposta)	MV: PW_AVALIACAO_ITPRE_MED*
+ficha_antimicrobiano	PEP	principal	F7	Justificativa de uso do antimicrobiano: indicação, sítio, cultura, tempo previsto e reavaliação	MV: AVALIACAO_ANTIMICROBIANO_PRSCT; depende: liberacao_antimicrobiano (05), antimicrobiano (05)
+auditoria_prescricao_ccih	PEP	principal	F7	Auditoria da prescrição de antimicrobiano pelo controle de infecção, com parecer e recomendação	MV: AUDIT_ANTIMICROBIANO
+tipo_auditoria_ccih	PEP	dominio	F7	Tipos de parecer da auditoria de antimicrobiano (adequado, descalonar, suspender, trocar)	MV: TIPO_AUDIT_PSIH
+tipo_protocolo_oncologico	PEP	dominio	F8	Tipos de protocolo oncológico (quimioterapia, hormonioterapia, imunoterapia, radioterapia)	SPDATA: PRTPPROT (5)
+protocolo_quimioterapia	PEP	principal	F8	Protocolo de tratamento oncológico, com número de ciclos, intervalo e indicação	MV: CICLO_TRATAMENTO_PROTOCOLO*, CICLO_TRTM_PROTOCOLO_PREPAD
+protocolo_quimioterapia_droga	PEP	item	F8	Droga do protocolo, com dose por superfície ou peso, dia do ciclo, via e pré-medicação	MV: CICLO_TRTM_PROTOCOLO_PREPAD, PRE_MED_CONCOMITANTE
+tratamento_oncologico	PEP	principal	F8	Tratamento oncológico do paciente com protocolo, ciclos previstos, intenção e situação	MV: TRATAMENTO, PW_ACPMT_PACIENTE_TRATAMENTO, CONTROLE_TRATAMENTO
+ciclo_quimioterapia	PEP	item	F8	Ciclo do tratamento, com data prevista, peso, superfície corporal e doses calculadas	MV: CICLO_TRATAMENTO, PRE_MED_CICLO
+sessao_quimioterapia	PEP	item	F8	Sessão de aplicação de um ciclo, com horários, cadeira e intercorrências	MV: SESSAO_TRATAMENTO, PW_SESS_TRTM_ACPMT_PAC_ONCO, TRATAMENTO_REALIZADO
+reacao_tratamento_oncologico	PEP	principal	F8	Reação ou toxicidade do tratamento oncológico, com grau e conduta	MV: PW_REACAO_TRATAMENTO, PW_HIST_REACAO_TRATAMENTO
+acompanhamento_oncologico	PEP	principal	F8	Acompanhamento do paciente oncológico (situação do tumor, resposta, recidiva)	MV: PW_ACPMT_PACIENTE_ONCO
+acompanhamento_oncologico_evento	PEP	historico	F8	Mudanças registradas no acompanhamento oncológico	MV: PW_HIST_ACPMT_PACIENTE_ONCO
+diagnostico_oncologico	PEP	principal	F8	Tumor do paciente: topografia, morfologia, lateralidade, data do diagnóstico e base diagnóstica	MV: LOCALIZACAO_PRIMARIA, TOPOGRAFIA*, CIDO; SPDATA: TBLOCPRI (grupo 06); depende: termo_terminologia (08, CID-O)
+estadiamento_tumor	PEP	historico	F8	Estadiamento do tumor em cada momento (clínico, patológico), com T, N, M e grupo	MV: ESTADIAMENTO, ESTADIO*, PW_METASTASE_ESTADIO; SPDATA: TBTISSESTTUMOR (grupo 06)
+regra_grupo_estadio	PEP	configuracao	F8	Tabela que deriva o grupo de estádio a partir de T, N e M por topografia	MV: GRUPAMENTO_ESTADIO
+metastase_paciente	PEP	item	F8	Sítio de metástase do tumor, com data de detecção	MV: METASTASE*
+aparelho_radioterapia	PEP	dominio	F8	Aparelhos de radioterapia do serviço	MV: APARELHO_ONCOLOGIA
+regiao_irradiada	PEP	dominio	F8	Áreas do corpo irradiadas no tratamento de radioterapia	MV: AREA_IRRADIADA
+tratamento_radioterapia	PEP	principal	F8	Plano de radioterapia do paciente, com área, dose total, fracionamento e aparelho	MV: TRATAMENTO, AREA_IRRADIADA
+sessao_radioterapia	PEP	item	F8	Sessão aplicada de radioterapia, com dose e intercorrências	MV: SESSAO_TRATAMENTO
+terapia_nutricional	PEP	principal	F3	Terapia nutricional enteral ou parenteral, com indicação, via, metas calóricas e proteicas e situação	MV: NPP_ADULTO, NPP_PEDIATRICO; conflito D5; depende: meta e acompanhamento (04)
+formulacao_parenteral	PEP	item	F3	Composição da nutrição parenteral prescrita: macronutrientes, eletrólitos, volume e osmolaridade	MV: NPP_ADULTO, NPP_PEDIATRICO
+horario_administracao	PEP	principal	F3	Horário previsto de um item prescrito, com aprazamento, situação, quem administrou e quando	SPDATA: PRCHKGERAL (1001+); MV: HRITPRE_CONS*
+horario_administracao_evento	PEP	historico	F3	Mudanças do horário (reaprazamento, checagem, estorno, não administrado), com motivo e autor	SPDATA: HTCHKGERAL (1001+), PREXTRATOITEM_PRCHKGERAL (1001+)
+administracao_dupla_checagem	PEP	item	F3	Segunda conferência de medicamento de alta vigilância, com o segundo profissional	MV: HRITPRE_CONS_DUPLA_CHECAGEM
+administracao_lote_lido	PEP	item	F7	Produto e lote lidos à beira do leito na administração, com o resultado da conferência	Pendência DP-26 do new-sgh; depende: lote_estoque (05)
+motivo_nao_administracao	PEP	dominio	F3	Motivos para não administrar (recusa, jejum, ausente, falta do item)	MV: HRITPRE_CONS*
+situacao_aprazamento	PEP	dominio	F3	Situações do aprazamento do horário	SPDATA: PRSITAPRAZAM (5)
+situacao_checagem	PEP	dominio	F3	Situações da checagem do horário (pendente, administrado, atrasado, não administrado)	SPDATA: PRSITCHECAGEM (8), PRSITUACAOCHECAGEM (14)
+fechamento_horario_checagem	PEP	principal	F3	Fechamento do período de checagem do setor, que trava os horários já conferidos	MV: PW_FECHAMENTO_HORARIO_CHECAGEM*, PW_HORARIO_FECHADO_CHECAGEM*
+auditoria_checagem	PEP	principal	F8	Auditoria de uma amostra de checagens, com auditor, período e resultado	MV: AUDITORIA_CHECAGEM_PRESCRICAO, ESPELHO_AUDITORIA_PRESCRICAO
+auditoria_checagem_item	PEP	item	F8	Checagem auditada, com conformidade e justificativa	MV: ITEM_CHECAGEM*, ITEM_CHECAGEM_USUARIOS
+auditoria_checagem_auditor	PEP	vinculo	F8	Auditores designados para a auditoria de checagens	MV: AUDITORIA_CHEC_PRESC_USUARIOS
+grupo_conferencia_checagem	PEP	configuracao	F8	Grupos de itens verificados na auditoria de checagem	MV: GRUPO_CHECAGEM, GRUPO_ITEM_CHECAGEM
+motivo_nao_conformidade_checagem	PEP	dominio	F8	Justificativas padronizadas para não conformidade na checagem	MV: JUSTIFICATIVA_CHECAGEM*
+escala_insulina	PEP	configuracao	F3	Escala de insulina por faixa de glicemia, com tipo de insulina e via	MV: ITCOLETA_GLICEMIA_CAPILAR; SPDATA: PRITENSGLICEMIA
+escala_insulina_faixa	PEP	item	F3	Faixa de glicemia da escala, com a dose de insulina e a conduta	SPDATA: PRITENSGLICEMIA
+afericao	PEP	principal	F3	Conjunto de sinais vitais e medidas aferidos num momento, com autor, origem (manual, monitor, modelo) e escore	MV: COLETA_SINAL_VITAL*; depende: atendimento (02)
+afericao_valor	PEP	item	F3	Valor de cada parâmetro aferido, com unidade, instrumento, posição, local e alerta de limite	MV: ITCOLETA_SINAL_VITAL*
+parametro_vital	PEP	dominio	F3	Parâmetros aferíveis (pressão, frequência, temperatura, saturação, dor, glicemia, peso, altura)	SPDATA: PRSINAIS (1); MV: PW_TIPO_SINAL_VITAL*, SINAL_VITAL*
+limite_parametro_vital	PEP	configuracao	F3	Limites de normalidade e alerta por parâmetro, faixa etária e setor	MV: PW_LIMITE_SINAL_VITAL*
+parametro_vital_setor	PEP	configuracao	F3	Parâmetros exigidos por setor, com periodicidade de aferição	MV: PW_TIPO_SINAL_VITAL*; depende: setor (02)
+instrumento_afericao	PEP	dominio	F3	Instrumentos de aferição e a unidade de cada um	MV: PW_SINAL_VITAL_UNID_INSTR_AFER*
+local_afericao	PEP	dominio	F3	Locais de aferição (axilar, oral, membro superior direito)	MV: SINAL_VITAL_PW_LOCAL_AFERICAO
+posicao_afericao	PEP	dominio	F3	Posições do paciente na aferição (deitado, sentado, em pé)	MV: SINAL_VITAL_PW_POSICAO_PACIEN
+motivo_nao_afericao	PEP	dominio	F3	Motivos para um parâmetro não ter sido aferido	MV: IT_SINAL_VITAL_NAO_COLETADO, ITEM_SINAL_VITAL_SEM_COLETA
+monitorizacao_paciente	PEP	principal	F3	Período de monitorização contínua do paciente, com parâmetros, intervalo e equipamento	SPDATA: PRCABEC_MONITORIZACAO (2)
+captura_monitor_setor	PEP	configuracao	F8	Captura automática dos monitores por setor e leito, com parâmetros e intervalo de importação	MV: IMV_COLETA_SINAL_VITAL; a fila de leitura vai para integracao
+balanco_lancamento	PEP	principal	F3	Lançamento de ganho ou perda no balanço hídrico, com tipo, volume, intensidade e horário	MV: PW_ITBALANCO_HIDRICO*
+balanco_fechamento	PEP	principal	F3	Fechamento parcial ou de 24 horas do balanço, com totais de ganhos, perdas e saldo	MV: PW_BALANCO_HIDRICO*
+tipo_ganho_perda	PEP	dominio	F3	Tipos de ganho e de perda (soro, dieta, diurese, dreno, vômito, evacuação)	SPDATA: PRBHTPELIMINA (6)
+grupo_balanco_hidrico	PEP	dominio	F3	Grupos do balanço (ganhos, perdas, perdas insensíveis)	SPDATA: PRAGRUPBALANCO (4); MV: PW_GRUPO_BALANCO_HIDRICO*
+intensidade_perda	PEP	dominio	F3	Intensidades para perdas não medidas (pequena, moderada, grande)	SPDATA: PRBHINTENSIDADE (4)
+tipo_fechamento_balanco	PEP	dominio	F3	Tipos de fechamento do balanço (parcial, 24 horas)	SPDATA: PRBHTIPOFECHAMENTO (2)
+processo_enfermagem	PEP	principal	F7	Ciclo do processo de enfermagem do paciente: histórico, diagnósticos, plano e avaliação	MV: SAE_HISTORICO_ENFERMAGEM*, PW_CONF_SETOR_SAE_PER_HIS_ENF
+classe_diagnostico_enfermagem	PEP	dominio	F7	Domínios e classes, em árvore, que organizam os diagnósticos de enfermagem	MV: SAE_DOMINIO*, SAE_CLASSE*, SAE_DIAGNOSTICO_CLASSE*; depende: termo_terminologia (08)
+diagnostico_enfermagem	PEP	dominio	F7	Diagnóstico de enfermagem padronizado, com definição e terminologia de origem	MV: SAE_DIAGNOSTICO, SAE_DIAGNOSTICO_ASSOCIACAO; depende: termo_terminologia (08)
+caracteristica_diagnostico_enfermagem	PEP	dominio	F7	Característica definidora, fator relacionado ou fator de risco usado nos diagnósticos	MV: SAE_CARACTERISTICA_DIAGNOSTICO, SAE_CARACTERISTICA_FATOR*, SAE_GRUPO_CARACTERISTICA*
+diagnostico_enfermagem_caracteristica	PEP	vinculo	F7	Características e fatores ligados a cada diagnóstico de enfermagem	MV: SAE_DIAGNOSTICO_CARACT_FTR, SAE_DIAGNOSTICO_ITEM_CRCT_FTR
+diagnostico_enfermagem_setor	PEP	vinculo	F7	Diagnósticos de enfermagem sugeridos por setor	MV: SAE_DIAGNOSTICO_SETOR
+resultado_enfermagem	PEP	dominio	F7	Resultado de enfermagem esperado, com a escala de medida	MV: PW_CONFIG_SAE_RESULTADO_ENFER*
+indicador_resultado_enfermagem	PEP	item	F7	Indicador que mede o resultado de enfermagem	MV: PW_CONFIG_SAE_INDICADOR_RESULT, PW_SAE_INDICADOR_RESULTADO
+escala_resultado_enfermagem	PEP	dominio	F7	Escalas de medida dos resultados (tipo Likert de 1 a 5), com o significado de cada ponto	MV: PW_CONFIG_SAE_TIPO_ESCALA_RES*, PW_CONFIG_SAE_ESCALA_RESULTADO*; SPDATA: PRSAE_LIKERT (6)
+intervencao_enfermagem	PEP	dominio	F7	Intervenção de enfermagem padronizada	MV: PW_CONFIG_SAE_INTERVENCAO_ENF*
+atividade_intervencao_enfermagem	PEP	item	F7	Atividade de uma intervenção, que pode virar cuidado prescrito	MV: PW_CONFIG_SAE_ATIVIDADE_INTER, PW_SAE_ATIVIDADE_INTERVENCAO
+diagnostico_resultado_enfermagem	PEP	vinculo	F7	Resultados sugeridos para cada diagnóstico de enfermagem	MV: PW_CONFIG_SAE_DIAGNOSTICO_RES
+resultado_intervencao_enfermagem	PEP	vinculo	F7	Intervenções sugeridas para cada resultado de enfermagem	MV: PW_CONFIG_SAE_RESULTADO_INTERV, PW_CONFIG_SAE_RESULT_INT_GERAL
+classificacao_meta_enfermagem	PEP	dominio	F7	Classificação das metas do plano de enfermagem (curto, médio e longo prazo)	SPDATA: PRSAE_CLASSIF_META (3)
+diagnostico_enfermagem_paciente	PEP	principal	F7	Diagnóstico de enfermagem levantado para o paciente, com prioridade, situação e resolução	MV: SAE_DIAGNOSTICO_PACIENTE*, SAE_DIAGNOSTICO_REALIZADO*
+diagnostico_enfermagem_paciente_caracteristica	PEP	vinculo	F7	Características e fatores observados no paciente para o diagnóstico	MV: SAE_CARACT_DIAG_ENFE_PAC
+plano_intervencao_enfermagem	PEP	item	F7	Intervenção planejada para o diagnóstico do paciente, com frequência e cuidado prescrito gerado	MV: PW_SAE_INTERVENCAO_ENFERMAGEM, PW_SAE_RESULTADO_INTERVENCAO
+avaliacao_resultado_enfermagem	PEP	item	F7	Avaliação do resultado no paciente, com nota inicial, meta e nota obtida	MV: PW_SAE_RESULTADO_ENFERMAGEM, PW_SAE_RESULTADO_ENFERMG_RLZD, PW_SAE_DIAG_EN_RLZ_RES_EN_RLZ
+dispositivo_invasivo_paciente	PEP	principal	F3	Dispositivo invasivo do paciente (cateter, sonda, tubo, dreno), com local, inserção, troca prevista e retirada	MV: PRO_INVASIVO*
+dispositivo_invasivo_evento	PEP	historico	F3	Eventos do dispositivo (inserção, curativo, troca, retirada, complicação), com autor	MV: MOV_INV*, HISTORICO_TROCA_PRO_INV
+tipo_dispositivo_invasivo	PEP	dominio	F3	Tipos de dispositivo invasivo, com prazo de troca e se conta para a vigilância de infecção	MV: PRO_INVASIVO*
+local_acesso_invasivo	PEP	dominio	F3	Locais de inserção do dispositivo (jugular, subclávia, femoral, periférico)	SPDATA: PRLOCALINVASIVO (10)
+passagem_turno	PEP	principal	F3	Passagem de plantão do setor, com quem entrega, quem recebe, aceite e horário	MV: PASSAGEM_PLANTAO*
+passagem_turno_paciente	PEP	item	F3	Situação de cada paciente na passagem de plantão, com pendências e riscos	MV: PASSAGEM_PLANTAO*
+interconsulta	PEP	principal	F3	Pedido de parecer a outra especialidade, com motivo, prioridade, prazo e situação	MV: PAR_MED*, SOLIC_PARECER; depende: especialidade (02)
+interconsulta_resposta	PEP	item	F3	Resposta do especialista ao parecer, com conduta e se segue acompanhando	MV: PAR_MED*
+prioridade_interconsulta	PEP	dominio	F3	Prioridades do pedido de parecer, com prazo de resposta	MV: SOLIC_PARECER
+encaminhamento_paciente	PEP	principal	F3	Encaminhamento do paciente para outra especialidade ou serviço, interno ou externo	MV: PW_ENCAMINHAMENTO*
+tipo_encaminhamento	PEP	dominio	F3	Tipos de encaminhamento (interno, externo, contrarreferência)	SPDATA: TBTABENC (1)
+receita_medica	PEP	principal	F3	Receita emitida ao paciente, com tipo, validade, número de vias e numeração de controle	SPDATA: PRRECEITA (1001+); MV: PW_RECEITA, RECEITA_ATD
+receita_medica_item	PEP	item	F3	Item da receita, com medicamento, posologia, quantidade e duração	SPDATA: PRITEMRECEITA (1001+); MV: PW_ITEM_RECEITA
+modelo_receita	PEP	configuracao	F3	Receita padrão pronta para uso do prescritor ou da especialidade	SPDATA: PRPADRECEITA (628)
+modelo_receita_item	PEP	item	F3	Item da receita padrão	SPDATA: PRPADRECEITA
+tipo_receita	PEP	dominio	F3	Tipos de receita (simples, controle especial, antimicrobiano, amarela, azul), com vias e validade	SPDATA: PRTPRECMED (5)
+talonario_receita_controle	PEP	principal	F7	Blocos de numeração de receita controlada recebidos da vigilância e o uso de cada número	Recurso novo para receita controlada
+documento_emitido	PEP	principal	F3	Atestado, declaração ou requerimento emitido ao paciente, com tipo, período, CID autorizado e situação	SPDATA: PRATESTREQIMP (1001+); MV: ATESTADOS, DECLARACAO_COMPARECIMENTO_ACOM
+documento_emitido_versao	PEP	historico	F3	Reemissão ou cancelamento do documento emitido, com motivo	MV: ATESTADOS
+termo_consentimento_modelo	PEP	configuracao	F3	Modelo de termo de consentimento por procedimento, com texto, riscos e versão	MV: TERMO_CONSENTIMENTO_PROCED
+termo_consentimento_procedimento	PEP	vinculo	F3	Procedimentos que exigem cada termo de consentimento	MV: TERMO_CONSENTIMENTO_PROCED; depende: procedimento (02/06)
+termo_consentimento_paciente	PEP	principal	F3	Termo assinado pelo paciente ou responsável, com testemunha, situação e revogação	MV: PW_TERMO_CONSENTIMENTO_ATND
+situacao_termo_consentimento	PEP	dominio	F3	Situações do termo (pendente, assinado, recusado, revogado)	SPDATA: PRTPTCLE (5)
+alta_medica	PEP	principal	F3	Alta médica com data prevista e efetiva, motivo, modalidade, destino e cancelamento justificado	SPDATA: HTATENDALTA (1001); MV: PW_REGISTRO_ALTA*; depende: motivo_saida_hospitalar (04); SPDATA: TBMOTALT (55) fica em motivo_saida_hospitalar (04)
+sumario_alta	PEP	principal	F3	Sumário de alta do atendimento, com versão e situação	MV: PW_REGISTRO_ALTA*
+sumario_alta_secao	PEP	item	F3	Conteúdo de cada seção do sumário de alta (diagnósticos, procedimentos, medicamentos, orientações)	MV: PW_REGISTRO_ALTA*
+componente_sumario_alta	PEP	configuracao	F3	Seções configuráveis do sumário de alta, ordem e obrigatoriedade	SPDATA: PRSUMARIO_ALTA_COMP (14), PRPARAMSUMARIOALTA
+modalidade_assistencial	PEP	dominio	F3	Modalidades assistenciais da alta e do atendimento (internação, hospital-dia, domiciliar)	SPDATA: TBMODALIDADE_ASSIST (5)
+motivo_cancelamento_alta	PEP	dominio	F3	Motivos para cancelar a alta médica	MV: PEP_JUSTIFICATIVA_CANCEL_ALT
+solicitacao_transporte_paciente	PEP	principal	F8	Pedido de transporte do paciente na alta ou transferência, com destino, tipo de veículo e acompanhante	MV: PW_SOLICITACAO_TRANSPORTE; depende: transporte (04, F8)
+declaracao_obito	PEP	principal	F3	Declaração de óbito com número do formulário, data, local, médico, situação e cancelamento	MV: CAD_OBITO, CANCELAMENTO_DECL_OBITO; conflito D3
+declaracao_obito_causa	PEP	item	F3	Causas do óbito em ordem (partes I e II), com CID e intervalo	MV: CAD_OBITO; depende: catalogo_publico:cid10
+declaracao_obito_evento	PEP	historico	F3	Emissão, segunda via e cancelamento da declaração, com motivo	MV: CANCELAMENTO_DECL_OBITO
+formulario_declaracao_obito	PEP	principal	F3	Formulários numerados de declaração de óbito recebidos da vigilância e o uso de cada um	MV: CAD_OBITO
+anexo_prontuario	PEP	principal	F3	Metadado de documento anexado ou digitalizado no prontuário; o arquivo vai para o armazenamento	SPDATA: PRGEDIMP (9); MV: DOCUMENTO_ANEXO, ARQUIVO_DOCUMENTO
+tipo_anexo	PEP	dominio	F3	Tipos de documento anexo (exame externo, termo, laudo, documento pessoal)	SPDATA: PRTIPODOCANEXO (20); MV: STATUS_ARQUIVO_ATENDIMENTO*
+painel_resultado_grupo	PEP	configuracao	F3	Grupo comparativo de exames para ver resultados lado a lado e em tendência	MV: PW_GRUPO_EXAME_COMPARATIVO
+painel_resultado_grupo_exame	PEP	item	F3	Exames e analitos de cada grupo comparativo, em ordem	MV: PW_GRUPO_EXAME_COMPARATIVO; depende: exame_analito (05)
+ciencia_resultado_critico	PEP	principal	F3	Ciência do valor crítico pelo médico, com horário, conduta e quem comunicou	MV: PW_RES_TRANSC_EXAMES; depende: resultado_exame (05); SPDATA: PRSITEXAME (4) fica com o resultado (05)
+exame_lancado_prontuario	PEP	principal	F3	Exame feito fora do hospital e lançado pelo profissional no prontuário	SPDATA: PRLANCAMENTOEXAME (20)
+exame_lancado_valor	PEP	item	F3	Valores estruturados do exame lançado, com analito e unidade	SPDATA: PRLANCEXAMEESTRUTURADO (36)
+documento_prontuario	PEP	principal	F3	Documento do prontuário na linha do tempo, ligado à origem, com tipo, autor, situação e versão	SPDATA: PRASSINATURA_CAB (1001+), PRASSINATURA_DOC (1001+), PRASSINAT_DOC_PRCHKGERAL, PRASS_DOC_PREXAMEASS; MV: PW_LINHA_TEMPO
+documento_prontuario_evento	PEP	historico	F3	Mudanças de situação do documento (criado, assinado, corrigido, suspenso), com autor	MV: PW_AGRUPADOR_HISTORICO*
+situacao_documento_prontuario	PEP	dominio	F3	Situações do documento do prontuário	SPDATA: PRSITDOCUMENTO (34)
+fluxo_situacao_documento	PEP	configuracao	F3	Situações permitidas e transições por tipo de documento	SPDATA: PRTPASSINATURA_PRSITDOC (31)
+processo_fluxo_prontuario	PEP	dominio	F3	Processos que agrupam fluxos de documento (assistencial, administrativo)	SPDATA: PRPROCESSOPEP (3)
+marco_linha_tempo	PEP	dominio	F7	Marcos destacados na linha do tempo (admissão, cirurgia, alta, óbito)	MV: PW_MARCO_LINHA_TEMPO
+tipo_exigencia_assinatura	PEP	dominio	F3	Exigência de assinatura do documento (sem, eletrônica, digital qualificada)	SPDATA: PRTPDOCUMENTO (3)
+situacao_assinatura_documento	PEP	dominio	F3	Situações da assinatura do documento (pendente, assinado, recusado)	SPDATA: PRSITDOCUMENTOASSINADO (4)
+tipo_assinante	PEP	dominio	F3	Papéis de quem assina (autor, supervisor, paciente, testemunha)	SPDATA: PRASSINANTE (2)
+pendencia_assinatura	PEP	principal	F3	Documento aguardando assinatura de um profissional, com prazo, cobrança e baixa	MV: DOCUMENTO_DIGITAL, PW_DOCUMENTO_AUTENTICADO; SPDATA: PREXAMEASSINATURA; depende: assinatura_documento, politica_assinatura, oid_icp, tipo_certificado (01); SPDATA TBOID, TBTIPOOID, TBTIPOCERTIFICADO, TBFORMA_ASSINATURA_ICP, PRTPASSINATURA_TBOID ficam no 01
+cabecalho_impressao_documento	PEP	configuracao	F3	Cabeçalho e rodapé da impressão por tipo de documento e estabelecimento	SPDATA: PRPARAMORIGEMCABIMP (79), HTPARAMORIGEMCABIMP (79)
+modelo_impressao_clinica	PEP	configuracao	F3	Layout de impressão de documento clínico, com versão e tipo de modelo	SPDATA: PRFICHAREL (678); MV: PW_PRONTUARIO
+tipo_modelo_impressao	PEP	dominio	F3	Tipos de modelo de impressão (ficha, prescrição, etiqueta, relatório)	SPDATA: PRMODELOREL (18)
+regra_obrigatoriedade_documento	PEP	configuracao	F7	Documento exigido por setor, tipo de atendimento, faixa etária ou momento (admissão, alta), com prazo	MV: DOCUMENTO_OBRIGATORIO*; depende: pendencia_prontuario (04)
+regra_obrigatoriedade_cid	PEP	vinculo	F7	Diagnósticos que tornam um documento obrigatório	MV: PW_CONFIG_DOCUMENTO_OBGT_CID
+aviso_clinico	PEP	principal	F3	Aviso gerado para profissional ou equipe por evento clínico, com prioridade, canal e situação	MV: NOTIFICACAO*, MVPEP_NOTIFICACAO*; depende: regra_alerta (01)
+aviso_clinico_destinatario	PEP	item	F3	Destinatário do aviso, com envio, leitura e ciência	MV: NOTIFICACAO*, NI_REGRA_ENVIO; SPDATA: PRTPNOTIFEMAIL (3)
+tipo_aviso_clinico	PEP	dominio	F3	Tipos de aviso clínico (acesso de emergência, ciclo de tratamento, valor crítico, pendência)	SPDATA: PRTIPONOTIFICACAO (3), PREMAILOPCAO (10)
+protocolo_gerenciado	PEP	principal	F7	Protocolo clínico gerenciado (sepse, dor torácica, AVC), com situação e público	MV: PROTOCOLO*, PW_CASO_PROTOCOLO
+protocolo_gerenciado_versao	PEP	historico	F7	Versão do protocolo com critérios, etapas e metas vigentes	MV: PROTOCOLO*
+protocolo_gerenciado_criterio	PEP	item	F7	Critério de entrada ou saída do protocolo (diagnóstico, sinal vital, resultado), avaliado automaticamente	MV: PW_ALERTA_PROTOCOLO*, PW_SUGESTAO_PROTOCOLO
+protocolo_gerenciado_etapa	PEP	item	F7	Etapa do protocolo, com meta de tempo a partir da inclusão e responsável	MV: PW_ETAPA_PROTOCOLO*
+inclusao_protocolo_paciente	PEP	principal	F7	Inclusão do paciente no protocolo, com origem, horário zero, situação, saída e motivo	MV: PW_CASO_PROTOCOLO
+inclusao_protocolo_etapa	PEP	item	F7	Cumprimento de cada etapa pelo paciente, com horário e meta atingida ou perdida	MV: PW_ETAPA_PROTOCOLO*
+inclusao_protocolo_evento	PEP	historico	F7	Eventos da inclusão (sugestão, aceite, descarte, saída), com motivo	MV: PW_ALERTA_PROTOCOLO*
+motivo_saida_protocolo	PEP	dominio	F7	Motivos de saída ou descarte do protocolo	MV: PW_CASO_PROTOCOLO
+imunobiologico	PEP	dominio	F7	Vacina ou imunobiológico, com doses do esquema e código para a rede nacional	MV: VACINA*, PW_OBJETIVO_VACINA; depende: insumo (05)
+vacina_dose	PEP	item	F7	Dose do esquema vacinal, com idade e intervalo mínimo	MV: PW_DOSE_VACINA*, INTERVALO_DOSE_VACINA
+vacina_aplicada	PEP	principal	F7	Vacina aplicada no paciente, com dose, lote, local, aplicador e situação do envio à rede nacional	MV: PW_VACINA_DOSE_PACIENTE, VACINA_PAC; o envio vai para integracao
+calendario_vacinal	PEP	configuracao	F8	Calendário vacinal por faixa etária e grupo, para o aviso de dose atrasada	MV: PW_DOSE_VACINA*
+agravo_notificavel	PEP	dominio	F3	Agravo de notificação compulsória, com periodicidade, autoridade e ficha	SPDATA: PRAGRAVOTPARQUETIPO (53)
+agravo_notificavel_cid	PEP	vinculo	F3	CID que sugerem a notificação de cada agravo	SPDATA: TBTPNOTIFCID10 (4); depende: catalogo_publico:cid10
+agravo_pergunta	PEP	item	F3	Pergunta da ficha de notificação do agravo, com tipo e opções	SPDATA: PRAGRAVOPERGUNTA (1001+)
+notificacao_agravo	PEP	principal	F3	Notificação de agravo do paciente, com data, prazo, situação e envio à vigilância	MV: (não identificado); SPDATA: PRAGRAVOTPARQUETIPO
+notificacao_agravo_resposta	PEP	item	F3	Resposta de cada pergunta da ficha de notificação	SPDATA: PRAGRAVOPERGUNTA
+autoridade_notificacao	PEP	dominio	F3	Autoridades que recebem a notificação (municipal, estadual, federal)	SPDATA: TBTPAUTORIDADE (3)
+periodicidade_notificacao	PEP	dominio	F3	Periodicidade da notificação (imediata, semanal)	SPDATA: TBTPNOTAGRAVO (3)
+contencao_paciente	PEP	principal	F7	Contenção do paciente, com indicação, tipo, prescritor, início e retirada	new-sgh: contenção (M48)
+contencao_paciente_avaliacao	PEP	item	F7	Reavaliação periódica da contenção (pele, circulação, necessidade)	new-sgh: contenção (M48)
+lesao_pele_paciente	PEP	principal	F7	Lesão de pele do paciente (pressão, cirúrgica, queimadura), com local, estágio e origem	new-sgh: lesão de pele (M48)
+lesao_pele_avaliacao	PEP	item	F7	Avaliação da lesão com medidas, aspecto, curativo e foto no armazenamento	new-sgh: lesão de pele (M48)
+tipo_lesao_pele	PEP	dominio	F7	Tipos de lesão de pele	new-sgh: lesão de pele (M48)
+estagio_lesao_pele	PEP	dominio	F7	Estágios ou graus da lesão de pele	new-sgh: lesão de pele (M48)
+acionamento_resposta_rapida	PEP	principal	F7	Acionamento do time de resposta rápida, com critério, horários, condutas e desfecho	new-sgh: time de resposta rápida (M48)
+criterio_resposta_rapida	PEP	dominio	F7	Critérios de acionamento do time de resposta rápida	new-sgh: time de resposta rápida (M48)
+profilaxia_tev_avaliacao	PEP	principal	F7	Avaliação de risco de tromboembolismo e profilaxia indicada, com contraindicação	new-sgh: profilaxia de TEV (M48)
+grupo_exame_oftalmologico	PEP	dominio	F8	Grupos de exames oftalmológicos	SPDATA: PROFTGRUPEXAME (6)
+tipo_exame_oftalmologico	PEP	dominio	F8	Exames oftalmológicos (refração, tonometria, fundoscopia, biomicroscopia)	SPDATA: PROFTEXAME (35)
+tipo_acuidade_visual	PEP	dominio	F8	Tipos de medida de acuidade visual (com e sem correção, perto, longe)	SPDATA: PROFTTPACUID (24)
+gabarito_acuidade_visual	PEP	configuracao	F8	Valores aceitos na medida de acuidade visual, por tabela e graduação	SPDATA: PROFTGABARITO (144), PROFTGRADUACAO (5)
+exame_oftalmologico	PEP	principal	F8	Exame oftalmológico do paciente, por olho, com achados e anexos	SPDATA: PROFTEXAME, PROFTTPARQUIV (6)
+exame_oftalmologico_valor	PEP	item	F8	Valor medido em cada exame e olho (acuidade, pressão, refração)	SPDATA: PROFTGABARITO
+prescricao_lente	PEP	principal	F8	Prescrição de óculos ou lentes de contato, com grau por olho, adição e distância	SPDATA: PRPAROFTALMO (1)
+gestacao_paciente	PEP	principal	F8	Gestação acompanhada, com data da última menstruação, idade gestacional e risco	MV: SACR_AVALIACAO_GESTACAO
+partograma	PEP	principal	F8	Partograma do trabalho de parto, com início, situação e desfecho	MV: IT_PARTO
+partograma_registro	PEP	item	F8	Registro horário do partograma (dilatação, altura, batimento fetal, contração)	MV: IT_PARTO
+registro_nascimento	PEP	principal	F8	Nascimento: tipo de parto, Apgar, peso, sexo, condição e o vínculo com o paciente criado	MV: RECEM_NASCIDO, CAD_RECEM_NASCIDO; SPDATA: TBTPRN (3)
+declaracao_nascido_vivo	PEP	principal	F8	Declaração de nascido vivo com número, situação e cancelamento	MV: CANCELAMENTO_DECL_NASC, CONTROLE_NASCIMENTO_NORMA24
+tipo_parto	PEP	dominio	F8	Tipos de parto (normal, cesárea, fórceps)	SPDATA: TBTPPARTO (4); MV: TIP_PARTO
+motivo_parto_cirurgico	PEP	dominio	F8	Indicações para o parto cesárea	MV: MOTIVO_PARTO
+condicao_recem_nascido	PEP	dominio	F8	Condição do recém-nascido ao nascer (vivo, natimorto)	SPDATA: TBTPRN (3)
+curva_referencia	PEP	catalogo_publico	F8	Curva de referência oficial de crescimento por sexo, idade e medida	MV: PW_CURVA_REFERENCIA
+curva_referencia_ponto	PEP	catalogo_publico	F8	Pontos e percentis da curva de referência por idade	MV: PW_CURVA_CRESCIMENTO_FAIXA
+grafico_clinico_padrao	PEP	configuracao	F8	Gráfico clínico padrão com parâmetros, curva e faixa etária exibidos	MV: PW_GRAFICO_PADRAO_CURVA_CRESC*, PW_GRAFICO_CURVA_CRESCIMENTO
+programa_cuidado	PEP	principal	F8	Programa de saúde ou de crônicos (hipertensão, diabetes, gestante), com critérios e metas	MV: PW_PROGRAMA_SAUDE_ATN
+programa_cuidado_paciente	PEP	principal	F8	Paciente inscrito no programa, com risco, equipe e situação	MV: PW_PROGRAMA_SAUDE_PACIENTE_ATP
+programa_cuidado_protocolo	PEP	vinculo	F8	Protocolos, questionários e prescrições padrão ligados ao programa	MV: PW_PROGRAMA_SAUDE_PROTOC_ATN, PW_PROGRAMA_SAUDE_QUEST_ATP, PW_PROGRAMA_SAUDE_PRE_PAD_ATP
+estratificacao_risco_paciente	PEP	historico	F8	Estratificação de risco do paciente no programa ao longo do tempo, com aviso de mudança	MV: PW_CLAS_RISCO_QUEST_ATP, PW_NTFC_RISCO_PROGR_SAUDE_ATP
+plano_cuidado	PEP	principal	F8	Plano de cuidado do paciente crônico, com metas, ações e justificativa de desvio	MV: PW_PLANO_CUIDADO_ATP, PW_PLANO_CUIDADO_JUSTV_ATP, PW_PROG_SAUD_PAC_IT_PRESC_ATP
+plano_cuidado_acao	PEP	item	F8	Ação do plano de cuidado, com responsável, prazo e situação	MV: PW_PLANO_CUIDADO_ATP
+nucleo_familiar	PEP	principal	F8	Núcleo familiar acompanhado na atenção primária	MV: PW_FAMILIA_ATN
+nucleo_familiar_membro	PEP	item	F8	Membro do núcleo familiar, com parentesco	MV: PW_FAMILIA_PACIENTE_ATN; depende: paciente (02)
+equipe_referencia	PEP	principal	F8	Equipe de referência da atenção primária, com área e população	MV: PW_EQUIPE_ATN
+equipe_referencia_membro	PEP	item	F8	Profissional da equipe de referência	MV: PW_EQUIPE_PRESTADOR_ATN
+orientacao_saude	PEP	dominio	F8	Orientações de saúde enviadas aos inscritos de um programa	MV: PW_DICAS_SAUDE_ATP, PW_PROGRAMA_SAUDE_DICAS_ATP
+area_atencao_domiciliar	PEP	dominio	F8	Área geográfica atendida pela atenção domiciliar	MV: PW_AREA_DOMICILIAR
+area_atencao_domiciliar_profissional	PEP	vinculo	F8	Profissionais que atendem cada área domiciliar	MV: PW_AREA_PRESTADOR_DOMICILIAR
+escala_atencao_domiciliar	PEP	principal	F8	Escala dos profissionais da atenção domiciliar por área e período	MV: PW_ESCALA_DOMICILIAR, PW_ESCALA_TIPO_CHAMADO_DOMIC
+chamado_domiciliar	PEP	principal	F8	Chamado de atendimento domiciliar, com tipo, motivo, prioridade e desfecho	MV: PW_CHAMADO_DOMICILIAR
+tipo_chamado_domiciliar	PEP	dominio	F8	Tipos de chamado domiciliar	MV: PW_TIPO_CHAMADO_DOMICILIAR
+motivo_chamado_domiciliar	PEP	dominio	F8	Motivos de chamado domiciliar	MV: PW_MOTIVOS_DOMICILIAR
+visita_domiciliar	PEP	principal	F8	Visita agendada ou feita no domicílio, com profissional, horário e registro	MV: PW_AGENDA_DOMICILIAR, PW_IT_AGENDA_DOMICILIAR, PW_GERACAO_AGENDA_DOMICILIAR, PW_IT_GERACAO_AGD_DOMICILIAR
+pesquisa_clinica	PEP	principal	F8	Estudo clínico, com patrocinador, aprovação ética, vigência e situação	MV: PW_PESQUISA_CIENTIFICA*
+pesquisa_clinica_equipe	PEP	vinculo	F8	Pesquisadores do estudo e o papel de cada um	MV: PW_EQUIPE_PESQUISA_CIENTIFICA*
+pesquisa_clinica_criterio	PEP	item	F8	Critério de inclusão ou exclusão do estudo, avaliável sobre o prontuário	MV: PW_ITEM_PESQUISA_CIENTIFICA*, PW_PESQUISA_AGENDA_CRITERIO*
+triagem_elegibilidade_pesquisa	PEP	principal	F8	Paciente encontrado pela triagem automática de elegíveis, com critérios atendidos	MV: PW_GERA_PESQUISA_CRITERIO, PW_PAC_PESQ_CIENT_CRITERIO
+participante_pesquisa	PEP	principal	F8	Paciente incluído no estudo, com consentimento, braço e situação	MV: PW_PACIENTE_PESQ, PW_PACIENTE_CRTE_ENTR_PESQ, PW_PACIENTE_CRTE_SAI_PESQ
+participante_pesquisa_evento	PEP	historico	F8	Eventos do participante (inclusão, visita, saída), com motivo	MV: PW_PACIENTE_PESQ_HIST, PW_PACIENTE_C_ENTR_PESQ_HIST, PW_PACIENTE_ENTR_PESQ_MOV
+item_prescritivel_pesquisa	PEP	vinculo	F8	Medicamentos de estudo liberados para prescrição aos participantes	MV: TIP_PRESC_PESQUISA*
+orgao_transplante	PEP	dominio	F8	Órgãos e tecidos para doação e transplante	MV: PW_ORGAO_CORPO_HUMANO
+doador_orgao	PEP	principal	F8	Doador de órgãos, com causa, exames, consentimento da família e situação	MV: PW_CADASTRO_DOADOR, PW_VINCULO_DOADOR
+doador_antibiotico	PEP	item	F8	Antibiótico em uso pelo doador	MV: PW_ANTIBIOTICO_DOADOR
+solucao_preservacao_orgao	PEP	item	F8	Solução de preservação usada em cada órgão captado, com horário	MV: PW_ORGAO_SOLUCAO_PRESERVACAO
+receptor_transplante	PEP	principal	F8	Receptor em lista de transplante, com órgão, cadastro nacional e situação	MV: CADASTRO_TRANSPLANTE_CMN, CADASTRO_TRANSPLANTE_RGCT, LOG_ALT_CAD_TRANSPLAN_RGCT
+doador_receptor	PEP	vinculo	F8	Órgão do doador destinado a cada receptor	MV: PW_DOADOR_RECEPTOR
+acompanhamento_pos_transplante	PEP	item	F8	Sintomas e achados do receptor depois do transplante	MV: PW_DOADOR_RECEPTOR
+dialisador	PEP	principal	F8	Dialisador identificado do paciente, com modelo, volume inicial e limite de reusos	MV: PW_CAPILAR; SPDATA: DIPARAM (2)
+reuso_dialisador	PEP	item	F8	Reprocessamento do dialisador, com teste de volume, desinfecção e responsável	MV: PW_REUSO_CAPILAR
+sessao_hemodialise	PEP	principal	F8	Sessão de hemodiálise, com máquina, dialisador, peso antes e depois e intercorrências	MV: PW_REUSO_CAPILAR
+anotacao_administrativa_caso	PEP	principal	F8	Anotação não clínica da equipe sobre o caso (serviço social, regulação, gestão de leito)	MV: EVOL_ADMIN, REGISTRO_EVOL_ADMIN
+anotacao_administrativa_caso_destinatario	PEP	vinculo	F8	Usuários que devem ler a anotação administrativa	MV: EVOL_ADMIN_USUARIOS
+protocolo_classificacao_risco	PEP	principal	F3	Protocolo de classificação de risco do pronto atendimento, com níveis e versão	SPDATA: PRMANCHESTER (7); MV: SCR_PROTOCOLO, SCR_TIPO_PROTOCOLO*, SACR_CATEGORIA_PROCESSO*
+fluxograma_classificacao_risco	PEP	item	F3	Queixa ou fluxograma de entrada do protocolo de classificação	MV: SACR_BLOCO_FLUXOGRAMA, SACR_FLUXOGRAMA_PERGUNTA_AVAL, SCR_SINTOMA_AVALIACAO
+discriminador_classificacao_risco	PEP	item	F3	Pergunta ou discriminador do fluxograma, com o nível de prioridade que define	MV: SACR_PERGUNTA_TRIAGEM*, SCR_PERGUNTA, SCR_PERGUNTA_AVALIACAO
+nivel_prioridade	PEP	dominio	F3	Nível de prioridade da classificação, com cor e tempo alvo de atendimento	SPDATA: PRMANCHESTER (7); MV: SACR_COR_REFERENCIA*, SCR_COR_REFERENCIA
+limite_risco_sinal_vital	PEP	configuracao	F3	Faixas de sinal vital que elevam a prioridade, por idade	MV: SACR_LIMITE_RISCO, SACR_FORMULA_LIMITE_RISCO, SCR_SINAL_VITAL_LIMITE_RISCO
+classificacao_risco	PEP	principal	F3	Classificação de risco do atendimento, com queixa, fluxograma, nível, sinais e classificador	MV: TRIAGEM_ATENDIMENTO*, SACR_CLASSIFICACAO_RISCO*, SCR_CLASSIFICACAO_RISCO; depende: atendimento (02)
+classificacao_risco_resposta	PEP	item	F3	Respostas aos discriminadores na classificação	MV: TRIAG_ATND_HIS_SACR_PRG_AVAL*, SCR_RESPOSTA_PACIENTE
+reclassificacao_risco	PEP	historico	F3	Reclassificação do paciente, com nível anterior, novo nível e motivo	MV: TRIAGEM_ATENDIMENTO_HISTORICO*, SACR_TRIAGEM_ATENDIME_HIST_TIP*, CLASSRISCO_LOGS*
+intervencao_salva_vidas	PEP	dominio	F7	Intervenções imediatas que definem prioridade máxima	MV: SACR_INTERVENCAO_SALVA_VIDA, SACR_GRUPO_INTERVNC_SLV_VID
+classificacao_risco_intervencao	PEP	vinculo	F7	Intervenções imediatas feitas no paciente durante a classificação	MV: SACR_TRIAG_ATND_INTVNC_SLV_VID, SACR_INTERVENCAO_SLV_VID_TRIA
+auditoria_classificacao_risco	PEP	principal	F7	Auditoria de uma amostra de classificações por auditor, com período e resultado	MV: SACR_AUDITORIA, SACR_AUDITOR, SACR_AUDITORIA_EQUIPE, SACR_EPIS_AUDIT_FILTRO
+auditoria_classificacao_risco_item	PEP	item	F7	Classificação auditada, com concordância e nível sugerido	MV: SACR_AUDITORIA_TRIAG_ATENDIME
+caso_infeccao	QUA	principal	F7	Caso de infecção relacionada à assistência, com critério, sítio, setor, data e dispositivo associado	MV: INFECCAO, CLASSIFICACAO_IRAS; depende: dispositivo_invasivo_paciente
+caso_infeccao_microrganismo	QUA	vinculo	F7	Microrganismos isolados ligados ao caso de infecção	MV: AGRUPA_GERMES; depende: isolado_microbiano (05)
+criterio_infeccao	QUA	dominio	F7	Critérios diagnósticos oficiais de infecção relacionada à assistência	MV: CLASSIFICACAO_IRAS, NATUREZA_PSIH
+sitio_infeccao	QUA	dominio	F7	Sítios ou topografias de infecção (corrente sanguínea, trato urinário, pneumonia, sítio cirúrgico)	MV: INFECCAO_TOPOGRAFIA, DI_IH_TOPOGRAFIA
+componente_vigilancia	QUA	dominio	F7	Componentes da vigilância (UTI adulto, neonatal, cirúrgico, geral)	MV: COMPONENTE_NNISS
+denominador_vigilancia	QUA	principal	F7	Denominadores do mês por setor (pacientes-dia, cateter-dia, sonda-dia, ventilação-dia)	MV: RESUMO_NNISS, MES_ANO_PSIH; derivado de dispositivo_invasivo_paciente e censo (04)
+relatorio_iras_mensal	QUA	principal	F7	Relatório mensal de infecções e indicadores por setor, com situação do envio à vigilância sanitária	MV: RESUMO_NNISS, GRAFICO_EVO_INFEC; o envio vai para integracao
+surto	QUA	principal	F7	Surto investigado pelo controle de infecção, com tipo, microrganismo, setores e medidas	SPDATA: TBTPSURTO (4)
+tipo_surto	QUA	dominio	F7	Tipos de surto (infeccioso, alimentar, por microrganismo resistente)	SPDATA: TBTPSURTO (4)
+acao_cultura_positiva	QUA	principal	F8	Ação do controle de infecção a partir da análise de cultura positiva	MV: ANALISE_CULTURA_ACAO, ACAO_ANALISE_CULTURA*

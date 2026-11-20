@@ -1,0 +1,14 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+taxa_prestador_rede	SGO	configuracao	F7	Taxa administrativa ou de intercâmbio aplicada à produção do prestador, em percentual e com vigência	DBAPS PRESTADOR_TAXA_ADMINISTRATIVA; PRESTADOR_TAXA_INTERCAMBIO
+pensao_prestador_rede	SGO	configuracao	F7	Desconto de pensão judicial no pagamento do prestador: percentual ou valor, processo, favorecido e vigência	DBAPS PRESTADOR_PENSAO; PRESTADOR_PENSAO_FORNECEDOR
+marcador_rede	SGO	dominio	F8	Marcadores livres para classificar e buscar prestadores no guia de rede e nos relatórios	DBAPS PRESTADOR_TAG (cadastro da marca vem da tabela de tags)
+marcador_prestador_rede	SGO	vinculo	F8	Marcadores atribuídos a cada prestador da rede, com quem incluiu e quando	DBAPS PRESTADOR_TAG
+item_faturavel_unidade_medida	FAT	configuracao	F7	Unidade de medida da terminologia oficial do item, com fator de conversão e vigência, opcionalmente por prestador	DBAPS PROCEDIMENTO_UNIDADE_MEDIDA; PROCEDIMENTO_UNI_MED_TNUMM; PRESTADOR_UNIDADE_MEDIDA
+item_faturavel_funcao_equipe	FAT	configuracao	F7	Funções de equipe aceitas na cobrança de cada item, com exceção por prestador ou estabelecimento	DBAPS PROCEDIMENTO_EQUIPE_MEDICA; PROCED_PREST_EQUIPE_MEDICA; PRESTADOR_EQUIPE_MEDICA
+item_faturavel_codigo_barras	FAT	vinculo	F8	Códigos de barras de produto aceitos para o item cobrado, para conferir material e medicamento na conta	DBAPS PROCEDIMENTO_EAN
+item_faturavel_tributacao	FAT	configuracao	F8	Alíquota de ICMS, preço máximo de intercâmbio, taxa logística e área de livre comércio do item por vigência	DBAPS PROCEDIMENTO_IMPOSTO
+equivalencia_item_prestador_rede	SGO	vinculo	F7	Código e descrição que o prestador usa para cada item, com o item equivalente e o tipo de valor	DBAPS PROCED_PRESTADOR
+tipo_regulacao_cobertura	SGO	dominio	F7	Tipos de regra regulatória do procedimento (diretriz, protocolo, cobertura obrigatória) mostrados na autorização	DBAPS PROCED_TIPO_REGULACAO (com dados)
+equivalencia_intercambio	SGO	configuracao	F8	De-para de contrato, plano e lançamento recebidos no intercâmbio entre operadoras para os cadastros próprios	DBAPS PTU_A100_CONTRATO_DESTINO; PTU_A300_CONFIG_PLANO_DES
+fatura_intercambio	SGO	principal	F8	Nota de cobrança trocada entre operadoras no intercâmbio: congênere, competência, valores, vencimento e situação	DBAPS PTU_A500_R502; leiautes A500/A550/A560 no motor de integração
+fatura_intercambio_item	SGO	item	F8	Atendimento ou serviço cobrado na nota de intercâmbio, com beneficiário, item, quantidade e valor	DBAPS PTU_A500_R503; PTU_A500_R504

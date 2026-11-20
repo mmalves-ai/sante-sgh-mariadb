@@ -1,0 +1,35 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+calendario_intercambio	SGO	configuracao	F8	Calendario mensal da compensacao entre operadoras do intercambio: prazos de envio, contestacao, leitura e relatorio	DBAPS.ITCALENDARIO_CAMARA_COMP
+regra_cobranca_intercambio	SGO	configuracao	F8	Tipo de lancamento de cobranca usado por classe de despesa e tipo de credenciamento na fatura de intercambio	DBAPS.ITEM_DESPESA_A500
+reciprocidade_beneficiario	SGO	principal	F8	Beneficiario atendido por outra operadora em acordo de reciprocidade: matricula externa, adesao, exclusao e validade do cartao	DBAPS.IMP_RECIPROCIDADE; DBAPS.IMP_CADASTRO_RECIPROCIDADE
+reciprocidade_movimento	SGO	historico	F8	Pedidos de inclusao ou exclusao do beneficiario na operadora parceira, com motivo, data e envio do arquivo	DBAPS.ITEM_RECIPROCIDADE
+lote_reciprocidade	SGO	principal	F8	Lote de movimentos de reciprocidade enviado a operadora parceira, com periodo, contratante, leiaute e validade	DBAPS.IMP_LOTE_RECIPROCIDADE
+lote_reciprocidade_item	SGO	item	F8	Movimento incluido no lote de reciprocidade, com rejeicao, importacao do retorno e atualizacao	DBAPS.ITEM_LOTE_RECIPROCIDADE
+indice_reajuste_tipo_lancamento	SGO	vinculo	F7	Tipos de lancamento da fatura reajustados por um indice diferenciado	DBAPS.INDICE_REAJUSTE_RECEITA
+agrupamento_procedimento	SGO	configuracao	F7	Agrupamento nomeado de procedimentos usado em regras de critica, cobertura e relatorios da operadora	DBAPS.ITAGRUP_PROCED (pai AGRUP_PROCED)
+agrupamento_procedimento_item	SGO	item	F7	Procedimentos que compoem cada agrupamento	DBAPS.ITAGRUP_PROCED
+alerta_operadora	SGO	principal	F7	Alerta sobre beneficiario, contrato ou prestador exibido no atendimento e na autorizacao, com vigencia e bloqueio	DBAPS.ITALERTA (pai ALERTA)
+alerta_operadora_departamento	SGO	vinculo	F7	Departamentos que recebem cada alerta, com vigencia, bloqueio do atendimento e acao judicial ligada	DBAPS.ITALERTA
+regra_concomitancia	SGO	configuracao	F7	Regra de procedimentos realizados no mesmo ato com reducao de valor do procedimento secundario	DBAPS.ITCONCOMITANTE (pai CONCOMITANTE)
+regra_concomitancia_item	SGO	item	F7	Procedimentos abrangidos pela regra de concomitancia, com ativacao e inativacao	DBAPS.ITCONCOMITANTE
+regra_concomitancia_excecao	SGO	item	F7	Percentuais de honorario, filme e custo operacional por procedimento e tipo de atendimento, com vigencia	DBAPS.ITCONCOMITANTE_VALOR_PROC
+classe_despesa_procedimento	SGO	vinculo	F7	Procedimentos classificados em cada classe de despesa assistencial, com vigencia	DBAPS.ITDESPESA_PROCED
+classe_despesa_centro_custo	SGO	vinculo	F7	Centro de custo e conta contabil usados por classe de despesa no lancamento de horas	DBAPS.ITEM_DESPESA_SETOR_HORA
+lote_cancelamento_fatura	SGO	principal	F7	Cancelamento em bloco de faturas da operadora, com motivo, responsavel e situacao	DBAPS.ITEM_LOTE_CANCELAMENTO_MENS (pai LOTE_CANCELAMENTO_MENS)
+lote_cancelamento_fatura_item	SGO	item	F7	Fatura incluida no cancelamento em bloco, com situacao, observacao e liberacao da coparticipacao	DBAPS.ITEM_LOTE_CANCELAMENTO_MENS
+faixa_reajuste	SGO	configuracao	F7	Tabela de percentuais de reajuste por faixa de valor (sinistralidade ou mensalidade)	DBAPS.ITFAIXA_REAJUSTE (pai FAIXA_REAJUSTE)
+faixa_reajuste_item	SGO	item	F7	Faixa de valor inicial e final com o percentual de reajuste correspondente	DBAPS.ITFAIXA_REAJUSTE
+grupo_postagem_cobranca	SGO	configuracao	F8	Agrupamento de cobrancas para impressao e postagem por regiao	DBAPS.ITGRUPO_IMPRESSAO_COBRANCA (pai GRUPO_IMPRESSAO_COBRANCA)
+grupo_postagem_cobranca_municipio	SGO	vinculo	F8	Municipios de cada grupo de postagem de cobranca, com vigencia	DBAPS.ITGRUPO_IMPRESSAO_COBRANCA
+carencia_impressa_cartao	SGO	vinculo	F7	Grupos de carencia exibidos no cartao do beneficiario por modelo de impressao	DBAPS.ITGRU_IMP_CAR
+execucao_autorizacao_item	SGO	item	F7	Cada execucao de item autorizado (sessao, dose), com executor, data, cancelamento e conta onde entrou	DBAPS.ITGUIA_EXECUCAO
+guia_leitura_contratual	SGO	principal	F7	Guia de leitura do contrato entregue ao beneficiario, exigido pela norma da ANS, por produto	DBAPS.ITGUIA_LEITURA_CONTRATUAL (pai GUIA_LEITURA_CONTRATUAL)
+guia_leitura_contratual_item	SGO	item	F7	Topicos do guia de leitura com resumo e a pagina do contrato onde o tema esta	DBAPS.ITGUIA_LEITURA_CONTRATUAL
+modelo_pedido_autorizacao	SGO	configuracao	F8	Modelo de pedido de autorizacao frequente, para preencher a solicitacao mais rapido	DBAPS.ITGUIA_MODELO (pai GUIA_MODELO)
+modelo_pedido_autorizacao_item	SGO	item	F8	Itens do modelo de pedido, inclusive regiao e face de dente no odontologico	DBAPS.ITGUIA_MODELO
+pedido_autorizacao_oculos	SGO	item	F8	Grau das lentes por olho e justificativa no pedido de oculos do beneficiario	DBAPS.ITGUIA_OCULOS
+tipo_lancamento_fatura_vigencia	SGO	historico	F7	Valor ou percentual padrao de cada tipo de lancamento da fatura por vigencia	DBAPS.ITLCTO_MENSALIDADE
+regra_numeracao_carteira	SGO	configuracao	F7	Modelo de formacao do numero do cartao do beneficiario	DBAPS.ITMODELO_CARTEIRA (pai MODELO_CARTEIRA)
+regra_numeracao_carteira_item	SGO	item	F7	Partes do numero do cartao em ordem: tamanho, origem do valor, digito verificador e separador	DBAPS.ITMODELO_CARTEIRA
+modelo_criterio	SGO	configuracao	F7	Conjunto nomeado de criterios reutilizado em isencao, valoracao e restricao da operadora	DBAPS.ITMODELO_CRITERIO_* (pai MODELO_CRITERIO)
+modelo_criterio_item	SGO	item	F7	Valor de criterio do modelo por dimensao: plano, contrato, prestador, especialidade, acomodacao, familia e outros	DBAPS.ITMODELO_CRITERIO_PLANO; DBAPS.ITMODELO_CRITERIO_PRESTADOR; demais ITMODELO_CRITERIO_*

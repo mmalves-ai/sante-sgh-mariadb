@@ -1,0 +1,56 @@
+funcionalidade	decisao	entidades_rodada1
+Cadastro de usuários e ciclo de vida da conta (criação, bloqueio, contas dormentes, pedido de acesso, recertificação)	F3: sem usuá	`usuario`, `usuario_vinculo_profissional`, `pedido_acesso`, `recertificacao_acesso`
+Perfis, papéis de segurança e permissões por ação	F3: as permi	`grupo_usuario`, `perfil_acesso`, `acao_sistema`, `perfil_acao`, `usuario_perfil`, `papel_seguranca`, `regra_segregacao_funcao`
+Escopo do usuário e permissões finas: estabelecimento, unidade, local, convênio, tipo de agenda, tipo de prontuário, alç	F3: o recort	`usuario_estabelecimento`, `usuario_unidade`, `usuario_local_atendimento`, `usuario_convenio`, `usuario_tipo_agenda`, `usuario_tipo_prontuario`, `alcada_aprovacao`
+Política de senha, sessão, bloqueio por tentativas e segundo fator	F3: no banco	`politica_senha`, `credencial_usuario`, `historico_senha`, `segundo_fator_usuario`, `bloqueio_login`
+Login único corporativo (LDAP, Active Directory, SSO)	F7: hospital	`provedor_identidade`, `vinculo_identidade_externa`
+Biometria do usuário no login	F8: o MV tam	—
+Termo de uso do sistema com aceite por usuário	F3: exigênci	`termo_uso_versao`, `aceite_termo_uso`
+Registro de sessões, entradas e últimos acessos	F3: alimenta	`evento_sessao`, `ultimo_acesso_usuario`
+Trilha de auditoria: inclusões, alterações e exclusões com quem, quando, de onde e o antes e depois	F3: obrigaçã	`evento_auditoria`, `evento_auditoria_registro`, `tipo_acao_auditavel`, `nivel_criticidade_auditoria`, `registro_excluido`
+Histórico de mudança de parâmetros e configurações	F3: mudar um	`parametro_valor_historico`
+Prontuário restrito, acesso de emergência (quebra de vidro) e registro de quem leu	F3: o new-sg	`restricao_prontuario`, `acesso_emergencial`, `leitura_prontuario`
+LGPD: termos de consentimento e revogação, pedidos do titular, anonimização, encarregado	F3: obrigaçã	`base_legal_tratamento`, `termo_consentimento`, `consentimento_titular`, `pedido_titular`, `anonimizacao_registro`, `encarregado_dados`
+Estabelecimentos da rede (multiempresa), dados fiscais e identidade visual nos documentos	F3: tudo no 	`rede`, `empresa`, `estabelecimento`, `unidade_atendimento`, `logotipo_estabelecimento`
+Parametrização por escopo (rede, estabelecimento, unidade, módulo, usuário) com vigência	F3: o compor	`parametro_definicao`, `parametro_valor`
+Feriados e calendário do estabelecimento	F3: agenda, 	`feriado`
+Catálogo de módulos, telas e ações, menu, busca e favoritos	F3: a permis	`modulo_sistema`, `tela_sistema`, `favorito_usuario`
+Liberação de funcionalidades por estabelecimento (ligar e desligar por hospital)	F3: a virada	`funcionalidade_estabelecimento`
+Mensagens internas e comunicados com ciência	F3: o comuni	`comunicado`, `comunicado_destinatario`, `comunicado_ciencia`, `mensagem_interna`
+Alertas configuráveis do sistema e central de notificações do usuário	F3: pouco us	`regra_alerta`, `alerta_gatilho`, `assinatura_alerta`, `notificacao_usuario`
+Notificação por regra com consolidação e histórico de envio	F8: ideia bo	—
+Servidor de e-mail, tipos e modelos de mensagem, registro de envio	F3: envio de	`servidor_email`, `modelo_email`, `envio_email`
+Assinatura digital de documentos (ICP-Brasil, nuvem), política por tipo de documento e verificação pública	F3: o prontu	`politica_assinatura`, `documento_assinado`, `assinatura_documento`, `consulta_verificacao_documento`, `oid_icp`, `tipo_certificado`
+Impressoras por estação de trabalho e controle de reimpressão	F3: na web, 	`estacao_trabalho`, `impressora`, `estacao_impressora`, `registro_reimpressao`
+Unificação de cadastros duplicados, com registro do que mudou e reversão	F3: o legado	`unificacao_cadastro`, `unificacao_item`
+Backup verificado e restauração testada	F3: exigênci	`verificacao_backup`
+Justificativa para imprimir ou exportar o prontuário	F3: exigênci	`tipo_justificativa_exportacao`, `exportacao_documento`
+Dicionário ortográfico pessoal	F3: pouco us	`dicionario_usuario`
+Preferências do usuário (tela inicial, densidade, colunas, ordenação)	F3: 962 usuá	`preferencia_usuario`
+"Acesso de suporte técnico auditado (""entrar como"" o usuário)"	F3: é como o	`conta_plataforma`, `atribuicao_suporte`, `sessao_suporte`, `auditoria_plataforma`
+Controle de versão, atualização e scripts do produto	NAO: as migr	—
+Motor de regras em banco disparado por evento de tabela e coluna	NAO: premiss	—
+Dicionário de dados, metadados e customização de objetos do fornecedor	NAO: domínio	—
+Ferramentas de diagnóstico de desempenho do banco	NAO: é ferra	—
+Rotinas agendadas e histórico de execução (cargas, envios, fechamentos automáticos)	F3: o sincro	`rotina_agendada`, `execucao_rotina`
+Log técnico de erros da aplicação	NAO no banco	—
+Ajuda de tela e tradução de conteúdo	NAO: o texto	—
+Kit de implantação e diagnóstico de processos do cliente (cenários, cadastros mínimos, aceleradores, metas da implantaçã	F7: para ven	`implantacao_estabelecimento`, `item_prontidao`
+Cadastro de clientes, hospitais e produtos do fornecedor	NAO: dado do	—
+Licenciamento comercial de módulos e usuários	NAO: o ligar	—
+Servidor de relatórios do fornecedor (agentes, repositório, impressoras, monitor)	NAO: infraes	—
+Carga inicial e sincronismo diferencial a partir do legado (conector)	F3: é o cami	`lote_carga_legado`, `marca_sincronismo`, `mapa_identificador_legado`, `divergencia_carga`
+Cadastros paralelos dos produtos satélite (pessoa, organização, cargo, telefone e endereço próprios)	NAO: duplica	—
+Catálogo de relatórios parametrizados, com permissão por perfil, máscara de dado pessoal e execução registrada	F3: os 252 r	`relatorio`, `relatorio_parametro`, `relatorio_permissao`, `execucao_relatorio`, `triagem_relatorio_legado`
+Envio agendado de relatório por e-mail, com o link e o alerta de falha	F3: está em 	`agendamento_relatorio`, `envio_relatorio`
+Editor de consultas SQL livre pelo usuário	NAO: SQL liv	—
+Indicadores hospitalares com ficha técnica, meta, apuração com numerador e denominador, e painéis gerenciais	F3: o censo 	`indicador`, `indicador_versao`, `meta_indicador`, `apuracao_indicador`
+Data mart analítico (dimensões e fatos, carga registrada, sem dado identificável)	F3: os painé	`carga_data_mart`
+Página inicial com blocos configuráveis por papel (widgets, links, gráficos)	F8: a home m	—
+Análise ad hoc (tabela dinâmica, cubo, filtros salvos pelo usuário)	F8: feito po	—
+Painéis de TV operacionais (UTI, farmácia, mapa cirúrgico, laboratório, chamada)	F3: os 19 pa	`painel_tv`, `painel_tv_bloco`
+Central de comando assistencial (riscos clínicos por exame, medicamento e CID, alertas de fluxo, metas das 24 horas)	F8: juntar o	—
+Gestão estratégica (mapa estratégico, perspectivas, objetivos, iniciativas, reuniões de análise crítica)	F8: útil par	—
+Gestão de projetos (cronograma, linha de base, caminho crítico)	NAO: ferrame	—
+Simulação de cenários de receita (troca de tabela de preço, reajuste de convênio, conversão de procedimentos)	F8: responde	—
+BI consolidado da Rede (vários estabelecimentos, pseudônimo comum)	F8: já const	—

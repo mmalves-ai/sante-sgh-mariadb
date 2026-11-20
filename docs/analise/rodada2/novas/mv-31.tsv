@@ -1,0 +1,18 @@
+tabela	modulo	tipo	fase	descricao	evidencia
+operadora_congenere_municipio	SGO	vinculo	F8	Municípios em que cada operadora parceira atua, usados para direcionar o atendimento recíproco	DBAPS PTU_UNIMED_ATUACAO
+suspensao_operadora_congenere	SGO	historico	F8	Períodos de suspensão do atendimento a beneficiários de uma operadora parceira, com caráter e observação	DBAPS PTU_UNIMED_SUSPENSAO
+plano_intercambio	SGO	configuracao	F8	Plano de operadora parceira reconhecido no atendimento recíproco: carteira, categoria, acomodação, cobertura e regras locais	DBAPS PTU_PLANO_INTERCAMBIO; DBAPS PTU_PRODUTO_REGULAMENTADO
+fatura_intercambio	SGO	principal	F8	Fatura de atendimentos cobrada ou recebida de operadora parceira: arquivo, valores acordados, taxa, situação e cancelamento	DBAPS PTU_CONTROLE_INTERCAMBIO
+aviso_atendimento_intercambio	SGO	item	F8	Aviso prévio de conta de beneficiário de parceira, por prestador, lote e guia, com movimento e erro de envio	DBAPS PTU_CONTROLE_AVISO
+repasse_beneficiario_intercambio	SGO	principal	F8	Transferência do atendimento de beneficiários entre operadora de origem e de destino, com tipo e processo	DBAPS REPASSE_INTERCAMBIO
+repasse_beneficiario_intercambio_item	SGO	item	F8	Beneficiários e produtos transferidos, com carteira de origem, mensalidade, período e cancelamento	DBAPS REPASSE_INTERCAMBIO_PRODUTO; DBAPS REPASSE_INTERCAMBIO_PRO_USU; DBAPS REPASSE_INTERCAMBIO_USUARIO
+reciprocidade_beneficiario	SGO	principal	F8	Inscrição do beneficiário próprio em operadora parceira: matrícula externa, plano, contrato, validade e tipo de repasse	DBAPS RECIPROCIDADE
+critica_pedido_reembolso	SGO	item	F7	Críticas do pedido de reembolso por procedimento, com motivo de glosa e liberação manual	DBAPS REEMBOLSO_ERROS
+critica_recurso_glosa	SGO	item	F7	Críticas encontradas no recurso de glosa recebido, por guia ou item, com liberação	DBAPS RECURSO_GLOSA_ERRO
+lote_pagamento_rede_tributo	SGO	item	F7	Tributos calculados no pagamento do prestador: base, alíquota, dedução, retenção e documento gerado	DBAPS REPASSE_PRESTADOR_IMPOSTO
+regra_subsidio_coparticipacao	SGO	configuracao	F8	Modelo de subsídio da coparticipação pago pela contratante, com condições por plano	DBAPS RATEIO_COPART; DBAPS RATEIO_COPART_COND
+regra_subsidio_coparticipacao_item	SGO	item	F8	Grupo de procedimento, programa ou concomitância subsidiados, com percentual, valor, teto e vigência	DBAPS RATEIO_COPART_GRU_PRO; DBAPS RATEIO_COPART_GRU_PRO_VAL; DBAPS RATEIO_COPART_TETO_URG; DBAPS RATEIO_COPART_PROG
+regra_documento_solicitacao_portal	SGO	configuracao	F8	Documentos obrigatórios no pedido pelo portal conforme tipo de beneficiário, parentesco e idade	DBAPS REGRA_TIPO_ARQUIVO_SOL_WEB
+acordo_inadimplencia_fatura	SGO	item	F7	Faturas e lançamentos incluídos no acordo de regularização, com valor, juros, multa e estorno	DBAPS REPACTUACAO_MENS_CONTRATO; DBAPS REPACTUACAO_ITMENS_CONTRATO
+restricao_cobertura_plano_item	SGO	item	F7	Itens da restrição: procedimento ou grupo, ação, especialidade, quantidade, período e exceções	DBAPS RESTRICAO_ITREGRA; DBAPS RESTRICAO_ITREGRA_GRUPO; DBAPS RESTRICAO_ITREGRA_GRUPO_EXC
+contato_contratante_plano	SGO	item	F7	Representantes da contratante para contato: nome, cargo, telefone e e-mail	DBAPS REPRESENTANTE
