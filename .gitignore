@@ -15,3 +15,7 @@ __pycache__/
 .venv/
 .DS_Store
 *.log
+
+# Dicionários completos de colunas do MV e do SPDATA: estrutura de software de terceiros, só uso local
+referencias/mv-colunas-raw.tsv
+referencias/spdata-colunas-raw.txt

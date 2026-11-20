@@ -23,6 +23,21 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
    - Relatório ao dono a cada 50 minutos: tarefas em termos da área hospitalar, % e tempo de cada uma,
      completude e previsão geral.
 
+## Produto, não projeto de um cliente (ADR 0002)
+
+- Nada é engessado para a Rede Santé. Ela é **um cliente**. A única exceção é a identidade visual, por
+  configuração.
+- **Fases F3, F7 e F8 são só ordem de construção.** Todo recurso fica disponível, e nada é bloqueado por
+  cliente.
+- **O administrador da plataforma pode tudo.**
+- A virada é **operacional** e decidida pelo cliente: o sistema dá ferramentas, alertas e relatórios, sem
+  travas automáticas.
+- **Um banco por cliente,** criado pelo comando "criar novo cliente". A Rede Santé usa o mesmo comando, e o
+  conector importa e limpa o SPDATA.
+- **Melhor prática, não o SPDATA.** Chaves e obrigatoriedades vão no banco (PK, FK, NOT NULL, UNIQUE,
+  CHECK). Onde o MV traz mais, segue-se o MV, com estrutura própria.
+- **Convenções do DDL:** [ADR 0002, parte 2](docs/adr/0002-decisoes-do-dono-e-principios-do-modelo.md).
+
 ## O projeto é independente do `new-sgh`
 
 - As regras do `new-sgh` (coexistência no Firebird, "não existe banco novo", teste de assinatura, tabelas
@@ -85,8 +100,7 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
 - Do dump do MV, use **só metadados** (dicionário: tabelas, colunas, comentários). Nunca leia conteúdo de
   linhas.
 - Pendências e logs do conector registram tabela, chave original e regra violada, **nunca valores**.
-- **Vetorização:** só colunas de cadastro e de domínio, com modelo local. Texto clínico e identificação de
-  paciente nunca são vetorizados.
+- **Sem vetorização no conector** (ADR 0002). A busca vetorial é recurso do produto, nunca aplicada a texto clínico sem decisão registrada.
 - **Homologação com dados reais** só depois dos quatro pré-requisitos de LGPD da F5.1.
 
 ### 6. Nenhuma mensagem externa fora de produção

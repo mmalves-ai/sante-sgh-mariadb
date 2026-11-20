@@ -26,6 +26,10 @@ O resultado tem três partes:
 
 ## Fases
 
+> **ADR 0002:** F3, F7 e F8 são **ordem de construção**, não disponibilidade. Todo recurso fica disponível a
+> todo cliente. O comando "criar novo cliente" (antes F7.2) é feito cedo, na F2, porque é ele que cria o
+> banco da própria Rede Santé.
+
 | Fase | Nome | O que entrega | Portão de saída |
 |---|---|---|---|
 | [F0](F0-fundacao.md) | Fundação | Repositório, modelo base do `new-sgh` trazido, MariaDB, esteira | Esteira verde com o modelo base sem o legado |

@@ -7,6 +7,8 @@ fases de construção. As pendências do fim continuam abertas e são decididas 
 proposto (2026-11-20), revisado por três revisões independentes (virada, arquitetura, dados/LGPD), com
 43 achados consolidados.
 
+**Alterado pelo [ADR 0002](0002-decisoes-do-dono-e-principios-do-modelo.md)** (2026-11-20). As mudanças: sem vetorização no de-para; travas viram alertas operados pelo cliente; banco por cliente com o comando "criar novo cliente"; fases são só ordem de construção.
+
 ## Premissas do dono (2026-11-20)
 
 1. **Analisar o modelo do MV** (Oracle) e **cruzar com o SPDATA** (Firebird) e com o `new-sgh`.
@@ -73,7 +75,7 @@ proposto (2026-11-20), revisado por três revisões independentes (virada, arqui
 - **Migrações:**
   - só avançam (sem *down*);
   - como o DDL do MariaDB não é transacional, cada migração confere o próprio resultado.
-- **Busca vetorial nativa** (`VECTOR` + índice HNSW) para catálogos e de-para de cadastros (item 3.2).
+- **Busca vetorial nativa** (`VECTOR` + índice HNSW) para recursos do produto (o conector não usa; ADR 0002).
 - **Catálogos públicos:**
   - vêm das **fontes oficiais**, por carregadores versionados (um por fonte, com a competência ou
     versão);
@@ -183,11 +185,7 @@ cobertura das 1.503 tabelas com dados. Por tabela, o mapa declara:
 **Valores** (códigos e cadastros livres do SPDATA → catálogos oficiais e cadastros novos):
 
 - **Com chave oficial** (TUSS, SIGTAP, CID, CBO, IBGE): casamento direto.
-- **Sem chave oficial:**
-  - o conector **sugere** o par por similaridade vetorial e uma pessoa **aprova**;
-  - o par aprovado vira linha fixa do de-para.
-- **Limite da vetorização:** só colunas de cadastro e de domínio. **Texto clínico e identificação de
-  paciente nunca são vetorizados.**
+- **Sem chave oficial:** o de-para é **determinístico**, declarado no mapa e revisado por gente (ADR 0002, item 11; não há vetorização).
 
 #### 3.3 Como grava
 
@@ -344,12 +342,7 @@ cobertura das 1.503 tabelas com dados. Por tabela, o mapa declara:
 - Pendências, de-para e logs do conector **vivem só dentro do ambiente controlado**:
   - logs não trazem conteúdo de linha;
   - o que sai do ambiente traz só contagens e somas.
-- **Modelo de vetorização local.** Se um dia for externo, exige:
-  - contrato com o hospital;
-  - processamento no Brasil ou base do art. 33 da LGPD;
-  - cláusula de não retenção e não treino.
-
-  Os vetores seguem a retenção do dado de origem.
+- **Vetorização:** o conector não usa (ADR 0002). Recurso do produto que use vetores com dado de paciente exige decisão registrada.
 
 **Retenção:**
 
@@ -403,8 +396,7 @@ cobertura das 1.503 tabelas com dados. Por tabela, o mapa declara:
 
 ## Pendências
 
-- **"Vetorização de-para":** este ADR entende que é sugestão de pares por similaridade vetorial, com
-  aprovação humana. Confirmar com o dono.
+- ~~"Vetorização de-para"~~: resolvida no ADR 0002 (não há vetorização no conector).
 - **Isolamento entre hospitais:** banco por hospital (recomendado) ou coluna de estabelecimento.
   **Decidir antes da primeira migração.**
 - **Inventários da Fase A:**

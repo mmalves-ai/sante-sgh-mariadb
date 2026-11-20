@@ -39,11 +39,9 @@ Roda **em paralelo com a F3**.
 
 - **Entregas:**
   - casamento direto pela chave oficial (TUSS, SIGTAP, CID, CBO, IBGE);
-  - sugestão por similaridade vetorial (MariaDB `VECTOR`, modelo local) **só para colunas de cadastro e
-    de domínio**;
-  - **tela de aprovação:** o par aprovado vira linha fixa do de-para.
-- **Aceite:** nenhum texto clínico ou de identificação de paciente é vetorizado (teste), e o par aprovado
-  não é sugerido de novo.
+  - tabelas de de-para **determinísticas**, declaradas e revisadas, para cadastros sem chave oficial;
+  - **limpeza no caminho:** chaves, duplicatas e obrigatoriedades corrigidas; o que não tiver correção vira pendência (ADR 0002, item 10).
+- **Aceite:** toda coluna de origem com regra de de-para ou motivo de descarte. Sem vetorização (ADR 0002, item 11).
 
 ### F4.4 Gravação
 
