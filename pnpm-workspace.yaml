@@ -9,9 +9,6 @@ engineStrict: true
 # Scripts de instalação de dependências: só os listados como permitidos rodam.
 allowBuilds:
   nx: false
-  # TEC-1 (M02): addon nativo do driver Firebird (node-gyp com o g++ 13.3 e o make 4.3 da VM; cabeçalhos
-  # do Node em npm_config_devdir, dentro do repositório, POL-4).
-  node-firebird-native-api: true
   # vue-demi (dependência do @tanstack/vue-query): o script só troca a variante Vue 2/3; a padrão já é a 3.
   vue-demi: false
   # M04 (BullMQ 6.3.11 → msgpackr): extensão nativa opcional de serialização; sem ela o msgpackr usa a
