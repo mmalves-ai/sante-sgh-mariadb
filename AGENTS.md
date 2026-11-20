@@ -166,6 +166,11 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
   `.env` (`ORACLE_SENHA`). Detalhes no `README.md`.
 - **Cópias do SPDATA para desenvolvimento:** a matriz fica em `../banco-dev/backups/` e não pode ser
   aberta direto. O conector usa um container próprio restaurado dela (F0.5).
+- **Disco (pedido do dono, 2026-11-20):** a VM tinha cerca de 146 GB livres em 20/11.
+  - Em tarefa longa, deixe rodando `tools/obra/vigia-disco.sh 130` em segundo plano. Ele avisa abaixo de 130 GB.
+  - Abaixo de 100 GB, pare o que for pesado e avise o dono.
+  - Antes de baixar, importar ou instalar algo grande (imagem, dump, `node_modules`, carga de catálogo), estime o tamanho.
+  - Apague temporários assim que deixarem de servir.
 - **Containers comuns da VM** (Gotenberg, Mailpit e outros de outros projetos): não pare, não altere.
 
 ## Git deste projeto
