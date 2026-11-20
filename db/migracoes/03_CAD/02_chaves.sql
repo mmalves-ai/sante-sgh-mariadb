@@ -85,7 +85,7 @@ ALTER TABLE nacionalidade
 ALTER TABLE nucleo_familiar
   ADD CONSTRAINT fk_nucleo_familiar_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_nucleo_familiar_equipe_profissional_id FOREIGN KEY (equipe_profissional_id) REFERENCES equipe_profissional (id) ON DELETE RESTRICT,
-  ADD CONSTRAINT fk_nucleo_familiar_responsavel_paciente_id FOREIGN KEY (responsavel_paciente_id) REFERENCES responsavel_paciente (id) ON DELETE RESTRICT,
+  ADD CONSTRAINT fk_nucleo_familiar_responsavel_paciente_id FOREIGN KEY (responsavel_paciente_id) REFERENCES paciente (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_nucleo_familiar_logradouro_cep_id FOREIGN KEY (logradouro_cep_id) REFERENCES logradouro_cep (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_nucleo_familiar_especie_logradouro_id FOREIGN KEY (especie_logradouro_id) REFERENCES especie_logradouro (id) ON DELETE RESTRICT,
   ADD CONSTRAINT fk_nucleo_familiar_bairro_id FOREIGN KEY (bairro_id) REFERENCES bairro (id) ON DELETE RESTRICT,

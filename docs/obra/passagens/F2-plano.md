@@ -39,3 +39,18 @@
    do módulo no DDL e as funções do legado que a porta chamava. Ele escreve o adaptador "próprio" e o teste
    no MariaDB.
 4. `./pnpm install` só quando a F2.1 estiver compilando.
+
+## Destino de cada arquivo do núcleo (`referencias/legado-nucleo/`, cerca de 6.300 linhas)
+
+| Arquivo | Linhas | Destino no `packages/nucleo` |
+|---|---:|---|
+| `executor.ts` | 733 | **Mantém**: protocolo da operação (trava, trilha, idempotência, outbox na mesma transação). Tira os passos de "gravar como o SPDATA" e a prova pós-escrita por gatilho |
+| `operacao.ts`, `erros.ts`, `erros-operacao.ts`, `contexto.ts`, `identificacao.ts`, `telemetria.ts`, `configuracao.ts`, `estabelecimentos.ts` | cerca de 1.300 | **Mantém**, em vocabulário neutro |
+| `transacao.ts` (`Leitor`, `Escritor`) | 380 | **Reescreve** sobre o driver `mariadb` (pool, transação, `SELECT ... FOR UPDATE`) |
+| `pool.ts`, `driver.ts`, `driver-nativo.ts` | 855 | **Substitui** pelo pool do MariaDB, um pool por banco de cliente, resolvido pela plataforma |
+| `trava-saidas.ts` | 426 | **Mantém o conceito**: neutralização fora de produção (AGENTS, regra 6) |
+| `legado.ts` (`NucleoLegado`) | 875 | **Vira `NucleoProprio`**, a mesma fachada sem o legado |
+| `codec*`, `cp1252.ts`, `colunas-utf8.ts`, `schema/` (catálogo `RDB$`), `como.ts`, `catalogo-operacoes.ts`, `gravador.ts`, `vigia/` | — | **Sai**: é específico do Firebird e do SPDATA (o conector tem o seu próprio) |
+| `consulta/`, `crud/`, `gravacao/`, `sgh/` | — | **Avalia na F2.1**: o CRUD genérico serve; as receitas de gravação no SPDATA saem |
+
+**Disco:** o `./pnpm install` ocupa cerca de 6,4 GB (medido no `node_modules` do `new-sgh`). Confira o espaço antes.
