@@ -117,8 +117,14 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
 
 ### 9. Git e ações irreversíveis
 
-- Commit, push e qualquer ação irreversível ou externa (enviar e-mail, publicar, apagar volume ou
-  imagem) **só com autorização do dono**.
+- **Commit e push nesta pasta: o agente sempre faz** (autorização permanente do dono, 2026-11-20).
+  - Feita uma alteração pronta, o agente faz o commit e o push para o `origin` sem perguntar.
+  - Antes, confere que nada de `.env`, `dump/` ou dado de pessoa está entrando.
+  - Não vale para o `new-sgh` nem para outros repositórios.
+  - Não inclui `push --force`, reescrita de histórico nem apagar branch remota, que continuam
+    precisando de autorização.
+- As demais ações irreversíveis ou externas (enviar e-mail, publicar, apagar volume ou imagem)
+  continuam **só com autorização do dono**.
 - Antes de apagar ou sobrescrever, olhe o alvo.
 
 ### 10. Provar antes de dizer pronto
