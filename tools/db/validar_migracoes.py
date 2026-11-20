@@ -24,7 +24,8 @@ SQL = RAIZ / "tools/db/sql.sh"
 MIG = RAIZ / "db/migracoes"
 BANCO = sys.argv[sys.argv.index("--banco") + 1] if "--banco" in sys.argv else "validacao"
 MANTER = "--manter" in sys.argv
-NUCLEO = {"trilha_auditoria", "sequencia_negocio", "arquivo", "pendencia", "integracao_mensagem"}
+NUCLEO = {"trilha_auditoria", "sequencia_negocio", "arquivo", "pendencia", "integracao_mensagem",
+          "idempotencia_operacao"}
 AUDIT = ["criado_em", "criado_por", "alterado_em", "alterado_por", "versao"]
 NOME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 CRIPTICO = re.compile(r"^(cd|sn|tp|ds|dt|nr|qt|vl|hr|nm|id_|fl|st|cod|dsc)_")

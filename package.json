@@ -106,6 +106,7 @@
     "bullmq": "6.3.11",
     "iconv-lite": "0.7.3",
     "ioredis": "5.11.1",
+    "mariadb": "3.5.5",
     "openvue": "1.0.0",
     "pinia": "4.1.0",
     "pino": "10.4.0",

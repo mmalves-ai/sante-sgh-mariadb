@@ -1,0 +1,21 @@
+{
+  "name": "nucleo",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/nucleo/src",
+  "tags": ["tipo:infra", "modulo:nucleo"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/nucleo"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/nucleo/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/nucleo/vitest.config.ts"
+    },
+    "build": {
+      "command": "tsc -p packages/nucleo/tsconfig.lib.json"
+    }
+  }
+}

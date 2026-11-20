@@ -39,7 +39,8 @@ CREATE TABLE sequencia_negocio (
   alterado_em       DATETIME(3) NULL,
   alterado_por      BIGINT UNSIGNED NULL,
   versao            INT UNSIGNED NOT NULL DEFAULT 1,
-  UNIQUE KEY uq_sequencia_negocio_estabelecimento_tipo (estabelecimento_id, tipo),
+  estabelecimento_chave BIGINT UNSIGNED AS (COALESCE(estabelecimento_id, 0)) PERSISTENT COMMENT 'Auxiliar da unicidade: 0 na sequência do cliente inteiro (o UNIQUE aceita vários NULL)',
+  UNIQUE KEY uq_sequencia_negocio_estabelecimento_tipo (estabelecimento_chave, tipo),
   KEY ix_sequencia_negocio_estabelecimento (estabelecimento_id)
 ) COMMENT='Gerador dos números de negócio (prontuário, conta, guia, nota), separado do id';
 
@@ -122,3 +123,23 @@ CREATE TABLE integracao_mensagem (
   KEY ix_integracao_mensagem_entidade (entidade, entidade_id),
   KEY ix_integracao_mensagem_estabelecimento (estabelecimento_id)
 ) COMMENT='Fila e registro único das mensagens de integração de entrada e saída';
+
+CREATE TABLE idempotencia_operacao (
+  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  operacao          VARCHAR(120) NOT NULL COMMENT 'Nome da operação do executor do núcleo',
+  chave             VARCHAR(80) NOT NULL COMMENT 'Chave de idempotência enviada por quem pediu a gravação',
+  estabelecimento_id BIGINT UNSIGNED NULL,
+  usuario_id        BIGINT UNSIGNED NULL COMMENT 'Quem gravou; a mesma chave usada por outra pessoa é recusada',
+  hash_entrada      CHAR(64) NOT NULL COMMENT 'SHA-256 da entrada canônica; a mesma chave com outra entrada é recusada',
+  resultado         JSON NOT NULL COMMENT 'Resultado devolvido na repetição (só ids e códigos)',
+  trilha_auditoria_id BIGINT UNSIGNED NULL,
+  criado_em         DATETIME(3) NOT NULL,
+  criado_por        BIGINT UNSIGNED NULL,
+  alterado_em       DATETIME(3) NULL,
+  alterado_por      BIGINT UNSIGNED NULL,
+  versao            INT UNSIGNED NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_idempotencia_operacao_chave (operacao, chave),
+  KEY ix_idempotencia_operacao_estabelecimento (estabelecimento_id),
+  KEY ix_idempotencia_operacao_usuario (usuario_id),
+  KEY ix_idempotencia_operacao_trilha (trilha_auditoria_id)
+) COMMENT='Gravações já feitas por chave de idempotência: a repetição devolve o resultado sem gravar de novo';

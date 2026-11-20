@@ -226,6 +226,9 @@ importers:
       ioredis:
         specifier: 5.11.1
         version: 5.11.1(supports-color@7.2.0)
+      mariadb:
+        specifier: 3.5.5
+        version: 3.5.5
       openvue:
         specifier: 1.0.0
         version: 1.0.0(patch_hash=0b402df4015e0b6fe52b16fde18ea9103d17e402dace6e9752323d185a299ddd)(vue@3.5.44(typescript@5.9.3))
@@ -1616,6 +1619,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/geojson@7946.0.16':
+    resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
+
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
@@ -2809,6 +2815,10 @@ packages:
 
   magicast@0.5.5:
     resolution: {integrity: sha512-UicdXN8zQ3JHlxVq+28afMXPr1z7WNY6+7EJnzTdQWkTAlMLF5fNCCKxJHBQwGaNGR11581EiQmQzx73+MvszA==}
+
+  mariadb@3.5.5:
+    resolution: {integrity: sha512-xvR622+h/ANbFvbi5SCkGnJWAFG2pGCUdSyISXXU3ObJ+P2X8KqdF8goCXquCD/lKnmqDeWfgTt1YY7dDI5i2Q==}
+    engines: {node: '>= 20.0.0'}
 
   mathml-tag-names@4.0.0:
     resolution: {integrity: sha512-aa6AU2Pcx0VP/XWnh8IGL0SYSgQHDT6Ucror2j2mXeFAlN3ahaNs8EZtG1YiticMkSLj3Gt6VPFfZogt7G5iFQ==}
@@ -5191,6 +5201,8 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/geojson@7946.0.16': {}
+
   '@types/json-schema@7.0.15': {}
 
   '@types/node@24.19.2':
@@ -6417,6 +6429,14 @@ snapshots:
       '@babel/parser': 7.29.9
       '@babel/types': 7.29.8
       source-map-js: 1.2.2
+
+  mariadb@3.5.5:
+    dependencies:
+      '@types/geojson': 7946.0.16
+      '@types/node': 24.19.2
+      denque: 2.1.0
+      iconv-lite: 0.7.3
+      lru-cache: 11.5.3
 
   mathml-tag-names@4.0.0: {}
 
