@@ -7,7 +7,9 @@ Atualizado em: 2026-11-20.
 | Fase | Marco | Status | Observação |
 |---|---|---|---|
 | F1 | F1.1 Matriz funcional MV × SPDATA × `new-sgh` | rodada 2 concluída e conferida: 3.500 tabelas próprias (F3 1.658, F7 1.105, F8 737); 8.867 do MV e 1.503 do SPDATA com destino (`docs/analise/rodada2/RESUMO.md`). Rodada 1: | 511 funcionalidades (F3 247, F7 109, F8 104, não fazer 51) e cerca de 1.376 entidades propostas (`docs/analise/RESUMO.md`). Aguarda o dono validar as arbitragens D1 a D13. A segunda rodada cobre qualidade e segurança do paciente e o vocabulário único |
-| F0 | todos | pendente | Começa com a autorização do dono para `git init` e para trazer o modelo base |
+| F0 | F0.1 a F0.3 | concluídos | git e remote (o push automático está bloqueado pelo classificador do Claude Code; o dono libera), modelo base `d3f8b5d` trazido sem o legado (`docs/obra/inventario-modelo-base.md`), MariaDB 12.3.3 em `127.0.0.1:3410` |
+| F1 | F1.3 DDL das 3.500 tabelas | em andamento | Workflow de 87 lotes rodando; validador em `tools/db/validar_migracoes.py` |
+| F2 | plano | pronto | `docs/obra/passagens/F2-plano.md` |
 
 ## Quadro de fases
 
@@ -24,6 +26,8 @@ Atualizado em: 2026-11-20.
 | F8 Recursos novos | pendente |
 
 ## Decisões registradas
+
+- **ADR 0002** (aceito em 2026-11-20): respostas do dono às 24 decisões; princípios do modelo (convenções do DDL).
 
 - **ADR 0001** (aceito em 2026-11-20): banco próprio em MariaDB 12.3, modelo base do `new-sgh` trazido para
   cá, conector diferencial, operação dia 0, dia 1 e dia 2+n.
