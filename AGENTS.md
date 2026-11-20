@@ -218,12 +218,17 @@ Decidido em 2026-11-20.
 ### Configuração desta pasta
 
 - Remote `origin`: `https://github.com/mmalves-ai/sante-sgh-mariadb.git`. Branch principal: `main`.
-- **Autenticação:** igual aos outros repositórios da VM. É HTTPS com o `credential.helper store`
-  global do `~/.gitconfig`, que guarda o token fine-grained do dono.
-  - Não há helper local nesta pasta; `git push` e `git pull` funcionam direto.
+- **Autenticação (desde 2026-11-20, por decisão do dono):** HTTPS com o token fine-grained
+  **"Santé Segh Mariadb"**, que fica na variável `GITHUB` do `.env` desta pasta e tem a permissão
+  Workflows.
+  - O `.git/config` local tem um `credential.helper` próprio. Primeiro ele anula o `store` global,
+    cujo token antigo não tem a permissão Workflows. Depois lê o `GITHUB` do `.env` no momento do
+    push.
+  - O valor nunca é copiado: não vai para o `.git/config`, a URL do remote, a saída dos comandos nem o
+    chat.
+  - `git push` e `git pull` funcionam direto.
+  - Se trocar o token, troque só o `.env`.
   - Não use chave SSH: o dono não usa mais.
-  - O `.env` tem uma cópia do token (variável `GITHUB`), só para o caso de o `store` pedir senha
-    de novo. Nunca a leia, imprima nem copie para a URL do remote, o `.git/config` ou o chat.
 - **Fora do git, pelo `.gitignore`:**
   - `.env` e `.env.*`;
   - `dump/` e `*.dmp`, por ter dados reais e arquivos de GB;
