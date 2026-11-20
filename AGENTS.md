@@ -109,7 +109,7 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
 
 - O `.env` desta pasta tem segredos (Oracle, AWS). **Nunca imprima valores**, nunca copie para outro
   arquivo e nunca faça commit dele.
-- O token do GitHub também mora no `.env` (variável `GITHUB`). Regras de uso na seção
+- O `.env` também guarda uma cópia do token do GitHub (variável `GITHUB`). Regras na seção
   [Git deste projeto](#git-deste-projeto).
 - Credenciais de integração vão para o cofre de segredos, nunca para o banco nem para o código.
 - Só loopback para bancos e serviços de desenvolvimento. Nada é instalado globalmente na VM: use
@@ -169,12 +169,12 @@ Decidido em 2026-11-20.
 ### Configuração desta pasta
 
 - Remote `origin`: `https://github.com/mmalves-ai/sante-sgh-mariadb.git`. Branch principal: `main`.
-- **Autenticação:** **só** o token fine-grained da variável `GITHUB` do `.env`.
-  - Ele é lido na hora por um `credential.helper` do `.git/config` local, com usuário
-    `x-access-token`.
-  - Não use outro token, chave SSH, nem o `gh` com outra conta para esta pasta.
-  - Nunca copie o token para a URL do remote, para o `.git/config`, para o chat nem para nenhum
-    outro arquivo.
+- **Autenticação:** igual aos outros repositórios da VM. É HTTPS com o `credential.helper store`
+  global do `~/.gitconfig`, que guarda o token fine-grained do dono.
+  - Não há helper local nesta pasta; `git push` e `git pull` funcionam direto.
+  - Não use chave SSH: o dono não usa mais.
+  - O `.env` tem uma cópia do token (variável `GITHUB`), só para o caso de o `store` pedir senha
+    de novo. Nunca a leia, imprima nem copie para a URL do remote, o `.git/config` ou o chat.
 - **Fora do git, pelo `.gitignore`:**
   - `.env` e `.env.*`;
   - `dump/` e `*.dmp`, por ter dados reais e arquivos de GB;
