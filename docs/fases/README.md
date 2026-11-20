@@ -26,36 +26,48 @@ O resultado tem três partes:
 
 ## Fases
 
-> **ADR 0002:** F3, F7 e F8 são **ordem de construção**, não disponibilidade. Todo recurso fica disponível a
-> todo cliente. O comando "criar novo cliente" (antes F7.2) é feito cedo, na F2, porque é ele que cria o
-> banco da própria Rede Santé.
+> **ADR 0002 e dono, 2026-11-20:**
+> - As fases são **ordem de construção**, não disponibilidade. Todo recurso fica disponível a todo cliente.
+> - **A obra constrói o produto inteiro.** Homologação e virada são **operações do hospital**, decididas e
+>   feitas por ele. A obra entrega as **ferramentas** para elas, não executa.
+> - **Recursos novos não esperam a virada de ninguém.** O sistema só está completo com todos os recursos.
 
-| Fase | Nome | O que entrega | Portão de saída |
+### Construção do produto (a obra)
+
+| Fase | Nome | O que entrega | Prova de saída |
 |---|---|---|---|
-| [F0](F0-fundacao.md) | Fundação | Repositório, modelo base do `new-sgh` trazido, MariaDB, esteira | Esteira verde com o modelo base sem o legado |
-| [F1](F1-analise-e-modelo.md) | Análise cruzada e modelo próprio | Matriz funcional MV × SPDATA × `new-sgh`, princípios do modelo, DDL por módulo, catálogos públicos | Toda tabela do SPDATA com destino no modelo; catálogos carregam num banco vazio |
-| [F2](F2-nucleo-e-persistencia.md) | Núcleo neutro e persistência própria | Núcleo extraído, portas neutras, adaptadores MariaDB, acesso próprio, fluxo vertical | Paciente → atendimento ponta a ponta no MariaDB, mesmos testes em memória e no banco |
-| [F3](F3-paridade.md) | Paridade funcional com o SPDATA | Regras dos gatilhos no domínio, módulo a módulo, telas ligadas | Todos os módulos usados pela Rede Santé com contrato de efeito verde |
-| [F4](F4-conector.md) | Conector diferencial | Leitura de imagens, mapa de-para, gravação, pendências, conciliação, diferencial | Carga completa de uma imagem real conciliada e diferencial medido |
-| [F5](F5-homologacao.md) | Homologação com dados reais e ensaios | LGPD, neutralização, rodadas por setor, dois ensaios gerais cronometrados | Aceite por setor e plano de virada aprovado |
-| [F6](F6-virada.md) | Virada da ProntoCardio | Dia 0, dia 1 a 1+n, dia 2+n | Produção no sistema novo; SPDATA arquivado |
-| [F7](F7-serrano-e-hospital-do-zero.md) | Serrano e hospital do zero | Virada do `hs`, índice único de pacientes, instalação de hospital novo | Serrano em produção; hospital novo instalável sem SPDATA |
-| [F8](F8-recursos-novos.md) | Recursos novos | Recursos inspirados no MV, por prioridade | Contínuo |
+| [F0](F0-fundacao.md) | Fundação | Repositório, modelo base do `new-sgh`, MariaDB, esteira | Esteira verde com o modelo base sem o legado |
+| [F1](F1-analise-e-modelo.md) | Análise cruzada e modelo próprio | Matriz funcional, princípios, DDL por módulo, catálogos públicos | Toda tabela do SPDATA e do MV com destino; catálogos carregam num banco vazio |
+| [F2](F2-nucleo-e-persistencia.md) | Núcleo e persistência própria | Núcleo, adaptadores MariaDB, acesso próprio, **login pelo navegador**, fluxo vertical | Paciente → atendimento ponta a ponta no MariaDB |
+| [F3](F3-paridade.md) | Paridade funcional | Regras dos gatilhos no domínio, módulo a módulo, telas ligadas | Todos os módulos com contrato de efeito verde |
+| [F4](F4-conector.md) | Conector diferencial | Leitura de imagens, de-para, gravação, pendências, conciliação, diferencial | Carga completa de uma imagem real conciliada e diferencial medido |
+| [F5](F5-homologacao.md) | **Ferramentas** de homologação e virada | Painel de conferência por setor, relatórios de conciliação, LGPD (mascaramento, neutralização), comandos do dia 0, dia 1 e dia 2+n, retorno | Ensaio geral completo num banco de teste, cronometrado |
+| [F7](F7-serrano-e-hospital-do-zero.md) | Multi-hospital e hospital do zero | Índice único de pacientes entre hospitais, instalação de hospital novo sem SPDATA | Hospital novo instalável pelo administrador da plataforma |
+| [F8](F8-recursos-novos.md) | Recursos novos | Todos os recursos que o MV tem a mais, com estrutura própria | Cobertura funcional completa contra a matriz da F1 |
 
-## Caminho crítico e paralelismo
+### Operação de cada hospital (fora da obra, decidida pelo cliente)
+
+| Etapa | Quem faz | Usa |
+|---|---|---|
+| Homologação com dados reais (antes F5) | Setores do hospital | Ferramentas da F5, conector da F4 |
+| Virada: dia 0, dia 1 a 1+n, dia 2+n (antes F6) | Hospital, com apoio | Comandos da F5 |
+| Virada de cada hospital da rede (Rede Santé: ProntoCardio, Serrano) | Cada hospital, quando quiser | O mesmo roteiro |
+
+As fichas `F5-homologacao.md` e `F6-virada.md` continuam valendo como **especificação** do que as
+ferramentas precisam suportar.
+
+## Caminho de construção e paralelismo
 
 ```
-F0 ─► F1 ─┬─► F2 ─► F3 (módulo a módulo) ─┐
-          │                               ├─► F5 ─► F6 ─► F7
-          └─► F4 (conector) ──────────────┘                └─► F8 (contínuo, depois da F6)
+F0 ─► F1 ─┬─► F2 ─► F3 (módulo a módulo) ─┬─► F7 ─► F8 ─► produto completo
+          │                               │
+          └─► F4 (conector) ─► F5 (ferramentas de homologação e virada)
 ```
 
-- **F3 e F4 andam em paralelo** depois da F1. O conector precisa do modelo (F1) e do mapa de rastreio
-  SPDATA → modelo (F1.5). Não precisa das regras da F3.
-- **A F5 começa** quando a F3 cobrir os módulos da primeira rodada e a F4 tiver a carga completa
-  conciliada.
-- **A F8 não atrasa a virada.** Recursos novos inspirados no MV entram depois da F6, salvo os que a F1
-  classificar como F7 (exigidos para vender a hospital novo).
+- **F3 e F4 andam em paralelo** depois da F1.
+- **F8 pode começar** assim que a F3 cobrir o módulo correspondente. Não depende de virada.
+- **Quando um hospital começa a homologar** é decisão dele, a partir do momento em que F3, F4 e F5 cobrirem
+  o que ele usa. Isso não interrompe a obra.
 
 ## Como cada marco é conduzido
 
@@ -65,8 +77,8 @@ F0 ─► F1 ─┬─► F2 ─► F3 (módulo a módulo) ─┐
    separadas.
 3. **Aceite por prova.** O marco só fecha com a prova pedida na ficha: teste, relatório de conciliação,
    medição. "Pronto" sem prova não conta.
-4. **Validação humana** nos portões de fase. Na F5 e na F6, a validação é dos responsáveis de cada setor
-   do hospital.
+4. **Validação humana:** as provas da obra são por teste e medição. A validação pelos setores
+   é da operação de cada hospital, fora da obra.
 5. **Decisões e desvios viram ADR** em `docs/adr/`, numerados a partir de 0002.
 6. **Estado.** O `docs/ESTADO.md` é atualizado no fim de cada sessão: marco atual, status, bloqueios,
    decisões pendentes.

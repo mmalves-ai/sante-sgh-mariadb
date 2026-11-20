@@ -138,3 +138,18 @@ cair, a regra que causou é desfeita.
 - **Por tarefa:** nível de completude (%) e tempo estimado até terminar.
 - **Geral:** completude (%) e previsão de término (data e hora).
 - **Fonte dos números:** o diário do workflow e os arquivos gravados. Estimativas são ditas como estimativas.
+
+**A cada etapa (dono, 2026-11-20),** o relatório tem estas 4 seções, nesta ordem:
+
+1. **Etapa atual:** a fase e o marco (por exemplo, "F2.1, núcleo").
+2. **O que foi construído:** o que ficou pronto desde o relatório anterior, com a prova.
+3. **O que está em andamento:** cada tarefa, com % e tempo estimado.
+4. **Próximas etapas e o que falta:** o que vem em seguida e o que falta para completar o sistema.
+
+**Sem parar até completar o sistema** (dono, 2026-11-20). Fechada uma etapa, a próxima é lançada em seguida.
+Só se para por bloqueio real (decisão do dono, disco abaixo de 100 GB ou pausa pedida). Ao passar de cerca de
+150 turnos, a passagem para uma sessão nova faz parte do fluxo; não é parada.
+
+**Termos da área da saúde (dono, 2026-11-20).** Nos relatórios, todo termo técnico ou sigla da área médica
+ou hospitalar vem explicado em poucas palavras no primeiro uso. Exemplos: CID, CBO, SIGTAP, TUSS, TISS, CNES,
+AIH, BPA, OPME.
