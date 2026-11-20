@@ -109,12 +109,8 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
 
 - O `.env` desta pasta tem segredos (Oracle, AWS). **Nunca imprima valores**, nunca copie para outro
   arquivo e nunca faça commit dele.
-- **GitHub desta pasta:** o repositório é `mmalves-ai/sante-sgh-mariadb` (HTTPS). A autenticação usa
-  **só** o token fine-grained da variável `GITHUB` do `.env`, lido na hora por um `credential.helper`
-  configurado no `.git/config` local (2026-11-20).
-  - Não use outro token, chave SSH nem o `gh` com outra conta para esta pasta.
-  - Não copie o token para a URL do remote, para o `.git/config` nem para nenhum outro arquivo.
-  - O repositório `mmalves-ai/sante-sgh` é o do `new-sgh` (legado), não deste projeto.
+- O token do GitHub também mora no `.env` (variável `GITHUB`). Regras de uso na seção
+  [Git deste projeto](#git-deste-projeto).
 - Credenciais de integração vão para o cofre de segredos, nunca para o banco nem para o código.
 - Só loopback para bancos e serviços de desenvolvimento. Nada é instalado globalmente na VM: use
   containers e ferramentas do repositório.
@@ -151,3 +147,50 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
 - **Cópias do SPDATA para desenvolvimento:** a matriz fica em `../banco-dev/backups/` e não pode ser
   aberta direto. O conector usa um container próprio restaurado dela (F0.5).
 - **Containers comuns da VM** (Gotenberg, Mailpit e outros de outros projetos): não pare, não altere.
+
+## Git deste projeto
+
+Decidido em 2026-11-20.
+
+### Repositórios e pastas
+
+| Pasta local | Repositório no GitHub | Papel |
+|---|---|---|
+| `sante-sgh` (esta) | `mmalves-ai/sante-sgh-mariadb` | Produto atual, banco próprio. **É o foco.** |
+| `new-sgh` (+ worktrees em `new-sgh-wt/`) | `mmalves-ai/sante-sgh` | Legado. Só fonte de código, para leitura. |
+
+- O repositório `mmalves-ai/sante-sgh` **não** é deste projeto, apesar do nome. Ele ficou com o
+  `new-sgh` por histórico.
+- O nome `sante-sgh-mariadb` foi escolhido de propósito, para lembrar que o foco agora é o banco
+  próprio.
+- **As pastas locais não são renomeadas.** As cerca de 150 worktrees do `new-sgh` guardam caminho
+  absoluto, e os `.md` dos dois lados citam "new-sgh" como pasta e "sante-sgh" como produto.
+
+### Configuração desta pasta
+
+- Remote `origin`: `https://github.com/mmalves-ai/sante-sgh-mariadb.git`. Branch principal: `main`.
+- **Autenticação:** **só** o token fine-grained da variável `GITHUB` do `.env`.
+  - Ele é lido na hora por um `credential.helper` do `.git/config` local, com usuário
+    `x-access-token`.
+  - Não use outro token, chave SSH, nem o `gh` com outra conta para esta pasta.
+  - Nunca copie o token para a URL do remote, para o `.git/config`, para o chat nem para nenhum
+    outro arquivo.
+- **Fora do git, pelo `.gitignore`:**
+  - `.env` e `.env.*`;
+  - `dump/` e `*.dmp`, por ter dados reais e arquivos de GB;
+  - `node_modules/`, `__pycache__/`, `.venv/` e `*.log`.
+- O repositório é **privado**. `docs/analise/` e `referencias/` têm nomes do MV e do SPDATA como
+  evidência interna (regra 1).
+- Antes de qualquer `git add`, confira que nada de `.env`, `dump/` ou dado de pessoa está sendo
+  versionado (regra 5).
+- Primeiro commit: `6976210` (2026-11-20).
+
+### Relação com o `new-sgh`
+
+- Daqui, o git do `new-sgh` é **só consultado**: `git log`, `git ls-remote`, `git cherry`. Nada de
+  fetch, commit, push ou mudança de branch. Qualquer ação lá é feita numa sessão aberta na própria
+  pasta.
+- Situação conferida em 2026-11-20:
+  - `fase0` e `main` do GitHub estão no mesmo commit, `d3f8b5d`;
+  - 17 branches locais `dev/crud-W*` e `marco/M21` têm commits fora da `fase0` e só existem na VM;
+  - o backup ou o descarte delas é decisão do dono.
