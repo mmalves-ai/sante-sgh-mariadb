@@ -22,6 +22,30 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
      - conferência determinística antes de qualquer agente verificador.
    - Relatório ao dono a cada 50 minutos: tarefas em termos da área hospitalar, % e tempo de cada uma,
      completude e previsão geral.
+   - **Regras padrão de economia sem perda de qualidade** (dono, 2026-11-20; detalhe nas regras 15 a 19 do
+     protocolo):
+     1. **Sessão do orquestrador curta, uma por fase ou bloco de trabalho.**
+        - Começa pela `docs/obra/passagens/RETOMADA.md` e pelo `docs/ESTADO.md`.
+        - Ao passar de cerca de 150 turnos, ou ao fechar um bloco: grave a passagem, faça o commit e recomece numa
+          sessão nova.
+     2. **Poucos turnos do orquestrador:**
+        - uma verificação é um script com saída compacta;
+        - status só no relatório de 50 minutos;
+        - nunca carregue no chat um arquivo grande de resultados ou achados: filtre por script.
+     3. **Prefixo comum idêntico nos prompts dos subagentes.** O brief vai colado **no início** do prompt,
+        palavra por palavra igual para todos, e a parte variável no **fim**. Assim os agentes reaproveitam o
+        mesmo prefixo pelo cache.
+     4. **Fatia autossuficiente e autoconferência em um comando:**
+        - a fatia já traz o que o agente precisaria buscar, como os campos dos contratos extraídos por script;
+        - a autoconferência é um único comando que devolve "ok" ou a lista de erros;
+        - o agente gera a saída com um script numa chamada só;
+        - antes de lançar a rodada, o orquestrador confere 2 ou 3 fatias.
+     5. **Reprocessar só o que mudou.** A correção vai só ao lote afetado, e o validador global roda sempre
+        sobre tudo.
+     - **Mantidos sempre**, porque são a qualidade: conferência determinística por script, verificação
+       adversarial, amostra conferida no início da rodada e conferência final independente.
+     - **Modelo:** todos os agentes usam o modelo da sessão. Não se troca por modelo mais leve (decisão do
+       dono).
 
 ## Produto, não projeto de um cliente (ADR 0002)
 

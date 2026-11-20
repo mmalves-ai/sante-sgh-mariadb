@@ -83,6 +83,49 @@ Evitar a leitura de contexto em duplicidade reduz o consumo em até 2/3.
     - duração;
     - o que mudou no protocolo.
 
+## Regras padrão de economia sem perda de qualidade (dono, 2026-11-20)
+
+Vieram da análise de consumo de 2026-11-20 (`docs/obra/consumo.md`). Medido até ali:
+
+- **Orquestrador:** uma única sessão de 640 turnos, cada turno relendo um contexto que só crescia. Foi o maior
+  consumidor.
+- **Subagentes:** 25,5 milhões de tokens no total.
+- **Ferramentas:** cerca de 19 chamadas por agente.
+
+15. **Sessão do orquestrador curta.**
+    - Uma sessão por fase ou bloco de trabalho, começando pela `RETOMADA.md` e pelo `ESTADO.md`.
+    - Acima de cerca de 150 turnos, ou ao fechar um bloco: passagem, commit e sessão nova.
+    - **Efeito na qualidade:** nenhum, ou positivo (o contexto enorme dilui a atenção).
+16. **Poucos turnos do orquestrador.**
+    - Verificação por script com saída compacta.
+    - Status só no relatório de 50 minutos.
+    - Resultado grande nunca entra no chat inteiro.
+    - **Proteção:** a conferência final por script não muda.
+17. **Prefixo comum idêntico.**
+    - O brief vai no início do prompt, igual palavra por palavra em todos os agentes; a parte variável (lote,
+      arquivo de saída) vai no fim.
+    - Isso substitui "citar o arquivo do brief" quando o mesmo brief serve a muitos agentes: repetir texto
+      idêntico no prefixo é barato (cache), e ler por ferramenta não é.
+    - **Efeito na qualidade:** zero, porque o conteúdo é o mesmo.
+18. **Fatia autossuficiente e autoconferência em um comando.**
+    - A fatia traz, já extraído por script, o que o agente buscaria (campos dos contratos, DDL relacionado).
+    - A autoconferência é um único comando que devolve "ok" ou os erros.
+    - O agente gera a saída com um script, numa chamada.
+    - **Proteção:** o orquestrador confere 2 ou 3 fatias antes de lançar a rodada (se o extrator errar, todos
+      os agentes recebem o erro), e o agente pode usar grep se faltar algo.
+19. **Reprocessar só o que mudou.**
+    - A correção vai só ao lote afetado.
+    - O validador global roda sempre sobre tudo e pega qualquer regressão.
+
+**Não adotado:** modelo mais leve em etapas mecânicas (decisão do dono, 2026-11-20). Todos os agentes usam o
+modelo da sessão.
+
+**Mantidos sempre:** conferência determinística, verificação adversarial, amostra no início da rodada e
+conferência final independente.
+
+**Prova:** cada rodada registra em `docs/obra/consumo.md` o custo e o resultado da conferência. Se a qualidade
+cair, a regra que causou é desfeita.
+
 ## Relatório periódico ao dono
 
 **Frequência:** a cada 50 minutos enquanto a tarefa longa durar, e o primeiro no início.
