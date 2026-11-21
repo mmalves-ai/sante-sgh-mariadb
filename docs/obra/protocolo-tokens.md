@@ -209,3 +209,10 @@ estratégia e a melhora quando os números pedirem.
         contador de 501 da F2.4) rodando na autoconferência do lote e no integrador;
       - a regra "decida pela melhor prática e registre para o dono", em vez de "bloqueie".
     - **Retrabalho evitado é a maior economia.**
+
+24. **Bloqueio compartilhado se resolve antes das fatias** (2026-11-21, conector rodada 3).
+    - Quando a causa do bloqueio está em código compartilhado (motor) ou no modelo (DDL), a mudança é aplicada
+      **primeiro**, por um agente sozinho e em sequência. Só **depois** as fatias são refeitas.
+    - Refazer fatias que dependem de mudança compartilhada não aplicada desperdiça a rodada inteira: na volta 2
+      da rodada 3 foram cerca de 18 agentes e 13 M sem avanço.
+    - O conferidor pode aplicar o compartilhado restante quando está sozinho.
