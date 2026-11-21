@@ -193,7 +193,11 @@ function loteDe(r: Record<string, unknown>): LoteFolhaCompleto {
   };
 }
 
-const semVinculos = ({ vinculos: _v, ...l }: LoteFolhaCompleto): LoteDaFolha => l;
+const semVinculos = (lote: LoteFolhaCompleto): LoteDaFolha => {
+  const { vinculos, ...l } = lote;
+  void vinculos;
+  return l;
+};
 
 async function lerLotes(
   l: Leitor,

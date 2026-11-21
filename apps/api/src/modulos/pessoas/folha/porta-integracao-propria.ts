@@ -507,7 +507,9 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
 
   // ── Gravação: o de-para grava; o lançamento dos títulos recusa com o motivo ────────────────────────────────────
 
-  async podeGravar(_c?: ContextoIntegracaoFolha, _operacao?: string): Promise<LiberacaoGravacao> {
+  async podeGravar(c?: ContextoIntegracaoFolha, operacao?: string): Promise<LiberacaoGravacao> {
+    void c;
+    void operacao;
     return { pode: true, codigo: null, motivo: null };
   }
 

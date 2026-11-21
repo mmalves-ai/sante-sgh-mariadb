@@ -96,7 +96,8 @@ type L = Pick<Leitor, 'consultar' | 'uma'>;
 
 const TETO = 500;
 const TETO_LISTA = 200;
-const SEM_EXECUTOR = 'A manutenção não usa operação de tela do executor: as gravações são diretas, pela própria tela.';
+const SEM_EXECUTOR =
+  'A manutenção não usa operação de tela do executor: as gravações são diretas, pela própria tela.';
 
 /** As tabelas que a gravação direta da manutenção pode escrever (a transação recusa as outras). */
 export const TABELAS_MANUTENCAO = [
@@ -183,14 +184,25 @@ const SITUACOES_ABERTAS_BANCO = SITUACOES_OS_ABERTAS.map(snake);
 const GRAVIDADE_AVISO = { grave: 'alta', atencao: 'atencao', informacao: 'informativa' } as const;
 
 const desatualizado = (o: string) =>
-  recusa('desatualizado', `${o} mudou depois que você abriu (outra pessoa gravou). Abra de novo para ver a versão atual.`);
+  recusa(
+    'desatualizado',
+    `${o} mudou depois que você abriu (outra pessoa gravou). Abra de novo para ver a versão atual.`,
+  );
 
 function contextoDe(c: ContextoPortaM18): ContextoNucleo {
-  return { cliente: c.cliente, estabelecimento: c.estabelecimento, usuario: c.usuario, correlacao: c.correlacao.slice(0, 64) };
+  return {
+    cliente: c.cliente,
+    estabelecimento: c.estabelecimento,
+    usuario: c.usuario,
+    correlacao: c.correlacao.slice(0, 64),
+  };
 }
 
 async function fusoDe(l: L, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -218,7 +230,8 @@ const SQL_EQUIPAMENTO = `
     LEFT JOIN recurso_agendavel r ON r.id = e.recurso_agendavel_id
    WHERE e.estabelecimento_id = ? AND e.excluido_em IS NULL`;
 
-function equipamentoDe(x: Linha, _fuso: string): EquipamentoManutencao {
+function equipamentoDe(x: Linha, fuso: string): EquipamentoManutencao {
+  void fuso; // reservado às datas e horas do equipamento no fuso do estabelecimento
   const situacao = texto(x['situacao']) as EquipamentoManutencao['situacao'];
   return {
     id: n(x['id']),
@@ -304,7 +317,8 @@ async function lerEquipamento(
   fuso: string,
   filtro: { id: number } | { codigo: string },
 ): Promise<EquipamentoManutencao | null> {
-  const [onde, valor] = 'id' in filtro ? ['e.id = ?', filtro.id] : ['e.codigo = ?', filtro.codigo.trim().toUpperCase()];
+  const [onde, valor] =
+    'id' in filtro ? ['e.id = ?', filtro.id] : ['e.codigo = ?', filtro.codigo.trim().toUpperCase()];
   const x = await l.uma(`${SQL_EQUIPAMENTO} AND ${onde}`, [...SITUACOES_ABERTAS_BANCO, est, valor]);
   return x ? equipamentoDe(x, fuso) : null;
 }
@@ -513,7 +527,12 @@ async function lerSetores(l: L, est: number): Promise<SetorManutencao[]> {
   }));
 }
 
-async function lerRecurso(l: L, est: number, tipo: TipoRecursoAgenda | null, id: number | null): Promise<RecursoDeAgenda[]> {
+async function lerRecurso(
+  l: L,
+  est: number,
+  tipo: TipoRecursoAgenda | null,
+  id: number | null,
+): Promise<RecursoDeAgenda[]> {
   const onde: string[] = ['r.estabelecimento_id = ?', 'r.excluido_em IS NULL'];
   const p: unknown[] = [est];
   if (tipo) {
@@ -617,7 +636,9 @@ const SQL_ALERTA = `
    WHERE a.estabelecimento_id = ? AND a.area = 'equipamento' AND a.excluido_em IS NULL`;
 
 function alertaDe(x: Linha, fuso: string): AlertaEquipamento {
-  const situacao: SituacaoAlertaEquipamento = (ALERTA_ENCERRADO as readonly string[]).includes(texto(x['situacao']))
+  const situacao: SituacaoAlertaEquipamento = (ALERTA_ENCERRADO as readonly string[]).includes(
+    texto(x['situacao']),
+  )
     ? 'encerrado'
     : 'aberto';
   const tipoAcao = texto(x['tipo_acao']);
@@ -658,11 +679,12 @@ async function lerAlertas(
     onde += ' AND a.id = ?';
     p.push(f.id);
   }
-  if (f.situacao) onde += ` AND a.situacao ${f.situacao === 'encerrado' ? '' : 'NOT '}IN (${marcas(ALERTA_ENCERRADO.length)})`;
+  if (f.situacao)
+    onde += ` AND a.situacao ${f.situacao === 'encerrado' ? '' : 'NOT '}IN (${marcas(ALERTA_ENCERRADO.length)})`;
   if (f.situacao) p.push(...ALERTA_ENCERRADO);
-  return (await l.consultar(`${SQL_ALERTA}${onde} ORDER BY a.recebido_em DESC, a.id DESC LIMIT ${TETO}`, p)).map((x) =>
-    alertaDe(x, fuso),
-  );
+  return (
+    await l.consultar(`${SQL_ALERTA}${onde} ORDER BY a.recebido_em DESC, a.id DESC LIMIT ${TETO}`, p)
+  ).map((x) => alertaDe(x, fuso));
 }
 
 async function lerAcoesDoAlerta(l: L, est: number, fuso: string, alerta: number): Promise<AcaoDeCampo[]> {
@@ -690,7 +712,12 @@ async function lerAcoesDoAlerta(l: L, est: number, fuso: string, alerta: number)
 
 /** O parque candidato: os equipamentos com fabricante e não desativados, mais os que já têm OS do alerta. */
 async function lerParqueDoAlerta(l: L, est: number, alerta: number): Promise<EquipamentoDoParque[]> {
-  if (!(await l.uma("SELECT id FROM alerta_sanitario WHERE id = ? AND estabelecimento_id = ? AND area = 'equipamento' AND excluido_em IS NULL", [alerta, est])))
+  if (
+    !(await l.uma(
+      "SELECT id FROM alerta_sanitario WHERE id = ? AND estabelecimento_id = ? AND area = 'equipamento' AND excluido_em IS NULL",
+      [alerta, est],
+    ))
+  )
     return [];
   return (
     await l.consultar(
@@ -741,7 +768,9 @@ async function lerCursosModelo(
     onde += ' AND UPPER(TRIM(f.nome)) = ? AND m.modelo = ?';
     p.push(f.chave.fabricante.trim().toUpperCase(), f.chave.modelo);
   }
-  return (await l.consultar(`${SQL_CURSO_MODELO}${onde} ORDER BY f.nome, m.modelo, cu.nome LIMIT ${TETO}`, p)).map((x) => ({
+  return (
+    await l.consultar(`${SQL_CURSO_MODELO}${onde} ORDER BY f.nome, m.modelo, cu.nome LIMIT ${TETO}`, p)
+  ).map((x) => ({
     id: n(x['id']),
     fabricante: texto(x['fabricante']),
     modelo: texto(x['modelo']),
@@ -755,7 +784,12 @@ async function lerCursosModelo(
   }));
 }
 
-async function lerEventosCiclo(l: L, est: number, fuso: string, equipamento: number): Promise<EventoCicloVida[]> {
+async function lerEventosCiclo(
+  l: L,
+  est: number,
+  fuso: string,
+  equipamento: number,
+): Promise<EventoCicloVida[]> {
   return (
     await l.consultar(
       `SELECT v.id, v.equipamento_saude_id, v.tipo, v.data_evento, v.motivo, v.documento, v.destino, v.valor_contabil,
@@ -816,11 +850,19 @@ async function centroDe(l: L, est: number, centro: number): Promise<{ id: number
     'SELECT id, setor_funcional_id FROM centro_custo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
     [centro, est],
   );
-  if (!r) throw recusa('setor-invalido', 'O setor (centro de custo) não é deste estabelecimento.', { campos: ['centroCusto'] });
+  if (!r)
+    throw recusa('setor-invalido', 'O setor (centro de custo) não é deste estabelecimento.', {
+      campos: ['centroCusto'],
+    });
   return { id: n(r['id']), setor: nn(r['setor_funcional_id']) };
 }
 
-function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: ContextoPortaM18): GravadorManutencao {
+function gravador(
+  tx: TxOperacao,
+  est: number,
+  an: AnotacaoGravacao,
+  c: ContextoPortaM18,
+): GravadorManutencao {
   let fusoP: Promise<string> | null = null;
   const fuso = () => (fusoP ??= fusoDe(tx, est));
   const usuario = c.usuario;
@@ -834,14 +876,19 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
   const fabricanteId = async (nome: string | null): Promise<number | null> => {
     const t = nome?.trim();
     if (!t) return null;
-    const r = await tx.uma<{ id: number }>('SELECT id FROM fabricante WHERE nome = ? AND excluido_em IS NULL LIMIT 1', [t]);
+    const r = await tx.uma<{ id: number }>(
+      'SELECT id FROM fabricante WHERE nome = ? AND excluido_em IS NULL LIMIT 1',
+      [t],
+    );
     return r ? n(r.id) : tx.incluir('fabricante', { nome: t.slice(0, 150) });
   };
 
   const causaId = async (causa: CausaFalha | null): Promise<number | null> => {
     if (!causa) return null;
     const codigo = snake(causa);
-    const r = await tx.uma<{ id: number }>('SELECT id FROM causa_falha_equipamento WHERE codigo = ?', [codigo]);
+    const r = await tx.uma<{ id: number }>('SELECT id FROM causa_falha_equipamento WHERE codigo = ?', [
+      codigo,
+    ]);
     // Semente: a causa do vocabulário entra no cadastro do cliente na primeira OS que a usa.
     return r
       ? n(r.id)
@@ -855,7 +902,10 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
   const recursoId = async (r: EquipamentoParaGravar['recurso']): Promise<number | null> => {
     if (!r) return null;
     const [x] = await lerRecurso(tx, est, r.tipo, r.id);
-    if (!x) throw recusa('recurso-invalido', 'O recurso de agenda não é deste estabelecimento.', { campos: ['recurso'] });
+    if (!x)
+      throw recusa('recurso-invalido', 'O recurso de agenda não é deste estabelecimento.', {
+        campos: ['recurso'],
+      });
     return x.id;
   };
 
@@ -890,18 +940,23 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       return await fn();
     } catch (erro) {
       if (restricaoUnicaViolada(erro) === 'uq_equipamento_saude_codigo')
-        throw recusa('codigo-repetido', 'Já há um equipamento com este código no estabelecimento.', { campos: ['codigo'] });
+        throw recusa('codigo-repetido', 'Já há um equipamento com este código no estabelecimento.', {
+          campos: ['codigo'],
+        });
       throw erro;
     }
   };
 
-  const evento = async (os: number, x: {
-    tipo: string;
-    de: string | null;
-    para: string | null;
-    nota: string | null;
-    em: Date;
-  }) =>
+  const evento = async (
+    os: number,
+    x: {
+      tipo: string;
+      de: string | null;
+      para: string | null;
+      nota: string | null;
+      em: Date;
+    },
+  ) =>
     tx.incluir('ordem_servico_manutencao_evento', {
       ordem_servico_manutencao_id: os,
       tipo_evento: x.tipo,
@@ -924,7 +979,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       [est],
     );
     if (r) return n(r.id);
-    return tx.incluir('oficina_manutencao', { estabelecimento_id: est, codigo: 'MANUTENCAO', nome: 'Manutenção' });
+    return tx.incluir('oficina_manutencao', {
+      estabelecimento_id: est,
+      codigo: 'MANUTENCAO',
+      nome: 'Manutenção',
+    });
   };
 
   const SQL_TRAVA_OS =
@@ -935,15 +994,27 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     'SELECT id, versao, situacao, inicio_vigencia, fim_vigencia, prazo_atendimento_horas, valor_parcela FROM contrato_servico_terceirizado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL';
 
   const equipamentoDoEstabelecimento = async (id: number) => {
-    const r = await tx.uma('SELECT id, setor_funcional_id FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [id, est]);
-    if (!r) throw recusa('equipamento-invalido', 'O equipamento não é deste estabelecimento.', { campos: ['equipamento'] });
+    const r = await tx.uma(
+      'SELECT id, setor_funcional_id FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [id, est],
+    );
+    if (!r)
+      throw recusa('equipamento-invalido', 'O equipamento não é deste estabelecimento.', {
+        campos: ['equipamento'],
+      });
     return { id: n(r['id']), setor: nn(r['setor_funcional_id']) };
   };
 
   const contratoValido = async (executor: string, contrato: number | null): Promise<number | null> => {
     if (executor !== 'contrato' || contrato === null) return null;
-    const r = await tx.uma('SELECT id FROM contrato_servico_terceirizado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [contrato, est]);
-    if (!r) throw recusa('contrato-invalido', 'O contrato de manutenção não é deste estabelecimento.', { campos: ['cobertura'] });
+    const r = await tx.uma(
+      'SELECT id FROM contrato_servico_terceirizado WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [contrato, est],
+    );
+    if (!r)
+      throw recusa('contrato-invalido', 'O contrato de manutenção não é deste estabelecimento.', {
+        campos: ['cobertura'],
+      });
     return contrato;
   };
 
@@ -1002,7 +1073,10 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       [bem, data],
     );
     if (cota) return centavos(cota['valor_residual']);
-    const b = await tx.uma('SELECT valor_aquisicao FROM bem_patrimonial WHERE id = ? AND estabelecimento_id = ?', [bem, est]);
+    const b = await tx.uma(
+      'SELECT valor_aquisicao FROM bem_patrimonial WHERE id = ? AND estabelecimento_id = ?',
+      [bem, est],
+    );
     return b ? centavos(b['valor_aquisicao']) : null;
   };
 
@@ -1013,12 +1087,18 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     equipamentoPorCodigo: async (codigo) => lerEquipamento(tx, est, await fuso(), { codigo }),
     os: async (id) => {
       // A OS relida e travada até o fim da transação.
-      await tx.consultarParaAtualizar('SELECT id FROM ordem_servico_manutencao WHERE id = ? AND estabelecimento_id = ?', [id, est]);
+      await tx.consultarParaAtualizar(
+        'SELECT id FROM ordem_servico_manutencao WHERE id = ? AND estabelecimento_id = ?',
+        [id, est],
+      );
       return lerOs(tx, est, await fuso(), id);
     },
     osAbertasDoEquipamento: (eq) => osAbertasDoEquipamento(tx, est, eq),
     plano: async (id) => {
-      await tx.consultarParaAtualizar('SELECT id FROM plano_preventivo WHERE id = ? AND estabelecimento_id = ?', [id, est]);
+      await tx.consultarParaAtualizar(
+        'SELECT id FROM plano_preventivo WHERE id = ? AND estabelecimento_id = ?',
+        [id, est],
+      );
       return lerPlano(tx, est, id);
     },
     cobertura: async (id) => (await lerCoberturas(tx, est, { id }))[0] ?? null,
@@ -1030,14 +1110,26 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
 
     incluirEquipamento: (x) =>
       comCodigoUnico(async () => {
-        const id = await tx.incluir('equipamento_saude', { estabelecimento_id: est, ...(await valoresEquipamento(x)) });
+        const id = await tx.incluir('equipamento_saude', {
+          estabelecimento_id: est,
+          ...(await valoresEquipamento(x)),
+        });
         return { id, versao: 1 };
       }),
     alterarEquipamento: (x) =>
       comCodigoUnico(async () => {
-        const atual = await travarLinha('SELECT id, versao, situacao, desativado_em FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', x.id, x.versaoVista, 'O equipamento');
+        const atual = await travarLinha(
+          'SELECT id, versao, situacao, desativado_em FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          x.id,
+          x.versaoVista,
+          'O equipamento',
+        );
         const valores = await valoresEquipamento(x);
-        if (x.situacao === 'desativado' && texto(atual['situacao']) === 'desativado' && atual['desativado_em'])
+        if (
+          x.situacao === 'desativado' &&
+          texto(atual['situacao']) === 'desativado' &&
+          atual['desativado_em']
+        )
           valores.desativado_em = dataIso(atual['desativado_em']) ?? valores.desativado_em;
         const versao = await tx.alterar('equipamento_saude', x.id, x.versaoVista, valores);
         return { id: x.id, versao };
@@ -1049,7 +1141,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       const eq = x.equipamento === null ? null : await equipamentoDoEstabelecimento(x.equipamento);
       const setor = centro.setor ?? eq?.setor ?? null;
       if (setor === null)
-        throw recusa('setor-sem-cadastro', 'O setor (centro de custo) não tem setor funcional ligado: ligue-o no cadastro antes de abrir a OS.', { campos: ['centroCusto'] });
+        throw recusa(
+          'setor-sem-cadastro',
+          'O setor (centro de custo) não tem setor funcional ligado: ligue-o no cadastro antes de abrir a OS.',
+          { campos: ['centroCusto'] },
+        );
       const solicitante = (await usuarioPorLogin(tx, x.solicitante)) ?? usuario;
       if (solicitante === null) throw recusa('sem-usuario', 'A abertura da OS exige o usuário da sessão.');
       const registro = paraInstante(x.registro, f);
@@ -1084,15 +1180,25 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       const k: CamposOs = x.campos;
       const v: Record<string, unknown> = { situacao: snake(x.para) };
       if (k.laudo !== undefined) {
-        if (k.laudo !== null && !(await tx.uma('SELECT id FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [k.laudo, est])))
-          throw recusa('laudo-invalido', 'O laudo não é um arquivo deste estabelecimento.', { campos: ['laudo'] });
+        if (
+          k.laudo !== null &&
+          !(await tx.uma(
+            'SELECT id FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [k.laudo, est],
+          ))
+        )
+          throw recusa('laudo-invalido', 'O laudo não é um arquivo deste estabelecimento.', {
+            campos: ['laudo'],
+          });
         v['laudo_arquivo_id'] = k.laudo;
       }
       if (k.prioridade !== undefined) v['prioridade'] = k.prioridade;
-      if (k.tecnico !== undefined) v['responsavel_usuario_id'] = k.tecnico === null ? null : await usuarioPorLogin(tx, k.tecnico);
+      if (k.tecnico !== undefined)
+        v['responsavel_usuario_id'] = k.tecnico === null ? null : await usuarioPorLogin(tx, k.tecnico);
       if (k.executor !== undefined) v['executor'] = k.executor;
       if (k.executor === 'interno') v['contrato_servico_terceirizado_id'] = null;
-      else if (k.cobertura !== undefined) v['contrato_servico_terceirizado_id'] = await contratoValido('contrato', k.cobertura);
+      else if (k.cobertura !== undefined)
+        v['contrato_servico_terceirizado_id'] = await contratoValido('contrato', k.cobertura);
       if (k.assumidaEm !== undefined) v['assumido_em'] = paraInstanteN(k.assumidaEm, f);
       if (k.concluidaEm !== undefined) v['concluido_em'] = paraInstanteN(k.concluidaEm, f);
       if (k.encerradaEm !== undefined) v['encerrado_em'] = paraInstanteN(k.encerradaEm, f);
@@ -1100,7 +1206,8 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         v['cancelado_em'] = paraInstanteN(k.canceladaEm, f);
         v['cancelado_por_usuario_id'] = k.canceladaEm === null ? null : usuario;
       }
-      if (k.motivoCancelamento !== undefined) v['justificativa_cancelamento'] = corte(k.motivoCancelamento, 500);
+      if (k.motivoCancelamento !== undefined)
+        v['justificativa_cancelamento'] = corte(k.motivoCancelamento, 500);
       if (k.causa !== undefined) v['causa_falha_equipamento_id'] = await causaId(k.causa);
       if (k.solucao !== undefined) v['solucao'] = k.solucao;
       if (k.custoPecasCent !== undefined) v['custo_pecas'] = reais(k.custoPecasCent);
@@ -1118,14 +1225,23 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       } else if (recusaAceite) {
         const porque = x.nota?.trim() ?? '';
         if (porque.length < 10)
-          throw recusa('justificativa-curta', 'Explique o que não ficou resolvido em pelo menos 10 caracteres.', { campos: ['nota'] });
+          throw recusa(
+            'justificativa-curta',
+            'Explique o que não ficou resolvido em pelo menos 10 caracteres.',
+            { campos: ['nota'] },
+          );
         v['aceite_resultado'] = 'reprovado';
         v['aceite_em'] = new Date();
         v['aceite_usuario_id'] = usuario;
         v['aceite_justificativa'] = corte(porque, 500);
       } else if (para === 'concluida') {
         // Nova conclusão: o aceite volta a ficar pendente (a recusa anterior segue no histórico).
-        Object.assign(v, { aceite_resultado: null, aceite_em: null, aceite_usuario_id: null, aceite_justificativa: null });
+        Object.assign(v, {
+          aceite_resultado: null,
+          aceite_em: null,
+          aceite_usuario_id: null,
+          aceite_justificativa: null,
+        });
       }
       const versao = await tx.alterar('ordem_servico_manutencao', x.id, x.versaoVista, v);
       if (k.inicioReparo !== undefined || k.fimReparo !== undefined) {
@@ -1163,26 +1279,38 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
               : recusaAceite
                 ? 'recusa_aceite'
                 : para === 'aberta' && de !== 'aberta'
-                ? 'reabertura'
-                : de === 'aberta'
-                  ? 'triagem'
-                  : 'andamento';
+                  ? 'reabertura'
+                  : de === 'aberta'
+                    ? 'triagem'
+                    : 'andamento';
       const agora = new Date();
       await evento(x.id, { tipo, de, para, nota: x.nota, em: agora });
       if (k.paradaFim)
-        await evento(x.id, { tipo: 'devolucao_equipamento', de: null, para: null, nota: 'Fim da parada do equipamento', em: paraInstante(k.paradaFim, f) });
+        await evento(x.id, {
+          tipo: 'devolucao_equipamento',
+          de: null,
+          para: null,
+          nota: 'Fim da parada do equipamento',
+          em: paraInstante(k.paradaFim, f),
+        });
       return { id: x.id, versao };
     },
 
     corrigirOs: async (x) => {
       const atual = await travarLinha(SQL_TRAVA_OS, x.id, x.versaoVista, 'A ordem de serviço');
-      if (texto(atual['situacao']) !== 'aberta' || atual['responsavel_usuario_id'] != null || atual['assumido_em'] != null)
+      if (
+        texto(atual['situacao']) !== 'aberta' ||
+        atual['responsavel_usuario_id'] != null ||
+        atual['assumido_em'] != null
+      )
         throw desatualizado('A ordem de serviço');
       const centro = await centroDe(tx, est, x.centroCusto);
       const eq = x.equipamento === null ? null : await equipamentoDoEstabelecimento(x.equipamento);
       const setor = centro.setor ?? eq?.setor ?? null;
       if (setor === null)
-        throw recusa('setor-sem-cadastro', 'O setor (centro de custo) não tem setor funcional ligado.', { campos: ['centroCusto'] });
+        throw recusa('setor-sem-cadastro', 'O setor (centro de custo) não tem setor funcional ligado.', {
+          campos: ['centroCusto'],
+        });
       const versao = await tx.alterar('ordem_servico_manutencao', x.id, x.versaoVista, {
         equipamento_saude_id: eq?.id ?? null,
         centro_custo_id: centro.id,
@@ -1217,7 +1345,10 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         modelo_plano_codigo: x.modelo ? x.modelo.codigo.slice(0, 30) : null,
         modelo_plano_versao: x.modelo ? x.modelo.versao : null,
       });
-      await tx.incluir('plano_preventivo_equipamento', { plano_preventivo_id: id, equipamento_saude_id: eq.id });
+      await tx.incluir('plano_preventivo_equipamento', {
+        plano_preventivo_id: id,
+        equipamento_saude_id: eq.id,
+      });
       return { id, versao: 1 };
     },
     ativarPlano: async (x) => {
@@ -1233,7 +1364,10 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         operacao: 'alteracao',
         antes: {
           versao: n(r['versao']),
-          periodicidade: { quantidade: n(r['periodicidade_quantidade']), unidade: texto(r['periodicidade_unidade']) },
+          periodicidade: {
+            quantidade: n(r['periodicidade_quantidade']),
+            unidade: texto(r['periodicidade_unidade']),
+          },
           dataBase: dataIso(r['data_base']),
           antecedenciaDias: nn(r['antecedencia_dias']),
           procedimento: textoN(r['procedimento']),
@@ -1256,21 +1390,44 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       const r = await travarLinha(SQL_TRAVA_PLANO, x.plano, x.versaoVista, 'O plano de manutenção');
       if (!verdadeiro(r['ativo'])) throw desatualizado('O plano de manutenção');
       if (x.resultado !== 'aprovado' && (x.observacao?.trim().length ?? 0) < 10)
-        throw recusa('observacao-curta', 'Descreva a restrição ou a reprovação em pelo menos 10 caracteres.', { campos: ['observacao'] });
+        throw recusa(
+          'observacao-curta',
+          'Descreva a restrição ou a reprovação em pelo menos 10 caracteres.',
+          { campos: ['observacao'] },
+        );
       const alvos = await tx.consultar(
         'SELECT equipamento_saude_id FROM plano_preventivo_equipamento WHERE plano_preventivo_id = ? AND excluido_em IS NULL AND equipamento_saude_id IS NOT NULL ORDER BY equipamento_saude_id LIMIT 2',
         [x.plano],
       );
       if (alvos.length !== 1)
-        throw recusa('plano-varios-alvos', 'Este plano cobre mais de um equipamento: a execução dele não é registrada por esta tela.', { campos: ['plano'] });
-      if (x.laudo != null && !(await tx.uma('SELECT id FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [x.laudo, est])))
-        throw recusa('laudo-invalido', 'O laudo não é um arquivo deste estabelecimento.', { campos: ['laudo'] });
+        throw recusa(
+          'plano-varios-alvos',
+          'Este plano cobre mais de um equipamento: a execução dele não é registrada por esta tela.',
+          { campos: ['plano'] },
+        );
+      if (
+        x.laudo != null &&
+        !(await tx.uma(
+          'SELECT id FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [x.laudo, est],
+        ))
+      )
+        throw recusa('laudo-invalido', 'O laudo não é um arquivo deste estabelecimento.', {
+          campos: ['laudo'],
+        });
       if (
         x.osCorretiva != null &&
-        !(await tx.uma('SELECT id FROM ordem_servico_manutencao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [x.osCorretiva, est]))
+        !(await tx.uma(
+          'SELECT id FROM ordem_servico_manutencao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [x.osCorretiva, est],
+        ))
       )
-        throw recusa('os-invalida', 'A OS corretiva não é deste estabelecimento.', { campos: ['osCorretiva'] });
-      const versaoPlano = await tx.alterar('plano_preventivo', x.plano, x.versaoVista, { ultima_execucao: x.data });
+        throw recusa('os-invalida', 'A OS corretiva não é deste estabelecimento.', {
+          campos: ['osCorretiva'],
+        });
+      const versaoPlano = await tx.alterar('plano_preventivo', x.plano, x.versaoVista, {
+        ultima_execucao: x.data,
+      });
       const id = await tx.incluir('execucao_preventiva', {
         estabelecimento_id: est,
         plano_preventivo_id: x.plano,
@@ -1290,7 +1447,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     },
 
     incluirCobertura: async (x) => {
-      if (!(await tx.uma('SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL', [x.fornecedor])))
+      if (
+        !(await tx.uma('SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL', [
+          x.fornecedor,
+        ]))
+      )
         throw recusa('fornecedor-invalido', 'O fornecedor não está no cadastro.', { campos: ['fornecedor'] });
       // O contrato de suprimentos ligado é do mesmo fornecedor e deste estabelecimento.
       if (
@@ -1300,13 +1461,24 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
           [x.contrato, est, x.fornecedor],
         ))
       )
-        throw recusa('contrato-fornecedor-invalido', 'O contrato de suprimentos não é deste fornecedor neste estabelecimento.', {
-          campos: ['contrato'],
-        });
+        throw recusa(
+          'contrato-fornecedor-invalido',
+          'O contrato de suprimentos não é deste fornecedor neste estabelecimento.',
+          {
+            campos: ['contrato'],
+          },
+        );
       const numero = x.numero.trim().slice(0, 30);
       // Número único por fornecedor. Sem filtro de excluido_em, de propósito: a unicidade do banco conta o excluído.
-      if (await tx.uma('SELECT id FROM contrato_servico_terceirizado WHERE estabelecimento_id = ? AND empresa_fornecedora_id = ? AND numero = ?', [est, x.fornecedor, numero]))
-        throw recusa('contrato-repetido', 'Este fornecedor já tem contrato de manutenção com este número.', { campos: ['numero'] });
+      if (
+        await tx.uma(
+          'SELECT id FROM contrato_servico_terceirizado WHERE estabelecimento_id = ? AND empresa_fornecedora_id = ? AND numero = ?',
+          [est, x.fornecedor, numero],
+        )
+      )
+        throw recusa('contrato-repetido', 'Este fornecedor já tem contrato de manutenção com este número.', {
+          campos: ['numero'],
+        });
       let id: number;
       try {
         id = await tx.incluir('contrato_servico_terceirizado', {
@@ -1326,7 +1498,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       } catch (erro) {
         // Corrida com outra inclusão do mesmo fornecedor e número: a UNIQUE do banco decide.
         if (restricaoUnicaViolada(erro) === 'uq_contrato_servico_terceirizado_fornecedor_numero')
-          throw recusa('contrato-repetido', 'Este fornecedor já tem contrato de manutenção com este número.', { campos: ['numero'] });
+          throw recusa(
+            'contrato-repetido',
+            'Este fornecedor já tem contrato de manutenção com este número.',
+            { campos: ['numero'] },
+          );
         throw erro;
       }
       let seq = 0;
@@ -1366,9 +1542,20 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
           "SELECT id, versao FROM contrato_servico_terceirizado_item WHERE contrato_servico_terceirizado_id = ? AND tipo_item = 'equipamento' AND equipamento_saude_id = ? AND excluido_em IS NULL",
           [x.id, q],
         );
-        if (it) await tx.alterar('contrato_servico_terceirizado_item', n(it['id']), n(it['versao']), { excluido_em: agora, excluido_por: usuario });
+        if (it)
+          await tx.alterar('contrato_servico_terceirizado_item', n(it['id']), n(it['versao']), {
+            excluido_em: agora,
+            excluido_por: usuario,
+          });
       }
-      let seq = n((await tx.uma<{ s: number }>('SELECT COALESCE(MAX(sequencia), 0) AS s FROM contrato_servico_terceirizado_item WHERE contrato_servico_terceirizado_id = ?', [x.id]))?.s);
+      let seq = n(
+        (
+          await tx.uma<{ s: number }>(
+            'SELECT COALESCE(MAX(sequencia), 0) AS s FROM contrato_servico_terceirizado_item WHERE contrato_servico_terceirizado_id = ?',
+            [x.id],
+          )
+        )?.s,
+      );
       for (const q of incluidos) {
         await equipamentoDoEstabelecimento(q);
         await tx.incluir('contrato_servico_terceirizado_item', {
@@ -1386,7 +1573,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       const r = await travarLinha(SQL_TRAVA_CONTRATO, x.id, x.versaoVista, 'O contrato de manutenção');
       if (texto(r['situacao']) !== 'vigente') throw desatualizado('O contrato de manutenção');
       an.motivo = x.motivo.slice(0, 500);
-      an.dados = { operacao: 'encerramento', antes: await retratoContrato(r), encerramento: { data: x.data } };
+      an.dados = {
+        operacao: 'encerramento',
+        antes: await retratoContrato(r),
+        encerramento: { data: x.data },
+      };
       const versao = await tx.alterar('contrato_servico_terceirizado', x.id, x.versaoVista, {
         situacao: 'encerrado',
         fim_vigencia: x.data,
@@ -1397,15 +1588,33 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       await travarLinha(SQL_TRAVA_CONTRATO, x.id, x.versaoVista, 'O contrato de manutenção');
       const contar = async (sql: string) => n((await tx.uma<{ n: number }>(sql, [x.id]))?.n);
       const grupos = [
-        { rotulo: 'Ordens de serviço', quantidade: await contar('SELECT COUNT(*) AS n FROM ordem_servico_manutencao WHERE contrato_servico_terceirizado_id = ? AND excluido_em IS NULL') },
-        { rotulo: 'Planos de manutenção', quantidade: await contar('SELECT COUNT(*) AS n FROM plano_preventivo WHERE contrato_servico_terceirizado_id = ?') },
-        { rotulo: 'Execuções de plano', quantidade: await contar('SELECT COUNT(*) AS n FROM execucao_preventiva WHERE contrato_servico_terceirizado_id = ? AND excluido_em IS NULL') },
+        {
+          rotulo: 'Ordens de serviço',
+          quantidade: await contar(
+            'SELECT COUNT(*) AS n FROM ordem_servico_manutencao WHERE contrato_servico_terceirizado_id = ? AND excluido_em IS NULL',
+          ),
+        },
+        {
+          rotulo: 'Planos de manutenção',
+          quantidade: await contar(
+            'SELECT COUNT(*) AS n FROM plano_preventivo WHERE contrato_servico_terceirizado_id = ?',
+          ),
+        },
+        {
+          rotulo: 'Execuções de plano',
+          quantidade: await contar(
+            'SELECT COUNT(*) AS n FROM execucao_preventiva WHERE contrato_servico_terceirizado_id = ? AND excluido_em IS NULL',
+          ),
+        },
       ].filter((g) => g.quantidade > 0);
       if (grupos.length > 0)
         throw recusa(
           'com-dependentes',
           `O contrato de manutenção tem vínculos (${grupos.map((g) => `${g.rotulo}: ${g.quantidade}`).join('; ')}). Encerre o contrato com motivo em vez de excluir.`,
-          { dependentes: grupos.map((g) => ({ ...g, amostra: [], origem: 'fk' as const })), podeInativar: true },
+          {
+            dependentes: grupos.map((g) => ({ ...g, amostra: [], origem: 'fk' as const })),
+            podeInativar: true,
+          },
         );
       an.motivo = x.motivo.slice(0, 500);
       an.dados = { operacao: 'exclusao' };
@@ -1415,8 +1624,14 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         [x.id],
       );
       for (const it of itens)
-        await tx.alterar('contrato_servico_terceirizado_item', n(it['id']), n(it['versao']), { excluido_em: agora, excluido_por: usuario });
-      await tx.alterar('contrato_servico_terceirizado', x.id, x.versaoVista, { excluido_em: agora, excluido_por: usuario });
+        await tx.alterar('contrato_servico_terceirizado_item', n(it['id']), n(it['versao']), {
+          excluido_em: agora,
+          excluido_por: usuario,
+        });
+      await tx.alterar('contrato_servico_terceirizado', x.id, x.versaoVista, {
+        excluido_em: agora,
+        excluido_por: usuario,
+      });
       return { id: x.id, versao: x.versaoVista };
     },
 
@@ -1504,14 +1719,21 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       }
       an.motivo = x.motivo.slice(0, 500);
       an.dados = { operacao: 'exclusao', antes: a };
-      await tx.alterar('alerta_sanitario', x.id, x.versaoVista, { excluido_em: new Date(), excluido_por: usuario });
+      await tx.alterar('alerta_sanitario', x.id, x.versaoVista, {
+        excluido_em: new Date(),
+        excluido_por: usuario,
+      });
       return { id: x.id, versao: x.versaoVista };
     },
     gerarAcaoDeCampo: async (x) => {
       const alerta = await alertaTravado(x.id);
       if (!alerta) throw recusaAlerta('desatualizado');
       const f = await fuso();
-      const p = x.planejar(alerta, await lerParqueDoAlerta(tx, est, x.id), await lerAcoesDoAlerta(tx, est, f, x.id));
+      const p = x.planejar(
+        alerta,
+        await lerParqueDoAlerta(tx, est, x.id),
+        await lerAcoesDoAlerta(tx, est, f, x.id),
+      );
       if (!p.ok) throw recusaAlerta(p.motivo);
       if (alerta.versao !== x.versaoVista) throw recusaAlerta('desatualizado');
       const geradas: { equipamento: number; os: number; numero: string }[] = [];
@@ -1538,7 +1760,9 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         });
         geradas.push({ equipamento: q.equipamento, os: os.id, numero: os.numero });
       }
-      const versao = await tx.alterar('alerta_sanitario', x.id, x.versaoVista, { situacao: 'em_verificacao' });
+      const versao = await tx.alterar('alerta_sanitario', x.id, x.versaoVista, {
+        situacao: 'em_verificacao',
+      });
       return { versao, geradas };
     },
     abrirQueixaDaOs: async (x) => {
@@ -1558,7 +1782,8 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         [x.os, est],
       );
       if (!o) throw desatualizado('A ordem de serviço');
-      if (o['equipamento_saude_id'] === null || o['equipamento_saude_id'] === undefined) throw recusaAlerta('os-sem-equipamento');
+      if (o['equipamento_saude_id'] === null || o['equipamento_saude_id'] === undefined)
+        throw recusaAlerta('os-sem-equipamento');
       // A queixa é única por OS (a UNIQUE do banco conta a excluída também).
       if (await tx.uma('SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [x.os]))
         throw recusaAlerta('queixa-ja-aberta');
@@ -1597,19 +1822,26 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     // Treinamento por modelo e ciclo de vida.
     cursoDoModelo: async (id) => (await lerCursosModelo(tx, est, await fuso(), { id }))[0] ?? null,
     vincularCursoModelo: async (x) => {
-      const curso = await tx.uma('SELECT id, ativo FROM curso WHERE id = ? AND excluido_em IS NULL', [x.curso]);
+      const curso = await tx.uma('SELECT id, ativo FROM curso WHERE id = ? AND excluido_em IS NULL', [
+        x.curso,
+      ]);
       if (!curso || !verdadeiro(curso['ativo'])) throw recusaCicloVida('curso-inativo');
       const fabricante = await fabricanteId(x.fabricante);
-      if (fabricante === null) throw recusa('fabricante-obrigatorio', 'Informe o fabricante.', { campos: ['fabricante'] });
+      if (fabricante === null)
+        throw recusa('fabricante-obrigatorio', 'Informe o fabricante.', { campos: ['fabricante'] });
       const modelo = x.modelo.trim().toUpperCase().slice(0, 60);
       const [ja] = await tx.consultarParaAtualizar(
         'SELECT id, versao, excluido_em FROM modelo_equipamento_curso WHERE estabelecimento_id = ? AND fabricante_id = ? AND modelo = ? AND curso_id = ?',
         [est, fabricante, modelo, x.curso],
       );
-      if (ja && (ja['excluido_em'] === null || ja['excluido_em'] === undefined)) throw recusaCicloVida('vinculo-repetido');
+      if (ja && (ja['excluido_em'] === null || ja['excluido_em'] === undefined))
+        throw recusaCicloVida('vinculo-repetido');
       if (ja) {
         // Vincular de novo reativa a mesma linha (a UNIQUE conta a excluída); a trilha guarda as duas pontas.
-        await tx.alterar('modelo_equipamento_curso', n(ja['id']), n(ja['versao']), { excluido_em: null, excluido_por: null });
+        await tx.alterar('modelo_equipamento_curso', n(ja['id']), n(ja['versao']), {
+          excluido_em: null,
+          excluido_por: null,
+        });
         return { id: n(ja['id']) };
       }
       const id = await tx.incluir('modelo_equipamento_curso', {
@@ -1628,7 +1860,10 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       if (!r) throw recusaCicloVida('desatualizado');
       an.motivo = x.motivo.slice(0, 500);
       an.dados = { operacao: 'exclusao' };
-      await tx.alterar('modelo_equipamento_curso', x.id, n(r['versao']), { excluido_em: new Date(), excluido_por: usuario });
+      await tx.alterar('modelo_equipamento_curso', x.id, n(r['versao']), {
+        excluido_em: new Date(),
+        excluido_por: usuario,
+      });
       return { id: x.id };
     },
     eventosCiclo: async (eq) => lerEventosCiclo(tx, est, await fuso(), eq),
@@ -1657,7 +1892,8 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
           autorizado_por: x.autorizadoPor.trim().slice(0, 150),
         });
       } catch (erro) {
-        if (restricaoUnicaViolada(erro) === 'uq_evento_ciclo_equipamento_tipo') throw recusaCicloVida('evento-repetido');
+        if (restricaoUnicaViolada(erro) === 'uq_evento_ciclo_equipamento_tipo')
+          throw recusaCicloVida('evento-repetido');
         throw erro;
       }
       if (x.tipo === 'desativacao' && texto(eq['situacao']) !== 'desativado')
@@ -1709,9 +1945,13 @@ export class PortaManutencaoPropria implements PortaManutencao {
     this.executor = executorPronto ?? nucleo.criarExecutor();
   }
 
-  private ler<T>(c: ContextoPortaM18, fn: (l: Leitor, est: number, fuso: () => Promise<string>) => Promise<T>): Promise<T> {
+  private ler<T>(
+    c: ContextoPortaM18,
+    fn: (l: Leitor, est: number, fuso: () => Promise<string>) => Promise<T>,
+  ): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), (l) => {
       let f: Promise<string> | null = null;
       return fn(l, est, () => (f ??= fusoDe(l, est)));
@@ -1766,10 +2006,12 @@ export class PortaManutencaoPropria implements PortaManutencao {
     const ls = [...new Set(logins.map((x) => x.trim()).filter(Boolean))].slice(0, TETO);
     if (ls.length === 0) return Promise.resolve([]);
     return this.ler(c, async (l) =>
-      (await l.consultar(`SELECT login, nome FROM usuario WHERE login IN (${marcas(ls.length)})`, ls)).map((x) => ({
-        login: texto(x['login']),
-        nome: texto(x['nome']),
-      })),
+      (await l.consultar(`SELECT login, nome FROM usuario WHERE login IN (${marcas(ls.length)})`, ls)).map(
+        (x) => ({
+          login: texto(x['login']),
+          nome: texto(x['nome']),
+        }),
+      ),
     );
   }
   /** Fornecedores pelo nome ou código, sem documento nem dado bancário (cadastro do cliente: rede inteira). */
@@ -1944,7 +2186,10 @@ export class PortaManutencaoPropria implements PortaManutencao {
         const per = json(a['periodicidade']);
         return {
           versao: n(a['versao']),
-          periodicidade: { quantidade: n(per['quantidade']), unidade: texto(per['unidade']) as VersaoDoPlano['periodicidade']['unidade'] },
+          periodicidade: {
+            quantidade: n(per['quantidade']),
+            unidade: texto(per['unidade']) as VersaoDoPlano['periodicidade']['unidade'],
+          },
           dataBase: texto(a['dataBase']),
           antecedenciaDias: nn(a['antecedenciaDias']),
           procedimento: textoN(a['procedimento']),
@@ -1978,7 +2223,8 @@ export class PortaManutencaoPropria implements PortaManutencao {
         const a = json(d['antes']);
         return {
           versao: n(a['versao']),
-          operacao: texto(d['operacao']) === 'encerramento' ? ('encerramento' as const) : ('alteracao' as const),
+          operacao:
+            texto(d['operacao']) === 'encerramento' ? ('encerramento' as const) : ('alteracao' as const),
           inicio: texto(a['inicio']),
           fim: texto(a['fim']),
           slaHoras: nn(a['slaHoras']),
@@ -2018,7 +2264,10 @@ export class PortaManutencaoPropria implements PortaManutencao {
         codigo: texto(x['codigo']),
         nome: texto(x['nome']),
         instalacao: dataIso(x['instalado_em']),
-        desativacao: texto(x['situacao']) === 'desativado' ? (instante(x['alterado_em'], fz)?.slice(0, 10) ?? null) : null,
+        desativacao:
+          texto(x['situacao']) === 'desativado'
+            ? (instante(x['alterado_em'], fz)?.slice(0, 10) ?? null)
+            : null,
       }));
       if (equipamentos.length === 0) return { equipamentos, paradas: [], corretivas: [] };
       const ids = new Set(equipamentos.map((e) => e.id));
@@ -2072,8 +2321,13 @@ export class PortaManutencaoPropria implements PortaManutencao {
   }
 
   // Tecnovigilância ligada ao parque.
-  alertas(c: ContextoPortaM18, f?: { situacao?: SituacaoAlertaEquipamento | null }): Promise<AlertaEquipamento[]> {
-    return this.ler(c, async (l, est, fuso) => lerAlertas(l, est, await fuso(), { situacao: f?.situacao ?? null }));
+  alertas(
+    c: ContextoPortaM18,
+    f?: { situacao?: SituacaoAlertaEquipamento | null },
+  ): Promise<AlertaEquipamento[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      lerAlertas(l, est, await fuso(), { situacao: f?.situacao ?? null }),
+    );
   }
   alerta(c: ContextoPortaM18, id: number): Promise<AlertaEquipamento | null> {
     return this.ler(c, async (l, est, fuso) => (await lerAlertas(l, est, await fuso(), { id }))[0] ?? null);
@@ -2090,7 +2344,10 @@ export class PortaManutencaoPropria implements PortaManutencao {
 
   // Treinamento dos operadores: o catálogo e as conclusões vêm do treinamento (curso, turma, presença); o curso exigido
   // por modelo é o modelo_equipamento_curso do estabelecimento.
-  cursosDosModelos(c: ContextoPortaM18, chave?: { fabricante: string; modelo: string }): Promise<CursoDoModelo[]> {
+  cursosDosModelos(
+    c: ContextoPortaM18,
+    chave?: { fabricante: string; modelo: string },
+  ): Promise<CursoDoModelo[]> {
     return this.ler(c, async (l, est, fuso) => lerCursosModelo(l, est, await fuso(), chave ? { chave } : {}));
   }
   catalogoCursos(c: ContextoPortaM18): Promise<CursoDoCatalogo[]> {

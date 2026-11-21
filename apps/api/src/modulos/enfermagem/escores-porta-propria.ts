@@ -689,7 +689,11 @@ export class PortaEscoresPropria implements PortaEscores {
         porEscore.set(k, [...(porEscore.get(k) ?? []), r]);
       }
       return [...porEscore].map(([escore, linhas]): DecisaoProfilaxiaRegistrada => {
-        const historico = historicoDe(linhas, fuso).map(({ autor: _a, ...h }) => h);
+        const historico = historicoDe(linhas, fuso).map((linha) => {
+          const { autor, ...h } = linha;
+          void autor;
+          return h;
+        });
         const v = historico.at(-1)!;
         const ultima = [...historico].reverse().find((y) => y.decisao !== 'anulada') ?? v;
         return {
