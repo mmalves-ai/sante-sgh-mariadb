@@ -9,6 +9,8 @@ L3 (`carga.ORDEM`) seguem na carga própria (`carga.py`).
 Mesmas garantias do L3 (herda `carga.Carga`):
 - toda linha lida fica em `conector_origem` (hash dos bytes crus das colunas lidas); recusa com regra e gravidade,
   pendência no mesmo commit; SAVEPOINT por linha (restrição do destino recusa só a linha: `restricao_destino_<código>`);
+- cadastro provisório do L3 (fonte pagadora criada pelo atendimento, `PROVISORIO`): a linha real o completa (UPDATE do
+  mesmo id), sem virar alteração; recusada, o provisório fica como estava, com a regra;
 - linha igual é pulada; alterada na origem fica com `alteracao_aguarda_sincronizar` (hash guardado intocado); apagada
   na origem, `apagada_aguarda_sincronizar`; diferente no destino com rastro de edição, `edicao_no_destino`;
 - regra de coluna (`sentinela.aplicar`): a pendência da regra vai para a linha (data_sentinela, hora_sem_data,
@@ -115,6 +117,9 @@ DEC_DESTINO = {"decimal"}
 TXT_DESTINO = {"char", "varchar", "text", "tinytext", "mediumtext", "longtext"}
 
 
+# cadastro provisório do L3 (carga._provisorio): tabela da origem -> tabela do destino do provisório. Só é completado
+# pela linha real quando o destino principal declarado é o mesmo (TBCBOPRO cria profissional, mas carrega inscrição)
+PROVISORIO = {"TBCONVEN": "fonte_pagadora", "TBCBOPRO": "profissional"}
 _AMBIGUO = object()            # valor repetido na chave alternativa do pai (`ref:T.K`)
 # texto não numérico em coluna numérica do destino (L6-06): o chamador grava NULL com valor_fora_do_dominio
 NAO_NUMERICO = object()
@@ -770,6 +775,13 @@ class CargaMapa(carga.Carga):
                 cont_seq[k] = cont_seq.get(k, 0) + 1
                 self.seq[col] = cont_seq[k]
             h = bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
+            prov = self.existente.get(t, {}).get(chave)
+            completar = None
+            if prov and prov[0] is not None and prov[1] == carga.HASH_ZERO and PROVISORIO.get(t) == dts[0]:
+                # cadastro provisório (criado pelo L3 para um atendimento antes desta tabela): a linha real o
+                # COMPLETA (UPDATE do principal, mesmo id), em vez de ficar como alteração à espera do Sincronizar
+                completar = prov[0]
+                del self.existente[t][chave]
             sit, ant = self._situacao(t, chave, h)
             if sit != "nova":
                 if ant[0] is not None:
@@ -782,6 +794,12 @@ class CargaMapa(carga.Carga):
             else:
                 vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
             if recusa:
+                if completar is not None:  # o provisório fica como estava, com a regra da linha real
+                    self.existente[t][chave] = prov
+                    self._pendencia(t, chave, *recusa)
+                    self.cont["provisorios_nao_completados"] = self.cont.get("provisorios_nao_completados", 0) + 1
+                    self.origem.setdefault(ents[0], {})[chave] = prov[2].hex() if prov[2] else "sem_resumo_gravado"
+                    continue
                 self._recusar(t, chave, ents[0], h, *recusa)
                 self.prop.registrar(t, chave, *recusa)
                 continue
@@ -805,7 +823,11 @@ class CargaMapa(carga.Carga):
                             elif c["coluna"].startswith("@id:"):
                                 v[c["destino"]] = ids.get(c["coluna"][4:])
                         op = (p.get("opcoes") or {}).get(dt) or {}
-                        rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
+                        if i == 0 and completar is not None:
+                            rid, adotado = self._gravar_ou_adotar(dt, dict(v, id=completar), None, True)
+                            self.cont["provisorios_completados"] = self.cont.get("provisorios_completados", 0) + 1
+                        else:
+                            rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
                         pad = [x for x in cs if isinstance(x, _PADRAO)]
                         if adotado:  # nada é sobrescrito: o resumo é o que está no destino
                             self._pendencia(t, chave, "adotado_existente", "baixa")
@@ -832,6 +854,10 @@ class CargaMapa(carga.Carga):
                 for dt, dc, ref, cpai in adiadas:
                     if ids[dts.index(dt)] is not None:
                         self.adiadas.append((dt, dc, ids[dts.index(dt)], ref, cpai, t, chave))
+            elif completar is not None:  # restrição do destino ao completar: o provisório fica como estava
+                self._registrar(t, chave, ents[0], prov[0], prov[1], prov[2])
+                self.cont["provisorios_nao_completados"] = self.cont.get("provisorios_nao_completados", 0) + 1
+                self.origem.setdefault(ents[0], {})[chave] = prov[2].hex() if prov[2] else "sem_resumo_gravado"
             else:
                 self.prop.registrar(t, chave, self.existente[t][chave][3] or "recusada", "critica")
             if n % LOTE_COMMIT == 0:

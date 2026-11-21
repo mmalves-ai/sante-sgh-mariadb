@@ -698,3 +698,23 @@ as fatias. Sem mecanismo ainda: `#retrato:*` e SHA-256 do retrato (históricos H
 (TBLOCALHORA, FCHORATE), recorrência de feriado (TBFERIAD), destino principal desdobrado (REPARATE), coluna do destino
 do pai (`ref:T@coluna`, FCCTRLANCIHA), regras `periodo_em_dias` e `data_hora_utc_texto`, catálogos oficiais TISS/eSocial
 (carregadores), o ciclo TBCENCUS <-> TBLOCCON (duas fases) e os pedidos de modelo à trilha F2.2.
+
+## 19. Integração da rodada 2 de cobertura (2026-11-21, tentativa 2): esteira verde, cobertura ainda NÃO fecha
+
+Prova: `conferir-fatia-f4.sh` em todas as 64 fatias + 4 exemplos sem erro fora do passo 6 (cobertura); `verificar_mapa`
+ok; `fatiar_conector --conferir` ok; `conector.sh testes` 934 ok (8 pulados, 1 falha esperada); ponta a ponta do painel
+(`ponta-a-ponta.int.spec.ts`, `--fatias lotes`) 4 testes verdes, conciliação 100% e toda entidade conferida.
+
+- Imagem `--fatias lotes` (`sintetica.gerar`): tabela da origem criada por mais de uma fatia ou pelo L3 (TBGRUDES,
+  RECADATE, TBUSERS e outras 29) vale a primeira; as seguintes perdem o CREATE e as linhas, e a coluna que só elas
+  têm entra por ALTER anulável depois das linhas. A conferência por fatia não muda.
+- Motor: a linha real COMPLETA o cadastro provisório do L3 (fonte pagadora criada pelo atendimento) por UPDATE do
+  mesmo id, sem virar `alteracao_aguarda_sincronizar` (no Importar real toda fonte usada por atendimento cairia nisso);
+  só quando o destino principal é o do provisório (`carga_mapa.PROVISORIO`). Falha do motor traz arquivo e linha.
+- Descartes pedidos e não aplicados na tentativa 1 (47 tabelas: L5-09, L5-12, L7-05, L8-02, L8-08) aplicados;
+  FPMOTDESLIG decidida como `catalogo_oficial` (decisões em `F4-decisoes-destino.md`, tentativa 2).
+- Cobertura: 1.185 carregáveis; CARREGA 666, DESCARTE 336, BLOQUEADA 183 (`docs/obra/fatias/f4/cobertura-r2.tsv`).
+  127 só pedem refazer a fatia (mecanismo ou decisão já existe); 56 pedem regra nova ou modelo (F2.2). Fatias a
+  refazer (39): L5-01 L5-02 L5-04 L5-05 L5-06 L5-12 L6-01 L6-02 L6-03 L6-04 L6-05 L6-09 L6-10 L6-11 L6-12 L6-13 L6-14
+  L6-15 L6-16 L6-18 L7-03 L7-04 L7-05 L7-07 L7-08 L8-01 L8-02 L8-03 L8-04 L8-05 L8-06 L8-08 L8-09 L8-10 L8-11 L8-12
+  L8-14 L8-15 L8-16.

@@ -11,6 +11,8 @@ mesma conciliação por entidade. No fim, sha256, tamanho e mtime
 do arquivo têm de ser iguais aos do início: a prova é obrigatória (não há como desligá-la).
 """
 import datetime
+import os
+import traceback
 import hashlib
 import time
 
@@ -180,7 +182,10 @@ def executar(trab, eid):
         plataforma.mudar_estado(conn, eid, "concluida", etapa="concluída", percentual=100, contadores=cont,
                                 imagem_sha256=sha_antes)
     except Exception as e:  # o motivo é técnico e não traz valores de linha
-        motivo = "%s: %s" % (type(e).__name__, str(e)[:420])
+        motivo = "%s: %s" % (type(e).__name__, str(e)[:380])
+        tb = traceback.extract_tb(e.__traceback__)
+        if tb:  # onde falhou (arquivo e linha do motor; nunca valores), para o diagnóstico
+            motivo += " (em %s:%d)" % (os.path.basename(tb[-1].filename), tb[-1].lineno)
         if isinstance(e, pymysql.err.MySQLError):  # a mensagem do servidor pode citar valores ("Duplicate entry ...")
             motivo = "%s: erro %s do banco de destino" % (type(e).__name__, e.args[0] if e.args else "?")
         try:

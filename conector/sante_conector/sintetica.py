@@ -25,6 +25,7 @@ import json
 import os
 import pkgutil
 import random
+import re
 import subprocess
 import datetime
 
@@ -272,6 +273,55 @@ def resolver_fatias(fatias):
     return saida
 
 
+def _tabelas_ddl(ddl):
+    return [t.upper() for t in re.findall(r'CREATE\s+TABLE\s+"?(\w+)"?', ddl, re.I)]
+
+
+def _colunas_create(st):
+    """{COLUNA: tipo} de um CREATE TABLE (sem NOT NULL nem PRIMARY KEY), na ordem."""
+    m = re.search(r"\((.*)\)\s*$", st.strip(), re.S)
+    if not m:
+        return {}
+    partes, nivel, atual = [], 0, ""
+    for ch in m.group(1):
+        nivel += (ch == "(") - (ch == ")")
+        if ch == "," and nivel == 0:
+            partes.append(atual)
+            atual = ""
+        else:
+            atual += ch
+    partes.append(atual)
+    saida = {}
+    for x in partes:
+        x = " ".join(x.split())
+        if not x or re.match(r"(PRIMARY|CONSTRAINT|UNIQUE|FOREIGN|CHECK)\b", x, re.I):
+            continue
+        nome, _, tipo = x.partition(" ")
+        tipo = re.sub(r"\b(NOT NULL|PRIMARY KEY|UNIQUE)\b", "", tipo, flags=re.I).strip()
+        saida[nome.strip('"').upper()] = tipo
+    return saida
+
+
+def _sem_tabelas(ddl, criadas, alteracoes):
+    """DDL sem os CREATE TABLE de tabelas já criadas (`criadas`: {TABELA: {COLUNA: tipo}}); a coluna que a fatia
+    declara e a primeira não tem entra por ALTER (anulável), em `alteracoes`, depois das linhas (os INSERT não
+    listam as colunas). Devolve (ddl, nomes omitidos)."""
+    saida, omit = [], set()
+    for st in ddl.split(";"):
+        n = _tabelas_ddl(st)
+        if n and n[0] in criadas:
+            omit.add(n[0])
+            for c, tipo in _colunas_create(st).items():
+                if c not in criadas[n[0]] and tipo:
+                    criadas[n[0]][c] = tipo
+                    alteracoes.append('ALTER TABLE %s ADD "%s" %s;' % (n[0], c, tipo))
+            continue
+        if n:
+            criadas[n[0]] = _colunas_create(st)
+        saida.append(st)
+    return ";".join(saida), omit
+
+
 def gerar(destino, versao=1, mapa=False, fatias=()):
     """Cria `destino` (não pode existir). Devolve o manifesto (contagens e bytes esperados). `mapa=True` acrescenta as
     tabelas com a forma da origem que o mapa do L3 carrega, e o manifesto traz o esperado no destino."""
@@ -279,8 +329,18 @@ def gerar(destino, versao=1, mapa=False, fatias=()):
         raise FileExistsError(destino)
     r = random.Random(SEMENTE + versao)
     mods = [(f, modulo_fatia(f)) for f in resolver_fatias(fatias)]
+    # tabela da origem criada por mais de uma fatia (ou já criada pelo L3): vale a PRIMEIRA (L3, depois a ordem das
+    # fatias); nas seguintes, o CREATE e as linhas dela são omitidos (imagem `lotes`: as fatias se juntam num arquivo)
+    criadas, alteracoes = {}, []
+    _sem_tabelas(DDL + (DDL_MAPA if mapa else ""), criadas, alteracoes)
+    omitidas = {}
+    ddl_fatias = []
+    for f, m in mods:
+        ddl_m, om = _sem_tabelas(m.DDL, criadas, alteracoes)
+        omitidas[f] = om
+        ddl_fatias.append(ddl_m)
     linhas = ["SET NAMES NONE;", "CREATE DATABASE '%s' PAGE_SIZE 8192 DEFAULT CHARACTER SET NONE;" % destino,
-              DDL + (DDL_MAPA if mapa else "") + "".join(m.DDL for _, m in mods), "COMMIT;"]
+              DDL + (DDL_MAPA if mapa else "") + "".join(ddl_fatias), "COMMIT;"]
     cont = {}
 
     def ins(tab, vals):
@@ -317,11 +377,15 @@ def gerar(destino, versao=1, mapa=False, fatias=()):
     esp_fatias, externos = {}, {}
     for f, m in mods:
         semente = SEMENTE + versao + sum(ord(c) for c in f)
-        esp_fatias[f] = m.linhas(random.Random(semente), lambda tab, vals: ins(tab, [_q(v) for v in vals]))
+        esp_fatias[f] = m.linhas(random.Random(semente),
+                                 lambda tab, vals, om=omitidas[f]: None if tab.strip('"').upper() in om
+                                 else ins(tab, [_q(v) for v in vals]))
         for t, ks in getattr(m, "PAIS_EXTERNOS", {}).items():
             externos.setdefault(t, [])
             externos[t] += [str(k) for k in ks if str(k) not in externos[t]]
     linhas.append("SET GENERATOR EX_GEN_PESSOA TO %d;" % max(ids))
+    if alteracoes:
+        linhas += ["COMMIT;"] + alteracoes
     linhas.append("COMMIT;")
     script = "\n".join(linhas) + "\n"
     p = subprocess.run([ISQL, "-q", "-ch", "NONE", "-u", os.environ.get("ISC_USER", "SYSDBA")],
