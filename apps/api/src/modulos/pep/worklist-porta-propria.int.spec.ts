@@ -28,7 +28,7 @@ describe.skipIf(SEM_BANCO)('PortaWorklistPropria contra o MariaDB (cliente f22_o
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE_F22_O4)).banco).toBe('cliente_f22_o4');
+    expect((await nucleo.cliente(CLIENTE_F22_O4)).banco).toBe(`cliente_${CLIENTE_F22_O4}`);
     m = await montarMassaWorklist(nucleo, P, 904_020_000);
     porta = new PortaWorklistPropria(nucleo, CLIENTE_F22_O4);
     desde = new Date(`${dataHora(new Date(m.agora.getTime() - 2 * 24 * HORA), FUSO)!.slice(0, 10)}T00:00:00Z`);

@@ -56,7 +56,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
   let avaliador = 0;
   let criterios: number[] = [];
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o3', correlacao: 't' }, (l) =>
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 't' }, (l) =>
       l.consultar<Record<string, unknown>>(sql, p),
     );
   const contar = async (sql: string, p: unknown[]) => Number((await ler(sql, p))[0]?.['q'] ?? 0);
@@ -82,7 +82,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
       g.incluirCiclo({ ...ciclo(nomeCiclo), por: m.login }),
     );
     const id = await m.nucleo.escrever(
-      { cliente: 'f22_o3', correlacao: 'massa-avaliacao-l0302' },
+      { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 'massa-avaliacao-l0302' },
       async (e) => {
         const a = await e.inserir(
           "INSERT INTO avaliacao_desempenho (estabelecimento_id, ciclo_avaliacao_id, colaborador_id, avaliador_colaborador_id, tipo, situacao, criado_em, criado_por) VALUES (?, ?, ?, ?, 'gestor', 'pendente', ?, ?)",
@@ -107,7 +107,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria da avaliação contra o MariaDB (f
     gestor = ctxO3(m.est, m.gestor);
     // Os critérios do modelo da massa e o colaborador avaliador (o gestor), sintéticos e reaproveitados.
     const x = await m.nucleo.escrever(
-      { cliente: 'f22_o3', correlacao: 'massa-criterios-l0302' },
+      { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 'massa-criterios-l0302' },
       async (e) => {
         const ks: number[] = [];
         for (const [i, cod] of ['L0302-COMUNICACAO', 'L0302-TRABALHO-EQUIPE'].entries()) {

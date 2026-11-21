@@ -1,0 +1,27 @@
+# assunto: sadt+permissoes-2+manutencao+tiss+patrimonio+raiz-api
+# cliente_teste: f24_22mistosadt
+apps/api/src/modulos/sadt/aplicacao/vigia-criticos.ts
+apps/api/src/modulos/sadt/porta-propria.ts
+packages/contratos/src/sadt/entradas.ts
+packages/contratos/src/sadt/transfusao.ts
+packages/contratos/src/sadt/vocabulario.ts
+packages/dominio-sadt/src/transfusao/ato-transfusional.ts
+packages/contratos/src/permissoes/rouparia.ts
+packages/contratos/src/permissoes/sadt.ts
+packages/contratos/src/permissoes/sessoes-digitalizacao.ts
+packages/contratos/src/permissoes/sistema.ts
+packages/contratos/src/permissoes/suprimentos.ts
+packages/contratos/src/permissoes/tipos.ts
+apps/api/src/modulos/manutencao/porta-propria.ts
+apps/web/src/modulos/manutencao/comum-manutencao.ts
+packages/contratos/src/manutencao/entradas.ts
+apps/api/src/modulos/tiss/acompanhamento.ts
+apps/api/src/modulos/tiss/porta-propria.ts
+apps/api/src/modulos/tiss/simulador.ts
+apps/api/src/modulos/patrimonio/porta-propria.ts
+packages/contratos/src/patrimonio/patrimonio.ts
+packages/dominio-patrimonio/src/depreciacao.ts
+packages/dominio-patrimonio/src/movimento.ts
+packages/dominio-patrimonio/src/origem.ts
+apps/api/src/autorizacao/catalogo.ts
+apps/api/src/versao.ts

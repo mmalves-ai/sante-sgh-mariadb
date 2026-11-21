@@ -7,7 +7,7 @@ import { nomesLegiveis } from '@sgh/dominio-acesso';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { contasSghDoAmbiente, PortaContasBancoPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const C = { rede: 'teste', hospital: 'l0202e' };
 

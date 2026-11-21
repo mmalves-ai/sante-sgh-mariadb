@@ -6,7 +6,7 @@ import { CLASSIFICACOES_OMS, GRAUS_DANO, TIPOS_INCIDENTE } from '@sgh/contratos'
 import { type ContextoNucleo, ErroOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { cobra } from './apoio-propria.js';
 
-export const CLIENTE_QUA = 'f22_o4';
+export const CLIENTE_QUA = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 export const SEM_BANCO_QUA = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const P_QUA = 'L0403Q';
 

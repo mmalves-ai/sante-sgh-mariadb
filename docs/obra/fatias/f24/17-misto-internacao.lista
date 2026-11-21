@@ -1,0 +1,31 @@
+# assunto: internacao+repasse+config
+# cliente_teste: f24_17mistointernacao
+apps/api/src/modulos/internacao/fonte-propria.ts
+apps/api/src/modulos/internacao/leitos.controller.ts
+packages/contratos/src/internacao/adt-respostas.ts
+packages/contratos/src/internacao/adt.ts
+packages/contratos/src/internacao/digitalizacao.ts
+packages/contratos/src/internacao/movimento.ts
+packages/dominio-internacao/src/painel.ts
+packages/dominio-internacao/src/tempo.ts
+apps/api/src/modulos/repasse/porta-memoria.ts
+apps/api/src/modulos/repasse/porta-propria.ts
+apps/api/src/modulos/repasse/servico.ts
+packages/contratos/src/repasse/entradas.ts
+packages/contratos/src/repasse/modelo.ts
+packages/contratos/src/repasse/respostas.ts
+packages/contratos/src/repasse/vocabulario.ts
+packages/dominio-repasse/src/adicionais.ts
+packages/dominio-repasse/src/apuracao.ts
+packages/dominio-repasse/src/calculo.ts
+packages/dominio-repasse/src/credor.ts
+packages/dominio-repasse/src/dinheiro.ts
+packages/dominio-repasse/src/dourado.ts
+packages/dominio-repasse/src/rpa.ts
+packages/dominio-repasse/src/versao-regra.ts
+apps/api/src/modulos/config/parametros.controller.ts
+packages/dominio-config/src/dominio/declaracao.ts
+packages/dominio-config/src/dominio/exportar.ts
+packages/dominio-config/src/fim-coexistencia/usuarios-restantes.ts
+packages/dominio-config/src/homologacao/homologacao.ts
+packages/dominio-config/src/parametros/vigencia.ts

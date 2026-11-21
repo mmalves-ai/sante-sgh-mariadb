@@ -13,7 +13,7 @@ import type { ContextoTiss, PortaTiss } from './porta.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 import { PortaTissPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0316';
 
@@ -132,7 +132,7 @@ describe.skipIf(SEM_BANCO)('porta própria do pós-fechamento (MariaDB, cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-16' }, async (e) => {
       const agora = new Date();
       const est = (cod: string) =>

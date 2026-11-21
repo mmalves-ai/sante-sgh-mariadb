@@ -7,7 +7,7 @@ import { type ContextoOperacao, type Escritor, NucleoProprio } from '@sgh/nucleo
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import type { ContextoAdt } from './porta.js';
 
-export const CLIENTE_ADT = 'f22_o3';
+export const CLIENTE_ADT = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 export const SEM_BANCO_ADT = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 export interface MassaAdt {

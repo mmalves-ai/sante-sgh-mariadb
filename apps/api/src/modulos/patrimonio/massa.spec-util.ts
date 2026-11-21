@@ -7,7 +7,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import type { ContextoPatrimonio } from './porta.js';
 
-export const CLIENTE_PAT = 'f22_o2';
+export const CLIENTE_PAT = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const SEM_BANCO_PAT = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const P_PAT = 'L0211P';
 

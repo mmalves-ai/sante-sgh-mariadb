@@ -5,7 +5,7 @@
 // inclusão) e as sequências referenciam. Só contagens e ids saem nos logs.
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE = 'f22_o2';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const P = 'L0207';
 export const COMPETENCIA = '2026-10-01';

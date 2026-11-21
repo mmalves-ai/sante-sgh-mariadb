@@ -11,14 +11,14 @@ import {
 } from './porta-integracao-propria.js';
 import { ROTINAS_INTEGRACAO_FOLHA } from './apoio-folha.js';
 
-const c = { cliente: 'f22_o3', estabelecimento: 7, usuario: 3, correlacao: 'teste' };
+const c = { cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), estabelecimento: 7, usuario: 3, correlacao: 'teste' };
 
 function dubleDe(linhas: Record<string, unknown>[]) {
   const chamadas: { sql: string; p: readonly unknown[] }[] = [];
   const nucleo = {
     lerSomente: async (_ctx: unknown, fn: (l: unknown) => Promise<unknown>) =>
       fn({
-        cliente: 'f22_o3',
+        cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'),
         consultar: async (sql: string, p: readonly unknown[] = []) => (chamadas.push({ sql, p }), linhas),
         uma: async (sql: string, p: readonly unknown[] = []) => (
           chamadas.push({ sql, p }),

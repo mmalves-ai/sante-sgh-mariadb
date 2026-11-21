@@ -15,7 +15,7 @@ import type { PortaCargos } from './porta-cargos.js';
 import { PortaCargosMemoria } from './porta-cargos-memoria.js';
 import { DEPENDENCIAS_CARGO, PortaCargosPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0303C';
 const CBO = '990303';
@@ -146,7 +146,7 @@ const escrever = (fn: (e: Escritor) => Promise<unknown>) =>
 describe.skipIf(SEM_BANCO)('porta própria de cargos e salários (MariaDB, cliente f22_o3)', () => {
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-03-03' }, async (e) => {
       const agora = new Date();
       const estab = (codigo: string) =>

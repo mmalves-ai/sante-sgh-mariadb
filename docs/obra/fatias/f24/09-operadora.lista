@@ -1,0 +1,22 @@
+# assunto: operadora
+# cliente_teste: f24_09operadora
+apps/api/src/modulos/operadora/ans-porta-propria.ts
+apps/api/src/modulos/operadora/apoio-banco.ts
+apps/api/src/modulos/operadora/apoio-porta-propria.ts
+apps/api/src/modulos/operadora/atendimento-porta-propria.ts
+apps/api/src/modulos/operadora/autorizacao-porta-propria.ts
+apps/api/src/modulos/operadora/cobranca-porta-propria.ts
+apps/api/src/modulos/operadora/contas-porta-propria.ts
+apps/api/src/modulos/operadora/porta-propria.ts
+apps/api/src/modulos/operadora/portal-prestador-servico.ts
+packages/contratos/src/operadora/ans.ts
+packages/contratos/src/operadora/atendimento.ts
+packages/contratos/src/operadora/autorizacao.ts
+packages/contratos/src/operadora/cobranca.ts
+packages/contratos/src/operadora/inventario.ts
+packages/contratos/src/operadora/rede.ts
+packages/contratos/src/operadora/vocabulario.ts
+packages/dominio-operadora/src/ans/sib.ts
+packages/dominio-operadora/src/ans/sip.ts
+packages/dominio-operadora/src/ans/tps.ts
+packages/dominio-operadora/src/autorizacao.ts

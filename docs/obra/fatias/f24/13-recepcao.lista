@@ -1,0 +1,18 @@
+# assunto: recepcao
+# cliente_teste: f24_13recepcao
+apps/api/src/modulos/recepcao/aplicacao/worklist-recepcao.ts
+apps/api/src/modulos/recepcao/classificacao-porta-propria.ts
+apps/api/src/modulos/recepcao/operacoes.ts
+apps/api/src/modulos/recepcao/porta-propria.ts
+apps/api/src/modulos/recepcao/worklist.controller.ts
+apps/web/src/modulos/recepcao/formato.ts
+apps/web/src/modulos/recepcao/i18n-classificacao.ts
+packages/contratos/src/recepcao/classificacao.ts
+packages/contratos/src/recepcao/entradas.ts
+packages/contratos/src/recepcao/estados.ts
+packages/contratos/src/recepcao/protocolo-gerenciado.ts
+packages/contratos/src/recepcao/respostas.ts
+packages/contratos/src/recepcao/vocabulario.ts
+packages/dominio-recepcao/src/fluxo.ts
+packages/dominio-recepcao/src/prioridade.ts
+packages/dominio-recepcao/src/worklist/ordenacao.ts

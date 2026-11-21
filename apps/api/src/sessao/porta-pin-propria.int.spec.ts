@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type PortaPin, portaPinMemoria, type TrilhaPin } from './porta-pin.js';
 import { PortaPinPropria } from './porta-pin-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const BANCO = `cliente_${CLIENTE}`;
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../..');

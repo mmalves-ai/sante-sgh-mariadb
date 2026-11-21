@@ -13,7 +13,7 @@ import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
 import { PortaOrcamentoPropria } from './porta-propria.js';
 import { ServicoOrcamento, type SessaoOrcamento } from './servico.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0211O';
 const ANO = 2031;

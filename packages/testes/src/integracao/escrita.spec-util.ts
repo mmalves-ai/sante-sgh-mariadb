@@ -21,9 +21,9 @@ import {
 } from '@sgh/nucleo';
 import { z } from 'zod';
 
-export const CLIENTE = 'f22_o5';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 /** Segundo cliente de teste, só para provar o isolamento entre clientes (um banco por cliente, ADR 0002). */
-export const CLIENTE_B = 'f22_o5_b';
+export const CLIENTE_B = process.env['SGH_CLIENTE_TESTE_B']?.trim() || 'f22_o5_b';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 /**
  * @deprecated Transição da onda 5 (lotes 05-02 a 05-05): use `!SEM_BANCO`. Não depende da cópia do sistema de origem;

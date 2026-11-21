@@ -1,0 +1,31 @@
+# assunto: financeiro+adt+enfermagem-2
+# cliente_teste: f24_16mistofinanceiro
+apps/api/src/modulos/financeiro/porta-propria.ts
+packages/contratos/src/financeiro/entradas.ts
+packages/contratos/src/financeiro/regras/alcada.ts
+packages/contratos/src/financeiro/regras/classificacao.ts
+packages/contratos/src/financeiro/regras/credor.ts
+packages/contratos/src/financeiro/regras/glosa-titulo.ts
+packages/contratos/src/financeiro/regras/recusa.ts
+packages/contratos/src/financeiro/regras/segregacao.ts
+packages/contratos/src/financeiro/regras/situacao-titulo.ts
+packages/contratos/src/financeiro/regras/tipo-movimento.ts
+packages/contratos/src/financeiro/regras/titulo-pagar.ts
+packages/contratos/src/financeiro/regras/titulo-receber.ts
+packages/contratos/src/financeiro/respostas.ts
+packages/dominio-financeiro/src/dre.ts
+packages/dominio-financeiro/src/fluxo-caixa.ts
+packages/dominio-financeiro/src/indicadores.ts
+packages/dominio-financeiro/src/lote-contabil.ts
+packages/dominio-financeiro/src/nfse.ts
+packages/dominio-financeiro/src/orcamento.ts
+packages/dominio-financeiro/src/remessa.ts
+apps/api/src/modulos/adt/higienizacao.controller.ts
+apps/api/src/modulos/adt/internacao.controller.ts
+apps/api/src/modulos/adt/leitos.controller.ts
+apps/api/src/modulos/adt/nir-porta-propria.ts
+apps/api/src/modulos/adt/porta-propria.ts
+apps/api/src/modulos/adt/porta.ts
+apps/api/src/modulos/adt/same.controller.ts
+apps/web/src/modulos/adt/regras-tela.ts
+packages/dominio-enfermagem/src/tempo.ts

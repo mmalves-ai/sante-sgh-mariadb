@@ -16,7 +16,7 @@ import {
 import { FonteConfiguracaoPropria } from './configuracao-propria.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const H = 'f22o103a';
 const OUTRO = 'f22o103b';

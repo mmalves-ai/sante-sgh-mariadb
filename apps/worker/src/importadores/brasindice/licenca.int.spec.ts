@@ -19,7 +19,7 @@ import {
 import { PortaPublicacaoPropria } from '../porta-propria.js';
 import { publicarCarga } from '../publicador.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const H = 'fo513l';
 
 describe.skipIf(SEM_BANCO)('licença do Brasíndice (f22_o5)', () => {

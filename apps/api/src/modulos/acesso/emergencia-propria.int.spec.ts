@@ -10,7 +10,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PONTO_ALERTA_EMERGENCIA, RegistroEmergenciaPropria, RELAY_ENTREGA_ALERTA_EMERGENCIA } from './emergencia.controller.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'l0104e';
 const LOGIN = 'teste.l0104e';

@@ -29,7 +29,7 @@ import {
 import { PortaRelatorioMemoria } from './porta-memoria.js';
 import { horaNoBanco, PortaRelatorioPropria, relogioNoFuso } from './porta-propria.js';
 
-const CLIENTE = 'f22_o4';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'R0404';
 
@@ -186,7 +186,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o4');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-04-04' }, async (e) => {
       const agora = new Date();
       const guardar = (tabela: string, r: { id: number; novo: boolean }) => {

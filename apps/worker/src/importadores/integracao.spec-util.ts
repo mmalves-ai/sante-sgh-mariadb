@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { conferirNome, type Escritor, type NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE = 'f22_o5';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const raiz = resolve(import.meta.dirname, '../../../..');
 

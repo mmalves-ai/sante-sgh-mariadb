@@ -13,7 +13,7 @@ import type { FonteConfiguracao } from '../../config/public-api.js';
 import { PortaSadtPropria } from '../porta-propria.js';
 import { ServicoPortal } from './portal.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 /** Configuração com o portal ligado no estabelecimento (escopo do estabelecimento, sem pré-requisito). */

@@ -10,7 +10,7 @@ import { CATALOGO_DECLARADO, PERMISSOES_PESSOAS_M52_F5 } from '@sgh/contratos';
 import { afterAll, describe, expect, it } from 'vitest';
 import { NucleoProprio } from '@sgh/nucleo';
 
-const CLIENTE_O3 = 'f22_o3';
+const CLIENTE_O3 = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO_O3 = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 const TABELAS = [

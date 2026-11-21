@@ -12,7 +12,7 @@ import type { ContextoTelemedicina, PortaTelemedicina } from './porta.js';
 import { PortaTelemedicinaMemoria } from './porta-memoria.js';
 import { civilNoFuso, instanteNoFuso, PortaTelemedicinaPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const MARCA = 'F22L0315';
 const LOGIN = 'f22.l0315.medico';

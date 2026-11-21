@@ -4,7 +4,7 @@
 // cadastros do cliente ficam: configuração).
 import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE_O3 = 'f22_o3';
+export const CLIENTE_O3 = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 export const SEM_BANCO_O3 = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0310';
 

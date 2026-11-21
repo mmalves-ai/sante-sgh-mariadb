@@ -10,7 +10,7 @@ import type { ContextoContabil, GravadorContabil } from './porta.js';
 import { chaveDoLancamento, PortaContabilPropria } from './porta-propria.js';
 import type { LancamentoParaGravar } from './tipos.js';
 
-const CLIENTE = 'f22_o4';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const COMPETENCIA = '2026-03';
 
@@ -109,7 +109,7 @@ describe.skipIf(SEM_BANCO)('porta própria da contabilidade contra o MariaDB (cl
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o4');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0401-massa' }, async (e) => {
       const agora = new Date();
       const est = (cod: string) =>

@@ -75,7 +75,7 @@ const linha =
 beforeAll(async () => {
   if (!PODE) return;
   nucleo = criarNucleo();
-  expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+  expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
   massa = await prepararBase(nucleo);
   await limparMassa(nucleo, massa);
   // A operadora do estabelecimento de teste (o contrato com o prestador é dela).

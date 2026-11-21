@@ -9,7 +9,7 @@ import { conferirNome, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { inicioMesAnterior, PortaLiberacaoPropria } from './liberacao-propria.ts';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const H = 'fo513l';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const raiz = resolve(import.meta.dirname, '../../..');

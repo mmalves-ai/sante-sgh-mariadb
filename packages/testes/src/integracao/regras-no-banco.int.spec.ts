@@ -111,7 +111,7 @@ describe.skipIf(SEM_BANCO)('regras de integridade no modelo (cliente f22_o5, tra
   });
 
   const ler = <T>(fn: Parameters<Ambiente['nucleo']['lerSomente']>[1]) =>
-    a.nucleo.lerSomente({ cliente: 'f22_o5', correlacao: 'int-regras-banco' }, fn) as Promise<T>;
+    a.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5'), correlacao: 'int-regras-banco' }, fn) as Promise<T>;
 
   it('as CHECK e as UNIQUE que substituem os gatilhos existem no banco do cliente', async () => {
     const faltam: string[] = [];

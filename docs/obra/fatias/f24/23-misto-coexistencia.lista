@@ -1,0 +1,25 @@
+# assunto: coexistencia+contratualizacao+sus+parametros+suporte+portal-paciente+precos+portal+documento+documento-assinatura
+# cliente_teste: f24_23mistocoexistencia
+packages/contratos/src/coexistencia/desligamento.ts
+packages/contratos/src/coexistencia/ensaio-firebird5.ts
+packages/contratos/src/coexistencia/ensaio-utf8.ts
+packages/contratos/src/coexistencia/fim.ts
+apps/api/src/modulos/contratualizacao/contratualizacao.controller.ts
+apps/api/src/modulos/contratualizacao/porta-propria.ts
+apps/api/src/modulos/sus/porta-propria.ts
+apps/api/src/modulos/sus/tipos.ts
+packages/contratos/src/parametros/definicoes.ts
+packages/contratos/src/parametros/pessoas.ts
+apps/api/src/modulos/suporte/plataforma.controller.ts
+apps/api/src/modulos/suporte/servico-como.ts
+packages/contratos/src/suporte/suporte.ts
+apps/api/src/modulos/portal-paciente/agenda/servico.ts
+apps/api/src/modulos/portal-paciente/aplicacao/servico.ts
+apps/api/src/modulos/precos/fonte-memoria.ts
+apps/api/src/modulos/precos/fonte-propria.ts
+packages/contratos/src/portal/agenda-online.ts
+packages/contratos/src/portal/vocabulario.ts
+packages/dominio-documento/src/assinatura/selo.ts
+packages/dominio-documento/src/zpl/modelos.ts
+packages/dominio-documento/src/zpl/opme.ts
+packages/contratos/src/documento-assinatura/vocabulario.ts

@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type RegistroEmissoes, RegistroEmissoesMemoria } from './registro.js';
 import { RegistroEmissoesPropria, registroEmissoesDaRequisicao } from './registro-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l0206';
 
@@ -106,7 +106,7 @@ describe.skipIf(SEM_BANCO || SEM_TABELA)('registro das emissões no banco (Maria
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-06' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

@@ -12,7 +12,7 @@ import type { ContextoFaturamento, PortaFaturamento } from './porta.js';
 import { PortaFaturamentoMemoria } from './porta-memoria.js';
 import { PortaFaturamentoPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0208';
 
@@ -129,7 +129,7 @@ describe.skipIf(SEM_BANCO)('porta própria da conta do paciente (MariaDB, client
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-08' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

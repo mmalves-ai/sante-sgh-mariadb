@@ -1,0 +1,22 @@
+# assunto: pep-2
+# cliente_teste: f24_05pep2
+packages/dominio-pep/src/formulario/dfm/layout.ts
+packages/dominio-pep/src/formulario/dfm/leitor.ts
+packages/dominio-pep/src/formulario/dfm/mapeamento.ts
+packages/dominio-pep/src/formulario/dfm/relatorio.ts
+packages/dominio-pep/src/gravador/colunas.ts
+packages/dominio-pep/src/gravador/registro.ts
+packages/dominio-pep/src/gravador/rtf.ts
+packages/dominio-pep/src/gravador/xml.ts
+packages/dominio-pep/src/historico.ts
+packages/dominio-pep/src/horarios.ts
+packages/dominio-pep/src/nutricao/mapa.ts
+packages/dominio-pep/src/prescricao/copia.ts
+packages/dominio-pep/src/prescricao/documento.ts
+packages/dominio-pep/src/prescricao/horarios-previstos.ts
+packages/dominio-pep/src/prescricao/montagem.ts
+packages/dominio-pep/src/prescricao/protocolo.ts
+packages/dominio-pep/src/prescricao/tempo.ts
+packages/dominio-pep/src/prescricao/vigencia.ts
+packages/dominio-pep/src/prontuario/respostas.ts
+packages/dominio-pep/src/worklist/pendencias.ts

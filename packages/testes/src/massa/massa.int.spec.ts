@@ -31,7 +31,7 @@ import {
 } from './sintetica.js';
 import { entradaSintetica, prescricaoSintetica } from './prescricao-sintetica.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const CODIGO = 'f22o5l08';
 

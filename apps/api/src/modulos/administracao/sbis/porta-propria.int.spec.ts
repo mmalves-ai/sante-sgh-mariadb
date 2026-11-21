@@ -15,7 +15,7 @@ import { ErroProblema } from '../../../problema.filter.js';
 import type { TrilhaSbis } from './porta.js';
 import { PortaSbisPropria, TABELAS_SBIS } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'f0206a';
 const EST_B = 'f0206b';
@@ -105,7 +105,7 @@ describe.skipIf(SEM_BANCO)('porta própria da certificação SBIS contra o Maria
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f22l0206' }, async (e) => {
       await limpar(e);
       const agora = new Date();

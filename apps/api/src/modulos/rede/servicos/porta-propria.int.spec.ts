@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaServicosRedePropria } from './porta-propria.js';
 import { ServicoServicosRede } from './servico.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 describe.skipIf(SEM_BANCO)('porta própria dos serviços compartilhados (cliente f22_o2)', () => {

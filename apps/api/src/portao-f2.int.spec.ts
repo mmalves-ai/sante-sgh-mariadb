@@ -46,7 +46,7 @@ describe.skipIf(SEM_BANCO)('portão da F2: paciente cadastrado → atendimento a
 
   beforeAll(async () => {
     conferencia = new NucleoProprio();
-    expect((await conferencia.cliente(CLIENTE_F22)).banco).toBe('cliente_f22_o1');
+    expect((await conferencia.cliente(CLIENTE_F22)).banco).toBe(`cliente_${CLIENTE_F22}`);
     m = await prepararMassa(conferencia);
     const est = m.estabelecimento;
     const resumo = await cifrarSenha(senha);

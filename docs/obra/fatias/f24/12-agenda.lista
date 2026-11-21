@@ -1,0 +1,18 @@
+# assunto: agenda
+# cliente_teste: f24_12agenda
+apps/api/src/modulos/agenda/porta-propria.ts
+apps/api/src/modulos/agenda/visao.ts
+apps/web/src/modulos/agenda/formato.ts
+packages/contratos/src/agenda/entradas.ts
+packages/contratos/src/agenda/exame.ts
+packages/contratos/src/agenda/sessoes.ts
+packages/contratos/src/agenda/vocabulario.ts
+packages/dominio-agenda/src/cobertura.ts
+packages/dominio-agenda/src/encaixe.ts
+packages/dominio-agenda/src/estado-horario.ts
+packages/dominio-agenda/src/exame.ts
+packages/dominio-agenda/src/grade.ts
+packages/dominio-agenda/src/indicadores.ts
+packages/dominio-agenda/src/online/regras.ts
+packages/dominio-agenda/src/sessoes/serie.ts
+packages/dominio-agenda/src/tempo.ts

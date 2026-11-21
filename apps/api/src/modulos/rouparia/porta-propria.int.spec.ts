@@ -12,7 +12,7 @@ import type { ContextoRouparia, MovimentoRoupaNovo, PortaRouparia } from './port
 import { PortaRoupariaMemoria } from './porta-memoria.js';
 import { documentoDoMovimento, PortaRoupariaPropria, relogioNoFuso } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0214';
 
@@ -106,7 +106,7 @@ describe.skipIf(SEM_BANCO)('porta própria da rouparia (MariaDB, cliente f22_o2)
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-14' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

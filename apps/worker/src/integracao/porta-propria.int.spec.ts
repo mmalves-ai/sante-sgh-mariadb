@@ -18,7 +18,7 @@ import { verificarAlertasMortos } from './integracao.service.js';
 import * as porta from './porta-propria.js';
 import { cicloVigiaFatos } from './vigia-fatos.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'fo514';
 /** A segunda unidade (fuso de Manaus): o isolamento por estabelecimento e a hora local. */

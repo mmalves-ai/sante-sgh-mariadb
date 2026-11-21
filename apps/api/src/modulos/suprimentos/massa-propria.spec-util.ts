@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { type Escritor, garantirSequencia, type NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE = 'f22_o3';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const PREFIXO = 'F22L0314';
 const RAIZ = fileURLToPath(new URL('../../../../../', import.meta.url));

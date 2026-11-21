@@ -32,7 +32,7 @@ describe.skipIf(SEM_BANCO)('porta própria do cadastro contra o MariaDB (cliente
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE_F22)).banco).toBe('cliente_f22_o1');
+    expect((await nucleo.cliente(CLIENTE_F22)).banco).toBe(`cliente_${CLIENTE_F22}`);
     m = await prepararMassa(nucleo);
     await limparMassa(nucleo, m);
     porta = new PortaCadastroPropria(nucleo, CLIENTE_F22);

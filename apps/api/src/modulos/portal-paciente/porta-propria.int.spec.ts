@@ -16,7 +16,7 @@ import type { ContextoPortal } from './porta.js';
 import { PortaPortalPropria } from './porta-propria.js';
 import type { RegistroTrilhaPortal } from './tipos.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'L0312P';
 const OUTRO = 'L0312PX';

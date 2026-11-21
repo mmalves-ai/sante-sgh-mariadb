@@ -10,7 +10,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import { FonteAdministracaoPropria } from './fonte-propria.js';
 import type { ContextoGestao, Ctx, TrilhaGestao } from './tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0205';
 const CPF = '98765432100';

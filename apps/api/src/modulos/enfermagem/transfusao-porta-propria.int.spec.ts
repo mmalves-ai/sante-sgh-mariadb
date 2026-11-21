@@ -58,7 +58,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agência transfusional (MariaDB, c
   beforeAll(async () => {
     garantirCliente();
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await montarMassa(nucleo, 'L0205T');
     porta = new PortaTransfusaoPropria(nucleo);
   }, 60_000);

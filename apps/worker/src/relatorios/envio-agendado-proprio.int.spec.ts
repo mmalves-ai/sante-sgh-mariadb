@@ -18,7 +18,7 @@ import {
 } from '../importadores/integracao.spec-util.js';
 import { PortaEnvioRelatorioPropria } from './envio-agendado-proprio.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const EST = 'fo517r';
 const OUTRO = 'fo517s';
 

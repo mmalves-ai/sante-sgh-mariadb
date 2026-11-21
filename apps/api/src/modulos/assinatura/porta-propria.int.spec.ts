@@ -12,7 +12,7 @@ import { PortaAssinaturaMemoria } from './porta-memoria.js';
 import { PortaAssinaturaPropria } from './porta-propria.js';
 import { type CertificadoParaGravar, ErroAssinatura, type TrilhaAssinatura } from './tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0201';
 const LOGIN = 'l0201.autor';
@@ -111,7 +111,7 @@ describe.skipIf(SEM_BANCO)('porta própria da assinatura ICP (MariaDB, cliente f
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'l0201-preparo' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

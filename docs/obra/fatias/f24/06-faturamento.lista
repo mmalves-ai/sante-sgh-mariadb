@@ -1,0 +1,34 @@
+# assunto: faturamento
+# cliente_teste: f24_06faturamento
+apps/api/src/modulos/faturamento/porta-propria.ts
+apps/web/src/modulos/faturamento/i18n-contratualizacao.ts
+packages/contratos/src/faturamento/contratualizacao.ts
+packages/contratos/src/faturamento/entradas.ts
+packages/contratos/src/faturamento/regras/escopo.ts
+packages/contratos/src/faturamento/regras/explicador.ts
+packages/contratos/src/faturamento/regras/fechamento.ts
+packages/contratos/src/faturamento/regras/onda4.ts
+packages/contratos/src/faturamento/regras/pacote.ts
+packages/contratos/src/faturamento/regras/particular.ts
+packages/contratos/src/faturamento/regras/situacao.ts
+packages/contratos/src/faturamento/regras/tipo-item.ts
+packages/contratos/src/faturamento/regras/tiss.ts
+packages/contratos/src/faturamento/respostas.ts
+packages/contratos/src/faturamento/sus-aih.ts
+packages/contratos/src/faturamento/sus-apac.ts
+packages/contratos/src/faturamento/sus-bpa.ts
+packages/contratos/src/faturamento/sus.ts
+packages/contratos/src/faturamento/tiss-entradas.ts
+packages/contratos/src/faturamento/tiss-lote.ts
+packages/contratos/src/faturamento/tiss-respostas.ts
+packages/dominio-faturamento/src/sus/aih.ts
+packages/dominio-faturamento/src/sus/apac.ts
+packages/dominio-faturamento/src/sus/bpa.ts
+packages/dominio-faturamento/src/sus/ciha.ts
+packages/dominio-faturamento/src/sus/compatibilidade.ts
+packages/dominio-faturamento/src/sus/identificacao-sus.ts
+packages/dominio-faturamento/src/sus/instrumento.ts
+packages/dominio-faturamento/src/sus/meta.ts
+packages/dominio-faturamento/src/sus/producao-ambulatorial.ts
+packages/dominio-faturamento/src/sus/sigtap-competencia.ts
+packages/dominio-faturamento/src/tiss/lote.ts

@@ -12,7 +12,7 @@ import { pacientesSinteticos } from './modulo.js';
 import { PortaAgendaMemoria } from './porta-memoria.js';
 import { instanteDe, localDe, PortaAgendaPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'l0104';
 const EST_B = 'l0104b';

@@ -12,7 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ContextoPortaM18, TrilhaDaGravacao } from '../exames/public-api.js';
 import { OPERACAO_CHAVE_CONTRATO, PortaContratoPropria } from './contrato-porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_DB = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const HOJE = '2026-11-21';
 
@@ -98,7 +98,7 @@ describe.skipIf(SEM_DB)('porta própria dos contratos contra o MariaDB (cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0313-ct-massa' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

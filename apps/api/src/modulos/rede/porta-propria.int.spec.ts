@@ -11,7 +11,7 @@ import { ServicoMpiRede, type SessaoRede } from './aplicacao/servico.js';
 import { PortaRedePropria } from './porta-propria.js';
 import type { TrilhaRede } from './tipos-indice.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const REDE = 'rede-f22-0213';
 const EST_A = 'f0213a';
@@ -102,7 +102,7 @@ describe.skipIf(SEM_BANCO)('porta própria do MPI da Rede contra o MariaDB (clie
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-f22l0213' }, async (e) => {
       await limpar(e);
       const agora = new Date();

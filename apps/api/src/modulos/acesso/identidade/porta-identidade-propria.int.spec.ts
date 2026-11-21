@@ -16,7 +16,7 @@ import { PortaIdentidadePropria } from './porta-identidade-propria.js';
 import { type AtorIdentidade, type PortaIdentidade, ServicoIdentidade } from './servico-identidade.js';
 import type { TrilhaIdentidade } from './tipos-identidade.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'l0203e';
 const OUTRO = 'l0203f';

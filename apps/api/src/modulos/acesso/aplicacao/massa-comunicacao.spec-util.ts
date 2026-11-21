@@ -5,7 +5,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import type { ContextoComunicacao, ContextoOperacaoComunicacao } from '../comunicacao-porta.js';
 import { OPERACOES_DICIONARIO } from '../comunicacao-operacoes.js';
 
-export const CLIENTE_COMUNICACAO = 'f22_o2';
+export const CLIENTE_COMUNICACAO = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 export interface MassaComunicacao {

@@ -16,7 +16,7 @@ import { fonteGestaoPropria } from './gestao-fonte-propria.js';
 import { type FonteGestao, fonteGestaoMemoria } from './gestao-fonte.js';
 import type { TrilhaGestao } from './gestao-tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST = 'l0202e';
 const OUTRO = 'l0202f';

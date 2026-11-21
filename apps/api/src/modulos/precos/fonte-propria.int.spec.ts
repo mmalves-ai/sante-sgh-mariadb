@@ -10,7 +10,7 @@ import type { ContextoGravacaoPreco, CtxPrecos, TrilhaPreco } from './fonte.js';
 import { FontePrecosPropria } from './fonte-propria.js';
 import { ErroPlano } from './tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0212P';
 
@@ -94,7 +94,7 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-12-precos' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

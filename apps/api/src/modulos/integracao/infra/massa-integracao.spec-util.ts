@@ -2,7 +2,7 @@
 // de teste, o padrão de troca HL7 v2 e a limpeza do que cada parceiro de teste deixou.
 import type { Escritor } from '@sgh/nucleo';
 
-export const CLIENTE = 'f22_o4';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 export async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi: unknown[]): Promise<number> {

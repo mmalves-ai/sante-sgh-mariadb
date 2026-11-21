@@ -14,7 +14,7 @@ import { PortaEspecialidadesMemoria } from './porta-memoria.js';
 import { PortaEspecialidadesPropria } from './porta-propria.js';
 import type { NovoPontoPartograma } from './tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0206E';
 
@@ -91,7 +91,7 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-06-esp' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

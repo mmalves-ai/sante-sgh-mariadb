@@ -10,7 +10,7 @@ import { type ContextoNucleo, type ContextoOperacao, type Escritor, ErroOperacao
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaFarmaciaPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0206F';
 
@@ -72,7 +72,7 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-06-far' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

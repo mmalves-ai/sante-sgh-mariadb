@@ -1,0 +1,32 @@
+# assunto: acesso
+# cliente_teste: f24_07acesso
+apps/api/src/modulos/acesso/comunicacao.controller.ts
+apps/api/src/modulos/acesso/estado-sintetico.ts
+apps/api/src/modulos/acesso/fonte-sintetica.ts
+apps/api/src/modulos/acesso/gestao-fonte-propria.ts
+apps/api/src/modulos/acesso/gestao-fonte.ts
+apps/api/src/modulos/acesso/gestao.controller.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-propria.ts
+apps/api/src/modulos/acesso/recertificacao.controller.ts
+apps/web/src/modulos/acesso/api-gestao.ts
+apps/web/src/modulos/acesso/i18n-segredos.ts
+packages/contratos/src/acesso/entrada.ts
+packages/contratos/src/acesso/gestao.ts
+packages/contratos/src/acesso/identidade.ts
+packages/contratos/src/acesso/tabelas-clinicas.gerado.ts
+packages/contratos/src/acesso/usuario-integracao.ts
+packages/dominio-acesso/src/catalogo/reconstrucao-arvore.ts
+packages/dominio-acesso/src/concessao.ts
+packages/dominio-acesso/src/politica-2fa.ts
+packages/dominio-acesso/src/politica-senha.ts
+packages/dominio-acesso/src/portal/conta.ts
+packages/dominio-acesso/src/portal/privacidade.ts
+packages/dominio-acesso/src/prova-grupos.ts
+packages/dominio-acesso/src/tempo-sessao.ts
+packages/dominio-acesso/src/tentativas.ts
+packages/dominio-acesso/src/termo.ts
+packages/dominio-acesso/src/usuario/login.ts
+packages/dominio-acesso/src/usuario/tarefas-rh.ts
+packages/dominio-acesso/src/usuario/ultimo-gestor.ts
+packages/dominio-acesso/src/usuario/usuario-modelo.ts
+packages/dominio-acesso/src/vinculo.ts

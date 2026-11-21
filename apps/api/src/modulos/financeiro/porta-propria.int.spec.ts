@@ -28,7 +28,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
   let m: MassaFinanceiro;
   let porta: PortaFinanceiroPropria;
   const contar = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o2', correlacao: 'conta-02-07' }, async (l) => Number((await l.uma(sql, p))?.['n'] ?? 0));
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'conta-02-07' }, async (l) => Number((await l.uma(sql, p))?.['n'] ?? 0));
 
   beforeAll(async () => {
     m = await montarMassa();
@@ -49,7 +49,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     const r = await porta.executar(c, 'financeiro.criarTituloPagar', e, op(c));
     expect(r.repetida).toBe(false);
     const titulo = Number(r.resultado['tituloPagar']);
-    const linha = await m.nucleo.lerSomente({ cliente: 'f22_o2', correlacao: 'x' }, (l) =>
+    const linha = await m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'x' }, (l) =>
       l.uma('SELECT numero, valor_bruto, valor_retencoes, valor_liquido, versao, situacao FROM titulo_pagar WHERE id = ?', [titulo]),
     );
     expect(String(linha?.['numero'])).toMatch(/^TP-\d+$/);
@@ -138,7 +138,7 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
     expect(await codigoDaGravacao(pagar(m.paga, versaoTexto(9)))).toBe('conflito-versao');
     const pago = await pagar(m.paga, versaoTexto(1));
     expect(pago.resultado['titulos']).toBe(1);
-    const p = await m.nucleo.lerSomente({ cliente: 'f22_o2', correlacao: 'x' }, (l) =>
+    const p = await m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'x' }, (l) =>
       l.uma('SELECT situacao, saldo, valor_pago, versao FROM parcela_pagar WHERE id = ?', [parcela]),
     );
     expect([String(p?.['situacao']), Number(p?.['saldo']), Number(p?.['valor_pago']), Number(p?.['versao'])]).toEqual([

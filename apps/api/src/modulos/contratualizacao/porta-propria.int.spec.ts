@@ -11,7 +11,7 @@ import type { ContextoPortaM18, TrilhaDaGravacao } from '../exames/public-api.js
 import { PortaContratualizacaoPropria } from './porta-propria.js';
 import { CARGA_DOMINIOS_CONTRATUALIZACAO } from './vocabulario.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'f2203a';
 const EST_B = 'f2203b';
@@ -123,7 +123,7 @@ describe.skipIf(SEM_BANCO)('porta própria da contratualização contra o MariaD
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-massa' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string, cnes: string | null) =>

@@ -1,0 +1,22 @@
+# assunto: especialidades+nutricao+portaria+rouparia+sessoes+auditoria+formatacao+onda2+catalogo+pacote-ui+inicio+organizacao+liberacao+orcamento+prontidao+pacote-contratos+texto+hotelaria
+# cliente_teste: f24_24mistoespecialidade
+apps/api/src/modulos/especialidades/porta-propria.ts
+apps/api/src/modulos/nutricao/porta-propria.ts
+apps/api/src/modulos/portaria/porta-propria.ts
+apps/api/src/modulos/rouparia/porta-propria.ts
+apps/web/src/modulos/sessoes/i18n-sessoes.ts
+packages/contratos/src/auditoria/eventos.ts
+packages/contratos/src/formatacao/hora-legada.ts
+packages/contratos/src/onda2/onda2.ts
+packages/dominio-catalogo/src/carga/janela.ts
+packages/ui/catalogo/historias.ts
+packages/contratos/src/inicio/comunicacao.ts
+packages/contratos/src/inicio/worklist.ts
+packages/dominio-organizacao/src/conferencia-leitos.ts
+packages/dominio-organizacao/src/hierarquia.ts
+packages/contratos/src/liberacao/onda4.ts
+packages/contratos/src/orcamento/orcamento.ts
+packages/contratos/src/prontidao/catalogo.ts
+packages/contratos/src/sessao.ts
+packages/contratos/src/texto/fonetica.ts
+packages/dominio-hotelaria/src/limpeza.ts

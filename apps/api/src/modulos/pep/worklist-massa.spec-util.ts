@@ -5,7 +5,7 @@
 // os CHECKs do modelo continuam valendo. A limpeza apaga tudo pelos estabelecimentos do teste.
 import type { Escritor, NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE_F22_O4 = 'f22_o4';
+export const CLIENTE_F22_O4 = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const HORA = 3_600_000;
 const DIA = 24 * HORA;
 

@@ -12,7 +12,7 @@ import { FonteInternacaoPropria } from './fonte-propria.js';
 import { ServicoInternacao } from './servico.js';
 import { MotorVigia } from './vigia.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const COD = 'L0211V';
 

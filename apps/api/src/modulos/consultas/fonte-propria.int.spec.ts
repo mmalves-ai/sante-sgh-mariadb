@@ -14,7 +14,7 @@ import { ErroConsulta, ErroEscopo } from './declaracao.js';
 import type { CtxConsulta } from './fonte.js';
 import { FonteConsultasPropria } from './fonte-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const PUBLICO = consultaPublica('suprimentos', 'capela')!;
 
@@ -46,7 +46,7 @@ describe.skipIf(SEM_BANCO)('fonte própria das consultas contra o MariaDB (clien
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-massa' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string, cnes: string | null) =>

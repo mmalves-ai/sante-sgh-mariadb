@@ -5,7 +5,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MOTIVO_GRAVACAO_PENDENTE, PortaRegistroPropria } from './registro-porta-propria.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'l0106';
 const C = { rede: CLIENTE, hospital: P, cliente: CLIENTE, estabelecimento: null, usuario: null, correlacao: P };
@@ -81,7 +81,7 @@ describe.skipIf(SEM_BANCO)('PortaRegistroPropria contra o MariaDB (cliente f22_o
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o1');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
       await limpar(e);
       const agora = new Date();

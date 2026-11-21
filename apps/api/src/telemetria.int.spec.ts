@@ -14,7 +14,7 @@ import { pino } from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { opcoesLogger } from './logger.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 // CPF sintético (dígitos verificadores válidos, nenhum titular real conhecido) e nome fictício.
 const CPF = '52998224725';

@@ -15,7 +15,7 @@ import { ServicoSituacaoOperadora } from '../aplicacao/situacao.js';
 import type { ContextoOperadora, PortaOperadora } from '../porta.js';
 import { PortaOperadoraPropria } from '../porta-propria.js';
 
-export const CLIENTE = 'f22_o2';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const PODE = process.env['SGH_NUCLEO_SEM_BANCO'] !== '1';
 /** Estabelecimento de teste (código no formato do contrato: minúsculas e dígitos). */
 export const COD = 'l0210';

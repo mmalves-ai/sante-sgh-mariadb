@@ -22,7 +22,7 @@ import {
 import { PortaPublicacaoPropria } from './porta-propria.js';
 import { cicloPublicacao, type DependenciasPublicador, publicarCarga } from './publicador.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const H = 'fo513';
 const H2 = 'fo513b';
 const CBO = ['999513', '999514'];

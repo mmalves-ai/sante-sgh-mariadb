@@ -11,7 +11,7 @@ import type { TrilhaDaGravacao } from '../../exames/public-api.js';
 import { PortaEscalaPropria } from '../escala/porta-escala-propria.js';
 import { PortaRealizadoPropria } from '../escala/porta-realizado-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../../..');
 const MARCA = `E34${Date.now().toString(36).slice(-4).toUpperCase()}`;

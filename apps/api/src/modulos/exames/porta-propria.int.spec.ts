@@ -14,7 +14,7 @@ import { PortaExameMemoria } from './porta-memoria.js';
 import { PortaExamePropria } from './porta-propria.js';
 import { civil, instanteCivil } from './relogio.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0105';
 
@@ -77,7 +77,7 @@ describe.skipIf(SEM_BANCO)('porta própria da agenda de exames (MariaDB, cliente
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o1');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-01-05' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

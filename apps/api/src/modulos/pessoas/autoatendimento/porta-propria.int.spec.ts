@@ -55,7 +55,7 @@ describe.skipIf(SEM_BANCO_O3)('porta própria do autoatendimento contra o MariaD
   let eu: ContextoAutoatendimento;
   let gestor: ContextoAutoatendimento;
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o3', correlacao: 't' }, (l) =>
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3'), correlacao: 't' }, (l) =>
       l.consultar<Record<string, unknown>>(sql, p),
     );
   const pedir = () =>

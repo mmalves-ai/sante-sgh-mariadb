@@ -6,7 +6,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import type { ContextoPorta } from './porta.js';
 import type { ContextoGravacao } from './tipos.js';
 
-export const CLIENTE_F22 = 'f22_o1';
+export const CLIENTE_F22 = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const MARCA = 'F22L0102';
 export const CODIGO_ESTAB = 'f22l0102';

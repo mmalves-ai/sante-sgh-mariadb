@@ -71,7 +71,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação contra o MariaDB
   afterAll(() => encerrarMassaQualidade(m));
 
   const ler = <T>(sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o4', correlacao: 't' }, (l) => l.consultar<Record<string, unknown> & T>(sql, p));
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 't' }, (l) => l.consultar<Record<string, unknown> & T>(sql, p));
 
   it('notificar: a linha, o protocolo pela sequência do ano, a linha do tempo e a trilha com o notificador', async () => {
     const r = await porta.gravarSgh(c, (x: { id: number }) => trilha(x.id), (g) =>
@@ -189,7 +189,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação: concorrência, 
   afterAll(() => encerrarMassaQualidade(m));
 
   const ler = (sql: string, p: unknown[]) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o4', correlacao: 't' }, (l) => l.consultar<Record<string, unknown>>(sql, p));
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 't' }, (l) => l.consultar<Record<string, unknown>>(sql, p));
 
   it('a primeira notificação do ano, duas ao mesmo tempo: as duas gravam, com números seguidos e uma sequência só', async () => {
     const ano = 2031;
@@ -218,7 +218,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação: concorrência, 
   });
 
   it('os feriados pelo endereço: nacional, o estadual da UF e o municipal do município; nem outro estado nem ponto facultativo', async () => {
-    const ids = await m.nucleo.escrever({ cliente: 'f22_o4', correlacao: 'preparo-feriados-0403' }, async (e) => {
+    const ids = await m.nucleo.escrever({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 'preparo-feriados-0403' }, async (e) => {
       const agora = new Date();
       const um = async (sel: string, p: unknown[], ins: string, pi: unknown[]) => {
         const r = await e.uma<{ id: number }>(sel, p);
@@ -252,7 +252,7 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da notificação: concorrência, 
       expect(await datas(ctxBanco(m.outro, m.codigoOutro, m.usuario))).toEqual(['2031-03-01', '2031-03-03', '2031-03-05']);
       expect(ids.munSp).not.toBe(ids.munRj);
     } finally {
-      await m.nucleo.escrever({ cliente: 'f22_o4', correlacao: 'limpeza-feriados-0403' }, async (e) => {
+      await m.nucleo.escrever({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 'limpeza-feriados-0403' }, async (e) => {
         await e.executar("DELETE FROM feriado WHERE nome LIKE 'FERIADO SINTETICO 0403%'", []);
         await e.executar('UPDATE estabelecimento SET municipio_ibge_id = NULL WHERE id IN (?, ?)', [m.est, m.outro]);
       });

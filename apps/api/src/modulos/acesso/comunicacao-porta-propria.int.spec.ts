@@ -207,7 +207,7 @@ describe.skipIf(SEM_BANCO)('porta própria da comunicação contra o MariaDB (cl
 
   it('mensagens anteriores: só as trazidas pelo conector, fora da caixa', async () => {
     const agora = new Date();
-    const id = await m.nucleo.escrever({ cliente: 'f22_o2', correlacao: 'f2201-anterior' }, async (e) => {
+    const id = await m.nucleo.escrever({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2'), correlacao: 'f2201-anterior' }, async (e) => {
       const mid = await e.inserir(
         `INSERT INTO mensagem_interna (estabelecimento_id, remetente_usuario_id, assunto, texto, situacao, enviada_em,
            origem, criado_em) VALUES (?, ?, 'Anterior', 'Mensagem sintética anterior', 'enviada', ?, 'migracao', ?)`,

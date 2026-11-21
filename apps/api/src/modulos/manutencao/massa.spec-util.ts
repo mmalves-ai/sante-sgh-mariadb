@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
 
-export const CLIENTE_MAN = 'f22_o3';
+export const CLIENTE_MAN = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 export const SEM_BANCO_MAN = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const P_MAN = 'L0303M';
 

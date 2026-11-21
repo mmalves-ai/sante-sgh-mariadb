@@ -12,7 +12,7 @@ import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { contextoDe, fonteDoBanco, reprocessar, SAIDA } from './reprocessar.ts';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const raiz = resolve(import.meta.dirname, '../../..');
 let nucleo: NucleoProprio;
 let estabelecimento = 0;

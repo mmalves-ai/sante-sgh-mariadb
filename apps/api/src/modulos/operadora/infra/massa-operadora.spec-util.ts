@@ -8,7 +8,7 @@ import { type ContextoNucleo, type Escritor, garantirSequencia, type NucleoPropr
 import type { ContextoPorta } from '../../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../../cadastro/tipos.js';
 
-export const CLIENTE = 'f22_o2';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const P = 'L0209';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 

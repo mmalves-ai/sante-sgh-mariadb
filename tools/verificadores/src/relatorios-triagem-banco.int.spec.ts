@@ -12,7 +12,7 @@ import {
   type PropostaGravavel,
 } from './relatorios-triagem-banco.ts';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const MODULOS = [0, 1, 4, 7, 8, 9, 10, 14, 15, 22, 23, 27, 99];
 

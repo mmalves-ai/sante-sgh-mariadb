@@ -20,7 +20,7 @@ import { PortaTreinamentoMemoria } from './porta-treinamento-memoria.js';
 import { PortaTreinamentoPropria } from './porta-treinamento-propria.js';
 import { ServicoTreinamento } from './servico-treinamento.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../../..');
 const FUNCAO = 'Técnico de enfermagem F2211';

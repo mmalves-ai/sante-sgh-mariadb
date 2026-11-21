@@ -35,7 +35,7 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await prepararMassa(nucleo);
     await limparNegocio(nucleo, m);
     porta = new PortaAnsOperadoraPropria(nucleo, CLIENTE, { gruposSip: async () => [] }, 'simulador');

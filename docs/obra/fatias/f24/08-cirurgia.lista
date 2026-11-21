@@ -1,0 +1,32 @@
+# assunto: cirurgia
+# cliente_teste: f24_08cirurgia
+apps/api/src/modulos/cirurgia/anestesia-porta-memoria.ts
+apps/api/src/modulos/cirurgia/anestesia-porta-propria.ts
+apps/api/src/modulos/cirurgia/anestesia-porta.ts
+apps/api/src/modulos/cirurgia/anestesia.controller.ts
+apps/api/src/modulos/cirurgia/banco-apoio.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta-propria.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta.ts
+apps/api/src/modulos/cirurgia/cirurgia.controller.ts
+apps/api/src/modulos/cirurgia/operacoes.ts
+apps/api/src/modulos/cirurgia/porta-propria.ts
+apps/api/src/modulos/cirurgia/porta.ts
+packages/contratos/src/cirurgia/anestesia-entradas.ts
+packages/contratos/src/cirurgia/anestesia-respostas.ts
+packages/contratos/src/cirurgia/anestesia-vocabulario.ts
+packages/contratos/src/cirurgia/bloco-seguro-entradas.ts
+packages/contratos/src/cirurgia/entradas.ts
+packages/contratos/src/cirurgia/respostas.ts
+packages/contratos/src/cirurgia/vocabulario.ts
+packages/dominio-cirurgia/src/checklist/trava.ts
+packages/dominio-cirurgia/src/equipe.ts
+packages/dominio-cirurgia/src/estados.ts
+packages/dominio-cirurgia/src/ficha/balanco-assinatura.ts
+packages/dominio-cirurgia/src/ficha/ficha-anestesica.ts
+packages/dominio-cirurgia/src/ficha/montar.ts
+packages/dominio-cirurgia/src/ligacao.ts
+packages/dominio-cirurgia/src/mapa.ts
+packages/dominio-cirurgia/src/pedido-portal.ts
+packages/dominio-cirurgia/src/registro.ts
+packages/dominio-cirurgia/src/sobreposicao.ts
+packages/dominio-cirurgia/src/tempo.ts

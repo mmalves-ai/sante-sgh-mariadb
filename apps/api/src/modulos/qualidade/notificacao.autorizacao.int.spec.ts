@@ -66,7 +66,7 @@ describe.skipIf(SEM_BANCO_QUA)('anonimato da notificação no MariaDB (f22_o4)',
 
   /** O texto de todas as linhas ligadas à notificação (a notificação, os eventos, os envios e a trilha). */
   const rastro = (id: number) =>
-    m.nucleo.lerSomente({ cliente: 'f22_o4', correlacao: 't' }, async (l) => {
+    m.nucleo.lerSomente({ cliente: (process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4'), correlacao: 't' }, async (l) => {
       const linhas = [
         ...(await l.consultar('SELECT * FROM notificacao_incidente WHERE id = ?', [id])),
         ...(await l.consultar('SELECT * FROM notificacao_incidente_evento WHERE notificacao_incidente_id = ?', [id])),

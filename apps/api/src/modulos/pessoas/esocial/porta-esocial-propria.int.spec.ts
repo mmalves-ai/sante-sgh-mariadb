@@ -21,7 +21,7 @@ import {
   versaoDoLeiaute,
 } from './porta-esocial-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const REF = 900_000 + randomInt(90_000);
 const LOGIN = 'f22.0305.teste';

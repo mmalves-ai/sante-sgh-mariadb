@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as L from './leituras.js';
 import { FonteCargaPropria } from './fonte-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 describe.skipIf(SEM_BANCO)('linha de base de carga sobre o banco próprio (cliente f22_o2)', () => {

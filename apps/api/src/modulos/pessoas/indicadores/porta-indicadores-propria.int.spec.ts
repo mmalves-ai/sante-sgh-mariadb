@@ -15,7 +15,7 @@ import type { ContextoIndicadores, PortaIndicadoresPessoas } from './porta-indic
 import { type FatosIndicadoresPessoas, PortaIndicadoresPessoasMemoria } from './porta-indicadores-memoria.js';
 import { PortaIndicadoresPessoasPropria } from './porta-indicadores-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'L0308A';
 const EST_B = 'L0308B';
@@ -173,7 +173,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos indicadores de pessoas (MariaDB, 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-l0308' }, async (e) => {
       const g = new Gerador(e);
       const est = async (codigo: string) => {

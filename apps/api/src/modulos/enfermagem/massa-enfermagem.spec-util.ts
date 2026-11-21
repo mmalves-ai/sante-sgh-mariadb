@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { type ContextoNucleo, type Escritor, NucleoProprio } from '@sgh/nucleo';
 
-export const CLIENTE = 'f22_o2';
+export const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 export const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 export const P = 'L0205';
 const RAIZ = resolve(import.meta.dirname, '../../../../..');

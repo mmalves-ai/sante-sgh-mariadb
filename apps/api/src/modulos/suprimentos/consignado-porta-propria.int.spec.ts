@@ -12,7 +12,7 @@ import type { ContextoPortaM18, TrilhaDaGravacao } from '../exames/public-api.js
 import type { LinhaMovimentoConsignado } from './consignado-porta.js';
 import { OPERACAO_CHAVE_CONSIGNADO, PortaConsignadoPropria } from './consignado-porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const SEM_DB = SEM_BANCO;
 
@@ -92,7 +92,7 @@ describe.skipIf(SEM_DB)('porta própria do consignado contra o MariaDB (cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0313-massa' }, async (e) => {
       const agora = new Date();
       const est = (codigo: string) =>

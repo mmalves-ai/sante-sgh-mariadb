@@ -1,0 +1,16 @@
+# assunto: contabil
+# cliente_teste: f24_14contabil
+apps/api/src/modulos/contabil/porta-memoria.ts
+apps/api/src/modulos/contabil/porta-propria.ts
+packages/contratos/src/contabil/entradas.ts
+packages/contratos/src/contabil/rotas.ts
+packages/contratos/src/contabil/vocabulario.ts
+packages/dominio-contabil/src/depara.ts
+packages/dominio-contabil/src/derivacao.ts
+packages/dominio-contabil/src/dinheiro.ts
+packages/dominio-contabil/src/fatos.ts
+packages/dominio-contabil/src/fontes.ts
+packages/dominio-contabil/src/receita.ts
+packages/dominio-contabil/src/registro.ts
+packages/dominio-contabil/src/regra.ts
+packages/dominio-contabil/src/sped.ts

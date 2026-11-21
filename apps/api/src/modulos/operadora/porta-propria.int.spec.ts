@@ -65,7 +65,7 @@ describe.skipIf(!PODE)('porta própria da operadora (MariaDB, cliente f22_o2)', 
 
   beforeAll(async () => {
     nucleo = criarNucleo();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await prepararBase(nucleo);
     await limparMassa(nucleo, m);
     await limparCatalogos();

@@ -20,7 +20,7 @@ import { AcessoProntuarioRede, type SessaoAcessoRede } from '../acesso-rede.js';
 import type { ServicoDocumentos } from '../documentos-servico.js';
 
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
-const CLIENTE = 'f22_o4';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o4';
 const REDE = 'rede-l0402';
 const P = 'l0402';
 const AQUI = `${P}r`;
@@ -78,7 +78,7 @@ describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (ba
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o4');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
       await limpar(e);
       const agora = new Date();

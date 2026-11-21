@@ -13,7 +13,7 @@ import type { ContextoPortaM18 } from '../../exames/public-api.js';
 import { PortaCalculoFolhaPropria } from '../folha/porta-calculo-propria.js';
 import { PortaFolhaPropria } from '../folha/porta-folha-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 /** CPF sintético com dígitos válidos (não é de pessoa real). */
 const CPF = '52998224725';

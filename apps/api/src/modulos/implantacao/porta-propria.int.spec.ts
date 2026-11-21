@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServicoConferenciaInstalacao } from './aplicacao/conferencia.js';
 import { contaSemHost, PortaImplantacaoPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const c = { rede: 'rede-teste', hospital: 'L0208A' };
 
@@ -17,7 +17,7 @@ describe.skipIf(SEM_BANCO)('porta própria da implantação (MariaDB, cliente f2
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     porta = new PortaImplantacaoPropria(nucleo, CLIENTE);
   });
   afterAll(async () => {

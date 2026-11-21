@@ -18,7 +18,7 @@ import type { ContextoGravacaoDigitalizacao } from './porta.js';
 import { PortaDigitalizacaoPropria } from './porta-propria.js';
 import type { CapturaDigitalizacao } from './tipos.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const BANCO = `cliente_${CLIENTE}`;
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
@@ -167,7 +167,7 @@ describe.skipIf(SEM_BANCO)('porta própria da digitalização (MariaDB, cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o3');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     porta = new PortaDigitalizacaoPropria(nucleo);
     const modelo = () =>
       nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'f22-0302-modelo' }, async (l) => {

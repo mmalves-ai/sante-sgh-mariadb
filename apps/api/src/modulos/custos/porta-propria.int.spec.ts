@@ -12,7 +12,7 @@ import { PortaCustosMemoria } from './porta-memoria.js';
 import { codigoEstatisticaNoBanco, PortaCustosPropria } from './porta-propria.js';
 import type { ContextoCustos, TrilhaCustos } from './tipos.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const EST_A = 'f2203a';
 const EST_B = 'f2203b';
@@ -71,7 +71,7 @@ describe.skipIf(SEM_BANCO)('porta própria dos custos contra o MariaDB (cliente 
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     await nucleo.escrever({ cliente: CLIENTE, correlacao: 'f22-0203-massa' }, async (e) => {
       const agora = new Date();
       // Os mesmos estabelecimentos fictícios da integração da contratualização (o A com o CNES de teste).

@@ -25,7 +25,7 @@ import { valoresDeControle } from '../indicadores-controle-leitura.ts';
 import { ambienteDoVigia, coletarTransacoes } from '../k6-coletor.ts';
 import { desviosDaConta, lerPrivilegiosDaConta, nomeDaConta } from '../privilegios-banco.ts';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const raiz = resolve(import.meta.dirname, '../../../..');
 const AGORA = Date.UTC(2026, 6, 5, 12);

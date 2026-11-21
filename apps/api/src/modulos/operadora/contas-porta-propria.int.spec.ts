@@ -29,7 +29,7 @@ describe.skipIf(SEM_BANCO)('porta própria das contas médicas recebidas (MariaD
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
-    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o2');
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe(`cliente_${CLIENTE}`);
     m = await prepararMassa(nucleo);
     await limparNegocio(nucleo, m);
     porta = new PortaContasOperadoraPropria(

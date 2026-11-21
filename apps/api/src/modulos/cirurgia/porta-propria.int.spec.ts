@@ -15,7 +15,7 @@ import { PortaAnestesiaPropria } from './anestesia-porta-propria.js';
 import { PortaBlocoSeguroPropria } from './bloco-seguro-porta-propria.js';
 import { PortaCirurgiaPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'C0301';
 const MOTIVO = MOTIVOS_CANCELAMENTO_CIRURGIA[0]!.codigo;

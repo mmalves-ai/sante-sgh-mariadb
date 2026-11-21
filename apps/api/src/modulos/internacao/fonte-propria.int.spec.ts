@@ -15,7 +15,7 @@ import type { CtxInternacao } from './fonte.js';
 import { FonteInternacaoPropria } from './fonte-propria.js';
 import { MARCA_ZERO, MotorVigia } from './vigia.js';
 
-const CLIENTE = 'f22_o1';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const P = 'L0105';
 

@@ -14,7 +14,7 @@ import { CifraCpf } from './cifra-cpf.js';
 import type { GravadorPessoas } from './porta.js';
 import { PortaPessoasPropria } from './porta-propria.js';
 
-const CLIENTE = 'f22_o3';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o3';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = resolve(import.meta.dirname, '../../../../..');
 const SUFIXO = randomUUID().replace(/-/g, '').slice(0, 8);

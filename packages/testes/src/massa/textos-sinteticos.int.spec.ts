@@ -6,7 +6,7 @@ import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CORPUS_ACENTUADO, textoLongoAcentuado } from './textos-sinteticos.js';
 
-const CLIENTE = 'f22_o5';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o5';
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 
 describe.skipIf(SEM_BANCO)('textos sintéticos em coluna utf8mb4 do MariaDB (cliente f22_o5)', () => {

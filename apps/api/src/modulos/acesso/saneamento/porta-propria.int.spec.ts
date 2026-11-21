@@ -26,7 +26,7 @@ import {
 import type { TrilhaSaneamento } from './porta.js';
 import { type AtorSaneamento, type ContextoExecucaoSaneamento, OPERACOES_SANEAMENTO, ServicoSaneamento } from './servico.js';
 
-const CLIENTE = 'f22_o2';
+const CLIENTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o2';
 const BANCO = `cliente_${CLIENTE}`;
 const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
 const RAIZ = fileURLToPath(new URL('../../../../../../', import.meta.url));
