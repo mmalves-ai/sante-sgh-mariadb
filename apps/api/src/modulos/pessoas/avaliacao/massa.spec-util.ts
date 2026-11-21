@@ -28,11 +28,25 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
   return l ? Number(l.id) : e.inserir(ins, pi);
 }
 
-/** O primeiro registro de um catálogo oficial do cliente (nome literal; o catálogo vazio para a integração). */
+/** O primeiro registro de um catálogo oficial do cliente (nome literal). Catálogo vazio no cliente de teste: o sexo
+ * falha (é carga do criar cliente); o tipo de vínculo e a categoria ganham uma linha sintética da massa. */
+const SINTETICO: Record<'tipo_vinculo_trabalho' | 'categoria_trabalhador', [string, unknown[]]> = {
+  tipo_vinculo_trabalho: [
+    'INSERT INTO tipo_vinculo_trabalho (codigo_cnes, nivel, codigo_vinculo, descricao, criado_em) VALUES (?, ?, ?, ?, ?)',
+    ['L0302', 'vinculo', '98', 'Vínculo sintético', new Date()],
+  ],
+  categoria_trabalhador: [
+    'INSERT INTO categoria_trabalhador (codigo_esocial, descricao, grupo, criado_em) VALUES (?, ?, ?, ?)',
+    ['Z32', 'Categoria sintética', 'empregado', new Date()],
+  ],
+};
 async function primeiro(e: Escritor, tabela: 'sexo' | 'tipo_vinculo_trabalho' | 'categoria_trabalhador') {
   const r = await e.uma<{ id: number }>(`SELECT id FROM ${tabela} ORDER BY id LIMIT 1`, []);
-  if (!r) throw new Error(`O catálogo ${tabela} está vazio no cliente de teste ${CLIENTE_O3}.`);
-  return Number(r.id);
+  if (r) return Number(r.id);
+  if (tabela === 'sexo')
+    throw new Error(`O catálogo ${tabela} está vazio no cliente de teste ${CLIENTE_O3}.`);
+  const [ins, p] = SINTETICO[tabela];
+  return e.inserir(ins, p);
 }
 
 export function ctxO3(est: number, usuario: number | null, codigo?: string): ContextoNucleo {

@@ -1,0 +1,44 @@
+{
+ "lote": "p-pessoas-esocial",
+ "pedidos": [
+  {
+   "tipo": "contrato",
+   "arquivos": [
+    "apps/api/src/modulos/pessoas/esocial/porta-esocial.ts (FichaEsocialCifrada, GravacaoFichaEsocial, GravadorEsocial.gravarFicha, PortaEsocial.ficha)",
+    "apps/api/src/modulos/pessoas/esocial/servico-esocial.ts (ficha, registrarFicha, decifrarFicha)",
+    "apps/api/src/modulos/pessoas/esocial/porta-esocial-memoria.ts"
+   ],
+   "motivo": "O DDL v3 (decisão 2) guardou a ficha do eSocial no cadastro estruturado (pessoa_fisica, endereco_pessoa, estagio_colaborador, regime de jornada, vinculo_trabalho.regime_controle_jornada e indicativo_admissao), mas a porta ainda recebe e devolve a ficha inteira cifrada (dadosCifrados). A porta própria não tem a cifra e não pode gravar colunas de um texto cifrado. Pedido: a porta passa a ler e gravar a FichaEsocialVinculo estruturada (o serviço deixa de cifrar o JSON; quem vê continua decidido por pessoas.esocial.gerar). Até lá ficha() e gravarFicha seguem 'modelo-pendente' (porta-esocial-propria.ts:38,111,117).",
+   "decisao_dono": "A ficha do eSocial passa a gravar dados da pessoa (sexo, raça e cor, estado civil, escolaridade, nome social, países, NIS e endereço) no cadastro de pessoas: confirmar que a tela do eSocial pode alterar o cadastro da pessoa, ou se só lê dele e recusa divergência."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "apps/api/src/modulos/pessoas/sesmt/porta-sesmt-propria.ts:236-239,1400",
+   "motivo": "Mantido o pedido do 02-pessoas-2: o registro de proteção (entrega de EPI, leitura do dosímetro, exposição a quimioterápico) endereçado por tipo + id no contrato (sesmt-entradas.ts), na porta (porta-sesmt.ts), no serviço e na web. Os ids das três tabelas se repetem; codificar o tipo no id seria gambiarra. Sem isso a leitura do dosímetro e a exposição seguem 'modelo-pendente'."
+  },
+  {
+   "tipo": "composicao",
+   "arquivos": [
+    "apps/api/src/modulos/pessoas/ponto/porta-ponto-propria.ts (grava por NucleoProprio.escrever, não pelo Executor)",
+    "apps/api/src/modulos/pessoas/folha/porta-calculo-propria.ts:249 (gravadorCalculo não exportado)",
+    "apps/api/src/modulos/pessoas/porta-propria.ts (gravador do cadastro sobre TxOperacao)",
+    "apps/api/src/modulos/pessoas/modulo.ts:241 (PortaAutoatendimentoPropria sem efeitos)"
+   ],
+   "motivo": "Mantido o pedido do 01-pessoas-1/03-pessoas: o efeito da aprovação do autoatendimento no ponto, nas férias e no cadastro precisa dos gravadores dessas portas sobre a MESMA TxOperacao (EfeitosAutoatendimento já está pronto em autoatendimento/porta-propria.ts:62). Reescrever ajuste de ponto, férias e correção de cadastro dentro do autoatendimento duplicaria regra de outros módulos. Enquanto isso, autoatendimento/porta-propria.ts:17 segue 'modelo-pendente' só na aprovação com efeito."
+  },
+  {
+   "tipo": "dado",
+   "arquivo": "catalogos/carregadores/ (novo: tabelas oficiais do eSocial e FPAS)",
+   "motivo": "Os parâmetros do empregador agora gravam a classificação tributária pelo codigo_esocial da tabela_esocial fonte 'esocial' código '08' e o FPAS pela tabela fpas. Não há carregador versionado dessas tabelas (regra 7): num cliente novo a gravação recusa com 'catalogo-pendente' até o catálogo ser carregado."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "cadastro_empregador",
+   "colunas": [
+    "indicador_cooperativa VARCHAR(20) NULL (sem DEFAULT; CHECK aceita NULL)",
+    "construtora BOOLEAN NULL (sem DEFAULT)"
+   ],
+   "motivo": "No contrato (esquemaEmpregadorEsocial) indCoop e indConstr são anuláveis: nulo = não informado, e no S-1000 as tags têm minOccurs=0 e só cabem em certas classificações tributárias. Com NOT NULL DEFAULT a ausência não fica guardada e a releitura viraria 0, pondo as tags no evento (troca de sentido fiscal). Até o DDL, a porta recusa com 'modelo-pendente' a gravação com um dos dois nulos (porta-esocial-propria.ts, incluirVigenciaEmpregador); depois, gravar NULL e reler NULL (a leitura já devolve nulo para coluna nula)."
+  }
+ ]
+}

@@ -11,7 +11,6 @@ export * from './permissoes/config.js';
 export * from './validacao/erro.js';
 export * from './codec/cp1252.js';
 export * from './codec/corpus-cp1252.js';
-export * from './formatacao/hora-legada.js';
 export * from './formatacao/data-legada.js';
 export * from './formatacao/hora.js';
 export * from './formatacao/booleano.js';

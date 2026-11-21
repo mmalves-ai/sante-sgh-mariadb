@@ -8,8 +8,8 @@
 // Melhoria: os fatos nascem na transação do módulo que os publica (fato_contabil); a leitura incremental por faixa de
 // chave das tabelas de outro sistema saiu (convivência, ADR 0003).
 // Melhoria: falha de leitura num estabelecimento fica nele (resultado com o código) e o ciclo segue nos demais.
-// Melhoria: operação indisponível no banco (recusa `modelo-pendente`) vai ao log com o código, uma vez por
-// estabelecimento e ciclo, e o ciclo segue; nunca vira "zero lançamentos" calado.
+// Melhoria: a recusa da contabilização (período encerrado, conta inexistente, banco indisponível) vai ao log com o
+// código, uma vez por estabelecimento e ciclo, e o ciclo segue; nunca vira "zero lançamentos" calado.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { dentroDaJanela, lerJanela } from '@sgh/dominio-catalogo';
 import { ErroOperacao, NucleoProprio } from '@sgh/nucleo';
@@ -52,7 +52,7 @@ export interface ResultadoEstabelecimento {
   readonly estabelecimento: string;
   readonly pendentes: number;
   readonly lancamentos: number;
-  /** Código da falha da contabilização (ex.: `modelo-pendente`); null: rodou ou não foi pedida. */
+  /** Código da falha da contabilização (ex.: `periodo-encerrado`); null: rodou ou não foi pedida. */
   readonly falha: string | null;
 }
 

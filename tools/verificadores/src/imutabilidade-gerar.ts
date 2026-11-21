@@ -1,5 +1,5 @@
 // pnpm imutabilidade:gerar -- [--conferir]
-// M59-F3 (ficha do M59, regra 6): regrava a lista gerada das tabelas clínicas (a partir da matriz de cobertura) e
+// M59-F3 (ficha do M59, regra 6): regrava a lista gerada das tabelas clínicas (a partir do DDL do modelo próprio) e
 // confere o repositório (código das portas e migrações sem DELETE clínico fora das exceções). Nunca grava no banco.
 // Com --conferir, só confere (sai 1 se desatualizado). Sem tabela clínica reconhecida no modelo, recusa (sai 1).
 // Melhoria (ADR 0003): o par de scripts de REVOKE da conta do banco de origem (--conta) saiu; no banco próprio a
@@ -8,7 +8,6 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { lerArgumentos } from './argumentos.ts';
 import {
-  CAMINHO_MATRIZ,
   CAMINHO_TABELAS_CLINICAS,
   ErroSemTabelasClinicas,
   MODULOS_CLINICOS_DDL,
@@ -58,22 +57,14 @@ try {
   console.error((e as Error).message);
   falha = true;
 }
-// A lista com os nomes do sistema de origem (contrato) só é regenerada quando a matriz de cobertura existe; sem ela,
-// o aviso é explícito e a guarda segue pela lista do modelo (pedido do lote 05-10).
+// A lista do contrato sai do DDL do modelo próprio (a mesma que a guarda usa), nunca dos nomes da origem.
 const caminho = resolve(RAIZ, CAMINHO_TABELAS_CLINICAS);
-let emDia = true;
-if (!existsSync(resolve(RAIZ, CAMINHO_MATRIZ))) {
-  console.warn(
-    `aviso: ${CAMINHO_MATRIZ} ausente; ${CAMINHO_TABELAS_CLINICAS} não foi regenerado (a guarda usa a lista do modelo)`,
-  );
-} else {
-  const texto = gerarTabelasClinicas();
-  emDia = existsSync(caminho) && readFileSync(caminho, 'utf8') === texto;
-  if (!emDia && !bandeiras.has('conferir')) {
-    writeFileSync(caminho, texto);
-    console.log(`gravado: ${CAMINHO_TABELAS_CLINICAS}`);
-    emDia = true;
-  }
+const texto = gerarTabelasClinicas();
+let emDia = existsSync(caminho) && readFileSync(caminho, 'utf8') === texto;
+if (!emDia && !bandeiras.has('conferir')) {
+  writeFileSync(caminho, texto);
+  console.log(`gravado: ${CAMINHO_TABELAS_CLINICAS}`);
+  emDia = true;
 }
 if (bandeiras.has('conferir') && !emDia)
   console.error(`desatualizado: ${CAMINHO_TABELAS_CLINICAS} (rode pnpm imutabilidade:gerar)`);

@@ -4,6 +4,7 @@
 // quantidade com unidade, grade, CID), em edição ou só leitura. O comportamento é o do formulário de origem: a
 // regra só habilita e desabilita (o valor do campo desabilitado continua); o cálculo é PROPOSTO e o profissional
 // confirma; o valor trazido do registro anterior fica marcado até ser confirmado. Recursivo nas seções.
+import { FORMATO_HORA } from '@sgh/contratos';
 import type { CampoRegistro, Paragrafo, RespostaRegistro, ValorResposta } from '@sgh/contratos';
 import { SanteBotao, SanteCampoTexto, SanteData, SanteHora, SanteOpcoes, SanteSelecao } from '@sgh/ui';
 import { computed, useId } from 'vue';
@@ -77,9 +78,8 @@ const data = computed<string | null>({
   set: (d) => atualizar(d ? { tipo: 'data', data: d } : null),
 });
 const hora = computed<string | null>({
-  get: () => (v.value?.tipo === 'hora' ? v.value.hora.replace(':', '') : null),
-  set: (h) =>
-    atualizar(h && /^\d{4}$/.test(h) ? { tipo: 'hora', hora: `${h.slice(0, 2)}:${h.slice(2)}` } : null),
+  get: () => (v.value?.tipo === 'hora' ? v.value.hora : null),
+  set: (h) => atualizar(h && FORMATO_HORA.test(h) ? { tipo: 'hora', hora: h } : null),
 });
 const escolha = computed<string>({
   get: () => (v.value?.tipo === 'escolha' ? String(v.value.indice) : ''),

@@ -101,9 +101,9 @@ function abrirRegistro(x: LinhaRealizado): void {
   decidindo.value = null;
   const base = x.realizado ?? { inicio: x.previstoInicio, fim: x.previstoFim };
   iniDia.value = base.inicio.slice(0, 10);
-  iniHora.value = base.inicio.slice(11, 16).replace(':', '');
+  iniHora.value = base.inicio.slice(11, 16);
   fimDia.value = base.fim.slice(0, 10);
-  fimHora.value = base.fim.slice(11, 16).replace(':', '');
+  fimHora.value = base.fim.slice(11, 16);
   origem.value = 'informado';
   obs.value = '';
   sugestaoTexto.value = null;
@@ -119,9 +119,9 @@ async function sugerir(): Promise<void> {
       return;
     }
     iniDia.value = s.sugestao.inicio.slice(0, 10);
-    iniHora.value = s.sugestao.inicio.slice(11, 16).replace(':', '');
+    iniHora.value = s.sugestao.inicio.slice(11, 16);
     fimDia.value = s.sugestao.fim.slice(0, 10);
-    fimHora.value = s.sugestao.fim.slice(11, 16).replace(':', '');
+    fimHora.value = s.sugestao.fim.slice(11, 16);
     origem.value = 'ponto';
     sugestaoTexto.value = t('f6.realizado.sugestao', {
       i: `${dataBr(s.sugestao.inicio)} ${s.sugestao.inicio.slice(11, 16)}`,
@@ -131,10 +131,8 @@ async function sugerir(): Promise<void> {
     erro.value = x;
   }
 }
-// O SanteHora guarda HHMM (4 dígitos); o instante da API é AAAA-MM-DDTHH:MM (W0-06: o HH:MM colado sem os dois
-// pontos virava 400 ao digitar a hora).
-const hhmm = (h: string | null) => (h && /^\d{4}$/.test(h) ? `${h.slice(0, 2)}:${h.slice(2)}` : (h ?? ''));
-const instante = (d: string | null, h: string | null) => (d && h ? `${d}T${hhmm(h)}` : '');
+// O SanteHora guarda "HH:MM"; o instante da API é AAAA-MM-DDTHH:MM.
+const instante = (d: string | null, h: string | null) => (d && h ? `${d}T${h}` : '');
 const podeRegistrar = computed(() => !!(iniDia.value && iniHora.value && fimDia.value && fimHora.value));
 async function gravarRegistro(): Promise<void> {
   if (!linha.value || !podeRegistrar.value) return;

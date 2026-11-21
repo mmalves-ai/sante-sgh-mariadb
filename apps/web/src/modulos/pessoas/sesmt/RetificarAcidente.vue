@@ -4,6 +4,7 @@
 // eSocial ganha o retificador (indRetif 2 com o recibo); o ainda não enviado se descarta e sai de novo. Os dados da CAT
 // que a tela não mostra seguem como estavam.
 import {
+  FORMATO_HORA,
   type AcidenteResposta,
   type ApoioSesmt,
   esquemaRetificarAcidente,
@@ -49,7 +50,7 @@ watch(
     if (!v) return;
     const a = props.acidente;
     dia.value = a.ocorridoEm.slice(0, 10);
-    hora.value = a.ocorridoEm.slice(11, 16).replace(':', '');
+    hora.value = a.ocorridoEm.slice(11, 16);
     tipo.value = a.tipo;
     local.value = a.local;
     descricao.value = a.descricao;
@@ -82,9 +83,7 @@ const opcoesLateralidade = computed(() => [
 ]);
 const vazio = (x: string) => (x.trim() === '' ? null : x.trim());
 const instante = () =>
-  dia.value && hora.value && /^\d{4}$/.test(hora.value)
-    ? `${dia.value}T${hora.value.slice(0, 2)}:${hora.value.slice(2)}`
-    : '';
+  dia.value && hora.value && FORMATO_HORA.test(hora.value) ? `${dia.value}T${hora.value}` : '';
 /** A entrada sem o motivo (o diálogo pede o motivo): o motivo provisório só valida o resto. */
 const entrada = (motivo: string) =>
   esquemaRetificarAcidente.safeParse({

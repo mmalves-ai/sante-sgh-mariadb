@@ -87,7 +87,7 @@ export async function relogioDoEstabelecimento(l: L, est: number): Promise<strin
   const fuso = r?.fuso_horario || FUSO_PADRAO;
   const rel = relogioNoFuso(fuso);
   const segundos = doisDigitos(new Date().getSeconds());
-  return `${rel.hoje}T${rel.hhmm.slice(0, 2)}:${rel.hhmm.slice(-2)}:${segundos}`;
+  return `${rel.hoje}T${rel.hora}:${segundos}`;
 }
 
 /** Os setores funcionais ativos do estabelecimento (a unidade onde o incidente ou a observação aconteceu). */

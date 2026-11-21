@@ -98,6 +98,9 @@ const EVENTO_INFUSAO_BANCO: Readonly<Record<string, string>> = {
 } satisfies Readonly<Record<EventoInfusaoContrato, string>>;
 
 /** Componente da resposta de extensão do formulário: contrato → banco. */
+/** O modelo de documento clínico da anotação de enfermagem (cadastro do estabelecimento, publicado). */
+export const MODELO_ANOTACAO_ENFERMAGEM = 'ANOTACAO_ENFERMAGEM';
+
 const COMPONENTE_EXTENSAO_BANCO = {
   sinalVital: 'sinal_vital',
   mapaCorporal: 'mapa_corporal',
@@ -219,7 +222,6 @@ function contextoDe(c: ContextoNucleo): ContextoNucleo {
 
 const foraDaFaixa = (nivel: unknown) => ['atencao', 'critico', 'fora_faixa_plausivel'].includes(texto(nivel));
 
-
 export class PortaEnfermagemPropria implements PortaEnfermagem {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -266,6 +268,8 @@ export class PortaEnfermagemPropria implements PortaEnfermagem {
         'horario_administracao_evento',
         'aparelho_beira_leito',
         'conflito_sincronizacao_checagem',
+        'registro_assistencial',
+        'registro_assistencial_extensao',
       ],
       trilha,
       gravador: (tx, est, an) => gravadorEnfermagem(tx, est, an),
@@ -1323,9 +1327,59 @@ function gravadorEnfermagem(tx: TxOperacao, est: number, anotacao: AnotacaoGrava
       if (!e) throw recusa('horario-mudou', 'O estorno do horário não foi gravado.');
       return Number(e.id);
     },
+    async registrarAnotacaoOffline(r) {
+      await conferirAtendimento(tx, est, r.atendimento, r.paciente);
+      const chave = `anotacao:${r.chave}`.slice(0, 80);
+      // O reenvio do mesmo ato (a mesma chave, o mesmo paciente) devolve o registro da primeira vez, sem gravar de novo.
+      const ja = await tx.uma<{ id: number }>(
+        `SELECT ra.id FROM registro_assistencial_extensao x
+           JOIN registro_assistencial ra ON ra.id = x.registro_assistencial_id
+          WHERE ra.estabelecimento_id = ? AND ra.paciente_id = ? AND x.componente = 'anexo' AND x.chave = ?
+            AND x.excluido_em IS NULL AND ra.excluido_em IS NULL
+          LIMIT 1`,
+        [est, r.paciente, chave],
+      );
+      if (ja) return Number(ja.id);
+      const autor = await profissional();
+      const modelo = await tx.uma<{ id: number; tipo_documento_clinico_id: number }>(
+        `SELECT id, tipo_documento_clinico_id FROM modelo_documento_clinico
+          WHERE codigo = ? AND situacao = 'publicado' AND excluido_em IS NULL`,
+        [MODELO_ANOTACAO_ENFERMAGEM],
+      );
+      if (!modelo)
+        throw recusa(
+          'cadastro-incompleto',
+          `O modelo de documento da anotação de enfermagem (${MODELO_ANOTACAO_ENFERMAGEM}) não está publicado: peça o cadastro ao administrador. Nada foi gravado.`,
+        );
+      const conteudo = r.texto.replace(/\s+/g, ' ').trim();
+      if (!conteudo) throw recusa('texto-obrigatorio', 'A anotação de enfermagem exige o texto.');
+      const registro = await tx.incluir('registro_assistencial', {
+        estabelecimento_id: est,
+        paciente_id: r.paciente,
+        atendimento_id: r.atendimento,
+        modelo_documento_clinico_id: Number(modelo.id),
+        tipo_documento_clinico_id: Number(modelo.tipo_documento_clinico_id),
+        autor_profissional_id: autor,
+        autor_usuario_id: tx.contexto.usuario,
+        data_hora_clinica: instanteDe(r.horaReal, await fusoP),
+        data_hora_lancamento: new Date(),
+        situacao: 'finalizado',
+        impressao_digital: createHash('sha256').update(conteudo).digest('hex'),
+        texto_consolidado: conteudo,
+      });
+      await tx.incluir('registro_assistencial_extensao', {
+        registro_assistencial_id: registro,
+        componente: COMPONENTE_EXTENSAO_BANCO.anexo,
+        chave,
+        valor: JSON.stringify({ texto: conteudo, horaReal: r.horaReal, origemOffline: true }),
+        referencia_id: null,
+      });
+      return registro;
+    },
     async gravarRespostaExt(r) {
       const componente = COMPONENTE_EXTENSAO_BANCO[r.componente];
-      if (!componente) throw recusa('componente-invalido', 'O componente da resposta de extensão não existe.');
+      if (!componente)
+        throw recusa('componente-invalido', 'O componente da resposta de extensão não existe.');
       const chave = r.chave.trim().slice(0, 80);
       if (!chave) throw recusa('chave-obrigatoria', 'A resposta de extensão exige a chave do item.');
       if (r.valor === null && r.referencia === null)

@@ -196,7 +196,7 @@ export class PortaPacsPropria implements PortaPacs {
         est,
       ]);
       const x = relogioNoFuso(r?.fuso_horario || FUSO_PADRAO);
-      return { hoje: x.hoje, agora: `${x.hoje}T${x.hhmm.slice(0, 2)}:${x.hhmm.slice(2, 4)}:00` };
+      return { hoje: x.hoje, agora: `${x.hoje}T${x.hora}:00` };
     });
   }
 

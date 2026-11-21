@@ -121,7 +121,7 @@ function local(v: unknown, fuso: string): string | null {
   const d = instante(v);
   if (!d) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 const dataLocal = (v: unknown, fuso: string): string | null => {
   const d = instante(v);
@@ -482,7 +482,7 @@ export class PortaDigitalizacaoPropria implements PortaDigitalizacao {
   relogio(c: ContextoDigitalizacao): Promise<{ agora: string; hoje: string }> {
     return this.ler(c, async (_l, _e, fuso) => {
       const r = relogioNoFuso(fuso, this.agora());
-      return { agora: `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}`, hoje: r.hoje };
+      return { agora: `${r.hoje}T${r.hora}`, hoje: r.hoje };
     });
   }
 

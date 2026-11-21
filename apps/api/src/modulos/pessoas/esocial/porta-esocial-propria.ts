@@ -22,23 +22,29 @@
 // tabela (inclusão, alteração ou exclusão) fica em operacao_tabela, e a data do fato em data_referencia (a competência
 // segue no seu campo para os filtros por período).
 // Melhoria: a conferência da conciliação é gravada por competência (conferencia_eventos_esocial) com a contagem por
-// tipo de evento (conferencia_eventos_esocial_item). O banco ainda só guarda o resumo da situação da linha (conciliada,
-// divergente ou sem transmissor): a leitura devolve a linha conciliada e a sem transmissor como foram conferidas, e
-// recusa com `modelo-pendente` a conferência com linha divergente, porque o detalhe (dois transmissores, repasse nos
-// periódicos ou no externo, só contagem) não foi guardado e não se inventa (pedido de DDL no lote 03-pessoas da F2.4).
-// O rótulo da linha é o nome do tipo de evento no catálogo do cliente.
-// Pendente (pedido no lote 03-pessoas da F2.4): os parâmetros do eSocial do empregador por vigência e a ficha do
-// eSocial do vínculo. Até lá, recusa com o código `modelo-pendente` (nunca vazio calado nem gravação pela metade):
-// - gravar e ler os parâmetros do empregador; por consequência, gerar eventos (tabela, trabalhador e periódicos) e
-//   calcular a conciliação, que dependem da vigência do empregador;
-// - gravar e ler a ficha do eSocial do vínculo.
+// tipo de evento (conferencia_eventos_esocial_item) e a situação exata de cada linha (conciliado, dois transmissores,
+// repasse nos periódicos ou no externo, só contagem, sem transmissor). O rótulo da linha é o nome do tipo de evento no
+// catálogo do cliente.
+// Parâmetros do eSocial do empregador por vigência (F2.4): cadastro_empregador, uma linha por estabelecimento e início
+// de vigência (a correção é uma vigência nova; a repetida recusa). Cada parâmetro tem a sua coluna: classificação
+// tributária pelo catálogo oficial (codigo_esocial da tabela 8), FPAS pelo catálogo, sindicato pela pessoa jurídica do
+// CNPJ, FAP em DECIMAL(5,4) e os indicativos no vocabulário do modelo; o de-para do motivo de afastamento para a
+// tabela 18 fica em cadastro_empregador_motivo_afastamento. Catálogo ou cadastro que falta recusa (nunca se grava pela
+// metade nem se inventa o código). A leitura lê a rede inteira (exceção, com o motivo): o transmissor é único por raiz
+// de CNPJ e a regra confere as vigências das outras empresas da mesma raiz; a gravação só no estabelecimento da sessão.
+// A linha migrada sem algum parâmetro volta com o campo nulo, e o serviço a descarta pelo contrato (nunca se inventa).
+// Pendente (pedido no lote p-pessoas-esocial da F2.4): a ficha do eSocial do vínculo. O DDL decidiu guardá-la no
+// cadastro estruturado (pessoa, endereço, estágio, regime de jornada, vínculo), mas o contrato da porta ainda recebe a
+// ficha cifrada inteira; até a troca do contrato, ler e gravar a ficha recusam com `modelo-pendente`.
 import {
   type AmbienteEsocial,
+  esquemaEmpregadorEsocial,
   type GrupoEventoEsocial,
   type LinhaConciliacaoEsocial,
   type SituacaoEventoEsocial,
   type SituacaoLinhaConciliacao,
   type SituacaoLoteEsocial,
+  SITUACOES_LINHA_CONCILIACAO,
   type TransmissorEsocial,
 } from '@sgh/contratos';
 import {
@@ -65,6 +71,7 @@ import {
   METODOS_PORTA_ESOCIAL,
   type MudancaSituacaoEvento,
   type MudancaSituacaoLote,
+  type NovaVigenciaEmpregador,
   type NovoRegistroEvento,
   type NovoRegistroLote,
   type PendenciaMigradaEsocial,
@@ -89,6 +96,8 @@ export const TABELAS_ESOCIAL = [
   'sequencia_negocio',
   'conferencia_eventos_esocial',
   'conferencia_eventos_esocial_item',
+  'cadastro_empregador',
+  'cadastro_empregador_motivo_afastamento',
 ] as const;
 
 /** Tipo da sequência do sequencial do Id do evento (por estabelecimento). */
@@ -107,11 +116,6 @@ const LEITURA_PENDENTE = (o: string, indisponivel: string) =>
   recusa(
     'modelo-pendente',
     `${o} ainda não tem lugar no modelo do banco (pedido de DDL registrado na obra). Indisponível até lá: ${indisponivel}.`,
-  );
-const PARAMETROS_PENDENTES = () =>
-  LEITURA_PENDENTE(
-    'Os parâmetros do eSocial do empregador',
-    'registrar e consultar os parâmetros, gerar eventos de tabela, do trabalhador e periódicos e calcular a conciliação',
   );
 const FICHA_PENDENTE = () =>
   LEITURA_PENDENTE(
@@ -186,17 +190,29 @@ const transmissorDaTela = (t: unknown): TransmissorEsocial | null =>
 const situacaoConferenciaDoBanco = (s: string): string => s.replace(/-/g, '_');
 const situacaoConferenciaDaTela = (s: unknown): RegistroConciliacaoEsocial['situacao'] =>
   String(s).replace(/_/g, '-') as RegistroConciliacaoEsocial['situacao'];
-/** A situação da linha guardada é o resumo: o detalhe da divergência ainda não tem coluna (pedido de DDL). */
-const situacaoLinhaDoBanco = (s: string): string =>
-  s === 'conciliado' ? 'conciliada' : s === 'sem-transmissor' ? 'sem_transmissor' : 'divergente';
-/** Só o resumo que não perde significado volta; a linha divergente recusa (nunca se inventa o detalhe). */
+/** A situação exata da linha: a tela usa hífen, o banco usa sublinhado (o CHECK do banco tem as mesmas seis). */
+const situacaoLinhaDoBanco = (s: SituacaoLinhaConciliacao): string => s.replace(/-/g, '_');
 const situacaoLinhaDaTela = (s: unknown): SituacaoLinhaConciliacao => {
-  if (s === 'conciliada') return 'conciliado';
-  if (s === 'sem_transmissor') return 'sem-transmissor';
-  throw LEITURA_PENDENTE(
-    'O detalhe da divergência de cada linha da conferência do eSocial',
-    'reler a conferência gravada com linha divergente (dois transmissores, repasse nos periódicos ou no externo, só contagem)',
+  const t = String(s).replace(/_/g, '-');
+  if ((SITUACOES_LINHA_CONCILIACAO as readonly string[]).includes(t)) return t as SituacaoLinhaConciliacao;
+  throw recusa(
+    'situacao-desconhecida',
+    `A linha da conferência tem uma situação fora do contrato (${String(s)}).`,
   );
+};
+
+// ── Parâmetros do empregador: tradução entre o contrato e as colunas ────────────────────────────────────────
+
+const COOPERATIVA_BANCO = ['nao_cooperativa', 'trabalho', 'producao', 'outra'] as const;
+const DESONERACAO_BANCO = ['nao_aplicavel', 'empresa_enquadrada', 'municipio_enquadrado'] as const;
+/** A tabela oficial da classificação tributária do contribuinte no catálogo do eSocial. */
+const TABELA_CLASSIFICACAO_TRIBUTARIA = ['08', '8'] as const;
+/** FAP do contrato em décimos de milésimo (1,0000 = 10000) e o do banco em DECIMAL(5,4). */
+const fapDoBanco = (fap: number) => (fap / 10_000).toFixed(4);
+const fapDaTela = (v: unknown) => (v === null || v === undefined ? null : Math.round(Number(v) * 10_000));
+const indice = (lista: readonly string[], v: unknown) => {
+  const i = lista.indexOf(String(v));
+  return i < 0 ? null : i;
 };
 
 const pad2 = (s: string) => s.padStart(2, '0');
@@ -406,7 +422,193 @@ async function loteDe(l: Leitor, est: number, id: number): Promise<RegistroLoteE
   return x ? loteDaLinha(x) : null;
 }
 
+/**
+ * As vigências dos parâmetros do empregador (a rede inteira, ou só a empresa pedida), as mais recentes primeiro. Os
+ * parâmetros voltam em JSON no formato do contrato; coluna vazia (linha migrada) volta nula e o serviço a descarta.
+ */
+async function empregadoresDe(l: Leitor, empresa: number | null): Promise<VigenciaEmpregadorEsocial[]> {
+  const linhas = await l.consultar(
+    `SELECT ce.id, ce.estabelecimento_id, DATE_FORMAT(ce.vigencia_inicio, '%Y-%m') AS inicio, ce.transmissor,
+            ce.leiaute_esocial_versao, ce.indicador_cooperativa, ce.construtora, ce.indicador_desoneracao,
+            ce.registro_eletronico_empregados, ce.cnae_preponderante, ce.aliquota_rat, ce.fap,
+            ce.codigo_lotacao_tributaria, ce.codigo_terceiros, ce.identificador_tabela_rubricas,
+            ct.codigo_esocial AS classificacao_tributaria, fp.codigo_fpas, pj.cnpj AS cnpj_sindicato,
+            u.login AS criado_por_login, DATE_FORMAT(ce.criado_em, '%Y-%m-%dT%H:%i:%s') AS criado_em_txt
+       FROM cadastro_empregador ce
+       JOIN estabelecimento e ON e.id = ce.estabelecimento_id AND e.excluido_em IS NULL
+       LEFT JOIN codigo_esocial ct ON ct.id = ce.tributaria_codigo_esocial_id
+       LEFT JOIN fpas fp ON fp.id = ce.fpas_id
+       LEFT JOIN pessoa_juridica pj ON pj.id = ce.sindicato_pessoa_juridica_id
+       LEFT JOIN usuario u ON u.id = ce.criado_por
+      WHERE (? IS NULL OR ce.estabelecimento_id = ?)
+      ORDER BY ce.estabelecimento_id, ce.vigencia_inicio DESC, ce.id DESC`,
+    [empresa, empresa],
+  );
+  const ids = linhas.map((x) => num(x['id']));
+  const motivos = new Map<number, Record<string, string>>();
+  if (ids.length)
+    for (const m of await l.consultar(
+      `SELECT cadastro_empregador_id, motivo_afastamento_id, codigo_esocial FROM cadastro_empregador_motivo_afastamento
+        WHERE cadastro_empregador_id IN (${ids.map(() => '?').join(',')}) ORDER BY motivo_afastamento_id`,
+      ids,
+    )) {
+      const id = num(m['cadastro_empregador_id']);
+      const r = motivos.get(id) ?? {};
+      r[String(num(m['motivo_afastamento_id']))] = String(m['codigo_esocial']);
+      motivos.set(id, r);
+    }
+  return linhas.map((x) => {
+    const id = num(x['id']);
+    return {
+      id,
+      empresa: num(x['estabelecimento_id']),
+      inicio: String(x['inicio']),
+      transmissor: transmissorDaTela(x['transmissor']) ?? '',
+      leiaute: String(x['leiaute_esocial_versao'] ?? ''),
+      parametros: JSON.stringify({
+        classTrib: txtOuNulo(x['classificacao_tributaria']),
+        indCoop: indice(COOPERATIVA_BANCO, x['indicador_cooperativa']),
+        indConstr:
+          x['construtora'] === null || x['construtora'] === undefined
+            ? null
+            : num(x['construtora']) > 0
+              ? 1
+              : 0,
+        indDesFolha: indice(DESONERACAO_BANCO, x['indicador_desoneracao']),
+        indOptRegEletron: num(x['registro_eletronico_empregados']) > 0 ? 1 : 0,
+        cnaePrep: txtOuNulo(x['cnae_preponderante']),
+        aliqRat: numOuNulo(x['aliquota_rat']),
+        fap: fapDaTela(x['fap']),
+        codLotacao: txtOuNulo(x['codigo_lotacao_tributaria']),
+        fpas: txtOuNulo(x['codigo_fpas']),
+        codTercs: txtOuNulo(x['codigo_terceiros']),
+        ideTabRubr: txtOuNulo(x['identificador_tabela_rubricas']),
+        cnpjSindicato: txtOuNulo(x['cnpj_sindicato']),
+        motivosAfastamento: motivos.get(id) ?? {},
+      }),
+      criadoPor: String(x['criado_por_login'] ?? ''),
+      criadoEm: String(x['criado_em_txt'] ?? ''),
+    };
+  });
+}
+
 // ── Gravações ───────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Um único registro pela chave natural; nenhum recusa com `codigo`, mais de um com `cadastro-ambiguo`. */
+async function unicoOu(
+  tx: Leitor,
+  sql: string,
+  p: unknown[],
+  codigo: string,
+  falta: string,
+): Promise<number> {
+  const xs = await tx.consultar(`${sql} LIMIT 2`, p);
+  if (xs.length === 0) throw recusa(codigo, falta);
+  if (xs.length > 1)
+    throw recusa(
+      'cadastro-ambiguo',
+      'Há mais de um cadastro para o mesmo código: ajuste o cadastro antes de gravar.',
+    );
+  return num(xs[0]!['id']);
+}
+
+/** Grava a vigência dos parâmetros do empregador (colunas próprias e o de-para dos motivos de afastamento). */
+async function incluirVigenciaEmpregador(
+  tx: TxOperacao,
+  est: number,
+  x: NovaVigenciaEmpregador,
+): Promise<number> {
+  let extra: unknown;
+  try {
+    extra = JSON.parse(x.parametros);
+  } catch {
+    extra = null;
+  }
+  const r = esquemaEmpregadorEsocial.safeParse({
+    ...(typeof extra === 'object' && extra !== null ? extra : {}),
+    empresa: x.empresa,
+    inicio: x.inicio,
+    transmissor: x.transmissor,
+    leiaute: x.leiaute,
+  });
+  if (!r.success)
+    throw recusa('parametros-invalidos', 'Os parâmetros do eSocial do empregador não seguem o contrato.');
+  const v = r.data;
+  // Nulo em indCoop/indConstr é "não informado" (no S-1000 a tag não vai). As colunas são NOT NULL com padrão e não
+  // guardam a ausência: gravar o padrão trocaria o sentido fiscal. Recusa até o DDL (pedido no .json do lote).
+  if (v.indCoop === null || v.indConstr === null)
+    throw MODELO_PENDENTE('O indicador de cooperativa ou de construtora "não informado"');
+  const inicio = dataDoBanco(v.inicio);
+  const classificacao = await unicoOu(
+    tx,
+    `SELECT c.id FROM codigo_esocial c JOIN tabela_esocial t ON t.id = c.tabela_esocial_id
+      WHERE t.fonte = 'esocial' AND t.codigo_oficial IN (?, ?) AND c.codigo_esocial = ?
+        AND (c.vigencia_inicio IS NULL OR c.vigencia_inicio <= ?) AND (c.vigencia_fim IS NULL OR c.vigencia_fim >= ?)`,
+    [...TABELA_CLASSIFICACAO_TRIBUTARIA, v.classTrib, inicio, inicio],
+    'catalogo-pendente',
+    `A classificação tributária ${v.classTrib} não está no catálogo oficial do eSocial carregado neste cliente.`,
+  );
+  const fpas = await unicoOu(
+    tx,
+    `SELECT id FROM fpas WHERE codigo_fpas = ?
+        AND (vigencia_inicio IS NULL OR vigencia_inicio <= ?) AND (vigencia_fim IS NULL OR vigencia_fim >= ?)`,
+    [v.fpas, inicio, inicio],
+    'catalogo-pendente',
+    `O FPAS ${v.fpas} não está no catálogo oficial carregado neste cliente.`,
+  );
+  const sindicato =
+    v.cnpjSindicato === null
+      ? null
+      : await unicoOu(
+          tx,
+          'SELECT id FROM pessoa_juridica WHERE cnpj = ? ORDER BY id',
+          [v.cnpjSindicato],
+          'cadastro-pendente',
+          'O sindicato: cadastre a pessoa jurídica do CNPJ informado antes dos parâmetros do eSocial.',
+        );
+  const motivos: [number, string][] = [];
+  for (const [motivo, codigo] of Object.entries(v.motivosAfastamento))
+    motivos.push([
+      await unicoOu(
+        tx,
+        'SELECT id FROM motivo_afastamento WHERE id = ?',
+        [Number(motivo)],
+        'cadastro-pendente',
+        `O motivo de afastamento ${motivo}: não está no cadastro de motivos de afastamento.`,
+      ),
+      codigo,
+    ]);
+  const id = await semRepeticao(
+    tx.incluir('cadastro_empregador', {
+      estabelecimento_id: est,
+      vigencia_inicio: inicio,
+      tributaria_codigo_esocial_id: classificacao,
+      fpas_id: fpas,
+      codigo_terceiros: v.codTercs,
+      indicador_cooperativa: COOPERATIVA_BANCO[v.indCoop],
+      construtora: v.indConstr === 1,
+      indicador_desoneracao: DESONERACAO_BANCO[v.indDesFolha],
+      registro_eletronico_empregados: v.indOptRegEletron === 1,
+      transmissor: transmissorDoBanco(v.transmissor),
+      leiaute_esocial_versao: v.leiaute,
+      cnae_preponderante: v.cnaePrep,
+      aliquota_rat: v.aliqRat,
+      fap: fapDoBanco(v.fap),
+      codigo_lotacao_tributaria: v.codLotacao,
+      identificador_tabela_rubricas: v.ideTabRubr,
+      sindicato_pessoa_juridica_id: sindicato,
+    }),
+    'vigencia-repetida',
+    'Já há parâmetros do eSocial com este início para a empresa: use um mês novo.',
+  );
+  for (const [motivo, codigo] of motivos)
+    await tx.incluir('cadastro_empregador_motivo_afastamento', {
+      cadastro_empregador_id: id,
+      motivo_afastamento_id: motivo,
+      codigo_esocial: codigo,
+    });
+  return id;
+}
 
 async function proximaSequenciaRetorno(tx: TxOperacao, evento: number): Promise<number> {
   const x = await tx.uma(
@@ -475,8 +677,11 @@ function gravador(tx: TxOperacao, est: number, ambienteEventos: AmbienteBanco): 
       throw recusa('outro-estabelecimento', 'A empresa informada não é o estabelecimento da sessão.');
   };
   return {
-    empregadores: () => Promise.reject(PARAMETROS_PENDENTES()),
-    incluirEmpregador: () => Promise.reject(MODELO_PENDENTE('Os parâmetros do eSocial do empregador')),
+    empregadores: (empresa) => empregadoresDe(tx, empresa),
+    async incluirEmpregador(x) {
+      daEmpresa(x.empresa);
+      return incluirVigenciaEmpregador(tx, est, x);
+    },
     gravarFicha: () => Promise.reject(MODELO_PENDENTE('A ficha do eSocial do vínculo')),
     eventos: (f) => eventosDe(tx, est, f),
     async eventosComTrava(ids) {
@@ -794,13 +999,12 @@ export class PortaEsocialPropria implements PortaEsocial {
 
   // ── Registros do eSocial (estabelecimento da sessão) ─────────────────────────────────────────────────────
 
-  /** Pendente de DDL (parâmetros do empregador): recusa dizendo o que fica indisponível (nunca lista vazia calada). */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo
-  async empregadores(_c: ContextoEsocial, _empresa: number | null): Promise<VigenciaEmpregadorEsocial[]> {
-    throw PARAMETROS_PENDENTES();
+  /** Rede inteira (motivo no cabeçalho): o transmissor é único por raiz de CNPJ. */
+  empregadores(c: ContextoEsocial, empresa: number | null): Promise<VigenciaEmpregadorEsocial[]> {
+    return this.ler(c, (l) => empregadoresDe(l, empresa));
   }
 
-  /** Pendente de DDL (ficha do eSocial do vínculo): recusa (nunca "não preenchida" calado). */
+  /** Pendente de contrato (ficha do eSocial do vínculo, estruturada): recusa (nunca "não preenchida" calado). */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta; a operação aguarda o modelo
   async ficha(_c: ContextoEsocial, _vinculo: number): Promise<FichaEsocialCifrada | null> {
     throw FICHA_PENDENTE();

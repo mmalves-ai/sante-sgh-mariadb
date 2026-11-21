@@ -31,11 +31,41 @@
 // trilha) e o NIRE do estabelecimento.
 import { createHash, randomUUID } from 'node:crypto';
 import { planejarEnvioSped } from '@sgh/dominio-contabil';
-import { avisoDoBloqueio, bloqueioDoLancamento } from './bloqueio-periodo.js';
 import {
-  type GrupoConta,
-  type LadoPartida,
-  type OrigemLancamento,
+  bool,
+  CENTAVOS,
+  contaDe,
+  corta,
+  diaUm,
+  fatoDe,
+  INSTANTE,
+  ladoDe,
+  lerDePara,
+  lerIdDoPlano,
+  lerParaContabilizar,
+  lerPartidas,
+  lerPeriodos,
+  lerPlano,
+  lerRegras,
+  type Linha,
+  lista,
+  NATUREZA_DO_GRUPO,
+  num,
+  numOuNulo,
+  origemDoTipo,
+  periodoDe,
+  reais,
+  SITUACAO_FATO_MODELO,
+  situacaoFatoDe,
+  SQL_CONTAS,
+  SQL_FATOS,
+  SQL_PERIODOS,
+  texto,
+  textoOuNulo,
+  tiposDaOrigem,
+  gravacaoDosFatos,
+} from '@sgh/persistencia-contabil';
+import {
   type PartidaGerada,
   type SituacaoArquivoSped,
   type SituacaoFato,
@@ -50,7 +80,6 @@ import {
   erroConflitoVersao,
   ErroOperacao,
   type Executor,
-  garantirSequencia,
   type Leitor,
   type NucleoProprio,
   recusa,
@@ -97,23 +126,11 @@ import type {
   SomaConta,
 } from './tipos.js';
 
+/** A chave idempotente do lançamento (do pacote comum; os testes a conferem). */
+export { chaveDoLancamento } from '@sgh/persistencia-contabil';
+
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoContabil = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
-
-type Linha = Record<string, unknown>;
-const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
-const num = (v: unknown): number => Number(v ?? 0);
-const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
-const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
-const textoOuNulo = (v: unknown): string | null =>
-  v === null || v === undefined || v === '' ? null : String(v);
-const bool = (v: unknown): boolean => v === true || Number(v) === 1;
-const corta = (s: string | null, n: number) => (s === null ? null : s.slice(0, n));
-/** Competência AAAA-MM ↔ primeiro dia do mês. */
-const diaUm = (competencia: string) => `${competencia.slice(0, 7)}-01`;
-const reais = (centavos: number) => (centavos / 100).toFixed(2);
-const INSTANTE = `'%Y-%m-%dT%H:%i:%s'`;
-const CENTAVOS = (expr: string) => `CAST(ROUND(COALESCE(${expr}, 0) * 100) AS SIGNED)`;
 
 /** Tabelas da gravação direta da contabilidade (a operação só grava nelas). */
 const TABELAS_GRAVACAO = [
@@ -154,49 +171,6 @@ const MODULO_DA_ORIGEM: Readonly<Record<number, string>> = {
   11: 'contabilidade',
 };
 
-/** Grupo da tela ↔ natureza da conta no modelo. */
-const NATUREZA_DO_GRUPO: Readonly<Record<GrupoConta, string>> = {
-  ativo: 'ativo',
-  passivo: 'passivo',
-  patrimonioLiquido: 'patrimonio_liquido',
-  receita: 'receita',
-  custo: 'custo',
-  despesa: 'despesa',
-  compensacao: 'compensacao',
-};
-function grupoDaNatureza(natureza: string, saldo: string): GrupoConta {
-  const g = (Object.keys(NATUREZA_DO_GRUPO) as GrupoConta[]).find((k) => NATUREZA_DO_GRUPO[k] === natureza);
-  return g ?? (saldo === 'credora' ? 'receita' : 'despesa');
-}
-
-/** Situação do fato na tela ↔ no modelo. */
-const SITUACAO_FATO_MODELO: Readonly<Record<SituacaoFato, string>> = {
-  pendente: 'pendente',
-  contabilizado: 'contabilizado',
-  semRegra: 'sem_regra',
-  semConta: 'sem_conta',
-  substituido: 'substituido',
-  ignorado: 'ignorado',
-};
-const situacaoFatoDe = (s: unknown): SituacaoFato =>
-  (Object.keys(SITUACAO_FATO_MODELO) as SituacaoFato[]).find((k) => SITUACAO_FATO_MODELO[k] === s) ??
-  'pendente';
-
-const ladoDe = (lado: unknown): LadoPartida => (lado === 'credito' ? 'C' : 'D');
-const ladoModelo = (lado: LadoPartida) => (lado === 'C' ? 'credito' : 'debito');
-const origemDoTipo = (tipo: string): OrigemLancamento =>
-  ((TIPOS_FATO as Readonly<Record<string, { origem: number }>>)[tipo]?.origem ?? 11) as OrigemLancamento;
-const tiposDaOrigem = (origem: number): string[] =>
-  Object.entries(TIPOS_FATO as Readonly<Record<string, { origem: number }>>)
-    .filter(([, v]) => v.origem === origem)
-    .map(([k]) => k);
-
-/** Chave idempotente do lançamento no banco: o hash da chave do domínio no estabelecimento, na forma de UUID. */
-export function chaveDoLancamento(estabelecimento: number, chave: string): string {
-  const h = createHash('sha256').update(`${estabelecimento}:${chave}`).digest('hex');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
-}
-
 const armazemIndisponivel = () =>
   new ErroOperacao(
     503,
@@ -217,35 +191,6 @@ function contextoDe(c: ContextoContabil): ContextoNucleo {
 function repetidaDe<T>(bruto: unknown): T {
   return (typeof bruto === 'string' ? JSON.parse(bruto) : null) as T;
 }
-
-const SQL_PLANO = `SELECT COALESCE(
-    (SELECT pe.plano_contas_id FROM periodo_contabil pe
-      WHERE pe.estabelecimento_id = ? AND pe.plano_contas_id IS NOT NULL AND pe.excluido_em IS NULL
-      ORDER BY pe.competencia DESC LIMIT 1),
-    (SELECT pc.id FROM plano_contas pc
-      WHERE pc.tipo = 'contabil' AND pc.ativo = TRUE AND pc.excluido_em IS NULL AND pc.grupo_consolidacao_id IS NULL
-        AND pc.vigencia_inicio <= CURRENT_DATE AND (pc.vigencia_fim IS NULL OR pc.vigencia_fim >= CURRENT_DATE)
-      ORDER BY pc.numero_versao DESC, pc.id DESC LIMIT 1)) AS id`;
-
-const SQL_CONTAS = `SELECT c.id, c.classificacao, c.descricao, c.natureza, c.natureza_saldo, c.tipo, c.exige_centro_custo,
-    c.ativo, c.versao, cr.codigo_referencial, cr.plano_referencial_id,
-    DATE_FORMAT(COALESCE(c.alterado_em, c.criado_em), ${INSTANTE}) AS alterado_em,
-    COALESCE(ua.login, uc.login, '') AS alterado_por
-  FROM conta_contabil c
-  LEFT JOIN conta_referencial cr ON cr.id = c.conta_referencial_id
-  LEFT JOIN usuario ua ON ua.id = c.alterado_por
-  LEFT JOIN usuario uc ON uc.id = c.criado_por
-  WHERE c.plano_contas_id = ? AND c.excluido_em IS NULL`;
-
-const SQL_FATOS = `SELECT f.id, f.estabelecimento_id, f.entidade_origem, f.entidade_origem_id, ev.codigo AS tipo,
-    DATE_FORMAT(f.data_fato, '%Y-%m-%d') AS data_fato, DATE_FORMAT(f.competencia, '%Y-%m') AS competencia,
-    ${CENTAVOS('f.valor')} AS centavos, f.centro_custo_id, f.documento, f.campos, f.impressao, f.estorno,
-    fe.impressao AS referencia, f.situacao, f.motivo, f.versao_regra_contabil_id,
-    DATE_FORMAT(f.criado_em, ${INSTANTE}) AS lido_em
-  FROM fato_contabil f
-  JOIN evento_contabil ev ON ev.id = f.evento_contabil_id
-  LEFT JOIN fato_contabil fe ON fe.id = f.estornado_fato_contabil_id
-  WHERE f.estabelecimento_id = ? AND f.excluido_em IS NULL`;
 
 const SQL_LANCAMENTOS = `SELECT l.id, l.estabelecimento_id, l.chave_idempotencia, l.numero, l.tipo,
     DATE_FORMAT(l.data_lancamento, '%Y-%m-%d') AS data_lancamento, DATE_FORMAT(pe.competencia, '%Y-%m') AS competencia,
@@ -269,25 +214,6 @@ const SQL_LANCAMENTOS = `SELECT l.id, l.estabelecimento_id, l.chave_idempotencia
   LEFT JOIN versao_regra_contabil vr ON vr.id = l.versao_regra_contabil_id
   WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL`;
 
-const SQL_PARTIDAS = `SELECT p.id, p.lancamento_contabil_id, p.sequencia, p.lado, c.classificacao,
-    ${CENTAVOS('p.valor')} AS centavos, p.centro_custo_id, p.complemento, p.conciliacao_conta_contabil_id
-  FROM partida_contabil p JOIN conta_contabil c ON c.id = p.conta_contabil_id
-  WHERE p.excluido_em IS NULL AND p.lancamento_contabil_id IN `;
-
-const SQL_PERIODOS = `SELECT p.id, DATE_FORMAT(p.competencia, '%Y-%m') AS competencia, p.situacao, p.versao,
-    DATE_FORMAT(p.bloqueado_ate, '%Y-%m-%d') AS bloqueado_ate,
-    p.justificativa_reabertura, DATE_FORMAT(p.encerrado_em, ${INSTANTE}) AS encerrado_em, ue.login AS encerrado_por,
-    DATE_FORMAT(p.reaberto_em, ${INSTANTE}) AS reaberto_em, ur.login AS reaberto_por,
-    (SELECT COUNT(*) FROM lancamento_contabil l WHERE l.periodo_contabil_id = p.id AND l.excluido_em IS NULL) AS lancamentos,
-    (SELECT ${CENTAVOS('SUM(x.valor)')} FROM partida_contabil x JOIN lancamento_contabil l ON l.id = x.lancamento_contabil_id
-      WHERE l.periodo_contabil_id = p.id AND l.excluido_em IS NULL AND x.excluido_em IS NULL AND x.lado = 'debito') AS debitos,
-    (SELECT ${CENTAVOS('SUM(x.valor)')} FROM partida_contabil x JOIN lancamento_contabil l ON l.id = x.lancamento_contabil_id
-      WHERE l.periodo_contabil_id = p.id AND l.excluido_em IS NULL AND x.excluido_em IS NULL AND x.lado = 'credito') AS creditos
-  FROM periodo_contabil p
-  LEFT JOIN usuario ue ON ue.id = p.encerrante_usuario_id
-  LEFT JOIN usuario ur ON ur.id = p.reabertura_usuario_id
-  WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL`;
-
 const SQL_CONCILIACOES = `SELECT k.id, c.classificacao, k.situacao, ${CENTAVOS('k.saldo_composicao')} AS centavos,
     k.justificativa, COALESCE(uc.login, '') AS criada_por, DATE_FORMAT(k.criado_em, ${INSTANTE}) AS criada_em,
     ua.login AS desfeita_por, DATE_FORMAT(k.alterado_em, ${INSTANTE}) AS desfeita_em,
@@ -310,78 +236,8 @@ const SQL_ARQUIVOS_SPED = `SELECT s.id, s.tipo_escrituracao, s.exercicio, s.sequ
   LEFT JOIN usuario u ON u.id = s.gerador_usuario_id
   WHERE s.estabelecimento_id = ? AND s.excluido_em IS NULL`;
 
-const SQL_REGRAS = `SELECT v.id, v.conteudo, v.impressao, v.justificativa, COALESCE(u.login, '') AS publicada_por,
-    DATE_FORMAT(v.publicada_em, ${INSTANTE}) AS publicada_em
-  FROM versao_regra_contabil v
-  JOIN evento_contabil ev ON ev.id = v.evento_contabil_id
-  LEFT JOIN usuario u ON u.id = v.publicador_usuario_id
-  WHERE v.estabelecimento_id = ? AND v.excluido_em IS NULL`;
-
-function regraPublicadaDe(r: Linha): RegraPublicada {
-  const conteudo = r['conteudo'];
-  return {
-    id: num(r['id']),
-    regra: (typeof conteudo === 'string' ? JSON.parse(conteudo) : conteudo) as RegraPublicada['regra'],
-    impressao: texto(r['impressao']),
-    justificativa: texto(r['justificativa']),
-    publicadaPor: texto(r['publicada_por']),
-    publicadaEm: texto(r['publicada_em']),
-  };
-}
-
 const parametrosDe = (v: unknown): string =>
   v === null || v === undefined ? '{}' : typeof v === 'string' ? v : JSON.stringify(v);
-
-function contaDe(r: Linha, est: number): ContaPlanoVersionada {
-  return {
-    empresa: est,
-    codigo: texto(r['classificacao']),
-    nome: texto(r['descricao']),
-    grupo: grupoDaNatureza(texto(r['natureza']), texto(r['natureza_saldo'])),
-    tipo: r['tipo'] === 'sintetica' ? 'sintetica' : 'analitica',
-    natureza: r['natureza_saldo'] === 'credora' ? 'credora' : 'devedora',
-    referencialTipo: numOuNulo(r['plano_referencial_id']),
-    referencialConta: textoOuNulo(r['codigo_referencial']),
-    contaExportacao: null,
-    exigeCentroCusto: bool(r['exige_centro_custo']),
-    ativa: bool(r['ativo']),
-    versao: num(r['versao']),
-    alteradoPor: texto(r['alterado_por']),
-    alteradoEm: texto(r['alterado_em']),
-  };
-}
-
-function camposDe(v: unknown): Readonly<Record<string, string | number | null>> {
-  if (v === null || v === undefined) return {};
-  const o: unknown = typeof v === 'string' ? JSON.parse(v) : v;
-  return o && typeof o === 'object' ? (o as Record<string, string | number | null>) : {};
-}
-
-function fatoDe(r: Linha): FatoRegistrado {
-  const tipo = texto(r['tipo']);
-  return {
-    tabela: texto(r['entidade_origem']),
-    id: num(r['entidade_origem_id']),
-    tipo: tipo as TipoFato,
-    origem: origemDoTipo(tipo),
-    empresa: num(r['estabelecimento_id']),
-    data: texto(r['data_fato']),
-    competencia: texto(r['competencia']),
-    valorCentavos: num(r['centavos']),
-    centroCusto: numOuNulo(r['centro_custo_id']),
-    documento: texto(r['documento']),
-    campos: camposDe(r['campos']),
-    impressao: texto(r['impressao']),
-    carimbo: null,
-    estorno: bool(r['estorno']),
-    referencia: textoOuNulo(r['referencia']),
-    idFato: num(r['id']),
-    situacao: situacaoFatoDe(r['situacao']),
-    motivo: textoOuNulo(r['motivo']),
-    regraId: numOuNulo(r['versao_regra_contabil_id']),
-    lidoEm: texto(r['lido_em']),
-  };
-}
 
 function lancamentoDe(r: Linha): LancamentoRegistrado {
   const fatoTipo = textoOuNulo(r['fato_tipo']);
@@ -413,45 +269,6 @@ function lancamentoDe(r: Linha): LancamentoRegistrado {
             documento: texto(r['fato_documento']),
             data: texto(r['fato_data']),
           },
-  };
-}
-
-function partidaDe(r: Linha): PartidaRegistrada {
-  return {
-    id: num(r['id']),
-    lancamento: num(r['lancamento_contabil_id']),
-    ordem: num(r['sequencia']),
-    lado: ladoDe(r['lado']),
-    conta: texto(r['classificacao']),
-    valorCentavos: num(r['centavos']),
-    centroCusto: numOuNulo(r['centro_custo_id']),
-    historico: texto(r['complemento']),
-    conciliacao: numOuNulo(r['conciliacao_conta_contabil_id']),
-  };
-}
-
-function periodoDe(r: Linha, est: number): PeriodoRegistrado {
-  return {
-    empresa: est,
-    competencia: texto(r['competencia']),
-    // O contrato ainda não tem "bloqueado" (pedido do lote): o período bloqueado aparece aberto, com o aviso na
-    // observação, e o lançamento nele é recusado na gravação (bloqueioDoLancamento).
-    situacao: r['situacao'] === 'encerrado' ? 'encerrado' : 'aberto',
-    lancamentos: num(r['lancamentos']),
-    debitos: num(r['debitos']),
-    creditos: num(r['creditos']),
-    observacao:
-      [
-        avisoDoBloqueio({ situacao: texto(r['situacao']), bloqueadoAte: textoOuNulo(r['bloqueado_ate']) }),
-        textoOuNulo(r['justificativa_reabertura']),
-      ]
-        .filter((x): x is string => x !== null)
-        .join(' ') || null,
-    encerradoPor: textoOuNulo(r['encerrado_por']),
-    encerradoEm: textoOuNulo(r['encerrado_em']),
-    reabertoPor: textoOuNulo(r['reaberto_por']),
-    reabertoEm: textoOuNulo(r['reaberto_em']),
-    versao: num(r['versao']),
   };
 }
 
@@ -544,25 +361,12 @@ export class PortaContabilPropria implements PortaContabil {
     return this.ler(c, (l, est) => (empresa === est ? fn(l, est) : Promise.resolve(vazio)));
   }
 
-  private static async plano(l: Leitor, est: number): Promise<number | null> {
-    return numOuNulo((await l.uma(SQL_PLANO, [est]))?.['id']);
+  private static plano(l: Leitor, est: number): Promise<number | null> {
+    return lerIdDoPlano(l, est);
   }
 
-  private static async partidasDe(
-    l: Leitor,
-    ids: readonly number[],
-  ): Promise<Map<number, PartidaRegistrada[]>> {
-    const m = new Map<number, PartidaRegistrada[]>();
-    if (ids.length === 0) return m;
-    const linhas = await l.consultar(
-      `${SQL_PARTIDAS} (${lista(ids.length)}) ORDER BY p.lancamento_contabil_id, p.sequencia`,
-      [...ids],
-    );
-    for (const r of linhas) {
-      const p = partidaDe(r);
-      m.set(p.lancamento, [...(m.get(p.lancamento) ?? []), p]);
-    }
-    return m;
+  private static partidasDe(l: Leitor, ids: readonly number[]): Promise<Map<number, PartidaRegistrada[]>> {
+    return lerPartidas(l, ids);
   }
 
   hoje(c: ContextoContabil): Promise<string> {
@@ -606,22 +410,7 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   dePara(c: ContextoContabil, empresa: number): Promise<ItemDePara[]> {
-    return this.lerEmpresa(c, empresa, [], async (l, est) => {
-      const r = await l.consultar(
-        `SELECT fonte_pagadora_id, tipo_conta_id, tipo_lancamento_id, conta_receita_id FROM regra_contabil_receita
-          WHERE estabelecimento_id = ? AND ativo = TRUE ORDER BY prioridade, id`,
-        [est],
-      );
-      return r.map((x) => ({
-        empresa: est,
-        convenio: numOuNulo(x['fonte_pagadora_id']),
-        tipoConta: texto(x['tipo_conta_id']),
-        tipoLancamento: numOuNulo(x['tipo_lancamento_id']),
-        tipoAto: null,
-        subtipoDiaria: null,
-        contaExportacao: numOuNulo(x['conta_receita_id']),
-      }));
-    });
+    return this.lerEmpresa(c, empresa, [], (l, est) => lerDePara(l, est));
   }
 
   empresas(c: ContextoContabil): Promise<number[]> {
@@ -640,31 +429,12 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   plano(c: ContextoContabil, empresa: number): Promise<ContaPlanoVersionada[]> {
-    return this.lerEmpresa(c, empresa, [], async (l, est) => {
-      const plano = await PortaContabilPropria.plano(l, est);
-      if (plano === null) return [];
-      return (await l.consultar(`${SQL_CONTAS} ORDER BY c.classificacao`, [plano])).map((r) =>
-        contaDe(r, est),
-      );
-    });
+    return this.lerEmpresa(c, empresa, [], (l, est) => lerPlano(l, est));
   }
 
   /** Versões publicadas das regras (todas, para o domínio conferir a versão seguinte e a vigência). */
   regras(c: ContextoContabil, empresa: number, f: FiltroRegrasPorta): Promise<RegraPublicada[]> {
-    return this.lerEmpresa(c, empresa, [] as RegraPublicada[], async (l, est) => {
-      const tipos =
-        f.tipoFato !== undefined ? [f.tipoFato] : f.origem !== undefined ? tiposDaOrigem(f.origem) : null;
-      if (tipos !== null && tipos.length === 0) return [];
-      const filtro = tipos === null ? '' : ` AND ev.codigo IN (${lista(tipos.length)})`;
-      return (
-        await l.consultar(`${SQL_REGRAS}${filtro} ORDER BY ev.codigo, v.nome, v.numero_versao, v.id`, [
-          est,
-          ...(tipos ?? []),
-        ])
-      )
-        .map(regraPublicadaDe)
-        .filter((r) => f.origem === undefined || r.regra.origem === f.origem);
-    });
+    return this.lerEmpresa(c, empresa, [] as RegraPublicada[], (l, est) => lerRegras(l, est, f));
   }
 
   fontes(c: ContextoContabil): Promise<EstadoFonteFatos[]> {
@@ -765,9 +535,7 @@ export class PortaContabilPropria implements PortaContabil {
   }
 
   periodos(c: ContextoContabil, empresa: number): Promise<PeriodoRegistrado[]> {
-    return this.lerEmpresa(c, empresa, [], async (l, est) =>
-      (await l.consultar(`${SQL_PERIODOS} ORDER BY p.competencia`, [est])).map((r) => periodoDe(r, est)),
-    );
+    return this.lerEmpresa(c, empresa, [], (l, est) => lerPeriodos(l, est));
   }
 
   movimentoPorCompetencia(c: ContextoContabil, empresa: number) {
@@ -1045,67 +813,9 @@ export class PortaContabilPropria implements PortaContabil {
       lancamentos: new Map(),
       restam: false,
     };
-    return this.lerEmpresa(c, empresa, vazio, async (l, est) => {
-      if (situacoes.length === 0) return vazio;
-      const p: unknown[] = [est, ...situacoes.map((s) => SITUACAO_FATO_MODELO[s])];
-      const lidos = (
-        await l.consultar(
-          `${SQL_FATOS} AND f.situacao IN (${lista(situacoes.length)})${competencia ? ' AND f.competencia = ?' : ''}
-            ORDER BY f.id LIMIT ?`,
-          [...p, ...(competencia ? [diaUm(competencia)] : []), lote + 1],
-          { teto: lote + 1 },
-        )
-      ).map(fatoDe);
-      const candidatos = lidos.slice(0, lote);
-      const origens = [...new Set(candidatos.map((f) => `${f.tabela}\u0000${f.id}`))].map((k) =>
-        k.split('\u0000'),
-      );
-      const registrados: FatoRegistrado[] = [];
-      for (let i = 0; i < origens.length; i += 200) {
-        const parte = origens.slice(i, i + 200);
-        registrados.push(
-          ...(
-            await l.consultar(
-              `${SQL_FATOS} AND (${parte.map(() => '(f.entidade_origem = ? AND f.entidade_origem_id = ?)').join(' OR ')}) ORDER BY f.id`,
-              [est, ...parte.flatMap(([t, id]) => [t, Number(id)])],
-            )
-          ).map(fatoDe),
-        );
-      }
-      const lancamentos = new Map<
-        number,
-        { id: number; idFato: number; partidas: PartidaGerada[]; estornadoPor: number | null }
-      >();
-      const ids = registrados.map((f) => f.idFato);
-      if (ids.length > 0) {
-        const ls = await l.consultar(
-          `SELECT l.id, l.fato_contabil_id,
-                  (SELECT e.id FROM lancamento_contabil e WHERE e.estornado_lancamento_contabil_id = l.id LIMIT 1) AS estornado_por
-             FROM lancamento_contabil l
-            WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND l.tipo = 'automatico'
-              AND l.fato_contabil_id IN (${lista(ids.length)}) ORDER BY l.id`,
-          [est, ...ids],
-        );
-        const partidas = await PortaContabilPropria.partidasDe(
-          l,
-          ls.map((x) => num(x['id'])),
-        );
-        for (const x of ls)
-          lancamentos.set(num(x['fato_contabil_id']), {
-            id: num(x['id']),
-            idFato: num(x['fato_contabil_id']),
-            partidas: (partidas.get(num(x['id'])) ?? []).map((pp) => ({
-              lado: pp.lado,
-              conta: pp.conta,
-              valorCentavos: pp.valorCentavos,
-              historico: pp.historico,
-              centroCusto: pp.centroCusto,
-            })),
-            estornadoPor: numOuNulo(x['estornado_por']),
-          });
-      }
-      return { candidatos, registrados, lancamentos, restam: lidos.length > lote };
-    });
+    return this.lerEmpresa(c, empresa, vazio, (l, est) =>
+      lerParaContabilizar(l, est, situacoes, competencia, lote),
+    );
   }
 
   somas(c: ContextoContabil, f: FiltroSomasPorta, teto: number) {
@@ -1420,20 +1130,10 @@ function gravadorSobre(
   armazemSped: ArmazemArquivoSped | null,
 ): { gravador: GravadorContabil; concluir: () => Promise<void> } {
   const usuario = tx.contexto.usuario;
-  /** Fatos marcados como contabilizados nesta transação à espera do lançamento automático. */
-  const aguardamLancamento = new Map<number, { motivo: string | null; regraId: number | null }>();
-  /** Fatos que saíram de contabilizado nesta transação (não podem terminar com lançamento automático ativo). */
-  const saidosDeContabilizado = new Set<number>();
-  const lancamentoAtivoDoFato = async (idFato: number) =>
-    numOuNulo(
-      (
-        await tx.uma(
-          `SELECT id FROM lancamento_contabil WHERE fato_contabil_id = ? AND estabelecimento_id = ? AND tipo = 'automatico'
-             AND situacao = 'ativo' AND excluido_em IS NULL ORDER BY id DESC LIMIT 1`,
-          [idFato, est],
-        )
-      )?.['id'],
-    );
+  // O núcleo comum da gravação contábil (o mesmo do worker): plano vigente, período travado, situação do fato e
+  // lançamento, com a conferência final de que todo fato marcado como contabilizado ganhou o lançamento automático.
+  const base = gravacaoDosFatos(tx, est);
+  const { plano, travarPeriodo, exigirEmpresa, concluir } = base;
   /** O plano é da rede: sem a permissão do plano da rede, só grava no plano usado apenas por este estabelecimento. */
   const exigirPlanoGravavel = async (p: number) => {
     if (gravaPlanoDaRede) return;
@@ -1453,15 +1153,6 @@ function gravadorSobre(
   const exigirUsuario = () => {
     if (usuario === null) throw recusa('sem-usuario', 'A operação exige um usuário identificado.');
     return usuario;
-  };
-  const exigirEmpresa = (empresa: number) => {
-    if (empresa !== est)
-      throw recusa('outro-estabelecimento', 'A empresa informada não é a do estabelecimento da sessão.');
-  };
-  const plano = async () => {
-    const p = numOuNulo((await tx.uma(SQL_PLANO, [est]))?.['id']);
-    if (p === null) throw recusa('sem-plano', 'O estabelecimento não tem plano de contas contábil vigente.');
-    return p;
   };
   const contaPorCodigo = async (p: number, codigo: string, travar = false) => {
     const sql = `${SQL_CONTAS} AND c.classificacao = ?`;
@@ -1484,34 +1175,6 @@ function gravadorSobre(
         'A conta referencial informada não existe no plano referencial.',
       );
     return num(r['id']);
-  };
-  const travarPeriodo = async (competencia: string, criar: boolean) => {
-    const [r] = await tx.consultarParaAtualizar(
-      `SELECT id, situacao, versao, DATE_FORMAT(bloqueado_ate, '%Y-%m-%d') AS bloqueado_ate FROM periodo_contabil
-        WHERE estabelecimento_id = ? AND competencia = ? AND excluido_em IS NULL`,
-      [est, diaUm(competencia)],
-      { teto: 1 },
-    );
-    if (r)
-      return {
-        id: num(r['id']),
-        situacao: texto(r['situacao']),
-        versao: num(r['versao']),
-        bloqueadoAte: textoOuNulo(r['bloqueado_ate']),
-      };
-    if (!criar)
-      throw recusa(
-        'periodo-inexistente',
-        `A competência ${competencia} não tem movimento nem período aberto.`,
-      );
-    const id = await tx.incluir('periodo_contabil', {
-      estabelecimento_id: est,
-      competencia: diaUm(competencia),
-      exercicio: Number(competencia.slice(0, 4)),
-      plano_contas_id: await plano(),
-      situacao: 'aberto',
-    });
-    return { id, situacao: 'aberto', versao: 1, bloqueadoAte: null as string | null };
   };
   const periodosLidos = async () =>
     (await tx.consultar(`${SQL_PERIODOS} ORDER BY p.competencia`, [est])).map((r) => periodoDe(r, est));
@@ -1540,21 +1203,9 @@ function gravadorSobre(
     });
   };
 
-  const concluir = async () => {
-    if (aguardamLancamento.size)
-      throw recusa(
-        'fato-sem-lancamento',
-        'O fato não tem lançamento automático ativo para ser marcado como contabilizado.',
-      );
-    for (const idFato of saidosDeContabilizado)
-      if ((await lancamentoAtivoDoFato(idFato)) !== null)
-        throw recusa(
-          'fato-com-lancamento',
-          'O fato tem lançamento automático ativo: estorne-o antes de mudar a situação.',
-        );
-  };
-
   const gravador: GravadorContabil = {
+    marcarSituacao: (x) => base.marcarSituacao(x),
+    gravarLancamento: (l: LancamentoParaGravar) => base.gravarLancamento(l),
     async incluirConta(x) {
       exigirEmpresa(x.conta.empresa);
       const p = await plano();
@@ -1631,163 +1282,6 @@ function gravadorSobre(
         publicador_usuario_id: publicador,
       });
       return { id, versao: r.versao };
-    },
-    async marcarSituacao(x) {
-      const atual = await tx.uma(
-        'SELECT situacao FROM fato_contabil WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [x.idFato, est],
-      );
-      // O lançamento automático do fato: o já gravado, ou o que esta mesma transação gravar em seguida (Contabilizar
-      // marca a situação condicionada à lida e só então lança; concluir() confere que o lançamento veio).
-      const lancamento = x.situacao === 'contabilizado' ? await lancamentoAtivoDoFato(x.idFato) : null;
-      const lida = x.situacaoLida ?? null;
-      if (x.situacao === 'contabilizado' && lancamento === null) {
-        // O banco exige o lançamento do fato contabilizado: aqui só trava o fato e confere a situação lida; a situação
-        // muda quando gravarLancamento gravar o lançamento automático do fato (concluir() confere que veio).
-        const n = await tx.executar(
-          `UPDATE fato_contabil SET versao = versao + 1, alterado_em = ?, alterado_por = ?
-            WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${lida ? ' AND situacao = ?' : ''}`,
-          [new Date(), usuario, x.idFato, est, ...(lida ? [SITUACAO_FATO_MODELO[lida]] : [])],
-        );
-        if (n > 0) aguardamLancamento.set(x.idFato, { motivo: corta(x.motivo, 500), regraId: x.regraId });
-        return n > 0;
-      }
-      const n = await tx.executar(
-        `UPDATE fato_contabil SET situacao = ?, motivo = ?, lancamento_contabil_id = ?, contabilizado_em = ?,
-                versao_regra_contabil_id = ?, versao = versao + 1, alterado_em = ?, alterado_por = ?
-          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL${lida ? ' AND situacao = ?' : ''}`,
-        [
-          SITUACAO_FATO_MODELO[x.situacao],
-          corta(x.motivo, 500),
-          lancamento,
-          lancamento === null ? null : new Date(),
-          x.regraId,
-          new Date(),
-          usuario,
-          x.idFato,
-          est,
-          ...(lida ? [SITUACAO_FATO_MODELO[lida]] : []),
-        ],
-      );
-      if (n > 0 && x.situacao !== 'contabilizado' && atual?.['situacao'] === 'contabilizado')
-        saidosDeContabilizado.add(x.idFato);
-      return n > 0;
-    },
-    async gravarLancamento(l: LancamentoParaGravar) {
-      exigirEmpresa(l.empresa);
-      const chave = chaveDoLancamento(est, l.chave);
-      const existente = await tx.uma('SELECT id FROM lancamento_contabil WHERE chave_idempotencia = ?', [
-        chave,
-      ]);
-      if (existente) return { id: num(existente['id']), repetido: true };
-      const periodo = await travarPeriodo(l.competencia, true);
-      const bloqueio = bloqueioDoLancamento(periodo, l.data, l.competencia);
-      if (bloqueio) throw recusa(bloqueio.codigo, bloqueio.mensagem);
-      const p = await plano();
-      const codigos = [...new Set(l.partidas.map((x) => x.conta))];
-      const contas = new Map<string, number>();
-      const semManual: string[] = [];
-      for (const r of await tx.consultar(
-        `SELECT id, classificacao, aceita_lancamento_manual FROM conta_contabil WHERE plano_contas_id = ? AND excluido_em IS NULL
-            AND ativo = TRUE AND tipo = 'analitica' AND classificacao IN (${lista(codigos.length)})`,
-        [p, ...codigos],
-      )) {
-        contas.set(texto(r['classificacao']), num(r['id']));
-        if (!bool(r['aceita_lancamento_manual'])) semManual.push(texto(r['classificacao']));
-      }
-      const falta = codigos.filter((k) => !contas.has(k));
-      if (falta.length)
-        throw recusa(
-          'conta-inexistente',
-          `Conta sem cadastro analítico ativo no plano: ${falta.join(', ')}.`,
-        );
-      if (l.tipo === 'manual' && semManual.length)
-        throw recusa(
-          'conta-sem-lancamento-manual',
-          `A conta não aceita lançamento manual: ${semManual.join(', ')}.`,
-        );
-      const debitos = l.partidas.filter((x) => x.lado === 'D').reduce((s, x) => s + x.valorCentavos, 0);
-      const creditos = l.partidas.filter((x) => x.lado === 'C').reduce((s, x) => s + x.valorCentavos, 0);
-      if (debitos !== creditos || debitos <= 0)
-        throw recusa(
-          'lancamento-desbalanceado',
-          'A soma dos débitos tem de ser igual à dos créditos e maior que zero.',
-        );
-      const fato =
-        l.fatoId === null
-          ? null
-          : await tx.uma(
-              'SELECT entidade_origem, entidade_origem_id FROM fato_contabil WHERE id = ? AND estabelecimento_id = ?',
-              [l.fatoId, est],
-            );
-      if (l.fatoId !== null && !fato)
-        throw recusa('fato-inexistente', 'O fato de origem não existe neste estabelecimento.');
-      if (l.estornaId !== null) {
-        const [o] = await tx.consultarParaAtualizar(
-          'SELECT id, versao, situacao FROM lancamento_contabil WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-          [l.estornaId, est],
-          { teto: 1 },
-        );
-        if (!o)
-          throw recusa('lancamento-inexistente', 'O lançamento a estornar não existe neste estabelecimento.');
-        if (o['situacao'] === 'estornado') throw recusa('ja-estornado', 'O lançamento já foi estornado.');
-        await tx.alterar('lancamento_contabil', l.estornaId, num(o['versao']), {
-          situacao: 'estornado',
-          estornado_em: new Date(),
-        });
-      }
-      await garantirSequencia(
-        tx,
-        { tipo: 'lancamento_contabil', estabelecimento: est },
-        { usuario, agora: new Date() },
-      );
-      const numero = await tx.proximoNumero('lancamento_contabil');
-      const id = await tx.incluir('lancamento_contabil', {
-        estabelecimento_id: est,
-        numero: numero.valor,
-        periodo_contabil_id: periodo.id,
-        data_lancamento: l.data,
-        tipo: l.tipo,
-        historico: l.historico.slice(0, 500),
-        complemento: l.justificativa,
-        valor_total: reais(debitos),
-        fato_contabil_id: l.fatoId,
-        entidade_origem: fato ? texto(fato['entidade_origem']) : null,
-        entidade_origem_id: fato ? num(fato['entidade_origem_id']) : null,
-        estornado_lancamento_contabil_id: l.estornaId,
-        versao_regra_contabil_id: l.regraId,
-        situacao: 'ativo',
-        chave_idempotencia: chave,
-      });
-      for (const [i, x] of l.partidas.entries())
-        await tx.incluir('partida_contabil', {
-          lancamento_contabil_id: id,
-          sequencia: i + 1,
-          lado: ladoModelo(x.lado),
-          conta_contabil_id: contas.get(x.conta),
-          centro_custo_id: x.centroCusto,
-          valor: reais(x.valorCentavos),
-          complemento: corta(x.historico, 300),
-        });
-      if (l.fatoId !== null && l.tipo === 'automatico' && aguardamLancamento.has(l.fatoId)) {
-        await tx.executar(
-          `UPDATE fato_contabil SET situacao = 'contabilizado', motivo = ?, lancamento_contabil_id = ?, contabilizado_em = ?,
-                  versao_regra_contabil_id = ?, alterado_em = ?, alterado_por = ?
-            WHERE id = ? AND estabelecimento_id = ?`,
-          [
-            aguardamLancamento.get(l.fatoId)?.motivo ?? null,
-            id,
-            new Date(),
-            aguardamLancamento.get(l.fatoId)?.regraId ?? l.regraId,
-            new Date(),
-            usuario,
-            l.fatoId,
-            est,
-          ],
-        );
-        aguardamLancamento.delete(l.fatoId);
-      }
-      return { id, repetido: false };
     },
     async encerrarPeriodo(x) {
       exigirEmpresa(x.empresa);

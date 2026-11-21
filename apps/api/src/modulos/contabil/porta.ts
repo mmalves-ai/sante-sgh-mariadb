@@ -83,17 +83,6 @@ export interface GravadorContabil {
   situacaoArquivoSped(x: SemHospital<PedidoSituacaoArquivoSped>): Promise<ArquivoSpedRegistrado>;
 }
 
-/** O que a contabilização dos fatos lê de uma vez (os candidatos, os fatos das linhas e os lançamentos deles). */
-export interface LeituraParaContabilizar {
-  readonly candidatos: readonly FatoRegistrado[];
-  readonly registrados: readonly FatoRegistrado[];
-  readonly lancamentos: ReadonlyMap<
-    number,
-    { id: number; idFato: number; partidas: PartidaGerada[]; estornadoPor: number | null }
-  >;
-  readonly restam: boolean;
-}
-
 /** O razão lido (saldo anterior, totais, a soma antes da página e os movimentos da página até o teto + 1). */
 export interface RazaoLido {
   readonly anterior: { readonly debitos: number; readonly creditos: number };
@@ -258,3 +247,7 @@ export const METODOS_PORTA_CONTABIL: ReadonlySet<string> = new Set([
   'conteudoSped',
   'gravar',
 ]);
+
+import type { LeituraParaContabilizar } from '@sgh/persistencia-contabil';
+
+export type { LeituraParaContabilizar };

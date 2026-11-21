@@ -18,12 +18,13 @@
 // resumo; um pedido pendente por conta, CHECK e UNIQUE do banco) e a confirmação passa a conta ao e-mail novo.
 // Melhoria: a notificação do aviso de crítico ao médico externo é uma tentativa de contato do aviso
 // (aviso_valor_critico_tentativa, uma por aviso e conta do portal, UNIQUE do banco), com o envio e o motivo.
-// Pendências (nada em silêncio; a tela recebe 409 com o motivo; pedidos em
-// docs/obra/fatias/f24/saida/21-misto-farmacia.json): OPERACOES_PENDENTES abaixo.
+// Melhoria: a senha da conta do portal é a credencial do usuário da conta (credencial_usuario, argon2id), trocada com
+// o histórico (historico_senha) e o ato 'troca_senha' na mesma transação. A porta recebe só o resumo: a conferência de
+// reuso (atual e histórico da janela, como em acesso/senha/porta-senha.ts) ainda NÃO é feita aqui nem no serviço
+// (pedido no saida/p-operadora-portal-precos.json).
 import {
   type ContextoNucleo,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type Linha,
@@ -52,6 +53,7 @@ import {
   trilhaDoNucleo,
   type VinculoMedicoExterno,
 } from './porta.js';
+import { ALGORITMO_SENHA, resumoArgon2id } from '../acesso/senha/porta-senha.js';
 import { conferirAtoContaMedico, SITUACAO_DO_MODELO, situacaoDaTela } from './regras-conta.js';
 
 /** O mínimo do núcleo que a porta usa. */
@@ -63,20 +65,23 @@ const TABELAS_GRAVACAO = [
   'ato_conta_portal_profissional_externo',
   'troca_email_conta_portal',
   'aviso_valor_critico_tentativa',
+  'credencial_usuario',
+  'historico_senha',
 ] as const;
 /** O canal da notificação do crítico pelo portal do médico externo (cadastro canal_notificacao do cliente). */
 export const CANAL_CRITICO_PORTAL_MEDICO = 'portal_medico_externo';
 const TETO_BUSCA = 20;
 
-/** Operações que o banco próprio ainda não atende, com o que falta (pedidos do lote 21-misto-farmacia da F2.4). */
-export const OPERACOES_PENDENTES: Readonly<Record<string, string>> = {
-  trocarSenha:
-    'a troca de senha da conta do médico externo (a senha fica no provedor de identidade, ainda não ligado)',
-};
+/** Operações que o banco próprio ainda não atende (nenhuma desde a troca de senha pela credencial do produto). */
+export const OPERACOES_PENDENTES: Readonly<Record<string, string>> = {};
 
 const id = z.number().int().positive();
 const ENTRADA_VINCULAR = z.object({ acesso: id, profissional: id }).strict();
 const ENTRADA_DESVINCULAR = z.object({ acesso: id }).strict();
+/** O resumo argon2id já calculado (a senha em claro nunca chega à gravação nem à trilha). */
+const ENTRADA_TROCA_SENHA = z
+  .object({ acesso: id, senhaResumo: z.string().refine(resumoArgon2id, 'resumo argon2id') })
+  .strict();
 const ENTRADA_ATO = z
   .object({
     acesso: id,
@@ -95,14 +100,6 @@ const emOutraConta = () =>
   recusa('profissional-em-outra-conta', 'O profissional já está ligado a outra conta do portal.', {
     campos: ['profissional'],
   });
-
-const pendente = (o: string): ErroOperacao =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso ainda não disponível no banco',
-    `${o.slice(0, 1).toUpperCase()}${o.slice(1)} ainda não está disponível neste banco.`,
-  );
 
 /** O ato gravado (snake_case) → o da tela (as trocas usam hífen). */
 const ATO_DO_BANCO: Readonly<Record<string, AtoContaMedicoRegistrado['ato']>> = {
@@ -342,7 +339,64 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
             return { situacao, anterior, id: e.acesso };
           },
         ),
-      trocarSenha: () => Promise.reject(pendente(OPERACOES_PENDENTES['trocarSenha']!)),
+      // A senha da conta do portal é a credencial do usuário da conta (credencial_usuario, argon2id): troca com o
+      // histórico (historico_senha) e o ato 'troca_senha' na mesma transação. Sem conferência de reuso (só o resumo
+      // chega aqui); ver o cabeçalho.
+      trocarSenha: (x) =>
+        this.operar(
+          c,
+          'portal-medico.trocar-senha',
+          ENTRADA_TROCA_SENHA,
+          { acesso: x.acesso, senhaResumo: x.senhaResumo },
+          trilha(),
+          async (tx, e) => {
+            const conta = await this.contaTravada(tx, e.acesso);
+            if (String(conta['situacao']) !== SITUACAO_DO_MODELO.ativo)
+              throw recusa('conta-nao-ativa', 'Só a conta ativa troca a senha.');
+            const [u] = await tx.consultarParaAtualizar(
+              `SELECT u.id FROM conta_portal_profissional_externo cp JOIN usuario u ON u.id = cp.usuario_id
+                WHERE cp.id = ? AND u.excluido_em IS NULL`,
+              [e.acesso],
+            );
+            if (!u) throw recusa('conta-sem-usuario', 'A conta do portal não tem usuário de acesso.');
+            const usuario = n(u['id']);
+            const agora = new Date();
+            const [atual] = await tx.consultarParaAtualizar(
+              'SELECT id, versao FROM credencial_usuario WHERE usuario_id = ? AND excluido_em IS NULL',
+              [usuario],
+            );
+            const valores = {
+              algoritmo: ALGORITMO_SENHA,
+              resumo_senha: e.senhaResumo,
+              senha_alterada_em: agora,
+              troca_obrigatoria: false,
+              tentativas_invalidas: 0,
+              ultima_tentativa_invalida_em: null,
+            };
+            if (atual) await tx.alterar('credencial_usuario', n(atual['id']), n(atual['versao']), valores);
+            else await tx.incluir('credencial_usuario', { usuario_id: usuario, ...valores });
+            await tx.incluir('historico_senha', {
+              usuario_id: usuario,
+              operacao: atual ? 'alteracao' : 'inclusao',
+              hash_senha: e.senhaResumo,
+              algoritmo: ALGORITMO_SENHA,
+              forma_troca: 'troca_voluntaria',
+              ocorrido_em: agora,
+              responsavel_usuario_id: usuario,
+            });
+            const id = await tx.incluir('ato_conta_portal_profissional_externo', {
+              conta_portal_profissional_externo_id: e.acesso,
+              ato: 'troca_senha',
+              situacao_anterior: String(conta['situacao']),
+              motivo: null,
+              pedidos_pendentes: 0,
+              decisao_pedidos: null,
+              realizado_por_usuario_id: usuario,
+              realizado_em: agora,
+            });
+            return { id };
+          },
+        ),
       pedirTrocaEmail: (x) =>
         this.operar(
           c,
@@ -425,7 +479,10 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
             );
             const validoAte = t ? comoData(t['valido_ate']) : null;
             if (!t || String(t['situacao']) !== 'pendente' || !validoAte || validoAte <= new Date(e.agora))
-              throw recusa('link-invalido', 'Este link de confirmação não vale mais. Peça a troca do e-mail de novo.');
+              throw recusa(
+                'link-invalido',
+                'Este link de confirmação não vale mais. Peça a troca do e-mail de novo.',
+              );
             const acesso = n(t['conta_portal_profissional_externo_id']);
             const conta = await this.contaTravada(tx, acesso);
             if (String(conta['situacao']) !== SITUACAO_DO_MODELO.ativo)
@@ -449,7 +506,9 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
           trilha(),
           async (tx, e) => {
             if (e.envio === 'desligado' && !e.motivo)
-              throw recusa('motivo-obrigatorio', 'A notificação desligada guarda o motivo.', { campos: ['motivo'] });
+              throw recusa('motivo-obrigatorio', 'A notificação desligada guarda o motivo.', {
+                campos: ['motivo'],
+              });
             const conta = await this.contaTravada(tx, e.acesso);
             const [a] = await tx.consultarParaAtualizar(
               `SELECT id, nivel_escalonamento FROM aviso_valor_critico WHERE id = ? AND excluido_em IS NULL`,
@@ -723,7 +782,11 @@ export class PortaPortalMedicoPropria implements PortaPortalMedico {
     );
   }
 
-  private trocaEmail(c: ContextoPortalMedico, filtro: string, p: unknown[]): Promise<TrocaEmailMedico | null> {
+  private trocaEmail(
+    c: ContextoPortalMedico,
+    filtro: string,
+    p: unknown[],
+  ): Promise<TrocaEmailMedico | null> {
     return this.ler(c, async (l) => {
       const t = await l.uma<Linha>(
         `SELECT id, conta_portal_profissional_externo_id, email_novo, valido_ate, envio, situacao

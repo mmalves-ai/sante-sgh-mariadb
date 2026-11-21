@@ -217,12 +217,12 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
           g.incluirIntegracao({
             empresa: est,
             inicio: '2099-09-01',
-            destinos: [{ ...destinos[0]!, contaContabil: '3.1.1' }],
+            destinos: [{ ...destinos[0]!, contaContabil: '9.9.93079' }],
             por: login,
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('conta-contabil-inexistente');
     expect(
       await codigo(
         porta.gravarSgh(cc(), trilha, (g) =>
@@ -238,8 +238,8 @@ describe.skipIf(SEM_BANCO)('porta própria da integração da folha contra o Mar
     expect((await porta.integracoes(cc(), est)).some((x) => x.inicio === '2099-09-01')).toBe(false);
   });
 
-  it('lançamento dos títulos ainda não ligado: recusa com 503 (nunca vazio) e liberação negada', async () => {
-    await expect(porta.lancamentos()).rejects.toMatchObject({ problema: { status: 503, codigo: 'modelo-pendente' } });
-    expect(await porta.podeGravar(ctx(), OPERACAO_TITULOS_FOLHA)).toMatchObject({ pode: false });
+  it('lançamento dos títulos: liberado; outra empresa não é vista', async () => {
+    expect(await porta.podeGravar(ctx(), OPERACAO_TITULOS_FOLHA)).toMatchObject({ pode: true });
+    expect(await porta.lancamentos(ctx(), est + 100_000, 2099)).toEqual([]);
   });
 });

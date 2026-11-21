@@ -4,8 +4,9 @@
 // Só no banco (contrato de efeito): linhas, versão, criado_por/alterado_por do usuário da sessão, trilha da operação,
 // nenhuma mensagem no outbox (o eSocial sai pelo lote e pelo transmissor, não pelo outbox), o sequencial do Id pela
 // sequencia_negocio do estabelecimento (concorrência sem colisão), o CHECK processado → recibo, a operação do evento
-// de tabela, o lote ao coletor, a conferência da conciliação gravada e relida e as recusas por modelo pendente
-// (parâmetros do empregador e ficha).
+// de tabela, o lote ao coletor, a conferência da conciliação gravada e relida com a situação exata de cada linha, os
+// parâmetros do empregador por vigência (colunas, catálogos, de-para dos motivos de afastamento e recusas) e a recusa
+// por modelo pendente da ficha do vínculo.
 // Massa sintética (identificadores e XML de teste, nenhuma pessoa); o que o teste cria é apagado no fim (a trilha fica:
 // é só de inclusão).
 // Rodar: vitest run --config apps/api/vitest.integracao.config.ts src/modulos/pessoas/esocial/porta-esocial-propria.int.spec.ts
@@ -38,6 +39,11 @@ let est = 1;
 let usuario: number | null = null;
 let sequenciaCriada = false;
 const tiposCriados: number[] = [];
+/** Catálogos e cadastros sintéticos criados para os parâmetros do empregador (apagados no fim). */
+const criados: [string, number][] = [];
+const LOTACAO_TESTE = 'LOT-TESTE-F24';
+const CNPJ_SINDICATO = '11222333000181';
+let motivoTeste = 0;
 const eventos: number[] = [];
 const lotes: number[] = [];
 
@@ -104,7 +110,7 @@ beforeAll(async () => {
       ? Number(x['id'])
       : await e.inserir(
           'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, NOW(3))',
-          ['F22-0305', 'Estabelecimento sintético', 'Estabelecimento sintético de teste'],
+          ['f220305', 'Estabelecimento sintético', 'Estabelecimento sintético de teste'],
         );
     const u = await e.uma('SELECT id FROM usuario WHERE login = ?', [LOGIN]);
     usuario = u
@@ -118,6 +124,54 @@ beforeAll(async () => {
       est,
     ]);
     sequenciaCriada = !s;
+    const garantir = async (tabela: string, busca: string, p: unknown[], inclui: string, q: unknown[]) => {
+      const x = await e.uma(busca, p);
+      if (x) return Number(x['id']);
+      const id = await e.inserir(inclui, q);
+      criados.push([tabela, id]);
+      return id;
+    };
+    const tabela8 = await garantir(
+      'tabela_esocial',
+      "SELECT id FROM tabela_esocial WHERE fonte = 'esocial' AND codigo_oficial IN ('08', '8') ORDER BY id LIMIT 1",
+      [],
+      "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES ('esocial', '08', ?, 'teste-f24', NOW(3))",
+      ['Classificação tributária (sintética)'],
+    );
+    await garantir(
+      'codigo_esocial',
+      "SELECT id FROM codigo_esocial WHERE tabela_esocial_id = ? AND codigo_esocial = '99'",
+      [tabela8],
+      "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) VALUES (?, '99', ?, NOW(3))",
+      [tabela8, 'Classificação sintética'],
+    );
+    await garantir(
+      'fpas',
+      "SELECT id FROM fpas WHERE codigo_fpas = '999'",
+      [],
+      "INSERT INTO fpas (codigo_fpas, descricao, criado_em) VALUES ('999', ?, NOW(3))",
+      ['FPAS sintético'],
+    );
+    await garantir(
+      'pessoa_juridica',
+      'SELECT id FROM pessoa_juridica WHERE cnpj = ? ORDER BY id LIMIT 1',
+      [CNPJ_SINDICATO],
+      'INSERT INTO pessoa_juridica (cnpj, razao_social, criado_em) VALUES (?, ?, NOW(3))',
+      [CNPJ_SINDICATO, 'Sindicato sintético de teste'],
+    );
+    motivoTeste = await garantir(
+      'motivo_afastamento',
+      "SELECT id FROM motivo_afastamento WHERE codigo = 'TESTE-F24'",
+      [],
+      "INSERT INTO motivo_afastamento (codigo, descricao, criado_em) VALUES ('TESTE-F24', ?, NOW(3))",
+      ['Motivo sintético'],
+    );
+    await e.executar(
+      `DELETE m FROM cadastro_empregador_motivo_afastamento m
+         JOIN cadastro_empregador c ON c.id = m.cadastro_empregador_id WHERE c.codigo_lotacao_tributaria = ?`,
+      [LOTACAO_TESTE],
+    );
+    await e.executar('DELETE FROM cadastro_empregador WHERE codigo_lotacao_tributaria = ?', [LOTACAO_TESTE]);
     for (const [codigo, classe] of [
       ['S-1010', 'tabela'],
       [EVENTO, 'nao_periodico'],
@@ -162,6 +216,14 @@ afterAll(async () => {
     await e.executar('DELETE FROM conferencia_eventos_esocial WHERE estabelecimento_id = ?', [est]);
     if (tiposCriados.length)
       await e.executar(`DELETE FROM tipo_evento_esocial WHERE id IN (${em(tiposCriados)})`, tiposCriados);
+    await e.executar(
+      `DELETE m FROM cadastro_empregador_motivo_afastamento m
+         JOIN cadastro_empregador c ON c.id = m.cadastro_empregador_id WHERE c.codigo_lotacao_tributaria = ?`,
+      [LOTACAO_TESTE],
+    );
+    await e.executar('DELETE FROM cadastro_empregador WHERE codigo_lotacao_tributaria = ?', [LOTACAO_TESTE]);
+    for (const [tabela, id] of [...criados].reverse())
+      await e.executar(`DELETE FROM ${tabela} WHERE id = ?`, [id]);
     if (sequenciaCriada)
       await e.executar('DELETE FROM sequencia_negocio WHERE tipo = ? AND estabelecimento_id = ?', [
         SEQUENCIA_EVENTO_ESOCIAL,
@@ -506,26 +568,140 @@ describe.skipIf(SEM_BANCO)('porta própria do eSocial: contrato de efeito no Mar
     ['repasse-no-periodico', '2026-06'],
     ['repasse-no-externo', '2026-07'],
     ['so-contagem', '2026-08'],
-  ])(
-    'linha %s: grava as contagens e a releitura recusa com modelo-pendente (nunca outro diagnóstico)',
-    async (sit, comp) => {
-      await conferir(comp, 'divergente', [linhaDe('S-1010', 'conciliado', 2, 0), linhaDe(EVENTO, sit, 1, 0)]);
-      expect(
-        await contar(
-          `SELECT COUNT(*) AS n FROM conferencia_eventos_esocial_item i
-           JOIN conferencia_eventos_esocial f ON f.id = i.conferencia_eventos_esocial_id
-          WHERE f.estabelecimento_id = ? AND f.competencia = ? AND i.situacao = 'divergente'`,
-          [est, `${comp}-01`],
-        ),
-      ).toBe(1);
-      await expect(porta.ultimaConciliacao(contexto(), est, comp)).rejects.toMatchObject({
+  ])('linha %s: grava a situação exata da linha e a releitura devolve a mesma', async (sit, comp) => {
+    await conferir(comp, 'divergente', [linhaDe('S-1010', 'conciliado', 2, 0), linhaDe(EVENTO, sit, 1, 0)]);
+    expect(
+      await contar(
+        `SELECT COUNT(*) AS n FROM conferencia_eventos_esocial_item i
+         JOIN conferencia_eventos_esocial f ON f.id = i.conferencia_eventos_esocial_id
+        WHERE f.estabelecimento_id = ? AND f.competencia = ? AND i.situacao = ?`,
+        [est, `${comp}-01`, sit.replace(/-/g, '_')],
+      ),
+    ).toBe(1);
+    const u = await porta.ultimaConciliacao(contexto(), est, comp);
+    expect(u?.situacao).toBe('divergente');
+    const lidas = JSON.parse(u!.linhas) as { evento: string; situacao: string }[];
+    expect(lidas.map((x) => [x.evento, x.situacao]).sort()).toEqual(
+      [
+        ['S-1010', 'conciliado'],
+        [EVENTO, sit],
+      ].sort(),
+    );
+  });
+
+  const parametros = (x: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      classTrib: '99',
+      indCoop: 0,
+      indConstr: 0,
+      indDesFolha: 2,
+      indOptRegEletron: 1,
+      cnaePrep: '8610101',
+      aliqRat: 2,
+      fap: 12_345,
+      codLotacao: LOTACAO_TESTE,
+      fpas: '999',
+      codTercs: '0115',
+      ideTabRubr: 'RUBR01',
+      cnpjSindicato: CNPJ_SINDICATO,
+      motivosAfastamento: { [String(motivoTeste)]: '03' },
+      ...x,
+    });
+  const empregador = (inicio: string, x: Record<string, unknown> = {}, empresa = est) =>
+    porta.gravarSgh(contexto(), trilhaDo('cadastro_empregador'), (g) =>
+      g.incluirEmpregador({
+        empresa,
+        inicio,
+        transmissor: 'sante',
+        leiaute: 'v_S_01_03_00',
+        parametros: parametros(x),
+        por: 'SINT',
+      }),
+    );
+
+  it('grava a vigência dos parâmetros do empregador nas colunas e relê no formato do contrato', async () => {
+    const id = await empregador('2026-03');
+    const linha = await banco(
+      `SELECT c.transmissor, c.leiaute_esocial_versao, c.indicador_desoneracao, c.registro_eletronico_empregados,
+              c.fap, c.aliquota_rat, c.criado_por, c.versao, m.codigo_esocial AS motivo, f.codigo_fpas
+         FROM cadastro_empregador c
+         JOIN fpas f ON f.id = c.fpas_id
+         JOIN cadastro_empregador_motivo_afastamento m ON m.cadastro_empregador_id = c.id
+        WHERE c.id = ? AND c.estabelecimento_id = ?`,
+      [id, est],
+    );
+    expect(linha).toMatchObject({
+      transmissor: 'sistema',
+      leiaute_esocial_versao: 'v_S_01_03_00',
+      indicador_desoneracao: 'municipio_enquadrado',
+      fap: '1.2345',
+      motivo: '03',
+      codigo_fpas: '999',
+    });
+    expect(Number(linha['criado_por'])).toBe(usuario);
+    expect(Number(linha['versao'])).toBe(1);
+    const [lida] = (await porta.empregadores(contexto(), est)).filter((v) => v.id === id);
+    expect(lida).toMatchObject({
+      empresa: est,
+      inicio: '2026-03',
+      transmissor: 'sante',
+      leiaute: 'v_S_01_03_00',
+    });
+    expect(lida!.criadoPor).toBe(LOGIN);
+    expect(JSON.parse(lida!.parametros)).toEqual(JSON.parse(parametros()));
+    expect((await porta.empregadores(contexto(), null)).some((v) => v.id === id)).toBe(true);
+    expect(await porta.empregadores(contexto(), est + 1_000_000)).toEqual([]);
+    // Dentro da gravação, a mesma leitura (a regra do transmissor único confere as vigências na transação).
+    const naTx = await porta.gravarSgh(contexto(), trilhaDo('cadastro_empregador'), (g) =>
+      g.empregadores(est),
+    );
+    expect(naTx.some((v) => v.id === id)).toBe(true);
+  });
+
+  it.each([
+    ['vigência repetida', '2026-03', {}, 'vigencia-repetida'],
+    ['classificação fora do catálogo', '2026-04', { classTrib: '98' }, 'catalogo-pendente'],
+    ['FPAS fora do catálogo', '2026-04', { fpas: '998' }, 'catalogo-pendente'],
+    ['sindicato sem cadastro', '2026-04', { cnpjSindicato: '11444777000161' }, 'cadastro-pendente'],
+    [
+      'motivo de afastamento sem cadastro',
+      '2026-04',
+      { motivosAfastamento: { '999999999': '01' } },
+      'cadastro-pendente',
+    ],
+    ['parâmetros fora do contrato', '2026-04', { fap: 1 }, 'parametros-invalidos'],
+  ])('parâmetros do empregador: %s recusa sem gravar', async (_n, inicio, x, codigo) => {
+    if (inicio === '2026-03' && !(await porta.empregadores(contexto(), est)).some((v) => v.inicio === inicio))
+      await empregador(inicio);
+    const n = () =>
+      contar('SELECT COUNT(*) AS n FROM cadastro_empregador WHERE codigo_lotacao_tributaria = ?', [
+        LOTACAO_TESTE,
+      ]);
+    const antes = await n();
+    await expect(empregador(inicio, x)).rejects.toMatchObject({ problema: { codigo } });
+    expect(await n()).toBe(antes);
+  });
+
+  it('indCoop e indConstr nulos (não informados) recusam com modelo-pendente sem gravar o padrão', async () => {
+    const n = () =>
+      contar('SELECT COUNT(*) AS n FROM cadastro_empregador WHERE codigo_lotacao_tributaria = ?', [
+        LOTACAO_TESTE,
+      ]);
+    const antes = await n();
+    for (const x of [{ indCoop: null }, { indConstr: null }, { indCoop: null, indConstr: null }])
+      await expect(empregador('2026-06', x)).rejects.toMatchObject({
         problema: { codigo: 'modelo-pendente' },
       });
-      await expect(porta.ultimaConciliacao(contexto(), est, comp)).rejects.toThrow(/detalhe da divergência/);
-    },
-  );
+    expect(await n()).toBe(antes);
+  });
 
-  it('recusa sem gravar: outro estabelecimento e parâmetros do empregador', async () => {
+  it('indCoop e indConstr informados (diferentes de 0) voltam iguais na releitura', async () => {
+    const id = await empregador('2026-07', { indCoop: 2, indConstr: 1 });
+    const [lida] = (await porta.empregadores(contexto(), est)).filter((v) => v.id === id);
+    expect(JSON.parse(lida!.parametros)).toMatchObject({ indCoop: 2, indConstr: 1 });
+  });
+
+  it('recusa sem gravar: lote e parâmetros do empregador de outro estabelecimento', async () => {
     const l = () => contar('SELECT COUNT(*) AS n FROM lote_esocial WHERE estabelecimento_id = ?', [est]);
     const lotesAntes = await l();
     await expect(
@@ -539,26 +715,14 @@ describe.skipIf(SEM_BANCO)('porta própria do eSocial: contrato de efeito no Mar
         }),
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'outro-estabelecimento' } });
-    await expect(
-      porta.gravarSgh(contexto(), trilhaDo('evento_esocial'), (g) =>
-        g.incluirEmpregador({
-          empresa: est,
-          inicio: '2026-10',
-          transmissor: 'sante',
-          leiaute: 'v_S_01_03_00',
-          parametros: '{}',
-          por: 'SINT',
-        }),
-      ),
-    ).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+    await expect(empregador('2026-05', {}, est + 1_000_000)).rejects.toMatchObject({
+      problema: { codigo: 'outro-estabelecimento' },
+    });
     expect(await l()).toBe(lotesAntes);
   });
 
-  it('leituras sem lugar no modelo recusam dizendo o que fica indisponível (nunca vazio calado)', async () => {
-    await expect(porta.empregadores(contexto(), null)).rejects.toMatchObject({
-      problema: { codigo: 'modelo-pendente' },
-    });
-    await expect(porta.empregadores(contexto(), null)).rejects.toThrow(/gerar eventos/);
+  it('a ficha do vínculo recusa dizendo o que fica indisponível (nunca vazio calado)', async () => {
+    await expect(porta.ficha(contexto(), 1)).rejects.toThrow(/ficha/);
     await expect(porta.ficha(contexto(), 1)).rejects.toMatchObject({
       problema: { codigo: 'modelo-pendente' },
     });

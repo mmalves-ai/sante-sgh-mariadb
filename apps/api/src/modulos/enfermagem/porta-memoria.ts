@@ -700,7 +700,10 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
         if (s.sinais.some((y) => y.anterior === a.id))
           throw recusa('sinal-ja-retificado', 'Este registro já foi retificado: retifique a versão vigente.');
         if (x.versao !== undefined && x.versao !== a.versao)
-          throw recusa('conflito-versao', 'O sinal vital mudou desde a leitura: recarregue e retifique de novo.');
+          throw recusa(
+            'conflito-versao',
+            'O sinal vital mudou desde a leitura: recarregue e retifique de novo.',
+          );
         const id = ++s.seq;
         s.sinais.push({
           ...a,
@@ -934,6 +937,20 @@ export class PortaEnfermagemMemoria implements PortaEnfermagem {
           avisos: null,
         });
         return id;
+      },
+      registrarAnotacaoOffline: async (x) => {
+        const chave = `anotacao:${x.chave}`.slice(0, 80);
+        const ja = s.respostas.find((r) => r.componente === 'anexo' && r.chave === chave);
+        if (ja) return ja.registro;
+        const registro = ++s.seq;
+        s.respostas.push({
+          registro,
+          componente: 'anexo',
+          chave,
+          valor: JSON.stringify({ texto: x.texto, horaReal: x.horaReal, atendimento: x.atendimento }),
+          referencia: null,
+        });
+        return registro;
       },
       gravarRespostaExt: async (x) => {
         s.respostas.push({ ...x });

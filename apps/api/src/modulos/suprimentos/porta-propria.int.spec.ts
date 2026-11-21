@@ -5,7 +5,7 @@
 // mesmo id sem gravar; a mesma chave com outro conteúdo é recusada), a contagem pela regra do domínio (divergência pede
 // recontagem por outra pessoa na rodada seguinte; duas iguais confirmam), a aprovação por quem não contou e o
 // cancelamento com justificativa, que libera o local. Pela HTTP do controller (sessão real, porta própria): GET apoio e
-// POST inventarios. Pendências: 409 modelo-pendente com o motivo, nada gravado.
+// POST inventarios. O OPME na saída ainda recusa com o motivo, nada gravado.
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -332,7 +332,12 @@ describe.skipIf(SEM_BANCO)('porta própria do estoque (MariaDB, cliente f22_o3)'
     expect(apoio.centrosCusto).toEqual([
       { codigo: m.centroCusto, nome: 'CENTRO SINTETICO', localConsumo: m.localA, tecnico: true },
     ]);
-    expect(apoio.escopo).toBeNull();
+    // O escopo vem do cadastro do usuário no estoque (o supervisor só aprova pedido no local A).
+    expect(apoio.escopo).toMatchObject({
+      usuario: 'F22L0314.SUPERVISOR',
+      locais: [{ local: m.localA, tipos: [] }],
+      flags: { autorizarPedido: true, autorizarRequisicao: false },
+    });
     const k = `f22l0314-http-${RODADA}`;
     const r = await controller.abrirInventario(
       { local: m.localA2, tipo: 'ciclico', itens: [m.insumo] },
@@ -351,30 +356,48 @@ describe.skipIf(SEM_BANCO)('porta própria do estoque (MariaDB, cliente f22_o3)'
     await decidir(como(m.usuario), id, 'cancelado', 'Fim do teste HTTP');
   });
 
-  it('pendências do modelo: 409 modelo-pendente com o motivo, nada gravado', async () => {
+  it('recursos ainda fora do banco: OPME na saída responde 409 com o motivo, nada gravado', async () => {
     const c = contexto(m);
-    expect(await codigoDe(porta.fichaItem())).toBe('modelo-pendente');
+    const gravados = async () =>
+      (
+        await ler<{ n: number }>(
+          `SELECT (SELECT COUNT(*) FROM documento_estoque WHERE estabelecimento_id = ?)
+                + (SELECT COUNT(*) FROM movimento_estoque WHERE estabelecimento_id = ?) AS n`,
+          [m.estA, m.estA],
+        )
+      )[0]?.n;
+    const antes = Number(await gravados());
     expect(
       await codigoDe(
-        porta.executar(c, 'suprimentos.registrarSaida', {}, { ...c, chaveIdempotencia: `k-${RODADA}` }),
-      ),
-    ).toBe('modelo-pendente');
-    expect(await porta.podeGravar(c, 'suprimentos.fecharMes')).toMatchObject({
-      pode: false,
-      codigo: 'operacao-nao-liberada',
-    });
-    expect(
-      await codigoDe(
-        porta.gravarSgh(c, trilha('suprimentos.ponto_pedido.definido', 'saldo_estoque'), (g) =>
-          g.definirPontoPedido({
-            item: m.insumo,
+        porta.executar(
+          c,
+          'suprimentos.registrarSaida',
+          {
+            destino: 1,
             local: m.localA,
-            prazoDias: 5,
-            estoqueSeguranca: null,
-            usuario: 'x',
-          }),
+            centroCusto: m.centroCusto,
+            localConsumo: 1,
+            atendimento: 1,
+            itens: [{ item: m.insumoOpme, quantidade: 1 }],
+            opme: {
+              agendamento: 1,
+              sala: 1,
+              dataHora: '2026-01-15T10:00',
+              solicitacao: 1,
+              lote: 'LOTE-SINT-1',
+              fabricante: 'Fabricante sintetico',
+              registroAnvisa: '12345678901',
+              fornecedor: 1,
+            },
+          },
+          { ...c, chaveIdempotencia: `k-${RODADA}` },
         ),
       ),
     ).toBe('modelo-pendente');
+    expect(Number(await gravados())).toBe(antes);
+    expect(await porta.podeGravar(c, 'suprimentos.inexistente')).toMatchObject({
+      pode: false,
+      codigo: 'operacao-desconhecida',
+    });
   });
 });

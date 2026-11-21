@@ -63,3 +63,66 @@ export function escoreTevVigente<T extends EscoreTevLido>(escores: readonly T[])
 export function profilaxiaPendente(vigente: EscoreTevLido | null, decididos: ReadonlySet<number>): boolean {
   return !!vigente && vigente.gatilho === 'profilaxia' && !decididos.has(vigente.id);
 }
+
+/** O risco de TEV da avaliação (vocabulário do modelo). */
+export type RiscoTev = 'muito_baixo' | 'baixo' | 'moderado' | 'alto';
+/** A profilaxia indicada pela regra (a ordem na prescrição continua do prescritor). */
+export type ProfilaxiaTevIndicada = 'deambulacao' | 'mecanica' | 'farmacologica' | 'farmacologica_mecanica';
+
+export interface AvaliacaoTevDoEscore {
+  readonly perfil: PerfilTev;
+  readonly risco: RiscoTev;
+  readonly indicada: ProfilaxiaTevIndicada;
+  readonly mecanico: 'compressao_pneumatica' | null;
+}
+
+/** As faixas publicadas de cada escala de TEV e o risco correspondente (faixa fora daqui é recusada, nunca adivinhada). */
+const RISCO_DA_FAIXA: Readonly<Record<EscalaTev, Readonly<Record<string, RiscoTev>>>> = {
+  caprini: { muitoBaixo: 'muito_baixo', baixo: 'baixo', moderado: 'moderado', alto: 'alto' },
+  padua: { baixo: 'baixo', alto: 'alto' },
+};
+
+/**
+ * A avaliação de risco de TEV que nasce do escore (a mesma regra da `sugestaoProfilaxia`, em vocabulário do modelo):
+ * - perfil pela população em que a escala foi validada: Caprini é a do paciente cirúrgico, Padua a do clínico;
+ * - Padua alto leva à farmacológica; Padua baixo, à deambulação;
+ * - Caprini muito baixo leva à deambulação; baixo, à mecânica (compressão pneumática); moderado, à farmacológica;
+ *   alto, à farmacológica com a mecânica.
+ * Escala que não é de TEV ou faixa desconhecida (regra local com outra faixa) é recusada: o risco nunca é presumido.
+ */
+export function avaliacaoTevDoEscore(
+  escala: string,
+  faixa: string,
+):
+  | { ok: true; avaliacao: AvaliacaoTevDoEscore }
+  | { ok: false; codigo: 'escala-nao-tev' | 'faixa-desconhecida'; mensagem: string } {
+  if (!ehTev(escala))
+    return { ok: false, codigo: 'escala-nao-tev', mensagem: 'O escore não é de uma escala de risco de TEV.' };
+  const risco = Object.hasOwn(RISCO_DA_FAIXA[escala], faixa) ? RISCO_DA_FAIXA[escala][faixa] : undefined;
+  if (!risco)
+    return {
+      ok: false,
+      codigo: 'faixa-desconhecida',
+      mensagem:
+        'A faixa do escore não é uma faixa conhecida da escala de TEV: a avaliação de risco não foi criada.',
+    };
+  const perfil: PerfilTev = escala === 'caprini' ? 'cirurgico' : 'clinico';
+  const indicacao = (
+    indicada: ProfilaxiaTevIndicada,
+    mecanico: 'compressao_pneumatica' | null = null,
+  ): { ok: true; avaliacao: AvaliacaoTevDoEscore } => ({
+    ok: true,
+    avaliacao: { perfil, risco, indicada, mecanico },
+  });
+  if (escala === 'padua') return indicacao(risco === 'alto' ? 'farmacologica' : 'deambulacao');
+  switch (risco) {
+    case 'baixo':
+      return indicacao('mecanica', 'compressao_pneumatica');
+    case 'moderado':
+      return indicacao('farmacologica');
+    case 'alto':
+      return indicacao('farmacologica_mecanica', 'compressao_pneumatica');
+    default:
+      return indicacao('deambulacao');
+  }
+}

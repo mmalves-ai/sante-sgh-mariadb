@@ -12,10 +12,15 @@
 // Melhoria: o reajuste aplicado guarda quem aplicou e quando; um reajuste por contrato, data-base e tipo (UNIQUE).
 // Base das mensalidades: contratos vigentes na competência, preço por faixa (tabela exclusiva do contrato, senão a do
 // produto), beneficiários ativos no mês, reajustes aplicados e a mensalidade já gerada.
-// Pendente (pedido ao orquestrador): acordos e renegociação (acordo_inadimplencia) e notificação de inadimplência
-// (ocorrencia_inadimplencia) respondem 501 `modelo-pendente`;
+// Acordo de regularização: acordo_inadimplencia (número pela numeração `acordo_inadimplencia` do estabelecimento) com as
+// cobranças renegociadas em acordo_inadimplencia_fatura (valor, multa e juros de cada uma); as parcelas são faturas do
+// tipo repactuação que apontam o acordo (fatura_plano.acordo_inadimplencia_id). Tudo numa gravação só.
+// Notificação de inadimplência: a ocorrência aberta do contrato (ocorrencia_inadimplencia, criada na primeira
+// notificação, na fase de tipo `notificacao` quando o cadastro a tem) e uma notificação por registro
+// (notificacao_inadimplencia: meio, data, dias de atraso e a referência no aviso de recebimento). A cobrança notificada
+// é lida da notificação: vencida em aberto no dia do registro, desde o primeiro vencimento em aberto da ocorrência.
 // multa e juros da baixa ficam somados em valor_acrescimo até o modelo separar as duas colunas.
-import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
+import { garantirSequencia, type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import {
   BasePortaOperadoraPropria,
   competenciaDe,
@@ -26,13 +31,13 @@ import {
   type NucleoOperadora,
   num,
   numOuNulo,
-  pendente,
   primeiroDia,
   txt,
   txtOuNulo,
   versaoDe,
 } from './apoio-porta-propria.js';
 import type {
+  AcordoParaGravar,
   ContextoCobranca,
   FiltroBaseMensalidades,
   GravadorCobranca,
@@ -53,7 +58,40 @@ import {
   LIMITE_CONTRATOS_GERACAO,
 } from './dados-portas.js';
 
-export const TABELAS_COBRANCA = ['fatura_plano', 'fatura_plano_item', 'reajuste_contrato_plano'] as const;
+export const TABELAS_COBRANCA = [
+  'fatura_plano',
+  'fatura_plano_item',
+  'reajuste_contrato_plano',
+  'acordo_inadimplencia',
+  'acordo_inadimplencia_fatura',
+  'ocorrencia_inadimplencia',
+  'notificacao_inadimplencia',
+  'sequencia_negocio',
+] as const;
+
+/** Meio da notificação na tela ↔ no banco. */
+const MEIO_NO_BANCO: Readonly<Record<string, string>> = {
+  'carta-ar': 'carta_ar',
+  pessoal: 'pessoal',
+  edital: 'edital',
+};
+const MEIO_DA_TELA: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(MEIO_NO_BANCO).map(([k, v]) => [v, k]),
+);
+
+/**
+ * A notificação que alcançou a fatura `f`: a primeira (não cancelada) de uma ocorrência do contrato, emitida depois
+ * do vencimento, com a fatura ainda sem pagamento na data de emissão e vencida desde o primeiro vencimento em aberto.
+ * A data que vale é a da emissão (`emitida_em`, a mesma gravada por `notificar`), nunca a do registro.
+ */
+const NOTIFICACAO_DA_FATURA = `
+  (SELECT n.id FROM notificacao_inadimplencia n
+     JOIN ocorrencia_inadimplencia o ON o.id = n.ocorrencia_inadimplencia_id
+    WHERE o.contrato_plano_id = f.contrato_plano_id AND o.estabelecimento_id = f.estabelecimento_id
+      AND o.excluido_em IS NULL AND n.excluido_em IS NULL AND n.situacao <> 'cancelada'
+      AND f.data_vencimento >= o.primeiro_vencimento_aberto AND f.data_vencimento < DATE(n.emitida_em)
+      AND (f.data_pagamento IS NULL OR f.data_pagamento >= DATE(n.emitida_em))
+    ORDER BY n.emitida_em, n.id LIMIT 1)`;
 
 /** Tipo da cobrança na tela ↔ tipo da fatura no banco. */
 export const TIPO_FATURA: Readonly<Record<number, string>> = {
@@ -95,7 +133,14 @@ const SELECT_FATURA = `
          COALESCE(pfc.nome, pjc.razao_social) AS pagador_nome, COALESCE(pfc.cpf, pjc.cnpj) AS pagador_documento,
          (SELECT i.descricao FROM fatura_plano_item i WHERE i.fatura_plano_id = f.id ORDER BY i.sequencia LIMIT 1)
            AS descricao,
-         uc.login AS criado_login, ua.login AS alterado_login
+         uc.login AS criado_login, ua.login AS alterado_login,
+         ao.numero AS acordo_origem, ao.quantidade_parcelas AS acordo_parcelas,
+         (SELECT ad.numero FROM acordo_inadimplencia_fatura af
+            JOIN acordo_inadimplencia ad ON ad.id = af.acordo_inadimplencia_id
+           WHERE af.fatura_plano_id = f.id AND af.incluido = TRUE AND af.estornado_em IS NULL
+             AND af.excluido_em IS NULL AND ad.excluido_em IS NULL AND ad.situacao <> 'cancelado'
+           ORDER BY ad.id DESC LIMIT 1) AS acordo_destino,
+         nt.emitida_em AS notificada_em, nt.meio AS notificacao_meio, nt.aviso_recebimento AS notificacao_referencia
     FROM fatura_plano f
     JOIN contrato_plano k ON k.id = f.contrato_plano_id
     JOIN contratante_plano ct ON ct.id = k.contratante_plano_id
@@ -103,7 +148,13 @@ const SELECT_FATURA = `
     LEFT JOIN pessoa_juridica pjc ON pjc.id = ct.pessoa_juridica_id
     LEFT JOIN produto_plano p ON p.id = k.produto_plano_id
     LEFT JOIN usuario uc ON uc.id = f.criado_por
-    LEFT JOIN usuario ua ON ua.id = f.alterado_por`;
+    LEFT JOIN usuario ua ON ua.id = f.alterado_por
+    LEFT JOIN acordo_inadimplencia ao ON ao.id = f.acordo_inadimplencia_id
+    LEFT JOIN notificacao_inadimplencia nt ON nt.id = ${NOTIFICACAO_DA_FATURA}`;
+
+/** O número do acordo (numeração só de dígitos) como número da tela. */
+const numeroAcordo = (v: unknown): number | null =>
+  v === null || v === undefined ? null : Number(v) || null;
 
 function cobrancaDe(f: Linha): DadosCobranca {
   const contratacao = CONTRATACAO[txt(f['tipo_contratacao'])] ?? 1;
@@ -135,14 +186,15 @@ function cobrancaDe(f: Linha): DadosCobranca {
     multa: paga ? num(f['valor_acrescimo']) : null,
     juros: paga ? 0 : null,
     dispensaMotivo: null,
-    motivo: situacao === 'cancelada' || (!paga && f['observacao'] !== null) ? txtOuNulo(f['observacao']) : null,
-    acordoOrigem: null,
+    motivo:
+      situacao === 'cancelada' || (!paga && f['observacao'] !== null) ? txtOuNulo(f['observacao']) : null,
+    acordoOrigem: numeroAcordo(f['acordo_origem']),
     parcela: numOuNulo(f['parcela']),
-    parcelas: null,
-    acordoDestino: null,
-    notificadoEm: null,
-    notificacaoMeio: null,
-    notificacaoReferencia: null,
+    parcelas: numOuNulo(f['acordo_parcelas']),
+    acordoDestino: numeroAcordo(f['acordo_destino']),
+    notificadoEm: data(f['notificada_em']),
+    notificacaoMeio: f['notificacao_meio'] ? (MEIO_DA_TELA[txt(f['notificacao_meio'])] ?? null) : null,
+    notificacaoReferencia: txtOuNulo(f['notificacao_referencia']),
     versao: num(f['versao']),
     emitidaEm: data(f['data_emissao']) ?? '',
     criadoEm: instante(f['criado_em']) ?? '',
@@ -227,7 +279,11 @@ function contratoDe(k: Linha): DadosContratoCobranca {
  * O preço por faixa etária do contrato (na ordem das faixas): a tabela exclusiva vigente do contrato, senão a tabela
  * vigente do produto (a mesma que a porta do produto grava). Sem tabela: null (a geração recusa o contrato sem preço).
  */
-async function precosDoContrato(l: Leitor, contrato: number, produto: number | null): Promise<number[] | null> {
+async function precosDoContrato(
+  l: Leitor,
+  contrato: number,
+  produto: number | null,
+): Promise<number[] | null> {
   if (produto === null) return null;
   const linhas = await l.consultar(
     `SELECT t.exclusiva_contrato_plano_id AS exclusiva, f.sequencia, f.valor_mensalidade
@@ -258,7 +314,10 @@ export class PortaCobrancaOperadoraPropria
    * preço por faixa (a tabela exclusiva do contrato, senão a vigente do produto), os beneficiários ativos no mês, os
    * reajustes aplicados até a competência e se a mensalidade da competência já foi gerada.
    */
-  baseMensalidades(c: ContextoCobranca, f: FiltroBaseMensalidades): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }> {
+  baseMensalidades(
+    c: ContextoCobranca,
+    f: FiltroBaseMensalidades,
+  ): Promise<{ itens: DadosBaseMensalidade[]; proxima: number | null }> {
     return this.ler(c, async (l) => {
       const cond = [
         'k.estabelecimento_id = ?',
@@ -315,25 +374,36 @@ export class PortaCobrancaOperadoraPropria
             situacao: txt(b['situacao']),
             exclusao: data(b['data_exclusao']),
           })),
-          reajustes: reajustes.map((r) => ({ competencia: competenciaDe(r['data_base']), percentual: num(r['percentual']) })),
+          reajustes: reajustes.map((r) => ({
+            competencia: competenciaDe(r['data_base']),
+            percentual: num(r['percentual']),
+          })),
           jaGerada: Boolean(gerada),
         });
       }
-      return { itens, proxima: linhas.length > LIMITE_CONTRATOS_GERACAO ? num(pagina[pagina.length - 1]?.['id']) : null };
+      return {
+        itens,
+        proxima: linhas.length > LIMITE_CONTRATOS_GERACAO ? num(pagina[pagina.length - 1]?.['id']) : null,
+      };
     });
   }
 
   contrato(c: ContextoCobranca, id: number): Promise<DadosContratoCobranca | null> {
     return this.ler(c, async (l) => {
-      const k = await l.uma(`${SELECT_CONTRATO} WHERE k.id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
-      return k ? { ...contratoDe(k), precos: await precosDoContrato(l, num(k['id']), numOuNulo(k['produto_id'])) } : null;
+      const k = await l.uma(
+        `${SELECT_CONTRATO} WHERE k.id = ? AND k.estabelecimento_id = ? AND k.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
+      return k
+        ? { ...contratoDe(k), precos: await precosDoContrato(l, num(k['id']), numOuNulo(k['produto_id'])) }
+        : null;
     });
   }
 
-  beneficiario(c: ContextoCobranca, id: number): Promise<(DadosBeneficiarioBase & { contrato: number }) | null> {
+  beneficiario(
+    c: ContextoCobranca,
+    id: number,
+  ): Promise<(DadosBeneficiarioBase & { contrato: number }) | null> {
     return this.ler(c, async (l) => {
       const b = await l.uma(
         `SELECT b.id, b.titular_beneficiario_plano_id, b.contrato_plano_id, b.data_adesao, b.situacao, b.data_exclusao,
@@ -358,7 +428,10 @@ export class PortaCobrancaOperadoraPropria
     });
   }
 
-  titular(c: ContextoCobranca, contrato: number): Promise<{ id: number; nome: string; cpf: string | null } | null> {
+  titular(
+    c: ContextoCobranca,
+    contrato: number,
+  ): Promise<{ id: number; nome: string; cpf: string | null } | null> {
     return this.ler(c, async (l) => {
       const t = await l.uma(
         `SELECT b.id, pf.nome, pf.cpf
@@ -374,8 +447,16 @@ export class PortaCobrancaOperadoraPropria
     });
   }
 
-  cobrancas(c: ContextoCobranca, f: FiltroCobrancasPorta): Promise<{ itens: DadosCobranca[]; proxima: number | null }> {
-    const cond = ['f.estabelecimento_id = ?', 'k.operadora_saude_id = ?', 'f.excluido_em IS NULL', 'f.id > ?'];
+  cobrancas(
+    c: ContextoCobranca,
+    f: FiltroCobrancasPorta,
+  ): Promise<{ itens: DadosCobranca[]; proxima: number | null }> {
+    const cond = [
+      'f.estabelecimento_id = ?',
+      'k.operadora_saude_id = ?',
+      'f.excluido_em IS NULL',
+      'f.id > ?',
+    ];
     const p: unknown[] = [c.estabelecimento ?? 0, f.operadora, f.apos ?? 0];
     if (f.competencia) {
       cond.push('f.competencia = ?');
@@ -414,10 +495,10 @@ export class PortaCobrancaOperadoraPropria
 
   cobranca(c: ContextoCobranca, id: number): Promise<DadosCobranca | null> {
     return this.ler(c, async (l) => {
-      const f = await l.uma(`${SELECT_FATURA} WHERE f.id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const f = await l.uma(
+        `${SELECT_FATURA} WHERE f.id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       return f ? cobrancaDe(f) : null;
     });
   }
@@ -446,9 +527,21 @@ export class PortaCobrancaOperadoraPropria
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async renegociadas(_c: ContextoCobranca, _acordo: number): Promise<DadosCobranca[]> {
-    return pendente('Acordos de regularização');
+  /** As cobranças renegociadas pelo acordo (pelo número), na ordem em que entraram nele. */
+  renegociadas(c: ContextoCobranca, acordo: number): Promise<DadosCobranca[]> {
+    return this.ler(c, async (l) =>
+      (
+        await l.consultar(
+          `${SELECT_FATURA}
+            JOIN acordo_inadimplencia_fatura rf ON rf.fatura_plano_id = f.id AND rf.incluido = TRUE AND rf.excluido_em IS NULL
+            JOIN acordo_inadimplencia ra ON ra.id = rf.acordo_inadimplencia_id
+           WHERE ra.estabelecimento_id = ? AND ra.numero = ? AND ra.excluido_em IS NULL
+             AND f.estabelecimento_id = ra.estabelecimento_id AND f.excluido_em IS NULL
+           ORDER BY rf.sequencia`,
+          [c.estabelecimento ?? 0, String(acordo)],
+        )
+      ).map(cobrancaDe),
+    );
   }
 
   doContrato(c: ContextoCobranca, contratos: readonly number[], desde: string): Promise<DadosCobranca[]> {
@@ -517,7 +610,10 @@ export class PortaCobrancaOperadoraPropria
         valorVencido: num(x['valor']),
         maisAntigo: data(x['mais_antigo']) ?? '',
       }));
-      return { itens, proxima: linhas.length > LIMITE_PAGINA_COBRANCA ? (itens.at(-1)?.contrato ?? null) : null };
+      return {
+        itens,
+        proxima: linhas.length > LIMITE_PAGINA_COBRANCA ? (itens.at(-1)?.contrato ?? null) : null,
+      };
     });
   }
 
@@ -525,7 +621,12 @@ export class PortaCobrancaOperadoraPropria
     c: ContextoCobranca,
     f: { operadora: number; contrato?: number; apos?: number },
   ): Promise<{ itens: DadosReajuste[]; proxima: number | null }> {
-    const cond = ['r.estabelecimento_id = ?', 'k.operadora_saude_id = ?', 'r.excluido_em IS NULL', 'r.id > ?'];
+    const cond = [
+      'r.estabelecimento_id = ?',
+      'k.operadora_saude_id = ?',
+      'r.excluido_em IS NULL',
+      'r.id > ?',
+    ];
     const p: unknown[] = [c.estabelecimento ?? 0, f.operadora, f.apos ?? 0];
     if (f.contrato !== undefined) {
       cond.push('r.contrato_plano_id = ?');
@@ -543,10 +644,10 @@ export class PortaCobrancaOperadoraPropria
 
   reajuste(c: ContextoCobranca, id: number): Promise<DadosReajuste | null> {
     return this.ler(c, async (l) => {
-      const r = await l.uma(`${SELECT_REAJUSTE} WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const r = await l.uma(
+        `${SELECT_REAJUSTE} WHERE r.id = ? AND r.estabelecimento_id = ? AND r.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       return r ? reajusteDe(r) : null;
     });
   }
@@ -603,7 +704,10 @@ export class PortaCobrancaOperadoraPropria
           valor_pago: b.valorPago,
           data_pagamento: b.pagoEm,
           valor_acrescimo: Math.round((b.multa + b.juros) * 100) / 100,
-          observacao: anexarNota(f['observacao'], b.dispensaMotivo ? `Dispensa na baixa: ${b.dispensaMotivo}` : null),
+          observacao: anexarNota(
+            f['observacao'],
+            b.dispensaMotivo ? `Dispensa na baixa: ${b.dispensaMotivo}` : null,
+          ),
         });
         return { id: b.id, versao };
       },
@@ -639,14 +743,14 @@ export class PortaCobrancaOperadoraPropria
         });
         return { id: x.id, versao };
       },
-      proximoAcordo: () => pendente('Acordos de regularização'),
-      renegociar: () => pendente('Renegociação da cobrança'),
-      notificar: () => pendente('Notificação de inadimplência'),
+      registrarAcordo: (a) => registrarAcordo(tx, est, a, fatura),
+      notificar: (k) => notificar(tx, est, k),
       registrarReajuste: (r) => registrarReajuste(tx, est, r),
       async cancelarReajuste(x) {
         const r = await versaoDe(tx, 'reajuste_contrato_plano', x.id, 'O reajuste');
         if (num(r['estabelecimento_id']) !== est) throw inexistente('O reajuste');
-        if (txt(r['situacao']) === 'cancelado') throw recusa('reajuste-cancelado', 'O reajuste já foi cancelado.');
+        if (txt(r['situacao']) === 'cancelado')
+          throw recusa('reajuste-cancelado', 'O reajuste já foi cancelado.');
         // A versão vista pela tela (relida pelo serviço antes das regras): mudou no meio, 409 conflito-versao.
         await tx.alterar('reajuste_contrato_plano', x.id, x.versao ?? num(r['versao']), {
           situacao: 'cancelado',
@@ -662,7 +766,12 @@ export class PortaCobrancaOperadoraPropria
 }
 
 /** O contrato do estabelecimento e da operadora (recusa 404 sem revelar outro). */
-async function contratoDaOperadora(l: Leitor, est: number, contrato: number, operadora: number): Promise<Linha> {
+async function contratoDaOperadora(
+  l: Leitor,
+  est: number,
+  contrato: number,
+  operadora: number,
+): Promise<Linha> {
   await exigirOperadora(l, est, operadora);
   const k = await l.uma(
     'SELECT id, operadora_saude_id FROM contrato_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -689,21 +798,35 @@ async function incluirFatura(
     [e.contrato, e.beneficiario],
   );
   if (!forma)
-    throw recusa('forma-cobranca-ausente', 'O contrato não tem forma de cobrança vigente. Cadastre-a no contrato.');
-  const lanc = await tx.uma(
-    'SELECT id FROM tipo_lancamento_fatura WHERE codigo = ? AND ativo = TRUE',
-    [tipo],
-  );
+    throw recusa(
+      'forma-cobranca-ausente',
+      'O contrato não tem forma de cobrança vigente. Cadastre-a no contrato.',
+    );
+  const lanc = await tx.uma('SELECT id FROM tipo_lancamento_fatura WHERE codigo = ? AND ativo = TRUE', [
+    tipo,
+  ]);
   if (!lanc)
     throw recusa(
       'tipo-lancamento-ausente',
       `O tipo de lançamento "${tipo}" não está cadastrado. Cadastre-o na configuração da cobrança.`,
     );
   if (e.beneficiario !== null) {
-    const b = await tx.uma('SELECT contrato_plano_id FROM beneficiario_plano WHERE id = ? AND excluido_em IS NULL', [
-      e.beneficiario,
-    ]);
+    const b = await tx.uma(
+      'SELECT contrato_plano_id FROM beneficiario_plano WHERE id = ? AND excluido_em IS NULL',
+      [e.beneficiario],
+    );
     if (!b || num(b['contrato_plano_id']) !== e.contrato) throw inexistente('O beneficiário');
+  }
+  // A parcela do acordo aponta o acordo do mesmo contrato (pelo número da tela).
+  let acordo: number | null = null;
+  if (e.acordoOrigem !== null) {
+    const a = await tx.uma(
+      `SELECT id FROM acordo_inadimplencia
+        WHERE estabelecimento_id = ? AND numero = ? AND contrato_plano_id = ? AND excluido_em IS NULL`,
+      [est, String(e.acordoOrigem), e.contrato],
+    );
+    if (!a) throw inexistente('O acordo');
+    acordo = num(a['id']);
   }
   const numero = await tx.proximoNumero('fatura_plano');
   const valor = Math.round(e.valor * 100) / 100;
@@ -722,10 +845,20 @@ async function incluirFatura(
     valor_bruto: valor,
     valor_total: valor,
     situacao: 'aberta',
+    acordo_inadimplencia_id: acordo,
   });
   const itens = e.itens.length
     ? e.itens
-    : [{ beneficiario: e.beneficiario, descricao: e.descricao, valorBase: null, valor, idade: null, faixa: null }];
+    : [
+        {
+          beneficiario: e.beneficiario,
+          descricao: e.descricao,
+          valorBase: null,
+          valor,
+          idade: null,
+          faixa: null,
+        },
+      ];
   let seq = 0;
   for (const i of itens) {
     seq++;
@@ -791,4 +924,170 @@ async function registrarReajuste(
     ...valores,
   });
   return { id };
+}
+
+const centavos = (v: number) => Math.round(v * 100) / 100;
+const diasEntre = (de: string, ate: string) =>
+  Math.max(0, Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000));
+
+/**
+ * O acordo de regularização: o acordo, as cobranças renegociadas (travadas pela versão vista, todas abertas e do
+ * contrato) com os encargos de cada uma. A numeração `acordo_inadimplencia` do estabelecimento nasce na primeira vez.
+ */
+async function registrarAcordo(
+  tx: TxOperacao,
+  est: number,
+  a: AcordoParaGravar,
+  fatura: (id: number) => Promise<Linha>,
+): Promise<{ acordo: number }> {
+  const k = await tx.uma(
+    'SELECT id FROM contrato_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    [a.contrato, est],
+  );
+  if (!k) throw inexistente('O contrato');
+  const primeira = [...a.parcelas].sort((x, y) => x.vencimento.localeCompare(y.vencimento))[0];
+  if (a.cobrancas.length === 0 || !primeira)
+    throw recusa('acordo-vazio', 'O acordo precisa de ao menos uma cobrança e uma parcela.');
+  await garantirSequencia(
+    tx,
+    { tipo: 'acordo_inadimplencia', estabelecimento: est },
+    { usuario: tx.contexto.usuario, agora: new Date() },
+  );
+  const numero = await tx.proximoNumero('acordo_inadimplencia');
+  const multa = centavos(a.cobrancas.reduce((s, c) => s + c.multa, 0));
+  const juros = centavos(a.cobrancas.reduce((s, c) => s + c.juros, 0));
+  const id = await tx.incluir('acordo_inadimplencia', {
+    estabelecimento_id: est,
+    numero: String(numero.valor),
+    contrato_plano_id: a.contrato,
+    data_acordo: a.data,
+    tipo_operacao: a.parcelas.length > 1 ? 'parcelamento' : 'quitacao',
+    valor_original: centavos(a.principal),
+    valor_juros: juros,
+    valor_multa: multa,
+    valor_desconto: 0,
+    valor_acordado: centavos(a.total),
+    valor_entrada: 0,
+    quantidade_parcelas: a.parcelas.length,
+    dia_vencimento: Number(primeira.vencimento.slice(8, 10)),
+    primeiro_vencimento: primeira.vencimento,
+    competencia_inicial: primeiroDia(primeira.vencimento),
+    gerar_fatura_propria: true,
+    situacao: 'ativo',
+    observacao: a.dispensaMotivo ? `Encargos dispensados: ${a.dispensaMotivo}` : null,
+  });
+  let seq = 0;
+  for (const c of a.cobrancas) {
+    const f = await fatura(c.id);
+    if (num(f['contrato_plano_id']) !== a.contrato)
+      throw recusa('acordo-de-outro-contrato', 'A cobrança é de outro contrato.', { campos: ['cobrancas'] });
+    if (!['aberta', 'emitida'].includes(txt(f['situacao'])))
+      throw recusa('acordo-cobranca-nao-aberta', 'Só a cobrança em aberto entra no acordo.', {
+        campos: ['cobrancas'],
+      });
+    await tx.alterar('fatura_plano', c.id, c.versao, { situacao: 'renegociada' });
+    seq++;
+    await tx.incluir('acordo_inadimplencia_fatura', {
+      acordo_inadimplencia_id: id,
+      sequencia: seq,
+      fatura_plano_id: c.id,
+      incluido: true,
+      valor_a_regularizar: centavos(c.valor),
+      valor_juros_mora: centavos(c.juros),
+      valor_multa: centavos(c.multa),
+      valor_total: centavos(c.valor + c.multa + c.juros),
+    });
+  }
+  return { acordo: numero.valor };
+}
+
+/**
+ * A notificação de inadimplência: as cobranças vencidas em aberto ainda sem notificação (travadas), a ocorrência aberta
+ * do contrato (criada ou atualizada) e a notificação com o meio, a data e a referência.
+ */
+async function notificar(
+  tx: TxOperacao,
+  est: number,
+  k: { contrato: number; hoje: string; em: string; meio: string; referencia: string },
+): Promise<{ cobrancas: number }> {
+  const meio = MEIO_NO_BANCO[k.meio];
+  if (!meio) throw recusa('meio-invalido', 'Meio de notificação inválido.', { campos: ['meio'] });
+  if (k.em > k.hoje)
+    throw recusa('notificacao-data-futura', 'A data de emissão da notificação não pode ser futura.', {
+      campos: ['em'],
+    });
+  const contrato = await tx.uma(
+    'SELECT id FROM contrato_plano WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    [k.contrato, est],
+  );
+  if (!contrato) throw inexistente('O contrato');
+  const vencidas = await tx.consultarParaAtualizar<Linha>(
+    `SELECT f.id, f.data_vencimento, f.valor_total, ${NOTIFICACAO_DA_FATURA} AS notificacao
+       FROM fatura_plano f
+      WHERE f.contrato_plano_id = ? AND f.estabelecimento_id = ? AND f.excluido_em IS NULL
+        AND f.situacao IN ('aberta','emitida') AND f.data_vencimento < ?
+      ORDER BY f.data_vencimento, f.id`,
+    // Vencidas na data de emissão da notificação (a mesma data que NOTIFICACAO_DA_FATURA usa na leitura).
+    [k.contrato, est, k.em],
+  );
+  const alvo = vencidas.filter((f) => f['notificacao'] === null || f['notificacao'] === undefined);
+  if (alvo.length === 0)
+    throw recusa(
+      'notificacao-sem-atraso',
+      'O contrato não tem cobrança vencida em aberto sem notificação (outra pessoa registrou agora).',
+    );
+  const primeiroAberto = data(vencidas[0]!['data_vencimento']) ?? k.hoje;
+  const valorAberto = centavos(vencidas.reduce((s, f) => s + num(f['valor_total']), 0));
+  // Dias de atraso na data de emissão (na notificação); a ocorrência guarda o atraso de hoje.
+  const dias = diasEntre(primeiroAberto, k.em);
+  const [atual] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT id, versao, primeiro_vencimento_aberto FROM ocorrencia_inadimplencia
+      WHERE contrato_plano_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+        AND situacao IN ('aberta','notificada')
+      ORDER BY id DESC LIMIT 1`,
+    [k.contrato, est],
+  );
+  let ocorrencia: number;
+  if (atual) {
+    ocorrencia = num(atual['id']);
+    const antes = data(atual['primeiro_vencimento_aberto']) ?? primeiroAberto;
+    const primeiro = antes < primeiroAberto ? antes : primeiroAberto;
+    await tx.alterar('ocorrencia_inadimplencia', ocorrencia, num(atual['versao']), {
+      primeiro_vencimento_aberto: primeiro,
+      dias_atraso: diasEntre(primeiro, k.hoje),
+      quantidade_parcelas: vencidas.length,
+      valor_em_aberto: valorAberto,
+      situacao: 'notificada',
+    });
+  } else {
+    const fase = await tx.uma(
+      "SELECT id FROM fase_cobranca_inadimplencia WHERE tipo_acao = 'notificacao' AND ativo = TRUE ORDER BY ordem, id LIMIT 1",
+    );
+    ocorrencia = await tx.incluir('ocorrencia_inadimplencia', {
+      estabelecimento_id: est,
+      contrato_plano_id: k.contrato,
+      fase_cobranca_inadimplencia_id: fase ? num(fase['id']) : null,
+      primeiro_vencimento_aberto: primeiroAberto,
+      dias_atraso: diasEntre(primeiroAberto, k.hoje),
+      quantidade_parcelas: vencidas.length,
+      valor_em_aberto: valorAberto,
+      responsavel_usuario_id: tx.contexto.usuario,
+      situacao: 'notificada',
+    });
+  }
+  const seq = await tx.uma(
+    'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM notificacao_inadimplencia WHERE ocorrencia_inadimplencia_id = ?',
+    [ocorrencia],
+  );
+  await tx.incluir('notificacao_inadimplencia', {
+    ocorrencia_inadimplencia_id: ocorrencia,
+    sequencia: num(seq?.['s']) || 1,
+    beneficiario_plano_id: null,
+    meio,
+    dias_atraso: dias,
+    emitida_em: `${k.em} 00:00:00`,
+    aviso_recebimento: k.referencia.slice(0, 100),
+    situacao: 'emitida',
+  });
+  return { cobrancas: alvo.length };
 }

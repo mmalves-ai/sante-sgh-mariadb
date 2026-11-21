@@ -3652,3 +3652,4 @@ carga_tabela_preco_linha	FAT	controle	F3	Linha da carga de tabela de preço: có
 integracao_folha_financeiro	RH	configuracao	F3	Vigência da integração da folha com o financeiro	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
 integracao_folha_financeiro_destino	RH	item	F3	Destino da folha com credor, classificação e vencimento do título	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
 lancamento_titulos_folha	RH	principal	F7	Lançamento dos títulos a pagar de uma competência da folha	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
+cadastro_empregador_motivo_afastamento	RH	configuracao	F3	De-para do motivo de afastamento para o código oficial do eSocial, por vigência do cadastro do empregador	F2.4 etapa 3: pedido do lote 03-pessoas	07	0

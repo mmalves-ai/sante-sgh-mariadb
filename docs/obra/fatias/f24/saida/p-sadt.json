@@ -1,0 +1,57 @@
+{
+  "lote": "p-sadt",
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "protocolo_acesso_portal (nova, 17_INTG)",
+      "colunas": [
+        "id BIGINT UNSIGNED PK",
+        "estabelecimento_id BIGINT UNSIGNED NOT NULL (FK estabelecimento)",
+        "paciente_id BIGINT UNSIGNED NOT NULL (FK paciente)",
+        "atendimento_id BIGINT UNSIGNED NOT NULL (FK atendimento)",
+        "resumo_protocolo CHAR(64) NOT NULL (SHA-256 do código impresso; o código nunca é guardado), UNIQUE",
+        "situacao VARCHAR(20) NOT NULL DEFAULT 'ativo' CHECK (situacao IN ('ativo','revogado','expirado'))",
+        "tentativas_falhas SMALLINT UNSIGNED NOT NULL DEFAULT 0",
+        "bloqueado_ate DATETIME(3) NULL",
+        "emitido_em DATETIME(3) NOT NULL, emitido_por_usuario_id BIGINT UNSIGNED NULL (FK usuario)",
+        "revogado_em DATETIME(3) NULL, CHECK (situacao <> 'revogado' OR revogado_em IS NOT NULL)",
+        "colunas padrão (origem, criado_em/por, alterado_em/por, versao, excluido_em/por)",
+        "KEY (estabelecimento_id, paciente_id), KEY (atendimento_id)"
+      ],
+      "motivo": "O portal de resultados do SADT entra o paciente pelo protocolo do atendimento mais a data de nascimento (sadt/aplicacao/portal.ts: criarProtocoloPortal, acessoPorProtocolo, registrarTentativaPortal). conta_portal_paciente é a conta com login e e-mail do portal do paciente, não o protocolo de uso único por atendimento; nada no modelo guarda o resumo do protocolo, as tentativas e o bloqueio. Destrava sadt/porta-propria.ts: acessoPorProtocolo, acessoPorId (perfil paciente), criarProtocoloPortal, registrarTentativaPortal (paciente)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_vinculo_profissional_externo e conta_portal_profissional_externo (17_INTG)",
+      "colunas": [
+        "pedido_vinculo_profissional_externo.resumo_senha VARCHAR(255) NULL (resumo com sal; a senha nunca é guardada)",
+        "pedido_vinculo_profissional_externo.segredo_segundo_fator_cifrado VARCHAR(255) NULL (envelope com a chave mestra do ambiente; nunca em claro)",
+        "conta_portal_profissional_externo: as mesmas duas colunas (a aprovação copia do pedido), OU a decisão de levar a credencial ao provedor de identidade (usuario.hash_senha e o segredo do segundo fator de 02_ADM/20) pela conta.usuario_id"
+      ],
+      "motivo": "O autocadastro do médico externo no portal grava a senha (resumo) e o segredo do autenticador antes da aprovação, e a entrada confere os dois (acessoDoMedico devolve senhaResumo e segundoFator). O modelo não tem lugar para eles; o portal-medico já registra que a senha fica no provedor de identidade, ainda não ligado. Decisão do dono: colunas próprias ou provedor de identidade. Destrava: acessoDoMedico, acessoPorId (médico), registrarAutocadastro, registrarTentativaPortal (médico: tentativas_falhas e bloqueada_ate já existem na conta)."
+    },
+    {
+      "tipo": "etapa-coordenada",
+      "arquivo": "packages/contratos/src/sadt (esquema do autocadastro do portal) + apps/web (tela do autocadastro) + sadt/porta.ts (GravadorSghSadt.registrarAutocadastro)",
+      "motivo": "pedido_vinculo_profissional_externo.cpf é NOT NULL (melhor prática: o médico externo se identifica pelo CPF além da inscrição); a entrada do autocadastro do portal não pede o CPF. Pede-se o CPF na entrada (com o dígito conferido), de ponta a ponta."
+    },
+    {
+      "tipo": "etapa-coordenada",
+      "arquivo": "packages/contratos/src/sadt/entradas.ts + apps/web (telas do SADT) + sadt/operacoes.ts + sadt/porta-memoria.ts",
+      "motivo": "OPERACOES_SADT_PENDENTES (10 operações: receberSolicitacao, lancarExame, registrarResultado, registrarLaudo, liberarExame, retificarResultado, emitirLaudo, criarOrcamento, registrarVisualizacaoPortal, abrirRequisicao) seguem desligadas no banco porque a entrada ainda leva a chave de 7 colunas do exame, o carimbo de data como versão, os retratos e prestador/local. Contrato novo: exame = { id do exame_item, versao inteira }, setor executante (setor_diagnostico.id, que a leitura apoio().prestadores já devolve) no lugar de prestador/local, sem retratos. Com ele, a porta própria grava cada operação pelo Executor. Pede lote próprio (estimativa: 2 agentes, contrato+web e porta)."
+    },
+    {
+      "tipo": "etapa-coordenada",
+      "arquivo": "apps/api/src/modulos/sadt/porta.ts (GravadorSghSadt.registrarOrcamento) + sadt/porta-memoria.ts",
+      "motivo": "A gravação direta registrarOrcamento recebe só a quantidade de itens e o total, sem os exames: não dá para gravar o orçamento do diagnóstico (orcamento_particular_item tipo 'exame'). Ninguém no SADT a chama (o orçamento nasce pela operação sadt.criarOrcamento). Pede-se trocar a entrada por itens [{ exame, valor }] ou retirá-la da porta em favor da operação."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "orcamento_particular_item",
+      "colunas": [
+        "exame_id BIGINT NULL, FK para exame(id)"
+      ],
+      "motivo": "O item de exame do orçamento liga ao exame pelo item faturável ou pelo código na descrição (frágil). Com exame_id a ligação é direta; o item sem ligação já não some da lista (fica como não identificado)."
+    }
+  ]
+}

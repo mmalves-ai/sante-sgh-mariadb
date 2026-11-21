@@ -4,8 +4,9 @@
 // aberta para o prescritor vinculado, três itens prescritos e um farmacêutico com vínculo. Confere as leituras
 // (estabelecimento da sessão, excluídos, validade e saldo), o contrato de efeito da triagem, da decisão, da intervenção
 // e da resposta (linhas, versao, trilha e outbox; recusas de item avaliado, de outro estabelecimento, do autor e de
-// quem não é o prescritor) a pendência de revisão médica (parecer `revisao_medica`, que não fecha o item) e as recusas das gravações que
-// ainda não gravam no banco próprio ('modelo-pendente', sem gravar nada).
+// quem não é o prescritor), a pendência de revisão médica (parecer `revisao_medica`, que não fecha o item) e as recusas
+// antes de gravar. A dispensação, a entrega, a devolução e os controlados têm o seu teste
+// (porta-propria-dispensacao.int.spec.ts).
 // SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type ContextoNucleo, type ContextoOperacao, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -488,24 +489,23 @@ describe.skipIf(SEM_BANCO)('porta própria da farmácia (MariaDB, cliente f22_o2
     );
   });
 
-  it('gravações: entrada inválida recusada antes; as que esperam o modelo recusam sem gravar', async () => {
+  it('gravações: entrada inválida e operação desconhecida recusadas antes, sem gravar', async () => {
     const opCtx: ContextoOperacao = { ...ctx, chaveIdempotencia: 'teste-02-06-far-1' };
+    const antes = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]);
     expect(codigoDe(await porta.executar(ctx, 'suprimentos.devolverDose', {}, opCtx).catch((e: unknown) => e))).toBe(
       'entrada-invalida',
     );
     expect(codigoDe(await porta.executar(ctx, 'suprimentos.inexistente', {}, opCtx).catch((e: unknown) => e))).toBe(
       'operacao-desconhecida',
     );
-    expect((await porta.podeGravar(ctx, 'suprimentos.dispensarHorario')).codigo).toBe('modelo-pendente');
-    const antes = await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est]);
+    expect(await porta.podeGravar(ctx, 'suprimentos.dispensarHorario')).toEqual({ pode: true, codigo: null, motivo: null });
+    expect((await porta.podeGravar(ctx, 'suprimentos.inexistente')).codigo).toBe('operacao-desconhecida');
+    // Sem dispensação ambulatorial no período, a escrituração recusa sem gravar.
     const r = await porta
       .gravarSgh(ctxF, null, (g) => g.escriturarSngpc({ inicio: '2026-11-01', fim: '2026-11-30', autor: 'l0206f.farma' }))
       .catch((e: unknown) => e);
-    expect(codigoDe(r)).toBe('modelo-pendente');
+    expect(codigoDe(r)).toBe('nada-a-escriturar');
     expect(await contar('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [ids.est])).toBe(antes);
-    // As leituras dessas telas recusam (não devolvem lista vazia como se fosse real).
-    expect(codigoDe(await porta.filaDaUnidade().catch((e: unknown) => e))).toBe('modelo-pendente');
-    expect(codigoDe(await porta.livroFechado().catch((e: unknown) => e))).toBe('modelo-pendente');
   });
   it('pendência de revisão médica: parecer revisao_medica com a justificativa, que não fecha o item', async () => {
     const [, , item3] = ids.itens as [number, number, number];

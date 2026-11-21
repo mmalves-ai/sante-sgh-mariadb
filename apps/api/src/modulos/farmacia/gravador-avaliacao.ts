@@ -21,7 +21,7 @@ import {
   type RecusaSuprimentos,
   type TipoIntervencao,
 } from '@sgh/contratos/regras-suprimentos';
-import { ErroOperacao, type EventoOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
+import { type EventoOperacao, recusa, type TxOperacao } from '@sgh/nucleo';
 import type { GravadorSghFarmacia } from './porta.js';
 
 type Linha = Record<string, unknown>;
@@ -38,20 +38,6 @@ export const TABELAS_AVALIACAO = [
 export interface ExtrasGravacaoFarmacia {
   alvo: { tabela: string; id: number | null } | null;
   readonly eventos: EventoOperacao[];
-}
-
-/**
- * A recusa das gravações da farmácia que ainda não têm a sua escrita no banco próprio (pedidos do lote 02-06 e da
- * F2.4, em docs/obra/fatias/f24/saida/21-misto-farmacia.json): 409, nada gravado, com o código `modelo-pendente`
- * (dívida contada pelo verificador da F2.4: a estrutura do banco existe, falta a escrita ou o contrato neutro).
- */
-export function pendenteFarmacia(oQue: string): ErroOperacao {
-  return new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Gravação indisponível',
-    `${oQue} ainda não grava no banco próprio: nada foi gravado.`,
-  );
 }
 
 function recusar(r: RecusaSuprimentos | null | undefined): void {

@@ -1,0 +1,10 @@
+# lote p-operadora-portal-precos (F2.4, 3ª etapa): portas da operadora (ANS, cobrança, autorização), portal do médico e cargas de preço
+# cliente_teste: f24p_operadoraportalprecos
+apps/api/src/modulos/operadora/ans-porta-propria.ts
+apps/api/src/modulos/operadora/apoio-banco.ts
+apps/api/src/modulos/operadora/apoio-porta-propria.ts
+apps/api/src/modulos/operadora/autorizacao-porta-propria.ts
+apps/api/src/modulos/operadora/cobranca-porta-propria.ts
+apps/api/src/modulos/operadora/cobranca-porta.ts
+apps/api/src/modulos/portal-medico/porta-propria.ts
+apps/api/src/modulos/precos/fonte-propria.ts

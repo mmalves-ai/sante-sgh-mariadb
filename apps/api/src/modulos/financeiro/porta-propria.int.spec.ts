@@ -3,7 +3,8 @@
 // segregação, sem aprovação, conflito de versão, outro estabelecimento, modelo pendente). A bateria comum de recusas
 // roda sobre as duas fábricas (memória e banco) num describe.each. SGH_NUCLEO_SEM_BANCO=1 pula o banco.
 import { randomUUID } from 'node:crypto';
-import type { ContextoNucleo, ContextoOperacao } from '@sgh/nucleo';
+import { type ContextoNucleo, type ContextoOperacao, definirOperacao } from '@sgh/nucleo';
+import { z } from 'zod';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   CLIENTE,
@@ -16,6 +17,7 @@ import {
 } from './aplicacao/massa-banco.spec-util.js';
 import type { PortaFinanceiro } from './porta.js';
 import { PortaFinanceiroMemoria } from './porta-memoria.js';
+import { gravadorTituloPagar, TABELAS_TITULO_PAGAR } from './operacoes.js';
 import { PortaFinanceiroPropria } from './porta-propria.js';
 import { formaDoCodigo, versaoTexto } from './vocabulario.js';
 
@@ -39,6 +41,35 @@ describe.skipIf(SEM_BANCO)('porta própria do financeiro (MariaDB, cliente f22_o
       await limparMassa(m.nucleo, [m.est, m.outroEst]);
       await m.nucleo.encerrar();
     }
+  });
+
+  it('gravador do título a pagar composto noutra operação: grava na mesma transação; a recusa desfaz tudo', async () => {
+    const c = m.ctx(m.lanca);
+    const executor = m.nucleo.criarExecutor();
+    const operacao = (nome: string, documentos: readonly number[]) =>
+      definirOperacao({
+        nome,
+        tabelas: TABELAS_TITULO_PAGAR,
+        entrada: z.object({}),
+        async gravar(tx) {
+          const g = gravadorTituloPagar(tx);
+          const feitos: number[] = [];
+          for (const d of documentos) feitos.push((await g.incluir(tituloDaMassa(m, d, 12.5))).tituloPagar);
+          return { titulos: feitos.join(',') };
+        },
+        alvo: () => ({ tabela: 'titulo_pagar', id: null }),
+      });
+    const contarDoc = (d: number) =>
+      contar('SELECT COUNT(*) AS n FROM titulo_pagar WHERE estabelecimento_id = ? AND numero_documento = ?', [m.est, String(d)]);
+    const r = await executor.executar(operacao('teste.compor_titulo', [7301]), c.cliente, {}, op(c));
+    const ids = String(r.resultado['titulos']).split(',').map(Number);
+    expect(ids).toHaveLength(1);
+    expect(await contar('SELECT COUNT(*) AS n FROM parcela_pagar WHERE titulo_pagar_id = ?', [ids[0]])).toBe(1);
+    // O segundo título repete o documento do primeiro: a recusa do gravador desfaz a transação inteira.
+    await expect(
+      executor.executar(operacao('teste.compor_titulo_repetido', [7302, 7302]), c.cliente, {}, op(c)),
+    ).rejects.toMatchObject({ problema: { codigo: 'duplicado' } });
+    expect(await contarDoc(7302)).toBe(0);
   });
 
   it('lança o título com parcelas e retenção: linhas, número, versão, trilha e outbox; o duplicado é recusado', async () => {

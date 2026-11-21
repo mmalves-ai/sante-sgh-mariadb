@@ -1,0 +1,64 @@
+{
+ "lote": "p-operadora-portal-precos",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "carga_tabela_preco_linha",
+   "colunas": "componentes do valor (custo operacional, filme, anestesista, outros) além do `valor` (CH), os vigentes antes da carga (os mesmos cinco) e o nome do item; ou dois JSON validados (componentes, anteriores)",
+   "motivo": "A linha da importação de honorários tem cinco componentes (ch, co, filme, anes, outros) e os vigentes antes; o modelo só tem um `valor`. Sem isso gravarCarga/mudarSituacaoCarga seguem 409 modelo-pendente (precos/fonte-propria.ts) e a aprovação publicaria só o CH."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "carga_tabela_preco",
+   "colunas": "arquivo_nome VARCHAR(120), arquivo_bytes INT UNSIGNED, catalogo VARCHAR(40), lote_reajuste_id (FK lote_reajuste) e as contagens novo/alterado/igual/removido (ou derivadas das linhas)",
+   "motivo": "CargaImportacao da tela traz nome e tamanho do arquivo, o catálogo, o lote publicado e as contagens; `fonte` VARCHAR(100) não substitui o nome do arquivo e a publicação precisa apontar o lote do reajuste."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "fonte_pagadora (ou contato_fonte_pagadora + endereço da pessoa jurídica + dados da nota fiscal)",
+   "colunas": "endereço (logradouro, número, complemento, bairro, cidade, CEP, IBGE) pela pessoa jurídica; contatos por área (convênio, credenciamento, contas médicas, recurso de glosa, autorização: telefone, e-mail, contato) numa tabela filha com a área; nota fiscal (razão social, CNPJ, endereço, número, bairro, cidade, CEP, telefone, inscrição municipal, IBGE)",
+   "motivo": "Campos do contrato do convênio sem coluna: seguem recusando com modelo-pendente (fonte-propria.ts, OP_CONTRATO). UF, UF da nota fiscal e telefone foram ligados nesta etapa. Senha obrigatória espera a DP-33."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "envio_ans (ou titulo da TPS)",
+   "colunas": "numero_gru, valor_gru, pago_em, valor_pago da Taxa de Saúde Suplementar (ou FK para um título a pagar)",
+   "motivo": "pagar() da GRU do ressarcimento ao SUS foi ligado à cobranca_ressarcimento_sus; a GRU da TPS não tem onde ficar e segue 501."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "apps/api/src/modulos/operadora/modulo.ts",
+   "motivo": "Ainda importa modeloPendente de apoio-banco.ts para 'A busca da autorização pela senha' sem a porta da autorização; enquanto isso apoio-banco.ts (linha 78) não zera. Trocar por recusa própria do módulo (ex.: 503 porta-indisponivel) ou exigir a porta."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/operadora/apoio-porta-propria.ts (pendente)",
+   "motivo": "O auxiliar `pendente` (linhas 9 e 76) só sai quando as recusas restantes forem construídas: arquivo do envio à ANS e anexos da resposta do prestador (armazenamento ADR 0004), portal do prestador (identidade no módulo de administração, atendimento-porta-propria.ts, fora deste lote), GRU da TPS, identificação dos beneficiários do aviso, pendências do SIB, bases do SIP, contraprestações do DIOPS e monitoramento TISS."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/operadora/autorizacao-porta-propria.ts",
+   "motivo": "Linha 21 (cabeçalho) e as recusas de anexos da resposta do prestador dependem do armazenamento de arquivos (ADR 0004). Não construído nesta etapa."
+  },
+  {
+   "tipo": "aviso-fora-da-lista",
+   "arquivo": "apps/api/src/modulos/operadora/cobranca-servico.ts, cobranca-porta-memoria.ts",
+   "motivo": "Editados junto com a assinatura nova de cobranca-porta.ts (registrarAcordo no lugar de proximoAcordo + renegociar). Nenhuma outra .lista os tem."
+  },
+  {
+   "tipo": "semente",
+   "tabela": "fase_cobranca_inadimplencia",
+   "motivo": "Opcional: a ocorrência de inadimplência usa a fase de tipo 'notificacao' quando o cadastro a tem (coluna nula sem ela). Semear no 'criar novo cliente' as fases padrão (aviso, notificação, suspensão, rescisão, acordo)."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "apps/api/src/modulos/portal-medico/porta.ts, aplicacao/servico.ts, porta-memoria.ts",
+   "motivo": "trocarSenha do portal grava credencial_usuario/historico_senha sem a política de reuso do produto. Proposta: o serviço confere antes de cifrar com reusoNoBanco (acesso/senha/porta-senha.ts) sobre o usuário da conta, ou a porta passa a receber a senha nova em claro só para conferir (trocarSenha({acesso, senhaNova, senhaResumo, por}) e recusa 'senha-repetida' / 'senha-igual-atual'). Fora da .lista deste lote."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/sadt/porta-propria.ts (acessoPorId)",
+   "motivo": "Ligar acessoPorId (login e conferência da senha atual do médico externo) à credencial_usuario do usuário da conta (conta_portal_profissional_externo.usuario_id), para o login enxergar a senha trocada pelo portal. Hoje recusa como pendente e a gravação não tem leitor no banco próprio."
+  }
+ ]
+}

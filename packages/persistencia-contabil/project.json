@@ -1,0 +1,19 @@
+{
+  "name": "persistencia-contabil",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/persistencia-contabil/src",
+  "tags": ["tipo:infra", "modulo:contabil"],
+  "targets": {
+    "lint": {
+      "command": "eslint packages/persistencia-contabil"
+    },
+    "typecheck": {
+      "command": "tsc -p packages/persistencia-contabil/tsconfig.json --noEmit"
+    },
+    "test": {
+      "command": "vitest run --config packages/persistencia-contabil/vitest.config.ts"
+    }
+  },
+  "implicitDependencies": ["contratos", "nucleo"]
+}

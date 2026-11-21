@@ -33,7 +33,19 @@ async function recusada(p: Promise<unknown>): Promise<string | null> {
 describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)', () => {
   let nucleo: NucleoProprio;
   let fonte: FontePrecosPropria;
-  const ids = { est: 0, outroEst: 0, semCredenciamento: 0, diaria: 0, usuario: 0, fonte: 0, classe: 0, tabela: 0, item: 0, preco: 0, contrato: 0 };
+  const ids = {
+    est: 0,
+    outroEst: 0,
+    semCredenciamento: 0,
+    diaria: 0,
+    usuario: 0,
+    fonte: 0,
+    classe: 0,
+    tabela: 0,
+    item: 0,
+    preco: 0,
+    contrato: 0,
+  };
   let c: CtxPrecos;
   let outro: CtxPrecos;
   const gravacao = (extra: Partial<ContextoGravacaoPreco> = {}): ContextoGravacaoPreco => ({
@@ -65,7 +77,9 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
         [ids.fonte],
       );
       await e.executar('DELETE FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ?', [ids.fonte]);
-      await e.executar('DELETE FROM codigo_prestador_fonte_pagadora WHERE fonte_pagadora_id = ?', [ids.fonte]);
+      await e.executar('DELETE FROM codigo_prestador_fonte_pagadora WHERE fonte_pagadora_id = ?', [
+        ids.fonte,
+      ]);
       await e.executar(
         'DELETE ctv FROM contrato_tabela_vigencia ctv JOIN contrato_fonte_pagadora k ON k.id = ctv.contrato_fonte_pagadora_id WHERE k.fonte_pagadora_id = ?',
         [ids.fonte],
@@ -104,6 +118,27 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
           [codigo],
           'INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)',
           [codigo, `ESTAB ${codigo} SINTETICO`, `ESTAB ${codigo} SINTETICO`, agora],
+        );
+      // UFs usadas pela alteração do contrato: o catálogo do IBGE do cliente de teste pode estar vazio.
+      const pais = await garantir(
+        e,
+        'SELECT id FROM pais_referencia WHERE codigo_iso = ?',
+        ['BR'],
+        'INSERT INTO pais_referencia (codigo_iso, descricao, criado_em) VALUES (?, ?, ?)',
+        ['BR', 'Brasil', agora],
+      );
+      for (const [codigo, sigla, nome] of [
+        ['35', 'SP', 'São Paulo'],
+        ['31', 'MG', 'Minas Gerais'],
+        ['33', 'RJ', 'Rio de Janeiro'],
+        ['29', 'BA', 'Bahia'],
+      ])
+        await garantir(
+          e,
+          'SELECT id FROM unidade_federativa WHERE sigla = ?',
+          [sigla],
+          'INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES (?, ?, ?, ?, ?)',
+          [codigo, sigla, nome, pais, agora],
         );
       ids.est = await est(P);
       ids.outroEst = await est(`${P}B`);
@@ -231,15 +266,30 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
   });
 
   const ler = <T>(sql: string, p: unknown[]) =>
-    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-0212p' }, (l) => l.uma<T & Record<string, unknown>>(sql, p));
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'conferencia-0212p' }, (l) =>
+      l.uma<T & Record<string, unknown>>(sql, p),
+    );
 
   it('convênio com a tabela do acordo do estabelecimento; contrato pela chave de negócio', async () => {
     const conv = await fonte.convenio(c, ids.fonte);
-    expect(conv).toMatchObject({ codigo: ids.fonte, situacao: 'A', registroAns: 999001, honorariosExterna: ids.tabela, classificacao: ids.classe });
+    expect(conv).toMatchObject({
+      codigo: ids.fonte,
+      situacao: 'A',
+      registroAns: 999001,
+      honorariosExterna: ids.tabela,
+      classificacao: ids.classe,
+    });
     expect((await fonte.convenio(outro, ids.fonte))?.honorariosExterna).toBeNull();
     const v = await fonte.valoresContrato(c, ids.fonte);
-    expect(v).toMatchObject({ nome: 'OPERADORA L0212P SINTETICA', retornoDias: '30', situacaoAcordo: 'vigente', prazoApresentacaoDias: 60 });
-    expect((await fonte.vigenciasTabelas(c, ids.fonte)).map((x) => [x.tipo, x.tabela, x.fim])).toEqual([['honorariosExterna', ids.tabela, null]]);
+    expect(v).toMatchObject({
+      nome: 'OPERADORA L0212P SINTETICA',
+      retornoDias: '30',
+      situacaoAcordo: 'vigente',
+      prazoApresentacaoDias: 60,
+    });
+    expect((await fonte.vigenciasTabelas(c, ids.fonte)).map((x) => [x.tipo, x.tabela, x.fim])).toEqual([
+      ['honorariosExterna', ids.tabela, null],
+    ]);
     expect((await fonte.tiss(c, ids.fonte)).configurado).toBe(true);
     expect((await fonte.tiss(outro, ids.fonte)).configurado).toBe(false);
     const cod = await fonte.codigosPrestador(c, ids.fonte, 0, 50);
@@ -257,7 +307,11 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     const pagina = await fonte.itensDiaria(c, ids.tabela, { pagina: 0, porPagina: 1, data: '2026-06-01' });
     expect(pagina.itens.length).toBe(1);
     expect(pagina.total).toBe(2);
-    expect(await fonte.itemDiaria(c, ids.tabela, ids.diaria, '2026-06-01')).toMatchObject({ id: ids.diaria, valor: 400, vigencia: '2025-01-01' });
+    expect(await fonte.itemDiaria(c, ids.tabela, ids.diaria, '2026-06-01')).toMatchObject({
+      id: ids.diaria,
+      valor: 400,
+      vigencia: '2025-01-01',
+    });
     expect(await fonte.itemDiaria(outro, ids.tabela, ids.diaria, '2026-06-01')).toBeNull();
   });
 
@@ -265,18 +319,35 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     expect((await fonte.cabecalhos(c, 'honorarios')).map((t) => t.codigo)).toContain(ids.tabela);
     expect((await fonte.cabecalhos(outro, 'honorarios')).map((t) => t.codigo)).not.toContain(ids.tabela);
     const em2025 = await fonte.itemHonorario(c, ids.tabela, ids.preco, '2025-06-01');
-    expect(em2025).toMatchObject({ vigencia: '2025-01-01', valores: { ch: 80, co: 5, filme: 0, anes: 0, outros: 1 }, vigencias: 2 });
+    expect(em2025).toMatchObject({
+      vigencia: '2025-01-01',
+      valores: { ch: 80, co: 5, filme: 0, anes: 0, outros: 1 },
+      vigencias: 2,
+    });
     const em2026 = await fonte.itemHonorario(c, ids.tabela, ids.preco, '2026-06-01');
     expect(em2026?.valores?.ch).toBe(100);
     expect(await fonte.itemHonorario(outro, ids.tabela, ids.preco, '2026-06-01')).toBeNull();
-    const pagina = await fonte.itensHonorario(c, ids.tabela, { pagina: 0, porPagina: 10, data: '2026-06-01', busca: 'consulta' });
+    const pagina = await fonte.itensHonorario(c, ids.tabela, {
+      pagina: 0,
+      porPagina: 10,
+      data: '2026-06-01',
+      busca: 'consulta',
+    });
     expect(pagina.total).toBe(1);
-    expect((await fonte.vigenciasDoItem(c, ids.tabela, ids.preco)).map((x) => x.data)).toEqual(['2026-01-15', '2025-01-01']);
+    expect((await fonte.vigenciasDoItem(c, ids.tabela, ids.preco)).map((x) => x.data)).toEqual([
+      '2026-01-15',
+      '2025-01-01',
+    ]);
   });
 
   it('situação: suspende e reativa no estabelecimento, com o retrato completo e a trilha; o outro estabelecimento não muda', async () => {
     const suspender = () =>
-      fonte.executar('convenio.alterarSituacao', c, { convenio: ids.fonte, operacao: 'suspender', justificativa: 'Teste sintético L0212P' }, gravacao());
+      fonte.executar(
+        'convenio.alterarSituacao',
+        c,
+        { convenio: ids.fonte, operacao: 'suspender', justificativa: 'Teste sintético L0212P' },
+        gravacao(),
+      );
     const r = await suspender();
     expect(r.resultado).toMatchObject({ convenio: ids.fonte, situacaoAntes: 'A', situacaoDepois: 'I' });
     const situacaoEm = (est: number) =>
@@ -287,15 +358,31 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     expect(await situacaoEm(ids.est)).toMatchObject({ situacao: 'suspensa' });
     // A suspensão em A não muda B nem a fonte pagadora da rede.
     expect((await situacaoEm(ids.outroEst))?.situacao).toBe('ativa');
-    expect((await ler<{ situacao: string }>('SELECT situacao FROM fonte_pagadora WHERE id = ?', [ids.fonte]))?.situacao).toBe('ativa');
+    expect(
+      (await ler<{ situacao: string }>('SELECT situacao FROM fonte_pagadora WHERE id = ?', [ids.fonte]))
+        ?.situacao,
+    ).toBe('ativa');
     expect((await fonte.convenio(outro, ids.fonte))?.situacao).toBe('A');
     expect((await fonte.convenio(c, ids.fonte))?.situacao).toBe('I');
-    const retratos = await ler<{ total: number }>('SELECT COUNT(*) AS total FROM fonte_pagadora_versao WHERE fonte_pagadora_id = ?', [ids.fonte]);
+    const retratos = await ler<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM fonte_pagadora_versao WHERE fonte_pagadora_id = ?',
+      [ids.fonte],
+    );
     expect(Number(retratos?.total)).toBe(1);
     // O retrato é o registro depois da mudança: a situação nova.
-    const dados = await ler<{ dados: unknown }>('SELECT dados FROM fonte_pagadora_versao WHERE fonte_pagadora_id = ? ORDER BY id DESC LIMIT 1', [ids.fonte]);
-    const json = (typeof dados?.dados === 'string' ? JSON.parse(dados.dados) : dados?.dados) as Record<string, unknown>;
-    expect(json).toMatchObject({ id: ids.fonte, nome: 'OPERADORA L0212P SINTETICA', estabelecimento: { estabelecimento_id: ids.est, situacao: 'suspensa' } });
+    const dados = await ler<{ dados: unknown }>(
+      'SELECT dados FROM fonte_pagadora_versao WHERE fonte_pagadora_id = ? ORDER BY id DESC LIMIT 1',
+      [ids.fonte],
+    );
+    const json = (typeof dados?.dados === 'string' ? JSON.parse(dados.dados) : dados?.dados) as Record<
+      string,
+      unknown
+    >;
+    expect(json).toMatchObject({
+      id: ids.fonte,
+      nome: 'OPERADORA L0212P SINTETICA',
+      estabelecimento: { estabelecimento_id: ids.est, situacao: 'suspensa' },
+    });
     const t = await ler<{ motivo: string }>(
       "SELECT motivo FROM trilha_auditoria WHERE entidade = 'fonte_pagadora' AND entidade_id = ? ORDER BY id DESC LIMIT 1",
       [ids.fonte],
@@ -306,15 +393,28 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     // Sem reautenticação recente: a operação crítica recusa.
     expect(
       await recusada(
-        fonte.executar('convenio.alterarSituacao', c, { convenio: ids.fonte, operacao: 'reativar', justificativa: 'Teste sintético' }, gravacao({ reautenticadoEm: 0 })),
+        fonte.executar(
+          'convenio.alterarSituacao',
+          c,
+          { convenio: ids.fonte, operacao: 'reativar', justificativa: 'Teste sintético' },
+          gravacao({ reautenticadoEm: 0 }),
+        ),
       ),
     ).toBe('reautenticacao-necessaria');
-    await fonte.executar('convenio.alterarSituacao', c, { convenio: ids.fonte, operacao: 'reativar', justificativa: 'Teste sintético' }, gravacao());
+    await fonte.executar(
+      'convenio.alterarSituacao',
+      c,
+      { convenio: ids.fonte, operacao: 'reativar', justificativa: 'Teste sintético' },
+      gravacao(),
+    );
     expect((await fonte.convenio(c, ids.fonte))?.situacao).toBe('A');
   });
 
   it('contrato: altera o que o modelo tem pela leitura da tela; o campo sem coluna aguarda o modelo', async () => {
-    const alterar = (valores: Record<string, string | number | null>, lidos: Record<string, string | number | null>) =>
+    const alterar = (
+      valores: Record<string, string | number | null>,
+      lidos: Record<string, string | number | null>,
+    ) =>
       fonte.executar(
         'convenio.alterarContrato',
         c,
@@ -322,42 +422,116 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
         gravacao(),
       );
     expect(await recusada(alterar({ nome: 'OUTRO NOME' }, { nome: 'LIDO ERRADO' }))).toBe('conflito-versao');
-    const antes = await ler<{ versao: number }>('SELECT versao FROM fonte_pagadora WHERE id = ?', [ids.fonte]);
+    const antes = await ler<{ versao: number }>('SELECT versao FROM fonte_pagadora WHERE id = ?', [
+      ids.fonte,
+    ]);
     await alterar({ nome: 'OPERADORA L0212P RENOMEADA' }, { nome: 'OPERADORA L0212P SINTETICA' });
-    const depois = await ler<{ versao: number; nome: string }>('SELECT versao, nome FROM fonte_pagadora WHERE id = ?', [ids.fonte]);
+    const depois = await ler<{ versao: number; nome: string }>(
+      'SELECT versao, nome FROM fonte_pagadora WHERE id = ?',
+      [ids.fonte],
+    );
     expect(depois?.nome).toBe('OPERADORA L0212P RENOMEADA');
     expect(Number(depois?.versao)).toBe(Number(antes?.versao) + 1);
     expect(await recusada(alterar({ bairro: 'CENTRO' }, { bairro: null }))).toBe('modelo-pendente');
+    // UF pela sigla (a FK da unidade federativa) e o telefone da fonte pagadora.
+    const lidos = await fonte.valoresContrato(c, ids.fonte);
+    // A massa é reaproveitada entre execuções: os valores novos sempre diferem dos lidos.
+    const uf = lidos?.['uf'] === 'SP' ? 'MG' : 'SP';
+    const nfUf = lidos?.['nfUf'] === 'RJ' ? 'BA' : 'RJ';
+    const telefone = lidos?.['telefone'] === '1133334444' ? '1144445555' : '1133334444';
+    await alterar(
+      { uf, nfUf, telefone },
+      { uf: lidos?.['uf'] ?? null, nfUf: lidos?.['nfUf'] ?? null, telefone: lidos?.['telefone'] ?? null },
+    );
+    expect(await fonte.valoresContrato(c, ids.fonte)).toMatchObject({ uf, nfUf, telefone });
+    const fk = await ler<{ u: string }>(
+      'SELECT u.sigla AS u FROM fonte_pagadora f JOIN unidade_federativa u ON u.id = f.unidade_federativa_id WHERE f.id = ?',
+      [ids.fonte],
+    );
+    expect(fk?.u).toBe(uf);
     // O retorno é o da unidade: grava no estabelecimento, a rede e o outro estabelecimento ficam com o da fonte.
     await fonte.executar(
       'convenio.alterarContrato',
       c,
-      { convenio: ids.fonte, aba: 'faturabilidade', valores: { retornoDias: '45' }, lidos: { retornoDias: '30' }, justificativa: 'Teste sintético L0212P' },
+      {
+        convenio: ids.fonte,
+        aba: 'faturabilidade',
+        valores: { retornoDias: '45' },
+        lidos: { retornoDias: '30' },
+        justificativa: 'Teste sintético L0212P',
+      },
       gravacao(),
     );
     expect((await fonte.valoresContrato(c, ids.fonte))?.['retornoDias']).toBe('45');
     expect((await fonte.valoresContrato(outro, ids.fonte))?.['retornoDias']).toBe('30');
-    expect(Number((await ler<{ dias_retorno: number }>('SELECT dias_retorno FROM fonte_pagadora WHERE id = ?', [ids.fonte]))?.dias_retorno)).toBe(30);
+    expect(
+      Number(
+        (
+          await ler<{ dias_retorno: number }>('SELECT dias_retorno FROM fonte_pagadora WHERE id = ?', [
+            ids.fonte,
+          ])
+        )?.dias_retorno,
+      ),
+    ).toBe(30);
     expect(fonte.estado('preco.reajustar')).toBeNull();
-    expect(await recusada(fonte.executar('preco.reajustar', c, {}, gravacao()))).toBe('operacao-nao-liberada');
+    expect(await recusada(fonte.executar('preco.reajustar', c, {}, gravacao()))).toBe(
+      'operacao-nao-liberada',
+    );
   });
 
   it('plano: inclui com a vigência no estabelecimento, corrige pela versão; outro estabelecimento não vê', async () => {
-    const novo = { hospital: P, convenio: ids.fonte, nome: 'PLANO L0212P', planoLegado: 77, inicio: '2026-01-01', fim: null, justificativa: 'Teste sintético', autor: 'x' };
+    const novo = {
+      hospital: P,
+      convenio: ids.fonte,
+      nome: 'PLANO L0212P',
+      planoLegado: 77,
+      inicio: '2026-01-01',
+      fim: null,
+      justificativa: 'Teste sintético',
+      autor: 'x',
+    };
     const pedido = { ...trilha, chaveIdempotencia: `t0212p-plano-${randomUUID()}` };
     const r = await fonte.gravarPlano(c, novo, pedido);
     // O reenvio do mesmo pedido (mesma Idempotency-Key) devolve o mesmo plano, sem gravar de novo.
     expect(await fonte.gravarPlano(c, novo, pedido)).toEqual(r);
     const lidos = await fonte.planos(c, ids.fonte);
-    expect(lidos?.map((p) => [p.id, p.nome, p.planoLegado, p.inicio, p.fim, p.versao])).toEqual([[r.id, 'PLANO L0212P', 77, '2026-01-01', null, 1]]);
+    expect(lidos?.map((p) => [p.id, p.nome, p.planoLegado, p.inicio, p.fim, p.versao])).toEqual([
+      [r.id, 'PLANO L0212P', 77, '2026-01-01', null, 1],
+    ]);
     expect(await fonte.planos(outro, ids.fonte)).toEqual([]);
     const alt = (versao: number, fim: string) =>
-      fonte.alterarPlano(c, { hospital: P, convenio: ids.fonte, id: r.id, versao, fim, justificativa: 'Teste sintético', autor: 'x' }, trilha);
+      fonte.alterarPlano(
+        c,
+        {
+          hospital: P,
+          convenio: ids.fonte,
+          id: r.id,
+          versao,
+          fim,
+          justificativa: 'Teste sintético',
+          autor: 'x',
+        },
+        trilha,
+      );
     expect(await recusada(alt(1, '2025-01-01'))).toBe('vigencia-invalida');
     expect(await alt(1, '2026-12-31')).toEqual({ id: r.id, versao: 2 });
     expect(await recusada(alt(1, '2026-12-31'))).toBe('conflito-concorrente');
     expect(
-      await recusada(fonte.alterarPlano(outro, { hospital: P, convenio: ids.fonte, id: r.id, versao: 2, fim: null, justificativa: 'x', autor: 'x' }, trilha)),
+      await recusada(
+        fonte.alterarPlano(
+          outro,
+          {
+            hospital: P,
+            convenio: ids.fonte,
+            id: r.id,
+            versao: 2,
+            fim: null,
+            justificativa: 'x',
+            autor: 'x',
+          },
+          trilha,
+        ),
+      ),
     ).toBe('nao-encontrado');
   });
 });

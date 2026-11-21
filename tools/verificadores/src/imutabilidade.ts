@@ -13,7 +13,6 @@ import { join, relative, resolve } from 'node:path';
 import {
   CRITERIOS_CLINICOS_MATRIZ,
   EXCECOES_DELETE_CLINICO,
-  MODULOS_CLINICOS_MATRIZ,
   NATUREZAS_REGISTRO_CLINICO,
   deleteClinicoProibido,
   telaClinica,
@@ -50,18 +49,19 @@ export function tabelasClinicasDaMatriz(tsv: string): string[] {
 /** O texto exato do arquivo gerado (o spec compara byte a byte). */
 export function textoTabelasClinicas(tabelas: readonly string[]): string {
   return [
-    '// Gerado por tools/verificadores/src/imutabilidade.ts a partir da matriz de cobertura (M59-F3, regra 6).',
-    `// Tabelas dos módulos ${MODULOS_CLINICOS_MATRIZ.join(', ')} (telas do registro) de natureza ${NATUREZAS_REGISTRO_CLINICO.join(', ')}. Não edite à mão:`,
-    '// ./pnpm imutabilidade:gerar regrava.',
-    'export const TABELAS_CLINICAS_LEGADO: readonly string[] = [',
+    '// Gerado por tools/verificadores/src/imutabilidade.ts a partir do DDL do modelo próprio (M59-F3, regra 6).',
+    `// Tabelas de registro do paciente dos módulos ${MODULOS_CLINICOS_DDL.join(', ')} (db/migracoes), mais as do núcleo`,
+    `// (${IMUTAVEIS_DO_NUCLEO.join(', ')}). Não edite à mão: ./pnpm imutabilidade:gerar regrava.`,
+    'export const TABELAS_CLINICAS_MODELO: readonly string[] = [',
     ...tabelas.map((t) => `  '${t}',`),
     '];',
     '',
   ].join('\n');
 }
 
+/** O arquivo gerado, a partir do DDL do modelo próprio (a matriz de cobertura da origem não decide mais). */
 export function gerarTabelasClinicas(raiz = RAIZ): string {
-  return textoTabelasClinicas(tabelasClinicasDaMatriz(readFileSync(resolve(raiz, CAMINHO_MATRIZ), 'utf8')));
+  return textoTabelasClinicas(tabelasClinicasDoModelo(raiz));
 }
 
 export interface AchadoImutabilidade {

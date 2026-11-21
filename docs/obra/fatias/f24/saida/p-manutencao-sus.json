@@ -1,0 +1,19 @@
+{
+  "lote": "p-manutencao-sus",
+  "pedidos": [
+    {
+      "tipo": "porta",
+      "alvo": "apps/api/src/modulos/sus/porta-propria.ts",
+      "motivo": "Sem DDL a pedir (ddl-aplicado-v3). Já escritas: crítica prévia (gravarCriticas, justificar, criticas, critica) e faixa de AIH (inserirFaixaAih, mudarFaixaAih, faixasAih, faixaAih, maiorNumeroDaFaixa). Faltam o arquivo gerado (proximoArquivo, gravarArquivo, gravarArquivoBpa, gravarArquivoApac, gravarArquivoSisaih e as leituras de arquivo e linhas), a APAC (incluirApac, mudarApac e as leituras), a AIH (inserirAih, autorizarAih, negarAih, reabrirAih, cancelarAih, fecharAih e as leituras) e o retorno do gestor (inserirRetornoSus, aplicarRetornoNaAih, tratarRetornoSus e as leituras)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "queixa_tecnica_produto",
+      "colunas": [
+        "natureza VARCHAR(20) NOT NULL DEFAULT 'queixa_tecnica' CHECK (natureza IN ('queixa_tecnica','evento_adverso','alerta_sanitario'))",
+        "alerta_sanitario_id BIGINT UNSIGNED NULL (FK alerta_sanitario)"
+      ],
+      "motivo": "A queixa aberta pela OS de equipamento pode ser evento adverso (notificação e prazo próprios, ligado à notificacao_incidente_id já existente) ou alerta sanitário; hoje não há coluna que distinga do desvio técnico. Até lá abrirQueixaDaOs recusa eventoAdverso e alertaSanitario com modelo-pendente."
+    }
+  ]
+}

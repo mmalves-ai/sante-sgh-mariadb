@@ -75,7 +75,7 @@ function local(v: unknown, fuso: string): string | null {
   const d = v instanceof Date ? v : new Date(String(v));
   if (Number.isNaN(d.getTime())) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 
 /** Estado da apuração na tela ↔ situação do modelo. */

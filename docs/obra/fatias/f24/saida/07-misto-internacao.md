@@ -59,3 +59,29 @@ devolvido como pedido de lote próprio (ver `07-misto-internacao.json`).
 ### Pedido
 - `same.controller.ts` (fora da lista): trilha com a tabela `ocorrencia_arquivo_prontuario`, JSDoc e
   `@AuditadoNoHandler` atualizados (ver `07-misto-internacao.json`).
+
+## Correção da revisão: SADT (`sadt/porta-propria.ts`)
+
+### O que mudou
+- **Laudo para emitir:** só o laudo assinado (assinado, emitido ou retificado) entra no documento, com o laudista como
+  emissor. Exame com laudo em rascunho ou aguardando revisão é recusado (`laudo-nao-assinado`), sem cair para o texto do
+  resultado. Laudo cancelado não conta: vale o texto do resultado, sem emissor.
+- **Conversão do orçamento:** recusa o vencido pela data (`validade_ate` antes de hoje no fuso do estabelecimento) com
+  `orcamento-indisponivel`, e só converte orçamento com item de exame (o resto responde `orcamento-inexistente`).
+- **Faixa de referência na digitação:** a mais específica vence antes da vigência: a do sexo antes da de ambos; a com
+  idade antes da sem idade; a faixa etária mais estreita antes da larga; só então a mais recente.
+- **Leitura no portal:** todo acesso grava em `acesso_resultado_portal` e soma uma visualização. A primeira abertura
+  marca `primeira_visualizacao_em`, e as seguintes não a mudam. Publicação vencida (`disponivel_ate`) não abre.
+- **Itens do orçamento:** o item de exame que não casa com o cadastro fica na lista, com a descrição e o valor do próprio
+  item e o código do exame vazio (não identificado). Assim, a soma dos itens bate com o total. O ato é o do primeiro exame
+  identificado.
+- Specs novos no `porta-propria.int.spec.ts`: laudo em rascunho, aguardando revisão, assinado e cancelado; faixa geral
+  contra a de adulto e a pediátrica; orçamento vencido, sem exame e rascunho com item não identificado; leitura no portal
+  repetida e vencida.
+
+### Decisões pela melhor prática (para o dono ver)
+- **O rascunho converte.** No setor, o orçamento é feito e aceito no balcão, e a porta não tem etapa de emissão
+  (`registrarOrcamento` segue pendente). A conversão registra o aceite em `aceito_em`.
+- **Validade igual a hoje ainda vale.** A leitura usa a mesma regra (`validade < hoje` é vencido).
+- **O item liga ao exame pela descrição** quando não tem item faturável. A ligação continua, mas o item que não casa não
+  some mais. Não pedi a coluna `exame_id` no item: o caminho certo é o item faturável do catálogo.

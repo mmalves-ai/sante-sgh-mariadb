@@ -39,6 +39,22 @@ async function garantir(e: Escritor, sel: string, p: unknown[], ins: string, pi:
 /** Apaga o que a integração gravou nos estabelecimentos da massa. */
 export async function limparGravacoes(e: Escritor, ests: readonly number[]): Promise<void> {
   const em = ests.map(() => '?').join(', ');
+  // Tecnovigilância, curso por modelo e ciclo de vida (dependem da OS e do equipamento): apagados antes deles.
+  await e.executar(
+    `DELETE v FROM queixa_tecnica_produto_evento v JOIN queixa_tecnica_produto k ON k.id = v.queixa_tecnica_produto_id WHERE k.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM queixa_tecnica_produto WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE q FROM alerta_sanitario_equipamento q JOIN alerta_sanitario a ON a.id = q.alerta_sanitario_id WHERE a.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM alerta_sanitario WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM modelo_equipamento_curso WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE v FROM evento_ciclo_equipamento v JOIN equipamento_saude q ON q.id = v.equipamento_saude_id WHERE q.estabelecimento_id IN (${em})`,
+    ests,
+  );
   await e.executar(`DELETE FROM notificacao_usuario WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM execucao_preventiva WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM arquivo WHERE estabelecimento_id IN (${em}) AND chave_armazenamento LIKE 'teste-l0303m/%'`, ests);

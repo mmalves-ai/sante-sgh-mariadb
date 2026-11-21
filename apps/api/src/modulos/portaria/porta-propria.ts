@@ -85,7 +85,7 @@ function local(v: unknown, fuso: string): string | null {
   const d = v instanceof Date ? v : new Date(String(v));
   if (Number.isNaN(d.getTime())) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 /** "AAAA-MM-DDTHH:mm" no fuso do estabelecimento → instante. */
 const instante = (t: string, fuso: string): Date =>
@@ -375,7 +375,7 @@ export class PortaPortariaPropria implements PortaPortaria {
   relogio(c: ContextoPortaria): Promise<string> {
     return this.ler(c, async (_l, _e, fuso) => {
       const r = relogioNoFuso(fuso);
-      return `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}:00`;
+      return `${r.hoje}T${r.hora}:00`;
     });
   }
 
@@ -541,7 +541,7 @@ export class PortaPortariaPropria implements PortaPortaria {
       const regras = await regrasDe(l, est, fuso);
       const r = relogioNoFuso(fuso);
       // Como a tela: o crachá válido ou vencido há até 24 horas.
-      const corte = local(new Date(instante(`${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2)}`, fuso).getTime() - 86_400_000), fuso)!;
+      const corte = local(new Date(instante(`${r.hoje}T${r.hora}`, fuso).getTime() - 86_400_000), fuso)!;
       return (
         await l.consultar(
           `${SQL_VISITAS} AND v.saida_em IS NULL AND v.situacao = 'em_andamento' ORDER BY v.entrada_em DESC, v.id DESC`,

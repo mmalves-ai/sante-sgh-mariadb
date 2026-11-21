@@ -1,0 +1,34 @@
+[
+  {
+    "tipo": "pendente-do-lote",
+    "arquivos": [
+      "apps/api/src/modulos/enfermagem/sae-porta-propria.ts",
+      "apps/api/src/modulos/enfermagem/sae-porta-propria.int.spec.ts"
+    ],
+    "motivo": "As 7 gravações da SAE seguem com modelo-pendente (linhas 19 e 88; sites prescrever, suspender, checar, estornar, carregarTerminologia, prescreverMedicamento, inativarReceita) e as leituras ligadas (atividadesVigentes, atividade, checagens, checagem, receitas) ainda devolvem vazio. Não coube nesta rodada: os turnos foram para as 13 gravações dos escores, com prova de integração. Desenho levantado sobre a estrutura que já existe: (1) atividade prescrita = prescricao (de enfermagem, do atendimento, prescritor = vínculo do enfermeiro) + prescricao_item + prescricao_item_cuidado (cuidado_enfermagem pela atividade_intervencao_enfermagem.cuidado_enfermagem_id) + horario_administracao dos horários, ligada em plano_intervencao_enfermagem.prescricao_item_id com situacao 'prescrita'; suspensão = situação do item e do plano ('suspensa') com o motivo; checagem e estorno = os mesmos eventos de horario_administracao/horario_administracao_evento da beira do leito (reaproveitar a checagem da porta-propria.ts, sem caminho paralelo); (2) terminologia licenciada = terminologia_edicao (versão, situacao_carga, contagens) + termo_terminologia + terminologia_licenca_estabelecimento (referencia_licenca, vigência); (3) receita do enfermeiro = receita_medica (protocolo_receita_enfermagem_id, protocolo_enfermagem, tipo_protocolo_enfermagem, versao_lista_enfermagem, segundo_identificador; numero pela numeração do estabelecimento; tipo_receita_id do cadastro) + receita_medica_item, conferindo cada item contra protocolo_receita_enfermagem_item (dose_maxima); a inativação usa situacao suspensa/cancelada com suspensa_em, suspensa_por_profissional_id e justificativa_suspensao; a reemissão usa origem_receita_medica_id. Falta decidir com o dono: o tipo de receita e a numeração da receita do enfermeiro, e se o estorno da checagem do cuidado é só do autor."
+  },
+  {
+    "tipo": "pedido-de-outro-lote",
+    "lote_alvo": "dono do registro assistencial do PEP (apps/api/src/modulos/pep/registro-porta-propria.ts)",
+    "arquivos": [
+      "apps/api/src/modulos/enfermagem/enfermagem.controller.ts"
+    ],
+    "motivo": "A anotação offline da beira do leito (enfermagem.controller.ts, linhas 1072-1086) manda registro: 0 a gravarRespostaExt e é recusada com 'registro-inexistente' (o lote devolve ok:false por anotação; nada some em silêncio). A correção certa é gravar a anotação de enfermagem como registro_assistencial do atendimento (modelo_documento_clinico da anotação de enfermagem, autor profissional e usuário, data_hora_clinica = horaReal, impressao_digital SHA-256 do texto exibido) e guardar o texto no registro, não como extensão 'anexo'. Hoje nenhuma porta da API grava registro_assistencial (o redesenho do registro do PEP está pendente no lote do PEP). Pedido: uma função compartilhada de gravação do registro assistencial (dentro da transação do Executor), que a enfermagem chamaria na anotação offline, e o modelo de documento 'anotacao_enfermagem' na carga de cadastros."
+  },
+  {
+    "tipo": "ddl",
+    "tabela": "profilaxia_tev_decisao",
+    "colunas": [
+      "CHECK ck_profilaxia_tev_decisao_decisao: acrescentar 'anulada' (e ck_profilaxia_tev_decisao_justificativa continua exigindo a justificativa na retificação)"
+    ],
+    "motivo": "Opcional, para limpeza: a anulação da decisão de profilaxia é gravada como retificação com a decisão anulada na coluna e {decisao:'anulada'} em dados (o CHECK só aceita aceita, modificada e recusada). Com 'anulada' no CHECK, a coluna passa a dizer o fato sem depender de dados. Nada fica recusado sem este DDL."
+  },
+  {
+    "tipo": "semente",
+    "tabela": "modelo_documento_clinico (+ tipo_documento_clinico, modelo_documento_versao)",
+    "colunas": [
+      "codigo ANOTACAO_ENFERMAGEM, titulo 'Anotação de enfermagem', tipo_registro 'evolucao', situacao 'publicado', com a versão 1 publicada; tipo de documento de categoria 'evolucao'"
+    ],
+    "motivo": "A anotação offline da beira do leito agora grava o registro assistencial do atendimento com esse modelo (enfermagem/porta-propria.ts, registrarAnotacaoOffline). Sem o modelo publicado no cliente, a anotação é recusada com cadastro-incompleto (nada gravado). O criar-novo-cliente deve trazer o modelo, ou o painel deve permitir cadastrá-lo."
+  }
+]

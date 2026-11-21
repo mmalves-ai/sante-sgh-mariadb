@@ -396,7 +396,7 @@ describe('comuns da manutenção', () => {
     expect(juntarInstante('2026-10-28', '09:05')).toBe('2026-10-28T09:05');
     // A mensagem padrão do Zod não chega à tela.
     expect(Object.values(problemasDe(esquemaConcluirOs, { versao: 1 })).join(' ')).not.toMatch(/Invalid/);
-    // O modelo do SanteHora (HHMM, 4 dígitos), como a tela entrega.
+    // Hora em quatro dígitos ainda é aceita pelo auxiliar.
     expect(juntarInstante('2026-10-28', '0905')).toBe('2026-10-28T09:05');
     expect(juntarInstante('2026-10-28', null)).toBeNull();
     expect(instanteBr('2026-10-28T09:05')).toBe('28/10/2026 09:05');

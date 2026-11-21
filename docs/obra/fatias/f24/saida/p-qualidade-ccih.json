@@ -1,0 +1,92 @@
+{
+ "lote": "p-qualidade-ccih",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "caso_infeccao",
+   "colunas": [
+    "implante BOOLEAN NOT NULL DEFAULT FALSE (ISC com implante: janela de vigilância de 90 dias)",
+    "exame_item_id BIGINT UNSIGNED NULL FK exame_item (a cultura do paciente que embasou a ficha)",
+    "microrganismo: o contrato manda texto livre (80); decidir entre resolver no cadastro microrganismo (código ou descrição) ou acrescentar microrganismo_descricao VARCHAR(80) NULL"
+   ],
+   "motivo": "A ficha de IRAS do contrato (IrasNova/IrasRegistrada) tem implante e a cultura do caso; caso_infeccao não tem onde guardar. Sem isso iras, irasDas, irasNoPeriodo, registrarIras, descartarIras e corrigirIras seguem falhando fechados."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "isolamento_paciente",
+   "colunas": [
+    "motivo_precaucao VARCHAR(30) NOT NULL CHECK IN ('kpc','mrsa','vre','acinetobacter','outro_multirresistente','clostridioides','tuberculose','varicela_sarampo','influenza','meningite','outro')",
+    "motivo_outro VARCHAR(200) NULL; CHECK motivo_precaucao <> 'outro' OR motivo_outro IS NOT NULL",
+    "origem_indicacao VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK IN ('manual','microbiologia')",
+    "exame_item_id BIGINT UNSIGNED NULL FK exame_item (a cultura que indicou)",
+    "multirresistente BOOLEAN NOT NULL DEFAULT FALSE",
+    "motivo_encerramento como código: CHECK IN ('culturas_negativas','fim_do_periodo','reavaliacao','alta','obito') (hoje VARCHAR(500) livre)"
+   ],
+   "motivo": "A precaução do contrato (PrecaucaoNova/PrecaucaoRegistrada) tem motivo codificado, origem, cultura e multirresistente. O bloqueio dos vizinhos usa periodo_situacao_leito.isolamento_paciente_id, que já existe, mais as sementes do item abaixo. Sem isso precaucao, precaucoesAbertas, precaucoesDa, definirPrecaucao, encerrarPrecaucao e alterarPrecaucao seguem falhando fechados."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "decisao_antimicrobiano (nova) e revisao_decisao_antimicrobiano (nova)",
+   "colunas": [
+    "decisao_antimicrobiano: id, estabelecimento_id FK, prescricao_item_id FK UNIQUE, prescricao_id FK, internacao_id FK, paciente_id FK, insumo_id FK, ficha_antimicrobiano_id FK NULL, prescrito_em DATETIME(3), inicio_tratamento_em DATETIME(3), decisao VARCHAR(25) CHECK IN ('liberado','liberado_com_ajuste','nao_liberado'), dias_autorizados SMALLINT NULL CHECK > 0, justificativa VARCHAR(500) NULL, no_prazo BOOLEAN, decidido_em DATETIME(3), decidido_por_usuario_id FK usuario, auditoria + versao",
+    "revisao_decisao_antimicrobiano: id, decisao_antimicrobiano_id FK, marco CHECK IN ('d3','d7'), UNIQUE (decisao, marco), conduta CHECK IN ('manter','descalonar','escalonar','ajustar_dose','trocar_via','suspender'), observacao VARCHAR(500) NULL, revisado_em DATETIME(3), revisado_por_usuario_id FK usuario, auditoria",
+    "alternativa: afrouxar liberacao_antimicrobiano (ficha, dose, unidade e dias NULL; decisão 'liberado_com_ajuste'; UNIQUE no item prescrito) e criar só a tabela das revisões"
+   ],
+   "motivo": "liberacao_antimicrobiano é o histórico da ficha completa (exige ficha, insumo, vigência, dose, unidade e dias); a decisão da CCIH sobre o item prescrito (com ou sem ficha, inclusive a não liberação) e as revisões D3/D7 não cabem nela. Sem isso liberacao, liberacoesDos, liberarAntimicrobiano e revisarAntimicrobiano seguem falhando fechados."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "configuracao_antimicrobiano_insumo (nova) ou insumo_id em regra_antimicrobiano_estabelecimento",
+   "colunas": [
+    "estabelecimento_id FK, insumo_id FK, UNIQUE (estabelecimento_id, insumo_id), restrito BOOLEAN, codigo_atc VARCHAR(7) NULL, ddd_gramas DECIMAL(15,4) NULL CHECK > 0, gramas_por_unidade DECIMAL(15,4) NULL CHECK > 0, auditoria + versao"
+   ],
+   "motivo": "A CCIH configura o item do cadastro de produtos (insumo): restrito, ATC, DDD e gramas por unidade (para o consumo em DDD). regra_antimicrobiano_estabelecimento é por antimicrobiano do catálogo, sem ligação com o insumo nem ATC e gramas por unidade. Sem isso itensConfigurados e configurarAntimicrobiano seguem falhando fechados."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "verificacao_bundle",
+   "colunas": [
+    "trocar uq_verificacao_bundle_dispositivo_turno por unicidade só entre os não excluídos (coluna gerada: IF(excluido_em IS NULL, 1, NULL))"
+   ],
+   "motivo": "O estorno do checklist é a exclusão lógica; com o UNIQUE atual o turno estornado não pode ser lançado de novo (hoje a porta recusa com bundle-ja-registrado e explica)."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "tools/db/configurar_numeracoes.py",
+   "motivo": "Incluir as numerações 'surto_infeccao' (surto_infeccao.numero é NOT NULL; sem ela registrarSurto recusa com sequencia-nao-configurada) e 'caso_infeccao' (para quando a ficha de IRAS sair)."
+  },
+  {
+   "tipo": "sementes",
+   "arquivo": "db/sementes",
+   "motivo": "Carregar os cadastros que o contrato da CCIH usa por código fixo: tipo_dispositivo_invasivo (cvc, sonda_vesical, ventilacao_mecanica), categoria_profissional das observações (medico, enfermeiro, tecnico_enfermagem, fisioterapeuta, outro), tipo_precaucao (contato, goticulas, aerossois) e motivo_bloqueio_leito 'isolamento'. Hoje o cliente novo vem sem eles e a porta recusa o código não cadastrado."
+  },
+  {
+   "tipo": "observacao",
+   "arquivo": "apps/api/src/modulos/qualidade/apoio-propria.ts e seguranca.controller.ts",
+   "motivo": "O mecanismo leituraPendente/modeloPendente continua em uso pelas partes da CCIH acima (e pela gestão e pela etapa 2 da notificação); só sai quando elas forem construídas."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "consumo_preparacao_alcoolica",
+   "colunas": [
+    "pacientes_dia INT UNSIGNED NULL (hoje NOT NULL)"
+   ],
+   "motivo": "Sem censo fechado na competência não há denominador; hoje a porta grava 0 por força do NOT NULL, com ml_por_paciente_dia nulo e o cálculo dizendo 'sem denominador'. Com a coluna nula, a porta passa a gravar NULL."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/qualidade/ccih.ts (esquemaRegistrarConsumoAlcool), controller, porta-ccih.ts e memória",
+   "motivo": "O lançamento do consumo da competência substitui o anterior sem versão vista. A porta já trava a linha e manda o valor anterior à trilha; falta o contrato trazer a versão vista (opcional na criação, obrigatória na substituição) para recusar 'versao-desatualizada' quando duas pessoas lançam juntas."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos (checklist do bundle), dominio-qualidade/ccih/bundle.ts, controller, web",
+   "motivo": "verificacao_bundle.manter_dispositivo é a decisão de manter o dispositivo depois de revisar a indicação (CHECK: indicacao_revisada = FALSE OR manter_dispositivo IS NOT NULL). O contrato só tem o item 'indicacao' (revisada ou não). A porta agora grava indicacao_revisada = FALSE e manter_dispositivo = NULL e lê a revisão pelo item. Decidir: campo explícito manterDispositivo no contrato (e aí gravar as duas colunas), ou DDL afrouxando o CHECK."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "porta-ccih.ts (corrigirDispositivo) e controller",
+   "motivo": "Não há operação para desfazer uma retirada lançada por engano. A correção só acerta a data de retirada já lançada (recusa antes da inserção) e recusa retirada em dispositivo em uso ('retirada-pela-correcao'). Se o dono quiser, criar 'desfazer retirada' com motivo, que volta a situação para em_uso e limpa data e motivo."
+  }
+ ]
+}

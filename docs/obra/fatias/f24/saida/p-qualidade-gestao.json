@@ -1,0 +1,100 @@
+[
+ {
+  "tipo": "ddl",
+  "tabela": "risco_institucional",
+  "colunas": [
+   "controles_descricao TEXT NULL"
+  ],
+  "motivo": "A matriz de riscos registra os controles existentes em texto livre (contrato `controles`). O modelo só tem o vínculo ao catálogo controle_risco (risco_institucional_controle). Até a coluna existir, o registro com controles em texto recusa com modelo-pendente; sem controles, grava."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "nao_conformidade_qualidade",
+  "colunas": [
+   "cancelada_em DATETIME(3) NULL",
+   "cancelada_por_usuario_id BIGINT UNSIGNED NULL (FK usuario)",
+   "motivo_cancelamento VARCHAR(500) NULL",
+   "duplicada_de_id BIGINT UNSIGNED NULL (FK nao_conformidade_qualidade)",
+   "CHECK (cancelada_em IS NULL) = (motivo_cancelamento IS NULL)"
+  ],
+  "motivo": "Cancelamento com motivo e a marca de duplicada (W0-04). Hoje o CHECK de situação não tem cancelada e a exclusão lógica some da lista; a gravação cancelarNaoConformidade e a dependência 'duplicadas desta' seguem recusando com modelo-pendente."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "documento_qualidade_versao",
+  "colunas": [
+   "resumo_sha256 CHAR(64) NULL",
+   "retirada_em DATETIME(3) NULL",
+   "retirada_por_usuario_id BIGINT UNSIGNED NULL",
+   "motivo_retirada VARCHAR(500) NULL"
+  ],
+  "motivo": "Documentos da qualidade: o contrato publica cada revisão com o resumo SHA-256 do conteúdo e permite retirar a versão com motivo. A ciência exige colaborador_id (NOT NULL): pedir também a regra de conta → colaborador (usuario.pessoa_fisica_id → colaborador) ou tornar colaborador_id opcional com usuario_id obrigatório."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "auditoria_interna",
+  "colunas": [
+   "referencial VARCHAR(30) NOT NULL DEFAULT 'interno' (ou categoria_auditoria_interna semeada com os códigos do contrato)",
+   "auditores_descricao VARCHAR(400) NULL",
+   "cancelada_em, motivo_cancelamento"
+  ],
+  "motivo": "O contrato registra a auditoria já realizada com o referencial (enum), os auditores em texto e os itens do checklist; o modelo exige categoria e auditor líder por conta e não tem cancelamento. Decidir se o referencial vira categoria_auditoria_interna (semente) e se auditores em texto ficam como descrição."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "comissao_membro, reuniao_comissao",
+  "colunas": [
+   "comissao_membro.nome_externo VARCHAR(80) NULL e funcao VARCHAR(60) NULL (membro sem colaborador nem profissional), relaxando ck_comissao_membro_pessoa",
+   "reuniao_comissao.ata_assinada_em DATETIME(3) NULL, ata_assinada_por_usuario_id"
+  ],
+  "motivo": "Comissões: o contrato traz os membros por nome, função e login opcional, e a reunião por índice dos presentes e com assinatura da ata; o modelo exige colaborador ou profissional por membro e não guarda a assinatura."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "analise_critica_indicador",
+  "colunas": [
+   "indicador por código sem apuração: apuracao_indicador_id passa a opcional com indicador_id + competencia, ou a análise cria a apuração digitada"
+  ],
+  "motivo": "A análise crítica do contrato é por código do indicador e competência com numerador, denominador, meta e texto; o modelo pede a apuração (apuracao_indicador) que ainda não é carregada."
+ },
+ {
+  "tipo": "ddl",
+  "tabela": "envio_regulatorio_qualidade (nova)",
+  "colunas": [
+   "estabelecimento_id",
+   "tipo",
+   "competencia DATE",
+   "revisao SMALLINT",
+   "arquivo",
+   "resumo_sha256 CHAR(64)",
+   "linhas",
+   "resumo",
+   "situacao",
+   "gerado_em/por",
+   "transmitido_em/por",
+   "protocolo",
+   "UNIQUE (estabelecimento_id, tipo, competencia, revisao)"
+  ],
+  "motivo": "Envios regulatórios da gestão (gerar e transmitir com revisão por competência). Não há tabela equivalente fora do envio de IRAS (notificacao_iras_envio, de outro lote)."
+ },
+ {
+  "tipo": "construcao",
+  "arquivo": "apps/api/src/modulos/qualidade/porta-gestao-propria.ts",
+  "motivo": "Faltam, depois do DDL acima: documentos e ciência; análise de indicador; auditorias; comissões e reuniões; envios; versões (trilha das correções); contagem do painel (depende de documentos); pesquisa de satisfação (a agenda e a data do atendimento vêm da marcação: leitura de outro módulo); protocolos gerenciados; revisão de prontuários (checklist, sorteio, revisão, pendência, altas e médicos)."
+ },
+ {
+  "tipo": "construcao",
+  "arquivo": "apps/api/src/modulos/qualidade/porta-propria.ts",
+  "motivo": "Etapa 2: as gravações (análise, ações do plano, queixa técnica, sugestão resolvida) seguem recusando; a queixa técnica e a sugestão também na leitura (o contrato tem área de vigilância, conduta, alerta, série e registro do produto, que o modelo de queixa_tecnica_produto não tem: pedir colunas ou a tradução). As 7 leituras de outros módulos seguem pendentes."
+ },
+ {
+  "tipo": "semente",
+  "tabela": "categoria_risco_institucional, canal_ouvidoria, tipo_manifestacao_ouvidoria, motivo_encerramento_manifestacao, fator_contribuinte",
+  "motivo": "Os registros recusam (categoria-inexistente, canal-inexistente, tipo-inexistente) sem os cadastros: o 'criar novo cliente' deve semear os códigos do contrato (categorias de risco: assistencial, ocupacional, ambiental, tecnologico, financeiro, legal, imagem; canais e tipos da ouvidoria do contrato em snake_case)."
+ },
+ {
+  "tipo": "observacao",
+  "arquivo": "apps/api/src/modulos/qualidade/apoio-propria.ts e seguranca.controller.ts",
+  "motivo": "O mecanismo modeloPendente/leituraPendente e o 'indisponiveis' do painel continuam necessários enquanto houver leitura pendente (painelAdesao, historicoRiscos, protocolosGerenciados e as da gestão acima). Removê-los agora trocaria a recusa por vazio."
+ }
+]

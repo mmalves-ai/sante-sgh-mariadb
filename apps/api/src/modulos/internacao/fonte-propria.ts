@@ -93,8 +93,7 @@ const SQL_POSICAO = `
 /** Data civil à meia-noite UTC (a forma do contrato do movimento) e a hora "HH:MM", no fuso do estabelecimento. */
 function diaEHora(v: unknown, fuso: string): { dia: Date; hora: string } {
   const c = civil(v as Date, fuso);
-  const h = c.hhmm.replace(':', '');
-  return { dia: new Date(`${c.data}T00:00:00Z`), hora: `${h.slice(0, 2)}:${h.slice(2, 4)}` };
+  return { dia: new Date(`${c.data}T00:00:00Z`), hora: c.hora };
 }
 
 export class FonteInternacaoPropria implements FonteInternacao {

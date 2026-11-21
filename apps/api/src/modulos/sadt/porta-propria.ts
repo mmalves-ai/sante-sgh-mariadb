@@ -14,18 +14,31 @@
 // à lista de coleta e o exame volta a "solicitado"); a leitura do resultado grava só a primeira abertura.
 // Melhoria: toda inclusão passa por tx.incluir (auditoria e escritas da trilha); cada gravação leva o nome do evento
 // da tela como operação e a chave de idempotência da requisição, quando a tela a manda.
-// Pendências (pedido do lote 02-09; a tela recebe o motivo, nada em silêncio): as operações do executor
-// (OPERACOES_SADT_PENDENTES: contrato novo) e as leituras/gravações em LEITURAS_PENDENTES e GRAVACOES_PENDENTES.
+// F2.4: a bancada (digitação com faixa e valor crítico vigentes, conferência com as versões retificadas, fila de
+// liberação), o laudo para emitir, a recepção do setor (atendimentos do dia, atendimento para lançamento), o orçamento do
+// diagnóstico (orcamento_particular com itens de exame) e a conversão, o catálogo de apoio, os parâmetros `sadt.*`, os
+// indicadores agregados no banco, os laudos publicados no portal (liberacao_resultado_portal, a leitura no portal em
+// acesso_resultado_portal) e os autocadastros de médicos externos (pedido_vinculo_profissional_externo) com a decisão.
+// Pendências (a tela recebe o motivo, nada em silêncio): as operações do executor (OPERACOES_SADT_PENDENTES: contrato
+// novo da tela) e o que falta no modelo em LEITURAS_PENDENTES e GRAVACOES_PENDENTES (pedido p-sadt).
 import {
   type AmostraDetalhe,
   type AvisoCritico,
   type ColetaGrupo,
   type EstadoAmostra,
+  type ElementoDigitacao,
   type ExameSadt,
+  type ItemLiberacao,
+  type LaudoPortal,
   NIVEIS_ESCALONAMENTO,
+  type OrcamentoLido,
+  type PacienteSadt,
+  type RequisicaoLida,
   rotuloEstadoAmostra,
   rotuloEstadoExame,
+  SETORES_SADT,
   type SetorSadt,
+  type ValorConferencia,
   type ValorCriticoLido,
 } from '@sgh/contratos';
 import {
@@ -47,7 +60,19 @@ import { z } from 'zod';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { OPERACOES_SADT_PENDENTES } from './operacoes.js';
-import { type ContextoSadt, type GravadorSghSadt, METODOS_PORTA_SADT, type PortaSadt, type VinculoDaSessao } from './porta.js';
+import {
+  type ApoioSadtLido,
+  type AtendimentoParaLancamento,
+  type AutocadastroPortalLido,
+  type ContextoSadt,
+  type GravadorSghSadt,
+  type LaudoParaEmitir,
+  type LaudoPortalLido,
+  METODOS_PORTA_SADT,
+  type PortaSadt,
+  type ResultadoParaDigitacaoLido,
+  type VinculoDaSessao,
+} from './porta.js';
 import {
   atoDoExame,
   estadoDaAmostra,
@@ -74,39 +99,31 @@ const TABELAS_GRAVACAO = [
   'visualizacao_resultado_exame',
   'emissao_laudo',
   'emissao_laudo_exame',
+  'orcamento_particular',
+  'pedido_vinculo_profissional_externo',
+  'conta_portal_profissional_externo',
+  'liberacao_resultado_portal',
+  'acesso_resultado_portal',
 ] as const;
 
-/** Leituras que o banco ainda não atende, com o que falta (pedido do lote 02-09). */
+/** Leituras que o modelo ainda não atende, com o que falta (pedido p-sadt). */
 export const LEITURAS_PENDENTES: Readonly<Record<string, string>> = {
-  digitacao: 'a tela de digitação (modelo de resultado, variáveis de fórmula e grandezas por exame)',
-  conferencia: 'a conferência do resultado antes da liberação (valores com faixa e versões)',
-  filaLiberacao: 'a fila de liberação de cada setor',
-  laudoParaEmitir: 'os dados do laudo para emissão',
-  requisicoes: 'a lista de requisições do dia',
-  atendimento: 'o atendimento para lançamento no setor',
-  atendimentosPorNumero: 'a busca de atendimento por número para lançamento',
-  orcamentos: 'os orçamentos do diagnóstico',
-  orcamento: 'o orçamento do diagnóstico',
-  apoio: 'os cadastros de apoio do lançamento (prestador, kit, recipiente, convênio)',
-  parametros: 'os parâmetros do setor',
-  indicadores: 'os indicadores do setor',
-  laudosPortalDoPaciente: 'os laudos do paciente no portal',
-  laudosPortalDoMedico: 'os laudos do médico externo no portal',
-  laudoPortal: 'o laudo aberto no portal',
-  acessoPorProtocolo: 'o acesso do paciente ao portal por protocolo',
-  acessoDoMedico: 'o acesso do médico externo ao portal',
-  acessoPorId: 'o acesso ao portal',
-  autocadastros: 'os autocadastros de médicos externos no portal',
+  acessoPorProtocolo:
+    'o acesso do paciente ao portal por protocolo (falta no modelo o protocolo de acesso do atendimento, com o resumo e as tentativas)',
+  acessoDoMedico:
+    'o acesso do médico externo ao portal (a senha e o segundo fator da conta do portal ainda não têm lugar no modelo)',
+  acessoPorId: 'o acesso ao portal (o protocolo do paciente e a credencial do médico externo ainda não estão no modelo)',
 };
 
-/** Gravações diretas que o banco ainda não atende (pedido do lote 02-09). */
+/** Gravações diretas que o modelo ou o contrato ainda não atendem (pedido p-sadt). */
 export const GRAVACOES_PENDENTES: Readonly<Record<string, string>> = {
-  registrarOrcamento: 'o orçamento do diagnóstico',
-  marcarOrcamentoConvertido: 'a conversão do orçamento em atendimento',
-  criarProtocoloPortal: 'o protocolo de acesso do paciente ao portal',
-  registrarAutocadastro: 'o autocadastro do médico externo no portal',
-  decidirAutocadastro: 'a decisão do autocadastro do médico externo',
-  registrarTentativaPortal: 'as tentativas de acesso ao portal',
+  registrarOrcamento:
+    'o orçamento do diagnóstico por esta gravação (a entrada traz só a quantidade de itens; o orçamento com os exames vai pela operação de criar orçamento, no contrato novo)',
+  criarProtocoloPortal: 'o protocolo de acesso do paciente ao portal (falta no modelo o protocolo de acesso do atendimento)',
+  registrarAutocadastro:
+    'o autocadastro do médico externo no portal (o pedido exige o CPF, e a senha e o segundo fator ainda não têm lugar no modelo)',
+  registrarTentativaPortal:
+    'as tentativas de acesso ao portal (dependem do protocolo do paciente e da credencial do médico externo, ainda fora do modelo)',
 };
 
 const pendente = (o: string): ErroOperacao =>
@@ -265,6 +282,315 @@ const SQL_AMOSTRA = `
     LEFT JOIN recipiente_coleta rc ON rc.id = am.recipiente_coleta_id
    WHERE am.estabelecimento_id = ? AND am.excluido_em IS NULL`;
 
+const TETO_REQUISICOES = 200;
+const TETO_ORCAMENTOS = 500;
+const TETO_CATALOGO = 5000;
+const TETO_PORTAL = 200;
+/** Os tipos de setor do diagnóstico que o SADT atende. */
+const TIPOS_SADT: readonly string[] = ['laboratorio', 'imagem', 'metodos_graficos', 'endoscopia'];
+/** conta_portal_profissional_externo.situacao → a situação da conta na tela de autocadastros. */
+const SITUACAO_DA_CONTA: Readonly<Record<string, string>> = {
+  pendente: 'pendente',
+  ativa: 'ativo',
+  bloqueada: 'bloqueado',
+  suspensa: 'bloqueado',
+  encerrada: 'encerrado',
+};
+
+/** A primeira linha de cada chave (a consulta já vem ordenada pela precedência). */
+function primeiraPor(ls: readonly Linha[], campo: string): Map<number, Linha> {
+  const m = new Map<number, Linha>();
+  for (const r of ls) if (!m.has(n(r[campo]))) m.set(n(r[campo]), r);
+  return m;
+}
+const rotuloDoSetor = (s: SetorSadt) => SETORES_SADT.find((x) => x.codigo === s)?.rotulo ?? '';
+/** As situações do laudo que valem como laudo oficial (assinado; emitido ou retificado depois da assinatura). */
+const LAUDO_ASSINADO = ['assinado', 'emitido', 'retificado'];
+/** O texto do laudo: o laudo assinado; sem ele, o texto do resultado; e a conclusão. */
+const linhasDoLaudo = (d: Linha | undefined): string[] =>
+  [d?.['laudo'] ?? d?.['texto_resultado'], d?.['conclusao']].filter((x) => x !== null && x !== undefined && texto(x) !== '').map(texto);
+/** O número de negócio (texto com prefixo) como número da tela. */
+const numeroDeNegocio = (v: unknown) => Number(texto(v).replace(/\D/g, '')) || 0;
+
+function pacienteDe(r: Linha, hoje: string): PacienteSadt {
+  const nasc = dataIso(r['data_nascimento']);
+  const sexo = texto(r['sexo']).toUpperCase();
+  return {
+    id: n(r['paciente_id']),
+    prontuario: numeroDeNegocio(r['numero_prontuario']),
+    nome: texto(r['paciente_nome']),
+    sexo: sexo === 'M' || sexo === 'F' ? sexo : null,
+    idadeAnos: idadeAnos(nasc, hoje),
+    nascimento: nasc,
+  };
+}
+
+/** O atendimento para o lançamento no setor, com a requisição aberta no setor e as versões (trava otimista). */
+const SQL_ATENDIMENTO_LANCAMENTO = `
+  SELECT a.id, a.numero, a.entrada_em, a.versao, fp.id AS fp_id, fp.nome AS fp_nome, p.id AS paciente_id,
+         p.versao AS paciente_versao, p.numero_prontuario, pf.nome AS paciente_nome, pf.data_nascimento, sx.sigla AS sexo,
+         EXISTS (SELECT 1 FROM internacao i WHERE i.atendimento_id = a.id) AS internado,
+         (SELECT q.id FROM requisicao_exame q WHERE q.atendimento_id = a.id AND q.estabelecimento_id = a.estabelecimento_id
+             AND q.excluido_em IS NULL AND q.situacao IN ('solicitada', 'em_andamento') AND q.tipo_solicitacao = 'lancado_no_setor'
+           ORDER BY q.id DESC LIMIT 1) AS conta_id,
+         (SELECT q.numero FROM requisicao_exame q WHERE q.atendimento_id = a.id AND q.estabelecimento_id = a.estabelecimento_id
+             AND q.excluido_em IS NULL AND q.situacao IN ('solicitada', 'em_andamento') AND q.tipo_solicitacao = 'lancado_no_setor'
+           ORDER BY q.id DESC LIMIT 1) AS conta_numero,
+         (SELECT COUNT(*) FROM exame_item ei JOIN requisicao_exame q ON q.id = ei.requisicao_exame_id
+           WHERE q.atendimento_id = a.id AND q.excluido_em IS NULL AND ei.excluido_em IS NULL
+             AND ei.situacao NOT IN ('cancelado', 'recusado')) AS exames
+    FROM atendimento a
+    JOIN paciente p ON p.id = a.paciente_id
+    JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+    LEFT JOIN sexo sx ON sx.id = pf.sexo_id
+    JOIN fonte_pagadora fp ON fp.id = a.fonte_pagadora_id
+   WHERE a.estabelecimento_id = ? AND a.excluido_em IS NULL AND a.situacao <> 'cancelado'`;
+
+function atendimentoDe(r: Linha, hoje: string): AtendimentoParaLancamento {
+  return {
+    atendimento: n(r['id']),
+    paciente: pacienteDe(r, hoje),
+    atend: verdadeiro(r['internado']) ? 'I' : 'E',
+    reg: n(r['id']),
+    convenio: { codigo: n(r['fp_id']), nome: texto(r['fp_nome']) },
+    conta: r['conta_id'] === null ? null : { id: n(r['conta_id']), numero: numeroDeNegocio(r['conta_numero']) },
+    retratos: { htAtendimento: n(r['versao']), htPaciente: n(r['paciente_versao']) },
+  };
+}
+
+/**
+ * O orçamento do diagnóstico é o orçamento particular com itens de exame (o item liga ao exame pelo item faturável
+ * do catálogo ou, sem ele, pelo código do exame na descrição). O ato é o do primeiro exame identificado. O item que não
+ * casa com exame nenhum continua na lista (descrição e valor do próprio item, código do exame vazio = não identificado),
+ * para a soma dos itens bater com o total.
+ */
+const SQL_ORCAMENTO = `
+  SELECT op.id, op.data_orcamento, op.validade_ate, op.situacao, op.valor_total, op.paciente_id, op.atendimento_id,
+         op.realizado_em, op.nome_interessado, pf.nome AS paciente_nome, fp.id AS fp_id, fp.nome AS fp_nome
+    FROM orcamento_particular op
+    LEFT JOIN paciente p ON p.id = op.paciente_id
+    LEFT JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+    LEFT JOIN fonte_pagadora fp ON fp.id = op.fonte_pagadora_id
+   WHERE op.estabelecimento_id = ? AND op.excluido_em IS NULL AND op.situacao NOT IN ('cancelado', 'recusado')
+     AND EXISTS (SELECT 1 FROM orcamento_particular_item oi WHERE oi.orcamento_particular_id = op.id
+                    AND oi.tipo_item = 'exame' AND oi.excluido_em IS NULL)`;
+
+async function orcamentosLidos(l: Leitor, ls: readonly Linha[], hoje: string): Promise<OrcamentoLido[]> {
+  if (ls.length === 0) return [];
+  const ids = ls.map((r) => n(r['id']));
+  const itens = new Map<number, { exame: string; nome: string; valor: number; ato: number }[]>();
+  const vistos = new Set<string>();
+  for (const r of await l.consultar(
+    `SELECT oi.orcamento_particular_id, oi.sequencia, oi.valor_total, COALESCE(oi.descricao, itf.descricao) AS descricao,
+            e.id AS exame_id, e.codigo, e.nome, e.tipo_servico, mi.sigla_padrao
+       FROM orcamento_particular_item oi
+       LEFT JOIN item_faturavel itf ON itf.id = oi.item_faturavel_id
+       LEFT JOIN exame e ON (e.item_faturavel_id = oi.item_faturavel_id OR (oi.item_faturavel_id IS NULL AND e.codigo = oi.descricao))
+                   AND e.excluido_em IS NULL
+       LEFT JOIN modalidade_imagem mi ON mi.id = e.modalidade_imagem_id
+      WHERE oi.tipo_item = 'exame' AND oi.excluido_em IS NULL AND oi.orcamento_particular_id IN (${lista(ids.length)})
+      ORDER BY oi.orcamento_particular_id, oi.sequencia, e.id`,
+    ids,
+    { teto: 20_000 },
+  )) {
+    const k = `${n(r['orcamento_particular_id'])}:${n(r['sequencia'])}`;
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    const servico = texto(r['tipo_servico']);
+    const tipo = servico === 'metodo_grafico' ? 'metodos_graficos' : servico;
+    const o = n(r['orcamento_particular_id']);
+    const identificado = r['exame_id'] !== null;
+    itens.set(o, [
+      ...(itens.get(o) ?? []),
+      identificado
+        ? {
+            exame: texto(r['codigo']),
+            nome: texto(r['nome']),
+            valor: n(r['valor_total']),
+            ato: atoDoExame(tipo, r['sigla_padrao'] === null ? null : texto(r['sigla_padrao'])),
+          }
+        : { exame: '', nome: texto(r['descricao']), valor: n(r['valor_total']), ato: 0 },
+    ]);
+  }
+  return ls.map((r) => {
+    const is = itens.get(n(r['id'])) ?? [];
+    const sit = texto(r['situacao']);
+    const validade = dataIso(r['validade_ate']) ?? '';
+    const ato = is.find((x) => x.exame !== '')?.ato ?? 0;
+    return {
+      id: n(r['id']),
+      nome: texto(r['nome_interessado']) || texto(r['paciente_nome']),
+      paciente: nn(r['paciente_id']),
+      convenio: { codigo: n(r['fp_id']), nome: texto(r['fp_nome']) },
+      ato,
+      atoRotulo: rotuloDoAto(ato),
+      data: dataIso(r['data_orcamento']) ?? '',
+      validade,
+      situacao: sit === 'realizado' ? 'convertido' : sit === 'expirado' || validade < hoje ? 'vencido' : 'aberto',
+      itens: is.map(({ exame, nome, valor }) => ({ exame, nome, valor })),
+      total: n(r['valor_total']),
+      convertidoEm:
+        sit === 'realizado' && r['atendimento_id'] !== null
+          ? { atendimento: n(r['atendimento_id']), em: dataIso(r['realizado_em']) ?? '' }
+          : null,
+    };
+  });
+}
+
+/** Os valores dos resultados (resultado_analito), com a referência guardada na digitação e o sentido do desvio. */
+async function valoresDosResultados(l: Leitor, ids: readonly number[]): Promise<Map<number, ValorConferencia[]>> {
+  const m = new Map<number, ValorConferencia[]>();
+  if (ids.length === 0) return m;
+  for (const r of await l.consultar(
+    `SELECT ra.resultado_exame_id, an.nome, ra.valor_numerico, COALESCE(ra.valor_texto, rp.descricao) AS alfa, ur.simbolo,
+            ra.referencia_minimo, ra.referencia_maximo, ra.referencia_texto, ra.interpretacao, ra.critico
+       FROM resultado_analito ra JOIN analito an ON an.id = ra.analito_id
+       LEFT JOIN unidade_resultado ur ON ur.id = COALESCE(ra.unidade_resultado_id, an.unidade_resultado_id)
+       LEFT JOIN resposta_padrao rp ON rp.id = ra.resposta_padrao_id
+      WHERE ra.excluido_em IS NULL AND ra.resultado_exame_id IN (${lista(ids.length)})
+      ORDER BY ra.resultado_exame_id, ra.sequencia`,
+    ids,
+    { teto: 20_000 },
+  )) {
+    const numero = nn(r['valor_numerico']);
+    const min = nn(r['referencia_minimo']);
+    const max = nn(r['referencia_maximo']);
+    const interp = texto(r['interpretacao']);
+    const fora =
+      interp === 'baixo' || interp === 'critico_baixo'
+        ? ('abaixo' as const)
+        : interp === 'alto' || interp === 'critico_alto'
+          ? ('acima' as const)
+          : numero !== null && min !== null && numero < min
+            ? ('abaixo' as const)
+            : numero !== null && max !== null && numero > max
+              ? ('acima' as const)
+              : null;
+    const referencia =
+      r['referencia_texto'] !== null
+        ? texto(r['referencia_texto'])
+        : min !== null && max !== null
+          ? `${min} a ${max}`
+          : min !== null
+            ? `≥ ${min}`
+            : max !== null
+              ? `≤ ${max}`
+              : null;
+    const k = n(r['resultado_exame_id']);
+    m.set(k, [
+      ...(m.get(k) ?? []),
+      {
+        elemento: texto(r['nome']),
+        valor: r['alfa'] !== null ? texto(r['alfa']) : numero === null ? '' : String(numero),
+        numero,
+        unidade: r['simbolo'] === null ? null : texto(r['simbolo']),
+        referencia,
+        foraDaFaixa: fora,
+        critico: verdadeiro(r['critico']),
+      },
+    ]);
+  }
+  return m;
+}
+
+/** O item da conferência: o resultado do exame pedido, quem digitou, os valores e as versões retificadas. */
+async function itensDeLiberacao(l: Leitor, exames: readonly ExameSadt[]): Promise<ItemLiberacao[]> {
+  if (exames.length === 0) return [];
+  const rs = await l.consultar(
+    `SELECT re.id, re.exame_item_id, re.digitado_em, re.critico, COALESCE(u.login, '') AS por
+       FROM resultado_exame re LEFT JOIN usuario u ON u.id = re.digitado_por_usuario_id
+      WHERE re.excluido_em IS NULL AND re.exame_item_id IN (${lista(exames.length)})`,
+    exames.map((x) => x.id),
+    { teto: exames.length },
+  );
+  const porItem = new Map(rs.map((r) => [n(r['exame_item_id']), r]));
+  const ids = rs.map((r) => n(r['id']));
+  const valores = await valoresDosResultados(l, ids);
+  const versoes = new Map<number, ItemLiberacao['versoes']>();
+  if (ids.length)
+    for (const v of await l.consultar(
+      `SELECT v.resultado_exame_id, v.numero_versao, v.ocorrido_em, v.motivo,
+              (SELECT COUNT(*) FROM visualizacao_resultado_exame x
+                WHERE x.resultado_exame_id = v.resultado_exame_id AND x.visualizado_em < v.ocorrido_em) AS vistos
+         FROM resultado_exame_versao v WHERE v.resultado_exame_id IN (${lista(ids.length)})
+        ORDER BY v.resultado_exame_id, v.numero_versao`,
+      ids,
+      { teto: 5000 },
+    )) {
+      const k = n(v['resultado_exame_id']);
+      versoes.set(k, [
+        ...(versoes.get(k) ?? []),
+        {
+          versao: n(v['numero_versao']),
+          em: instante(v['ocorrido_em']),
+          motivo: v['motivo'] === null ? null : texto(v['motivo']),
+          viramAntes: n(v['vistos']),
+        },
+      ]);
+    }
+  return exames.map((exame) => {
+    const r = porItem.get(exame.id);
+    const vs = r ? (valores.get(n(r['id'])) ?? []) : [];
+    return {
+      exame,
+      valores: vs,
+      digitadoEm: r ? dataIso(r['digitado_em']) : null,
+      digitadoPor: r && texto(r['por']) ? texto(r['por']) : null,
+      critico: (r ? verdadeiro(r['critico']) : false) || vs.some((v) => v.critico),
+      versoes: (r ? versoes.get(n(r['id'])) : undefined) ?? [],
+    };
+  });
+}
+
+/** O laudo publicado no portal: vigente (não retirado, dentro do prazo) e do resultado liberado deste estabelecimento. */
+const SQL_LAUDO_PORTAL = `
+  SELECT lp.id, lp.liberado_em AS publicado_em, lp.primeira_visualizacao_em, re.id AS resultado, re.liberado_em,
+         re.texto_resultado, re.conclusao, ei.id AS item, e.nome, sd.tipo, mi.sigla_padrao, r.solicitado_em, r.paciente_id,
+         r.atendimento_id, r.solicitante_profissional_id, pf.nome AS paciente_nome, ld.texto AS laudo
+    FROM liberacao_resultado_portal lp
+    JOIN resultado_exame re ON re.id = lp.resultado_exame_id AND re.excluido_em IS NULL AND re.situacao IN ('liberado', 'retificado')
+    JOIN exame_item ei ON ei.id = re.exame_item_id AND ei.excluido_em IS NULL
+    JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id AND r.excluido_em IS NULL AND r.estabelecimento_id = lp.estabelecimento_id
+    JOIN setor_diagnostico sd ON sd.id = COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id)
+    JOIN exame e ON e.id = ei.exame_id
+    LEFT JOIN modalidade_imagem mi ON mi.id = e.modalidade_imagem_id
+    JOIN paciente p ON p.id = r.paciente_id
+    JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+    LEFT JOIN laudo_diagnostico ld ON ld.exame_item_id = ei.id AND ld.excluido_em IS NULL
+                                 AND ld.situacao IN ('assinado', 'emitido', 'retificado')
+   WHERE lp.estabelecimento_id = ? AND lp.situacao = 'liberado' AND lp.excluido_em IS NULL
+     AND (lp.disponivel_ate IS NULL OR lp.disponivel_ate > ?)`;
+
+const atoDoPortal = (r: Linha) => atoDoExame(texto(r['tipo']), r['sigla_padrao'] === null ? null : texto(r['sigla_padrao']));
+
+function laudoDoPortal(r: Linha, comPaciente: boolean): LaudoPortal {
+  return {
+    liberacao: n(r['id']),
+    exame: n(r['item']),
+    nome: texto(r['nome']),
+    setor: rotuloDoSetor(setorDoTipo(texto(r['tipo'])) ?? 'laboratorio'),
+    data: dataIso(r['solicitado_em']) ?? '',
+    liberadoEm: instante(r['liberado_em'] ?? r['publicado_em']),
+    visualizado: r['primeira_visualizacao_em'] !== null,
+    paciente: comPaciente ? texto(r['paciente_nome']) : null,
+  };
+}
+
+async function laudosDoPortal(
+  l: Leitor,
+  filtro: string,
+  p: readonly unknown[],
+  atos: readonly number[],
+  comPaciente: boolean,
+): Promise<{ laudos: LaudoPortal[]; cortada: boolean }> {
+  const ls = (
+    await l.consultar(`${SQL_LAUDO_PORTAL}${filtro} ORDER BY lp.liberado_em DESC, lp.id DESC LIMIT ${TETO_PORTAL * 5}`, p, {
+      teto: TETO_PORTAL * 5,
+    })
+  ).filter((r) => atos.includes(atoDoPortal(r)));
+  return { laudos: ls.slice(0, TETO_PORTAL).map((r) => laudoDoPortal(r, comPaciente)), cortada: ls.length > TETO_PORTAL };
+}
+
 export class PortaSadtPropria implements PortaSadt {
   readonly destino = 'banco' as const;
   private readonly executor: Executor;
@@ -285,7 +611,7 @@ export class PortaSadtPropria implements PortaSadt {
   private async hoje(l: Leitor, est: number): Promise<{ hoje: string; agora: string }> {
     const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
     const x = relogioNoFuso(r?.fuso_horario || FUSO_PADRAO);
-    return { hoje: x.hoje, agora: `${x.hoje}T${x.hhmm.slice(0, 2)}:${x.hhmm.slice(2, 4)}:00` };
+    return { hoje: x.hoje, agora: `${x.hoje}T${x.hora}:00` };
   }
 
   // ── Gravação ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -452,14 +778,223 @@ export class PortaSadtPropria implements PortaSadt {
     );
   }
 
-  digitacao(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['digitacao']!));
+  // ── Bancada: digitação, conferência e fila de liberação ──────────────────────────────────────────────────
+
+  digitacao(c: ContextoSadt, id: number): Promise<ResultadoParaDigitacaoLido | null> {
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      const [r] = await l.consultar(`${SQL_EXAME} AND ei.id = ?`, [est, id], { teto: 1 });
+      if (!r) return null;
+      const exame = exameDe(r, hoje);
+      const pac = await l.uma(
+        `SELECT pf.sexo_id, DATEDIFF(?, pf.data_nascimento) AS dias
+           FROM paciente p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id WHERE p.id = ?`,
+        [hoje, exame.paciente.id],
+      );
+      const re = await l.uma(
+        `SELECT id, situacao, texto_resultado, conclusao FROM resultado_exame WHERE exame_item_id = ? AND excluido_em IS NULL`,
+        [id],
+      );
+      const els = await l.consultar(
+        `SELECT ea.id AS ea, an.id, an.nome, ea.titulo, COALESCE(ea.casas_decimais, an.casas_decimais) AS casas, ur.simbolo,
+                an.tipo_resultado, an.limite_minimo_aceito, an.limite_maximo_aceito, ea.grupo_resposta_id
+           FROM exame_analito ea JOIN analito an ON an.id = ea.analito_id
+           LEFT JOIN unidade_resultado ur ON ur.id = COALESCE(ea.unidade_resultado_id, an.unidade_resultado_id)
+          WHERE ea.exame_id = ? AND ea.ativo = TRUE AND ea.excluido_em IS NULL AND an.excluido_em IS NULL
+          ORDER BY ea.ordem, ea.id`,
+        [exame.exame.id],
+        { teto: 500 },
+      );
+      const eas = els.map((x) => n(x['ea']));
+      const analitos = els.map((x) => n(x['id']));
+      // A faixa de referência vigente do analito no exame, da mais específica para a geral: a do sexo do paciente antes
+      // da de ambos; a com idade antes da sem idade, e a faixa etária mais estreita antes da larga; só então a mais recente.
+      const faixas = eas.length
+        ? primeiraPor(
+            await l.consultar(
+              `SELECT exame_analito_id, referencia_minima, referencia_maxima, referencia_texto, vigencia_inicio
+                 FROM faixa_referencia
+                WHERE exame_analito_id IN (${lista(eas.length)}) AND ativo = TRUE AND condicao = 'nenhuma'
+                  AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+                  AND (sexo_id IS NULL OR sexo_id = ?)
+                  AND (idade_minima_dias IS NULL OR idade_minima_dias <= ?) AND (idade_maxima_dias IS NULL OR idade_maxima_dias >= ?)
+                ORDER BY exame_analito_id, sexo_id IS NULL, (idade_minima_dias IS NULL AND idade_maxima_dias IS NULL),
+                         COALESCE(idade_maxima_dias, 4294967295) - COALESCE(idade_minima_dias, 0), vigencia_inicio DESC, id DESC`,
+              [...eas, hoje, hoje, pac?.['sexo_id'] ?? null, pac?.['dias'] ?? null, pac?.['dias'] ?? null],
+              { teto: 5000 },
+            ),
+            'exame_analito_id',
+          )
+        : new Map<number, Linha>();
+      // O valor crítico vigente do analito: o da unidade antes do da rede, o do exame antes do geral.
+      const criticos = analitos.length
+        ? primeiraPor(
+            await l.consultar(
+              `SELECT analito_id, limite_inferior, limite_superior, prazo_comunicacao_minutos FROM regra_valor_critico
+                WHERE analito_id IN (${lista(analitos.length)}) AND ativo = TRUE AND (estabelecimento_id = ? OR estabelecimento_id IS NULL)
+                  AND (exame_id IS NULL OR exame_id = ?) AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+                ORDER BY analito_id, estabelecimento_id IS NULL, exame_id IS NULL, vigencia_inicio DESC, id DESC`,
+              [...analitos, est, exame.exame.id, hoje, hoje],
+              { teto: 5000 },
+            ),
+            'analito_id',
+          )
+        : new Map<number, Linha>();
+      const grupos = [...new Set(els.filter((x) => x['grupo_resposta_id'] !== null).map((x) => n(x['grupo_resposta_id'])))];
+      const respostas = new Map<number, { codigo: number; texto: string }[]>();
+      if (grupos.length)
+        for (const x of await l.consultar(
+          `SELECT id, grupo_resposta_id, descricao FROM resposta_padrao
+            WHERE grupo_resposta_id IN (${lista(grupos.length)}) AND ativo = TRUE AND excluido_em IS NULL
+            ORDER BY grupo_resposta_id, sequencia`,
+          grupos,
+          { teto: 5000 },
+        )) {
+          const g = n(x['grupo_resposta_id']);
+          respostas.set(g, [...(respostas.get(g) ?? []), { codigo: n(x['id']), texto: texto(x['descricao']) }]);
+        }
+      const resultado = re ? n(re['id']) : null;
+      const valores =
+        resultado === null
+          ? new Map<number, Linha>()
+          : primeiraPor(
+              await l.consultar(
+                `SELECT ra.analito_id, ra.valor_numerico, ra.valor_absoluto, COALESCE(ra.valor_texto, rp.descricao) AS alfa,
+                        ra.referencia_minimo, ra.referencia_maximo, ra.referencia_texto
+                   FROM resultado_analito ra LEFT JOIN resposta_padrao rp ON rp.id = ra.resposta_padrao_id
+                  WHERE ra.resultado_exame_id = ? AND ra.excluido_em IS NULL ORDER BY ra.sequencia`,
+                [resultado],
+                { teto: 500 },
+              ),
+              'analito_id',
+            );
+      const elementos: ElementoDigitacao[] = els.map((x) => {
+        const f = faixas.get(n(x['ea']));
+        const v = valores.get(n(x['id']));
+        const cr = criticos.get(n(x['id']));
+        // A referência guardada no resultado (a que valeu na digitação) vem antes da do cadastro.
+        const guardada = v && (v['referencia_minimo'] !== null || v['referencia_maximo'] !== null || v['referencia_texto'] !== null);
+        const tipo = texto(x['tipo_resultado']);
+        return {
+          codigo: n(x['id']),
+          nome: texto(x['nome']),
+          titulo: verdadeiro(x['titulo']) || tipo === 'titulo',
+          unidade: x['simbolo'] === null ? null : texto(x['simbolo']),
+          casas: nn(x['casas']),
+          numerico: tipo === 'numerico' || tipo === 'calculado',
+          minimoAberto: nn(x['limite_minimo_aceito']),
+          maximoAberto: nn(x['limite_maximo_aceito']),
+          referencia: guardada
+            ? {
+                texto: v['referencia_texto'] === null ? null : texto(v['referencia_texto']),
+                minimo: nn(v['referencia_minimo']),
+                maximo: nn(v['referencia_maximo']),
+                versao: null,
+                fonte: 'historicoExame' as const,
+              }
+            : f
+              ? {
+                  texto: f['referencia_texto'] === null ? null : texto(f['referencia_texto']),
+                  minimo: nn(f['referencia_minima']),
+                  maximo: nn(f['referencia_maxima']),
+                  versao: dataIso(f['vigencia_inicio']) ?? 'atual',
+                  fonte: 'cadastro' as const,
+                }
+              : { texto: null, minimo: null, maximo: null, versao: null, fonte: 'nenhuma' as const },
+          respostasPadrao: x['grupo_resposta_id'] === null ? [] : (respostas.get(n(x['grupo_resposta_id'])) ?? []),
+          critico: cr
+            ? {
+                abaixoDe: nn(cr['limite_inferior']),
+                acimaDe: nn(cr['limite_superior']),
+                prazoMinutos: n(cr['prazo_comunicacao_minutos']),
+              }
+            : null,
+          valor: v
+            ? { numerico: nn(v['valor_numerico']), alfa: v['alfa'] === null ? null : texto(v['alfa']), absoluta: nn(v['valor_absoluto']) }
+            : null,
+        };
+      });
+      const variaveis =
+        resultado === null
+          ? []
+          : (
+              await l.consultar(
+                `SELECT vf.id, vf.identificador, vf.descricao, rv.valor_numerico
+                   FROM resultado_variavel_formula rv JOIN variavel_formula vf ON vf.id = rv.variavel_formula_id
+                  WHERE rv.resultado_exame_id = ? AND rv.excluido_em IS NULL ORDER BY rv.sequencia`,
+                [resultado],
+                { teto: 200 },
+              )
+            ).map((x) => ({
+              codigo: n(x['id']),
+              identificacao: texto(x['identificador']),
+              descricao: texto(x['descricao']),
+              valor: nn(x['valor_numerico']),
+            }));
+      const observacoes =
+        resultado === null
+          ? []
+          : (
+              await l.consultar(
+                'SELECT texto FROM resultado_observacao WHERE resultado_exame_id = ? AND excluido_em IS NULL ORDER BY sequencia',
+                [resultado],
+                { teto: 200 },
+              )
+            ).map((x) => texto(x['texto']));
+      const modelos = (
+        await l.consultar(
+          `SELECT id, nome, COALESCE(texto_html, nota_fixa, '') AS texto FROM modelo_resultado
+            WHERE exame_id = ? AND ativo = TRUE AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+            ORDER BY padrao DESC, nome, id`,
+          [exame.exame.id, hoje, hoje],
+          { teto: 200 },
+        )
+      ).map((x) => ({ codigo: n(x['id']), nome: texto(x['nome']), texto: texto(x['texto']) }));
+      const ld = await l.uma(
+        `SELECT ld.texto, COALESCE(pr.nome_exibicao, pf.nome, '') AS emissor FROM laudo_diagnostico ld
+           LEFT JOIN profissional pr ON pr.id = ld.laudista_profissional_id LEFT JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+          WHERE ld.exame_item_id = ? AND ld.excluido_em IS NULL AND ld.situacao <> 'cancelado'`,
+        [id],
+      );
+      const textoLaudo = ld?.['texto'] ?? re?.['texto_resultado'] ?? null;
+      const grandezas = (
+        await l.consultar(
+          `SELECT id, descricao, COALESCE(sigla, codigo) AS sigla FROM grandeza_laudo
+            WHERE exame_id = ? AND ativo = TRUE ORDER BY ordem, id`,
+          [exame.exame.id],
+          { teto: 500 },
+        )
+      ).map((x) => ({ codigo: n(x['id']), nome: texto(x['descricao']), sigla: texto(x['sigla']) }));
+      return {
+        exame,
+        elementos,
+        variaveis,
+        observacoes,
+        modelos,
+        laudo: textoLaudo === null ? null : { texto: texto(textoLaudo), html: texto(textoLaudo), emissor: texto(ld?.['emissor']) },
+        alertaDataInvalida: false,
+        bloqueado:
+          ['liberado', 'emitido', 'visualizado'].includes(exame.estado) ||
+          ['liberado', 'retificado'].includes(texto(re?.['situacao'])),
+        grandezas,
+      };
+    });
   }
-  conferencia(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['conferencia']!));
+
+  conferencia(c: ContextoSadt, id: number): Promise<ItemLiberacao | null> {
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      const [r] = await l.consultar(`${SQL_EXAME} AND ei.id = ?`, [est, id], { teto: 1 });
+      if (!r) return null;
+      const [item] = await itensDeLiberacao(l, [exameDe(r, hoje)]);
+      return item ?? null;
+    });
   }
-  filaLiberacao(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['filaLiberacao']!));
+
+  async filaLiberacao(c: ContextoSadt, f: { setor?: SetorSadt | undefined; inicio: string; fim: string }) {
+    const r = await this.examesDoSetor(c, { setor: f.setor, inicio: f.inicio, fim: f.fim, situacao: 'aLiberar' });
+    const itens = await this.ler(c, (l) => itensDeLiberacao(l, r.itens));
+    return { itens, cortada: r.cortada };
   }
 
   liberacaoVigente(c: ContextoSadt, id: number) {
@@ -826,26 +1361,234 @@ export class PortaSadtPropria implements PortaSadt {
     });
   }
 
-  laudoParaEmitir(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['laudoParaEmitir']!));
+  laudoParaEmitir(c: ContextoSadt, ids: readonly number[]): Promise<LaudoParaEmitir | null> {
+    const unicos = [...new Set(ids)];
+    if (unicos.length === 0) return Promise.resolve(null);
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      const exames = (
+        await l.consultar(`${SQL_EXAME} AND ei.id IN (${lista(unicos.length)}) ORDER BY ei.id`, [est, ...unicos])
+      ).map((r) => exameDe(r, hoje));
+      // Um laudo é de um paciente só, e todos os exames são deste estabelecimento.
+      if (exames.length !== unicos.length || new Set(exames.map((x) => x.paciente.id)).size > 1) return null;
+      const ls = await l.consultar(
+        `SELECT ei.id, ei.liberado_em, COALESCE(u.login, '') AS por, re.id AS resultado, re.texto_resultado, re.conclusao,
+                IF(ld.situacao IN ('assinado', 'emitido', 'retificado'), ld.texto, NULL) AS laudo, ld.situacao AS laudo_situacao,
+                COALESCE(lp.nome_exibicao, lpf.nome, '') AS laudista, fp.nome AS convenio
+           FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+           JOIN atendimento a ON a.id = r.atendimento_id
+           LEFT JOIN fonte_pagadora fp ON fp.id = COALESCE(r.fonte_pagadora_id, a.fonte_pagadora_id)
+           LEFT JOIN usuario u ON u.id = ei.liberado_por_usuario_id
+           LEFT JOIN resultado_exame re ON re.exame_item_id = ei.id AND re.excluido_em IS NULL
+           LEFT JOIN laudo_diagnostico ld ON ld.exame_item_id = ei.id AND ld.excluido_em IS NULL AND ld.situacao <> 'cancelado'
+           LEFT JOIN profissional lp ON lp.id = ld.laudista_profissional_id
+           LEFT JOIN pessoa_fisica lpf ON lpf.id = lp.pessoa_fisica_id
+          WHERE r.estabelecimento_id = ? AND ei.id IN (${lista(unicos.length)})`,
+        [est, ...unicos],
+      );
+      const por = new Map(ls.map((x) => [n(x['id']), x]));
+      // Exame com laudo ainda não assinado (rascunho, aguardando revisão) não sai impresso: nem o rascunho como laudo
+      // oficial, nem o texto do resultado no lugar dele.
+      const semAssinatura = ls.filter((x) => x['laudo_situacao'] !== null && !LAUDO_ASSINADO.includes(texto(x['laudo_situacao'])));
+      if (semAssinatura.length > 0)
+        throw recusa(
+          'laudo-nao-assinado',
+          `O laudo ainda não foi assinado (exame ${semAssinatura.map((x) => n(x['id'])).join(', ')}): assine-o antes de emitir.`,
+        );
+      const valores = await valoresDosResultados(
+        l,
+        ls.filter((x) => x['resultado'] !== null).map((x) => n(x['resultado'])),
+      );
+      const x0 = exames[0]!;
+      return {
+        paciente: x0.paciente,
+        atendimento: x0.atendimento.cabecalho,
+        convenio: texto(por.get(x0.id)?.['convenio']),
+        exames: exames.map((x) => {
+          const d = por.get(x.id);
+          return {
+            id: x.id,
+            nome: x.exame.nome,
+            setor: rotuloDoSetor(x.setor),
+            data: x.chave.data,
+            liberadoEm: d?.['liberado_em'] ? instante(d['liberado_em']) : null,
+            liberadoPor: texto(d?.['por']),
+            valores: d && d['resultado'] !== null ? (valores.get(n(d['resultado'])) ?? []) : [],
+            texto: linhasDoLaudo(d),
+            emissor: d?.['laudo'] === null || d?.['laudo'] === undefined ? '' : texto(d['laudista']),
+          };
+        }),
+      };
+    });
   }
-  requisicoes(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['requisicoes']!));
+
+  requisicoes(c: ContextoSadt, o: { data: string; termo?: string }) {
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      const p: unknown[] = [est, o.data, o.data];
+      let f = '';
+      if (o.termo) {
+        f = ' AND (pf.nome LIKE ? OR a.numero = ?)';
+        p.push(`%${o.termo}%`, o.termo);
+      }
+      const ls = await l.consultar(
+        `${SQL_ATENDIMENTO_LANCAMENTO} AND a.entrada_em >= ? AND a.entrada_em < DATE_ADD(?, INTERVAL 1 DAY)${f}
+          ORDER BY a.entrada_em, a.id LIMIT ${TETO_REQUISICOES + 1}`,
+        p,
+        { teto: TETO_REQUISICOES + 1 },
+      );
+      const atendimentos = ls.slice(0, TETO_REQUISICOES);
+      const contas = atendimentos.filter((r) => r['conta_id'] !== null).map((r) => n(r['conta_id']));
+      const dados = new Map<number, Linha>();
+      if (contas.length)
+        for (const r of await l.consultar(
+          `SELECT q.id, COALESCE(pr.nome_exibicao, pfp.nome, '') AS solicitante,
+                  COALESCE(g.numero_guia_operadora, g.numero_guia_prestador, '') AS guia
+             FROM requisicao_exame q
+             LEFT JOIN profissional pr ON pr.id = q.solicitante_profissional_id
+             LEFT JOIN pessoa_fisica pfp ON pfp.id = pr.pessoa_fisica_id
+             LEFT JOIN guia_tiss g ON g.id = q.guia_tiss_id AND g.excluido_em IS NULL
+            WHERE q.id IN (${lista(contas.length)})`,
+          contas,
+          { teto: contas.length },
+        ))
+          dados.set(n(r['id']), r);
+      const itens: RequisicaoLida[] = atendimentos.map((r) => {
+        const d = r['conta_id'] === null ? undefined : dados.get(n(r['conta_id']));
+        return {
+          atendimento: texto(r['numero']),
+          reg: n(r['id']),
+          paciente: pacienteDe(r, hoje),
+          convenio: { codigo: n(r['fp_id']), nome: texto(r['fp_nome']) },
+          data: dataIso(r['entrada_em']) ?? o.data,
+          conta:
+            r['conta_id'] === null
+              ? null
+              : {
+                  id: n(r['conta_id']),
+                  numero: numeroDeNegocio(r['conta_numero']),
+                  solicitante: texto(d?.['solicitante']),
+                  guia: texto(d?.['guia']),
+                },
+          exames: n(r['exames']),
+        };
+      });
+      return { itens, cortada: ls.length > TETO_REQUISICOES };
+    });
   }
-  atendimento(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['atendimento']!));
+
+  atendimento(c: ContextoSadt, atendimento: number): Promise<AtendimentoParaLancamento | null> {
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      const [r] = await l.consultar(`${SQL_ATENDIMENTO_LANCAMENTO} AND a.id = ?`, [est, atendimento], { teto: 1 });
+      return r ? atendimentoDe(r, hoje) : null;
+    });
   }
-  atendimentosPorNumero(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['atendimentosPorNumero']!));
+
+  /** O número do atendimento (o da recepção) ou o id: os dois identificam o atendimento na busca. */
+  atendimentosPorNumero(c: ContextoSadt, reg: number): Promise<AtendimentoParaLancamento[]> {
+    return this.ler(c, async (l, est) => {
+      const { hoje } = await this.hoje(l, est);
+      return (
+        await l.consultar(`${SQL_ATENDIMENTO_LANCAMENTO} AND (a.id = ? OR a.numero = ?) ORDER BY a.id`, [est, reg, String(reg)], {
+          teto: 20,
+        })
+      ).map((r) => atendimentoDe(r, hoje));
+    });
   }
-  orcamentos(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['orcamentos']!));
+
+  orcamentos(c: ContextoSadt, o: { inicio: string; fim: string; hoje: string; termo?: string; validadeDias: number }) {
+    return this.ler(c, async (l, est) => {
+      const p: unknown[] = [est, o.inicio, o.fim];
+      let f = '';
+      if (o.termo) {
+        f = ' AND COALESCE(op.nome_interessado, pf.nome) LIKE ?';
+        p.push(`%${o.termo}%`);
+      }
+      const ls = await l.consultar(
+        `${SQL_ORCAMENTO} AND op.data_orcamento BETWEEN ? AND ?${f}
+          ORDER BY op.data_orcamento DESC, op.id DESC LIMIT ${TETO_ORCAMENTOS + 1}`,
+        p,
+        { teto: TETO_ORCAMENTOS + 1 },
+      );
+      return {
+        itens: await orcamentosLidos(l, ls.slice(0, TETO_ORCAMENTOS), o.hoje),
+        cortada: ls.length > TETO_ORCAMENTOS,
+      };
+    });
   }
-  orcamento(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['orcamento']!));
+
+  orcamento(c: ContextoSadt, id: number, o: { hoje: string; validadeDias: number }) {
+    return this.ler(c, async (l, est) => {
+      const [r] = await l.consultar(`${SQL_ORCAMENTO} AND op.id = ?`, [est, id], { teto: 1 });
+      if (!r) return null;
+      const [x] = await orcamentosLidos(l, [r], o.hoje);
+      return x ? { ...x, nomeRegistrado: texto(r['nome_interessado']) || texto(r['paciente_nome']) } : null;
+    });
   }
-  apoio(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['apoio']!));
+
+  apoio(c: ContextoSadt, setor?: SetorSadt): Promise<ApoioSadtLido> {
+    return this.ler(c, async (l, est) => {
+      const tipos = setor ? TIPOS_DO_SETOR[setor] : TIPOS_SADT;
+      const prestadores = (
+        await l.consultar(
+          `SELECT id, nome, tipo FROM setor_diagnostico
+            WHERE estabelecimento_id = ? AND ativo = TRUE AND excluido_em IS NULL AND tipo IN (${lista(tipos.length)})
+            ORDER BY nome, id`,
+          [est, ...tipos],
+          { teto: 500 },
+        )
+      ).map((r) => ({ id: n(r['id']), ato: atoDoExame(texto(r['tipo']), null), codigo: n(r['id']), nome: texto(r['nome']) }));
+      // O setor do exame: o executante padrão deste estabelecimento; sem ele, o tipo de serviço do catálogo.
+      const exames = (
+        await l.consultar(
+          `SELECT x.* FROM (
+             SELECT e.id, e.codigo, e.nome, mi.sigla_padrao, mb.descricao AS material, rc.descricao AS recipiente,
+                    COALESCE((SELECT sd.tipo FROM exame_setor_executante es
+                                JOIN setor_diagnostico sd ON sd.id = es.setor_diagnostico_id
+                               WHERE es.exame_id = e.id AND es.ativo = TRUE AND es.excluido_em IS NULL
+                                 AND sd.estabelecimento_id = ? AND sd.ativo = TRUE AND sd.excluido_em IS NULL
+                               ORDER BY es.padrao DESC, es.id LIMIT 1),
+                             CASE e.tipo_servico WHEN 'laboratorio' THEN 'laboratorio' WHEN 'imagem' THEN 'imagem'
+                                  WHEN 'metodo_grafico' THEN 'metodos_graficos' END) AS tipo_setor
+               FROM exame e
+               LEFT JOIN modalidade_imagem mi ON mi.id = e.modalidade_imagem_id
+               LEFT JOIN exame_material em ON em.id = (SELECT m.id FROM exame_material m WHERE m.exame_id = e.id AND m.ativo = TRUE
+                                                          AND m.excluido_em IS NULL ORDER BY m.padrao DESC, m.id LIMIT 1)
+               LEFT JOIN material_biologico mb ON mb.id = em.material_biologico_id
+               LEFT JOIN recipiente_coleta rc ON rc.id = em.recipiente_coleta_id
+              WHERE e.ativo = TRUE AND e.excluido_em IS NULL) x
+            WHERE x.tipo_setor IN (${lista(tipos.length)}) ORDER BY x.nome, x.id LIMIT ${TETO_CATALOGO}`,
+          [est, ...tipos],
+          { teto: TETO_CATALOGO },
+        )
+      ).map((r) => ({
+        id: n(r['id']),
+        ato: atoDoExame(texto(r['tipo_setor']), r['sigla_padrao'] === null ? null : texto(r['sigla_padrao'])),
+        codigo: texto(r['codigo']),
+        nome: texto(r['nome']),
+        material: r['material'] === null ? null : texto(r['material']),
+        recipiente: r['recipiente'] === null ? null : texto(r['recipiente']),
+      }));
+      const kits = (
+        await l.consultar('SELECT id, nome FROM kit_exame WHERE ativo = TRUE AND excluido_em IS NULL ORDER BY nome, id', [], {
+          teto: TETO_CATALOGO,
+        })
+      ).map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
+      const recipientes = (
+        await l.consultar('SELECT id, descricao FROM recipiente_coleta WHERE ativo = TRUE ORDER BY descricao, id', [], {
+          teto: TETO_CATALOGO,
+        })
+      ).map((r) => ({ codigo: n(r['id']), nome: texto(r['descricao']) }));
+      const convenios = (
+        await l.consultar(
+          "SELECT id, nome FROM fonte_pagadora WHERE situacao = 'ativa' AND excluido_em IS NULL ORDER BY nome, id",
+          [],
+          { teto: TETO_CATALOGO },
+        )
+      ).map((r) => ({ codigo: n(r['id']), nome: texto(r['nome']) }));
+      return { prestadores, exames, kits, recipientes, convenios };
+    });
   }
 
   vinculos(c: ContextoSadt, login: string): Promise<VinculoDaSessao[]> {
@@ -961,20 +1704,154 @@ export class PortaSadtPropria implements PortaSadt {
     });
   }
 
-  parametros(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['parametros']!));
+  /**
+   * Os parâmetros do SADT (parametro_definicao `sadt.*`) com o valor efetivo: o do usuário antes do do estabelecimento,
+   * e este antes do da rede; sem valor, o padrão da definição. Os do setor (`sadt.<setor>.*`) só aparecem no próprio
+   * setor. O modelo não guarda segredo em parâmetro (credencial vai ao cofre): não há campo oculto a listar.
+   */
+  parametros(c: ContextoSadt, setor: SetorSadt, usuario: string) {
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT d.chave, d.descricao, d.valor_padrao,
+                (SELECT v.valor FROM parametro_valor v LEFT JOIN usuario u ON u.id = v.usuario_id
+                  WHERE v.parametro_definicao_id = d.id AND v.vigencia_inicio <= NOW()
+                    AND (v.vigencia_fim IS NULL OR v.vigencia_fim > NOW())
+                    AND ((v.nivel = 'usuario' AND u.login = ?) OR (v.nivel = 'estabelecimento' AND v.estabelecimento_id = ?)
+                         OR v.nivel = 'rede')
+                  ORDER BY FIELD(v.nivel, 'usuario', 'estabelecimento', 'rede'), v.vigencia_inicio DESC LIMIT 1) AS valor
+           FROM parametro_definicao d
+          WHERE d.ativo = TRUE AND d.chave LIKE 'sadt.%' ORDER BY d.chave`,
+        [usuario, est],
+        { teto: 1000 },
+      );
+      const outros = SETORES_SADT.map((s) => s.codigo).filter((s) => s !== setor);
+      return {
+        campos: ls
+          .filter((r) => !outros.some((s) => texto(r['chave']).startsWith(`sadt.${s}.`)))
+          .map((r) => ({
+            campo: texto(r['chave']),
+            rotulo: texto(r['descricao']),
+            valor: texto(r['valor'] ?? r['valor_padrao']),
+          })),
+        ocultos: [],
+      };
+    });
   }
-  indicadores(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['indicadores']!));
+
+  /**
+   * O tempo de atendimento do período (regra 12), agregado no banco: do pedido à liberação, do pedido à coleta (o
+   * primeiro evento "coletada" do rastreio) e da coleta à liberação, cada média com quantos exames entram nela; o
+   * pendente há mais de 24 h pela hora do estabelecimento; e a visualização no portal das liberações publicadas.
+   */
+  indicadores(c: ContextoSadt, o: { inicio: string; fim: string; setor?: SetorSadt | undefined; agora: Date }) {
+    return this.ler(c, async (l, est) => {
+      const { agora } = await this.hoje(l, est);
+      const tipos = o.setor ? TIPOS_DO_SETOR[o.setor] : TIPOS_SADT;
+      const base = `
+        SELECT sd.tipo, CASE WHEN ei.urgente = TRUE OR r.prioridade <> 'rotina' THEN 'urgente' ELSE 'rotina' END AS prioridade,
+               r.solicitado_em AS s, ei.liberado_em AS l, ei.situacao IN ('liberado', 'entregue') AS lib,
+               (SELECT MIN(ev.ocorrido_em) FROM amostra_biologica_exame abe
+                  JOIN amostra_biologica_evento ev ON ev.amostra_biologica_id = abe.amostra_biologica_id
+                 WHERE abe.exame_item_id = ei.id AND abe.excluido_em IS NULL AND ev.evento = 'coletada') AS c,
+               EXISTS (SELECT 1 FROM liberacao_resultado_portal lp JOIN resultado_exame re ON re.id = lp.resultado_exame_id
+                        WHERE re.exame_item_id = ei.id AND lp.primeira_visualizacao_em IS NOT NULL) AS vis
+          FROM exame_item ei JOIN requisicao_exame r ON r.id = ei.requisicao_exame_id
+          JOIN setor_diagnostico sd ON sd.id = COALESCE(ei.setor_diagnostico_id, r.setor_diagnostico_id)
+         WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL AND ei.excluido_em IS NULL
+           AND ei.situacao NOT IN ('cancelado', 'recusado')
+           AND r.solicitado_em >= ? AND r.solicitado_em < DATE_ADD(?, INTERVAL 1 DAY) AND sd.tipo IN (${lista(tipos.length)})`;
+      const p = [est, o.inicio, o.fim, ...tipos];
+      const pl = 'x.lib AND x.l IS NOT NULL AND x.l >= x.s';
+      const pc = 'x.c IS NOT NULL AND x.c >= x.s';
+      const cl = `${pc} AND x.lib AND x.l IS NOT NULL AND x.l > x.c`;
+      const linhas = await l.consultar(
+        `SELECT x.tipo, x.prioridade, COUNT(*) AS exames, SUM(x.lib) AS liberados,
+                SUM(${pl}) AS com_marcas, ROUND(AVG(CASE WHEN ${pl} THEN TIMESTAMPDIFF(SECOND, x.s, x.l) / 60 END)) AS media_pl,
+                SUM(${pc}) AS com_coleta, ROUND(AVG(CASE WHEN ${pc} THEN TIMESTAMPDIFF(SECOND, x.s, x.c) / 60 END)) AS media_pc,
+                SUM(${cl}) AS com_cl, ROUND(AVG(CASE WHEN ${cl} THEN TIMESTAMPDIFF(SECOND, x.c, x.l) / 60 END)) AS media_cl
+           FROM (${base}) x GROUP BY x.tipo, x.prioridade ORDER BY x.tipo, x.prioridade`,
+        p,
+        { teto: 100 },
+      );
+      const dias = await l.consultar(
+        `SELECT DATE(x.s) AS dia, COUNT(*) AS exames FROM (${base}) x GROUP BY DATE(x.s) ORDER BY dia`,
+        p,
+        { teto: 400 },
+      );
+      const tot = await l.uma(
+        `SELECT COALESCE(SUM(NOT x.lib AND x.s < DATE_SUB(?, INTERVAL 24 HOUR)), 0) AS pendentes,
+                COALESCE(SUM(x.lib), 0) AS liberados, COALESCE(SUM(x.lib AND x.vis), 0) AS visualizados
+           FROM (${base}) x`,
+        [agora.replace('T', ' '), ...p],
+      );
+      return {
+        linhas: linhas.map((r) => {
+          const comMarcas = n(r['com_marcas']);
+          return {
+            setor: setorDoTipo(texto(r['tipo'])) ?? 'laboratorio',
+            prioridade: texto(r['prioridade']) === 'urgente' ? ('urgente' as const) : ('rotina' as const),
+            exames: n(r['exames']),
+            liberados: n(r['liberados']),
+            mediaMinutosPedidoLiberacao: nn(r['media_pl']),
+            comMarcas,
+            semMarcas: n(r['liberados']) - comMarcas,
+            mediaMinutosPedidoColeta: nn(r['media_pc']),
+            comColeta: n(r['com_coleta']),
+            mediaMinutosColetaLiberacao: nn(r['media_cl']),
+            comColetaLiberacao: n(r['com_cl']),
+          };
+        }),
+        porDia: dias.map((r) => ({ dia: dataIso(r['dia']) ?? '', exames: n(r['exames']) })),
+        pendentesMais24h: n(tot?.['pendentes']),
+        visualizadosPortal: { liberados: n(tot?.['liberados']), visualizados: n(tot?.['visualizados']) },
+      };
+    });
   }
-  laudosPortalDoPaciente(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['laudosPortalDoPaciente']!));
+
+  // ── Portal de resultados: os laudos publicados (liberacao_resultado_portal) ─────────────────────────────────
+
+  laudosPortalDoPaciente(c: ContextoSadt, o: { paciente: number; reg: number | null; atos: readonly number[] }) {
+    return this.ler(c, async (l, est) => {
+      const { agora } = await this.hoje(l, est);
+      const p: unknown[] = [est, agora.replace('T', ' '), o.paciente];
+      let f = ' AND r.paciente_id = ?';
+      if (o.reg !== null) {
+        f += ' AND r.atendimento_id = ?';
+        p.push(o.reg);
+      }
+      return laudosDoPortal(l, f, p, o.atos, false);
+    });
   }
-  laudosPortalDoMedico(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['laudosPortalDoMedico']!));
+
+  laudosPortalDoMedico(c: ContextoSadt, o: { solicitante: number; atos: readonly number[]; desde: string }) {
+    return this.ler(c, async (l, est) => {
+      const { agora } = await this.hoje(l, est);
+      return laudosDoPortal(
+        l,
+        ' AND r.solicitante_profissional_id = ? AND lp.liberado_em >= ?',
+        [est, agora.replace('T', ' '), o.solicitante, o.desde],
+        o.atos,
+        true,
+      );
+    });
   }
-  laudoPortal(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['laudoPortal']!));
+
+  laudoPortal(c: ContextoSadt, liberacao: number): Promise<LaudoPortalLido | null> {
+    return this.ler(c, async (l, est) => {
+      const { agora } = await this.hoje(l, est);
+      const [r] = await l.consultar(`${SQL_LAUDO_PORTAL} AND lp.id = ?`, [est, agora.replace('T', ' '), liberacao], { teto: 1 });
+      if (!r) return null;
+      const valores = await valoresDosResultados(l, [n(r['resultado'])]);
+      return {
+        laudo: laudoDoPortal(r, true),
+        ato: atoDoPortal(r),
+        paciente: n(r['paciente_id']),
+        reg: n(r['atendimento_id']),
+        solicitante: nn(r['solicitante_profissional_id']),
+        valores: valores.get(n(r['resultado'])) ?? [],
+        texto: linhasDoLaudo(r),
+      };
+    });
   }
 
   pacienteDoAtendimento(c: ContextoSadt, reg: number) {
@@ -1009,8 +1886,62 @@ export class PortaSadtPropria implements PortaSadt {
   acessoPorId(): Promise<never> {
     return Promise.reject(pendente(LEITURAS_PENDENTES['acessoPorId']!));
   }
-  autocadastros(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['autocadastros']!));
+  /**
+   * Os autocadastros de médicos externos (pedido_vinculo_profissional_externo) do estabelecimento desde a data, com a
+   * situação da conta aprovada e os candidatos: os profissionais do cadastro com a mesma inscrição (conselho, UF e
+   * número), que a aprovação liga à conta do portal.
+   */
+  autocadastros(c: ContextoSadt, o: { desde: string }): Promise<AutocadastroPortalLido[]> {
+    return this.ler(c, async (l, est) => {
+      const ls = await l.consultar(
+        `SELECT pv.id, pv.nome, cc.sigla AS conselho, uf.sigla AS uf, pv.numero_conselho, pv.situacao, pv.solicitado_em,
+                pv.conselho_classe_id, pv.conselho_unidade_federativa_id, cp.situacao AS situacao_conta
+           FROM pedido_vinculo_profissional_externo pv
+           JOIN conselho_classe cc ON cc.id = pv.conselho_classe_id
+           JOIN unidade_federativa uf ON uf.id = pv.conselho_unidade_federativa_id
+           LEFT JOIN conta_portal_profissional_externo cp ON cp.id = pv.conta_portal_profissional_externo_id
+          WHERE pv.estabelecimento_id = ? AND pv.excluido_em IS NULL AND pv.situacao <> 'cancelado' AND pv.solicitado_em >= ?
+          ORDER BY pv.solicitado_em DESC, pv.id DESC LIMIT 500`,
+        [est, o.desde],
+        { teto: 500 },
+      );
+      const numeros = [...new Set(ls.map((r) => texto(r['numero_conselho'])))];
+      const candidatos = new Map<string, { id: number; nome: string }[]>();
+      if (numeros.length)
+        for (const r of await l.consultar(
+          `SELECT ic.conselho_classe_id, ic.unidade_federativa_id, ic.numero_inscricao, pr.id, COALESCE(pr.nome_exibicao, pf.nome) AS nome
+             FROM inscricao_conselho ic JOIN profissional pr ON pr.id = ic.profissional_id AND pr.excluido_em IS NULL
+             JOIN pessoa_fisica pf ON pf.id = pr.pessoa_fisica_id
+            WHERE ic.excluido_em IS NULL AND ic.numero_inscricao IN (${lista(numeros.length)})
+            ORDER BY nome, pr.id`,
+          numeros,
+          { teto: 5000 },
+        )) {
+          const k = `${n(r['conselho_classe_id'])}:${n(r['unidade_federativa_id'])}:${texto(r['numero_inscricao'])}`;
+          const v = candidatos.get(k) ?? [];
+          if (!v.some((x) => x.id === n(r['id']))) v.push({ id: n(r['id']), nome: texto(r['nome']) });
+          candidatos.set(k, v);
+        }
+      return ls.map((r) => {
+        const sit = texto(r['situacao']);
+        const conta = r['situacao_conta'] === null ? null : texto(r['situacao_conta']);
+        return {
+          id: n(r['id']),
+          nome: texto(r['nome']),
+          conselho: texto(r['conselho']),
+          uf: texto(r['uf']),
+          numero: texto(r['numero_conselho']),
+          situacao: sit === 'aprovado' ? ('aprovado' as const) : sit === 'recusado' ? ('recusado' as const) : ('pendente' as const),
+          ...(conta === null ? {} : { situacaoConta: SITUACAO_DA_CONTA[conta] ?? conta }),
+          pedidoEm: instante(r['solicitado_em']),
+          origem: 'novo' as const,
+          candidatos:
+            candidatos.get(
+              `${n(r['conselho_classe_id'])}:${n(r['conselho_unidade_federativa_id'])}:${texto(r['numero_conselho'])}`,
+            ) ?? [],
+        };
+      });
+    });
   }
 
   atosPublicados(c: ContextoSadt) {
@@ -1062,6 +1993,11 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
   const usuario = tx.contexto.usuario;
   const agora = () => new Date();
   const nao = (o: string) => () => Promise.reject(pendente(GRAVACOES_PENDENTES[o]!));
+  /** A data de hoje na hora do estabelecimento (as colunas DATE da gravação). */
+  const hojeDoEstabelecimento = async () => {
+    const f = await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+    return relogioNoFuso(texto(f?.['fuso_horario']) || FUSO_PADRAO).hoje;
+  };
   return {
     async registrarColeta(a) {
       if (a.exames.length === 0) throw recusa('sem-exames', 'Escolha ao menos um exame para coletar.');
@@ -1322,9 +2258,34 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
     },
 
     async registrarLeitura(r) {
-      // A leitura no portal (paciente ou médico externo, sem usuário interno) é registrada pela operação de
-      // visualização no portal (acesso_resultado_portal), ainda pendente no banco: recusa explícita, nunca silêncio.
-      if (r.origem === 'portal') throw pendente('o registro da leitura do resultado feita no portal');
+      // A leitura no portal (paciente ou médico externo, sem usuário interno) vai à publicação vigente do resultado no
+      // portal (não vencida, como na leitura). Todo acesso fica no registro de acessos (auditoria do acesso a dado de
+      // saúde) e soma uma visualização; a primeira abertura marca também a publicação.
+      if (r.origem === 'portal') {
+        const quando = agora();
+        const [lp] = await tx.consultarParaAtualizar(
+          `SELECT lp.id, lp.versao, lp.primeira_visualizacao_em, lp.visualizacoes FROM liberacao_resultado_portal lp
+             JOIN resultado_exame re ON re.id = lp.resultado_exame_id
+            WHERE re.exame_item_id = ? AND lp.estabelecimento_id = ? AND lp.situacao = 'liberado' AND lp.excluido_em IS NULL
+              AND (lp.disponivel_ate IS NULL OR lp.disponivel_ate > ?)
+            ORDER BY lp.liberado_em DESC, lp.id DESC LIMIT 1`,
+          [r.exameItem, est, quando],
+          { teto: 1 },
+        );
+        if (!lp) throw recusa('resultado-nao-publicado', 'O resultado não está publicado no portal.');
+        await tx.incluir('acesso_resultado_portal', {
+          liberacao_resultado_portal_id: n(lp['id']),
+          operacao: 'inclusao',
+          ocorrido_em: quando,
+          usuario_id: usuario,
+          tipo_acesso: 'visualizacao',
+        });
+        await tx.alterar('liberacao_resultado_portal', n(lp['id']), n(lp['versao']), {
+          ...(lp['primeira_visualizacao_em'] === null ? { primeira_visualizacao_em: quando } : {}),
+          visualizacoes: n(lp['visualizacoes']) + 1,
+        });
+        return;
+      }
       if (usuario === null) throw recusa('sem-usuario', 'A leitura do resultado exige o usuário da sessão.');
       const re = await tx.uma(
         `SELECT re.id, re.paciente_id FROM resultado_exame re JOIN exame_item ei ON ei.id = re.exame_item_id
@@ -1350,7 +2311,40 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
     },
 
     registrarOrcamento: nao('registrarOrcamento'),
-    marcarOrcamentoConvertido: nao('marcarOrcamentoConvertido'),
+
+    async marcarOrcamentoConvertido(r) {
+      const hoje = await hojeDoEstabelecimento();
+      const [o] = await tx.consultarParaAtualizar(
+        `SELECT op.id, op.versao, op.situacao, op.paciente_id, op.aceito_em, op.validade_ate < ? AS vencido
+           FROM orcamento_particular op
+          WHERE op.id = ? AND op.estabelecimento_id = ? AND op.excluido_em IS NULL
+            AND EXISTS (SELECT 1 FROM orcamento_particular_item oi WHERE oi.orcamento_particular_id = op.id
+                           AND oi.tipo_item = 'exame' AND oi.excluido_em IS NULL)`,
+        [hoje, r.orcamento, est],
+        { teto: 1 },
+      );
+      // Só o orçamento do diagnóstico (com item de exame) se converte por aqui; o de internação ou outro não existe nesta porta.
+      if (!o) throw recusa('orcamento-inexistente', 'O orçamento de exames não existe neste estabelecimento.');
+      if (texto(o['situacao']) === 'realizado') throw recusa('orcamento-convertido', 'O orçamento já foi convertido.');
+      // O rascunho converte: no setor o orçamento é feito e aceito no balcão, e a conversão registra o aceite (aceito_em).
+      // Vencido pela data (validade antes de hoje no fuso do estabelecimento) não converte, como a leitura o mostra.
+      if (!['rascunho', 'emitido', 'aceito'].includes(texto(o['situacao'])) || verdadeiro(o['vencido']))
+        throw recusa('orcamento-indisponivel', 'O orçamento recusado, vencido ou cancelado não se converte.');
+      const a = await tx.uma(
+        "SELECT id, paciente_id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'",
+        [r.atendimento, est],
+      );
+      if (!a) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento.');
+      if (o['paciente_id'] !== null && n(o['paciente_id']) !== n(a['paciente_id']))
+        throw recusa('paciente-divergente', 'O orçamento é de outro paciente.');
+      const quando = agora();
+      await tx.alterar('orcamento_particular', r.orcamento, n(o['versao']), {
+        situacao: 'realizado',
+        atendimento_id: r.atendimento,
+        aceito_em: o['aceito_em'] ?? quando,
+        realizado_em: hoje,
+      });
+    },
 
     async registrarLaudoEmitido(r) {
       const ids = r.idsExames ?? [];
@@ -1410,7 +2404,74 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
 
     criarProtocoloPortal: nao('criarProtocoloPortal'),
     registrarAutocadastro: nao('registrarAutocadastro'),
-    decidirAutocadastro: nao('decidirAutocadastro'),
+
+    async decidirAutocadastro(r) {
+      const [pv] = await tx.consultarParaAtualizar(
+        `SELECT id, versao, situacao, email, conselho_classe_id, conselho_unidade_federativa_id, numero_conselho
+           FROM pedido_vinculo_profissional_externo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [r.id, est],
+        { teto: 1 },
+      );
+      if (!pv) throw recusa('autocadastro-inexistente', 'O autocadastro não existe neste estabelecimento.');
+      if (!['pendente', 'em_conferencia'].includes(texto(pv['situacao'])))
+        throw recusa('autocadastro-decidido', 'O autocadastro já foi decidido.');
+      const quando = agora();
+      if (!r.aprovar) {
+        await tx.alterar('pedido_vinculo_profissional_externo', r.id, n(pv['versao']), {
+          situacao: 'recusado',
+          conferido_em: quando,
+          conferido_por_usuario_id: usuario,
+          motivo_recusa: r.motivo?.slice(0, 500) ?? null,
+        });
+        return;
+      }
+      // A aprovação liga o pedido ao profissional do cadastro com a mesma inscrição (conselho, UF e número).
+      if (r.solicitante === null) throw recusa('solicitante-obrigatorio', 'Escolha o médico do cadastro que o pedido liga.');
+      const pr = await tx.uma(
+        `SELECT pr.id, pr.pessoa_fisica_id FROM profissional pr
+           JOIN inscricao_conselho ic ON ic.profissional_id = pr.id AND ic.excluido_em IS NULL
+          WHERE pr.id = ? AND pr.excluido_em IS NULL AND ic.conselho_classe_id = ? AND ic.unidade_federativa_id = ?
+            AND ic.numero_inscricao = ? LIMIT 1`,
+        [r.solicitante, pv['conselho_classe_id'], pv['conselho_unidade_federativa_id'], pv['numero_conselho']],
+      );
+      if (!pr) throw recusa('solicitante-divergente', 'O médico escolhido não tem a inscrição do pedido.');
+      const [ja] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, situacao FROM conta_portal_profissional_externo WHERE profissional_id = ? AND excluido_em IS NULL',
+        [r.solicitante],
+        { teto: 1 },
+      );
+      let conta: number;
+      if (ja) {
+        conta = n(ja['id']);
+        if (texto(ja['situacao']) === 'pendente')
+          await tx.alterar('conta_portal_profissional_externo', conta, n(ja['versao']), {
+            situacao: 'ativa',
+            autorizada_em: quando,
+            autorizada_por_usuario_id: usuario,
+          });
+      } else {
+        const email = texto(pv['email']);
+        if (await tx.uma('SELECT id FROM conta_portal_profissional_externo WHERE login = ?', [email]))
+          throw recusa('login-em-uso', 'O e-mail do pedido já é o acesso de outra conta do portal.');
+        conta = await tx.incluir('conta_portal_profissional_externo', {
+          profissional_id: r.solicitante,
+          pessoa_fisica_id: n(pr['pessoa_fisica_id']),
+          pedido_vinculo_profissional_externo_id: r.id,
+          login: email,
+          email,
+          situacao: 'ativa',
+          autorizada_em: quando,
+          autorizada_por_usuario_id: usuario,
+          origem: 'sistema',
+        });
+      }
+      await tx.alterar('pedido_vinculo_profissional_externo', r.id, n(pv['versao']), {
+        situacao: 'aprovado',
+        conferido_em: quando,
+        conferido_por_usuario_id: usuario,
+        conta_portal_profissional_externo_id: conta,
+      });
+    },
     registrarTentativaPortal: nao('registrarTentativaPortal'),
   };
 }

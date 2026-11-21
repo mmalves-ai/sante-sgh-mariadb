@@ -37,6 +37,35 @@ export function ctxBanco(est: number, codigo: string, usuario: number | null): C
 /** Apaga o que a integração gravou nos estabelecimentos da massa. */
 export async function limparQualidade(e: Escritor, ests: readonly number[]): Promise<void> {
   const em = ests.map(() => '?').join(', ');
+  // A gestão (riscos, não conformidades e o plano de ação delas): o plano e a não conformidade se apontam.
+  await e.executar(`UPDATE nao_conformidade_qualidade SET plano_acao_qualidade_id = NULL WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE v FROM nao_conformidade_qualidade_evento v JOIN nao_conformidade_qualidade n ON n.id = v.nao_conformidade_qualidade_id WHERE n.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(
+    `DELETE a FROM acao_plano_qualidade a JOIN plano_acao_qualidade p ON p.id = a.plano_acao_qualidade_id WHERE p.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM plano_acao_qualidade WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE c FROM analise_incidente_causa c JOIN analise_incidente a ON a.id = c.analise_incidente_id WHERE a.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM analise_incidente WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM nao_conformidade_qualidade WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(`DELETE FROM risco_institucional WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE v FROM manifestacao_ouvidoria_evento v JOIN manifestacao_ouvidoria o ON o.id = v.manifestacao_ouvidoria_id WHERE o.estabelecimento_id IN (${em})`,
+    ests,
+  );
+  await e.executar(`DELETE FROM manifestacao_ouvidoria WHERE estabelecimento_id IN (${em})`, ests);
+  await e.executar(
+    `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em})
+        AND (tipo LIKE 'risco_institucional_%' OR tipo LIKE 'nao_conformidade_qualidade_%' OR tipo LIKE 'plano_acao_qualidade_%'
+             OR tipo LIKE 'manifestacao_ouvidoria_%')`,
+    ests,
+  );
   await e.executar(
     `DELETE v FROM notificacao_incidente_envio v JOIN notificacao_incidente n ON n.id = v.notificacao_incidente_id WHERE n.estabelecimento_id IN (${em})`,
     ests,

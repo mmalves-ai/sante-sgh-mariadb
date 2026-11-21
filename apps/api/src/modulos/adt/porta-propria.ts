@@ -248,14 +248,14 @@ export class PortaAdtPropria implements PortaAdt {
       tipoAcomodacao: texto(r['tipo_acomodacao']),
       intensiva: verdadeiro(r['terapia_intensiva']),
       entrada: e.data,
-      horaEntrada: e.hhmm,
+      horaEntrada: e.hora,
       alta: s?.data ?? null,
-      horaSaida: s?.hhmm ?? null,
+      horaSaida: s?.hora ?? null,
       convenio: { codigo: n(r['fonte_pagadora_id']), nome: texto(r['convenio']) },
       clinica: clinicaDaClassificacao(r['classificacao']),
       especialidade: { codigo: n(r['especialidade_medica_id']), nome: texto(r['especialidade']) },
       medicoAssistente: texto(r['medico']),
-      diasInternacao: diariasFaturaveis(e.data, s?.data ?? hoje, s?.hhmm ?? '0000'),
+      diasInternacao: diariasFaturaveis(e.data, s?.data ?? hoje, s?.hora ?? '00:00'),
       isolamento: verdadeiro(r['isolamento']),
       altaMedica:
         r['am_em'] !== null && r['am_em'] !== undefined && r['situacao'] !== 'alta'
@@ -390,9 +390,9 @@ export class PortaAdtPropria implements PortaAdt {
             leito: { bloco: texto(t['bloco']), acomodacao: texto(t['acomodacao']), leito: texto(t['leito']) },
             tipo: { codigo: n(t['tipo']), nome: texto(t['tipo_nome']) },
             entrada: a.data,
-            horaEntrada: a.hhmm,
+            horaEntrada: a.hora,
             saida: b?.data ?? null,
-            horaSaida: b?.hhmm ?? null,
+            horaSaida: b?.hora ?? null,
           };
         }),
         guias: extra?.['numero_guia']
@@ -412,7 +412,7 @@ export class PortaAdtPropria implements PortaAdt {
           const tipo = tipoTroca(texto(t['dado_trocado']));
           const [de, para] =
             tipo === 'convenio' ? [t['fa'], t['fn']] : tipo === 'especialidade' ? [t['ea'], t['en']] : [t['pa'], t['pn']];
-          return { tipo, data: d.data, hora: d.hhmm, de: texto(de), para: texto(para), usuario: texto(t['login']) };
+          return { tipo, data: d.data, hora: d.hora, de: texto(de), para: texto(para), usuario: texto(t['login']) };
         }) as DetalheInternacao['trocas'],
         contas: [{ conta: n(extra?.['atendimento_id']), inicio: resumo.entrada, fim: resumo.alta, tipo: 'internacao', guias: extra?.['numero_guia'] ? 1 : 0 }],
         procedimentosExtras: [],
@@ -494,7 +494,7 @@ export class PortaAdtPropria implements PortaAdt {
           prontuario: n(r['numero_prontuario']),
           nome: texto(r['nome']),
           dataPrevista: semData ? DATA_SEM_DATA_PRE : d.data,
-          horaPrevista: semData ? '' : d.hhmm,
+          horaPrevista: semData ? '' : d.hora,
           situacao: pendente(r['situacao']) ? 'pendente' : 'outra',
           problema: semData ? 'sem-data' : null,
           convenio: { codigo: n(r['fonte_pagadora_id']), nome: texto(r['convenio']) },
@@ -674,9 +674,9 @@ export class PortaAdtPropria implements PortaAdt {
             leito: { bloco: texto(r['bloco']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) },
             tipo: { codigo: n(r['tipo']), nome: texto(r['tipo_nome']) },
             entrada: a.data,
-            horaEntrada: a.hhmm,
+            horaEntrada: a.hora,
             saida: b?.data ?? null,
-            horaSaida: b?.hhmm ?? null,
+            horaSaida: b?.hora ?? null,
             horas: Math.round(((fim - (r['data_hora_inicio'] as Date).getTime()) / 3_600_000) * 10) / 10,
           };
         }),
@@ -1077,7 +1077,7 @@ export class PortaAdtPropria implements PortaAdt {
       const item = (r: Linha): ItemIncoerencia => {
         const e = civil(r['data_hora_entrada'] as Date, fuso);
         const s = r['data_hora_alta'] ? civil(r['data_hora_alta'] as Date, fuso) : null;
-        return { reg: n(r['id']), prontuario: n(r['numero_prontuario']), entrada: e.data, horaEntrada: e.hhmm, alta: s?.data ?? null, horaSaida: s?.hhmm ?? null };
+        return { reg: n(r['id']), prontuario: n(r['numero_prontuario']), entrada: e.data, horaEntrada: e.hora, alta: s?.data ?? null, horaSaida: s?.hora ?? null };
       };
       const semTrecho = await l.consultar(
         `SELECT i.id, p.numero_prontuario, i.data_hora_entrada, i.data_hora_alta FROM internacao i JOIN paciente p ON p.id = i.paciente_id
@@ -1133,7 +1133,7 @@ export class PortaAdtPropria implements PortaAdt {
         nascimento: r['data_nascimento'] ? (r['data_nascimento'] as Date).toISOString().slice(0, 10) : null,
         convenio: texto(r['convenio']),
         entrada: e.data,
-        hora: e.hhmm,
+        hora: e.hora,
         leito: chaveTextoLeito({ bloco: texto(r['bloco']), acomodacao: texto(r['acomodacao']), leito: texto(r['leito']) }),
         medico: texto(r['medico']),
         alergia: verdadeiro(r['alergia']),

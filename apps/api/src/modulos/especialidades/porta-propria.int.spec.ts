@@ -41,6 +41,8 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     exameOft: 0,
     prescricao: 0,
     sexoF: 0,
+    conferente: 0,
+    terceiro: 0,
   };
   let ctx: ContextoNucleo;
   const trilha: TrilhaDaGravacao = {
@@ -77,12 +79,18 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
 
   const limpar = (e: Escritor) =>
     (async () => {
+      await e.executar('DELETE FROM registro_nascimento WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar(
         'DELETE r FROM partograma_registro r JOIN partograma p ON p.id = r.partograma_id WHERE p.estabelecimento_id = ?',
         [ids.est],
       );
       await e.executar('DELETE FROM partograma WHERE estabelecimento_id = ?', [ids.est]);
-      await e.executar('DELETE FROM registro_nascimento WHERE estabelecimento_id = ?', [ids.est]);
+      for (const t of ['preparo_lactario_evento', 'preparo_lactario_item'])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN preparo_lactario p ON p.id = x.preparo_lactario_id WHERE p.estabelecimento_id IN (?, ?)`,
+          [ids.est, ids.outroEst],
+        );
+      await e.executar('DELETE FROM preparo_lactario WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
       await e.executar('DELETE FROM prescricao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM internacao WHERE estabelecimento_id = ?', [ids.est]);
       await e.executar('DELETE FROM atendimento WHERE estabelecimento_id = ?', [ids.est]);
@@ -280,6 +288,37 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
       ids.tipoProtocolo = await cat('tipo_protocolo_oncologico', `${P}-QT`);
       ids.grupoOft = await cat('grupo_exame_oftalmologico', `${P}-G`);
       ids.exameOft = await cat('tipo_exame_oftalmologico', `${P}-TON`, 'grupo_exame_oftalmologico_id', [ids.grupoOft]);
+      // Lactário: a fórmula do cadastro, o manipulador (colaborador do usuário) e outra pessoa para a conferência.
+      await garantir(
+        e,
+        'SELECT id FROM formula_lactea WHERE estabelecimento_id = ? AND codigo = ?',
+        [ids.est, `${P}-F1`],
+        `INSERT INTO formula_lactea (estabelecimento_id, codigo, nome, tipo, validade_apos_preparo_horas, criado_em)
+         VALUES (?, ?, ?, 'formula_infantil', 24, ?)`,
+        [ids.est, `${P}-F1`, `FORMULA SINTETICA ${P}`, agora],
+      );
+      await garantir(
+        e,
+        'SELECT id FROM colaborador WHERE usuario_id = ?',
+        [ids.usuario],
+        `INSERT INTO colaborador (usuario_id, nome, cpf, data_nascimento, sexo_id, grau_instrucao, criado_em)
+         VALUES (?, ?, '92020600001', '1990-01-01', ?, '07', ?)`,
+        [ids.usuario, `MANIPULADORA SINTETICA ${P}`, sexoF, agora],
+      );
+      ids.conferente = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        ['l0206.confere'],
+        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+        ['l0206.confere', 'CONFERENTE SINTETICO L0206', agora],
+      );
+      ids.terceiro = await garantir(
+        e,
+        'SELECT id FROM usuario WHERE login = ?',
+        ['l0206.terceiro'],
+        "INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, 'servico', ?)",
+        ['l0206.terceiro', 'TERCEIRO SINTETICO L0206', agora],
+      );
     });
     ctx = { cliente: CLIENTE, estabelecimento: ids.est, usuario: ids.usuario, correlacao: 'teste-02-06-esp' };
     porta = new PortaEspecialidadesPropria(nucleo);
@@ -362,7 +401,18 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     expect(await recusa(ctx, ponto({ paciente: ids.paciente + 999_999 }))).toBe('paciente-divergente');
     expect(await recusa(ctx, ponto({ dilatacaoCm: 12 }))).not.toBe('');
     const pend = await porta
-      .gravarSgh(ctx, trilha, (g) => g.registrarOrdem({ ...ponto(), formula: 'F', volumeMl: 10, horarios: [], preparoEm: '', validadeEm: '', lote: null, observacao: null }))
+      .gravarSgh(ctx, trilha, (g) =>
+        g.registrarExame({
+          ...ponto(),
+          od: { avSc: null, avCc: null, pio: null, gonio: null },
+          oe: { avSc: null, avCc: null, pio: null, gonio: null },
+          metodoPio: null,
+          classificacao: 'normal',
+          alertas: [],
+          conduta: null,
+          itens: [],
+        }),
+      )
       .catch((e: unknown) => e);
     expect(codigoDe(pend)).toBe('modelo-pendente');
     expect((await porta.partograma(ctx, ids.internacao)).length).toBe(2);
@@ -447,5 +497,80 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     expect(gravados.join(' ')).toMatch(/linha de alerta/);
     const lido = (await p.partograma(c, internacao, faseAtivaCm)).find((x) => x.em === '2026-11-20T14:00');
     expect(lido?.alertas).toEqual(gravados);
+  });
+
+  it('recém-nascido: grava pela internação da mãe, numera o nascimento e lê a reanimação e a observação', async () => {
+    const rn = {
+      internacao: ids.internacao, prontuario: 920_206_101, paciente: ids.paciente, vinculo: ids.profissional, usuario: 'l0206.teste',
+      nascimentoEm: '2026-11-20T18:30', sexo: 'F' as const, pesoG: 3200, comprimentoCm: 49, perimetroCefalicoCm: 34, apgar1: 8,
+      apgar5: 9, apgar10: null, igSemanas: 39, igDias: 2, tipoParto: ids.tipoParto, reanimacao: true,
+      classificacaoIg: 'a termo', classificacaoPeso: 'adequado', classificacaoApgar: 'boa vitalidade', observacao: 'Observação sintética.',
+    };
+    const id = await porta.gravarSgh(ctx, { ...trilha, entidade: 'registro_nascimento' }, (g) => g.registrarRecemNascido(rn));
+    const lido = (await porta.recemNascidos(ctx, ids.internacao)).find((x) => x.id === id);
+    expect(lido).toMatchObject({ nascimentoEm: '2026-11-20T18:30', pesoG: 3200, apgar5: 9, reanimacao: true, observacao: 'Observação sintética.', por: 'l0206.teste' });
+    const linha = await nucleo.lerSomente(ctx, (l) =>
+      l.uma('SELECT ordem_nascimento, mae_paciente_id, partograma_id FROM registro_nascimento WHERE id = ?', [id]));
+    expect(Number(linha?.['ordem_nascimento'])).toBeGreaterThanOrEqual(1);
+    expect(Number(linha?.['mae_paciente_id'])).toBe(ids.paciente);
+    expect(linha?.['partograma_id']).not.toBeNull();
+    expect(codigoDe(await porta.gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarRecemNascido(rn)).catch((e: unknown) => e))).toBe('registro-inexistente');
+  });
+
+  it('lactário: ordem por paciente com uma porção por horário, conferência por outra pessoa, alteração, etiqueta e cancelamento', async () => {
+    const t = { ...trilha, entidade: 'preparo_lactario' };
+    const ordem = {
+      internacao: ids.internacao, prontuario: 920_206_101, paciente: ids.paciente, usuario: 'l0206.teste',
+      formula: `formula sintetica ${P}`, volumeMl: 60, horarios: ['09:00', '12:00', '03:00'], preparoEm: '2026-11-20T08:00',
+      validadeEm: '2026-11-21T08:00', lote: null, observacao: null,
+    };
+    const erro = (p: Promise<unknown>) => p.then(() => '').catch((e: unknown) => codigoDe(e));
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, formula: 'INEXISTENTE' })))).toBe('formula-nao-cadastrada');
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.registrarOrdem({ ...ordem, validadeEm: '2026-11-20T10:00' })))).toBe('porcao-fora-da-validade');
+    expect(await erro(porta.gravarSgh({ ...ctx, usuario: ids.conferente }, t, (g) => g.registrarOrdem(ordem)))).toBe('sem-cadastro-colaborador');
+    const id = await porta.gravarSgh(ctx, t, (g) => g.registrarOrdem(ordem));
+    expect(await porta.ordem(ctx, id)).toMatchObject({
+      internacao: ids.internacao, paciente: ids.paciente, formula: `FORMULA SINTETICA ${P}`, volumeMl: 60,
+      horarios: ['09:00', '12:00', '03:00'], preparoEm: '2026-11-20T08:00', validadeEm: '2026-11-21T08:00',
+      situacao: 'preparada', por: 'l0206.teste', conferidoPor: null, canceladaEm: null, etiquetaEm: null,
+    });
+    expect((await porta.ordensDoDia(ctx, '2026-11-20')).map((o) => o.id)).toContain(id);
+    expect(await porta.ordem({ ...ctx, estabelecimento: ids.outroEst }, id)).toBeNull();
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe('ordem-nao-conferivel');
+    const antes = await porta.gravarSgh(ctx, t, (g) =>
+      g.alterarOrdem({ id, formula: ordem.formula, volumeMl: 90, horarios: ['10:00'], preparoEm: '2026-11-20T09:00', validadeEm: '2026-11-21T09:00', lote: 'LT-9', observacao: 'ajuste' }));
+    expect(antes).toMatchObject({ volumeMl: 60, horarios: ['09:00', '12:00', '03:00'], lote: 'L1' });
+    expect(await porta.ordem(ctx, id)).toMatchObject({ volumeMl: 90, horarios: ['10:00'], lote: 'LT-9', observacao: 'ajuste' });
+    // Dupla checagem: quem alterou o conteúdo da ordem também não confere; a conferência fica com um terceiro.
+    const ctx2 = { ...ctx, usuario: ids.conferente };
+    await porta.gravarSgh(ctx2, t, (g) =>
+      g.alterarOrdem({ id, formula: ordem.formula, volumeMl: 90, horarios: ['10:00'], preparoEm: '2026-11-20T09:00', validadeEm: '2026-11-21T09:00', lote: 'LT-9', observacao: 'ajuste' }));
+    expect(await erro(porta.gravarSgh(ctx2, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.confere' })))).toBe('ordem-nao-conferivel');
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.teste' })))).toBe('ordem-nao-conferivel');
+    const ctx3 = { ...ctx, usuario: ids.terceiro };
+    await porta.gravarSgh(ctx3, t, (g) => g.conferirOrdem({ id, usuario: 'l0206.terceiro' }));
+    expect(await porta.ordem(ctx, id)).toMatchObject({ situacao: 'conferida', conferidoPor: 'l0206.terceiro' });
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.alterarOrdem({ id, ...ordem })))).toBe('ordem-conferida');
+    const ev = await porta.gravarSgh(ctx, t, async (g) => {
+      expect(await g.marcarEtiqueta({ id })).toBe(1);
+      return g.registrarAlteracao({ id, evento: 'etiqueta-emitida', antes: null, depois: '1', motivo: null, usuario: 'l0206.teste' });
+    });
+    expect(await porta.gravarSgh(ctx, t, (g) => g.marcarEtiqueta({ id }))).toBe(0);
+    await porta.gravarSgh(ctx, t, async (g) => {
+      await g.cancelarOrdem({ id, motivo: 'troca de fórmula', usuario: 'l0206.teste' });
+      return g.registrarAlteracao({ id, evento: 'cancelada', antes: '{"volumeMl":90}', depois: null, motivo: 'troca de fórmula', usuario: 'l0206.teste' });
+    });
+    expect(await erro(porta.gravarSgh(ctx, t, (g) => g.cancelarOrdem({ id, motivo: 'de novo', usuario: 'x' })))).toBe('ordem-cancelada');
+    // Fórmula cancelada não ganha etiqueta, e mexer na ordem depois não troca quem cancelou.
+    expect(await erro(porta.gravarSgh(ctx2, t, (g) => g.marcarEtiqueta({ id })))).toBe('ordem-cancelada');
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-02-06-esp' }, async (e) => { await e.executar('UPDATE preparo_lactario SET alterado_por = ? WHERE id = ?', [ids.terceiro, id]); });
+    const o = await porta.ordem(ctx, id);
+    expect(o?.canceladaEm).not.toBeNull();
+    expect(o).toMatchObject({ motivoCancelamento: 'troca de fórmula', canceladaPor: 'l0206.teste' });
+    expect(o?.etiquetaEm).not.toBeNull();
+    const hist = await porta.alteracoesOrdens(ctx, [id]);
+    expect(hist.map((h) => [h.evento, h.antes, h.depois])).toEqual([['cancelada', '{"volumeMl":90}', null], ['etiqueta-emitida', null, '1']]);
+    expect(hist[1]!.id).toBe(ev);
+    expect(await porta.alteracoesOrdens({ ...ctx, estabelecimento: ids.outroEst }, [id])).toEqual([]);
   });
 });

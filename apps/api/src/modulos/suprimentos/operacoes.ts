@@ -1,6 +1,5 @@
 // Operações do estoque (M28) e apoios comuns das portas do módulo: o esquema de entrada de cada operação do executor
-// (os contratos Zod de @sgh/contratos), as operações que o banco do cliente ainda não grava (com o motivo, para a tela),
-// a fonte do estado das operações (memória de dev/ci) e o valor guardado no resultado das gravações diretas.
+// (os contratos Zod de @sgh/contratos), a recusa do recurso que o banco ainda não atende (OPME e manipulação), a fonte do estado das operações (memória de dev/ci) e o valor guardado no resultado das gravações diretas.
 // Melhoria: a lista das operações é do próprio módulo (sem catálogo do sistema de origem); operação desconhecida é
 // recusada com código, nunca aceita em silêncio.
 import {
@@ -56,31 +55,6 @@ export function operacaoSuprimentos(nome: string): { readonly nome: string; read
   if (!entrada) throw recusa('operacao-desconhecida', 'Operação desconhecida no estoque.');
   return { nome, entrada };
 }
-
-/**
- * Operações do executor que o banco do cliente ainda não grava (pedido do lote 03-14): o contrato da tela chama o
- * documento pela chave antiga (ano, mês e número do documento) e o item pelo código numérico; o modelo grava
- * documento_estoque/documento_estoque_item, movimento_estoque e saldo_estoque/saldo_lote por id. A tela recebe o
- * motivo (podeGravar) e a gravação responde 409 modelo-pendente; nada é gravado pela metade.
- */
-export const OPERACOES_SUPRIMENTOS_PENDENTES: Readonly<Record<string, string>> = {
-  'suprimentos.registrarSaida': 'a saída de estoque (documento_estoque com movimento e saldo por lote)',
-  'suprimentos.registrarDevolucao': 'a devolução ao estoque (documento_estoque de devolução interna)',
-  'suprimentos.requisitarMaterial': 'a requisição de material (requisicao_material)',
-  'suprimentos.transferir': 'a transferência entre locais (documento_estoque de transferência)',
-  'suprimentos.registrarEntradaNF': 'a entrada por nota fiscal (nota de entrada, movimento e custo médio)',
-  'suprimentos.criarPedido': 'o pedido de compra (pedido_compra e itens)',
-  'suprimentos.registrarProposta': 'a proposta da cotação',
-  'suprimentos.definirVencedorCotacao': 'a escolha do vencedor da cotação',
-  'suprimentos.registrarMovimentoDireto': 'o movimento direto (acerto, baixa, doação, venda)',
-  'suprimentos.registrarBalanco': 'o balanço do item (acerto por contagem)',
-  'suprimentos.fecharMes': 'o fechamento do mês (fechamento_estoque e saldo_estoque_mensal)',
-  'suprimentos.reabrirMes': 'a reabertura do mês (fechamento_estoque reaberto, com motivo)',
-  'suprimentos.reporKitRastreavel': 'a reposição do kit rastreável (movimento_kit_rastreavel)',
-  'suprimentos.desconsolidarDocumento': 'a desconsolidação do documento (documento_estoque não consolidado)',
-  'suprimentos.corrigirValidadeLote':
-    'a correção da validade do lote (lote_insumo, com a validade original guardada)',
-};
 
 /** 409 com o motivo: o recurso ainda não está no banco (a tela fica em consulta, nada é gravado). */
 export const modeloPendente = (o: string): ErroOperacao =>

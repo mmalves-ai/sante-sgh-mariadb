@@ -8,7 +8,19 @@
 // gravação vem da sessão, nunca da entrada.
 import type { ContextoPorta } from '../cadastro/porta.js';
 import type { RegistroTrilhaTela } from '../cadastro/tipos.js';
-import { type DadosBaseMensalidade, type DadosBeneficiarioBase, type DadosCobranca, type DadosContratoCobranca, type DadosItemCobranca, type DadosOperadora, type DadosReajuste, type EntradaCobranca, type EntradaReajuste, type FiltroCobrancasPorta, type TotaisCobranca } from './dados-portas.js';
+import {
+  type DadosBaseMensalidade,
+  type DadosBeneficiarioBase,
+  type DadosCobranca,
+  type DadosContratoCobranca,
+  type DadosItemCobranca,
+  type DadosOperadora,
+  type DadosReajuste,
+  type EntradaCobranca,
+  type EntradaReajuste,
+  type FiltroCobrancasPorta,
+  type TotaisCobranca,
+} from './dados-portas.js';
 
 export const PORTA_COBRANCA_OPERADORA = Symbol('PORTA_COBRANCA_OPERADORA');
 
@@ -40,8 +52,12 @@ export interface GravadorCobranca {
     motivo: string;
     por: string;
   }): Promise<{ id: number; versao: number }>;
-  proximoAcordo(): Promise<number>;
-  renegociar(x: { id: number; versao: number; contrato: number; acordo: number; por: string }): Promise<void>;
+  /**
+   * O acordo de regularização num passo só: o acordo (contrato, data, valores e parcelas) e as cobranças renegociadas
+   * (pela versão vista na tela, com os encargos de cada uma). Devolve o número do acordo; as parcelas entram depois pelo
+   * `incluir`, com `acordoOrigem` igual a esse número.
+   */
+  registrarAcordo(x: AcordoParaGravar): Promise<{ acordo: number }>;
   notificar(x: {
     contrato: number;
     hoje: string;
@@ -52,6 +68,31 @@ export interface GravadorCobranca {
   }): Promise<{ cobrancas: number }>;
   registrarReajuste(r: EntradaReajuste & { readonly por: string }): Promise<{ id: number }>;
   cancelarReajuste(x: { id: number; versao?: number; motivo: string; por: string }): Promise<{ id: number }>;
+}
+
+/** O acordo calculado pelo domínio, com a versão vista de cada cobrança renegociada. */
+export interface AcordoParaGravar {
+  readonly contrato: number;
+  /** A data do acordo (AAAA-MM-DD, a de hoje no banco). */
+  readonly data: string;
+  readonly principal: number;
+  readonly encargos: number;
+  readonly total: number;
+  readonly cobrancas: readonly {
+    readonly id: number;
+    readonly versao: number;
+    readonly valor: number;
+    readonly multa: number;
+    readonly juros: number;
+  }[];
+  readonly parcelas: readonly {
+    readonly numero: number;
+    readonly vencimento: string;
+    readonly valor: number;
+  }[];
+  /** O motivo da dispensa dos encargos (nulo quando eles foram cobrados). */
+  readonly dispensaMotivo: string | null;
+  readonly por: string;
 }
 
 export interface FiltroBaseMensalidades {

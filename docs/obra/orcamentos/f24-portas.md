@@ -44,5 +44,5 @@ teto_M: 81
   | Conferidor | 1 | 3,5 M | 3,5 M |
 
   O construtor usa a medida da 2ª volta para porta inteira, entre 1,8 e 3,2 M.
-- **Estimativa:** 51,4 × 1,2 ≈ 62 M. Teto: 81 M. `LIMITE_AGENTES` = 32.
+- **Estimativa:** 51,4 × 1,2 ≈ 62 M. Teto: 81 M. `LIMITE_AGENTES` = 36 (subido de 32 em 21/11 às 18h50: 7 corretores contra 6 previstos; retomada pelo cache).
 - **Fora do escopo:** preço por médico (aguarda os itens 24 a 27 do dono). O lote de preços não o implementa.

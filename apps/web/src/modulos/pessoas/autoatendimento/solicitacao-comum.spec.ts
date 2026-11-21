@@ -1,5 +1,5 @@
 // W0-06, parte 6d: o formulário único das solicitações vira a entrada do mesmo Zod do servidor, tipo a tipo; a hora do
-// SanteHora (HHMM) vira o instante; a pendência aponta o campo; os textos não citam o sistema antigo nem tabelas.
+// SanteHora (HH:MM) vira o instante; a pendência aponta o campo; os textos não citam o sistema antigo nem tabelas.
 import type { SolicitacaoPessoaResposta } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { dataBr } from '../comum.js';
@@ -126,7 +126,7 @@ describe('solicitações do autoatendimento: montagem do pedido', () => {
     expect(r).toMatchObject({ ok: false, campo: 'observacao' });
   });
 
-  it('hora HHMM ou HH:MM', () => {
+  it('hora em quatro dígitos ou HH:MM', () => {
     expect(horaHhMm('0705')).toBe('07:05');
     expect(horaHhMm('23:59')).toBe('23:59');
     expect(horaHhMm('2460')).toBeNull();

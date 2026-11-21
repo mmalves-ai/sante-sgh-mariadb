@@ -1,7 +1,7 @@
 // M54.1, correção da revisão: a janela fora do pico e o "hoje" do ciclo vão no fuso civil do Brasil (UTC−3), não na
 // hora do processo (TZ=UTC no manual de implantação §3.3). Instante de prova: 31/10/2026 às 23:30 de Brasília, que é
 // 01/11/2026 02:30Z. Lote F2.2 05-12: o ciclo por cliente e estabelecimento sobre uma porta dublê (liberação, contagem,
-// contabilização e a recusa `modelo-pendente` registrada sem parar o ciclo).
+// contabilização e a recusa registrada pelo código sem parar o ciclo).
 import { CHAVE_CONTABIL, recursoDesligado } from '@sgh/contratos';
 import { competenciaDaData } from '@sgh/dominio-contabil';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +13,11 @@ import {
   hojeDoCiclo,
   LeituraFatosContabeisService,
 } from './leitura-fatos.service.js';
-import { contabilLigadaPor, modeloPendente, type PortaContabilWorker } from './porta-propria.js';
+import { ErroOperacao } from '@sgh/nucleo';
+import { contabilLigadaPor, type PortaContabilWorker } from './porta-propria.js';
+
+/** Recusa de negócio da contabilização (o ciclo registra o código e segue). */
+const recusada = (m: string) => new ErroOperacao(409, 'periodo-encerrado', 'Período encerrado', m);
 
 const NOITE_DO_ULTIMO_DIA = new Date('2026-11-01T02:30:00Z');
 const PRODUCAO = { AMBIENTE: 'producao' } as NodeJS.ProcessEnv;
@@ -90,22 +94,22 @@ describe('ciclo do cliente (lote 05-12)', () => {
     if (DECLARADOS.length > 0) expect(contabilLigadaPor({ chaves: CHAVE_LIGADA, prerequisitos: [] }, agora)).toBe(false);
   });
 
-  it('operação sem modelo: a recusa vai ao resultado com o código e o ciclo segue', async () => {
+  it('recusa da contabilização: vai ao resultado com o código e o ciclo segue', async () => {
     const porta = portaDubla({
-      ler: () => Promise.reject(modeloPendente('A contabilização automática dos fatos')),
+      ler: () => Promise.reject(recusada('A competência está encerrada.')),
       gravar: () => Promise.reject(new Error('não chamado')),
     });
     const r = await cicloDoCliente(porta, 'cli_a', new Date(), {});
     // Só o h1 está liberado: o h2 nem é contado.
     expect(r).toEqual([
-      { cliente: 'cli_a', estabelecimento: 'h1', pendentes: 3, lancamentos: 0, falha: 'modelo-pendente' },
+      { cliente: 'cli_a', estabelecimento: 'h1', pendentes: 3, lancamentos: 0, falha: 'periodo-encerrado' },
     ]);
     expect(porta.lidos).toEqual([1]);
   });
 
   it('falha de leitura num estabelecimento fica nele e o seguinte ainda é processado', async () => {
     const base = portaDubla({
-      ler: () => Promise.reject(modeloPendente('A contabilização automática dos fatos')),
+      ler: () => Promise.reject(recusada('A competência está encerrada.')),
       gravar: () => Promise.reject(new Error('não chamado')),
     });
     const porta: PortaContabilWorker = {
@@ -149,7 +153,7 @@ describe('ciclo do cliente (lote 05-12)', () => {
   });
 
   it('o código da falha é o da recusa, ou o nome do erro', () => {
-    expect(codigoDaFalha(modeloPendente('x'))).toBe('modelo-pendente');
+    expect(codigoDaFalha(recusada('x'))).toBe('periodo-encerrado');
     expect(codigoDaFalha(new TypeError('y'))).toBe('TypeError');
     expect(codigoDaFalha('z')).toBe('erro');
   });

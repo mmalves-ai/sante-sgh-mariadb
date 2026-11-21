@@ -1,23 +1,15 @@
 // Relógio civil do estabelecimento (data ISO e hora do dia), pelo fuso do cadastro do estabelecimento
 // (estabelecimento.fuso_horario). O processo roda em UTC; o banco guarda instantes.
-// A agenda de exames usa só a forma neutra "HH:MM" (relogioDoEstabelecimento, horaCivil, minutosDaHora,
-// horaDeMinutos); o contrato das entradas de exame (`horaExame` de @sgh/contratos) é o `esquemaHora` estrito.
-// Este arquivo é compartilhado: cerca de 20 módulos (ADT, farmácia, portaria, TISS, pessoas…) ainda importam
-// relogioNoFuso/civil com a hora em quatro dígitos. Essas duas ficam com a forma antiga até a troca coordenada
-// (pedido do lote 20-misto-preco da F2.4); instanteCivil já aceita as duas formas.
+// Toda hora sai na forma neutra "HH:MM" (formatacao/hora de @sgh/contratos). Este arquivo é compartilhado por cerca
+// de 20 módulos (ADT, farmácia, portaria, TISS, pessoas…); instanteCivil ainda aceita a hora digitada em quatro
+// dígitos, que o auxiliar neutro converte.
 import { ErroHoraInvalida, FUSO_PADRAO, horaParaMinutos, lerHoraDigitada, minutosParaHora } from '@sgh/contratos';
 import type { RelogioEstabelecimento } from './tipos.js';
 
 export { FUSO_PADRAO };
 
-/** A forma antiga do relógio: `hhmm` em quatro dígitos sem os dois-pontos (tipo próprio, nunca o do relógio neutro). */
-export interface RelogioQuatroDigitos {
-  readonly hoje: string;
-  readonly hhmm: string;
-}
-
-/** Forma antiga (hora HHMM em quatro dígitos), só para os módulos de fora da agenda de exames. */
-export function relogioNoFuso(fuso: string = FUSO_PADRAO, agora: Date = new Date()): RelogioQuatroDigitos {
+/** Hoje ("AAAA-MM-DD") e a hora corrente ("HH:MM") no fuso do estabelecimento. */
+export function relogioNoFuso(fuso: string = FUSO_PADRAO, agora: Date = new Date()): RelogioEstabelecimento {
   let partes: Intl.DateTimeFormatPart[];
   try {
     partes = formatador(fuso).formatToParts(agora);
@@ -25,13 +17,12 @@ export function relogioNoFuso(fuso: string = FUSO_PADRAO, agora: Date = new Date
     partes = formatador(FUSO_PADRAO).formatToParts(agora);
   }
   const v = (t: string) => partes.find((x) => x.type === t)?.value ?? '00';
-  return { hoje: `${v('year')}-${v('month')}-${v('day')}`, hhmm: `${v('hour')}${v('minute')}` };
+  return { hoje: `${v('year')}-${v('month')}-${v('day')}`, hora: `${v('hour')}:${v('minute')}` };
 }
 
 /** Hoje e a hora corrente "HH:MM" no fuso do estabelecimento (o `Relogio` do motor da agenda). */
 export function relogioDoEstabelecimento(fuso: string = FUSO_PADRAO, agora: Date = new Date()): RelogioEstabelecimento {
-  const r = relogioNoFuso(fuso, agora);
-  return { hoje: r.hoje, hora: normalizarHora(r.hhmm) };
+  return relogioNoFuso(fuso, agora);
 }
 
 function formatador(fuso: string): Intl.DateTimeFormat {
@@ -69,16 +60,12 @@ export function horaCivil(instante: Date, fuso: string = FUSO_PADRAO): { data: s
   return { data: r.hoje, hora: r.hora };
 }
 
-/**
- * Transição para os módulos de fora da agenda de exames: `hora` já é "HH:MM" (o que os módulos migrados leem) e
- * `hhmm` é a forma antiga HHMM em quatro dígitos (ADT, portaria, TISS…), que sai na troca coordenada.
- */
-export function civil(instante: Date, fuso: string = FUSO_PADRAO): { data: string; hora: string; hhmm: string } {
-  const r = relogioNoFuso(fuso, instante);
-  return { data: r.hoje, hora: normalizarHora(r.hhmm), hhmm: r.hhmm };
+/** Data civil e hora "HH:MM" de um instante, no fuso do estabelecimento (o mesmo que horaCivil). */
+export function civil(instante: Date, fuso: string = FUSO_PADRAO): { data: string; hora: string } {
+  return horaCivil(instante, fuso);
 }
 
-/** Instante (UTC) da data civil e hora ("HH:MM" ou os quatro dígitos) no fuso do estabelecimento. */
+/** Instante (UTC) da data civil e hora ("HH:MM", ou digitada sem os dois-pontos) no fuso do estabelecimento. */
 export function instanteCivil(data: string, hora: string, fuso: string = FUSO_PADRAO): Date {
   const [a, m, d] = data.split('-').map(Number) as [number, number, number];
   const min = minutosDaHora(hora);

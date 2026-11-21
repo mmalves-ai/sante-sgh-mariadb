@@ -16,11 +16,15 @@
 // Melhoria: o prazo da triagem gravado (dentro_prazo) é o decidido no serviço pelo parâmetro, não uma constante da porta;
 // o paciente em jejum entra no mapa com a modalidade de jejum do cadastro; o sem prescrição fica na trilha do fechamento.
 // Melhoria: a chave de idempotência da gravação vem da Idempotency-Key do pedido (pedido.ts), contada por pedido.
-// Pendências de modelo (pedidos do lote 03-04, saida/03-04.json): o acompanhamento diário da meta, o registro do
-// serviço social e o adendo, a correção (retificação/estorno) com o log, a avaliação da NPT, o plano de refeição do
-// acompanhante com o log de alteração, o hash do mapa e a linha do mapa sem dieta (modalidade nula), os exames com
-// jejum da agenda e o volume parenteral do balanço. As leituras desses registros respondem vazio e as gravações
-// respondem "modelo-pendente" (409), sem gravar nada.
+// F2.4: o acompanhamento diário da meta (acompanhamento_terapia_nutricional, um ativo por meta e dia; a retificação
+// marca o anterior 'retificado' e liga o novo por substitui_id), o registro do serviço social e o adendo
+// (registro_social, com a barreira social em barreira_alta), a correção (correcao_registro_nutricao, uma por
+// registro), a avaliação farmacêutica da NPT (avaliacao_nutricao_parenteral, uma por formulação), o plano de refeição
+// do acompanhante (plano_refeicao_acompanhante + as refeições) e o histórico da ordem do lactário
+// (preparo_lactario_evento) gravam e leem no modelo próprio.
+// Pendências (pedido em docs/obra/fatias/f24/saida/p-especialidades-nutricao.json): o histórico de alteração do plano
+// de refeição do acompanhante (sem tabela de eventos: a gravação recusa com "modelo-pendente" e nada é gravado), o hash
+// do mapa, os exames com jejum da agenda e o volume parenteral do balanço.
 import {
   type AvaliacaoNptLida,
   CODIGOS_TIPO_BARREIRA,
@@ -96,7 +100,7 @@ function local(v: unknown, fuso: string): string | null {
   const d = v instanceof Date ? v : new Date(String(v));
   if (Number.isNaN(d.getTime())) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 /** "AAAA-MM-DDTHH:mm" (ou "AAAA-MM-DD") no fuso do estabelecimento → instante. */
 const instante = (t: string, fuso: string): Date =>
@@ -120,9 +124,54 @@ const TABELAS_GRAVACAO = [
   'terapia_nutricional',
   'mapa_dieta',
   'mapa_dieta_item',
+  'acompanhamento_terapia_nutricional',
+  'registro_social',
+  'barreira_alta',
+  'correcao_registro_nutricao',
+  'avaliacao_nutricao_parenteral',
+  'plano_refeicao_acompanhante',
+  'plano_refeicao_acompanhante_refeicao',
+  'preparo_lactario_evento',
 ] as const;
 
-const modeloPendente = (o: string) =>
+/** Estado da gravação: os acompanhamentos marcados 'retificado' à espera da correção (anterior → novo). */
+interface ExtrasGravacao {
+  dados: Record<string, unknown>;
+  provisorias: Map<number, number>;
+}
+
+/** Ação da correção (tela) → ação do modelo. */
+const ACAO_DO_MODELO: Readonly<Record<string, string>> = {
+  retificacao: 'retificacao',
+  estorno: 'estorno',
+  'nova-versao': 'nova_versao',
+  encerramento: 'encerramento',
+};
+const ACAO_DA_TELA: Readonly<Record<string, CorrecaoRegistrada['acao']>> = {
+  retificacao: 'retificacao',
+  estorno: 'estorno',
+  nova_versao: 'nova-versao',
+  encerramento: 'encerramento',
+};
+/** Evento do histórico (tela) ↔ evento do modelo. */
+const EVENTO_DO_MODELO = { alterada: 'alterado', cancelada: 'cancelado', 'etiqueta-emitida': 'etiqueta_emitida' } as const;
+
+/** Texto livre do histórico → JSON (literal de texto, sem perda); a leitura devolve o texto como veio. */
+const jsonDoTexto = (v: string | null) => (v === null ? null : JSON.stringify(v));
+
+/** Lista JSON do banco (texto ou já lida) → lista de textos. */
+function listaJson(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (typeof v !== 'string' || v === '') return [];
+  try {
+    const x = JSON.parse(v) as unknown;
+    return Array.isArray(x) ? x.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+export const modeloPendente = (o: string) =>
   new ErroOperacao(
     409,
     'modelo-pendente',
@@ -219,12 +268,63 @@ function colunasDaResposta(v: unknown): Record<string, unknown> {
   return { resposta_texto: String(typeof v === 'object' ? JSON.stringify(v) : v).slice(0, 500) };
 }
 
+const SQL_SOCIAIS = `
+  SELECT r.id, r.internacao_id, r.tipo, r.rede_apoio, r.vulnerabilidades, r.risco, r.encaminhamentos, r.parecer,
+         r.orientacoes, r.barreira_alta_id, r.adendo_registro_social_id, r.motivo_adendo, r.criado_em, u.login
+    FROM registro_social r
+    LEFT JOIN usuario u ON u.id = r.criado_por
+   WHERE r.estabelecimento_id = ? AND r.excluido_em IS NULL`;
+
+function socialDe(r: Linha, fuso: string): RegistroSocialRegistrado {
+  return {
+    id: n(r['id']),
+    reg: n(r['internacao_id']),
+    tipo: texto(r['tipo']) as RegistroSocialRegistrado['tipo'],
+    redeApoio: texto(r['rede_apoio']) as RegistroSocialRegistrado['redeApoio'],
+    vulnerabilidades: listaJson(r['vulnerabilidades']) as RegistroSocialRegistrado['vulnerabilidades'],
+    risco: texto(r['risco']) as RiscoSocial,
+    encaminhamentos: listaJson(r['encaminhamentos']) as RegistroSocialRegistrado['encaminhamentos'],
+    parecer: texto(r['parecer']),
+    orientacoes: textoN(r['orientacoes']),
+    barreira: nn(r['barreira_alta_id']),
+    por: texto(r['login']),
+    em: local(r['criado_em'], fuso) ?? '',
+    adendoDe: nn(r['adendo_registro_social_id']),
+    motivoAdendo: textoN(r['motivo_adendo']),
+  };
+}
+
+/** A internação dona do registro corrigível, no estabelecimento (null: não existe ou é de outro). */
+async function internacaoDoRegistroEm(
+  l: Leitor,
+  est: number,
+  registro: RegistroCorrigivel,
+  id: number,
+): Promise<number | null> {
+  const sql: Readonly<Record<RegistroCorrigivel, string>> = {
+    triagem:
+      'SELECT internacao_id FROM triagem_nutricional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+    meta: `SELECT i.id AS internacao_id FROM terapia_nutricional t
+             JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+            WHERE t.id = ? AND t.estabelecimento_id = ? AND t.excluido_em IS NULL AND i.excluido_em IS NULL
+            ORDER BY i.id LIMIT 1`,
+    acompanhamento: `SELECT i.id AS internacao_id FROM acompanhamento_terapia_nutricional a
+             JOIN terapia_nutricional t ON t.id = a.terapia_nutricional_id
+             JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+            WHERE a.id = ? AND t.estabelecimento_id = ? AND a.excluido_em IS NULL AND i.excluido_em IS NULL
+            ORDER BY i.id LIMIT 1`,
+    social: 'SELECT internacao_id FROM registro_social WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+  };
+  const r = await l.uma(sql[registro], [id, est]);
+  return nn(r?.['internacao_id']);
+}
+
 function gravadorSobre(
   tx: TxOperacao,
   est: number,
   usuario: number,
   fuso: string,
-  extras: { dados: Record<string, unknown> },
+  extras: ExtrasGravacao,
 ): GravadorNutricao {
   const internacao = async (reg: number) => {
     const r = await tx.uma(
@@ -325,8 +425,42 @@ function gravadorSobre(
         observacao: m.observacao,
       });
     },
-    async registrarAcompanhamento() {
-      throw modeloPendente('O acompanhamento diário da meta nutricional');
+    async registrarAcompanhamento(a) {
+      const t = await tx.uma(
+        `SELECT t.id FROM terapia_nutricional t
+           JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+          WHERE t.id = ? AND t.estabelecimento_id = ? AND i.id = ? AND t.excluido_em IS NULL AND i.excluido_em IS NULL`,
+        [a.meta, est, a.reg],
+      );
+      if (!t) throw recusa('meta-de-outra-internacao', 'A meta de terapia nutricional não é desta internação.');
+      // Um acompanhamento ativo por meta e dia (restrição do banco): o do dia que já existe fica 'retificado' à espera
+      // da correção na mesma gravação; sem ela, a gravação inteira é recusada (gravarSgh).
+      const [vigente] = await tx.consultarParaAtualizar(
+        `SELECT id, versao FROM acompanhamento_terapia_nutricional
+          WHERE terapia_nutricional_id = ? AND dia_vigente = ?`,
+        [a.meta, a.data],
+      );
+      if (vigente)
+        await tx.alterar('acompanhamento_terapia_nutricional', n(vigente['id']), n(vigente['versao']), {
+          situacao: 'retificado',
+        });
+      const id = await tx.incluir('acompanhamento_terapia_nutricional', {
+        terapia_nutricional_id: a.meta,
+        data_referencia: a.data,
+        volume_prescrito_ml: a.volumePrescritoMl,
+        volume_infundido_ml: a.volumeInfundidoMl,
+        origem_volume: a.origemVolume,
+        calorias_atingidas_kcal: a.kcalAtingida,
+        proteina_atingida_g: a.proteinaAtingidaG,
+        percentual_calorico: a.pctKcal,
+        percentual_proteico: a.pctProteina,
+        motivo_meta_nao_atingida: a.motivo,
+        observacao: a.observacao,
+        profissional_id: a.vinculo,
+        situacao: 'ativo',
+      });
+      if (vigente) extras.provisorias.set(n(vigente['id']), id);
+      return id;
     },
     async fecharMapa(m) {
       const u = await tx.uma(
@@ -392,34 +526,261 @@ function gravadorSobre(
       };
       return id;
     },
-    async registrarAcompanhante() {
-      throw modeloPendente('O plano de refeição do acompanhante');
+    async registrarAcompanhante(a) {
+      await internacao(a.reg);
+      const vigente = await tx.consultarParaAtualizar(
+        `SELECT id FROM plano_refeicao_acompanhante
+          WHERE internacao_id = ? AND estabelecimento_id = ? AND situacao = 'ativa' AND excluido_em IS NULL`,
+        [a.reg, est],
+      );
+      if (vigente.length > 0)
+        throw recusa(
+          'acompanhante-vigente',
+          'A internação já tem a refeição do acompanhante vigente: encerre a atual antes de registrar outra.',
+        );
+      const id = await tx.incluir('plano_refeicao_acompanhante', {
+        estabelecimento_id: est,
+        internacao_id: a.reg,
+        direito_legal: a.baseLegal,
+        inicio_em: instante(a.inicio, fuso),
+        fim_em: a.fim ? instante(a.fim, fuso) : null,
+        observacao: a.observacao,
+        situacao: 'ativa',
+      });
+      for (const r of [...new Set(a.refeicoes)].sort((p, q) => p - q))
+        await tx.incluir('plano_refeicao_acompanhante_refeicao', {
+          plano_refeicao_acompanhante_id: id,
+          refeicao_do_dia_id: r,
+        });
+      return id;
     },
-    async encerrarAcompanhante() {
-      throw modeloPendente('O plano de refeição do acompanhante');
+    async encerrarAcompanhante(a) {
+      const [atual] = await tx.consultarParaAtualizar(
+        `SELECT id, versao FROM plano_refeicao_acompanhante
+          WHERE id = ? AND estabelecimento_id = ? AND situacao = 'ativa' AND excluido_em IS NULL`,
+        [a.id, est],
+      );
+      if (!atual) throw recusa('acompanhante-desatualizado', 'A refeição do acompanhante já foi encerrada.');
+      await tx.alterar('plano_refeicao_acompanhante', a.id, n(atual['versao']), { situacao: 'encerrada' });
+      return 1;
     },
-    async registrarSocial() {
-      throw modeloPendente('O registro do serviço social');
+    async registrarSocial(a) {
+      const i = await internacao(a.reg);
+      let barreira: number | null = null;
+      if (a.barreira) {
+        const tipo = await tx.uma(
+          "SELECT id FROM tipo_barreira_alta WHERE categoria = 'social' AND ativo = TRUE ORDER BY id LIMIT 1",
+          [],
+        );
+        if (!tipo)
+          throw recusa('sem-tipo-barreira-social', 'Cadastre o tipo de barreira de alta da categoria social.');
+        // O responsável vem em texto da tela (não é um usuário do cadastro): vai junto da descrição.
+        barreira = await tx.incluir('barreira_alta', {
+          internacao_id: a.reg,
+          tipo_barreira_alta_id: n(tipo['id']),
+          descricao: `${a.barreira.descricao} (responsável: ${a.barreira.responsavel})`.slice(0, 1000),
+          identificada_em: new Date(),
+          prazo_em: instante(a.barreira.prazo, fuso),
+          situacao: 'aberta',
+        });
+      }
+      const id = await tx.incluir('registro_social', {
+        estabelecimento_id: est,
+        internacao_id: a.reg,
+        paciente_id: i.paciente,
+        tipo: a.tipo,
+        rede_apoio: a.redeApoio,
+        vulnerabilidades: JSON.stringify([...new Set(a.vulnerabilidades)]),
+        risco: a.risco,
+        encaminhamentos: JSON.stringify([...new Set(a.encaminhamentos)]),
+        parecer: a.parecer,
+        orientacoes: a.orientacoes,
+        barreira_alta_id: barreira,
+        profissional_id: a.vinculo,
+        situacao: 'ativo',
+      });
+      return { id, barreira };
     },
     async registrarEvento(linha) {
       // O evento próprio vai nos dados da trilha da operação (uma linha da trilha por gravação).
       const eventos = (extras.dados['eventos'] as unknown[] | undefined) ?? [];
       extras.dados = { ...extras.dados, eventos: [...eventos, { acao: linha.acao, entidade: linha.entidade, id: linha.entidadeId }] };
     },
-    async corrigir() {
-      throw modeloPendente('A correção do registro da nutrição');
+    async corrigir(k) {
+      const dono = await internacaoDoRegistroEm(tx, est, k.registro, k.id);
+      if (dono === null || dono !== k.reg)
+        throw recusa('registro-de-outra-internacao', 'O registro não existe ou não é desta internação.');
+      const ja = await tx.consultarParaAtualizar(
+        `SELECT id FROM correcao_registro_nutricao
+          WHERE estabelecimento_id = ? AND tipo_registro = ? AND registro_id = ?`,
+        [est, k.registro, k.id],
+      );
+      if (ja.length > 0)
+        throw recusa('registro-ja-corrigido', 'O registro já foi retificado, estornado ou encerrado (inativo).');
+      const substitui = k.acao === 'retificacao' || k.acao === 'nova-versao';
+      if (k.registro === 'acompanhamento') {
+        const provisoria = extras.provisorias.get(k.id);
+        if (provisoria !== undefined && (!substitui || provisoria !== k.idNovo))
+          throw recusa('acompanhamento-do-dia', 'O dia já tem acompanhamento ativo: retifique o registro do dia.');
+        extras.provisorias.delete(k.id);
+        const [o] = await tx.consultarParaAtualizar(
+          'SELECT id, versao, situacao FROM acompanhamento_terapia_nutricional WHERE id = ?',
+          [k.id],
+        );
+        if (o && texto(o['situacao']) === 'ativo' && k.acao !== 'encerramento')
+          await tx.alterar('acompanhamento_terapia_nutricional', k.id, n(o['versao']), {
+            situacao: substitui ? 'retificado' : 'estornado',
+          });
+        if (substitui && k.idNovo !== null) {
+          const [novo] = await tx.consultarParaAtualizar(
+            'SELECT id, versao FROM acompanhamento_terapia_nutricional WHERE id = ? AND terapia_nutricional_id = (SELECT terapia_nutricional_id FROM acompanhamento_terapia_nutricional WHERE id = ?)',
+            [k.idNovo, k.id],
+          );
+          if (!novo) throw recusa('registro-novo-inexistente', 'O registro novo da retificação não é da mesma meta.');
+          await tx.alterar('acompanhamento_terapia_nutricional', k.idNovo, n(novo['versao']), {
+            substitui_id: k.id,
+            motivo_correcao: k.motivo.slice(0, 500),
+          });
+        }
+      }
+      if (k.registro === 'social') {
+        const [o] = await tx.consultarParaAtualizar('SELECT id, versao, situacao FROM registro_social WHERE id = ?', [
+          k.id,
+        ]);
+        if (o && texto(o['situacao']) === 'ativo')
+          await tx.alterar('registro_social', k.id, n(o['versao']), {
+            situacao: k.acao === 'estorno' ? 'estornado' : k.acao === 'encerramento' ? 'encerrado' : 'retificado',
+          });
+      }
+      return tx.incluir('correcao_registro_nutricao', {
+        estabelecimento_id: est,
+        internacao_id: k.reg,
+        tipo_registro: k.registro,
+        registro_id: k.id,
+        acao: ACAO_DO_MODELO[k.acao] ?? k.acao,
+        novo_registro_id: k.idNovo,
+        motivo: k.motivo.slice(0, 500),
+        profissional_id: k.vinculo,
+      });
     },
-    async avaliarNpt() {
-      throw modeloPendente('A avaliação farmacêutica da nutrição parenteral');
+    async avaliarNpt(a) {
+      const [t] = await tx.consultarParaAtualizar(
+        `SELECT t.id, t.tipo_terapia FROM terapia_nutricional t
+           JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+          WHERE t.id = ? AND t.estabelecimento_id = ? AND i.id = ? AND t.excluido_em IS NULL`,
+        [a.meta, est, a.reg],
+      );
+      if (!t || texto(t['tipo_terapia']) !== 'parenteral')
+        throw recusa('meta-nao-parenteral', 'A meta não é uma terapia parenteral desta internação.');
+      const ja = await tx.uma('SELECT id FROM avaliacao_nutricao_parenteral WHERE terapia_nutricional_id = ?', [a.meta]);
+      if (ja)
+        throw recusa('avaliacao-registrada', 'A avaliação farmacêutica desta formulação já foi registrada e não se edita.');
+      return tx.incluir('avaliacao_nutricao_parenteral', {
+        terapia_nutricional_id: a.meta,
+        parecer: a.parecer,
+        acesso: a.acesso,
+        osmolaridade_mosm_l: a.osmolaridade,
+        estavel: a.estabilidade,
+        compativel: a.compatibilidade,
+        observacao: a.observacao,
+        profissional_id: a.vinculo,
+      });
     },
-    async adendoSocial() {
-      throw modeloPendente('O adendo do serviço social');
+    async adendoSocial(a) {
+      const [o] = await tx.consultarParaAtualizar(
+        `SELECT id, paciente_id, rede_apoio, risco, situacao FROM registro_social
+          WHERE id = ? AND estabelecimento_id = ? AND internacao_id = ? AND excluido_em IS NULL`,
+        [a.de, est, a.reg],
+      );
+      if (!o) throw recusa('registro-de-outra-internacao', 'O registro social não existe.');
+      const corrigido = await tx.uma(
+        "SELECT id FROM correcao_registro_nutricao WHERE estabelecimento_id = ? AND tipo_registro = 'social' AND registro_id = ?",
+        [est, a.de],
+      );
+      if (corrigido || texto(o['situacao']) === 'estornado')
+        throw recusa('registro-ja-corrigido', 'O registro foi estornado (inativo).');
+      return tx.incluir('registro_social', {
+        estabelecimento_id: est,
+        internacao_id: a.reg,
+        paciente_id: n(o['paciente_id']),
+        tipo: 'adendo',
+        rede_apoio: texto(o['rede_apoio']),
+        vulnerabilidades: '[]',
+        risco: texto(o['risco']),
+        encaminhamentos: '[]',
+        parecer: a.texto,
+        adendo_registro_social_id: a.de,
+        motivo_adendo: a.motivo.slice(0, 500),
+        profissional_id: a.vinculo,
+        situacao: 'ativo',
+      });
     },
-    async alterarAcompanhante() {
-      throw modeloPendente('O plano de refeição do acompanhante');
+    async alterarAcompanhante(a) {
+      const [atual] = await tx.consultarParaAtualizar(
+        `SELECT id, versao, situacao, inicio_em, fim_em, dieta, observacao FROM plano_refeicao_acompanhante
+          WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [a.id, est],
+      );
+      const inicio = atual ? (local(atual['inicio_em'], fuso) ?? '').slice(0, 10) : '';
+      if (!atual || texto(atual['situacao']) !== 'ativa' || (a.fim !== null && a.fim < inicio))
+        throw recusa(
+          'acompanhante-desatualizado',
+          'A refeição do acompanhante foi encerrada (ou o fim ficou antes do início).',
+        );
+      // Todas as linhas do plano, inclusive as excluídas: a chave única (plano, refeição) faz a refeição que volta
+      // reativar a linha excluída, e a que sai é exclusão lógica (excluido_em e excluido_por) pelo Executor, com trilha.
+      const linhas = await tx.consultarParaAtualizar(
+        `SELECT id, versao, refeicao_do_dia_id, excluido_em FROM plano_refeicao_acompanhante_refeicao
+          WHERE plano_refeicao_acompanhante_id = ? ORDER BY refeicao_do_dia_id`,
+        [a.id],
+      );
+      const ativas = linhas.filter((r) => r['excluido_em'] === null || r['excluido_em'] === undefined);
+      const antes = ativas.map((r) => n(r['refeicao_do_dia_id']));
+      await tx.alterar('plano_refeicao_acompanhante', a.id, n(atual['versao']), {
+        dieta: a.dieta,
+        fim_em: a.fim ? instante(a.fim, fuso) : null,
+        observacao: a.observacao,
+      });
+      const novas = [...new Set(a.refeicoes)];
+      const sair = antes.filter((r) => !novas.includes(r));
+      for (const l of ativas.filter((r) => sair.includes(n(r['refeicao_do_dia_id']))))
+        await tx.alterar('plano_refeicao_acompanhante_refeicao', n(l['id']), n(l['versao']), {
+          excluido_em: new Date(),
+          excluido_por: tx.contexto.usuario,
+        });
+      for (const r of novas.filter((x) => !antes.includes(x)).sort((p, q) => p - q)) {
+        const excluida = linhas.find((l) => n(l['refeicao_do_dia_id']) === r && !ativas.includes(l));
+        if (excluida)
+          await tx.alterar('plano_refeicao_acompanhante_refeicao', n(excluida['id']), n(excluida['versao']), {
+            excluido_em: null,
+            excluido_por: null,
+          });
+        else
+          await tx.incluir('plano_refeicao_acompanhante_refeicao', {
+            plano_refeicao_acompanhante_id: a.id,
+            refeicao_do_dia_id: r,
+          });
+      }
+      return {
+        dieta: textoN(atual['dieta']),
+        refeicoes: antes,
+        fim: atual['fim_em'] ? (local(atual['fim_em'], fuso) ?? '').slice(0, 10) : null,
+        observacao: textoN(atual['observacao']),
+      };
     },
-    async registrarAlteracao() {
-      throw modeloPendente('O registro de alteração da hotelaria');
+    async registrarAlteracao(a) {
+      if (a.tabela !== 'ordem_lactario') throw modeloPendente('O histórico de alteração da refeição do acompanhante');
+      const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [a.id, est]);
+      if (!o) throw recusa('ordem-inexistente', 'A ordem do lactário não existe neste estabelecimento.');
+      return tx.incluir('preparo_lactario_evento', {
+        preparo_lactario_id: a.id,
+        evento: EVENTO_DO_MODELO[a.evento],
+        dados_antes: jsonDoTexto(a.antes),
+        dados_depois: jsonDoTexto(a.depois),
+        motivo: a.motivo,
+        ocorrido_em: new Date(),
+        usuario_id: usuario,
+      });
     },
   };
 }
@@ -462,7 +823,7 @@ export class PortaNutricaoPropria implements PortaNutricao {
     if (c.usuario === null) throw recusa('sem-usuario', 'A gravação da nutrição exige o usuário da sessão.');
     const usuario = c.usuario;
     let saida: { valor: T } | null = null;
-    const extras: { dados: Record<string, unknown> } = { dados: {} };
+    const extras: ExtrasGravacao = { dados: {}, provisorias: new Map() };
     const linha = () => (typeof trilha === 'function' ? (saida ? trilha(saida.valor) : null) : trilha);
     const op = definirOperacao({
       nome: 'nutricao.gravacao-direta',
@@ -471,6 +832,11 @@ export class PortaNutricaoPropria implements PortaNutricao {
       gravar: async (tx) => {
         const fuso = await fusoDe(tx, est);
         saida = { valor: await fn(gravadorSobre(tx, est, usuario, fuso, extras)) };
+        if (extras.provisorias.size > 0)
+          throw recusa(
+            'acompanhamento-do-dia',
+            'O dia já tem acompanhamento ativo desta meta: retifique ou estorne o registro do dia.',
+          );
         return { valor: JSON.stringify(saida.valor ?? null) } as ResultadoOperacao;
       },
       alvo: () => {
@@ -496,7 +862,7 @@ export class PortaNutricaoPropria implements PortaNutricao {
   relogio(c: ContextoNutricao): Promise<{ agora: string; hoje: string }> {
     return this.ler(c, async (_l, _e, fuso) => {
       const r = relogioNoFuso(fuso);
-      return { agora: `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}`, hoje: r.hoje };
+      return { agora: `${r.hoje}T${r.hora}`, hoje: r.hoje };
     });
   }
 
@@ -687,14 +1053,41 @@ export class PortaNutricaoPropria implements PortaNutricao {
       const rs = await l.consultar(`${SQL_METAS} AND i.id = ? ORDER BY t.criado_em DESC, t.id DESC`, [est, reg], {
         teto: 500,
       });
-      // O acompanhamento diário aguarda o modelo (pedido do lote): a lista vem vazia.
+      const as = await l.consultar(
+        `SELECT a.id, a.terapia_nutricional_id, a.data_referencia, a.volume_prescrito_ml, a.volume_infundido_ml,
+                a.origem_volume, a.calorias_atingidas_kcal, a.proteina_atingida_g, a.percentual_calorico,
+                a.percentual_proteico, a.motivo_meta_nao_atingida, a.observacao, a.criado_em, u.login
+           FROM acompanhamento_terapia_nutricional a
+           JOIN terapia_nutricional t ON t.id = a.terapia_nutricional_id
+           JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+           LEFT JOIN usuario u ON u.id = a.criado_por
+          WHERE t.estabelecimento_id = ? AND i.id = ? AND a.excluido_em IS NULL AND t.excluido_em IS NULL
+          ORDER BY a.data_referencia DESC, a.id DESC`,
+        [est, reg],
+        { teto: 2000 },
+      );
       return {
         metas: rs.map((r) => {
           const { reg, ...m } = metaDe(r);
           void reg;
           return { ...m, em: local(r['criado_em'], fuso) ?? '' };
         }),
-        acompanhamentos: [],
+        acompanhamentos: as.map((a) => ({
+          id: n(a['id']),
+          meta: n(a['terapia_nutricional_id']),
+          data: dataIso(a['data_referencia']) ?? '',
+          volumePrescritoMl: nn(a['volume_prescrito_ml']),
+          volumeInfundidoMl: n(a['volume_infundido_ml']),
+          origemVolume: texto(a['origem_volume']) as AcompanhamentoTerapiaRegistrado['origemVolume'],
+          kcalAtingida: n(a['calorias_atingidas_kcal']),
+          proteinaAtingidaG: n(a['proteina_atingida_g']),
+          pctKcal: n(a['percentual_calorico']),
+          pctProteina: n(a['percentual_proteico']),
+          motivo: textoN(a['motivo_meta_nao_atingida']),
+          observacao: textoN(a['observacao']),
+          por: texto(a['login']),
+          em: local(a['criado_em'], fuso) ?? '',
+        })),
       };
     });
   }
@@ -718,12 +1111,44 @@ export class PortaNutricaoPropria implements PortaNutricao {
     });
   }
 
-  async sociais(): Promise<RegistroSocialRegistrado[]> {
-    return []; // registro do serviço social: aguarda o modelo (pedido do lote)
+  sociais(c: ContextoNutricao, reg: number): Promise<RegistroSocialRegistrado[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(`${SQL_SOCIAIS} AND r.internacao_id = ? ORDER BY r.criado_em DESC, r.id DESC`, [est, reg], {
+          teto: 1000,
+        })
+      ).map((r) => socialDe(r, fuso)),
+    );
   }
 
-  async ultimosSociais(): Promise<Map<number, { risco: RiscoSocial; tipo: TipoRegistroSocial; em: string }>> {
-    return new Map();
+  /** O último registro social de cada internação (sem os adendos e os corrigidos). */
+  ultimosSociais(
+    c: ContextoNutricao,
+    regs: readonly number[],
+  ): Promise<Map<number, { risco: RiscoSocial; tipo: TipoRegistroSocial; em: string }>> {
+    if (regs.length === 0) return Promise.resolve(new Map());
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `${SQL_SOCIAIS} AND r.internacao_id IN (${marcas(regs)}) AND r.tipo <> 'adendo' AND r.situacao = 'ativo'
+            AND NOT EXISTS (SELECT 1 FROM correcao_registro_nutricao k
+                             WHERE k.estabelecimento_id = r.estabelecimento_id AND k.tipo_registro = 'social'
+                               AND k.registro_id = r.id)
+          ORDER BY r.criado_em DESC, r.id DESC`,
+        [est, ...regs],
+        { teto: 5000 },
+      );
+      const m = new Map<number, { risco: RiscoSocial; tipo: TipoRegistroSocial; em: string }>();
+      for (const r of rs) {
+        const reg = n(r['internacao_id']);
+        if (!m.has(reg))
+          m.set(reg, {
+            risco: texto(r['risco']) as RiscoSocial,
+            tipo: texto(r['tipo']) as TipoRegistroSocial,
+            em: local(r['criado_em'], fuso) ?? '',
+          });
+      }
+      return m;
+    });
   }
 
   barreirasSociais(c: ContextoNutricao, regs: readonly number[]): Promise<Map<number, number>> {
@@ -921,16 +1346,63 @@ export class PortaNutricaoPropria implements PortaNutricao {
     return []; // os exames com jejum da agenda aguardam o modelo (pedido do lote)
   }
 
-  async acompanhantesVigentes(): Promise<Map<number, RefeicaoAcompanhanteRegistrada>> {
-    return new Map(); // plano de refeição do acompanhante: aguarda o modelo (o da portaria entra pela porta dela)
+  acompanhantesVigentes(
+    c: ContextoNutricao,
+    regs: readonly number[],
+  ): Promise<Map<number, RefeicaoAcompanhanteRegistrada>> {
+    if (regs.length === 0) return Promise.resolve(new Map());
+    return this.ler(c, async (l, est, fuso) => {
+      const xs = await this.planos(l, fuso, `p.estabelecimento_id = ? AND p.internacao_id IN (${marcas(regs)}) AND p.situacao = 'ativa'`, [
+        est,
+        ...regs,
+      ]);
+      return new Map(xs.map((x) => [x.reg, x]));
+    });
   }
 
-  async acompanhantes(): Promise<RefeicaoAcompanhanteRegistrada[]> {
-    return [];
+  acompanhantes(c: ContextoNutricao, reg: number): Promise<RefeicaoAcompanhanteRegistrada[]> {
+    return this.ler(c, (l, est, fuso) => this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.internacao_id = ?', [est, reg]));
   }
 
-  async acompanhante(): Promise<RefeicaoAcompanhanteRegistrada | null> {
-    return null;
+  acompanhante(c: ContextoNutricao, id: number): Promise<RefeicaoAcompanhanteRegistrada | null> {
+    return this.ler(c, async (l, est, fuso) => (await this.planos(l, fuso, 'p.estabelecimento_id = ? AND p.id = ?', [est, id]))[0] ?? null);
+  }
+
+  /** Os planos de refeição do acompanhante, com as refeições (o mais novo primeiro). */
+  private async planos(l: Leitor, fuso: string, filtro: string, p: unknown[]): Promise<RefeicaoAcompanhanteRegistrada[]> {
+    const rs = await l.consultar(
+      `SELECT p.id, p.internacao_id, p.direito_legal, p.inicio_em, p.fim_em, p.dieta, p.observacao, p.situacao,
+              p.criado_em, u.login
+         FROM plano_refeicao_acompanhante p
+         LEFT JOIN usuario u ON u.id = p.criado_por
+        WHERE ${filtro} AND p.excluido_em IS NULL
+        ORDER BY p.criado_em DESC, p.id DESC`,
+      p,
+      { teto: 2000 },
+    );
+    if (rs.length === 0) return [];
+    const ids = rs.map((r) => n(r['id']));
+    const refeicoes = await l.consultar(
+      `SELECT plano_refeicao_acompanhante_id AS plano, refeicao_do_dia_id AS refeicao
+         FROM plano_refeicao_acompanhante_refeicao
+        WHERE plano_refeicao_acompanhante_id IN (${marcas(ids)}) AND excluido_em IS NULL
+        ORDER BY refeicao_do_dia_id`,
+      ids,
+      { teto: 20000 },
+    );
+    return rs.map((r) => ({
+      id: n(r['id']),
+      reg: n(r['internacao_id']),
+      baseLegal: texto(r['direito_legal']) as RefeicaoAcompanhanteRegistrada['baseLegal'],
+      refeicoes: refeicoes.filter((x) => n(x['plano']) === n(r['id'])).map((x) => n(x['refeicao'])),
+      inicio: (local(r['inicio_em'], fuso) ?? '').slice(0, 10),
+      fim: r['fim_em'] ? (local(r['fim_em'], fuso) ?? '').slice(0, 10) : null,
+      observacao: textoN(r['observacao']),
+      situacao: texto(r['situacao']) === 'ativa' ? 'ativa' : 'encerrada',
+      por: texto(r['login']),
+      em: local(r['criado_em'], fuso) ?? '',
+      dieta: textoN(r['dieta']),
+    }));
   }
 
   retrato(c: ContextoNutricao, unidade: string, refeicao: number, data: string): Promise<RetratoMapa | null> {
@@ -989,35 +1461,81 @@ export class PortaNutricaoPropria implements PortaNutricao {
     });
   }
 
-  async correcoes(): Promise<{ inativa: Map<number, CorrecaoRegistrada>; substitui: Map<number, number> }> {
-    return { inativa: new Map(), substitui: new Map() }; // correção: aguarda o modelo (pedido do lote)
-  }
-
-  internacaoDoRegistro(c: ContextoNutricao, registro: RegistroCorrigivel, id: number): Promise<number | null> {
-    return this.ler(c, async (l, est) => {
-      if (registro === 'triagem') {
-        const r = await l.uma(
-          'SELECT internacao_id FROM triagem_nutricional WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-          [id, est],
-        );
-        return nn(r?.['internacao_id']);
+  correcoes(
+    c: ContextoNutricao,
+    registro: RegistroCorrigivel,
+    ids: readonly number[],
+  ): Promise<{ inativa: Map<number, CorrecaoRegistrada>; substitui: Map<number, number> }> {
+    const vazio = { inativa: new Map<number, CorrecaoRegistrada>(), substitui: new Map<number, number>() };
+    if (ids.length === 0) return Promise.resolve(vazio);
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT k.registro_id, k.acao, k.novo_registro_id, k.motivo, k.criado_em, u.login
+           FROM correcao_registro_nutricao k
+           LEFT JOIN usuario u ON u.id = k.criado_por
+          WHERE k.estabelecimento_id = ? AND k.tipo_registro = ?
+            AND (k.registro_id IN (${marcas(ids)}) OR k.novo_registro_id IN (${marcas(ids)}))`,
+        [est, registro, ...ids, ...ids],
+        { teto: 5000 },
+      );
+      for (const r of rs) {
+        const antigo = n(r['registro_id']);
+        const novo = nn(r['novo_registro_id']);
+        if (ids.includes(antigo))
+          vazio.inativa.set(antigo, {
+            registro,
+            idRegistro: antigo,
+            acao: ACAO_DA_TELA[texto(r['acao'])] ?? 'estorno',
+            idNovo: novo,
+            motivo: texto(r['motivo']),
+            por: texto(r['login']),
+            em: local(r['criado_em'], fuso) ?? '',
+          });
+        if (novo !== null && ids.includes(novo)) vazio.substitui.set(novo, antigo);
       }
-      if (registro === 'meta') {
-        const r = (await l.consultar(`${SQL_METAS} AND t.id = ?`, [est, id], { teto: 1 }))[0];
-        return r ? n(r['internacao']) : null;
-      }
-      return null;
+      return vazio;
     });
   }
 
-  async avaliacoesNpt(): Promise<AvaliacaoNptLida[]> {
-    return [];
+  internacaoDoRegistro(c: ContextoNutricao, registro: RegistroCorrigivel, id: number): Promise<number | null> {
+    return this.ler(c, (l, est) => internacaoDoRegistroEm(l, est, registro, id));
+  }
+
+  avaliacoesNpt(c: ContextoNutricao, reg: number): Promise<AvaliacaoNptLida[]> {
+    return this.ler(c, async (l, est, fuso) =>
+      (
+        await l.consultar(
+          `SELECT a.id, a.terapia_nutricional_id, a.parecer, a.acesso, a.osmolaridade_mosm_l, a.estavel, a.compativel,
+                  a.observacao, a.criado_em, u.login
+             FROM avaliacao_nutricao_parenteral a
+             JOIN terapia_nutricional t ON t.id = a.terapia_nutricional_id
+             JOIN internacao i ON i.atendimento_id = t.atendimento_id AND i.estabelecimento_id = t.estabelecimento_id
+             LEFT JOIN usuario u ON u.id = a.criado_por
+            WHERE t.estabelecimento_id = ? AND i.id = ? AND a.excluido_em IS NULL
+            ORDER BY a.criado_em DESC, a.id DESC`,
+          [est, reg],
+          { teto: 500 },
+        )
+      ).map((a) => ({
+        id: n(a['id']),
+        meta: n(a['terapia_nutricional_id']),
+        parecer: texto(a['parecer']) as AvaliacaoNptLida['parecer'],
+        acesso: texto(a['acesso']) as AvaliacaoNptLida['acesso'],
+        osmolaridade: n(a['osmolaridade_mosm_l']),
+        estabilidade: verdadeiro(a['estavel']),
+        compatibilidade: verdadeiro(a['compativel']),
+        observacao: textoN(a['observacao']),
+        por: texto(a['login']),
+        em: local(a['criado_em'], fuso) ?? '',
+      })),
+    );
   }
 
   async balancoParenteral(): Promise<VolumeBalanco[]> {
     return []; // o volume parenteral do balanço aguarda o modelo (pedido do lote)
   }
 
+  /** O histórico de alteração do plano do acompanhante aguarda a tabela de eventos (pedido): nenhum foi gravado. */
   async alteracoesAcompanhante(): Promise<AlteracaoHotelariaRegistrada[]> {
     return [];
   }

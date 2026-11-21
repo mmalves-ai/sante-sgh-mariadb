@@ -1,0 +1,8 @@
+# lote p-enfermagem (F2.4, 3ª etapa, correção dos achados): anotação offline, profilaxia de TEV e estágio da lesão
+# cliente_teste: f24p_enfermagem
+apps/api/src/modulos/enfermagem/escores-porta-propria.ts
+apps/api/src/modulos/enfermagem/porta-propria.ts
+apps/api/src/modulos/enfermagem/porta.ts
+apps/api/src/modulos/enfermagem/porta-memoria.ts
+apps/api/src/modulos/enfermagem/enfermagem.controller.ts
+packages/dominio-enfermagem/src/escores/profilaxia.ts

@@ -1,14 +1,9 @@
-// Porta própria da integração da folha com dublê do núcleo: parâmetros das consultas, mapeamento e as recusas
-// explícitas das operações ainda sem modelo (nunca vazio).
+// Porta própria da integração da folha com dublê do núcleo: parâmetros das consultas, mapeamento, o filtro pelo
+// estabelecimento da sessão e a recusa de operação de executor desconhecida.
 import { ErroOperacao } from '@sgh/nucleo';
 import { describe, expect, it } from 'vitest';
 import { METODOS_PORTA_INTEGRACAO_FOLHA } from './porta-integracao.js';
-import {
-  erroSemModelo,
-  type NucleoIntegracaoFolha,
-  PortaIntegracaoFolhaPropria,
-  SEM_MODELO_INTEGRACAO_FOLHA,
-} from './porta-integracao-propria.js';
+import { type NucleoIntegracaoFolha, PortaIntegracaoFolhaPropria } from './porta-integracao-propria.js';
 import { ROTINAS_INTEGRACAO_FOLHA } from './apoio-folha.js';
 import { OPERACAO_TITULOS_FOLHA } from './servico-integracao.js';
 
@@ -134,35 +129,31 @@ describe('porta própria da integração da folha (dublê)', () => {
     expect(await porta.integracoes(c, 8)).toEqual([]);
   });
 
-  it('liberação: o de-para grava; o lançamento dos títulos é negado com o motivo', async () => {
+  it('liberação: o de-para e o lançamento dos títulos gravam', async () => {
     const { porta } = dubleDe([]);
     expect(await porta.podeGravar(c, 'gravarIntegracao')).toMatchObject({ pode: true });
-    expect(await porta.podeGravar(c, OPERACAO_TITULOS_FOLHA)).toMatchObject({
-      pode: false,
-      codigo: 'modelo-pendente',
-    });
+    expect(await porta.podeGravar(c, OPERACAO_TITULOS_FOLHA)).toMatchObject({ pode: true });
   });
 
-  it('operações ainda não ligadas: recusa 503 com a operação na mensagem (nunca vazio)', async () => {
-    const { porta } = dubleDe([]);
-    const chamadas: [keyof typeof SEM_MODELO_INTEGRACAO_FOLHA, () => Promise<unknown>][] = [
-      ['retorno', () => porta.retorno()],
-      ['lancamentos', () => porta.lancamentos()],
-      ['lancamento', () => porta.lancamento()],
-      ['lancamentoDaOrigem', () => porta.lancamentoDaOrigem()],
-      ['titulosDoLancamento', () => porta.titulosDoLancamento()],
-      ['chavesLancadas', () => porta.chavesLancadas()],
-      ['custoPessoal', () => porta.custoPessoal()],
-      ['executar', () => porta.executar()],
-    ];
-    for (const [op, fn] of chamadas) {
-      const e = await fn().then(
-        () => null,
-        (x: unknown) => x,
-      );
-      expect(e).toBeInstanceOf(ErroOperacao);
-      expect((e as ErroOperacao).problema).toMatchObject({ status: 503, codigo: 'modelo-pendente' });
-      expect((e as ErroOperacao).problema.detail).toBe(erroSemModelo(op).problema.detail);
-    }
+  it('executar: só o lançamento dos títulos da folha; outra operação é recusada sem tocar o banco', async () => {
+    const { porta, chamadas } = dubleDe([]);
+    const e = await porta.executar(c, 'financeiro.baixarTitulo', {}, { ...c, chaveIdempotencia: 'k' }).then(
+      () => null,
+      (x: unknown) => x,
+    );
+    expect(e).toBeInstanceOf(ErroOperacao);
+    expect((e as ErroOperacao).problema.codigo).toBe('operacao-desconhecida');
+    expect(chamadas).toEqual([]);
+  });
+
+  it('leituras do lançamento e do retorno: filtradas pelo estabelecimento da sessão; outra empresa não é vista', async () => {
+    const { porta, chamadas } = dubleDe([]);
+    expect(await porta.retorno(c, 5)).toBeNull();
+    expect(chamadas[0]?.p).toEqual([7, 5]);
+    expect(await porta.lancamentos(c, 8, 2099)).toEqual([]);
+    expect(await porta.chavesLancadas(c, 8, 'mensal', '2099-03')).toEqual([]);
+    expect(await porta.custoPessoal(c, 8, '2099-03')).toEqual({ centros: [], lancamentos: 0 });
+    expect(await porta.lancamentoDaOrigem(c, 'interface', 5)).toBeNull();
+    expect(chamadas.at(-1)?.p).toEqual([7, 5]);
   });
 });

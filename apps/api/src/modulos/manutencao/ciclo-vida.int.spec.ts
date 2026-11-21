@@ -1,10 +1,9 @@
-// Ciclo de vida e treinamento dos operadores (M55, RDC 509/2021) sobre a porta própria no MariaDB (cliente f22_o3):
+// Ciclo de vida e treinamento dos operadores (M55, RDC 509/2021) sobre a porta própria no MariaDB (cliente de teste do lote):
 // o catálogo de cursos e as conclusões vêm do treinamento (curso, turma, presença); a base do índice de obsolescência
-// vem das OS do equipamento e entra no `montarIndice` real; o curso exigido por modelo e os eventos do ciclo de vida
-// aguardam o modelo do banco (pedidos modelo_equipamento_curso e evento_ciclo_equipamento): as leituras ficam vazias e
-// a gravação recusa `modelo-pendente` sem deixar nada no banco. Massa SINTÉTICA. SGH_NUCLEO_SEM_BANCO=1 pula.
+// vem das OS do equipamento e entra no `montarIndice` real; o curso exigido por modelo (modelo_equipamento_curso) e os
+// eventos do ciclo de vida (evento_ciclo_equipamento) são gravados e relidos do banco. Massa SINTÉTICA. SGH_NUCLEO_SEM_BANCO=1 pula.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { inicioDaJanela, montarIndice } from './ciclo-vida.js';
+import { conferirEvento, inicioDaJanela, montarIndice } from './ciclo-vida.js';
 import {
   CLIENTE_MAN,
   contextoMan,
@@ -63,20 +62,51 @@ describe.skipIf(SEM_BANCO_MAN)(`ciclo de vida e treinamento na porta própria (c
     expect(indice).toBeTruthy();
   });
 
-  it('curso por modelo e eventos do ciclo de vida: leituras vazias e gravação recusada sem resíduo', async () => {
+  it('curso exigido por modelo: vincular, repetido, desvincular com motivo e reativar', async () => {
     const M = m!;
     const c = contextoMan(M);
-    expect(await porta.cursosDosModelos(c)).toEqual([]);
-    expect(await porta.eventosCiclo(c, 1)).toEqual([]);
-    const antes = await lerBanco<{ n: number }>(M, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ?', ['evento_ciclo_equipamento']);
+    const chave = { fabricante: 'L0303M FAB CURSO', modelo: 'MX-2' };
+    const v = await porta.gravarSgh(c, trilhaMan(M, 'modelo_equipamento_curso'), (g) =>
+      g.vincularCursoModelo({ ...chave, curso: M.curso, usuario: M.loginUsuario }),
+    );
+    expect(await porta.cursosDosModelos(c, chave)).toMatchObject([
+      { id: v.id, fabricante: chave.fabricante, modelo: 'MX-2', curso: M.curso, cursoCodigo: 'L0303M-OPER', cursoAtivo: true, validadeMeses: 24, criadoPor: M.loginUsuario },
+    ]);
+    await expect(
+      porta.gravarSgh(c, trilhaMan(M, 'modelo_equipamento_curso'), (g) => g.vincularCursoModelo({ ...chave, curso: M.curso, usuario: M.loginUsuario })),
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'vinculo-repetido');
+    await porta.gravarSgh(c, trilhaMan(M, 'modelo_equipamento_curso', v.id), (g) =>
+      g.desvincularCursoModelo({ id: v.id, motivo: 'Curso trocado (teste)', usuario: M.loginUsuario }),
+    );
+    expect(await porta.cursosDosModelos(c, chave)).toEqual([]);
+    const de = await porta.gravarSgh(c, trilhaMan(M, 'modelo_equipamento_curso'), (g) =>
+      g.vincularCursoModelo({ ...chave, curso: M.curso, usuario: M.loginUsuario }),
+    );
+    expect(de.id).toBe(v.id);
+  });
+
+  it('ciclo de vida: desativação grava o evento e a data no equipamento; evento repetido recusa sem resíduo', async () => {
+    const M = m!;
+    const c = contextoMan(M);
+    const eq = await porta.gravarSgh(c, trilhaMan(M, 'equipamento_saude'), (g) =>
+      g.incluirEquipamento({
+        codigo: 'L0303-CICLO2', nome: 'BOMBA SINTETICA 2', tipo: 'medico', criticidade: 'alta', classeRisco: 'II', fabricante: null,
+        modelo: null, numeroSerie: null, registroAnvisa: null, unidade: null, centroCusto: M.centro, localizacao: null, recurso: null,
+        bemPatrimonial: null, instalacao: '2018-03-01', garantiaAte: null, situacao: 'ativo', motivo: null, usuario: M.loginUsuario,
+      }),
+    );
+    const novo = { tipo: 'desativacao' as const, data: '2026-01-02' };
+    const r = await porta.gravarSgh(c, trilhaMan(M, 'evento_ciclo_equipamento'), (g) =>
+      g.registrarEventoCiclo({ equipamento: eq.id, ...novo, motivo: 'Fim da vida útil (teste)', documento: null, destino: null, valorObtidoCent: null, autorizadoPor: 'TESTE', usuario: M.loginUsuario, conferir: conferirEvento(novo) }),
+    );
+    expect(r.valorContabilCent).toBeNull();
+    expect(await porta.eventosCiclo(c, eq.id)).toMatchObject([{ id: r.id, equipamento: eq.id, tipo: 'desativacao', data: '2026-01-02', autorizadoPor: 'TESTE', por: M.loginUsuario }]);
+    expect(await porta.equipamento(c, eq.id)).toMatchObject({ situacao: 'desativado', desativadoEm: '2026-01-02' });
     await expect(
       porta.gravarSgh(c, trilhaMan(M, 'evento_ciclo_equipamento'), (g) =>
-        g.registrarEventoCiclo({ equipamento: 1, tipo: 'desativacao', data: '2026-01-01', motivo: 'teste', documento: null, destino: null, valorObtidoCent: null, autorizadoPor: 'TESTE', usuario: M.loginUsuario, conferir: () => null }),
+        g.registrarEventoCiclo({ equipamento: eq.id, ...novo, motivo: 'de novo (teste)', documento: null, destino: null, valorObtidoCent: null, autorizadoPor: 'TESTE', usuario: M.loginUsuario, conferir: () => null }),
       ),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
-    await expect(
-      porta.gravarSgh(c, trilhaMan(M, 'modelo_equipamento_curso'), (g) => g.desvincularCursoModelo({ id: 1, motivo: 'teste', usuario: M.loginUsuario })),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
-    expect(await lerBanco(M, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = ?', ['evento_ciclo_equipamento'])).toMatchObject({ n: antes?.n });
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'evento-repetido');
+    expect(await lerBanco(M, 'SELECT COUNT(*) AS n FROM evento_ciclo_equipamento WHERE equipamento_saude_id = ?', [eq.id])).toMatchObject({ n: 1 });
   });
 });

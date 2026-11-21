@@ -373,7 +373,10 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const u = unidadeDe(unidade);
     const p = await this.apoios.parametros(s, u);
     const r = await this.servico.linhaDoTempo(s.porta, u, p, turnoDe(data, turno));
-    req.sghAlvo = { tabelaAlvo: 'horario_administracao', chaveNaturalAlvo: `unidade:${u}:${r.horarios.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'horario_administracao',
+      chaveNaturalAlvo: `unidade:${u}:${r.horarios.length}`,
+    };
     return { ...r, contencoes: await this.contencoesDoTurno(s, u, r) };
   }
 
@@ -855,7 +858,10 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
     const u = unidadeDe(unidade);
     const itens = await this.servico.propostas(s.porta, u);
     const liberado = await this.porta.podeGravar(s.porta, 'enfermagem.aprazarHorario');
-    req.sghAlvo = { tabelaAlvo: 'horario_administracao', chaveNaturalAlvo: `aprazamento:${u}:${itens.length}` };
+    req.sghAlvo = {
+      tabelaAlvo: 'horario_administracao',
+      chaveNaturalAlvo: `aprazamento:${u}:${itens.length}`,
+    };
     return {
       unidade: u,
       itens,
@@ -1073,15 +1079,15 @@ export class EnfermagemController implements OnApplicationBootstrap, OnApplicati
             s,
             EVENTOS_AUDITAVEIS.enfermagemAnotacaoRegistrada.codigo,
             P.administracaoChecar,
-            (r: number) => ({ tabela: 'afericao', id: String(r), paciente: a.paciente }),
+            // A anotação é um registro assistencial do atendimento (com a resposta de extensão na mesma transação).
+            (r: number) => ({ tabela: 'registro_assistencial', id: String(r), paciente: a.paciente }),
             (g) =>
-              g.gravarRespostaExt({
-                registro: 0,
+              g.registrarAnotacaoOffline({
                 paciente: a.paciente,
-                componente: 'anexo',
-                chave: `anotacao:${a.chave}`.slice(0, 60),
-                valor: JSON.stringify({ texto: a.texto, horaReal: a.horaReal, atendimento: a.atendimento }),
-                referencia: null,
+                atendimento: a.atendimento,
+                chave: a.chave,
+                texto: a.texto,
+                horaReal: a.horaReal,
                 usuario: s.login,
               }),
           );

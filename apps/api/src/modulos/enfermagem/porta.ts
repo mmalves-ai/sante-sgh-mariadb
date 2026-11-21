@@ -127,6 +127,19 @@ export interface GravadorSghEnfermagem {
     justificativa: string;
     usuario: string;
   }): Promise<number>;
+  /**
+   * A anotação de enfermagem feita sem rede na beira do leito: grava o registro assistencial do atendimento (modelo de
+   * documento da anotação de enfermagem) e, nele, a resposta de extensão com a chave do ato. O reenvio da mesma chave
+   * devolve o registro gravado da primeira vez. Devolve o id do registro assistencial.
+   */
+  registrarAnotacaoOffline(r: {
+    paciente: number;
+    atendimento: number;
+    chave: string;
+    texto: string;
+    horaReal: string;
+    usuario: string;
+  }): Promise<number>;
   gravarRespostaExt(r: {
     registro: number;
     paciente: number;

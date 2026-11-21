@@ -68,3 +68,8 @@ teto_M: 87
   - **Teto revisto: 125 M**, com projeção de 115 a 120 M.
   - **Lição para as próximas rodadas do conector:** lotes de 2 fatias quando o trabalho é conversão com prova (no
     lugar de 4).
+
+- **21/11, 18h55:** parou no `LIMITE_AGENTES` (38) com 2 corretores pendentes. Retomada pelo cache com limite 52: 2 corretores, conferidor (até 2) e "refazer" (até 4), mais L9 e L10 (3 cada). Essas etapas já levam as regras novas (teto de 60 turnos e saída resumida).
+
+- **21/11, 19h15: a retomada pelo cache repetiu corretores já concluídos**, porque o cache só vale até a primeira chamada que falhou. Parei a rodada (cerca de 137 M, com cerca de 12 M de corretores repetidos) e lancei `f4-rodada5-fim`: só o conferidor, o L9 e o L10, com limite de 12 agentes e as regras novas.
+- **Lição:** a retomada não serve depois de uma falha no meio de um pipeline. A sobra vai para um script novo, só com as etapas que faltam.

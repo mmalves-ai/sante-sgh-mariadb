@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
 
 const id = z.number().int().positive().max(2_147_483_647);
-const local = z.number().int().min(1).max(99);
+const local = id;
 const quantidade = z
   .number()
   .positive('A quantidade tem de ser maior que zero.')

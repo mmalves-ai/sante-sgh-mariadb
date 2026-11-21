@@ -3,9 +3,13 @@
 // idempotência na mesma transação), com a trava otimista pela `versao`.
 // Tabelas: estabelecimento, tipo_hora, motivo_afastamento, tipo_folha, competencia_folha, vinculo_trabalho,
 // categoria_trabalhador, colaborador, cargo, inscricao_conselho, conselho_classe, unidade_federativa, ocupacao_cbo, validade_conselho e afastamento.
-// Lotes trocados com a folha externa (exportado, retorno conferido e o resumo por rubrica): o modelo ainda não tem a
-// tabela (lote_folha_externa só cobre o lote importado, sem o sentido, o leiaute e os totais); as operações recusam com
-// `modelo-pendente` até o DDL pedido em docs/obra/fatias/f22/saida/03-06.json.
+// Lotes trocados com a folha externa (exportado, retorno conferido e o resumo por rubrica): lote_folha_intercambio e
+// lote_folha_intercambio_resumo. O número do lote no contrato é o número de negócio do estabelecimento
+// (lote_folha_intercambio.numero, pela sequência `lote_folha_intercambio`), reservado antes de montar o conteúdo; o id
+// interno nunca sai da porta, e o lote exportado a que o retorno responde é traduzido do número para a chave.
+// Unidades no banco (DECIMAL(15,2)): o valor do resumo e a soma do lote recebido ficam em reais, como os títulos e os
+// fatos contábeis; o contrato fala em centavos inteiros e a porta converte na ida e na volta. A soma do lote exportado
+// é a de minutos (ponto mais plantão) e fica em minutos.
 // O afastamento grava só o fato: 'em_andamento' (ativo) ou 'cancelado'. O andamento que depende do relógio (previsto,
 // encerrado) não é gravado, porque venceria sem ninguém o atualizar; quem precisa dele usa `situacaoDoAfastamento` na
 // leitura.
@@ -21,7 +25,6 @@ import {
   type ContextoNucleo,
   type ContextoOperacao,
   definirOperacao,
-  ErroOperacao,
   type Escritor,
   erroRegistroInexistente,
   type Executor,
@@ -30,6 +33,7 @@ import {
   type NucleoProprio,
   recusa,
   type ResultadoOperacao,
+  garantirSequencia,
   type TxOperacao,
 } from '@sgh/nucleo';
 import { z } from 'zod';
@@ -50,14 +54,24 @@ import {
   type AfastamentoFolha,
   type ConselhoDoProfissional,
   type FiltroAfastamentosFolha,
+  type FiltroLotesDaFolha,
   type ItemDominioFolha,
+  type LinhaResumoDaFolha,
+  type LoteDaFolha,
+  type LoteFolhaCompleto,
   type NovoAfastamentoFolha,
+  type ResumoDaFolha,
   type RemessaDaFolha,
   tipoVinculoDaFolha,
   type VinculoDaFolha,
 } from './tipos-folha.js';
 
 const n = (v: unknown): number => Number(v ?? 0);
+/** Reais do banco (DECIMAL) em centavos inteiros do contrato, e de volta. */
+const centavos = (v: unknown): number => Math.round(n(v) * 100);
+const reais = (c: number): number => Math.round(c) / 100;
+/** A soma do lote: centavos no recebido (reais no banco), minutos no exportado. */
+const somaDoBanco = (sentido: unknown, v: unknown): number => (sentido === 'recebido' ? centavos(v) : n(v));
 const numOuNulo = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
 const textoOuNulo = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
@@ -105,16 +119,6 @@ function contextoDe(c: ContextoPortaM18): ContextoNucleo {
   };
 }
 
-/** Recusa explícita de operação cujo registro o modelo do banco ainda não tem (pedido de DDL da obra, lote 03-06). */
-export function erroModeloPendente(operacao: string, falta: string): ErroOperacao {
-  return new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Operação indisponível no modelo atual',
-    `${operacao}: o modelo do banco ainda não tem ${falta}. A operação volta quando a tabela for criada.`,
-  );
-}
-
 /** Vínculos do estabelecimento ativos em algum dia de [inicio, fim] (com o colaborador e o cargo). */
 const SQL_VINCULOS = `
   SELECT v.id, v.matricula, v.regime_trabalhista, v.data_admissao, v.data_desligamento, v.centro_custo_id,
@@ -135,9 +139,113 @@ export interface CifradorCpf {
   cifrar(cpf: string): string;
 }
 
-const FALTA_LOTE =
-  'o registro dos lotes trocados com a folha externa (exportado, retorno conferido e resumo por rubrica)';
-const TABELAS_FOLHA = ['afastamento'] as const;
+const TABELAS_FOLHA = [
+  'afastamento',
+  'lote_folha_intercambio',
+  'lote_folha_intercambio_resumo',
+  'sequencia_negocio',
+] as const;
+
+/** Tipo da sequência do número do lote (por estabelecimento). */
+export const SEQUENCIA_LOTE_FOLHA = 'lote_folha_intercambio';
+
+/** DATETIME do banco no instante local AAAA-MM-DDTHH:MM:SS (o driver entrega Date local ou texto). */
+function instanteLocal(v: unknown): string {
+  if (v instanceof Date)
+    return `${dia(v)}T${doisDigitos(v.getHours())}:${doisDigitos(v.getMinutes())}:${doisDigitos(v.getSeconds())}`;
+  return texto(v).replace(' ', 'T').slice(0, 19);
+}
+
+/** AAAA-MM do contrato no primeiro dia do mês (a coluna `competencia`), e de volta. */
+const competenciaNoBanco = (c: string): string => `${c.slice(0, 7)}-01`;
+const competenciaDoBanco = (v: unknown): string => diaObrigatorio(v).slice(0, 7);
+
+const SQL_LOTES = `
+  SELECT l.id, l.numero, l.estabelecimento_id, l.competencia, l.sentido, ex.numero AS numero_exportado, l.leiaute,
+         l.situacao, l.quantidade_colaboradores, l.soma, l.totais, l.vinculos, l.divergencias, l.resumo, l.gerado_em,
+         u.login, l.versao
+    FROM lote_folha_intercambio l
+    LEFT JOIN lote_folha_intercambio ex ON ex.id = l.lote_exportado_id
+    LEFT JOIN usuario u ON u.id = l.criado_por
+   WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL`;
+
+const json = (v: unknown): string | null =>
+  v === null || v === undefined ? null : typeof v === 'string' ? v : JSON.stringify(v);
+
+function loteDe(r: Record<string, unknown>): LoteFolhaCompleto {
+  return {
+    id: n(r['numero']),
+    empresa: n(r['estabelecimento_id']),
+    competencia: competenciaDoBanco(r['competencia']),
+    sentido: r['sentido'] === 'recebido' ? 'recebido' : 'exportado',
+    loteExportado: numOuNulo(r['numero_exportado']),
+    leiaute: texto(r['leiaute']),
+    situacao: texto(r['situacao']),
+    colaboradores: n(r['quantidade_colaboradores']),
+    soma: somaDoBanco(r['sentido'], r['soma']),
+    totais: json(r['totais']) ?? '{}',
+    divergencias: json(r['divergencias']),
+    resumo: texto(r['resumo']),
+    geradoEm: instanteLocal(r['gerado_em']),
+    geradoPor: texto(r['login']),
+    versao: n(r['versao']),
+    vinculos: json(r['vinculos']),
+  };
+}
+
+const semVinculos = ({ vinculos: _v, ...l }: LoteFolhaCompleto): LoteDaFolha => l;
+
+async function lerLotes(
+  l: Leitor,
+  est: number,
+  f: { empresa?: number; competencia?: string },
+): Promise<LoteDaFolha[]> {
+  // A empresa da folha é o estabelecimento: outro estabelecimento não é visto desta sessão.
+  if (f.empresa !== undefined && f.empresa !== est) return [];
+  let sql = SQL_LOTES;
+  const p: unknown[] = [est];
+  if (f.competencia !== undefined) {
+    sql += ' AND l.competencia = ?';
+    p.push(competenciaNoBanco(f.competencia));
+  }
+  return (await l.consultar(`${sql} ORDER BY l.numero DESC`, p)).map((r) => semVinculos(loteDe(r)));
+}
+
+async function lerLote(l: Leitor, est: number, numero: number): Promise<LoteFolhaCompleto | null> {
+  const r = await l.uma(`${SQL_LOTES} AND l.numero = ?`, [est, numero]);
+  return r ? loteDe(r) : null;
+}
+
+async function competenciaLancadaEm(
+  l: Leitor,
+  est: number,
+  empresa: number,
+  competencia: string,
+): Promise<boolean> {
+  if (empresa !== est) return false;
+  const r = await l.uma(
+    `SELECT id FROM lote_folha_intercambio
+      WHERE estabelecimento_id = ? AND competencia = ? AND situacao = 'lancado' AND excluido_em IS NULL LIMIT 1`,
+    [est, competenciaNoBanco(competencia)],
+  );
+  return r !== null && r !== undefined;
+}
+
+/** Chave interna do lote pelo número de negócio, travada para a troca (outro estabelecimento não existe). */
+async function travarLote(e: Escritor, est: number, numero: number) {
+  const [r] = await e.consultarParaAtualizar<{
+    id: unknown;
+    situacao: unknown;
+    versao: unknown;
+    sentido: unknown;
+  }>(
+    'SELECT id, situacao, versao, sentido FROM lote_folha_intercambio WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL',
+    [est, numero],
+  );
+  return r
+    ? { id: n(r.id), situacao: texto(r.situacao), versao: n(r.versao), sentido: texto(r.sentido) }
+    : null;
+}
 
 const SQL_AFASTAMENTOS = `
   SELECT a.id, a.vinculo_trabalho_id, a.motivo_afastamento_id, a.data_inicio, a.data_fim, a.observacao, a.situacao, a.versao
@@ -218,23 +326,99 @@ async function conferirSobreposicao(
     );
 }
 
-function gravadorFolha(e: Escritor, c: ContextoFolha, est: number): GravadorFolha {
+function gravadorFolha(e: TxOperacao, c: ContextoFolha, est: number): GravadorFolha {
   const carimbo = () => ({ usuario: c.usuario, agora: new Date() });
-  const lote = (operacao: string) => () => Promise.reject(erroModeloPendente(operacao, FALTA_LOTE));
   const atual = async (id: number) => {
     const a = await lerAfastamento(e, est, id);
     if (!a) throw erroRegistroInexistente();
     return a;
   };
   return {
-    proximoIdLote: lote('Reservar o número do lote da folha'),
-    lote: lote('Ler o lote da folha'),
-    lotesDaCompetencia: lote('Listar os lotes da competência'),
-    competenciaLancada: lote('Conferir a competência lançada'),
-    incluirLote: lote('Gravar o lote da folha'),
-    situacaoLote: lote('Trocar a situação do lote da folha'),
-    incluirResumo: lote('Gravar o resumo do retorno da folha'),
-    resumo: lote('Ler o resumo do retorno da folha'),
+    async proximoIdLote() {
+      await garantirSequencia(e, { tipo: SEQUENCIA_LOTE_FOLHA, estabelecimento: est }, carimbo());
+      return (await e.proximoNumero(SEQUENCIA_LOTE_FOLHA)).valor;
+    },
+    lote: (numero) => lerLote(e, est, numero),
+    lotesDaCompetencia: (empresa, competencia) => lerLotes(e, est, { empresa, competencia }),
+    competenciaLancada: (empresa, competencia) => competenciaLancadaEm(e, est, empresa, competencia),
+    async incluirLote(x) {
+      if (x.empresa !== est)
+        throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
+      if (await travarLote(e, est, x.id))
+        throw recusa('lote-repetido', 'O número do lote já foi usado: gere de novo.');
+      let exportado: number | null = null;
+      if (x.loteExportado !== null) {
+        const ex = await travarLote(e, est, x.loteExportado);
+        if (!ex || ex.sentido !== 'exportado')
+          throw recusa('lote-inexistente', 'O lote exportado a que o retorno responde não existe.');
+        exportado = ex.id;
+      }
+      const competencia = competenciaNoBanco(x.competencia);
+      // A competência da folha só é ligada quando há uma única folha do mês (normal ou não) no estabelecimento.
+      const folhas = await e.consultar(
+        `SELECT id FROM competencia_folha
+          WHERE estabelecimento_id = ? AND ano = ? AND mes = ? AND excluido_em IS NULL LIMIT 2`,
+        [est, Number(competencia.slice(0, 4)), Number(competencia.slice(5, 7))],
+      );
+      await e.incluir('lote_folha_intercambio', {
+        estabelecimento_id: est,
+        numero: x.id,
+        competencia_folha_id: folhas.length === 1 ? n(folhas[0]!['id']) : null,
+        competencia,
+        sentido: x.sentido,
+        lote_exportado_id: exportado,
+        leiaute: x.leiaute,
+        situacao: x.situacao,
+        quantidade_colaboradores: x.colaboradores,
+        soma: x.sentido === 'recebido' ? reais(x.soma) : x.soma,
+        totais: x.totais,
+        vinculos: x.sentido === 'exportado' ? x.vinculos : null,
+        divergencias: x.divergencias,
+        resumo: x.resumo,
+        gerado_em: x.geradoEm.slice(0, 19).replace('T', ' '),
+      });
+      return x.id;
+    },
+    async situacaoLote(x) {
+      const l = await travarLote(e, est, x.id);
+      if (!l || !x.de.includes(l.situacao)) throw desatualizadoLote();
+      await e.alterar('lote_folha_intercambio', l.id, l.versao, { situacao: x.para });
+    },
+    async incluirResumo(x) {
+      const l = await travarLote(e, est, x.interface);
+      if (!l || x.empresa !== est) throw erroRegistroInexistente();
+      const vistos = new Set<string>();
+      const [ult] = await e.consultar(
+        'SELECT COALESCE(MAX(sequencia), 0) AS s FROM lote_folha_intercambio_resumo WHERE lote_folha_intercambio_id = ?',
+        [l.id],
+      );
+      let seq = n(ult?.['s']);
+      const ja = await e.consultar(
+        `SELECT vinculo_trabalho_id, rubrica FROM lote_folha_intercambio_resumo
+          WHERE lote_folha_intercambio_id = ? AND excluido_em IS NULL AND vinculo_trabalho_id IS NOT NULL`,
+        [l.id],
+      );
+      for (const r of ja) vistos.add(`${n(r['vinculo_trabalho_id'])}|${texto(r['rubrica'])}`);
+      for (const r of x.linhas as readonly LinhaResumoDaFolha[]) {
+        if (r.vinculo !== null) {
+          const k = `${r.vinculo}|${r.rubrica}`;
+          if (vistos.has(k))
+            throw recusa('resumo-repetido', 'O resumo deste colaborador já foi gravado neste retorno.');
+          vistos.add(k);
+        }
+        await e.incluir('lote_folha_intercambio_resumo', {
+          lote_folha_intercambio_id: l.id,
+          sequencia: ++seq,
+          vinculo_trabalho_id: r.vinculo,
+          centro_custo_id: r.centroCusto,
+          rubrica: r.rubrica,
+          valor: reais(r.valor),
+          vencimento: r.vencimento ?? null,
+        });
+      }
+      return x.linhas.length;
+    },
+    resumo: (numero) => lerResumo(e, est, numero),
     afastamento: (id) => lerAfastamento(e, est, id),
     afastamentos: (f) => lerAfastamentos(e, est, f),
     async incluirAfastamento(x: NovoAfastamentoFolha) {
@@ -275,6 +459,27 @@ function gravadorFolha(e: Escritor, c: ContextoFolha, est: number): GravadorFolh
       await alterarAuditado(e, 'afastamento', x.id, x.versao, { situacao: 'cancelado' }, carimbo());
     },
   };
+}
+
+const desatualizadoLote = () =>
+  recusa('desatualizado', 'O lote mudou depois que você abriu (outra pessoa gravou). Abra de novo.');
+
+async function lerResumo(l: Leitor, est: number, numero: number): Promise<ResumoDaFolha[]> {
+  return (
+    await l.consultar(
+      `SELECT r.vinculo_trabalho_id, r.centro_custo_id, r.rubrica, r.valor
+         FROM lote_folha_intercambio_resumo r
+         JOIN lote_folha_intercambio l ON l.id = r.lote_folha_intercambio_id
+        WHERE l.estabelecimento_id = ? AND l.numero = ? AND l.excluido_em IS NULL AND r.excluido_em IS NULL
+        ORDER BY r.sequencia`,
+      [est, numero],
+    )
+  ).map((r) => ({
+    vinculo: numOuNulo(r['vinculo_trabalho_id']),
+    centroCusto: numOuNulo(r['centro_custo_id']),
+    rubrica: texto(r['rubrica']),
+    valor: centavos(r['valor']),
+  }));
 }
 
 export class PortaFolhaPropria implements PortaFolha {
@@ -421,16 +626,16 @@ export class PortaFolhaPropria implements PortaFolha {
     });
   }
 
-  lotes(): Promise<never> {
-    return Promise.reject(erroModeloPendente('Listar os lotes da folha', FALTA_LOTE));
+  lotes(c: ContextoFolha, f: FiltroLotesDaFolha): Promise<LoteDaFolha[]> {
+    return this.ler(c, (l, est) => lerLotes(l, est, f));
   }
 
-  lote(): Promise<never> {
-    return Promise.reject(erroModeloPendente('Ler o lote da folha', FALTA_LOTE));
+  lote(c: ContextoFolha, id: number): Promise<LoteFolhaCompleto | null> {
+    return this.ler(c, (l, est) => lerLote(l, est, id));
   }
 
-  competenciaLancada(): Promise<never> {
-    return Promise.reject(erroModeloPendente('Conferir a competência lançada', FALTA_LOTE));
+  competenciaLancada(c: ContextoFolha, empresa: number, competencia: string): Promise<boolean> {
+    return this.ler(c, (l, est) => competenciaLancadaEm(l, est, empresa, competencia));
   }
 
   vinculosDaFolha(c: ContextoFolha, inicio: string, fim: string): Promise<VinculoDaFolha[]> {

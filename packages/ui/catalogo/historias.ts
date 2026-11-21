@@ -80,7 +80,7 @@ const dataEditavel = comModelo(SanteData, null as string | null, {
   rotulo: 'Data de retorno',
   editavel: true,
 });
-const horaEditavel = comModelo(SanteHora, '0830' as string | null, { rotulo: 'Hora', editavel: true });
+const horaEditavel = comModelo(SanteHora, '08:30' as string | null, { rotulo: 'Hora', editavel: true });
 const passos = comModelo(SantePassos, '2', {
   passos: [
     { valor: '1', rotulo: 'Dados' },
@@ -177,8 +177,8 @@ export const HISTORIAS: readonly Historia[] = [
   {
     id: 'hora',
     componente: 'SanteHora',
-    titulo: 'Hora (quatro dígitos, até a troca do componente)',
-    render: () => [h(SanteHora, { modelValue: '0801' }), horaEditavel()],
+    titulo: 'Hora (HH:MM)',
+    render: () => [h(SanteHora, { modelValue: '08:01' }), horaEditavel()],
   },
   {
     id: 'colisao',

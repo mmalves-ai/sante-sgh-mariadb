@@ -60,7 +60,7 @@ import {
   verdadeiro,
 } from './apoio-propria.js';
 import type { ContextoQualidade, GravadorQualidade, PortaQualidade } from './porta.js';
-import type { EventoNotificacaoNovo, EventoNotificacaoRegistrado, FiltroNotificacoes, NotificacaoRegistrada } from './tipos.js';
+import type { AcaoPlanoRegistrada, AnaliseRegistrada, EventoNotificacaoNovo, EventoNotificacaoRegistrado, FiltroNotificacoes, NotificacaoRegistrada } from './tipos.js';
 import { recusaVersaoNotificacao } from './tipos.js';
 
 /** As tabelas que a gravação da notificação escreve (a transação recusa as outras). */
@@ -81,6 +81,49 @@ function concorrencia(e: unknown): boolean {
   return (e as { errno?: unknown } | null)?.errno === ERRNO_LINHA_MUDOU || ehTravaOcupada(e);
 }
 const ETAPA_2 = 'A análise, o plano de ação, a queixa técnica e a sugestão resolvida';
+const QUEIXA = 'A queixa técnica de produto (área de vigilância, conduta, alerta, série e registro do produto)';
+const SUGESTAO = 'A sugestão de notificação resolvida (o resumo da sugestão)';
+
+const FATOR_DO_BANCO: Readonly<Record<string, string>> = { profissional: 'individuo', externo: 'institucional' };
+
+const SQL_ACAO = `
+  SELECT ap.id, COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) AS notificacao, ap.sequencia, ap.o_que,
+         ap.por_que, ap.onde, ap.prazo, ru.login AS quem, ap.como, ap.quanto_descricao, ap.situacao, ap.evidencia_execucao,
+         ap.concluida_em, ap.eficacia, ap.eficacia_descricao, ap.eficacia_verificada_em, ue.login AS eficacia_por,
+         ap.versao, uc.login AS criada_por, ap.criado_em
+    FROM acao_plano_qualidade ap
+    JOIN plano_acao_qualidade pa ON pa.id = ap.plano_acao_qualidade_id AND pa.excluido_em IS NULL
+    LEFT JOIN analise_incidente ai ON ai.id = pa.analise_incidente_id
+    LEFT JOIN usuario ru ON ru.id = ap.responsavel_usuario_id
+    LEFT JOIN usuario ue ON ue.id = ap.eficacia_verificador_usuario_id
+    LEFT JOIN usuario uc ON uc.id = ap.criado_por
+   WHERE pa.estabelecimento_id = ? AND ap.excluido_em IS NULL`;
+
+function acaoPlano(r: Linha): AcaoPlanoRegistrada {
+  return {
+    id: n(r['id']),
+    notificacao: n(r['notificacao']),
+    sequencia: n(r['sequencia']),
+    oQue: texto(r['o_que']),
+    porQue: texto(r['por_que']),
+    onde: texto(r['onde']),
+    quando: dataIso(r['prazo']) ?? '',
+    quem: texto(r['quem']),
+    como: texto(r['como']),
+    quanto: textoN(r['quanto_descricao']),
+    situacao: camelo(r['situacao']),
+    texto: textoN(r['evidencia_execucao']),
+    concluidaEm: instanteN(r['concluida_em']),
+    eficacia: textoN(r['eficacia']),
+    eficaciaTexto: textoN(r['eficacia_descricao']),
+    eficaciaEm: instanteN(r['eficacia_verificada_em']),
+    eficaciaPor: textoN(r['eficacia_por']),
+    versao: n(r['versao']),
+    criadaPor: texto(r['criada_por']),
+    criadaEm: instante(r['criado_em']),
+  };
+}
+
 const DE_OUTROS = 'A leitura de outro módulo (checagens, reações, checklists, protocolos gerenciados, riscos e itens da tecnovigilância)';
 
 const SQL_NOTIFICACAO = `
@@ -723,47 +766,121 @@ export class PortaQualidadePropria implements PortaQualidade {
     return this.ler(c, (l) => usuarioPeloLogin(l, login));
   }
 
-  // ── Etapa 2: nada dela pode ter sido gravado neste banco (as gravações recusam com `modelo-pendente`), então a
-  // leitura é de fato vazia. O que depende de dado de OUTRO módulo ainda sem mapeamento falha fechado (503). ──
+  // ── Etapa 2 (leitura sobre o modelo próprio): a análise (analise_incidente e as causas com o fator contribuinte) e as
+  // ações do plano (acao_plano_qualidade do plano da notificação ou da análise dela). Os registros podem vir do conector
+  // ou de outra tela, então a leitura é a do banco, nunca um vazio presumido. A queixa técnica e a sugestão resolvida
+  // ainda não têm o mapeamento do contrato (área de vigilância, conduta, alerta, série e registro do produto; o resumo
+  // da sugestão): falham fechadas (503 `modelo-pendente`). ──
 
-  analise(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve(null);
+  analise(c: ContextoQualidade, notificacao: number) {
+    return this.ler(c, async (l, est) => {
+      const a = await l.uma(
+        `SELECT a.id, a.notificacao_incidente_id, a.metodo, a.conteudo, a.causa_raiz, a.licoes_aprendidas,
+                a.sem_acao_justificativa, a.situacao, a.versao, uc.login AS registrada_por, a.criado_em, a.alterado_em,
+                a.concluida_em, ua.login AS alterada_por
+           FROM analise_incidente a
+           LEFT JOIN usuario uc ON uc.id = a.criado_por
+           LEFT JOIN usuario ua ON ua.id = a.alterado_por
+          WHERE a.notificacao_incidente_id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
+            AND a.situacao <> 'cancelada'
+          ORDER BY a.id DESC LIMIT 1`,
+        [notificacao, est],
+      );
+      if (!a) return null;
+      const fatores = await l.consultar(
+        `SELECT DISTINCT f.categoria FROM analise_incidente_causa ca JOIN fator_contribuinte f ON f.id = ca.fator_contribuinte_id
+          WHERE ca.analise_incidente_id = ? AND ca.excluido_em IS NULL ORDER BY f.categoria`,
+        [a['id']],
+        { teto: 100 },
+      );
+      const bruto = a['conteudo'];
+      const concluida = texto(a['situacao']) === 'concluida';
+      const r: AnaliseRegistrada = {
+        id: n(a['id']),
+        notificacao: n(a['notificacao_incidente_id']),
+        metodo: camelo(a['metodo']),
+        conteudo: bruto === null || bruto === undefined ? '' : typeof bruto === 'string' ? bruto : JSON.stringify(bruto),
+        causaRaiz: textoN(a['causa_raiz']),
+        // O fator do contrato é a categoria do fator contribuinte (o profissional é o indivíduo; o externo, o institucional).
+        fatores: fatores.map((f) => FATOR_DO_BANCO[texto(f['categoria'])] ?? texto(f['categoria'])),
+        licoes: textoN(a['licoes_aprendidas']),
+        semAcaoJustificativa: textoN(a['sem_acao_justificativa']),
+        situacao: concluida ? 'concluida' : 'rascunho',
+        versao: n(a['versao']),
+        registradaPor: texto(a['registrada_por']),
+        registradaEm: instante(a['criado_em']),
+        atualizadaEm: instanteN(a['alterado_em']),
+        concluidaEm: concluida ? instanteN(a['concluida_em']) : null,
+        // A análise concluída não muda mais: quem a alterou por último é quem a concluiu.
+        concluidaPor: concluida ? textoN(a['alterada_por']) : null,
+      };
+      return r;
+    });
   }
 
-  acoes(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve([]);
+  acoes(c: ContextoQualidade, notificacao: number) {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(`${SQL_ACAO} AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) = ? ORDER BY ap.sequencia, ap.id`, [est, notificacao], {
+          teto: 500,
+        })
+      ).map(acaoPlano),
+    );
   }
 
-  acoesDoResponsavel(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve([]);
+  /** As ações abertas de que o login é o responsável (teto 200). */
+  acoesDoResponsavel(c: ContextoQualidade, login: string) {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `${SQL_ACAO} AND ru.login = ? AND ap.situacao IN ('planejada', 'em_andamento') ORDER BY ap.prazo, ap.id LIMIT 200`,
+          [est, login.trim()],
+          { teto: 200 },
+        )
+      ).map(acaoPlano),
+    );
   }
 
-  queixas(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve({ itens: [], temMais: false });
+  queixas(): Promise<never> {
+    return Promise.reject(leituraPendente(QUEIXA));
   }
 
-  queixa(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve(null);
+  queixa(): Promise<never> {
+    return Promise.reject(leituraPendente(QUEIXA));
   }
 
-  eventosQueixa(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve([]);
+  eventosQueixa(): Promise<never> {
+    return Promise.reject(leituraPendente(QUEIXA));
   }
 
-  resolvidas(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve(new Set<string>());
+  resolvidas(): Promise<never> {
+    return Promise.reject(leituraPendente(SUGESTAO));
   }
 
-  painelAcoes(..._a: unknown[]) {
-    void _a;
-    return Promise.resolve([]);
+  /** As ações dos planos das notificações por situação, eficácia e prazo vencido (aberta com prazo antes de hoje). */
+  painelAcoes(c: ContextoQualidade, hoje: string) {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT ap.situacao, ap.eficacia,
+                  (ap.situacao IN ('planejada', 'em_andamento') AND ap.prazo < ?) AS vencida, COUNT(*) AS quantidade
+             FROM acao_plano_qualidade ap
+             JOIN plano_acao_qualidade pa ON pa.id = ap.plano_acao_qualidade_id AND pa.excluido_em IS NULL
+             LEFT JOIN analise_incidente ai ON ai.id = pa.analise_incidente_id
+            WHERE pa.estabelecimento_id = ? AND ap.excluido_em IS NULL
+              AND COALESCE(pa.notificacao_incidente_id, ai.notificacao_incidente_id) IS NOT NULL
+            GROUP BY ap.situacao, ap.eficacia, vencida
+            ORDER BY ap.situacao, ap.eficacia, vencida`,
+          [hoje.slice(0, 10), est],
+          { teto: 100 },
+        )
+      ).map((r) => ({
+        situacao: camelo(r['situacao']),
+        eficacia: textoN(r['eficacia']),
+        vencida: verdadeiro(r['vencida']),
+        quantidade: n(r['quantidade']),
+      })),
+    );
   }
 
   /** As análises do período (pela data do incidente): com prazo, concluídas, no prazo e vencidas (sem as descartadas). */

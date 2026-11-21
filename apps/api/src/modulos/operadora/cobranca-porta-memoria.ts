@@ -4,7 +4,22 @@
 // competência, o reajuste vigente único, a versão vista e a situação) e a transação desfeita por inteiro quando a
 // função falha. Nada vai ao banco.
 import { ErroOperacao } from '@sgh/nucleo';
-import { type DadosBaseMensalidade, type DadosBeneficiarioBase, type DadosCobranca, type DadosContratoCobranca, type DadosItemCobranca, type DadosOperadora, type DadosReajuste, type EntradaCobranca, type EntradaItemCobranca, type EntradaReajuste, type FiltroCobrancasPorta, LIMITE_CONTRATOS_GERACAO, LIMITE_PAGINA_COBRANCA, type TotaisCobranca } from './dados-portas.js';
+import {
+  type DadosBaseMensalidade,
+  type DadosBeneficiarioBase,
+  type DadosCobranca,
+  type DadosContratoCobranca,
+  type DadosItemCobranca,
+  type DadosOperadora,
+  type DadosReajuste,
+  type EntradaCobranca,
+  type EntradaItemCobranca,
+  type EntradaReajuste,
+  type FiltroCobrancasPorta,
+  LIMITE_CONTRATOS_GERACAO,
+  LIMITE_PAGINA_COBRANCA,
+  type TotaisCobranca,
+} from './dados-portas.js';
 import { hojeLocal } from './aplicacao/beneficiarios.js';
 import type {
   ContextoCobranca,
@@ -586,12 +601,15 @@ export class PortaCobrancaOperadoraMemoria implements PortaCobrancaOperadora {
         tocar(x, k.por);
         return { id: x.id, versao: x.versao };
       },
-      proximoAcordo: async () => this.proximo('acordo'),
-      renegociar: async (k) => {
-        const x = achar(k.id, k.versao, 'aberta');
-        if (x.contrato !== k.contrato) throw desatualizada();
-        Object.assign(x, { situacao: 'renegociada', situacaoEm: hoje, acordoDestino: k.acordo });
-        tocar(x, k.por);
+      registrarAcordo: async (a) => {
+        const numero = await this.proximo('acordo');
+        for (const k of a.cobrancas) {
+          const x = achar(k.id, k.versao, 'aberta');
+          if (x.contrato !== a.contrato) throw desatualizada();
+          Object.assign(x, { situacao: 'renegociada', situacaoEm: hoje, acordoDestino: numero });
+          tocar(x, a.por);
+        }
+        return { acordo: numero };
       },
       notificar: async (k) => {
         const alvo = this.daqui(c).filter(

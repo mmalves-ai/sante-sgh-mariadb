@@ -74,7 +74,25 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
         [ids.est, ids.outroEst],
       );
       await e.executar('DELETE FROM triagem_nutricional WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM correcao_registro_nutricao WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      // O acompanhamento que substitui outro sai antes do substituído (chave do próprio registro).
+      for (const [t, f] of [['avaliacao_nutricao_parenteral', ''], ['acompanhamento_terapia_nutricional', ' AND x.substitui_id IS NOT NULL'], ['acompanhamento_terapia_nutricional', '']])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN terapia_nutricional t ON t.id = x.terapia_nutricional_id WHERE t.estabelecimento_id IN (?, ?)${f}`,
+          [ids.est, ids.outroEst],
+        );
       await e.executar('DELETE FROM terapia_nutricional WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM registro_social WHERE estabelecimento_id IN (?, ?) AND adendo_registro_social_id IS NOT NULL', [ids.est, ids.outroEst]);
+      await e.executar('DELETE FROM registro_social WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
+      await e.executar(
+        'DELETE b FROM barreira_alta b JOIN internacao i ON i.id = b.internacao_id WHERE i.estabelecimento_id IN (?, ?)',
+        [ids.est, ids.outroEst],
+      );
+      await e.executar(
+        'DELETE r FROM plano_refeicao_acompanhante_refeicao r JOIN plano_refeicao_acompanhante p ON p.id = r.plano_refeicao_acompanhante_id WHERE p.estabelecimento_id IN (?, ?)',
+        [ids.est, ids.outroEst],
+      );
+      await e.executar('DELETE FROM plano_refeicao_acompanhante WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
     })();
 
   beforeAll(async () => {
@@ -109,6 +127,9 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
       ids.jantar = await g('refeicao_do_dia', `${P}-JAN`, { ordem: 3041, horario_inicio: '18:00:00' });
       ids.ceia = await g('refeicao_do_dia', `${P}-CEI`, { ordem: 3042, horario_inicio: '21:00:00' });
       ids.jejum = await g('modalidade_dieta', `${P}-JEJ`, { classe: 'jejum', gera_bandeja: false, ordem: 0 });
+      await garantir(e, "SELECT id FROM tipo_barreira_alta WHERE categoria = 'social' AND ativo = TRUE ORDER BY id LIMIT 1", [],
+        "INSERT INTO tipo_barreira_alta (codigo, descricao, categoria, criado_em) VALUES (?, 'BARREIRA SOCIAL SINTETICA', 'social', ?)",
+        [`${P}-SOC`, agora]);
       const setor = await garantir(e, 'SELECT id FROM setor_funcional WHERE estabelecimento_id = ? AND codigo = ?', [ids.est, `${P}-SET`],
         "INSERT INTO setor_funcional (estabelecimento_id, codigo, nome, sigla, tipo, criado_em) VALUES (?, ?, 'POSTO L0304', 'PL0304', 'assistencial', ?)",
         [ids.est, `${P}-SET`, agora]);
@@ -312,11 +333,99 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
         linhas: [{ ...linhaJejum, tipo: 'oral' as const, jejumOrigem: null }], usuario: 'l0304.nutri' })))).toBe('dieta-sem-modalidade');
   });
 
+  it('acompanhamento do dia, retificação, avaliação da NPT e correção: um ativo por dia, o anterior fica inativo', async () => {
+    const base = { reg: ids.internacao, pront: ids.paciente, paciente: ids.paciente, vinculo: ids.profissional, usuario: 'l0304.nutri' };
+    const meta = await porta.gravarSgh(ctx, trilha('terapia_nutricional'), (g) =>
+      g.registrarMeta({ ...base, via: 'parenteral', itemDieta: null, dieta: null, pesoKg: 60, kcalPorKg: 25, proteinaGPorKg: 1.5,
+        metaKcal: 1500, metaProteinaG: 90, densidadeKcalMl: 1, proteinaGL: 60, metaVolumeMl: 1500, observacao: null }));
+    const dia = (x: Partial<{ volumeInfundidoMl: number; pctKcal: number }> = {}) => ({
+      ...base, via: 'parenteral' as const, meta, data: '2026-11-20', volumePrescritoMl: 1500, volumeInfundidoMl: 1200,
+      origemVolume: 'informado' as const, kcalAtingida: 1200, proteinaAtingidaG: 72, pctKcal: 80, pctProteina: 80,
+      motivo: null, observacao: null, ...x,
+    });
+    const a1 = await porta.gravarSgh(ctx, trilha('terapia_nutricional'), (g) => g.registrarAcompanhamento(dia()));
+    // O segundo do mesmo dia sem a correção é recusado inteiro (nada gravado).
+    expect(await recusada(porta.gravarSgh(ctx, trilha('terapia_nutricional'), (g) => g.registrarAcompanhamento(dia())))).toBe('acompanhamento-do-dia');
+    const a2 = await porta.gravarSgh(ctx, trilha('correcao_registro_nutricao'), async (g) => {
+      const x = await g.registrarAcompanhamento(dia({ volumeInfundidoMl: 1500, pctKcal: 100 }));
+      await g.corrigir({ ...base, registro: 'acompanhamento', id: a1, acao: 'retificacao', idNovo: x, motivo: 'volume corrigido' });
+      return x;
+    });
+    const t = await porta.terapia(ctx, ids.internacao);
+    expect(t.acompanhamentos.map((a) => [a.id, a.pctKcal])).toEqual([[a2, 100], [a1, 80]]);
+    const k = await porta.correcoes(ctx, 'acompanhamento', [a1, a2]);
+    expect(k.inativa.get(a1)).toMatchObject({ acao: 'retificacao', idNovo: a2, por: 'l0304.nutri' });
+    expect(k.substitui.get(a2)).toBe(a1);
+    expect(await porta.internacaoDoRegistro(ctx, 'acompanhamento', a2)).toBe(ids.internacao);
+    expect(await recusada(porta.gravarSgh(ctx, trilha('correcao_registro_nutricao'), (g) =>
+      g.corrigir({ ...base, registro: 'acompanhamento', id: a1, acao: 'estorno', idNovo: null, motivo: 'de novo' })))).toBe('registro-ja-corrigido');
+    const linhas = await nucleo.lerSomente(ctx, (l) => l.consultar(
+      'SELECT id, situacao, substitui_id FROM acompanhamento_terapia_nutricional WHERE terapia_nutricional_id = ? ORDER BY id', [meta]));
+    expect(linhas.map((r) => [r['situacao'], r['substitui_id'] === null ? null : Number(r['substitui_id'])])).toEqual([['retificado', null], ['ativo', a1]]);
+    const npt = { ...base, meta, parecer: 'adequada' as never, acesso: 'central' as never, osmolaridade: 1200, estabilidade: true, compatibilidade: true, observacao: null };
+    const av = await porta.gravarSgh(ctx, trilha('avaliacao_nutricao_parenteral'), (g) => g.avaliarNpt(npt));
+    expect(await porta.avaliacoesNpt(ctx, ids.internacao)).toMatchObject([{ id: av, meta, osmolaridade: 1200, estabilidade: true }]);
+    expect(await recusada(porta.gravarSgh(ctx, trilha('avaliacao_nutricao_parenteral'), (g) => g.avaliarNpt(npt)))).toBe('avaliacao-registrada');
+    expect(await porta.avaliacoesNpt(outro, ids.internacao)).toEqual([]);
+  });
+
+  it('serviço social: registro com a barreira social, adendo, último registro e estorno', async () => {
+    const base = { reg: ids.internacao, pront: ids.paciente, vinculo: ids.profissional, usuario: 'l0304.nutri' };
+    const social = {
+      ...base, paciente: ids.paciente, tipo: 'avaliacao' as const, redeApoio: 'fragil' as never, vulnerabilidades: ['sem-renda', 'sem-renda'] as never[],
+      risco: 'alto' as never, encaminhamentos: ['cras-creas'] as never[], parecer: 'Parecer sintético.', orientacoes: null,
+      barreira: { descricao: 'Sem cuidador em casa', responsavel: 'Assistente social', prazo: '2026-11-25' },
+    };
+    const r = await porta.gravarSgh(ctx, trilha('registro_social'), (g) => g.registrarSocial(social));
+    expect(r.barreira).not.toBeNull();
+    const ad = await porta.gravarSgh(ctx, trilha('registro_social'), (g) =>
+      g.adendoSocial({ ...base, de: r.id, texto: 'Complemento sintético.', motivo: 'faltou o contato' }));
+    const lidos = await porta.sociais(ctx, ids.internacao);
+    expect(lidos.map((x) => [x.id, x.tipo, x.adendoDe])).toEqual([[ad, 'adendo', r.id], [r.id, 'avaliacao', null]]);
+    expect(lidos[1]).toMatchObject({ vulnerabilidades: ['sem-renda'], encaminhamentos: ['cras-creas'], barreira: r.barreira, por: 'l0304.nutri' });
+    expect((await porta.ultimosSociais(ctx, [ids.internacao])).get(ids.internacao)).toMatchObject({ risco: 'alto', tipo: 'avaliacao' });
+    expect((await porta.barreirasSociais(ctx, [ids.internacao])).get(ids.internacao)).toBe(1);
+    await porta.gravarSgh(ctx, trilha('correcao_registro_nutricao'), (g) =>
+      g.corrigir({ ...base, registro: 'social', id: r.id, acao: 'estorno', idNovo: null, motivo: 'paciente errado' }));
+    expect((await porta.ultimosSociais(ctx, [ids.internacao])).size).toBe(0);
+    expect(await recusada(porta.gravarSgh(ctx, trilha('registro_social'), (g) =>
+      g.adendoSocial({ ...base, de: r.id, texto: 'x', motivo: 'y' })))).toBe('registro-ja-corrigido');
+    expect(await porta.sociais(outro, ids.internacao)).toEqual([]);
+  });
+
+  it('refeição do acompanhante: uma vigente, alteração devolve o anterior, encerramento', async () => {
+    const a = { reg: ids.internacao, pront: ids.paciente, baseLegal: 'idoso' as never, refeicoes: [ids.jantar, ids.refeicao, ids.refeicao],
+      inicio: '2026-11-20', fim: null, observacao: null, usuario: 'l0304.nutri' };
+    const id = await porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.registrarAcompanhante(a));
+    expect(await recusada(porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.registrarAcompanhante(a)))).toBe('acompanhante-vigente');
+    expect(await porta.acompanhante(ctx, id)).toMatchObject({ reg: ids.internacao, refeicoes: [ids.refeicao, ids.jantar].sort((x, y) => x - y), inicio: '2026-11-20', fim: null, situacao: 'ativa', por: 'l0304.nutri' });
+    const antes = await porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) =>
+      g.alterarAcompanhante({ id, dieta: 'Branda', refeicoes: [ids.ceia], fim: '2026-11-22', observacao: 'ok' }));
+    expect(antes).toEqual({ dieta: null, refeicoes: [ids.refeicao, ids.jantar].sort((x, y) => x - y), fim: null, observacao: null });
+    expect(await porta.acompanhante(ctx, id)).toMatchObject({ dieta: 'Branda', refeicoes: [ids.ceia], fim: '2026-11-22', observacao: 'ok' });
+    // A refeição que sai é exclusão lógica com carimbo; a que volta reativa a mesma linha (chave única plano + refeição).
+    const linhasRef = () => nucleo.lerSomente(ctx, (l) => l.consultar(
+      'SELECT refeicao_do_dia_id AS r, excluido_em, excluido_por FROM plano_refeicao_acompanhante_refeicao WHERE plano_refeicao_acompanhante_id = ? ORDER BY refeicao_do_dia_id', [id]));
+    const saiu = (await linhasRef()).find((x) => Number(x['r']) === ids.jantar);
+    expect(saiu?.['excluido_em']).not.toBeNull();
+    expect(Number(saiu?.['excluido_por'])).toBe(ctx.usuario);
+    await porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) =>
+      g.alterarAcompanhante({ id, dieta: 'Branda', refeicoes: [ids.ceia, ids.jantar], fim: '2026-11-22', observacao: 'ok' }));
+    expect((await porta.acompanhante(ctx, id))?.refeicoes).toEqual([ids.ceia, ids.jantar].sort((x, y) => x - y));
+    expect((await linhasRef()).filter((x) => Number(x['r']) === ids.jantar).map((x) => x['excluido_em'])).toEqual([null]);
+    expect((await porta.acompanhantesVigentes(ctx, [ids.internacao])).get(ids.internacao)?.id).toBe(id);
+    expect(await porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.encerrarAcompanhante({ id, motivo: 'alta', usuario: 'x' }))).toBe(1);
+    expect((await porta.acompanhantes(ctx, ids.internacao)).map((x) => x.situacao)).toEqual(['encerrada']);
+    expect(await recusada(porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.encerrarAcompanhante({ id, motivo: 'alta', usuario: 'x' })))).toBe('acompanhante-desatualizado');
+    expect(await porta.acompanhantes(outro, ids.internacao)).toEqual([]);
+  });
+
   it('recusas: outro estabelecimento, sem usuário e modelo pendente (nada gravado)', async () => {
     expect(await recusada(porta.gravarSgh(outro, trilha('triagem_nutricional'), (g) => g.triar(triagem(ids.internacao))))).toBe('internacao-inexistente');
     expect(await recusada(porta.gravarSgh({ ...ctx, usuario: null }, trilha('triagem_nutricional'), (g) => g.triar(triagem(ids.internacao))))).toBe('sem-usuario');
-    expect(await recusada(porta.gravarSgh(ctx, trilha('registro_social'), (g) => g.registrarAcompanhante({
-      reg: ids.internacao, pront: ids.paciente, baseLegal: 'idoso', refeicoes: [ids.refeicao], inicio: '2026-11-20', fim: null, observacao: null, usuario: 'x',
+    // O histórico de alteração do plano do acompanhante aguarda a tabela de eventos (pedido do lote).
+    expect(await recusada(porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.registrarAlteracao({
+      tabela: 'plano_refeicao_acompanhante', id: 1, evento: 'alterada', antes: null, depois: null, motivo: 'x', usuario: 'x',
     })))).toBe('modelo-pendente');
     expect(await contar('SELECT COUNT(*) AS q FROM triagem_nutricional WHERE estabelecimento_id = ?', [ids.outroEst])).toBe(0);
   });

@@ -19,15 +19,19 @@
 // Classificação de pacientes (Fugulin e NAS) em classificacao_paciente, índices da UTI (APACHE II, SOFA) em
 // indice_gravidade_uti (com a validação e o estorno) e o adendo da checagem da contenção em
 // contencao_paciente_avaliacao_adendo (a checagem original não muda).
-// Ainda recusadas com 'modelo-pendente' (a estrutura existe, falta ligar a porta): a decisão e a retificação da
-// profilaxia de TEV, a retificação e a inativação do evento do TRR, a lesão de pele (ficha, versão,
-// curativo, correção, foto, encerramento, inativação) e a meta e o item do checklist do protocolo gerenciado (o CHECK
-// do evento da inclusão não tem esses fatos: pedido de DDL). A inclusão no protocolo, o encerramento e a inativação por
-// engano gravam em inclusao_protocolo_paciente e inclusao_protocolo_evento; a ficha da PCR (Utstein), por versão, e a
-// inativação dela em parada_cardiorrespiratoria_ficha.
+// Profilaxia de TEV: a decisão do prescritor sobre a sugestão do escore (Caprini ou Padua) grava em profilaxia_tev_decisao,
+// ligada à avaliação de risco (profilaxia_tev_avaliacao) criada na primeira decisão a partir do escore; a retificação e
+// a anulação são linhas novas (a original não muda). TRR: a chegada e o desfecho são eventos versionados em
+// acionamento_resposta_rapida_evento (a retificação aponta a versão corrigida; a inativação fica visível), e as colunas
+// do acionamento espelham o evento vigente. Lesão de pele: a ficha (versões), o curativo (e a correção) e a foto são
+// linhas de lesao_pele_avaliacao; o tipo, a região e o estágio vêm do cadastro; o encerramento e a inativação ficam na
+// lesão ou na linha, visíveis. Protocolo gerenciado do internado: a inclusão, a meta, o item do checklist, o
+// encerramento e a inativação por engano gravam em inclusao_protocolo_paciente e inclusao_protocolo_evento; a ficha da
+// PCR (Utstein), por versão, e a inativação dela em parada_cardiorrespiratoria_ficha.
 import { createHash } from 'node:crypto';
+import { avaliacaoTevDoEscore } from '@sgh/dominio-enfermagem';
 import { CONFIGURACAO_INDICES_SINTETICA } from '@sgh/dominio-pep';
-import { ErroOperacao, type Executor, gravarOutbox, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
+import { type Executor, gravarOutbox, type Leitor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import {
   booleano,
@@ -64,7 +68,10 @@ import type {
   ClassificacaoRegistrada,
   ContencaoParaGravar,
   ContencaoRegistrada,
+  DecisaoProfilaxiaRegistrada,
   EscoreRegistrado,
+  EventoTrrRegistrado,
+  HistoricoProfilaxia,
   HorarioContencao,
   IndiceUtiRegistrado,
   InternacaoParaEscore,
@@ -165,13 +172,75 @@ function indiceDe(r: Linha, fuso: string): IndiceUtiRegistrado {
   };
 }
 
-const pendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Gravação indisponível',
-    `${o} aguarda a tabela no modelo do banco próprio: nada foi gravado.`,
-  );
+/** A decisão do contrato na coluna da decisão (a anulação guarda a decisão anulada; o contrato vai em `dados`). */
+const DECISAO_BANCO = (d: 'prescrita' | 'nao-prescrita') => (d === 'prescrita' ? 'aceita' : 'recusada');
+
+/** O histórico das decisões de profilaxia de uma avaliação, da mais antiga para a mais nova. */
+function historicoDe(rs: readonly Linha[], fuso: string): (HistoricoProfilaxia & { autor: number })[] {
+  return rs.map((d) => {
+    const x = lerJson<{ decisao?: string; motivo?: string | null }>(d['dados']) ?? {};
+    const decisao =
+      x.decisao === 'anulada' || x.decisao === 'prescrita' || x.decisao === 'nao-prescrita'
+        ? x.decisao
+        : d['decisao'] === 'aceita'
+          ? 'prescrita'
+          : 'nao-prescrita';
+    return {
+      decisao,
+      motivo: x.motivo ?? null,
+      justificativa: d['operacao'] === 'retificacao' ? textoOuNulo(d['justificativa']) : null,
+      usuario: texto(d['login']),
+      em: civilDe(d['ocorrido_em'], fuso) ?? '',
+      autor: num(d['usuario_id']),
+    };
+  });
+}
+
+const SQL_EVENTOS_TRR = (n: number) => `
+  SELECT ev.*, ${LOGIN_DE('ev.criado_por')} AS login, ${LOGIN_DE('ev.alterado_por')} AS alterado_login
+    FROM acionamento_resposta_rapida_evento ev
+   WHERE ev.acionamento_resposta_rapida_id IN (${marcadores(n)}) AND ev.excluido_em IS NULL
+   ORDER BY ev.acionamento_resposta_rapida_id, ev.tipo, ev.id`;
+
+/** Os eventos do TRR por acionamento: a sequência por tipo e o vigente (o último do tipo, se não inativado). */
+function eventosTrrDe(rs: readonly Linha[], fuso: string): Map<number, EventoTrrRegistrado[]> {
+  const m = new Map<number, EventoTrrRegistrado[]>();
+  const minuto = (v: unknown) => (civilDe(v, fuso) ?? '').slice(0, 16);
+  for (const r of rs) {
+    const k = num(r['acionamento_resposta_rapida_id']);
+    const tipo = r['tipo'] === 'desfecho' ? 'desfecho' : 'chegada';
+    const lista = m.get(k) ?? [];
+    const seq = lista.filter((e) => e.tipo === tipo).length + 1;
+    lista.push({
+      id: num(r['id']),
+      tipo,
+      seq,
+      em: minuto(r['ocorrido_em']),
+      desfecho: textoOuNulo(r['desfecho']),
+      usuario: texto(r['login']),
+      motivo: textoOuNulo(r['motivo']),
+      anterior: numOuNulo(r['anterior_evento_id']),
+      inativacao: booleano(r['inativado'])
+        ? {
+            motivo: texto(r['motivo_inativacao']),
+            usuario: texto(r['alterado_login']),
+            em: minuto(r['alterado_em']),
+          }
+        : null,
+      vigente: false,
+    });
+    m.set(k, lista);
+  }
+  for (const [k, lista] of m)
+    m.set(
+      k,
+      lista.map((e) => {
+        const ultimo = lista.filter((y) => y.tipo === e.tipo).at(-1);
+        return { ...e, vigente: ultimo?.id === e.id && e.inativacao === null };
+      }),
+    );
+  return m;
+}
 
 /** A unidade de internação do atendimento no instante (a ocupação de leito vigente nele). */
 const UNIDADE_NO_INSTANTE = (atendimento: string, instante: string) => `(
@@ -273,6 +342,9 @@ export class PortaEscoresPropria implements PortaEscores {
         'classificacao_paciente',
         'indice_gravidade_uti',
         'acionamento_resposta_rapida',
+        'acionamento_resposta_rapida_evento',
+        'profilaxia_tev_avaliacao',
+        'profilaxia_tev_decisao',
         'parada_cardiorrespiratoria_ficha',
         'inclusao_protocolo_paciente',
         'inclusao_protocolo_evento',
@@ -600,8 +672,37 @@ export class PortaEscoresPropria implements PortaEscores {
     });
   }
 
-  decisoesProfilaxia(): Promise<[]> {
-    return Promise.resolve([]);
+  decisoesProfilaxia(c: ContextoEscores, escores: readonly number[]): Promise<DecisaoProfilaxiaRegistrada[]> {
+    if (escores.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est, fuso) => {
+      const rs = await l.consultar(
+        `SELECT av.aplicacao_escala_id AS escore, d.*, ${LOGIN_DE('d.usuario_id')} AS login
+           FROM profilaxia_tev_decisao d JOIN profilaxia_tev_avaliacao av ON av.id = d.profilaxia_tev_avaliacao_id
+          WHERE av.estabelecimento_id = ? AND av.excluido_em IS NULL AND av.situacao = 'registrada'
+            AND av.aplicacao_escala_id IN (${marcadores(escores.length)})
+          ORDER BY av.aplicacao_escala_id, d.ocorrido_em, d.id`,
+        [est, ...escores],
+      );
+      const porEscore = new Map<number, Linha[]>();
+      for (const r of rs) {
+        const k = num(r['escore']);
+        porEscore.set(k, [...(porEscore.get(k) ?? []), r]);
+      }
+      return [...porEscore].map(([escore, linhas]): DecisaoProfilaxiaRegistrada => {
+        const historico = historicoDe(linhas, fuso).map(({ autor: _a, ...h }) => h);
+        const v = historico.at(-1)!;
+        const ultima = [...historico].reverse().find((y) => y.decisao !== 'anulada') ?? v;
+        return {
+          escore,
+          decisao: ultima.decisao === 'prescrita' ? 'prescrita' : 'nao-prescrita',
+          motivo: v.decisao === 'anulada' ? ultima.motivo : v.motivo,
+          usuario: v.usuario,
+          em: v.em,
+          anulada: v.decisao === 'anulada',
+          historico,
+        };
+      });
+    });
   }
 
   // ── Contenção ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -784,9 +885,11 @@ export class PortaEscoresPropria implements PortaEscores {
         ...p,
         TETO,
       ]);
-      return rs
-        .filter((r) => f.unidade === undefined || r['unidade'] === f.unidade)
-        .map((r) => trrDe(r, fuso));
+      const lidos = rs.filter((r) => f.unidade === undefined || r['unidade'] === f.unidade);
+      const ids = lidos.map((r) => num(r['id']));
+      const eventos =
+        ids.length > 0 ? eventosTrrDe(await l.consultar(SQL_EVENTOS_TRR(ids.length), ids), fuso) : new Map();
+      return lidos.map((r) => ({ ...trrDe(r, fuso), eventos: eventos.get(num(r['id'])) ?? [] }));
     });
   }
 
@@ -1039,6 +1142,7 @@ export class PortaEscoresPropria implements PortaEscores {
       }
       const rs = await l.consultar(
         `SELECT lp.*, ${LOGIN_DO_PROFISSIONAL('lp.responsavel_profissional_id', 'lp.estabelecimento_id')} AS autor,
+                ${LOGIN_DE('lp.alterado_por')} AS alterado_login,
                 ${UNIDADE_NO_INSTANTE('lp.atendimento_id', 'lp.identificada_em')} AS unidade,
                 ${UTI_NO_INSTANTE('lp.atendimento_id', 'lp.identificada_em')} AS uti
            FROM lesao_pele_paciente lp
@@ -1050,7 +1154,8 @@ export class PortaEscoresPropria implements PortaEscores {
       const avals = new Map<number, Linha[]>();
       if (ids.length > 0) {
         const as = await l.consultar(
-          `SELECT a.*, ${LOGIN_DO_PROFISSIONAL('a.profissional_id', 'lp.estabelecimento_id')} AS autor
+          `SELECT a.*, ${LOGIN_DO_PROFISSIONAL('a.profissional_id', 'lp.estabelecimento_id')} AS autor,
+                  ${LOGIN_DE('a.alterado_por')} AS alterado_login
              FROM lesao_pele_avaliacao a JOIN lesao_pele_paciente lp ON lp.id = a.lesao_pele_paciente_id
             WHERE a.lesao_pele_paciente_id IN (${marcadores(ids.length)}) AND a.excluido_em IS NULL
             ORDER BY a.lesao_pele_paciente_id, a.sequencia DESC`,
@@ -1061,11 +1166,43 @@ export class PortaEscoresPropria implements PortaEscores {
           avals.set(k, [...(avals.get(k) ?? []), a]);
         }
       }
+      const dadosDe = (a: Linha) => {
+        const d = a['dados'] ?? a['observacao'];
+        return d === null || d === undefined ? '' : typeof d === 'string' ? d : JSON.stringify(d);
+      };
+      const minuto = (v: unknown) => (civilDe(v, fuso) ?? '').slice(0, 16);
       return rs.map((r): LesaoRegistrada => {
         const as = avals.get(num(r['id'])) ?? [];
         const fichas = as.filter((a) => a['tipo_avaliacao'] === 'ficha');
-        const curativos = as.filter((a) => a['tipo_avaliacao'] !== 'ficha').reverse();
-        const situacao = texto(r['situacao']);
+        const fotos = as.filter((a) => a['tipo_avaliacao'] === 'foto');
+        const curativos = as
+          .filter((a) => a['tipo_avaliacao'] !== 'ficha' && a['tipo_avaliacao'] !== 'foto')
+          .reverse();
+        const inativacao = (origem: 'lesao' | 'curativo' | 'foto', x: Linha) => ({
+          origem,
+          registro: num(x['id']),
+          tipo: 'inativacao' as const,
+          desfecho: null,
+          em: minuto(x['alterado_em']),
+          motivo: textoOuNulo(x['motivo_inativacao']),
+          usuario: texto(x['alterado_login']),
+          criadoEm: civilDe(x['alterado_em'], fuso) ?? '',
+        });
+        const eventos: LesaoRegistrada['eventos'][number][] = [];
+        if (texto(r['situacao']) === 'encerrada')
+          eventos.push({
+            origem: 'lesao',
+            registro: num(r['id']),
+            tipo: 'encerramento',
+            desfecho: textoOuNulo(r['desfecho']),
+            em: minuto(r['encerrada_em']),
+            motivo: textoOuNulo(r['observacao_encerramento']),
+            usuario: texto(r['autor']),
+            criadoEm: civilDe(r['encerrada_em'], fuso) ?? '',
+          });
+        for (const a of curativos) if (booleano(a['inativada'])) eventos.push(inativacao('curativo', a));
+        for (const a of fotos) if (booleano(a['inativada'])) eventos.push(inativacao('foto', a));
+        if (booleano(r['inativada'])) eventos.push(inativacao('lesao', r));
         return {
           id: num(r['id']),
           paciente: num(r['paciente_id']),
@@ -1077,9 +1214,9 @@ export class PortaEscoresPropria implements PortaEscores {
           versoes: fichas.map((a, i) => ({
             id: num(a['id']),
             versao: fichas.length - i,
-            anterior: numOuNulo(a['corrigida_lesao_pele_avaliacao_id']),
+            anterior: i + 1 < fichas.length ? num(fichas[i + 1]!['id']) : null,
             situacao: booleano(a['finalizada']) ? ('finalizada' as const) : ('rascunho' as const),
-            dados: texto(a['observacao']),
+            dados: dadosDe(a),
             motivo: textoOuNulo(a['motivo_correcao']),
             autor: texto(a['autor']),
             criadoEm: civilDe(a['criado_em'], fuso) ?? '',
@@ -1087,28 +1224,20 @@ export class PortaEscoresPropria implements PortaEscores {
           curativos: curativos.map((a) => ({
             id: num(a['id']),
             anterior: numOuNulo(a['corrigida_lesao_pele_avaliacao_id']),
-            realizadoEm: (civilDe(a['realizada_em'], fuso) ?? '').slice(0, 16),
-            dados: texto(a['observacao']),
+            realizadoEm: minuto(a['realizada_em']),
+            dados: dadosDe(a),
             motivo: textoOuNulo(a['motivo_correcao']),
             autor: texto(a['autor']),
             criadoEm: civilDe(a['criado_em'], fuso) ?? '',
           })),
-          fotos: [],
-          eventos:
-            situacao === 'encerrada'
-              ? [
-                  {
-                    origem: 'lesao',
-                    registro: num(r['id']),
-                    tipo: 'encerramento',
-                    desfecho: textoOuNulo(r['desfecho']),
-                    em: (civilDe(r['encerrada_em'], fuso) ?? '').slice(0, 16),
-                    motivo: textoOuNulo(r['observacao_encerramento']),
-                    usuario: texto(r['autor']),
-                    criadoEm: civilDe(r['alterado_em'], fuso) ?? '',
-                  },
-                ]
-              : [],
+          fotos: fotos.map((a) => ({
+            id: num(a['id']),
+            curativo: lerJson<{ curativo?: number | null }>(a['dados'])?.curativo ?? null,
+            anexo: num(a['anexo_prontuario_id']),
+            tiradaEm: minuto(a['realizada_em']),
+            usuario: texto(a['autor']),
+          })),
+          eventos,
         };
       });
     });
@@ -1233,6 +1362,185 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
     );
     if (!u) throw recusa('unidade-inexistente', 'A unidade de internação não é deste estabelecimento.');
     return Number(u.id);
+  };
+  /** O escore de Caprini ou Padua que sugere a profilaxia (travado: serializa a primeira decisão). */
+  const escoreDaProfilaxia = async (id: number, paciente: number, exigeSugestao: boolean) => {
+    const [e] = await tx.consultarParaAtualizar<Linha>(
+      `SELECT a.id, a.paciente_id, a.atendimento_id, a.situacao, a.pontuacao_total, a.interpretacao, a.aplicado_em,
+              (SELECT x.codigo FROM escala_clinica x WHERE x.id = a.escala_clinica_id) AS escala
+         FROM aplicacao_escala a WHERE a.id = ? AND a.estabelecimento_id = ? AND a.excluido_em IS NULL`,
+      [id, est],
+    );
+    if (!e) throw recusa('escore-inexistente', 'O escore não foi encontrado.');
+    if (num(e['paciente_id']) !== paciente)
+      throw recusa('escore-de-outro-paciente', 'O escore não é deste paciente.');
+    const gatilho = lerJson<{ gatilho?: string }>(e['interpretacao'])?.gatilho;
+    if (exigeSugestao && (!['caprini', 'padua'].includes(texto(e['escala'])) || gatilho !== 'profilaxia'))
+      throw recusa('sem-profilaxia-sugerida', 'Este escore não sugere profilaxia de TEV.');
+    if (e['situacao'] === 'inativada')
+      throw recusa('escore-estornado', 'O escore foi estornado: não há profilaxia a decidir.');
+    return e;
+  };
+  const avaliacaoDoEscore = async (escore: number) => {
+    const a = await tx.uma<{ id: number }>(
+      `SELECT id FROM profilaxia_tev_avaliacao WHERE estabelecimento_id = ? AND aplicacao_escala_id = ?
+          AND situacao = 'registrada' AND excluido_em IS NULL ORDER BY id LIMIT 1`,
+      [est, escore],
+    );
+    return a ? Number(a.id) : null;
+  };
+  const historicoDaAvaliacao = async (avaliacao: number) =>
+    historicoDe(
+      await tx.consultar<Linha>(
+        `SELECT d.*, ${LOGIN_DE('d.usuario_id')} AS login FROM profilaxia_tev_decisao d
+          WHERE d.profilaxia_tev_avaliacao_id = ? ORDER BY d.ocorrido_em, d.id`,
+        [avaliacao],
+      ),
+      await fusoP,
+    );
+  const minutoDe = (v: unknown, fuso: string) => (civilDe(v, fuso) ?? '').slice(0, 16);
+  const trrTravado = async (id: number) => {
+    const [t] = await tx.consultarParaAtualizar<Linha>(
+      'SELECT id, versao, situacao, acionado_em, paciente_id FROM acionamento_resposta_rapida WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [id, est],
+    );
+    if (!t) throw recusa('trr-inexistente', 'O acionamento não foi encontrado.');
+    return t;
+  };
+  /** O último evento do tipo (o vigente se não inativado; a retificação é sempre a linha mais nova). */
+  const ultimoEventoTrr = (trr: number, tipo: string) =>
+    tx.uma<Linha>(
+      `SELECT * FROM acionamento_resposta_rapida_evento WHERE acionamento_resposta_rapida_id = ? AND tipo = ?
+          AND excluido_em IS NULL ORDER BY id DESC LIMIT 1`,
+      [trr, tipo],
+    );
+  /** O evento a corrigir ou inativar: deste estabelecimento, do acionamento ativo, e o vigente do tipo. */
+  const eventoTrrVigente = async (id: number) => {
+    const ev = await tx.uma<Linha>(
+      'SELECT * FROM acionamento_resposta_rapida_evento WHERE id = ? AND excluido_em IS NULL',
+      [id],
+    );
+    if (!ev) throw recusa('evento-inexistente', 'O registro do time não foi encontrado.');
+    const t = await trrTravado(num(ev['acionamento_resposta_rapida_id'])).catch(() => {
+      throw recusa('evento-inexistente', 'O registro do time não foi encontrado.');
+    });
+    if (t['situacao'] === 'inativado')
+      throw recusa('trr-inativado', 'O acionamento foi inativado (lançado errado).');
+    const u = await ultimoEventoTrr(num(t['id']), texto(ev['tipo']));
+    if (!u || num(u['id']) !== id || booleano(u['inativado']))
+      throw recusa('evento-nao-vigente', 'Este registro já foi corrigido ou inativado: abra o vigente.');
+    return { ...u, acionado_em: t['acionado_em'], paciente_id: t['paciente_id'] } as Linha;
+  };
+  /** As colunas do acionamento espelham os eventos vigentes (chegada, desfecho e a situação). */
+  const espelharTrr = async (trr: number) => {
+    const t = await trrTravado(trr);
+    if (t['situacao'] === 'inativado') return;
+    const vigente = async (tipo: string) => {
+      const u = await ultimoEventoTrr(trr, tipo);
+      return u && !booleano(u['inativado']) ? u : null;
+    };
+    const chegada = await vigente('chegada');
+    const desfecho = await vigente('desfecho');
+    await tx.alterar('acionamento_resposta_rapida', trr, num(t['versao']), {
+      chegada_em: chegada?.['ocorrido_em'] ?? null,
+      desfecho: desfecho?.['desfecho'] ?? null,
+      encerrado_em: desfecho ? (desfecho['ocorrido_em'] ?? new Date()) : null,
+      situacao: desfecho ? 'encerrado' : chegada ? 'em_atendimento' : 'acionado',
+    });
+  };
+  /** O item do cadastro da lesão pelo código (ativo); o que falta é pedido ao administrador. */
+  const doCadastro = async (tabela: string, codigo: string, nome: string) => {
+    const r = await tx.uma<{ id: number }>(`SELECT id FROM ${tabela} WHERE codigo = ? AND ativo`, [codigo]);
+    if (!r)
+      throw recusa(
+        'cadastro-incompleto',
+        `O cadastro não tem o ${nome} "${codigo}": peça a carga ao administrador.`,
+      );
+    return Number(r.id);
+  };
+  const colunasLesao = async (c: {
+    tipo: string;
+    regiao: string;
+    estagio: string | null;
+    presenteNaAdmissao: boolean;
+    identificadaEm: string;
+  }) => ({
+    tipo_lesao_pele_id: await doCadastro('tipo_lesao_pele', c.tipo, 'tipo de lesão'),
+    regiao_corporal_id: await doCadastro('regiao_corporal', c.regiao, 'região do corpo'),
+    estagio_lesao_pele_id: c.estagio
+      ? await doCadastro('estagio_lesao_pele', c.estagio, 'estágio da lesão')
+      : null,
+    presente_na_admissao: c.presenteNaAdmissao,
+    identificada_em: await quando(c.identificadaEm),
+  });
+  const conferirDadosLesao = (dados: string) => {
+    if (dados.length > 2000) throw recusa('ficha-grande', 'A ficha passa do tamanho máximo.');
+    try {
+      JSON.parse(dados);
+    } catch {
+      throw recusa('dados-invalidos', 'Os campos da ficha chegaram fora do formato JSON.');
+    }
+  };
+  const lesaoTravada = async (id: number) => {
+    const [l] = await tx.consultarParaAtualizar<Linha>(
+      'SELECT * FROM lesao_pele_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [id, est],
+    );
+    if (!l) throw recusa('lesao-inexistente', 'A lesão não foi encontrada.');
+    return l;
+  };
+  const lesaoAberta = async (id: number) => {
+    const l = await lesaoTravada(id);
+    if (booleano(l['inativada'])) throw recusa('lesao-inativada', 'A lesão foi inativada (lançada errada).');
+    if (l['situacao'] === 'encerrada')
+      throw recusa('lesao-encerrada', 'O acompanhamento da lesão foi encerrado.');
+    return l;
+  };
+  /**
+   * O estágio atual da lesão é o da última linha lançada (pela sequência), vigente, não inativada e com estágio (ficha,
+   * curativo ou reavaliação); sem nenhuma, fica sem estágio. Recalculado a cada curativo, correção e inativação.
+   */
+  const recalcularEstagioLesao = async (lesao: number) => {
+    const l = await lesaoTravada(lesao);
+    const u = await tx.uma<Linha>(
+      `SELECT estagio_lesao_pele_id FROM lesao_pele_avaliacao
+        WHERE lesao_pele_paciente_id = ? AND tipo_avaliacao IN ('ficha', 'curativo', 'reavaliacao') AND vigente
+          AND NOT inativada AND estagio_lesao_pele_id IS NOT NULL AND excluido_em IS NULL
+        ORDER BY sequencia DESC LIMIT 1`,
+      [lesao],
+    );
+    const estagio = u ? num(u['estagio_lesao_pele_id']) : null;
+    if (numOuNulo(l['estagio_lesao_pele_id']) !== estagio)
+      await tx.alterar('lesao_pele_paciente', lesao, num(l['versao']), { estagio_lesao_pele_id: estagio });
+  };
+  /** A sequência seguinte das linhas da lesão (a lesão está travada pela transação). */
+  const proximaSequencia = async (lesao: number) =>
+    num(
+      (
+        await tx.uma<Linha>(
+          'SELECT COALESCE(MAX(sequencia), 0) + 1 AS n FROM lesao_pele_avaliacao WHERE lesao_pele_paciente_id = ?',
+          [lesao],
+        )
+      )?.['n'],
+    );
+  /** O curativo ou a foto deste estabelecimento (com a lesão travada). */
+  const avaliacaoDaLesao = async (id: number, origem: 'curativo' | 'foto') => {
+    const a = await tx.uma<Linha>(
+      `SELECT a.*, lp.paciente_id FROM lesao_pele_avaliacao a JOIN lesao_pele_paciente lp ON lp.id = a.lesao_pele_paciente_id
+        WHERE a.id = ? AND lp.estabelecimento_id = ? AND a.excluido_em IS NULL
+          AND ${origem === 'foto' ? "a.tipo_avaliacao = 'foto'" : "a.tipo_avaliacao IN ('curativo', 'reavaliacao')"}`,
+      [id, est],
+    );
+    if (!a)
+      throw recusa(
+        origem === 'foto' ? 'foto-inexistente' : 'curativo-inexistente',
+        origem === 'foto' ? 'A foto não foi encontrada.' : 'O curativo não foi encontrado.',
+      );
+    await lesaoTravada(num(a['lesao_pele_paciente_id']));
+    const [k] = await tx.consultarParaAtualizar<Linha>('SELECT * FROM lesao_pele_avaliacao WHERE id = ?', [
+      id,
+    ]);
+    return { ...k, paciente_id: a['paciente_id'] } as Linha;
   };
   /** Programa a reavaliação (a mesma chave do paciente e da escala é reconhecida: devolve a já programada). */
   const programar = async (r: {
@@ -1580,11 +1888,92 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       anotacao.dados = { estorno: { tipo: r.tipo, alerta: r.alerta, escoreMantem: r.escoreMantem } };
       return r.id;
     },
-    decidirProfilaxia: async () => {
-      throw pendente('A decisão sobre a profilaxia de TEV sugerida pelo escore');
+    async decidirProfilaxia(d) {
+      const e = await escoreDaProfilaxia(d.escore, d.paciente, true);
+      const motivo = d.motivo?.trim() || null;
+      if (d.decisao === 'nao-prescrita' && !motivo)
+        throw recusa('motivo-obrigatorio', 'A profilaxia não prescrita exige o motivo.');
+      const av = await avaliacaoDoEscore(d.escore);
+      if (av !== null) {
+        // Depois da anulação, a nova decisão entra como retificação (a anulada fica no histórico).
+        const h = await historicoDaAvaliacao(av);
+        if (h.at(-1)?.decisao !== 'anulada')
+          throw recusa('profilaxia-ja-decidida', 'A profilaxia deste escore já foi decidida.');
+        return tx.incluir('profilaxia_tev_decisao', {
+          profilaxia_tev_avaliacao_id: av,
+          operacao: 'retificacao',
+          decisao: DECISAO_BANCO(d.decisao),
+          justificativa: 'Nova decisão depois da anulação da anterior.',
+          dados: JSON.stringify({
+            decisao: d.decisao,
+            motivo: d.decisao === 'nao-prescrita' ? motivo : null,
+          }),
+          ocorrido_em: new Date(),
+          usuario_id: tx.contexto.usuario,
+        });
+      }
+      const faixa = lerJson<{ faixa?: string }>(e['interpretacao'])?.faixa ?? '';
+      const escala = texto(e['escala']);
+      // A regra (perfil, risco e profilaxia indicada) é do domínio; faixa desconhecida é recusada, nunca presumida.
+      const regra = avaliacaoTevDoEscore(escala, faixa);
+      if (!regra.ok) throw recusa(regra.codigo, regra.mensagem);
+      const sugerida = regra.avaliacao;
+      const avaliacao = await tx.incluir('profilaxia_tev_avaliacao', {
+        estabelecimento_id: est,
+        paciente_id: num(e['paciente_id']),
+        atendimento_id: num(e['atendimento_id']),
+        profissional_id: await profissional(),
+        avaliado_em: e['aplicado_em'],
+        perfil: sugerida.perfil,
+        escala,
+        aplicacao_escala_id: d.escore,
+        pontuacao: numOuNulo(e['pontuacao_total']),
+        risco_tev: sugerida.risco,
+        profilaxia_indicada: sugerida.indicada,
+        metodo_mecanico: sugerida.mecanico,
+        situacao: 'registrada',
+      });
+      return tx.incluir('profilaxia_tev_decisao', {
+        profilaxia_tev_avaliacao_id: avaliacao,
+        operacao: 'decisao',
+        decisao: DECISAO_BANCO(d.decisao),
+        justificativa: d.decisao === 'nao-prescrita' ? motivo!.slice(0, 500) : null,
+        dados: JSON.stringify({ decisao: d.decisao, motivo: d.decisao === 'nao-prescrita' ? motivo : null }),
+        ocorrido_em: new Date(),
+        usuario_id: tx.contexto.usuario,
+      });
     },
-    retificarProfilaxia: async () => {
-      throw pendente('A retificação da decisão da profilaxia de TEV');
+    async retificarProfilaxia(r) {
+      await escoreDaProfilaxia(r.escore, r.paciente, false);
+      const av = await avaliacaoDoEscore(r.escore);
+      const h = av === null ? [] : await historicoDaAvaliacao(av);
+      const v = h.at(-1);
+      if (av === null || !v)
+        throw recusa('profilaxia-nao-decidida', 'A profilaxia deste escore ainda não foi decidida.');
+      if (v.decisao === 'anulada')
+        throw recusa(
+          'profilaxia-anulada',
+          'A decisão foi anulada: a pendência está aberta para uma nova decisão.',
+        );
+      if (v.autor !== tx.contexto.usuario)
+        throw recusa('so-o-autor', 'Só quem decidiu corrige a decisão (fato novo, com a justificativa).');
+      const motivo = r.decisao === 'nao-prescrita' ? r.motivo?.trim() || null : null;
+      if (r.decisao === 'nao-prescrita' && !motivo)
+        throw recusa('motivo-obrigatorio', 'A profilaxia não prescrita exige o motivo.');
+      if (r.decisao === v.decisao && motivo === v.motivo)
+        throw recusa('sem-mudanca', 'Nada mudou em relação à decisão vigente.');
+      const justificativa = r.justificativa.replace(/\s+/g, ' ').trim();
+      if (!justificativa) throw recusa('motivo-obrigatorio', 'A correção da decisão exige a justificativa.');
+      return tx.incluir('profilaxia_tev_decisao', {
+        profilaxia_tev_avaliacao_id: av,
+        operacao: 'retificacao',
+        // A anulação guarda na coluna a decisão anulada (o CHECK do modelo); o contrato vai em `dados`.
+        decisao: DECISAO_BANCO(r.decisao === 'anulada' ? v.decisao : r.decisao),
+        justificativa: justificativa.slice(0, 500),
+        dados: JSON.stringify({ decisao: r.decisao, motivo }),
+        ocorrido_em: new Date(),
+        usuario_id: tx.contexto.usuario,
+      });
     },
     async prescreverContencao(o) {
       const prof = await profissional();
@@ -1712,28 +2101,30 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       return { id, alertaEm: alerta ? (civilDe(alerta.aplicado_em, await fusoP) ?? '').slice(0, 16) : null };
     },
     async eventoTrr(x) {
-      const [t] = await tx.consultarParaAtualizar<Linha>(
-        'SELECT id, versao, situacao, chegada_em FROM acionamento_resposta_rapida WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
-        [x.trr, est],
-      );
-      if (!t) throw recusa('trr-inexistente', 'O acionamento não foi encontrado.');
-      if (t['situacao'] === 'inativado' || t['situacao'] === 'encerrado')
-        throw recusa('trr-encerrado', 'O acionamento já foi encerrado ou inativado.');
+      const t = await trrTravado(x.trr);
+      if (t['situacao'] === 'inativado')
+        throw recusa('trr-inativado', 'O acionamento foi inativado (lançado errado).');
       const em = await quando(x.em);
-      if (x.tipo === 'chegada') {
-        if (t['chegada_em']) throw recusa('trr-chegada', 'A chegada do time já foi registrada.');
-        await tx.alterar('acionamento_resposta_rapida', x.trr, num(t['versao']), {
-          chegada_em: em,
-          situacao: 'em_atendimento',
-        });
-      } else {
-        await tx.alterar('acionamento_resposta_rapida', x.trr, num(t['versao']), {
-          encerrado_em: em,
-          desfecho: x.desfecho,
-          situacao: 'encerrado',
-        });
-      }
-      return x.trr;
+      const fuso = await fusoP;
+      if (minutoDe(em, fuso) < minutoDe(t['acionado_em'], fuso))
+        throw recusa('antes-do-acionamento', 'A hora é anterior ao acionamento do time.');
+      if (x.tipo === 'desfecho' && !x.desfecho)
+        throw recusa('desfecho-obrigatorio', 'O desfecho do atendimento do time é obrigatório.');
+      const u = await ultimoEventoTrr(x.trr, x.tipo);
+      if (u && !booleano(u['inativado']))
+        throw recusa(
+          'evento-ja-registrado',
+          x.tipo === 'chegada' ? 'A chegada do time já foi registrada.' : 'O desfecho já foi registrado.',
+        );
+      const id = await tx.incluir('acionamento_resposta_rapida_evento', {
+        acionamento_resposta_rapida_id: x.trr,
+        tipo: x.tipo,
+        ocorrido_em: em,
+        desfecho: x.tipo === 'desfecho' ? x.desfecho : null,
+        inativado: false,
+      });
+      await espelharTrr(x.trr);
+      return id;
     },
     async gravarFichaPcr(f) {
       try {
@@ -1819,11 +2210,49 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       });
       return { id, versao };
     },
-    retificarEventoTrr: async () => {
-      throw pendente('A retificação da chegada ou do desfecho do TRR');
+    async retificarEventoTrr(x) {
+      const ev = await eventoTrrVigente(x.evento);
+      if (num(ev['criado_por']) !== tx.contexto.usuario)
+        throw recusa('so-o-autor', 'Só quem registrou corrige (versão nova com o motivo).');
+      const fuso = await fusoP;
+      const em = x.em ? await quando(x.em) : (ev['ocorrido_em'] as Date);
+      const minuto = minutoDe(em, fuso);
+      if (minuto < minutoDe(ev['acionado_em'], fuso))
+        throw recusa('antes-do-acionamento', 'A hora é anterior ao acionamento do time.');
+      if (minuto > x.agora.slice(0, 16)) throw recusa('hora-no-futuro', 'A hora corrigida é do futuro.');
+      const tipo = ev['tipo'] === 'desfecho' ? 'desfecho' : 'chegada';
+      const desfecho = tipo === 'desfecho' ? (x.desfecho ?? textoOuNulo(ev['desfecho'])) : null;
+      if (minuto === minutoDe(ev['ocorrido_em'], fuso) && desfecho === textoOuNulo(ev['desfecho']))
+        throw recusa('sem-mudanca', 'Nada mudou em relação ao registro vigente.');
+      const motivo = x.motivo.replace(/\s+/g, ' ').trim();
+      if (!motivo) throw recusa('motivo-obrigatorio', 'A correção exige o motivo.');
+      const trr = num(ev['acionamento_resposta_rapida_id']);
+      const id = await tx.incluir('acionamento_resposta_rapida_evento', {
+        acionamento_resposta_rapida_id: trr,
+        tipo,
+        ocorrido_em: em,
+        desfecho,
+        anterior_evento_id: num(ev['id']),
+        motivo: motivo.slice(0, 500),
+        inativado: false,
+      });
+      await espelharTrr(trr);
+      return { id, trr, tipo };
     },
     async inativarTrr(x) {
-      if (x.origem === 'evento') throw pendente('A inativação do evento do TRR');
+      if (x.origem === 'evento') {
+        const ev = await eventoTrrVigente(x.id);
+        if (num(ev['criado_por']) !== tx.contexto.usuario)
+          throw recusa('so-o-autor', 'Só quem lançou inativa o registro (lançamento errado).');
+        const motivo = x.motivo.trim();
+        if (!motivo) throw recusa('motivo-obrigatorio', 'A inativação exige o motivo.');
+        await tx.alterar('acionamento_resposta_rapida_evento', x.id, num(ev['versao']), {
+          inativado: true,
+          motivo_inativacao: motivo.slice(0, 300),
+        });
+        await espelharTrr(num(ev['acionamento_resposta_rapida_id']));
+        return { id: x.id, paciente: num(ev['paciente_id']) };
+      }
       if (x.origem === 'pcr') {
         const [p] = await tx.consultarParaAtualizar<Linha>(
           'SELECT id, versao, paciente_id, criado_por, inativada FROM parada_cardiorrespiratoria_ficha WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
@@ -1857,26 +2286,257 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       });
       return { id: x.id, paciente: num(t['paciente_id']) };
     },
-    registrarLesao: async () => {
-      throw pendente('A ficha da lesão de pele (tipo, região e estágio pelo cadastro)');
+    async registrarLesao(r) {
+      conferirDadosLesao(r.dados);
+      await conferirAtendimento(tx, est, r.atendimento, r.paciente);
+      const prof = await profissional();
+      const col = await colunasLesao(r.colunas);
+      const id = await tx.incluir('lesao_pele_paciente', {
+        estabelecimento_id: est,
+        paciente_id: r.paciente,
+        atendimento_id: r.atendimento,
+        ...col,
+        responsavel_profissional_id: prof,
+        situacao: r.situacao === 'finalizada' ? 'em_acompanhamento' : 'rascunho',
+        inativada: false,
+      });
+      const idVersao = await tx.incluir('lesao_pele_avaliacao', {
+        lesao_pele_paciente_id: id,
+        sequencia: 1,
+        tipo_avaliacao: 'ficha',
+        realizada_em: new Date(),
+        profissional_id: prof,
+        estagio_lesao_pele_id: col.estagio_lesao_pele_id,
+        dados: r.dados,
+        finalizada: r.situacao === 'finalizada',
+        vigente: true,
+        inativada: false,
+      });
+      return { id, versao: 1, idVersao };
     },
-    versaoLesao: async () => {
-      throw pendente('A versão da ficha da lesão de pele');
+    async versaoLesao(v) {
+      const l = await lesaoAberta(v.lesao);
+      const prof = await profissional();
+      if (num(l['responsavel_profissional_id']) !== prof)
+        throw recusa('so-o-autor', 'Só quem registrou a ficha pode corrigi-la.');
+      const fichas = await tx.consultar<Linha>(
+        `SELECT id, versao, finalizada FROM lesao_pele_avaliacao
+          WHERE lesao_pele_paciente_id = ? AND tipo_avaliacao = 'ficha' AND excluido_em IS NULL ORDER BY sequencia DESC`,
+        [v.lesao],
+      );
+      const atual = fichas[0];
+      if (!atual || num(atual['id']) !== v.anterior)
+        throw recusa('versao-desatualizada', 'Há uma versão mais nova da ficha: abra a versão atual.');
+      let motivo: string | null = null;
+      if (booleano(atual['finalizada'])) {
+        motivo = (v.motivo ?? '').replace(/\s+/g, ' ').trim();
+        if (motivo.length < 10)
+          throw recusa('motivo-obrigatorio', 'A correção da ficha finalizada exige a justificativa.');
+        if (v.situacao !== 'finalizada')
+          throw recusa(
+            'correcao-finaliza',
+            'A correção da ficha finalizada é gravada finalizada (a ficha não volta a rascunho).',
+          );
+      }
+      conferirDadosLesao(v.dados);
+      const col = await colunasLesao(v.colunas);
+      await tx.alterar('lesao_pele_paciente', v.lesao, num(l['versao']), {
+        ...col,
+        situacao: v.situacao === 'finalizada' ? 'em_acompanhamento' : texto(l['situacao']),
+      });
+      await tx.alterar('lesao_pele_avaliacao', num(atual['id']), num(atual['versao']), { vigente: false });
+      const id = await tx.incluir('lesao_pele_avaliacao', {
+        lesao_pele_paciente_id: v.lesao,
+        sequencia: await proximaSequencia(v.lesao),
+        tipo_avaliacao: 'ficha',
+        realizada_em: new Date(),
+        profissional_id: prof,
+        estagio_lesao_pele_id: col.estagio_lesao_pele_id,
+        dados: v.dados,
+        finalizada: v.situacao === 'finalizada',
+        vigente: true,
+        // A correção da ficha finalizada aponta a versão corrigida, com a justificativa (CHECK do modelo).
+        corrigida_lesao_pele_avaliacao_id: motivo ? num(atual['id']) : null,
+        motivo_correcao: motivo?.slice(0, 500) ?? null,
+        inativada: false,
+      });
+      return { id, versao: fichas.length + 1, paciente: num(l['paciente_id']) };
     },
-    curativoLesao: async () => {
-      throw pendente('O curativo da lesão de pele');
+    async curativoLesao(c) {
+      const l = await lesaoAberta(c.lesao);
+      const realizada = await quando(c.realizadoEm);
+      if (realizada < (l['identificada_em'] as Date))
+        throw recusa('curativo-antes-da-lesao', 'O curativo é anterior à identificação da lesão.');
+      conferirDadosLesao(c.dados);
+      const estagio = c.estagio
+        ? await doCadastro('estagio_lesao_pele', c.estagio, 'estágio da lesão')
+        : null;
+      const id = await tx.incluir('lesao_pele_avaliacao', {
+        lesao_pele_paciente_id: c.lesao,
+        sequencia: await proximaSequencia(c.lesao),
+        tipo_avaliacao: 'curativo',
+        realizada_em: realizada,
+        profissional_id: await profissional(),
+        estagio_lesao_pele_id: estagio,
+        dados: c.dados,
+        finalizada: true,
+        vigente: true,
+        inativada: false,
+      });
+      await recalcularEstagioLesao(c.lesao);
+      return { id, paciente: num(l['paciente_id']) };
     },
-    corrigirCurativoLesao: async () => {
-      throw pendente('A correção do curativo');
+    async corrigirCurativoLesao(c) {
+      const motivo = c.motivo.replace(/\s+/g, ' ').trim();
+      if (motivo.length < 10)
+        throw recusa('motivo-obrigatorio', 'A correção do curativo exige a justificativa.');
+      const k = await avaliacaoDaLesao(c.anterior, 'curativo');
+      if (num(k['profissional_id']) !== (await profissional()))
+        throw recusa('so-o-autor', 'Só quem registrou o curativo pode corrigi-lo.');
+      if (booleano(k['inativada']))
+        throw recusa('curativo-inativado', 'O curativo foi inativado (lançado errado).');
+      if (!booleano(k['vigente']))
+        throw recusa('curativo-desatualizado', 'O curativo já foi corrigido: abra a versão atual.');
+      const lesao = num(k['lesao_pele_paciente_id']);
+      const l = await lesaoAberta(lesao);
+      const realizada = await quando(c.realizadoEm);
+      if (realizada < (l['identificada_em'] as Date))
+        throw recusa('curativo-antes-da-lesao', 'O curativo é anterior à identificação da lesão.');
+      conferirDadosLesao(c.dados);
+      const estagio = c.estagio
+        ? await doCadastro('estagio_lesao_pele', c.estagio, 'estágio da lesão')
+        : null;
+      await tx.alterar('lesao_pele_avaliacao', c.anterior, num(k['versao']), { vigente: false });
+      const id = await tx.incluir('lesao_pele_avaliacao', {
+        lesao_pele_paciente_id: lesao,
+        sequencia: await proximaSequencia(lesao),
+        tipo_avaliacao: texto(k['tipo_avaliacao']),
+        realizada_em: realizada,
+        profissional_id: num(k['profissional_id']),
+        estagio_lesao_pele_id: estagio,
+        dados: c.dados,
+        finalizada: true,
+        vigente: true,
+        corrigida_lesao_pele_avaliacao_id: c.anterior,
+        motivo_correcao: motivo.slice(0, 300),
+        inativada: false,
+      });
+      // A correção do estágio (ou a retirada dele) volta à lesão: o estágio atual é recalculado das linhas vigentes.
+      await recalcularEstagioLesao(lesao);
+      return { id, lesao, paciente: num(l['paciente_id']) };
     },
-    fotoLesao: async () => {
-      throw pendente('A foto da lesão');
+    async fotoLesao(f) {
+      const l = await lesaoAberta(f.lesao);
+      if (f.curativo !== null) {
+        const k = await avaliacaoDaLesao(f.curativo, 'curativo');
+        if (num(k['lesao_pele_paciente_id']) !== f.lesao)
+          throw recusa('curativo-de-outra-lesao', 'O curativo é de outra lesão.');
+        if (booleano(k['inativada']) || !booleano(k['vigente']))
+          throw recusa('curativo-nao-vigente', 'O curativo foi corrigido ou inativado: abra o vigente.');
+      }
+      const anexo = await tx.uma(
+        'SELECT id FROM anexo_prontuario WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ? AND excluido_em IS NULL',
+        [f.anexo, est, num(l['paciente_id'])],
+      );
+      if (!anexo) throw recusa('anexo-inexistente', 'A imagem não é um anexo do prontuário deste paciente.');
+      if (
+        await tx.uma(
+          "SELECT id FROM lesao_pele_avaliacao WHERE anexo_prontuario_id = ? AND tipo_avaliacao = 'foto' AND excluido_em IS NULL",
+          [f.anexo],
+        )
+      )
+        throw recusa('foto-ja-vinculada', 'Esta foto já está vinculada a uma lesão.');
+      const id = await tx.incluir('lesao_pele_avaliacao', {
+        lesao_pele_paciente_id: f.lesao,
+        sequencia: await proximaSequencia(f.lesao),
+        tipo_avaliacao: 'foto',
+        realizada_em: await quando(f.tiradaEm),
+        profissional_id: await profissional(),
+        anexo_prontuario_id: f.anexo,
+        dados: JSON.stringify({ curativo: f.curativo }),
+        finalizada: true,
+        vigente: true,
+        inativada: false,
+      });
+      return { id, paciente: num(l['paciente_id']) };
     },
-    encerrarLesao: async () => {
-      throw pendente('O encerramento do acompanhamento da lesão');
+    async encerrarLesao(x) {
+      const l = await lesaoAberta(x.lesao);
+      if (l['situacao'] !== 'em_acompanhamento')
+        throw recusa('lesao-em-rascunho', 'Finalize a ficha da lesão antes de encerrar o acompanhamento.');
+      const em = await quando(x.em);
+      if (em < (l['identificada_em'] as Date))
+        throw recusa('encerramento-antes-da-lesao', 'O encerramento é anterior à identificação da lesão.');
+      const obs = x.observacao ? x.observacao.replace(/\s+/g, ' ').trim().slice(0, 300) || null : null;
+      await tx.alterar('lesao_pele_paciente', x.lesao, num(l['versao']), {
+        situacao: 'encerrada',
+        desfecho: x.desfecho,
+        encerrada_em: em,
+        observacao_encerramento: obs,
+      });
+      return { id: x.lesao, paciente: num(l['paciente_id']) };
     },
-    inativarLesao: async () => {
-      throw pendente('A inativação da lesão, do curativo ou da foto');
+    async inativarLesao(x) {
+      const motivo = x.motivo.replace(/\s+/g, ' ').trim();
+      if (motivo.length < 10) throw recusa('motivo-obrigatorio', 'Informe o motivo da inativação.');
+      const prof = await profissional();
+      const inativacao = { inativada: true, motivo_inativacao: motivo.slice(0, 300) };
+      if (x.origem === 'lesao') {
+        const l = await lesaoTravada(x.id);
+        if (booleano(l['inativada'])) throw recusa('ja-inativado', 'O registro já foi inativado.');
+        if (num(l['responsavel_profissional_id']) !== prof)
+          throw recusa('so-o-autor', 'Só quem lançou inativa o registro (lançamento errado).');
+        const v = await tx.uma<Linha>(
+          `SELECT SUM(tipo_avaliacao IN ('curativo', 'reavaliacao') AND vigente) AS curativos,
+                  SUM(tipo_avaliacao = 'foto') AS fotos
+             FROM lesao_pele_avaliacao WHERE lesao_pele_paciente_id = ? AND NOT inativada AND excluido_em IS NULL`,
+          [x.id],
+        );
+        const curativos = num(v?.['curativos'] ?? 0);
+        const fotos = num(v?.['fotos'] ?? 0);
+        if (curativos + fotos > 0)
+          throw recusa(
+            'lesao-com-registros',
+            `A lesão tem ${curativos} curativo(s) e ${fotos} foto(s) vigentes: inative-os antes da lesão.`,
+          );
+        await tx.alterar('lesao_pele_paciente', x.id, num(l['versao']), inativacao);
+        return { id: x.id, paciente: num(l['paciente_id']), lesao: x.id };
+      }
+      const k = await avaliacaoDaLesao(x.id, x.origem);
+      if (booleano(k['inativada'])) throw recusa('ja-inativado', 'O registro já foi inativado.');
+      if (x.origem === 'curativo' && !booleano(k['vigente']))
+        throw recusa('curativo-desatualizado', 'O curativo já foi corrigido: inative a versão atual.');
+      if (num(k['profissional_id']) !== prof)
+        throw recusa('so-o-autor', 'Só quem lançou inativa o registro (lançamento errado).');
+      const lesao = num(k['lesao_pele_paciente_id']);
+      if (x.origem === 'curativo') {
+        // As versões do curativo (a cadeia das correções) e as fotos vigentes ligadas a qualquer uma delas.
+        const versoes = new Set<number>([x.id]);
+        for (let a = numOuNulo(k['corrigida_lesao_pele_avaliacao_id']); a !== null && !versoes.has(a);) {
+          versoes.add(a);
+          const ant = await tx.uma<Linha>(
+            'SELECT corrigida_lesao_pele_avaliacao_id FROM lesao_pele_avaliacao WHERE id = ?',
+            [a],
+          );
+          a = ant ? numOuNulo(ant['corrigida_lesao_pele_avaliacao_id']) : null;
+        }
+        const fotos = (
+          await tx.consultar<Linha>(
+            `SELECT dados FROM lesao_pele_avaliacao WHERE lesao_pele_paciente_id = ? AND tipo_avaliacao = 'foto'
+                AND NOT inativada AND excluido_em IS NULL`,
+            [lesao],
+          )
+        ).filter((f) => versoes.has(Number(lerJson<{ curativo?: number }>(f['dados'])?.curativo))).length;
+        if (fotos > 0)
+          throw recusa(
+            'curativo-com-fotos',
+            `O curativo tem ${fotos} foto(s) vigente(s): inative a(s) ${fotos} foto(s) antes do curativo.`,
+          );
+      }
+      await tx.alterar('lesao_pele_avaliacao', x.id, num(k['versao']), inativacao);
+      // O estágio lançado errado sai da lesão: volta ao da última linha vigente com estágio.
+      if (x.origem === 'curativo') await recalcularEstagioLesao(lesao);
+      return { id: x.id, paciente: num(k['paciente_id']), lesao };
     },
     async incluirProtocoloInternado(p) {
       if (p.origem === 'news2' && (p.escore === null || p.tipo !== 'sepse'))
@@ -1934,8 +2594,6 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       });
     },
     async eventoProtocoloInternado(x) {
-      if (x.tipoEvento === 'meta' || x.tipoEvento === 'checklist')
-        throw pendente('A meta e o item do checklist do protocolo do internado');
       const [p] = await tx.consultarParaAtualizar<{ id: number; versao: number; situacao: string }>(
         'SELECT id, versao, situacao FROM inclusao_protocolo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
         [x.protocolo, est],
@@ -1954,6 +2612,20 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
       const encerrada = ['concluido', 'encerrado'].includes(p.situacao);
       if (encerrada && x.tipoEvento === 'encerramento')
         throw recusa('ja-encerrado', 'O protocolo deste paciente já foi encerrado.');
+      if (encerrada && (x.tipoEvento === 'meta' || x.tipoEvento === 'checklist'))
+        throw recusa('protocolo-encerrado', 'O protocolo deste paciente já foi encerrado.');
+      if (
+        (x.tipoEvento === 'meta' || x.tipoEvento === 'checklist') &&
+        (await tx.uma(
+          `SELECT id FROM inclusao_protocolo_evento WHERE inclusao_protocolo_paciente_id = ? AND evento = ?
+              AND JSON_VALUE(dados, '$.codigo') = ?`,
+          [p.id, x.tipoEvento, x.codigo],
+        ))
+      )
+        throw recusa(
+          'ja-registrado',
+          'Este item do protocolo já foi registrado. Abra de novo para ver o registro.',
+        );
       const motivo = x.motivo?.trim() || null;
       if (x.tipoEvento === 'inativacao' && !motivo)
         throw recusa('motivo-obrigatorio', 'A inativação exige o motivo.');
@@ -1978,7 +2650,12 @@ function gravadorEscores(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao
         }),
         ocorrido_em: agora,
         usuario_id: tx.contexto.usuario,
-        evento: x.tipoEvento === 'encerramento' ? 'saida' : 'descarte',
+        evento:
+          x.tipoEvento === 'encerramento'
+            ? 'saida'
+            : x.tipoEvento === 'meta' || x.tipoEvento === 'checklist'
+              ? x.tipoEvento
+              : 'descarte',
         justificativa: motivo,
       });
     },

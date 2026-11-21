@@ -159,7 +159,7 @@ describe.skipIf(SEM_BANCO_MAN)(`porta própria da manutenção (MariaDB, cliente
       porta.gravarSgh(c(), trilhaMan(M(), 'ordem_servico_manutencao', os.id), (g) =>
         g.mudarOs({ id: os.id, versaoVista: 2, de: 'emAtendimento', para: 'concluida', campos: { laudo: 99 }, usuario: M().loginUsuario, nota: null }),
       ),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'laudo-invalido');
     const v3 = await porta.gravarSgh(c(), trilhaMan(M(), 'ordem_servico_manutencao', os.id), (g) =>
       g.mudarOs({
         id: os.id,
@@ -366,11 +366,12 @@ describe.skipIf(SEM_BANCO_MAN)(`porta própria da manutenção (MariaDB, cliente
       g.incluirPlano({ equipamento: eq.id, atividade: 'calibracao', periodicidade: { quantidade: 12, unidade: 'meses' }, dataBase: '2026-01-15', antecedenciaDias: 30, procedimento: 'Calibrar (teste)', executor: 'interno', cobertura: null, usuario: M().loginUsuario }),
     );
     expect(await lerBanco(M(), 'SELECT p.codigo, o.codigo AS oficina FROM plano_preventivo p JOIN oficina_manutencao o ON o.id = p.oficina_manutencao_id WHERE p.id = ?', [p.id])).toMatchObject({ oficina: 'MANUTENCAO' });
-    await expect(
-      porta.gravarSgh(c(), trilhaMan(M(), 'plano_preventivo'), (g) =>
-        g.incluirPlano({ equipamento: eq.id, atividade: 'preventiva', periodicidade: { quantidade: 6, unidade: 'meses' }, dataBase: '2026-01-15', antecedenciaDias: null, procedimento: null, executor: 'interno', cobertura: null, modelo: { codigo: 'pmocAr', versao: 1 }, usuario: M().loginUsuario }),
-      ),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
+    // O plano instalado de um modelo pronto guarda o código e a versão do modelo de origem.
+    const eqModelo = await novoEquipamento('L0303-EQ3M');
+    const pm = await porta.gravarSgh(c(), trilhaMan(M(), 'plano_preventivo'), (g) =>
+      g.incluirPlano({ equipamento: eqModelo.id, atividade: 'preventiva', periodicidade: { quantidade: 6, unidade: 'meses' }, dataBase: '2026-01-15', antecedenciaDias: null, procedimento: null, executor: 'interno', cobertura: null, modelo: { codigo: 'pmocAr', versao: 1 }, usuario: M().loginUsuario }),
+    );
+    expect((await porta.planoPorId(c(), pm.id))?.modelo).toEqual({ codigo: 'pmocAr', versao: 1 });
     const alt = await porta.gravarSgh(c(), trilhaMan(M(), 'plano_preventivo', p.id), (g) =>
       g.alterarPlano({ id: p.id, versaoVista: 1, periodicidade: { quantidade: 6, unidade: 'meses' }, dataBase: '2026-02-01', antecedenciaDias: 15, procedimento: 'Novo roteiro', executor: 'interno', cobertura: null, motivo: 'Exigência do fabricante', usuario: M().loginUsuario }),
     );
@@ -461,13 +462,13 @@ describe.skipIf(SEM_BANCO_MAN)(`porta própria da manutenção (MariaDB, cliente
     ).toMatchObject({ n: 0 });
   });
 
-  it('pendentes de modelo: a gravação recusa e desfaz tudo o que a mesma transação já tinha gravado', async () => {
+  it('recusa no meio da operação: desfaz tudo o que a mesma transação já tinha gravado', async () => {
     await expect(
       porta.gravarSgh(c(), trilhaMan(M(), 'equipamento_saude'), async (g) => {
         await g.incluirEquipamento(equipamento('L0303-EQ9'));
-        return g.vincularCursoModelo({ fabricante: 'L0303M FABRICANTE SINTETICO', modelo: 'MX-1', curso: M().curso, usuario: M().loginUsuario });
+        return g.vincularCursoModelo({ fabricante: 'L0303M FABRICANTE SINTETICO', modelo: 'MX-1', curso: 2_000_000_000, usuario: M().loginUsuario });
       }),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
+    ).rejects.toSatisfy((e) => codigoDe(e) === 'curso-inativo');
     expect(await porta.equipamentoPorCodigo(c(), 'L0303-EQ9')).toBeNull();
     expect((await porta.catalogoCursos(c())).find((x) => x.id === M().curso)).toMatchObject({ codigo: 'L0303M-OPER', validadeMeses: 24, ativo: true });
     expect(await porta.conclusoesDosCursos(c(), [M().curso])).toEqual([]);

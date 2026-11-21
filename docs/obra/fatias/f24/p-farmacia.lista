@@ -1,0 +1,6 @@
+# lote p-farmacia (F2.4, 3ª etapa): portas da farmácia hospitalar
+# cliente_teste: f24p_farmacia
+apps/api/src/modulos/farmacia/porta-propria.ts
+apps/api/src/modulos/farmacia/operacoes.ts
+apps/api/src/modulos/farmacia/gravador-avaliacao.ts
+apps/api/src/modulos/farmacia/gravador-dispensacao.ts

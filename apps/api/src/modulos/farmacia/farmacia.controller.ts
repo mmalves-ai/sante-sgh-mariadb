@@ -642,7 +642,7 @@ export class FarmaciaController {
   @Post('livro/fechar')
   @HttpCode(200)
   @Permissao('suprimentos.livro.fechar')
-  @AuditadoNoHandler('fechamento em SGH_SUP_LIVRO_CONTROLADO (trilha na mesma transação)')
+  @AuditadoNoHandler('fechamento em livro_controlado (trilha na mesma transação)')
   fecharLivro(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoFarmacia> {
     const e = corpo(esquemaFecharLivro, b);
     return this.servico.fecharLivro(sessaoDe(req), e.livro, e.inicio, e.fim, e.oficial);

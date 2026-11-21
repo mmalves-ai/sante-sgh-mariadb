@@ -4,38 +4,35 @@
 // Melhoria: os pedidos de gravação não levam o código do hospital (o estabelecimento vem do contexto do núcleo).
 import type {
   ContaPlano,
-  FatoContabil,
   ImpedimentoEncerramento,
   LadoPartida,
   OrigemLancamento,
-  PartidaGerada,
   RegraContabil,
   SituacaoArquivoSped,
   SituacaoConciliacao,
   SituacaoFato,
-  SituacaoPeriodo,
   TipoArquivoSped,
   TipoFato,
   TipoLancamento,
 } from '@sgh/contratos';
 import type { gerarXlsx } from '../relatorio/public-api.js';
 
+import type { PeriodoRegistrado } from '@sgh/persistencia-contabil';
+
+// As formas que a persistência comum da contabilidade lê e grava (as mesmas do worker).
+export type {
+  ContaPlanoVersionada,
+  FatoRegistrado,
+  ItemDePara,
+  LancamentoParaGravar,
+  PartidaRegistrada,
+  PedidoSituacaoFato,
+  PeriodoRegistrado,
+  RegraPublicada,
+} from '@sgh/persistencia-contabil';
+
 /** Linha de planilha exportada (a mesma do gerador de XLSX do relatório). */
 export type LinhaRelatorio = Parameters<typeof gerarXlsx>[0]['linhas'][number];
-
-export interface ContaPlanoVersionada extends ContaPlano {
-  readonly versao: number;
-  readonly alteradoPor: string;
-  readonly alteradoEm: string;
-}
-
-export interface FatoRegistrado extends FatoContabil {
-  readonly idFato: number;
-  readonly situacao: SituacaoFato;
-  readonly motivo: string | null;
-  readonly regraId: number | null;
-  readonly lidoEm: string;
-}
 
 export interface FiltroLancamentosPorta {
   readonly empresa: number;
@@ -113,31 +110,6 @@ export interface LancamentoRegistrado {
     readonly documento: string;
     readonly data: string;
   } | null;
-}
-
-/** O lançamento a gravar (a forma do LancamentoNovo de @sgh/dominio-contabil). */
-export interface LancamentoParaGravar {
-  readonly chave: string;
-  readonly tipo: TipoLancamento;
-  readonly empresa: number;
-  readonly data: string;
-  readonly competencia: string;
-  readonly historico: string;
-  readonly partidas: readonly PartidaGerada[];
-  readonly fatoId: number | null;
-  readonly regraId: number | null;
-  readonly regra: { readonly nome: string; readonly versao: number } | null;
-  readonly estornaId: number | null;
-  readonly justificativa: string | null;
-}
-
-export interface RegraPublicada {
-  readonly id: number;
-  readonly regra: RegraContabil;
-  readonly impressao: string;
-  readonly justificativa: string;
-  readonly publicadaPor: string;
-  readonly publicadaEm: string;
 }
 
 export interface ConciliacaoRegistrada {
@@ -268,17 +240,6 @@ export interface FiltroFatosPorta {
   readonly situacao?: SituacaoFato;
 }
 
-/** Linha do de-para contábil da receita (fonte pagadora, tipo de conta e de lançamento → conta). */
-export interface ItemDePara {
-  readonly empresa: number;
-  readonly convenio: number | null;
-  readonly tipoConta: string;
-  readonly tipoLancamento: number | null;
-  readonly tipoAto: number | null;
-  readonly subtipoDiaria: number | null;
-  readonly contaExportacao: number | null;
-}
-
 export interface NovoArquivoSped {
   readonly empresa: number;
   readonly tipo: TipoArquivoSped;
@@ -295,18 +256,6 @@ export interface NovoArquivoSped {
   readonly usuario: string;
 }
 
-export interface PartidaRegistrada {
-  readonly id: number;
-  readonly lancamento: number;
-  readonly ordem: number;
-  readonly lado: LadoPartida;
-  readonly conta: string;
-  readonly valorCentavos: number;
-  readonly centroCusto: number | null;
-  readonly historico: string;
-  readonly conciliacao: number | null;
-}
-
 export interface PartidaPendente {
   readonly id: number;
   readonly lancamento: number;
@@ -315,21 +264,6 @@ export interface PartidaPendente {
   readonly valorCentavos: number;
   readonly historico: string;
   readonly centroCusto: number | null;
-}
-
-export interface PeriodoRegistrado {
-  readonly empresa: number;
-  readonly competencia: string;
-  readonly situacao: SituacaoPeriodo;
-  readonly lancamentos: number;
-  readonly debitos: number;
-  readonly creditos: number;
-  readonly observacao: string | null;
-  readonly encerradoPor: string | null;
-  readonly encerradoEm: string | null;
-  readonly reabertoPor: string | null;
-  readonly reabertoEm: string | null;
-  readonly versao: number;
 }
 
 export interface PedidoReabertura {
@@ -401,14 +335,3 @@ export interface PedidoPublicacaoRegra {
   readonly usuario: string;
 }
 
-export interface PedidoSituacaoFato {
-  readonly idFato: number;
-  readonly situacao: SituacaoFato;
-  readonly motivo: string | null;
-  readonly regraId: number | null;
-  /**
-   * A situação lida antes do plano: a gravação só vale se o fato ainda estiver nela (o worker e a tela, ou o
-   * reprocessamento, leem numa transação e gravam noutra). Sem ela, a gravação não confere a situação.
-   */
-  readonly situacaoLida?: SituacaoFato | null;
-}

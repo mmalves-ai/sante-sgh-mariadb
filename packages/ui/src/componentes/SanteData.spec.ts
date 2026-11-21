@@ -82,8 +82,8 @@ describe('SanteData (regra 7)', () => {
 });
 
 describe('SanteHora (regra 8)', () => {
-  it('mostra HHMM como HH:MM e vazio como "Sem hora"', () => {
-    const w = montar(SanteHora, { props: { modelValue: '0801' } });
+  it('mostra HH:MM e vazio como "Sem hora"', () => {
+    const w = montar(SanteHora, { props: { modelValue: '08:01' } });
     expect(w.text()).toBe('08:01');
     w.unmount();
     const v = montar(SanteHora, { props: { modelValue: null } });
@@ -91,7 +91,7 @@ describe('SanteHora (regra 8)', () => {
     v.unmount();
   });
 
-  it('editável: aceita H:MM e HHMM, devolve HHMM de 4 dígitos; recusa 25:00', async () => {
+  it('editável: aceita H:MM e quatro dígitos, devolve sempre HH:MM; recusa 25:00', async () => {
     const emitidos: (string | null)[] = [];
     const w = montar(SanteHora, {
       props: {
@@ -104,10 +104,10 @@ describe('SanteHora (regra 8)', () => {
     const input = w.find('input');
     await input.setValue('8:05');
     await input.trigger('blur');
-    expect(emitidos.at(-1)).toBe('0805');
+    expect(emitidos.at(-1)).toBe('08:05');
     await input.setValue('1630');
     await input.trigger('keydown', { key: 'Enter' });
-    expect(emitidos.at(-1)).toBe('1630');
+    expect(emitidos.at(-1)).toBe('16:30');
     await input.setValue('25:00');
     await input.trigger('blur');
     await nextTick();

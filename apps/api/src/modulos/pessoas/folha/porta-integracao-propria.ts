@@ -4,38 +4,54 @@
 // O catálogo de rotinas é fixo do produto (ROTINAS_INTEGRACAO_FOLHA).
 // O de-para por vigência é lido e gravado em integracao_folha_financeiro e integracao_folha_financeiro_destino: o credor
 // é a empresa_fornecedora, a classificação é a natureza_financeira achada pelos códigos numéricos do grupo, do subgrupo
-// e do item, e o mês do vencimento é `mesmo` ou `seguinte`.
-// O que ainda não está ligado NÃO devolve vazio: recusa com 503 `modelo-pendente`, dizendo a operação, e a liberação da
-// operação do lançamento responde "não pode" com o mesmo motivo. O que falta:
-//   - o lançamento dos títulos da folha (executar `financeiro.criarTituloPagar`, que grava o título a pagar pela operação
-//     do financeiro na mesma transação; lancamentos, lancamento, lancamentoDaOrigem, titulosDoLancamento,
-//     chavesLancadas leem o que ele grava): pedido de composição em docs/obra/fatias/f24/saida/03-pessoas.json;
-//   - a conta contábil sugerida do destino (o de-para não tem a coluna; pedido de DDL no mesmo arquivo);
-//   - o custo de pessoal por centro (custoPessoal);
-//   - o retorno conferido da folha externa somado por destino (retorno; falta o papel de resumo da rubrica).
+// e do item, o mês do vencimento é `mesmo` ou `seguinte` e a conta contábil sugerida é a conta analítica ativa do plano
+// contábil vigente (pelo código reduzido ou pela classificação).
+// O lançamento dos títulos da folha (`financeiro.criarTituloPagar`, ação `incluir-folha`) é uma operação do Executor
+// que, na mesma transação, grava cada título a pagar pelo gravador do financeiro (gravadorTituloPagar), o lançamento
+// (lancamento_titulos_folha), os títulos da folha (titulo_folha), os fatos contábeis (fato_contabil, evento `folha`,
+// com a natureza e a rotina nos campos) e, na origem `interface`, marca o retorno conferido como lançado. Ou tudo, ou
+// nada. O retorno conferido é lido do lote recebido (lote_folha_intercambio) somado do resumo por rubrica.
 // Melhoria: o credor é o cadastro único de fornecedor (empresa_fornecedora), só os ativos e não excluídos.
-// Melhoria: o aviso de títulos manuais ignora títulos cancelados e excluídos e filtra pelo estabelecimento da sessão.
+// Melhoria: o aviso de títulos manuais ignora títulos cancelados e excluídos, os lançados pela folha e filtra pelo
+// estabelecimento da sessão.
 // Melhoria: as classificações só trazem naturezas de despesa ativas, com o plano inteiro não excluído.
-// Melhoria: o aviso de títulos manuais conta pelo VENCIMENTO de uma parcela viva no mês (a regra do sistema de origem),
-// e compara os códigos da classificação pelo valor numérico (o código '01' casa com 1).
+// Melhoria: o aviso de títulos manuais conta pelo VENCIMENTO de uma parcela viva no mês, e compara os códigos da
+// classificação pelo valor numérico (o código '01' casa com 1).
 // Pendência registrada: o contrato da classificação é numérico (grupo, subgrupo e item); as naturezas de código não
 // numérico ficam fora da escolha do de-para até o contrato passar ao id da natureza (pedido em saida/03-07.json).
 // naturezasForaDoContrato conta quantas ficam fora, para o aviso.
+import { createHash } from 'node:crypto';
 import type {
+  ApuracaoFolha,
   ClassificacaoFolha,
   CredorFolha,
+  CustoPessoalCentro,
+  IncluirTitulosFolhaEntrada,
   IntegracaoFolhaLida,
+  OrigemLancamentoFolha,
   RotinaIntegracaoFolha,
+  TipoEncargoFolha,
 } from '@sgh/contratos';
 import {
   DESTINOS_TITULO_FOLHA,
   type DestinoIntegracaoFolha,
   type DestinoTituloFolha,
+  esquemaIncluirTitulosFolha,
   ROTINA_DO_DESTINO,
 } from '@sgh/contratos';
-import { ErroOperacao, type Leitor, type NucleoProprio, recusa, type TxOperacao } from '@sgh/nucleo';
+import {
+  type ContextoOperacao,
+  definirOperacao,
+  type Executor,
+  type Leitor,
+  type NucleoProprio,
+  recusa,
+  type ResultadoOperacao,
+  type TxOperacao,
+} from '@sgh/nucleo';
 import { gravacaoDireta } from '../../enfermagem/gravacao-direta.js';
 import type { GravacaoFeita, LiberacaoGravacao, TrilhaDaGravacao } from '../../exames/public-api.js';
+import { gravadorTituloPagar, TABELAS_TITULO_PAGAR } from '../../financeiro/public-api.js';
 import { exigirUsuario } from '../../qualidade/apoio-propria.js';
 import type {
   ContextoIntegracaoFolha,
@@ -57,37 +73,21 @@ export type NucleoIntegracaoFolha = Pick<NucleoProprio, 'lerSomente' | 'criarExe
 /** Quantos credores a busca devolve. */
 export const TETO_CREDORES_FOLHA = 50;
 
-/** As operações sem tabela no modelo e o recurso que falta a cada uma (o texto vai na recusa). */
-const SEM_LANCAMENTO = '(o lançamento dos títulos da folha ainda não está ligado à operação do título a pagar do financeiro)';
-export const SEM_MODELO_INTEGRACAO_FOLHA = {
-  executar: `lançar os títulos da folha no contas a pagar ${SEM_LANCAMENTO}`,
-  lancamentos: `listar os lançamentos dos títulos da folha ${SEM_LANCAMENTO}`,
-  lancamento: `consultar o lançamento dos títulos da folha ${SEM_LANCAMENTO}`,
-  lancamentoDaOrigem: `consultar o lançamento da origem ${SEM_LANCAMENTO}`,
-  titulosDoLancamento: `listar os títulos do lançamento da folha ${SEM_LANCAMENTO}`,
-  chavesLancadas: `conferir os títulos já lançados da competência ${SEM_LANCAMENTO}`,
-  custoPessoal: `consultar o custo de pessoal por centro (os fatos contábeis da folha nascem do lançamento) ${SEM_LANCAMENTO}`,
-  retorno: 'ler o retorno conferido da folha externa para os títulos (a leitura do lote conferido por papel de resumo da rubrica ainda não está ligada)',
-  contaContabil:
-    'gravar a conta contábil sugerida do destino (o de-para do modelo ainda não tem a coluna; deixe a sugestão vazia)',
-} as const;
-
-export type OperacaoSemModeloIntegracaoFolha = keyof typeof SEM_MODELO_INTEGRACAO_FOLHA;
-
-export function erroSemModelo(op: OperacaoSemModeloIntegracaoFolha): ErroOperacao {
-  return new ErroOperacao(
-    503,
-    'modelo-pendente',
-    'Recurso ainda sem modelo de dados',
-    `Ainda não é possível ${SEM_MODELO_INTEGRACAO_FOLHA[op]}. Nada foi lido nem gravado.`,
-  );
-}
-
-const MOTIVO_SEM_LANCAMENTO =
-  'O lançamento dos títulos da folha no contas a pagar ainda não está ligado ao financeiro: a prévia fica em consulta.';
-
 /** As tabelas que a gravação do de-para escreve (a transação recusa as outras). */
-export const TABELAS_INTEGRACAO_FOLHA = ['integracao_folha_financeiro', 'integracao_folha_financeiro_destino'] as const;
+export const TABELAS_INTEGRACAO_FOLHA = [
+  'integracao_folha_financeiro',
+  'integracao_folha_financeiro_destino',
+] as const;
+
+/** As tabelas do lançamento dos títulos da folha (as do título a pagar do financeiro e as da folha). */
+export const TABELAS_LANCAMENTO_FOLHA: readonly string[] = [
+  ...TABELAS_TITULO_PAGAR,
+  'lancamento_titulos_folha',
+  'titulo_folha',
+  'fato_contabil',
+  'evento_contabil',
+  'lote_folha_intercambio',
+];
 
 /** O destino do contrato (`liquido-mensal`) no banco (`liquido_mensal`) e de volta. */
 const destinoNoBanco = (d: DestinoTituloFolha): string => d.replace(/-/g, '_');
@@ -104,20 +104,24 @@ const instante = (v: unknown): string => (v instanceof Date ? v.toISOString() : 
 
 const SQL_INTEGRACOES = `
   SELECT i.id, i.vigencia_inicio, i.criado_em, u.login,
-         d.destino, d.empresa_fornecedora_id, d.dia_vencimento, d.mes_vencimento,
+         d.destino, d.empresa_fornecedora_id, d.dia_vencimento, d.mes_vencimento, cc.codigo_reduzido AS conta,
          g.codigo AS grupo, s.codigo AS subgrupo, n.codigo AS item
     FROM integracao_folha_financeiro i
     JOIN integracao_folha_financeiro_destino d ON d.integracao_folha_financeiro_id = i.id
     JOIN natureza_financeira n ON n.id = d.natureza_financeira_id
     JOIN subgrupo_natureza_financeira s ON s.id = n.subgrupo_natureza_financeira_id
     JOIN grupo_natureza_financeira g ON g.id = s.grupo_natureza_financeira_id
+    LEFT JOIN conta_contabil cc ON cc.id = d.conta_contabil_id
     LEFT JOIN usuario u ON u.id = i.criado_por
    WHERE i.estabelecimento_id = ? AND i.excluido_em IS NULL
    ORDER BY i.vigencia_inicio DESC, i.id DESC, d.id`;
 
 /** As vigências do de-para do estabelecimento (a mais recente primeiro), com os destinos na ordem gravada. */
 async function lerIntegracoes(l: Pick<Leitor, 'consultar'>, est: number): Promise<IntegracaoFolhaLida[]> {
-  const porId = new Map<number, IntegracaoFolhaLida & { destinos: (DestinoIntegracaoFolha & { rotina: number })[] }>();
+  const porId = new Map<
+    number,
+    IntegracaoFolhaLida & { destinos: (DestinoIntegracaoFolha & { rotina: number })[] }
+  >();
   for (const r of await l.consultar(SQL_INTEGRACOES, [est])) {
     const id = numero(r['id']);
     let v = porId.get(id);
@@ -142,7 +146,7 @@ async function lerIntegracoes(l: Pick<Leitor, 'consultar'>, est: number): Promis
       classificacao: { grupo: numero(r['grupo']), subgrupo: numero(r['subgrupo']), item: numero(r['item']) },
       diaVencimento: numero(r['dia_vencimento']),
       mesesDepois: r['mes_vencimento'] === 'mesmo' ? 0 : 1,
-      contaContabil: '',
+      contaContabil: texto(r['conta']),
     });
   }
   return [...porId.values()];
@@ -174,19 +178,48 @@ async function naturezaDaClassificacao(
   return numero(rs[0]!['id']);
 }
 
+/**
+ * A conta contábil sugerida do destino: conta analítica ativa do plano contábil vigente no início do de-para, pelo
+ * código reduzido ou pela classificação. Vazio: sem sugestão.
+ */
+async function contaContabilSugerida(tx: TxOperacao, codigo: string, inicio: string): Promise<number | null> {
+  const c = codigo.trim();
+  if (c === '') return null;
+  const rs = await tx.consultar(
+    `SELECT cc.id
+       FROM conta_contabil cc
+       JOIN plano_contas p ON p.id = cc.plano_contas_id
+      WHERE p.tipo = 'contabil' AND p.ativo = TRUE AND p.excluido_em IS NULL
+        AND p.vigencia_inicio <= ? AND (p.vigencia_fim IS NULL OR p.vigencia_fim >= ?)
+        AND cc.excluido_em IS NULL AND cc.ativo = TRUE AND cc.tipo = 'analitica'
+        AND (cc.codigo_reduzido = ? OR cc.classificacao = ?)`,
+    [inicio, inicio, c, c],
+  );
+  if (rs.length !== 1)
+    throw recusa(
+      rs.length === 0 ? 'conta-contabil-inexistente' : 'conta-contabil-ambigua',
+      rs.length === 0
+        ? `A conta contábil ${c} não é uma conta analítica ativa do plano contábil vigente.`
+        : `A conta contábil ${c} casa com mais de uma conta do plano vigente: use a classificação completa.`,
+    );
+  return numero(rs[0]!['id']);
+}
+
 function gravadorIntegracao(tx: TxOperacao, est: number): GravadorIntegracaoFolha {
   return {
     integracoes: async (empresa) => (empresa === est ? lerIntegracoes(tx, est) : []),
     async incluirIntegracao(x) {
       if (x.empresa !== est)
         throw recusa('empresa-fora-da-sessao', 'A empresa do de-para é o estabelecimento da sessão.');
-      if (x.destinos.some((d) => d.contaContabil.trim() !== '')) throw erroSemModelo('contaContabil');
       const repetida = await tx.consultarParaAtualizar(
         'SELECT id FROM integracao_folha_financeiro WHERE estabelecimento_id = ? AND vigencia_inicio = ? AND excluido_em IS NULL',
         [est, x.inicio],
       );
       if (repetida.length > 0)
-        throw recusa('vigencia-repetida', 'Já existe um de-para com este início para a empresa: escolha outra data.');
+        throw recusa(
+          'vigencia-repetida',
+          'Já existe um de-para com este início para a empresa: escolha outra data.',
+        );
       for (const d of x.destinos) {
         const credor = await tx.uma(
           "SELECT id FROM empresa_fornecedora WHERE id = ? AND excluido_em IS NULL AND situacao = 'ativo'",
@@ -205,6 +238,7 @@ function gravadorIntegracao(tx: TxOperacao, est: number): GravadorIntegracaoFolh
           destino: destinoNoBanco(d.destino),
           empresa_fornecedora_id: d.credor,
           natureza_financeira_id: await naturezaDaClassificacao(tx, d.classificacao),
+          conta_contabil_id: await contaContabilSugerida(tx, d.contaContabil, x.inicio),
           dia_vencimento: d.diaVencimento,
           mes_vencimento: d.mesesDepois === 0 ? 'mesmo' : 'seguinte',
         });
@@ -215,11 +249,252 @@ function gravadorIntegracao(tx: TxOperacao, est: number): GravadorIntegracaoFolh
 
 const numero = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0));
 const texto = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
+/** Reais do banco (DECIMAL) em centavos inteiros do contrato, e de volta. */
+const centavos = (v: unknown): number => Math.round(numero(v) * 100);
+const reais = (c: number): number => Math.round(c) / 100;
+const sha256 = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
+
+/** O período do lançamento (AAAA-MM na apuração mensal, AAAA na anual), da competência da folha. */
+const periodoDe = (r: Record<string, unknown>): string =>
+  r['apuracao'] === 'anual'
+    ? String(numero(r['ano']))
+    : `${numero(r['ano'])}-${doisDigitos(numero(r['mes']))}`;
+
+const SQL_LANCAMENTOS = `
+  SELECT l.id, l.estabelecimento_id, l.origem_lancamento, l.origem_id, lf.numero AS numero_lote, l.apuracao, l.resumo,
+         l.total_liquido, l.total_encargos, l.lancado_em, u.login, cf.ano, cf.mes,
+         (SELECT COUNT(*) FROM titulo_folha t WHERE t.lancamento_titulos_folha_id = l.id AND t.excluido_em IS NULL) AS titulos,
+         (SELECT COUNT(*) FROM fato_contabil f
+           WHERE f.entidade_origem = 'lancamento_titulos_folha' AND f.entidade_origem_id = l.id) AS fatos
+    FROM lancamento_titulos_folha l
+    JOIN competencia_folha cf ON cf.id = l.competencia_folha_id
+    LEFT JOIN lote_folha_intercambio lf ON l.origem_lancamento = 'interface' AND lf.id = l.origem_id
+    LEFT JOIN usuario u ON u.id = l.lancado_por_usuario_id
+   WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL`;
+
+function lancamentoDe(r: Record<string, unknown>): LancamentoTitulosFolha {
+  const origem: OrigemLancamentoFolha = r['origem_lancamento'] === 'interface' ? 'interface' : 'fechamento';
+  const liquido = centavos(r['total_liquido']);
+  const encargos = centavos(r['total_encargos']);
+  return {
+    id: numero(r['id']),
+    empresa: numero(r['estabelecimento_id']),
+    origem,
+    // A origem `interface` é o lote recebido, que o contrato conhece pelo número de negócio.
+    idOrigem: origem === 'interface' ? numero(r['numero_lote']) : numero(r['origem_id']),
+    apuracao: r['apuracao'] === 'anual' ? 'anual' : 'mensal',
+    periodo: periodoDe(r),
+    resumo: texto(r['resumo']),
+    titulos: numero(r['titulos']),
+    fatos: numero(r['fatos']),
+    liquido,
+    encargos,
+    total: liquido + encargos,
+    lancadoPor: texto(r['login']),
+    lancadoEm: instante(r['lancado_em']),
+  };
+}
+
+/** Filtro do período (AAAA-MM ou AAAA) e da apuração sobre a competência da folha do lançamento. */
+function filtroPeriodo(apuracao: ApuracaoFolha | null, periodo: string): { sql: string; p: unknown[] } {
+  const ano = Number(periodo.slice(0, 4));
+  const mes = periodo.length >= 7 ? Number(periodo.slice(5, 7)) : null;
+  const ap = apuracao ?? (mes === null ? 'anual' : 'mensal');
+  return ap === 'anual'
+    ? { sql: " AND l.apuracao = 'anual' AND cf.ano = ?", p: [ano] }
+    : { sql: " AND COALESCE(l.apuracao, 'mensal') = 'mensal' AND cf.ano = ? AND cf.mes = ?", p: [ano, mes] };
+}
+
+/** O evento contábil da folha (catálogo da rede): o nativo é criado no primeiro lançamento, como faz o contábil. */
+async function eventoDaFolha(tx: TxOperacao): Promise<number> {
+  const e = await tx.uma('SELECT id FROM evento_contabil WHERE codigo = ?', ['folha']);
+  if (e) return numero(e['id']);
+  return tx.incluir('evento_contabil', {
+    codigo: 'folha',
+    descricao: 'Folha e encargos',
+    modulo: 'folha',
+    nativo: true,
+  });
+}
+
+/** A competência da folha do estabelecimento do período (a anual cai na competência de dezembro). */
+async function competenciaDoPeriodo(tx: TxOperacao, est: number, periodo: string): Promise<number> {
+  const ano = Number(periodo.slice(0, 4));
+  const mes = periodo.length >= 7 ? Number(periodo.slice(5, 7)) : 12;
+  const rs = await tx.consultar(
+    `SELECT id FROM competencia_folha
+      WHERE estabelecimento_id = ? AND ano = ? AND mes = ? AND excluido_em IS NULL
+      ORDER BY numero_folha, id LIMIT 1`,
+    [est, ano, mes],
+  );
+  if (!rs[0])
+    throw recusa(
+      'competencia-folha-inexistente',
+      `O estabelecimento não tem a competência da folha de ${periodo}: abra a competência antes de lançar.`,
+    );
+  return numero(rs[0]['id']);
+}
+
+/** Lança os títulos da folha: título a pagar, lançamento, títulos da folha, fatos e a marca do retorno; tudo ou nada. */
+async function lancarTitulos(
+  tx: TxOperacao,
+  e: IncluirTitulosFolhaEntrada,
+  ctx: ContextoOperacao,
+): Promise<ResultadoOperacao> {
+  const est = ctx.estabelecimento;
+  if (est === null || e.empresa !== est)
+    throw recusa('empresa-fora-da-sessao', 'A empresa da folha é o estabelecimento da sessão.');
+  if (ctx.usuario === null) throw recusa('sem-usuario', 'O lançamento exige o usuário da sessão.');
+  const total = e.titulos.reduce((a, t) => a + t.valor, 0);
+  if (total !== e.liquido + e.encargos)
+    throw recusa('soma-divergente', 'A soma dos títulos não fecha com o líquido mais os encargos da folha.');
+
+  let origemId = e.idOrigem;
+  let competencia: number;
+  if (e.origem === 'interface') {
+    const [lote] = await tx.consultarParaAtualizar(
+      `SELECT id, versao, situacao, sentido, competencia_folha_id, competencia FROM lote_folha_intercambio
+        WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL`,
+      [est, e.idOrigem],
+    );
+    if (!lote || lote['sentido'] !== 'recebido' || lote['situacao'] !== 'conferido')
+      throw recusa(
+        'registro-alterado',
+        'O registro mudou agora há pouco (outra pessoa ou outra aba): releia.',
+      );
+    origemId = numero(lote['id']);
+    competencia =
+      lote['competencia_folha_id'] !== null && lote['competencia_folha_id'] !== undefined
+        ? numero(lote['competencia_folha_id'])
+        : await competenciaDoPeriodo(tx, est, e.periodo);
+    await tx.alterar('lote_folha_intercambio', origemId, numero(lote['versao']), { situacao: 'lancado' });
+  } else {
+    const f = await tx.uma(
+      'SELECT id FROM fechamento_periodo_folha WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+      [e.idOrigem, est],
+    );
+    if (!f)
+      throw recusa(
+        'registro-alterado',
+        'O registro mudou agora há pouco (outra pessoa ou outra aba): releia.',
+      );
+    competencia = await competenciaDoPeriodo(tx, est, e.periodo);
+  }
+
+  const repetido = await tx.consultarParaAtualizar(
+    `SELECT id FROM lancamento_titulos_folha
+      WHERE estabelecimento_id = ? AND origem_lancamento = ? AND origem_id = ? AND excluido_em IS NULL`,
+    [est, e.origem, origemId],
+  );
+  const filtro = filtroPeriodo(e.apuracao, e.periodo);
+  const chaves = new Set(
+    (
+      await tx.consultar(
+        `SELECT t.destino, t.vencimento FROM titulo_folha t
+           JOIN lancamento_titulos_folha l ON l.id = t.lancamento_titulos_folha_id
+           JOIN competencia_folha cf ON cf.id = l.competencia_folha_id
+          WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND t.excluido_em IS NULL${filtro.sql}`,
+        [est, ...filtro.p],
+      )
+    ).map((r) => `${destinoDoBanco(r['destino']) ?? texto(r['destino'])}:${dia(r['vencimento'])}`),
+  );
+  if (repetido.length > 0 || e.titulos.some((t) => chaves.has(`${t.destino}:${t.vencimento}`)))
+    throw recusa('folha-repetida', 'A competência já tem os títulos da folha lançados no contas a pagar.');
+
+  const lancamento = await tx.incluir('lancamento_titulos_folha', {
+    estabelecimento_id: est,
+    competencia_folha_id: competencia,
+    origem_lancamento: e.origem,
+    origem_id: origemId,
+    apuracao: e.apuracao,
+    resumo: e.resumo,
+    total_liquido: reais(e.liquido),
+    total_encargos: reais(e.encargos),
+    lancado_em: new Date(),
+    lancado_por_usuario_id: ctx.usuario,
+  });
+
+  const financeiro = gravadorTituloPagar(tx);
+  const parcelas: number[] = [];
+  for (const t of e.titulos) {
+    const liquido = t.destino.startsWith('liquido');
+    const r = await financeiro.incluir({
+      tipo: 'F',
+      credor: t.credor,
+      documento: t.documento,
+      serie: liquido ? 'DP' : 'IMP',
+      emissao: e.emissao,
+      valorDocumento: reais(t.valor),
+      referente: t.referente,
+      parcelas: [{ parcela: 1, vencimento: t.vencimento, valor: reais(t.valor) }],
+      classificacao: t.classificacao,
+    });
+    parcelas.push(...r.parcelas);
+    await tx.incluir('titulo_folha', {
+      competencia_folha_id: competencia,
+      lancamento_titulos_folha_id: lancamento,
+      titulo_pagar_id: r.tituloPagar,
+      destino: destinoNoBanco(t.destino),
+      empresa_fornecedora_id: t.credor,
+      valor: reais(t.valor),
+      vencimento: t.vencimento,
+      chave_planejamento: t.chave,
+    });
+  }
+
+  if (e.fatos.length > 0) {
+    const evento = await eventoDaFolha(tx);
+    const competenciaContabil = `${e.emissao.slice(0, 7)}-01`;
+    for (const [i, f] of e.fatos.entries()) {
+      const campos = { natureza: f.natureza, rotina: f.rotina, sequencia: i + 1 };
+      const valor = reais(f.valor);
+      const centro = f.centroCusto > 0 ? f.centroCusto : null;
+      await tx.incluir('fato_contabil', {
+        estabelecimento_id: est,
+        evento_contabil_id: evento,
+        entidade_origem: 'lancamento_titulos_folha',
+        entidade_origem_id: lancamento,
+        data_fato: e.emissao,
+        competencia: competenciaContabil,
+        valor,
+        centro_custo_id: centro,
+        campos: JSON.stringify(campos),
+        impressao: sha256(JSON.stringify({ tipo: 'folha', valor, data: e.emissao, centro, campos })),
+        situacao: f.contabiliza ? 'pendente' : 'ignorado',
+      });
+    }
+  }
+  return {
+    acao: 'incluir-folha',
+    lancamento,
+    titulo: parcelas[0] ?? 0,
+    parcelas: parcelas.length,
+    documento: e.titulos[0]?.documento ?? 0,
+    credor: e.titulos[0]?.credor ?? 0,
+    tipo: 'F',
+    serie: '',
+    ids: parcelas.join(','),
+  };
+}
+
+const lancarTitulosFolha = definirOperacao<IncluirTitulosFolhaEntrada, ResultadoOperacao>({
+  nome: 'pessoas.integracao_folha.lancar_titulos',
+  tabelas: TABELAS_LANCAMENTO_FOLHA,
+  entrada: esquemaIncluirTitulosFolha as never,
+  gravar: lancarTitulos,
+  alvo: (_e, r) => ({ tabela: 'lancamento_titulos_folha', id: numero(r['lancamento']) || null }),
+  eventos: (_e, r) => [
+    {
+      tipo: 'financeiro.titulo_pagar.lancado',
+      carga: { titulo: numero(r['titulo']), parcelas: numero(r['parcelas']) },
+    },
+  ],
+});
 
 export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
   readonly destino = 'banco' as const;
 
-  private executor: ReturnType<NucleoIntegracaoFolha['criarExecutor']> | null = null;
+  private executor: Executor | null = null;
 
   constructor(private readonly nucleo: NucleoIntegracaoFolha) {}
 
@@ -232,14 +507,24 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
 
   // ── Gravação: o de-para grava; o lançamento dos títulos recusa com o motivo ────────────────────────────────────
 
-  async podeGravar(_c: ContextoIntegracaoFolha, operacao?: string): Promise<LiberacaoGravacao> {
-    return operacao === OPERACAO_TITULOS_FOLHA
-      ? { pode: false, codigo: 'modelo-pendente', motivo: MOTIVO_SEM_LANCAMENTO }
-      : { pode: true, codigo: null, motivo: null };
+  async podeGravar(_c?: ContextoIntegracaoFolha, _operacao?: string): Promise<LiberacaoGravacao> {
+    return { pode: true, codigo: null, motivo: null };
   }
 
-  async executar(): Promise<GravacaoFeita> {
-    throw erroSemModelo('executar');
+  /** Lança os títulos da folha (`financeiro.criarTituloPagar`, ação `incluir-folha`) numa operação do executor. */
+  async executar(
+    c: ContextoIntegracaoFolha,
+    op: string,
+    entrada: unknown,
+    ctx: ContextoOperacao,
+  ): Promise<GravacaoFeita> {
+    if (op !== OPERACAO_TITULOS_FOLHA)
+      throw recusa('operacao-desconhecida', 'A integração da folha só lança os títulos da folha.');
+    if (c.estabelecimento === null)
+      throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    this.executor ??= this.nucleo.criarExecutor();
+    const r = await this.executor.executar(lancarTitulosFolha, c.cliente, entrada, ctx);
+    return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
 
   /** Grava a vigência do de-para numa operação do executor, com a trilha e a releitura na mesma transação. */
@@ -332,6 +617,7 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
            JOIN grupo_natureza_financeira g ON g.id = s.grupo_natureza_financeira_id
           WHERE t.estabelecimento_id = ? AND t.excluido_em IS NULL AND t.situacao <> 'cancelado'
             AND t.modulo_origem <> 'folha' AND t.empresa_fornecedora_id = ?
+            AND NOT EXISTS (SELECT 1 FROM titulo_folha tf WHERE tf.titulo_pagar_id = t.id)
             AND g.codigo REGEXP '^[0-9]{1,5}$' AND s.codigo REGEXP '^[0-9]{1,5}$' AND n.codigo REGEXP '^[0-9]{1,5}$'
             AND CAST(g.codigo AS UNSIGNED) = ? AND CAST(s.codigo AS UNSIGNED) = ? AND CAST(n.codigo AS UNSIGNED) = ?
             AND EXISTS (SELECT 1 FROM parcela_pagar p
@@ -363,27 +649,189 @@ export class PortaIntegracaoFolhaPropria implements PortaIntegracaoFolha {
     });
   }
 
-  // ── Leituras sem modelo (recusa explícita, nunca vazio) ─────────────────────────────────────────────────────
+  // ── Retorno conferido e lançamentos ──────────────────────────────────────────────────────────────────────────
 
-  async retorno(): Promise<RetornoParaTitulos | null> {
-    throw erroSemModelo('retorno');
+  /** O lote recebido (pelo número) somado do resumo por rubrica, centro e vencimento, como os títulos o usam. */
+  retorno(c: ContextoIntegracaoFolha, id: number): Promise<RetornoParaTitulos | null> {
+    return this.ler(c, async (l, est) => {
+      const lote = await l.uma(
+        `SELECT id, numero, estabelecimento_id, competencia, sentido, situacao FROM lote_folha_intercambio
+          WHERE estabelecimento_id = ? AND numero = ? AND excluido_em IS NULL`,
+        [est, id],
+      );
+      if (!lote) return null;
+      const linhas = await l.consultar(
+        `SELECT rubrica, centro_custo_id, vencimento, SUM(valor) AS valor
+           FROM lote_folha_intercambio_resumo
+          WHERE lote_folha_intercambio_id = ? AND excluido_em IS NULL
+          GROUP BY rubrica, centro_custo_id, vencimento
+          ORDER BY rubrica, centro_custo_id, vencimento`,
+        [numero(lote['id'])],
+      );
+      let liquido = 0;
+      let vencimentoLiquido: string | null = null;
+      const encargos: { tipo: TipoEncargoFolha; valor: number; vencimento: string | null }[] = [];
+      const proventos: { centroCusto: number | null; proventos: number }[] = [];
+      for (const r of linhas) {
+        const rubrica = texto(r['rubrica']);
+        const valor = centavos(r['valor']);
+        const venc = r['vencimento'] === null || r['vencimento'] === undefined ? null : dia(r['vencimento']);
+        const centro = r['centro_custo_id'] === null ? null : numero(r['centro_custo_id']);
+        if (rubrica === 'liquido') {
+          liquido += valor;
+          if (venc && (!vencimentoLiquido || venc < vencimentoLiquido)) vencimentoLiquido = venc;
+        } else if (rubrica === 'proventos') proventos.push({ centroCusto: centro, proventos: valor });
+        else if (rubrica !== 'descontos')
+          encargos.push({ tipo: rubrica as TipoEncargoFolha, valor, vencimento: venc });
+      }
+      return {
+        id,
+        empresa: est,
+        competencia: dia(lote['competencia']).slice(0, 7),
+        sentido: lote['sentido'] === 'recebido' ? 'recebido' : 'exportado',
+        situacao: texto(lote['situacao']),
+        liquido,
+        vencimentoLiquido,
+        encargos,
+        proventos,
+      };
+    });
   }
-  async lancamentos(): Promise<LancamentoTitulosFolha[]> {
-    throw erroSemModelo('lancamentos');
+
+  lancamentos(c: ContextoIntegracaoFolha, empresa: number, ano: number): Promise<LancamentoTitulosFolha[]> {
+    return this.ler(c, async (l, est) =>
+      empresa !== est
+        ? []
+        : (await l.consultar(`${SQL_LANCAMENTOS} AND cf.ano = ? ORDER BY l.id DESC`, [est, ano])).map(
+            lancamentoDe,
+          ),
+    );
   }
-  async lancamento(): Promise<LancamentoTitulosFolha | null> {
-    throw erroSemModelo('lancamento');
+
+  lancamento(c: ContextoIntegracaoFolha, id: number): Promise<LancamentoTitulosFolha | null> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma(`${SQL_LANCAMENTOS} AND l.id = ?`, [est, id]);
+      return r ? lancamentoDe(r) : null;
+    });
   }
-  async lancamentoDaOrigem(): Promise<LancamentoTitulosFolha | null> {
-    throw erroSemModelo('lancamentoDaOrigem');
+
+  lancamentoDaOrigem(
+    c: ContextoIntegracaoFolha,
+    origem: OrigemLancamentoFolha,
+    id: number,
+  ): Promise<LancamentoTitulosFolha | null> {
+    return this.ler(c, async (l, est) => {
+      const r =
+        origem === 'interface'
+          ? await l.uma(`${SQL_LANCAMENTOS} AND l.origem_lancamento = 'interface' AND lf.numero = ?`, [
+              est,
+              id,
+            ])
+          : await l.uma(`${SQL_LANCAMENTOS} AND l.origem_lancamento = 'fechamento' AND l.origem_id = ?`, [
+              est,
+              id,
+            ]);
+      return r ? lancamentoDe(r) : null;
+    });
   }
-  async titulosDoLancamento(): Promise<TituloFolhaLancado[]> {
-    throw erroSemModelo('titulosDoLancamento');
+
+  titulosDoLancamento(c: ContextoIntegracaoFolha, lancamento: number): Promise<TituloFolhaLancado[]> {
+    return this.ler(c, async (l, est) =>
+      (
+        await l.consultar(
+          `SELECT t.destino, t.empresa_fornecedora_id, t.valor, t.vencimento, tp.numero_documento,
+                  (SELECT MIN(p.id) FROM parcela_pagar p WHERE p.titulo_pagar_id = tp.id AND p.excluido_em IS NULL) AS parcela,
+                  NOT EXISTS (SELECT 1 FROM parcela_pagar p
+                               WHERE p.titulo_pagar_id = tp.id AND p.excluido_em IS NULL AND p.situacao <> 'paga') AS pago
+             FROM titulo_folha t
+             JOIN lancamento_titulos_folha lt ON lt.id = t.lancamento_titulos_folha_id
+             JOIN titulo_pagar tp ON tp.id = t.titulo_pagar_id
+            WHERE lt.estabelecimento_id = ? AND lt.id = ? AND t.excluido_em IS NULL
+            ORDER BY t.id`,
+          [est, lancamento],
+        )
+      ).flatMap((r) => {
+        const destino = destinoDoBanco(r['destino']);
+        if (destino === null) return [];
+        return [
+          {
+            destino,
+            rotina: ROTINA_DO_DESTINO[destino],
+            titulo: numero(r['parcela']),
+            credor: numero(r['empresa_fornecedora_id']),
+            documento: numero(r['numero_documento']),
+            vencimento: dia(r['vencimento']),
+            valor: centavos(r['valor']),
+            pago: Boolean(numero(r['pago'])),
+          },
+        ];
+      }),
+    );
   }
-  async chavesLancadas(): Promise<string[]> {
-    throw erroSemModelo('chavesLancadas');
+
+  chavesLancadas(
+    c: ContextoIntegracaoFolha,
+    empresa: number,
+    apuracao: ApuracaoFolha,
+    periodo: string,
+  ): Promise<string[]> {
+    return this.ler(c, async (l, est) => {
+      if (empresa !== est) return [];
+      const f = filtroPeriodo(apuracao, periodo);
+      return (
+        await l.consultar(
+          `SELECT t.destino, t.vencimento FROM titulo_folha t
+             JOIN lancamento_titulos_folha l ON l.id = t.lancamento_titulos_folha_id
+             JOIN competencia_folha cf ON cf.id = l.competencia_folha_id
+            WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL AND t.excluido_em IS NULL${f.sql}
+            ORDER BY t.id`,
+          [est, ...f.p],
+        )
+      ).map((r) => `${destinoDoBanco(r['destino']) ?? texto(r['destino'])}:${dia(r['vencimento'])}`);
+    });
   }
-  async custoPessoal(): Promise<{ centros: never[]; lancamentos: number }> {
-    throw erroSemModelo('custoPessoal');
+
+  /** O custo de pessoal por centro do período: os fatos da folha (provento ou encargo) dos lançamentos do período. */
+  custoPessoal(
+    c: ContextoIntegracaoFolha,
+    empresa: number,
+    periodo: string,
+  ): Promise<{ centros: CustoPessoalCentro[]; lancamentos: number }> {
+    return this.ler(c, async (l, est) => {
+      if (empresa !== est) return { centros: [], lancamentos: 0 };
+      const f = filtroPeriodo(null, periodo);
+      const fatos = await l.consultar(
+        `SELECT COALESCE(fc.centro_custo_id, 0) AS centro, JSON_VALUE(fc.campos, '$.natureza') AS natureza,
+                SUM(fc.valor) AS valor
+           FROM fato_contabil fc
+           JOIN lancamento_titulos_folha l ON l.id = fc.entidade_origem_id
+           JOIN competencia_folha cf ON cf.id = l.competencia_folha_id
+          WHERE fc.entidade_origem = 'lancamento_titulos_folha' AND fc.estabelecimento_id = ? AND fc.estorno = FALSE
+            AND l.estabelecimento_id = ? AND l.excluido_em IS NULL${f.sql}
+          GROUP BY COALESCE(fc.centro_custo_id, 0), JSON_VALUE(fc.campos, '$.natureza')
+          ORDER BY centro`,
+        [est, est, ...f.p],
+      );
+      const acc = new Map<number, { proventos: number; encargos: number }>();
+      for (const r of fatos) {
+        const k = numero(r['centro']);
+        const a = acc.get(k) ?? { proventos: 0, encargos: 0 };
+        if (r['natureza'] === 'provento') a.proventos += centavos(r['valor']);
+        else a.encargos += centavos(r['valor']);
+        acc.set(k, a);
+      }
+      const n = await l.uma(
+        `SELECT COUNT(*) AS n FROM lancamento_titulos_folha l
+           JOIN competencia_folha cf ON cf.id = l.competencia_folha_id
+          WHERE l.estabelecimento_id = ? AND l.excluido_em IS NULL${f.sql}`,
+        [est, ...f.p],
+      );
+      return {
+        centros: [...acc.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([centroCusto, a]) => ({ centroCusto, ...a, total: a.proventos + a.encargos })),
+        lancamentos: numero(n?.['n']),
+      };
+    });
   }
 }

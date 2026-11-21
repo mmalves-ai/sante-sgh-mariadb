@@ -4,16 +4,14 @@
 // Trigger novo em tabela do banco continua proibido (convencoes.md §1, regra 3; guardas:legado, regra d); a regra por
 // linha é o primeiro passo do plano de evolução, se o ADR da F6 extinguir a retrocompatibilidade.
 //
-// O que é "tabela clínica" (D-CLINICA-59, ampliada na correção da revisão): as tabelas de registro do paciente na
-// matriz de cobertura das 1.503 tabelas (planejamento/referencias/matriz-cobertura-1503-tabelas.tsv), de natureza
-// movimento, histórico, vínculo ou auditoria, nos módulos clínicos e só nas telas do registro (critérios abaixo): o
-// prontuário (PEP, sem os cadastros e configurações), o resultado e o laudo de exame (SADT) e o registro de cirurgia
-// e a ficha anestésica (CC), com as auditorias de exclusão deles. As tabelas SGH_ do prontuário, dos documentos
+// O que é "tabela clínica" (D-CLINICA-59): as tabelas de registro do paciente do modelo próprio, as que têm paciente,
+// atendimento ou internação, nos módulos clínicos do DDL (prontuário com a enfermagem, internação, centro cirúrgico
+// e SADT), mais a trilha de auditoria. As tabelas SGH_ do prontuário, dos documentos
 // assinados, do laudo e do resultado, da hemoterapia (ato transfusional e reação) e do perioperatório (ficha
-// anestésica, APA, SRPA, checklist) entram pelo prefixo. A lista do legado sai gerada em tabelas-clinicas.gerado.ts (o
-// teste de tools/verificadores confere que está em dia com a matriz).
+// anestésica, APA, SRPA, checklist) entram pelo prefixo. A lista do modelo sai gerada do DDL em
+// tabelas-clinicas.gerado.ts (o teste de tools/verificadores confere que está em dia).
 import { z } from 'zod';
-import { TABELAS_CLINICAS_LEGADO } from './tabelas-clinicas.gerado.js';
+import { TABELAS_CLINICAS_MODELO } from './tabelas-clinicas.gerado.js';
 
 /**
  * Critério por módulo da matriz: a tela (coluna tela_funcao) diz se a tabela é do registro do paciente. `telasDentro`
@@ -85,14 +83,14 @@ export const EXCECOES_DELETE_CLINICO: readonly { readonly tabela: string; readon
   },
 ];
 
-const CLINICAS_LEGADO = new Set<string>(TABELAS_CLINICAS_LEGADO);
+const CLINICAS_MODELO = new Set<string>(TABELAS_CLINICAS_MODELO);
 const EXCECOES = new Set(EXCECOES_DELETE_CLINICO.map((e) => e.tabela));
 
-/** A tabela guarda registro clínico (do legado, pela matriz; ou SGH_, pelo prefixo)? */
+/** A tabela guarda registro clínico (do modelo, pela lista gerada do DDL; ou SGH_, pelo prefixo)? */
 export function ehTabelaClinica(tabela: string): boolean {
   const t = tabela.trim().toUpperCase();
   if (t.startsWith('SGH_')) return PREFIXOS_SGH_CLINICOS.some((p) => t.startsWith(p));
-  return CLINICAS_LEGADO.has(t);
+  return CLINICAS_MODELO.has(t.toLowerCase());
 }
 
 /** DELETE nesta tabela fere a imutabilidade (clínica e fora das exceções)? */

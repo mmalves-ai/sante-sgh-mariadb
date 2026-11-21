@@ -24,10 +24,16 @@
 // Decisão (registrada em saida/03-03.json): esta API trata o plano como de UM equipamento. O plano com vários alvos
 // (vindo do conector ou de outra tela) é lido uma vez, com o menor equipamento, e a execução dele é recusada
 // (`plano-varios-alvos`); o plano só de ambiente climatizado ou de bem patrimonial não é desta tela e não aparece.
-// Pendente (pedidos ao orquestrador, DDL em docs/obra/fatias/f22/saida/03-03.json): alertas de tecnovigilância ligados ao
-// parque, queixa técnica de equipamento, curso exigido por modelo, eventos do ciclo de vida, laudo da OS, modelo pronto
-// do plano e data da desativação. Até lá, as gravações recusam com o
-// código `modelo-pendente` (nada é gravado pela metade) e as leituras devolvem vazio.
+// Tecnovigilância ligada ao parque: o alerta é o alerta_sanitario da área `equipamento` (fabricante, modelo e faixa de
+// série), as OS de ação de campo ficam em alerta_sanitario_equipamento e a queixa técnica do equipamento é a
+// queixa_tecnica_produto ligada à OS (com o andamento em queixa_tecnica_produto_evento). O número digitado do alerta é a
+// identificação do emissor; o número interno vem da sequencia_negocio. A exclusão do alerta é lógica e só sem vínculo.
+// Treinamento e ciclo de vida: o curso exigido por modelo é o modelo_equipamento_curso (fabricante do cadastro e modelo
+// normalizado; desvincular é exclusão lógica, e vincular de novo reativa a mesma linha); os eventos são o
+// evento_ciclo_equipamento, com o valor contábil lido do patrimônio na data (última cota de depreciação até a data ou,
+// sem cota, o valor de aquisição). A desativação grava a data no equipamento (desativado_em).
+// A OS guarda o laudo próprio (laudo_arquivo_id, arquivo do estabelecimento) e o plano guarda o modelo pronto de origem
+// (modelo_plano_codigo e modelo_plano_versao).
 import {
   type AlertaEquipamento,
   ATIVIDADES_PLANO,
@@ -37,6 +43,7 @@ import {
   type ConclusaoDeCurso,
   type CursoDoModelo,
   type EventoCicloVida,
+  type SituacaoAlertaEquipamento,
   SITUACOES_OS_ABERTAS,
   type SituacaoOs,
   type TipoRecursoAgenda,
@@ -58,6 +65,8 @@ import { civil, FUSO_PADRAO, instanteCivil, relogioNoFuso } from '../exames/relo
 import type { CursoDoCatalogo, FiltroPeriodoPorta, GravadorManutencao, PortaManutencao } from './porta.js';
 import type {
   AcaoDeCampo,
+  AlertaParaAlterar,
+  AlertaParaIncluir,
   CamposOs,
   CoberturaManutencao,
   EquipamentoDoParque,
@@ -77,7 +86,7 @@ import type {
   VersaoDaCobertura,
   VersaoDoPlano,
 } from './tipos.js';
-import { numeroDaOs } from './tipos.js';
+import { numeroDaOs, recusaAlerta, recusaCicloVida } from './tipos.js';
 
 /** O mínimo do núcleo que a porta usa. */
 export type NucleoManutencao = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor'>;
@@ -105,6 +114,12 @@ export const TABELAS_MANUTENCAO = [
   'contrato_servico_terceirizado',
   'contrato_servico_terceirizado_item',
   'notificacao_usuario',
+  'alerta_sanitario',
+  'alerta_sanitario_equipamento',
+  'queixa_tecnica_produto',
+  'queixa_tecnica_produto_evento',
+  'modelo_equipamento_curso',
+  'evento_ciclo_equipamento',
 ] as const;
 
 // ── Conversões ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -142,7 +157,7 @@ function instante(v: unknown, fuso: string): string | null {
   const d = v instanceof Date ? v : new Date(String(v));
   if (Number.isNaN(d.getTime())) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 /** "AAAA-MM-DDTHH:MM" (no fuso do estabelecimento) → instante do banco. */
 function paraInstante(v: string, fuso: string): Date {
@@ -167,15 +182,6 @@ function tipoDoRecurso(t: unknown): TipoRecursoAgenda {
 const SITUACOES_ABERTAS_BANCO = SITUACOES_OS_ABERTAS.map(snake);
 const GRAVIDADE_AVISO = { grave: 'alta', atencao: 'atencao', informacao: 'informativa' } as const;
 
-/** A recusa do que o modelo do banco ainda não guarda (pedido de DDL ao orquestrador). */
-const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a estrutura no banco do cliente: por enquanto não é gravado (nada foi alterado).`,
-  );
-
 const desatualizado = (o: string) =>
   recusa('desatualizado', `${o} mudou depois que você abriu (outra pessoa gravou). Abra de novo para ver a versão atual.`);
 
@@ -190,7 +196,7 @@ async function fusoDe(l: L, est: number): Promise<string> {
 
 function relogio(fuso: string): { hoje: string; agora: string } {
   const r = relogioNoFuso(fuso);
-  return { hoje: r.hoje, agora: `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}` };
+  return { hoje: r.hoje, agora: `${r.hoje}T${r.hora}` };
 }
 
 // ── Leituras (as mesmas na consulta e dentro da gravação) ───────────────────────────────────────────────────────
@@ -199,7 +205,7 @@ const SQL_EQUIPAMENTO = `
   SELECT e.id, e.versao, e.codigo, e.nome, e.tipo, e.criticidade, e.classe_risco, f.nome AS fabricante, e.modelo,
          e.numero_serie, e.registro_anvisa, sf.unidade_assistencial_id AS unidade, e.centro_custo_id, e.localizacao,
          e.recurso_agendavel_id, r.tipo AS recurso_tipo, e.bem_patrimonial_id, e.instalado_em, e.garantia_ate,
-         e.situacao, e.motivo_desativacao, e.alterado_em,
+         e.situacao, e.motivo_desativacao, e.desativado_em,
          (SELECT COUNT(*) FROM ordem_servico_manutencao o
            WHERE o.equipamento_saude_id = e.id AND o.excluido_em IS NULL
              AND o.situacao IN (${marcas(SITUACOES_ABERTAS_BANCO.length)})) AS os_abertas,
@@ -212,7 +218,7 @@ const SQL_EQUIPAMENTO = `
     LEFT JOIN recurso_agendavel r ON r.id = e.recurso_agendavel_id
    WHERE e.estabelecimento_id = ? AND e.excluido_em IS NULL`;
 
-function equipamentoDe(x: Linha, fuso: string): EquipamentoManutencao {
+function equipamentoDe(x: Linha, _fuso: string): EquipamentoManutencao {
   const situacao = texto(x['situacao']) as EquipamentoManutencao['situacao'];
   return {
     id: n(x['id']),
@@ -237,8 +243,7 @@ function equipamentoDe(x: Linha, fuso: string): EquipamentoManutencao {
     instalacao: dataIso(x['instalado_em']),
     garantiaAte: dataIso(x['garantia_ate']),
     situacao,
-    // Pendente (pedido desativado_em): até lá, a data da última alteração do equipamento desativado.
-    desativadoEm: situacao === 'desativado' ? (instante(x['alterado_em'], fuso)?.slice(0, 10) ?? null) : null,
+    desativadoEm: situacao === 'desativado' ? dataIso(x['desativado_em']) : null,
     motivo: textoN(x['motivo_desativacao']),
     parado: n(x['paradas']) > 0,
     osAbertas: n(x['os_abertas']),
@@ -310,6 +315,7 @@ const SQL_OS = `
          ut.login AS tecnico, o.executor, o.contrato_servico_terceirizado_id, o.plano_preventivo_id, o.solicitado_em,
          o.assumido_em, o.concluido_em, o.encerrado_em, o.cancelado_em, o.justificativa_cancelamento,
          o.equipamento_parado, cf.codigo AS causa, o.solucao, o.custo_pecas, o.custo_mao_obra, o.custo_terceiros,
+         o.laudo_arquivo_id,
          (SELECT MAX(v.ocorrido_em) FROM ordem_servico_manutencao_evento v
            WHERE v.ordem_servico_manutencao_id = o.id AND v.tipo_evento = 'devolucao_equipamento') AS parada_fim,
          (SELECT MIN(i.iniciado_em) FROM ordem_servico_manutencao_item i
@@ -359,8 +365,7 @@ function osDe(x: Linha, fuso: string): OrdemServico {
     custoPecasCent: centavos(x['custo_pecas']),
     custoMaoDeObraCent: centavos(x['custo_mao_obra']),
     custoTerceirosCent: centavos(x['custo_terceiros']),
-    // Pendente (pedido laudo_arquivo_id na ordem): até lá, a OS não guarda laudo próprio.
-    laudo: null,
+    laudo: nn(x['laudo_arquivo_id']),
   };
 }
 
@@ -374,6 +379,7 @@ const SQL_PLANO = `
          (SELECT MIN(pe.equipamento_saude_id) FROM plano_preventivo_equipamento pe
            WHERE pe.plano_preventivo_id = p.id AND pe.excluido_em IS NULL) AS equipamento_saude_id, p.periodicidade_quantidade, p.periodicidade_unidade,
          p.data_base, p.antecedencia_dias, p.procedimento, p.executor, p.contrato_servico_terceirizado_id, p.ativo,
+         p.modelo_plano_codigo, p.modelo_plano_versao,
          (SELECT x.data_execucao FROM execucao_preventiva x WHERE x.plano_preventivo_id = p.id AND x.excluido_em IS NULL
            ORDER BY x.data_execucao DESC, x.id DESC LIMIT 1) AS ultima_execucao,
          (SELECT x.resultado FROM execucao_preventiva x WHERE x.plano_preventivo_id = p.id AND x.excluido_em IS NULL
@@ -399,8 +405,10 @@ function planoDe(x: Linha): PlanoManutencao {
     executor: texto(x['executor']) as PlanoManutencao['executor'],
     cobertura: nn(x['contrato_servico_terceirizado_id']),
     ativo: verdadeiro(x['ativo']),
-    // Pendente (pedido modelo_plano_codigo/versao): até lá, nenhum plano registra o modelo pronto de origem.
-    modelo: null,
+    modelo:
+      x['modelo_plano_codigo'] === null || x['modelo_plano_codigo'] === undefined
+        ? null
+        : { codigo: texto(x['modelo_plano_codigo']), versao: n(x['modelo_plano_versao']) },
     ultimaExecucao: dataIso(x['ultima_execucao']),
     ultimoResultado: x['ultimo_resultado']
       ? (camel(texto(x['ultimo_resultado'])) as PlanoManutencao['ultimoResultado'])
@@ -588,6 +596,211 @@ async function planosAtivosDoContrato(
   return n(r?.n);
 }
 
+// ── Tecnovigilância, treinamento por modelo e ciclo de vida ────────────────────────────────────────────────────
+
+/** O tipo do alerta da tela ↔ o tipo de ação do alerta sanitário. */
+const TIPO_ACAO_ALERTA = { recall: 'recolhimento', alerta: 'alerta_risco' } as const;
+/** As situações do alerta sanitário que a tela mostra como encerrado. */
+const ALERTA_ENCERRADO = ['concluido', 'nao_se_aplica', 'cancelado'] as const;
+
+const SQL_ALERTA = `
+  SELECT a.id, a.versao, a.numero, a.identificacao_externa, a.tipo_acao, a.origem, a.titulo, f.nome AS fabricante,
+         a.modelo, a.numero_serie_inicial, a.numero_serie_final, a.registro_anvisa, a.publicado_em, a.descricao,
+         a.acao_recomendada, a.situacao, a.concluido_em, a.conclusao, a.criado_em, uc.login AS criado_por_login,
+         ua.login AS alterado_por_login,
+         (SELECT COUNT(*) FROM alerta_sanitario_equipamento q
+           WHERE q.alerta_sanitario_id = a.id AND q.excluido_em IS NULL) AS acoes
+    FROM alerta_sanitario a
+    LEFT JOIN fabricante f ON f.id = a.fabricante_id
+    LEFT JOIN usuario uc ON uc.id = a.criado_por
+    LEFT JOIN usuario ua ON ua.id = a.alterado_por
+   WHERE a.estabelecimento_id = ? AND a.area = 'equipamento' AND a.excluido_em IS NULL`;
+
+function alertaDe(x: Linha, fuso: string): AlertaEquipamento {
+  const situacao: SituacaoAlertaEquipamento = (ALERTA_ENCERRADO as readonly string[]).includes(texto(x['situacao']))
+    ? 'encerrado'
+    : 'aberto';
+  const tipoAcao = texto(x['tipo_acao']);
+  return {
+    id: n(x['id']),
+    numero: textoN(x['identificacao_externa']) ?? texto(x['numero']),
+    tipo: tipoAcao === 'recolhimento' || tipoAcao === 'correcao_campo' ? 'recall' : 'alerta',
+    origem: texto(x['origem']) === 'integracao' ? 'anvisa' : 'manual',
+    titulo: texto(x['titulo']),
+    fabricante: texto(x['fabricante']),
+    modelo: textoN(x['modelo']),
+    serieInicio: textoN(x['numero_serie_inicial']),
+    serieFim: textoN(x['numero_serie_final']),
+    registroAnvisa: textoN(x['registro_anvisa']),
+    publicadoEm: dataIso(x['publicado_em']),
+    descricao: texto(x['descricao']),
+    acao: texto(x['acao_recomendada']),
+    situacao,
+    encerradoEm: situacao === 'encerrado' ? instante(x['concluido_em'], fuso) : null,
+    encerradoPor: situacao === 'encerrado' ? textoN(x['alterado_por_login']) : null,
+    motivo: situacao === 'encerrado' ? textoN(x['conclusao']) : null,
+    versao: n(x['versao']),
+    criadoPor: texto(x['criado_por_login']),
+    criadoEm: instante(x['criado_em'], fuso) ?? '',
+    acoes: n(x['acoes']),
+  };
+}
+
+async function lerAlertas(
+  l: L,
+  est: number,
+  fuso: string,
+  f: { id?: number; situacao?: SituacaoAlertaEquipamento | null },
+): Promise<AlertaEquipamento[]> {
+  const p: unknown[] = [est];
+  let onde = '';
+  if (f.id !== undefined) {
+    onde += ' AND a.id = ?';
+    p.push(f.id);
+  }
+  if (f.situacao) onde += ` AND a.situacao ${f.situacao === 'encerrado' ? '' : 'NOT '}IN (${marcas(ALERTA_ENCERRADO.length)})`;
+  if (f.situacao) p.push(...ALERTA_ENCERRADO);
+  return (await l.consultar(`${SQL_ALERTA}${onde} ORDER BY a.recebido_em DESC, a.id DESC LIMIT ${TETO}`, p)).map((x) =>
+    alertaDe(x, fuso),
+  );
+}
+
+async function lerAcoesDoAlerta(l: L, est: number, fuso: string, alerta: number): Promise<AcaoDeCampo[]> {
+  return (
+    await l.consultar(
+      `SELECT q.equipamento_saude_id, o.id AS os, o.numero, o.situacao, u.login, q.criado_em,
+              (SELECT k.id FROM queixa_tecnica_produto k
+                WHERE k.ordem_servico_manutencao_id = o.id AND k.excluido_em IS NULL LIMIT 1) AS queixa
+         FROM alerta_sanitario_equipamento q
+         JOIN alerta_sanitario a ON a.id = q.alerta_sanitario_id AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
+         JOIN ordem_servico_manutencao o ON o.id = q.ordem_servico_manutencao_id
+         LEFT JOIN usuario u ON u.id = q.criado_por
+        WHERE q.alerta_sanitario_id = ? AND q.excluido_em IS NULL
+        ORDER BY q.id LIMIT ${TETO * 4}`,
+      [est, alerta],
+    )
+  ).map((x) => ({
+    equipamento: n(x['equipamento_saude_id']),
+    os: { id: n(x['os']), numero: texto(x['numero']), situacao: camel(texto(x['situacao'])) },
+    queixa: nn(x['queixa']),
+    por: texto(x['login']),
+    em: instante(x['criado_em'], fuso) ?? '',
+  }));
+}
+
+/** O parque candidato: os equipamentos com fabricante e não desativados, mais os que já têm OS do alerta. */
+async function lerParqueDoAlerta(l: L, est: number, alerta: number): Promise<EquipamentoDoParque[]> {
+  if (!(await l.uma("SELECT id FROM alerta_sanitario WHERE id = ? AND estabelecimento_id = ? AND area = 'equipamento' AND excluido_em IS NULL", [alerta, est])))
+    return [];
+  return (
+    await l.consultar(
+      `SELECT e.id, e.codigo, e.nome, f.nome AS fabricante, e.modelo, e.numero_serie, e.centro_custo_id, e.situacao
+         FROM equipamento_saude e
+         LEFT JOIN fabricante f ON f.id = e.fabricante_id
+        WHERE e.estabelecimento_id = ? AND e.excluido_em IS NULL
+          AND ((e.fabricante_id IS NOT NULL AND e.situacao <> 'desativado')
+               OR EXISTS (SELECT 1 FROM alerta_sanitario_equipamento q
+                           WHERE q.equipamento_saude_id = e.id AND q.alerta_sanitario_id = ? AND q.excluido_em IS NULL))
+        ORDER BY e.codigo LIMIT ${TETO * 4}`,
+      [est, alerta],
+    )
+  ).map((x) => ({
+    id: n(x['id']),
+    codigo: texto(x['codigo']),
+    nome: texto(x['nome']),
+    fabricante: textoN(x['fabricante']),
+    modelo: textoN(x['modelo']),
+    numeroSerie: textoN(x['numero_serie']),
+    centroCusto: n(x['centro_custo_id']),
+    situacao: texto(x['situacao']),
+  }));
+}
+
+const SQL_CURSO_MODELO = `
+  SELECT m.id, UPPER(f.nome) AS fabricante, m.modelo, m.curso_id, cu.codigo, cu.nome, cu.ativo, cu.validade_meses,
+         u.login, m.criado_em
+    FROM modelo_equipamento_curso m
+    JOIN fabricante f ON f.id = m.fabricante_id
+    JOIN curso cu ON cu.id = m.curso_id
+    LEFT JOIN usuario u ON u.id = m.criado_por
+   WHERE m.estabelecimento_id = ? AND m.excluido_em IS NULL`;
+
+async function lerCursosModelo(
+  l: L,
+  est: number,
+  fuso: string,
+  f: { id?: number; chave?: { fabricante: string; modelo: string } },
+): Promise<CursoDoModelo[]> {
+  const p: unknown[] = [est];
+  let onde = '';
+  if (f.id !== undefined) {
+    onde += ' AND m.id = ?';
+    p.push(f.id);
+  }
+  if (f.chave) {
+    onde += ' AND UPPER(TRIM(f.nome)) = ? AND m.modelo = ?';
+    p.push(f.chave.fabricante.trim().toUpperCase(), f.chave.modelo);
+  }
+  return (await l.consultar(`${SQL_CURSO_MODELO}${onde} ORDER BY f.nome, m.modelo, cu.nome LIMIT ${TETO}`, p)).map((x) => ({
+    id: n(x['id']),
+    fabricante: texto(x['fabricante']),
+    modelo: texto(x['modelo']),
+    curso: n(x['curso_id']),
+    cursoCodigo: texto(x['codigo']),
+    cursoTitulo: texto(x['nome']),
+    cursoAtivo: verdadeiro(x['ativo']),
+    validadeMeses: n(x['validade_meses']),
+    criadoPor: texto(x['login']),
+    criadoEm: instante(x['criado_em'], fuso) ?? '',
+  }));
+}
+
+async function lerEventosCiclo(l: L, est: number, fuso: string, equipamento: number): Promise<EventoCicloVida[]> {
+  return (
+    await l.consultar(
+      `SELECT v.id, v.equipamento_saude_id, v.tipo, v.data_evento, v.motivo, v.documento, v.destino, v.valor_contabil,
+              v.valor_obtido, v.autorizado_por, u.login, v.criado_em
+         FROM evento_ciclo_equipamento v
+         JOIN equipamento_saude e ON e.id = v.equipamento_saude_id AND e.estabelecimento_id = ? AND e.excluido_em IS NULL
+         LEFT JOIN usuario u ON u.id = v.criado_por
+        WHERE v.equipamento_saude_id = ? AND v.excluido_em IS NULL
+        ORDER BY v.data_evento, v.id`,
+      [est, equipamento],
+    )
+  ).map((x) => ({
+    id: n(x['id']),
+    equipamento: n(x['equipamento_saude_id']),
+    tipo: texto(x['tipo']) as EventoCicloVida['tipo'],
+    data: dataIso(x['data_evento']) ?? '',
+    motivo: texto(x['motivo']),
+    documento: textoN(x['documento']),
+    destino: textoN(x['destino']) as EventoCicloVida['destino'],
+    valorContabilCent: centavosN(x['valor_contabil']),
+    valorObtidoCent: centavosN(x['valor_obtido']),
+    autorizadoPor: texto(x['autorizado_por']),
+    por: texto(x['login']),
+    em: instante(x['criado_em'], fuso) ?? '',
+  }));
+}
+
+async function lerVinculosTecnovigDaOs(l: L, est: number, os: number) {
+  const k = await l.uma<{ id: number }>(
+    'SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL LIMIT 1',
+    [os, est],
+  );
+  const a = await l.uma(
+    `SELECT a.id, COALESCE(a.identificacao_externa, a.numero) AS numero
+       FROM alerta_sanitario_equipamento q
+       JOIN alerta_sanitario a ON a.id = q.alerta_sanitario_id AND a.estabelecimento_id = ? AND a.excluido_em IS NULL
+      WHERE q.ordem_servico_manutencao_id = ? AND q.excluido_em IS NULL LIMIT 1`,
+    [est, os],
+  );
+  return {
+    queixa: k ? n(k.id) : null,
+    alerta: a ? { id: n(a['id']), numero: texto(a['numero']) } : null,
+  };
+}
+
 // ── Gravação ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** O usuário pelo login (a tela fala login; o banco guarda o id). */
@@ -667,6 +880,8 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       garantia_ate: x.garantiaAte,
       situacao: x.situacao,
       motivo_desativacao: x.situacao === 'desativado' ? corte(x.motivo?.trim(), 500) : null,
+      // A data da desativação (CHECK: só o desativado tem data); quem já estava desativado guarda a data que tinha.
+      desativado_em: x.situacao === 'desativado' ? relogio(await fuso()).hoje : null,
     };
   };
 
@@ -741,7 +956,57 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     equipamentos: (await equipamentosDoContrato(tx, [n(r['id'])])).get(n(r['id'])) ?? [],
   });
 
-  return {
+  /** O número digitado do alerta (a identificação do emissor) é único entre os alertas de equipamento ativos. */
+  const identificacaoLivre = async (numero: string, proprio: number | null) => {
+    const r = await tx.uma(
+      "SELECT id FROM alerta_sanitario WHERE estabelecimento_id = ? AND area = 'equipamento' AND excluido_em IS NULL AND UPPER(TRIM(identificacao_externa)) = ? AND id <> ? LIMIT 1",
+      [est, numero.trim().toUpperCase(), proprio ?? 0],
+    );
+    if (r) throw recusaAlerta('numero-repetido');
+  };
+  const camposAlerta = async (x: AlertaParaIncluir | AlertaParaAlterar) => {
+    const fabricante = x.fabricante.trim();
+    return {
+      identificacao_externa: x.numero.trim().slice(0, 60),
+      emissor: x.tipo === 'recall' ? 'fabricante' : 'vigilancia_nacional',
+      tipo_acao: TIPO_ACAO_ALERTA[x.tipo],
+      titulo: x.titulo.trim().slice(0, 200),
+      descricao: x.descricao,
+      fabricante_id: await fabricanteId(fabricante),
+      modelo: corte(x.modelo?.trim(), 60),
+      produto_descricao: `${fabricante}${x.modelo ? ` ${x.modelo.trim()}` : ''}`.slice(0, 300),
+      numero_serie_inicial: corte(x.serieInicio?.trim(), 40),
+      numero_serie_final: corte(x.serieFim?.trim(), 40),
+      registro_anvisa: x.registroAnvisa?.trim() || null,
+      publicado_em: x.publicadoEm,
+      acao_recomendada: x.acao,
+    };
+  };
+  /** O alerta de equipamento do estabelecimento, relido e travado até o fim da transação. */
+  const alertaTravado = async (id: number): Promise<AlertaEquipamento | null> => {
+    const [r] = await tx.consultarParaAtualizar(
+      "SELECT id FROM alerta_sanitario WHERE id = ? AND estabelecimento_id = ? AND area = 'equipamento' AND excluido_em IS NULL",
+      [id, est],
+    );
+    if (!r) return null;
+    return (await lerAlertas(tx, est, await fuso(), { id }))[0] ?? null;
+  };
+  /** O valor contábil do bem na data: a última cota de depreciação societária até a data ou, sem cota, o valor de aquisição. */
+  const valorContabilDoBem = async (bem: number | null, data: string): Promise<number | null> => {
+    if (bem === null) return null;
+    const cota = await tx.uma(
+      // Só a base societária (a contábil): a fiscal e a gerencial têm outro sentido e não entram no valor do evento.
+      `SELECT valor_residual FROM cota_depreciacao
+        WHERE bem_patrimonial_id = ? AND competencia <= ? AND base = 'societaria' AND excluido_em IS NULL
+        ORDER BY competencia DESC, id DESC LIMIT 1`,
+      [bem, data],
+    );
+    if (cota) return centavos(cota['valor_residual']);
+    const b = await tx.uma('SELECT valor_aquisicao FROM bem_patrimonial WHERE id = ? AND estabelecimento_id = ?', [bem, est]);
+    return b ? centavos(b['valor_aquisicao']) : null;
+  };
+
+  const g: GravadorManutencao = {
     relogio: async () => relogio(await fuso()),
     setores: () => lerSetores(tx, est),
     equipamento: async (id) => lerEquipamento(tx, est, await fuso(), { id }),
@@ -770,8 +1035,11 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       }),
     alterarEquipamento: (x) =>
       comCodigoUnico(async () => {
-        await travarLinha('SELECT id, versao FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', x.id, x.versaoVista, 'O equipamento');
-        const versao = await tx.alterar('equipamento_saude', x.id, x.versaoVista, await valoresEquipamento(x));
+        const atual = await travarLinha('SELECT id, versao, situacao, desativado_em FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', x.id, x.versaoVista, 'O equipamento');
+        const valores = await valoresEquipamento(x);
+        if (x.situacao === 'desativado' && texto(atual['situacao']) === 'desativado' && atual['desativado_em'])
+          valores.desativado_em = dataIso(atual['desativado_em']) ?? valores.desativado_em;
+        const versao = await tx.alterar('equipamento_saude', x.id, x.versaoVista, valores);
         return { id: x.id, versao };
       }),
 
@@ -814,8 +1082,12 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       const atual = await travarLinha(SQL_TRAVA_OS, x.id, x.versaoVista, 'A ordem de serviço');
       if (texto(atual['situacao']) !== snake(x.de)) throw desatualizado('A ordem de serviço');
       const k: CamposOs = x.campos;
-      if (k.laudo !== undefined && k.laudo !== null) throw modeloPendente('O laudo anexado à OS');
       const v: Record<string, unknown> = { situacao: snake(x.para) };
+      if (k.laudo !== undefined) {
+        if (k.laudo !== null && !(await tx.uma('SELECT id FROM arquivo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL', [k.laudo, est])))
+          throw recusa('laudo-invalido', 'O laudo não é um arquivo deste estabelecimento.', { campos: ['laudo'] });
+        v['laudo_arquivo_id'] = k.laudo;
+      }
       if (k.prioridade !== undefined) v['prioridade'] = k.prioridade;
       if (k.tecnico !== undefined) v['responsavel_usuario_id'] = k.tecnico === null ? null : await usuarioPorLogin(tx, k.tecnico);
       if (k.executor !== undefined) v['executor'] = k.executor;
@@ -925,7 +1197,6 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
     },
 
     incluirPlano: async (x) => {
-      if (x.modelo) throw modeloPendente('O plano instalado de um modelo pronto');
       const eq = await equipamentoDoEstabelecimento(x.equipamento);
       const nome = await tx.uma<{ nome: string }>('SELECT nome FROM equipamento_saude WHERE id = ?', [eq.id]);
       const codigo = `PM-${await proximoNumero('plano_preventivo')}`;
@@ -943,6 +1214,8 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
         executor: x.executor,
         contrato_servico_terceirizado_id: await contratoValido(x.executor, x.cobertura),
         ativo: true,
+        modelo_plano_codigo: x.modelo ? x.modelo.codigo.slice(0, 30) : null,
+        modelo_plano_versao: x.modelo ? x.modelo.versao : null,
       });
       await tx.incluir('plano_preventivo_equipamento', { plano_preventivo_id: id, equipamento_saude_id: eq.id });
       return { id, versao: 1 };
@@ -1147,35 +1420,253 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       return { id: x.id, versao: x.versaoVista };
     },
 
-    // Pendentes de modelo (pedidos ao orquestrador): nada é gravado.
-    incluirAlerta: async () => {
-      throw modeloPendente('O alerta de tecnovigilância ligado ao parque');
+    // Tecnovigilância ligada ao parque (alerta_sanitario da área `equipamento`).
+    incluirAlerta: async (x) => {
+      const r = x.conferir();
+      if (r) throw recusaAlerta(r);
+      await identificacaoLivre(x.numero, null);
+      const numero = `ALE-${await proximoNumero('alerta_sanitario')}`;
+      const id = await tx.incluir('alerta_sanitario', {
+        estabelecimento_id: est,
+        numero,
+        ...(await camposAlerta(x)),
+        area: 'equipamento',
+        recebido_em: new Date(),
+        responsavel_usuario_id: usuario,
+        situacao: 'recebido',
+      });
+      return { id, versao: 1 };
     },
-    alterarAlerta: async () => {
-      throw modeloPendente('O alerta de tecnovigilância ligado ao parque');
+    alterarAlerta: async (x) => {
+      const antes = await alertaTravado(x.id);
+      if (!antes) throw recusaAlerta('desatualizado');
+      const r = x.conferir(antes);
+      if (r) throw recusaAlerta(r);
+      if (antes.versao !== x.versaoVista || antes.situacao !== 'aberto') throw recusaAlerta('desatualizado');
+      await identificacaoLivre(x.numero, x.id);
+      an.motivo = x.motivo.slice(0, 500);
+      an.dados = { operacao: 'alteracao', antes };
+      const versao = await tx.alterar('alerta_sanitario', x.id, x.versaoVista, await camposAlerta(x));
+      return { id: x.id, versao, antes };
     },
-    encerrarAlerta: async () => {
-      throw modeloPendente('O alerta de tecnovigilância ligado ao parque');
+    encerrarAlerta: async (x) => {
+      const a = await alertaTravado(x.id);
+      if (!a) throw recusaAlerta('desatualizado');
+      if (a.situacao === 'encerrado') throw recusaAlerta('alerta-encerrado');
+      if (a.versao !== x.versaoVista) throw recusaAlerta('desatualizado');
+      an.motivo = x.motivo.slice(0, 500);
+      an.dados = { operacao: 'encerramento', antes: a };
+      const versao = await tx.alterar('alerta_sanitario', x.id, x.versaoVista, {
+        situacao: 'concluido',
+        concluido_em: new Date(),
+        conclusao: x.motivo.slice(0, 65_000),
+      });
+      return { id: x.id, versao };
     },
-    excluirAlerta: async () => {
-      throw modeloPendente('O alerta de tecnovigilância ligado ao parque');
+    excluirAlerta: async (x) => {
+      const a = await alertaTravado(x.id);
+      if (!a || a.versao !== x.versaoVista) throw recusaAlerta('desatualizado');
+      const os = (
+        await tx.consultar(
+          'SELECT ordem_servico_manutencao_id AS id FROM alerta_sanitario_equipamento WHERE alerta_sanitario_id = ? AND excluido_em IS NULL ORDER BY id',
+          [x.id],
+        )
+      ).map((q) => n(q['id']));
+      const queixas = os.length
+        ? (
+            await tx.consultar(
+              `SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id IN (${marcas(os.length)}) AND excluido_em IS NULL ORDER BY id`,
+              os,
+            )
+          ).map((q) => n(q['id']))
+        : [];
+      const grupos = [
+        { rotulo: 'OS de ação de campo do alerta', ids: os },
+        { rotulo: 'Queixas técnicas da vigilância de produto', ids: queixas },
+      ].filter((q) => q.ids.length > 0);
+      if (grupos.length > 0) {
+        const total = grupos.reduce((t, q) => t + q.ids.length, 0);
+        throw recusa(
+          'com-dependentes',
+          `O alerta tem ${total} ${total === 1 ? 'registro dependente' : 'registros dependentes'}: ${grupos
+            .map((q) => `${q.ids.length} ${q.ids.length === 1 ? 'registro' : 'registros'} em ${q.rotulo}`)
+            .join('; ')}. Encerre o alerta com motivo em vez de excluir.`,
+          {
+            dependentes: grupos.map((q) => ({
+              rotulo: q.rotulo,
+              quantidade: q.ids.length,
+              amostra: q.ids.slice(0, 5).map(String),
+              origem: 'fk' as const,
+            })),
+            podeInativar: true,
+          },
+        );
+      }
+      an.motivo = x.motivo.slice(0, 500);
+      an.dados = { operacao: 'exclusao', antes: a };
+      await tx.alterar('alerta_sanitario', x.id, x.versaoVista, { excluido_em: new Date(), excluido_por: usuario });
+      return { id: x.id, versao: x.versaoVista };
     },
-    gerarAcaoDeCampo: async () => {
-      throw modeloPendente('A ação de campo do alerta de tecnovigilância');
+    gerarAcaoDeCampo: async (x) => {
+      const alerta = await alertaTravado(x.id);
+      if (!alerta) throw recusaAlerta('desatualizado');
+      const f = await fuso();
+      const p = x.planejar(alerta, await lerParqueDoAlerta(tx, est, x.id), await lerAcoesDoAlerta(tx, est, f, x.id));
+      if (!p.ok) throw recusaAlerta(p.motivo);
+      if (alerta.versao !== x.versaoVista) throw recusaAlerta('desatualizado');
+      const geradas: { equipamento: number; os: number; numero: string }[] = [];
+      for (const q of p.equipamentos) {
+        const os = await g.abrirOs({
+          natureza: 'inspecao',
+          equipamento: q.equipamento,
+          centroCusto: q.centroCusto,
+          local: null,
+          descricao: q.descricao,
+          contato: null,
+          prioridadeSugerida: x.prioridade,
+          prioridade: x.prioridade,
+          solicitante: x.usuario,
+          registro: x.registro,
+          parado: false,
+          plano: null,
+          nota: `Ação de campo do alerta ${alerta.numero}.`,
+        });
+        await tx.incluir('alerta_sanitario_equipamento', {
+          alerta_sanitario_id: x.id,
+          equipamento_saude_id: q.equipamento,
+          ordem_servico_manutencao_id: os.id,
+        });
+        geradas.push({ equipamento: q.equipamento, os: os.id, numero: os.numero });
+      }
+      const versao = await tx.alterar('alerta_sanitario', x.id, x.versaoVista, { situacao: 'em_verificacao' });
+      return { versao, geradas };
     },
-    abrirQueixaDaOs: async () => {
-      throw modeloPendente('A queixa técnica de equipamento');
+    abrirQueixaDaOs: async (x) => {
+      // Evento adverso e alerta sanitário têm notificação e prazo próprios: sem estrutura que os distinga da queixa
+      // técnica no banco, recusam em vez de virar "falha de funcionamento" (pedido de DDL do lote).
+      if (x.tipo !== 'queixaTecnica')
+        throw new ErroOperacao(
+          409,
+          'modelo-pendente',
+          'Recurso aguardando o modelo do banco',
+          `A abertura de ${x.tipo === 'eventoAdverso' ? 'evento adverso' : 'alerta sanitário'} pela OS aguarda o mapeamento para o modelo próprio do banco.`,
+        );
+      const [o] = await tx.consultarParaAtualizar(
+        `SELECT o.id, o.equipamento_saude_id, e.fabricante_id, e.setor_funcional_id
+           FROM ordem_servico_manutencao o LEFT JOIN equipamento_saude e ON e.id = o.equipamento_saude_id
+          WHERE o.id = ? AND o.estabelecimento_id = ? AND o.excluido_em IS NULL`,
+        [x.os, est],
+      );
+      if (!o) throw desatualizado('A ordem de serviço');
+      if (o['equipamento_saude_id'] === null || o['equipamento_saude_id'] === undefined) throw recusaAlerta('os-sem-equipamento');
+      // A queixa é única por OS (a UNIQUE do banco conta a excluída também).
+      if (await tx.uma('SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [x.os]))
+        throw recusaAlerta('queixa-ja-aberta');
+      const f = await fuso();
+      const em = paraInstante(x.agora, f);
+      const segregado = x.conduta !== 'nenhuma';
+      const situacao = segregado ? 'lote_segregado' : 'aberta';
+      const id = await tx.incluir('queixa_tecnica_produto', {
+        estabelecimento_id: est,
+        numero: `QT-${await proximoNumero('queixa_tecnica_produto')}`,
+        insumo_id: null,
+        equipamento_saude_id: n(o['equipamento_saude_id']),
+        ordem_servico_manutencao_id: x.os,
+        fabricante_id: nn(o['fabricante_id']),
+        setor_funcional_id: nn(o['setor_funcional_id']),
+        tipo_desvio: 'falha_funcionamento',
+        descricao: x.descricao.slice(0, 65_000),
+        identificada_em: em,
+        lote_segregado: segregado,
+        segregado_em: segregado ? em : null,
+        notificante_usuario_id: usuario,
+        situacao,
+      });
+      await tx.incluir('queixa_tecnica_produto_evento', {
+        queixa_tecnica_produto_id: id,
+        operacao: 'inclusao',
+        dados: JSON.stringify({ tipo: x.tipo, conduta: x.conduta, os: x.os }),
+        ocorrido_em: em,
+        usuario_id: usuario,
+        situacao,
+        observacao: `Aberta pela OS ${x.os}.`,
+      });
+      return { id, versao: 1, os: x.os };
     },
-    cursoDoModelo: async () => null,
-    vincularCursoModelo: async () => {
-      throw modeloPendente('O curso exigido por modelo de equipamento');
+
+    // Treinamento por modelo e ciclo de vida.
+    cursoDoModelo: async (id) => (await lerCursosModelo(tx, est, await fuso(), { id }))[0] ?? null,
+    vincularCursoModelo: async (x) => {
+      const curso = await tx.uma('SELECT id, ativo FROM curso WHERE id = ? AND excluido_em IS NULL', [x.curso]);
+      if (!curso || !verdadeiro(curso['ativo'])) throw recusaCicloVida('curso-inativo');
+      const fabricante = await fabricanteId(x.fabricante);
+      if (fabricante === null) throw recusa('fabricante-obrigatorio', 'Informe o fabricante.', { campos: ['fabricante'] });
+      const modelo = x.modelo.trim().toUpperCase().slice(0, 60);
+      const [ja] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, excluido_em FROM modelo_equipamento_curso WHERE estabelecimento_id = ? AND fabricante_id = ? AND modelo = ? AND curso_id = ?',
+        [est, fabricante, modelo, x.curso],
+      );
+      if (ja && (ja['excluido_em'] === null || ja['excluido_em'] === undefined)) throw recusaCicloVida('vinculo-repetido');
+      if (ja) {
+        // Vincular de novo reativa a mesma linha (a UNIQUE conta a excluída); a trilha guarda as duas pontas.
+        await tx.alterar('modelo_equipamento_curso', n(ja['id']), n(ja['versao']), { excluido_em: null, excluido_por: null });
+        return { id: n(ja['id']) };
+      }
+      const id = await tx.incluir('modelo_equipamento_curso', {
+        estabelecimento_id: est,
+        fabricante_id: fabricante,
+        modelo,
+        curso_id: x.curso,
+      });
+      return { id };
     },
-    desvincularCursoModelo: async () => {
-      throw modeloPendente('O curso exigido por modelo de equipamento');
+    desvincularCursoModelo: async (x) => {
+      const [r] = await tx.consultarParaAtualizar(
+        'SELECT id, versao FROM modelo_equipamento_curso WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.id, est],
+      );
+      if (!r) throw recusaCicloVida('desatualizado');
+      an.motivo = x.motivo.slice(0, 500);
+      an.dados = { operacao: 'exclusao' };
+      await tx.alterar('modelo_equipamento_curso', x.id, n(r['versao']), { excluido_em: new Date(), excluido_por: usuario });
+      return { id: x.id };
     },
-    eventosCiclo: async () => [],
-    registrarEventoCiclo: async () => {
-      throw modeloPendente('O evento do ciclo de vida do equipamento');
+    eventosCiclo: async (eq) => lerEventosCiclo(tx, est, await fuso(), eq),
+    registrarEventoCiclo: async (x) => {
+      const [eq] = await tx.consultarParaAtualizar(
+        'SELECT id, versao, situacao, bem_patrimonial_id FROM equipamento_saude WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [x.equipamento, est],
+      );
+      if (!eq) throw recusaCicloVida('desatualizado');
+      if (x.tipo === 'descarte' && (!x.documento || !x.destino)) throw recusaCicloVida('descarte-incompleto');
+      const f = await fuso();
+      const r = x.conferir(await lerEventosCiclo(tx, est, f, x.equipamento), relogio(f).hoje);
+      if (r) throw recusaCicloVida(r);
+      const valorContabil = await valorContabilDoBem(nn(eq['bem_patrimonial_id']), x.data);
+      let id: number;
+      try {
+        id = await tx.incluir('evento_ciclo_equipamento', {
+          equipamento_saude_id: x.equipamento,
+          tipo: x.tipo,
+          data_evento: x.data,
+          motivo: x.motivo.slice(0, 500),
+          documento: corte(x.documento?.trim(), 60),
+          destino: x.tipo === 'descarte' ? x.destino : null,
+          valor_contabil: reais(valorContabil),
+          valor_obtido: reais(x.valorObtidoCent),
+          autorizado_por: x.autorizadoPor.trim().slice(0, 150),
+        });
+      } catch (erro) {
+        if (restricaoUnicaViolada(erro) === 'uq_evento_ciclo_equipamento_tipo') throw recusaCicloVida('evento-repetido');
+        throw erro;
+      }
+      if (x.tipo === 'desativacao' && texto(eq['situacao']) !== 'desativado')
+        await tx.alterar('equipamento_saude', x.equipamento, n(eq['versao']), {
+          situacao: 'desativado',
+          desativado_em: x.data,
+          motivo_desativacao: x.motivo.slice(0, 500),
+        });
+      return { id, valorContabilCent: valorContabil };
     },
 
     avisar: async (a) => {
@@ -1202,6 +1693,7 @@ function gravador(tx: TxOperacao, est: number, an: AnotacaoGravacao, c: Contexto
       });
     },
   };
+  return g;
 }
 
 // ── A porta ─────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1579,39 +2071,27 @@ export class PortaManutencaoPropria implements PortaManutencao {
     });
   }
 
-  // Tecnovigilância (pendente de modelo): leituras vazias.
-  async alertas(_c: ContextoPortaM18, _f?: unknown): Promise<AlertaEquipamento[]> {
-    void _c;
-    void _f;
-    return [];
+  // Tecnovigilância ligada ao parque.
+  alertas(c: ContextoPortaM18, f?: { situacao?: SituacaoAlertaEquipamento | null }): Promise<AlertaEquipamento[]> {
+    return this.ler(c, async (l, est, fuso) => lerAlertas(l, est, await fuso(), { situacao: f?.situacao ?? null }));
   }
-  async alerta(_c: ContextoPortaM18, _id: number): Promise<AlertaEquipamento | null> {
-    void _c;
-    void _id;
-    return null;
+  alerta(c: ContextoPortaM18, id: number): Promise<AlertaEquipamento | null> {
+    return this.ler(c, async (l, est, fuso) => (await lerAlertas(l, est, await fuso(), { id }))[0] ?? null);
   }
-  async acoesDoAlerta(_c: ContextoPortaM18, _alerta: number): Promise<AcaoDeCampo[]> {
-    void _c;
-    void _alerta;
-    return [];
+  acoesDoAlerta(c: ContextoPortaM18, alerta: number): Promise<AcaoDeCampo[]> {
+    return this.ler(c, async (l, est, fuso) => lerAcoesDoAlerta(l, est, await fuso(), alerta));
   }
-  async parqueDoAlerta(_c: ContextoPortaM18, _alerta: number): Promise<EquipamentoDoParque[]> {
-    void _c;
-    void _alerta;
-    return [];
+  parqueDoAlerta(c: ContextoPortaM18, alerta: number): Promise<EquipamentoDoParque[]> {
+    return this.ler(c, (l, est) => lerParqueDoAlerta(l, est, alerta));
   }
-  async vinculosTecnovigDaOs(_c: ContextoPortaM18, _os: number) {
-    void _c;
-    void _os;
-    return { queixa: null as number | null, alerta: null as { id: number; numero: string } | null };
+  vinculosTecnovigDaOs(c: ContextoPortaM18, os: number) {
+    return this.ler(c, (l, est) => lerVinculosTecnovigDaOs(l, est, os));
   }
 
   // Treinamento dos operadores: o catálogo e as conclusões vêm do treinamento (curso, turma, presença); o curso exigido
-  // por modelo aguarda a tabela (pedido modelo_equipamento_curso).
-  async cursosDosModelos(_c: ContextoPortaM18, _chave?: unknown): Promise<CursoDoModelo[]> {
-    void _c;
-    void _chave;
-    return [];
+  // por modelo é o modelo_equipamento_curso do estabelecimento.
+  cursosDosModelos(c: ContextoPortaM18, chave?: { fabricante: string; modelo: string }): Promise<CursoDoModelo[]> {
+    return this.ler(c, async (l, est, fuso) => lerCursosModelo(l, est, await fuso(), chave ? { chave } : {}));
   }
   catalogoCursos(c: ContextoPortaM18): Promise<CursoDoCatalogo[]> {
     return this.ler(c, async (l) =>
@@ -1659,11 +2139,9 @@ export class PortaManutencaoPropria implements PortaManutencao {
       })),
     );
   }
-  /** Ciclo de vida (pendente de modelo: evento_ciclo_equipamento): nenhum evento registrado. */
-  async eventosCiclo(_c: ContextoPortaM18, _equipamento: number): Promise<EventoCicloVida[]> {
-    void _c;
-    void _equipamento;
-    return [];
+  /** Os eventos do ciclo de vida do equipamento do estabelecimento (incorporação, desativação e descarte). */
+  eventosCiclo(c: ContextoPortaM18, equipamento: number): Promise<EventoCicloVida[]> {
+    return this.ler(c, async (l, est, fuso) => lerEventosCiclo(l, est, await fuso(), equipamento));
   }
   /** A base do índice de obsolescência: o custo e as corretivas das OS do equipamento desde a data. */
   baseObsolescencia(c: ContextoPortaM18, equipamento: number, desde: string) {

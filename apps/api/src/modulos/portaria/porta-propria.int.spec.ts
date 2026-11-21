@@ -56,7 +56,7 @@ describe.skipIf(SEM_BANCO)('porta própria da portaria (MariaDB, cliente f22_o2)
   let outro: ContextoNucleo;
   const agoraLocal = () => {
     const c = civil(new Date());
-    return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+    return `${c.data}T${c.hora}`;
   };
   const trilha =
     (entidade: string) =>

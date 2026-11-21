@@ -91,8 +91,9 @@ describe.skipIf(SEM_BANCO)('folha sobre o MariaDB (cliente f22_o3)', () => {
       ids.estB = await est(`${P}b`);
       const sexo = await garantir(
         e,
-        'SELECT id FROM sexo WHERE codigo = ?',
-        [`${P}_s`],
+        // A sigla é única: reaproveita o sexo de sigla I do catálogo do cliente quando já existir.
+        'SELECT id FROM sexo WHERE codigo = ? OR sigla = ? ORDER BY id LIMIT 1',
+        [`${P}_s`, 'I'],
         'INSERT INTO sexo (codigo, descricao, sigla, criado_em) VALUES (?, ?, ?, ?)',
         [`${P}_s`, 'Sexo sintético', 'I', agora],
       );
@@ -135,7 +136,16 @@ describe.skipIf(SEM_BANCO)('folha sobre o MariaDB (cliente f22_o3)', () => {
         );
       const motivoDeslig = await codigoEsocial(`${P}m`);
       const tipoDependente = await codigoEsocial(`${P}d`);
-      const cbo = await e.uma<{ id: number }>('SELECT id FROM ocupacao_cbo ORDER BY id LIMIT 1');
+      // CBO sintético da massa: o catálogo do cliente de teste pode estar vazio (ou sendo carregado por outro spec).
+      const cbo = {
+        id: await garantir(
+          e,
+          'SELECT id FROM ocupacao_cbo WHERE codigo_cbo = ?',
+          ['999206'],
+          'INSERT INTO ocupacao_cbo (codigo_cbo, descricao, criado_em) VALUES (?, ?, ?)',
+          ['999206', 'Ocupação sintética', agora],
+        ),
+      };
       const cargo = await garantir(
         e,
         'SELECT id FROM cargo WHERE codigo = ?',
@@ -472,9 +482,9 @@ describe.skipIf(SEM_BANCO)('folha sobre o MariaDB (cliente f22_o3)', () => {
     ).rejects.toMatchObject({ problema: { codigo: 'vinculo-inexistente' } });
   });
 
-  it('lotes da folha externa recusam com modelo-pendente (pedido de DDL)', async () => {
-    await expect(folha.lotes()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
-    await expect(folha.lote()).rejects.toMatchObject({ problema: { codigo: 'modelo-pendente' } });
+  it('lotes da folha externa: outro estabelecimento não é visto e o número inexistente lê nulo', async () => {
+    expect(await folha.lotes(c, { empresa: ids.estB })).toEqual([]);
+    expect(await folha.lote(c, 999_999_999)).toBeNull();
   });
 
   it('cálculo: vínculos, dependentes, tipos de rescisão, desligados, FGTS, salários e 13º; o resto recusa com modelo-pendente', async () => {

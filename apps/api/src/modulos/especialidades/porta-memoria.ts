@@ -606,6 +606,8 @@ export class PortaEspecialidadesMemoria implements PortaEspecialidades {
         const i = this.ordensGravadas.findIndex(
           (o) => o.estab === h && o.id === x.id && o.etiquetaEm === null,
         );
+        if (i >= 0 && this.ordensGravadas[i]!.canceladaEm !== null)
+          throw recusa('ordem-cancelada', 'A ordem foi cancelada: não se emite etiqueta de fórmula cancelada.');
         if (i < 0) return 0;
         this.ordensGravadas[i] = { ...this.ordensGravadas[i]!, etiquetaEm: em };
         return 1;

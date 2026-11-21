@@ -5,6 +5,7 @@
 // identificada; os códigos da CAT do eSocial), e o acompanhamento: profilaxia, sorologia por marco, emissão da CAT com o
 // PDF e o encerramento com motivo.
 import {
+  FORMATO_HORA,
   type AcidenteResposta,
   type ColaboradorSesmt,
   type EfeitoEsocialSesmt,
@@ -115,9 +116,9 @@ const opcoesDominio = (xs: readonly { codigo: number; rotulo: string }[] | undef
   { valor: null, rotulo: '—' },
   ...(xs ?? []).map((x) => ({ valor: x.codigo, rotulo: x.rotulo })),
 ];
-const hhmm = (h: string | null) => (h && /^\d{4}$/.test(h) ? `${h.slice(0, 2)}:${h.slice(2)}` : '');
+const horaValida = (h: string | null) => (h && FORMATO_HORA.test(h) ? h : '');
 const instante = (dia: string | null, hora: string | null) =>
-  dia && hhmm(hora) ? `${dia}T${hhmm(hora)}` : '';
+  dia && horaValida(hora) ? `${dia}T${horaValida(hora)}` : '';
 const entradaNova = computed(() =>
   esquemaRegistrarAcidente.safeParse({
     vinculo: colaborador.value?.vinculo ?? 0,

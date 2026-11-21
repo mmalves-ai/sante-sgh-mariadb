@@ -10,10 +10,13 @@
 // vigente por item faturável, e a recusa por versão vista é de negócio, não do banco.
 // Melhoria: a trilha da tela (evento, operação, alvo e diferença) vai nos dados da trilha da própria operação, na mesma
 // transação (uma linha por gravação, sem tabela de trilha à parte).
-// Pendências de modelo (pedidos do lote 03-05, docs/obra/fatias/f22/saida/03-05.json): a crítica prévia por conta (a
-// critica_sus só aceita alvo de AIH, APAC ou linha de BPA), o arquivo gerado (remessa_* sem a chave do objeto e a
-// versão), as linhas do BPA e da APAC ligadas ao arquivo, o ciclo da AIH (laudo, autorização e conta) e da APAC pela
-// tela atual, a faixa de AIH (órgão emissor, data de liberação e motivo do cancelamento) e o retorno por linha. Até lá,
+// Crítica prévia: critica_sus por conta, item, atendimento ou competência inteira (regra e chave estável, UNIQUE por
+// competência), com o detalhe em JSON e a justificativa do aviso; a rodada grava criticada_em, a quantidade de registros
+// e o CNES na competência. Faixa de AIH: faixa_numeracao_aih (instrumento `aih`) com o número de 13 dígitos (base e
+// dígito), o órgão emissor, a data de liberação e o motivo do cancelamento; o consumo é lido das autorizações.
+// Ainda por escrever nesta porta (a estrutura existe no banco, ver ddl-aplicado-v3): o arquivo gerado, as linhas do BPA,
+// da APAC e da CIHA ligadas ao arquivo, o ciclo da AIH (laudo, autorização e conta) e da APAC pela tela atual e o
+// retorno por linha. Até lá,
 // essas leituras saem vazias e as gravações recusam com "modelo-pendente". A montagem a partir da conta própria
 // (atendimentos, itens, internação e trajetória da competência) é do lote da conta e da internação: hoje sai vazia.
 import { randomUUID } from 'node:crypto';
@@ -29,6 +32,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { numeroAih } from '@sgh/dominio-faturamento';
 import { z } from 'zod';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
@@ -44,9 +48,14 @@ import type { DadosAihLidos, SolicitanteAihLido } from './porta-aih.js';
 import {
   type CompatibilidadeSigtap,
   type CompetenciaSusRegistro,
+  type CriticaSus,
   type EquivalenciaSus,
   type EquivalenciaSusNomeada,
   ErroAih,
+  type FaixaAih,
+  type FiltroCriticasPorta,
+  type NovaCriticaSus,
+  type ResultadoGravacaoCriticas,
   ErroSus,
   type FiltroEquivalenciasPorta,
   type InstrumentoSusPorta,
@@ -70,7 +79,7 @@ const txtOuNulo = (v: unknown): string | null => {
 };
 
 /** As tabelas que a operação de gravação do faturamento SUS declara (a transação recusa as outras). */
-export const TABELAS_SUS = ['competencia_sus', 'equivalencia_sigtap_item'] as const;
+export const TABELAS_SUS = ['competencia_sus', 'equivalencia_sigtap_item', 'critica_sus', 'faixa_numeracao_aih'] as const;
 
 /** Os instrumentos do faturamento SUS que a tela usa (o modelo também tem RAAS, fora desta tela). */
 const INSTRUMENTOS: readonly InstrumentoSusPorta[] = ['ciha', 'bpa', 'apac', 'aih'];
@@ -118,7 +127,7 @@ const SQL_COMPETENCIA = `
              AND k.gravidade = 'bloqueante') AS bloqueantes,
          (SELECT COUNT(*) FROM critica_sus k WHERE k.competencia_sus_id = c.id AND k.situacao = 'aberta'
              AND k.gravidade = 'aviso') AS avisos,
-         (SELECT ${instante('MAX(k.criticada_em)')} FROM critica_sus k WHERE k.competencia_sus_id = c.id) AS criticada_em
+         ${instante('c.criticada_em')} AS criticada_em, c.quantidade_registros_criticados AS registros
     FROM competencia_sus c JOIN estabelecimento e ON e.id = c.estabelecimento_id
    WHERE c.estabelecimento_id = ? AND c.excluido_em IS NULL`;
 
@@ -129,8 +138,7 @@ function competenciaDaLinha(x: Linha): CompetenciaSusRegistro {
     competencia: txt(x['competencia']),
     situacao: situacaoDaTela(txt(x['situacao'])),
     cnes: txtOuNulo(x['cnes']),
-    // A quantidade de registros criticados ainda não tem coluna (pedido): 0 até lá.
-    registros: 0,
+    registros: num(x['registros']),
     bloqueantes: num(x['bloqueantes']),
     avisos: num(x['avisos']),
     criticadaEm: txtOuNulo(x['criticada_em']),
@@ -186,6 +194,81 @@ const semNomes = (x: EquivalenciaSusNomeada): EquivalenciaSus => {
 
 const marcadores = (n: number) => Array.from({ length: n }, () => '?').join(', ');
 
+const SQL_CRITICA = `
+  SELECT k.id, k.competencia_sus_id, k.codigo_regra, k.gravidade, k.situacao, k.conta_hospitalar_id, k.atendimento_id,
+         k.conta_hospitalar_item_id, k.fonte_pagadora_id, k.detalhe, k.justificativa, k.versao
+    FROM critica_sus k JOIN competencia_sus c ON c.id = k.competencia_sus_id
+   WHERE c.estabelecimento_id = ? AND k.excluido_em IS NULL`;
+
+/** O detalhe guardado em JSON volta como o texto curto que a montagem gerou. */
+function detalheDaCritica(v: unknown): string {
+  // O driver pode devolver a coluna JSON já interpretada (objeto) ou como texto.
+  if (v !== null && typeof v === 'object') return JSON.stringify(v);
+  const t = txt(v);
+  try {
+    const x: unknown = JSON.parse(t);
+    return typeof x === 'string' ? x : t;
+  } catch {
+    return t;
+  }
+}
+
+/** O detalhe da montagem (JSON curto) como JSON válido para a coluna. */
+function detalheParaGravar(d: string): string {
+  try {
+    JSON.parse(d);
+    return d;
+  } catch {
+    return JSON.stringify(d);
+  }
+}
+
+function criticaDaLinha(x: Linha): CriticaSus & { competencia: number; convenio: number | null } {
+  const situacao = txt(x['situacao']);
+  return {
+    id: num(x['id']),
+    regra: txt(x['codigo_regra']),
+    gravidade: txt(x['gravidade']) === 'aviso' ? 'aviso' : 'bloqueante',
+    // `ignorada` é a situação de carga antiga: na tela, a crítica que não pede mais ação é a corrigida.
+    situacao: situacao === 'aberta' || situacao === 'justificada' ? situacao : 'corrigida',
+    conta: numOuNulo(x['conta_hospitalar_id']),
+    atendimento: numOuNulo(x['atendimento_id']),
+    item: numOuNulo(x['conta_hospitalar_item_id']),
+    detalhe: detalheDaCritica(x['detalhe']),
+    justificativa: txtOuNulo(x['justificativa']),
+    versao: num(x['versao']),
+    competencia: num(x['competencia_sus_id']),
+    convenio: numOuNulo(x['fonte_pagadora_id']),
+  };
+}
+
+const SQL_FAIXA = `
+  SELECT f.id, f.numero_inicial, f.numero_final, f.orgao_emissor, ${dia('f.data_liberacao')} AS data_liberacao,
+         f.situacao, f.motivo_situacao, ${login('f.recebida_por_usuario_id')} AS registrada_por,
+         ${instante('f.recebida_em')} AS registrada_em, f.versao,
+         (SELECT COUNT(a.numero_aih) FROM autorizacao_internacao_sus a
+           WHERE a.faixa_numeracao_aih_id = f.id AND a.excluido_em IS NULL) AS usados
+    FROM faixa_numeracao_aih f
+   WHERE f.estabelecimento_id = ? AND f.instrumento = 'aih'`;
+
+/** A faixa na tela: a base de 12 dígitos (o banco guarda o número de 13, com o dígito). */
+function faixaDaLinha(x: Linha): FaixaAih {
+  const situacao = txt(x['situacao']);
+  return {
+    id: num(x['id']),
+    inicio: txt(x['numero_inicial']).slice(0, 12),
+    fim: txt(x['numero_final']).slice(0, 12),
+    orgaoEmissor: txt(x['orgao_emissor']),
+    dataLiberacao: txt(x['data_liberacao']),
+    situacao: situacao === 'esgotada' || situacao === 'cancelada' ? situacao : 'ativa',
+    justificativa: txtOuNulo(x['motivo_situacao']),
+    usados: num(x['usados']),
+    registradaPor: txt(x['registrada_por']),
+    registradaEm: txt(x['registrada_em']),
+    versao: num(x['versao']),
+  };
+}
+
 /** As leituras do faturamento SUS sobre uma conexão (a somente leitura ou a da transação da gravação). */
 export class LeituraSusPropria implements LeituraSus {
   constructor(
@@ -225,14 +308,59 @@ export class LeituraSusPropria implements LeituraSus {
     return x ? competenciaDaLinha(x) : null;
   }
 
-  // ── Crítica e arquivo (pendentes de modelo: leituras vazias) ──
+  // ── Crítica prévia (da competência do estabelecimento) ──
 
-  async criticas(): Promise<{ itens: never[]; total: number; porRegra: Record<string, number> }> {
-    return { itens: [], total: 0, porRegra: {} };
+  async criticas(
+    competencia: number,
+    f: FiltroCriticasPorta,
+  ): Promise<{ itens: CriticaSus[]; total: number; porRegra: Record<string, number> }> {
+    let escopo = ' AND k.competencia_sus_id = ?';
+    const pe: unknown[] = [this.est, competencia];
+    if (f.convenios !== null) {
+      escopo += f.convenios.length
+        ? ` AND (k.fonte_pagadora_id IS NULL OR k.fonte_pagadora_id IN (${marcadores(f.convenios.length)}))`
+        : ' AND k.fonte_pagadora_id IS NULL';
+      pe.push(...f.convenios);
+    }
+    let filtro = ' AND k.situacao = ?';
+    const pf: unknown[] = [f.situacao ?? 'aberta'];
+    if (f.regra) {
+      filtro += ' AND k.codigo_regra = ?';
+      pf.push(f.regra);
+    }
+    if (f.gravidade) {
+      filtro += ' AND k.gravidade = ?';
+      pf.push(f.gravidade);
+    }
+    const total = num((await this.l.uma(`SELECT COUNT(*) AS n FROM (${SQL_CRITICA}${escopo}${filtro}) t`, [...pe, ...pf]))?.['n']);
+    const porPagina = Math.max(1, Math.min(500, f.porPagina));
+    const ls = await this.l.consultar(
+      `${SQL_CRITICA}${escopo}${filtro} ORDER BY k.gravidade DESC, k.codigo_regra, k.id LIMIT ? OFFSET ?`,
+      [...pe, ...pf, porPagina, Math.max(0, f.pagina) * porPagina],
+      { teto: 500 },
+    );
+    const porRegra: Record<string, number> = {};
+    for (const x of await this.l.consultar(
+      `SELECT t.codigo_regra, COUNT(*) AS n FROM (${SQL_CRITICA}${escopo} AND k.situacao = 'aberta') t GROUP BY t.codigo_regra`,
+      pe,
+      { teto: 1_000 },
+    ))
+      porRegra[txt(x['codigo_regra'])] = num(x['n']);
+    return {
+      itens: ls.map((x) => {
+        const { competencia: _c, convenio: _v, ...k } = criticaDaLinha(x);
+        void _c;
+        void _v;
+        return k;
+      }),
+      total,
+      porRegra,
+    };
   }
 
-  async critica(): Promise<null> {
-    return null;
+  async critica(id: number): Promise<(CriticaSus & { competencia: number; convenio: number | null }) | null> {
+    const x = await this.l.uma(`${SQL_CRITICA} AND k.id = ?`, [this.est, id]);
+    return x ? criticaDaLinha(x) : null;
   }
 
   async arquivos(): Promise<never[]> {
@@ -616,16 +744,31 @@ export class LeituraSusPropria implements LeituraSus {
     return null;
   }
 
-  async faixasAih(): Promise<never[]> {
-    return [];
+  async faixasAih(): Promise<FaixaAih[]> {
+    return (await this.l.consultar(`${SQL_FAIXA} ORDER BY f.numero_inicial DESC`, [this.est], { teto: 2_000 })).map(
+      faixaDaLinha,
+    );
   }
 
-  async faixaAih(): Promise<null> {
-    return null;
+  async faixaAih(id: number, travar?: boolean): Promise<FaixaAih | null> {
+    if (travar && this.travador)
+      await this.travador.consultarParaAtualizar(
+        "SELECT id FROM faixa_numeracao_aih WHERE id = ? AND estabelecimento_id = ? AND instrumento = 'aih'",
+        [id, this.est],
+      );
+    const x = await this.l.uma(`${SQL_FAIXA} AND f.id = ?`, [this.est, id]);
+    return x ? faixaDaLinha(x) : null;
   }
 
-  async maiorNumeroDaFaixa(): Promise<null> {
-    return null;
+  /** O maior número de AIH já dado pela faixa (nas autorizações do estabelecimento); nulo se nenhum. */
+  async maiorNumeroDaFaixa(id: number): Promise<string | null> {
+    const x = await this.l.uma(
+      `SELECT MAX(a.numero_aih) AS maior FROM autorizacao_internacao_sus a
+         JOIN faixa_numeracao_aih f ON f.id = a.faixa_numeracao_aih_id AND f.estabelecimento_id = ?
+        WHERE a.faixa_numeracao_aih_id = ? AND a.excluido_em IS NULL`,
+      [this.est, id],
+    );
+    return txtOuNulo(x?.['maior']);
   }
 
   async numeroAihEmUso(numero: string): Promise<boolean> {
@@ -750,12 +893,102 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
     });
   }
 
-  gravarCriticas(): Promise<never> {
-    return Promise.reject(modeloPendente('a crítica prévia por conta (regra, detalhe e justificativa)'));
+  async gravarCriticas(
+    c: { id: number; versao: number },
+    criticas: readonly NovaCriticaSus[],
+    contagens: { registros: number; cnes: string | null },
+  ): Promise<ResultadoGravacaoCriticas> {
+    const atual = await this.competenciaPorId(c.id);
+    if (atual.versao !== c.versao) throw new ErroSus('versao-alterada', 'A competência mudou desde a leitura.');
+    if (atual.situacao !== 'aberta') throw new ErroSus('competencia-ja-fechada', 'A competência já está fechada.');
+    const agora = new Date();
+    const existentes = new Map<string, Linha>();
+    for (const x of await this.tx.consultarParaAtualizar(
+      'SELECT id, versao, chave_critica, situacao FROM critica_sus WHERE competencia_sus_id = ? AND excluido_em IS NULL',
+      [c.id],
+    ))
+      existentes.set(txt(x['chave_critica']), x);
+    let sequencia = num(
+      (await this.tx.uma('SELECT COALESCE(MAX(sequencia), 0) AS s FROM critica_sus WHERE competencia_sus_id = ?', [c.id]))?.[
+        's'
+      ],
+    );
+    const vistas = new Set<string>();
+    let novas = 0;
+    let mantidas = 0;
+    let reabertas = 0;
+    let bloqueantes = 0;
+    let avisos = 0;
+    for (const x of criticas) {
+      const chave = x.chave.slice(0, 120);
+      if (vistas.has(chave)) continue;
+      vistas.add(chave);
+      const ex = existentes.get(chave);
+      if (x.gravidade === 'bloqueante') bloqueantes += 1;
+      else if (txt(ex?.['situacao']) !== 'justificada') avisos += 1;
+      if (ex) {
+        if (txt(ex['situacao']) === 'corrigida') {
+          await this.tx.alterar('critica_sus', num(ex['id']), num(ex['versao']), {
+            situacao: 'aberta',
+            criticada_em: agora,
+            tratada_em: null,
+            tratada_por_usuario_id: null,
+          });
+          reabertas += 1;
+        } else mantidas += 1;
+        continue;
+      }
+      await this.tx.incluir('critica_sus', {
+        competencia_sus_id: c.id,
+        sequencia: ++sequencia,
+        conta_hospitalar_id: x.conta,
+        conta_hospitalar_item_id: x.item,
+        atendimento_id: x.atendimento,
+        fonte_pagadora_id: x.convenio,
+        codigo_regra: x.regra.slice(0, 60),
+        chave_critica: chave,
+        descricao: x.regra.slice(0, 1000),
+        detalhe: detalheParaGravar(x.detalhe),
+        gravidade: x.gravidade,
+        situacao: 'aberta',
+        criticada_em: agora,
+      });
+      novas += 1;
+    }
+    let corrigidas = 0;
+    for (const [chave, ex] of existentes) {
+      if (vistas.has(chave) || txt(ex['situacao']) === 'corrigida') continue;
+      await this.tx.alterar('critica_sus', num(ex['id']), num(ex['versao']), {
+        situacao: 'corrigida',
+        tratada_em: agora,
+        tratada_por_usuario_id: this.tx.contexto.usuario,
+      });
+      corrigidas += 1;
+    }
+    const cnes = contagens.cnes && /^\d{7}$/.test(contagens.cnes) ? contagens.cnes : null;
+    await this.tx.alterar('competencia_sus', c.id, c.versao, {
+      criticada_em: agora,
+      quantidade_registros_criticados: Math.max(0, Math.trunc(contagens.registros)),
+      codigo_cnes_critica: cnes,
+    });
+    return { novas, mantidas, reabertas, corrigidas, bloqueantes, avisos };
   }
 
-  justificar(): Promise<never> {
-    return Promise.reject(modeloPendente('a justificativa da crítica prévia'));
+  async justificar(c: { id: number; versao: number }, justificativa: string): Promise<void> {
+    const [x] = await this.tx.consultarParaAtualizar(
+      `SELECT k.id, k.versao, k.situacao, k.gravidade FROM critica_sus k
+         JOIN competencia_sus p ON p.id = k.competencia_sus_id AND p.estabelecimento_id = ?
+        WHERE k.id = ? AND k.excluido_em IS NULL`,
+      [this.est, c.id],
+    );
+    if (!x || num(x['versao']) !== c.versao || txt(x['situacao']) !== 'aberta' || txt(x['gravidade']) !== 'aviso')
+      throw new ErroSus('critica-nao-justificavel', 'Só o aviso aberto, na versão que a tela leu, pode ser justificado.');
+    await this.tx.alterar('critica_sus', c.id, c.versao, {
+      situacao: 'justificada',
+      justificativa: justificativa.slice(0, 1000),
+      tratada_em: new Date(),
+      tratada_por_usuario_id: this.tx.contexto.usuario,
+    });
   }
 
   proximoArquivo(): Promise<never> {
@@ -866,12 +1099,49 @@ export class GravacaoSusPropria extends LeituraSusPropria implements GravacaoSus
 
   // ── AIH, faixa e retorno (pendentes de modelo) ──
 
-  inserirFaixaAih(): Promise<never> {
-    return Promise.reject(modeloPendente('a faixa de AIH com o órgão emissor e a data de liberação'));
+  async inserirFaixaAih(p: {
+    inicio: bigint;
+    fim: bigint;
+    orgaoEmissor: string;
+    dataLiberacao: string;
+    por: string;
+  }): Promise<number> {
+    const inicio = numeroAih(p.inicio);
+    const fim = numeroAih(p.fim);
+    // Melhoria: a faixa nova não pode cruzar nenhuma faixa do estabelecimento (não só a que começa no mesmo número).
+    const cruza = await this.tx.consultarParaAtualizar(
+      `SELECT id FROM faixa_numeracao_aih
+        WHERE estabelecimento_id = ? AND instrumento = 'aih' AND numero_inicial <= ? AND numero_final >= ? LIMIT 1`,
+      [this.est, fim, inicio],
+    );
+    if (cruza.length) throw new ErroAih('faixa-sobreposta', 'Já existe uma faixa que cobre parte destes números.');
+    return this.tx.incluir('faixa_numeracao_aih', {
+      estabelecimento_id: this.est,
+      instrumento: 'aih',
+      numero_inicial: inicio,
+      numero_final: fim,
+      orgao_emissor: p.orgaoEmissor.trim().slice(0, 10),
+      data_liberacao: p.dataLiberacao,
+      situacao: 'ativa',
+      recebida_em: new Date(),
+      recebida_por_usuario_id: this.tx.contexto.usuario,
+    });
   }
 
-  mudarFaixaAih(): Promise<never> {
-    return Promise.reject(modeloPendente('o motivo do cancelamento da faixa de AIH'));
+  async mudarFaixaAih(p: {
+    id: number;
+    versao: number;
+    situacao: 'esgotada' | 'cancelada';
+    justificativa: string | null;
+    por: string;
+  }): Promise<void> {
+    const f = await this.faixaAih(p.id, true);
+    if (!f || f.versao !== p.versao || f.situacao !== 'ativa')
+      throw new ErroAih('versao-alterada', 'O registro mudou desde que a tela foi aberta.');
+    await this.tx.alterar('faixa_numeracao_aih', p.id, p.versao, {
+      situacao: p.situacao,
+      ...(p.justificativa ? { motivo_situacao: p.justificativa.slice(0, 500) } : {}),
+    });
   }
 
   inserirAih(): Promise<never> {

@@ -1,0 +1,72 @@
+{
+ "lote": "p-estoque",
+ "pedidos": [
+  {
+   "tipo": "rodada",
+   "assunto": "OPME e manipulação: portas próprias (ainda pendentes)",
+   "arquivos": [
+    "apps/api/src/modulos/suprimentos/opme-porta-propria.ts:9",
+    "apps/api/src/modulos/suprimentos/manipulacao-porta-propria.ts:11",
+    "apps/api/src/modulos/suprimentos/operacoes.ts:63"
+   ],
+   "motivo": "A saída do estoque já grava no banco (motor movimentar em porta-propria.ts). Falta: OPME (13 leituras, gravação da solicitação e etapas em solicitacao_opme/_item, consumo e devolução em consumo_opme ligados ao movimento) e manipulação (itensAManipular, ordens, ordem, vinculos e as gravações de abertura e conferência da ordem). A saída com 'opme' ou 'manipulacao' e a devolução com 'opme' ainda recusam com o motivo. operacoes.ts:63 (modeloPendente) só sai quando os dois ficarem prontos."
+  },
+  {
+   "tipo": "contrato",
+   "assunto": "contrato do estoque: chave por id e vocabulário neutro (ponta a ponta)",
+   "arquivos": [
+    "packages/contratos/src/suprimentos/entradas.ts",
+    "packages/contratos/src/suprimentos/respostas.ts",
+    "packages/contratos/src/suprimentos/vocabulario.ts",
+    "apps/api/src/modulos/suprimentos/porta.ts, servico.ts, suprimentos.controller.ts, porta-memoria.ts",
+    "apps/web (telas do estoque)"
+   ],
+   "motivo": "A porta própria atende o contrato atual mapeando a chave {ano, mes, doc} para o número de negócio do documento no estabelecimento (documento_estoque.numero, nota_entrada.numero, requisicao_material.numero) e o mês do movimento. Pedido: trocar a chave por id; 'local' com max 99 por id; destino 1/2/3/5 e origem 'E'/'B' por texto; situação do pedido 1..10 por texto do banco; tipoCompra 'P'/'E'/'N' por texto; vencedor 'T'/'F'/'' por booleano + decidido; tipos do usuário 'S','E','D','TO','TD','I','R','V' por nomes. Não cabe num lote: é contrato, API, memória, web e testes juntos."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "documento_estoque",
+   "colunas": "ck_documento_estoque_tipo: incluir 'balanco'",
+   "motivo": "O balanço do inventário com sobra e falta hoje gera dois documentos (acerto_entrada e acerto_saida) e o inventário aponta o primeiro. Com o tipo 'balanco' (itens com sinal pela natureza do movimento) fica um documento só."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "documento_estoque_item",
+   "colunas": "origem_documento_estoque_item_id BIGINT NULL, FK documento_estoque_item(id)",
+   "motivo": "A devolução aponta a saída que desfaz pelo movimento (movimento_estoque.estorno_movimento_estoque_id). Uma coluna explícita no item deixa a leitura do 'devolvido' direta e sem depender do movimento."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "pedido_compra",
+   "colunas": "empresa_fornecedora_id NULL enquanto situacao IN ('rascunho','em_cotacao') (CHECK)",
+   "motivo": "O pedido em cotação ainda não tem fornecedor: hoje nasce com o primeiro convidado e exige ao menos um fornecedor."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "local_estoque_usuario",
+   "colunas": "pode_autorizar_requisicao BOOLEAN NOT NULL DEFAULT FALSE",
+   "motivo": "Hoje quem autoriza a requisição é quem atende o local dela (pode_atender). Se o dono quiser a alçada separada, a coluna é esta."
+  },
+  {
+   "tipo": "codigo",
+   "assunto": "criar cliente: catálogo e numeração do estoque",
+   "arquivos": [
+    "tools/db/criar_cliente.py (ou carregador de catálogo)"
+   ],
+   "motivo": "As gravações exigem no banco do cliente: tipo_movimento_estoque com os códigos saida_setor, saida_paciente, saida_terceiro, devolucao_interna, transferencia_saida, transferencia_entrada, transferencia_envio, entrada_nota, acerto_entrada, acerto_saida, estoque_inicial; tipo_entrada_estoque 'compra'; motivo_ajuste_estoque 'inventario'; e sequencia_negocio por estabelecimento para documento_estoque, requisicao_material e nota_entrada. Sem eles a gravação recusa com o código (tipo-movimento-nao-configurado, sequencia-nao-configurada...), nunca grava pela metade. A massa de teste cria tudo isso."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "inventario_estoque_item",
+   "colunas": "lote_insumo_id BIGINT UNSIGNED NULL (FK lote_insumo), com a chave única por contagem, insumo e lote",
+   "motivo": "A sobra de item que controla lote precisa do lote contado para entrar no saldo do lote. Hoje o balanço recusa com sobra-sem-lote."
+  },
+  {
+   "tipo": "arquivo",
+   "arquivos": [
+    "apps/api/src/modulos/suprimentos/porta-memoria.ts:896"
+   ],
+   "motivo": "O movimento direto devolve id: e.atendimento ?? 0. Deve devolver o documento (como a porta própria) e o atendimento em campo próprio."
+  }
+ ]
+}

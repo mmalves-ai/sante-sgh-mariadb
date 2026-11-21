@@ -1,0 +1,33 @@
+{
+  "lote": "p-folha",
+  "pedidos": [
+    {
+      "tipo": "integracao",
+      "arquivo": "apps/api/src/modulos/repasse (public-api)",
+      "motivo": "escala/porta-realizado-propria.ts:18,53,420: o lançamento do plantão realizado e o estorno gravam em evento_repasse/estorno_repasse. O financeiro já expõe gravadorTituloPagar(tx) + TABELAS_TITULO_PAGAR; o repasse precisa do equivalente (gravadorEventoRepasse(tx) com incluir e estornar, e TABELAS_EVENTO_REPASSE) na public-api, para a porta do realizado compor na mesma transação."
+    },
+    {
+      "tipo": "teste",
+      "arquivo": "apps/api/src/modulos/pessoas/aplicacao/folha.int.spec.ts",
+      "motivo": "Fora da .lista: o caso dos lotes foi trocado (a assinatura antiga não compilava). A massa do arquivo falha num cliente novo com 'Duplicate entry I for key uq_sexo_sigla' (insere sexo sintético já existente): usar garantir() no sexo."
+    },
+    {
+      "tipo": "teste",
+      "arquivo": "apps/api/src/modulos/pessoas/avaliacao/massa.spec-util.ts",
+      "motivo": "Mesmo pedido do 03-pessoas: garantir linha sintética de tipo_vinculo_trabalho e categoria_trabalhador quando o catálogo do cliente de teste estiver vazio (inseridas à mão no cliente f24p_folha)."
+    },
+    {
+      "tipo": "decisao",
+      "tabela": "plano_contas",
+      "motivo": "A conta contábil sugerida do de-para da folha é procurada no plano contábil vigente sem filtrar o grupo de consolidação do estabelecimento. Confirmar a regra de escolha do plano por estabelecimento (há helper no contábil?) para a porta usar a mesma."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lote_folha_intercambio",
+      "colunas": [
+        "soma"
+      ],
+      "motivo": "A soma tem unidade pelo sentido: reais (líquido mais encargos) no recebido e minutos (ponto mais plantão) no exportado. Pôr isso no COMMENT da coluna ou separar em soma_valor DECIMAL(15,2) NULL e soma_minutos INT UNSIGNED NULL com CHECK pelo sentido. A porta já grava reais no recebido."
+    }
+  ]
+}

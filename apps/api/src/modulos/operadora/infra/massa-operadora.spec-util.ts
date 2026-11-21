@@ -104,7 +104,9 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
        VALUES (?, ?, 'PLANO SINTETICO L0209', '902090001', 'individual_familiar', 'nacional', '2020-01-01', ?)`,
       [m.est, `${P}-PROD`, agora],
     );
-    const classif = await dominio(e, 'classificacao_plano', `${P}-CLA`, { tipo_contratacao: 'individual_familiar' });
+    const classif = await dominio(e, 'classificacao_plano', `${P}-CLA`, {
+      tipo_contratacao: 'individual_familiar',
+    });
     const titular = await garantir(
       e,
       'SELECT id FROM pessoa_fisica WHERE nome = ?',
@@ -152,7 +154,9 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
          data_adesao, inicio_vigencia, criado_em) VALUES (?, ?, ?, 'titular', ?, '2024-01-01', '2024-01-01', ?)`,
       [m.contrato, plano, titular, `${P}0001`, agora],
     );
-    const grau = await dominio(e, 'grau_parentesco_dependente', `${P}-FIL`, { tipo_beneficiario: 'dependente' }).catch(() => null);
+    const grau = await dominio(e, 'grau_parentesco_dependente', `${P}-FIL`, {
+      tipo_beneficiario: 'dependente',
+    }).catch(() => null);
     m.dependente = grau
       ? await garantir(
           e,
@@ -184,6 +188,28 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
     const tipoPrest = await dominio(e, 'tipo_prestador_rede', `${P}-TP`);
     const natPrest = await dominio(e, 'natureza_prestador_rede', `${P}-NP`);
     const cnpjPrest = cnpjSintetico('020902090002');
+    // Endereço do prestador: o catálogo do IBGE do cliente de teste pode estar vazio; país, UF e município sintéticos.
+    const pais = await garantir(
+      e,
+      'SELECT id FROM pais_referencia WHERE codigo_iso = ?',
+      ['BR'],
+      'INSERT INTO pais_referencia (codigo_iso, descricao, criado_em) VALUES (?, ?, ?)',
+      ['BR', 'Brasil', agora],
+    );
+    const ufSp = await garantir(
+      e,
+      'SELECT id FROM unidade_federativa WHERE sigla = ?',
+      ['SP'],
+      'INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES (?, ?, ?, ?, ?)',
+      ['35', 'SP', 'São Paulo', pais, agora],
+    );
+    const munSp = await garantir(
+      e,
+      'SELECT id FROM municipio_ibge WHERE codigo_ibge = ?',
+      ['3550308'],
+      'INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES (?, ?, ?, ?)',
+      ['3550308', 'SAO PAULO', ufSp, agora],
+    );
     m.prestador = await garantir(
       e,
       'SELECT id FROM prestador_rede WHERE estabelecimento_id = ? AND codigo = ?',
@@ -192,16 +218,21 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
          natureza_prestador_rede_id, classificacao, municipio_ibge_id, unidade_federativa_id, credenciado_em, situacao_em,
          criado_em)
        VALUES (?, ?, 'juridica', ?, 'CLINICA SINTETICA L0209', ?, ?, 'clinica_ambulatorial',
-         (SELECT MIN(id) FROM municipio_ibge), (SELECT MIN(id) FROM unidade_federativa), '2024-01-01', '2024-01-01', ?)`,
-      [m.est, `${P}-PR`, cnpjPrest, tipoPrest, natPrest, agora],
+         ?, ?, '2024-01-01', '2024-01-01', ?)`,
+      [m.est, `${P}-PR`, cnpjPrest, tipoPrest, natPrest, munSp, ufSp, agora],
     );
     m.tipoGuia = await dominio(e, 'tipo_guia_plano', 'sp_sadt');
     m.origemGuia = await dominio(e, 'origem_guia_plano', `${P}-OG`, { canal: 'portal' });
     m.critica = await dominio(e, 'motivo_decisao_autorizacao', `${P}-MD`, { aplica_a: 'todos' });
     await dominio(e, 'motivo_cancelamento_guia_plano', 'outros', { aplica_a: 'todos' });
     m.origemProtocolo = await dominio(e, 'origem_protocolo', `${P}-OP`);
-    m.motivoContato = await dominio(e, 'motivo_contato_beneficiario', `${P}-MC`, { tipo_contato: 'solicitacao' });
-    await dominio(e, 'motivo_movimento_cadastral', `${P}-MOV`, { tipo_movimento: 'inclusao', codigo_ans: '1' });
+    m.motivoContato = await dominio(e, 'motivo_contato_beneficiario', `${P}-MC`, {
+      tipo_contato: 'solicitacao',
+    });
+    await dominio(e, 'motivo_movimento_cadastral', `${P}-MOV`, {
+      tipo_movimento: 'inclusao',
+      codigo_ans: '1',
+    });
     const pfAud = await garantir(
       e,
       'SELECT id FROM pessoa_fisica WHERE nome = ?',
@@ -285,30 +316,65 @@ export async function prepararMassa(nucleo: NucleoProprio): Promise<MassaOperado
 export async function limparNegocio(nucleo: NucleoProprio, m: MassaOperadora): Promise<void> {
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'limpeza-teste-02-09' }, async (e) => {
     const est = [m.est, m.outroEst];
-    await e.executar('DELETE i FROM fatura_plano_item i JOIN fatura_plano f ON f.id = i.fatura_plano_id WHERE f.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE i FROM fatura_plano_item i JOIN fatura_plano f ON f.id = i.fatura_plano_id WHERE f.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM fatura_plano WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM reajuste_contrato_plano WHERE estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE k FROM complemento_sib_beneficiario k JOIN beneficiario_plano b ON b.id = k.beneficiario_plano_id JOIN contrato_plano c ON c.id = b.contrato_plano_id WHERE c.estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE r FROM envio_ans_retorno r JOIN envio_ans x ON x.id = r.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE i FROM envio_ans_item i JOIN envio_ans x ON x.id = i.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE k FROM complemento_sib_beneficiario k JOIN beneficiario_plano b ON b.id = k.beneficiario_plano_id JOIN contrato_plano c ON c.id = b.contrato_plano_id WHERE c.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE r FROM envio_ans_retorno r JOIN envio_ans x ON x.id = r.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE i FROM envio_ans_item i JOIN envio_ans x ON x.id = i.envio_ans_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM envio_ans WHERE estabelecimento_id IN (?, ?) ORDER BY id DESC', est);
     await e.executar('DELETE FROM junta_divergencia_tecnica WHERE estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE h FROM pedido_autorizacao_plano_historico h JOIN pedido_autorizacao_plano p ON p.id = h.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE i FROM pedido_autorizacao_plano_item i JOIN pedido_autorizacao_plano p ON p.id = i.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE h FROM pedido_autorizacao_plano_historico h JOIN pedido_autorizacao_plano p ON p.id = h.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE i FROM pedido_autorizacao_plano_item i JOIN pedido_autorizacao_plano p ON p.id = i.pedido_autorizacao_plano_id WHERE p.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM pedido_autorizacao_plano WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM auditor_plano WHERE operadora_saude_id = ?', [m.operadora]);
-    await e.executar('DELETE i FROM recurso_glosa_recebido_item i JOIN recurso_glosa_recebido r ON r.id = i.recurso_glosa_recebido_id WHERE r.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE i FROM recurso_glosa_recebido_item i JOIN recurso_glosa_recebido r ON r.id = i.recurso_glosa_recebido_id WHERE r.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM recurso_glosa_recebido WHERE estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE g FROM glosa_conta_recebida g JOIN guia_conta_recebida x ON x.id = g.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE i FROM guia_conta_recebida_item i JOIN guia_conta_recebida x ON x.id = i.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE g FROM glosa_conta_recebida g JOIN guia_conta_recebida x ON x.id = g.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE i FROM guia_conta_recebida_item i JOIN guia_conta_recebida x ON x.id = i.guia_conta_recebida_id WHERE x.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM guia_conta_recebida WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM lote_conta_recebida WHERE estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE r FROM protocolo_beneficiario_resposta r JOIN protocolo_beneficiario p ON p.id = r.protocolo_beneficiario_id WHERE p.estabelecimento_id IN (?, ?)', est);
-    await e.executar('DELETE a FROM protocolo_beneficiario_andamento a JOIN protocolo_beneficiario p ON p.id = a.protocolo_beneficiario_id WHERE p.estabelecimento_id IN (?, ?)', est);
+    await e.executar(
+      'DELETE r FROM protocolo_beneficiario_resposta r JOIN protocolo_beneficiario p ON p.id = r.protocolo_beneficiario_id WHERE p.estabelecimento_id IN (?, ?)',
+      est,
+    );
+    await e.executar(
+      'DELETE a FROM protocolo_beneficiario_andamento a JOIN protocolo_beneficiario p ON p.id = a.protocolo_beneficiario_id WHERE p.estabelecimento_id IN (?, ?)',
+      est,
+    );
     await e.executar('DELETE FROM protocolo_beneficiario WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM consulta_elegibilidade_recebida WHERE estabelecimento_id IN (?, ?)', est);
     await e.executar('DELETE FROM conta_portal_prestador WHERE operadora_saude_id = ?', [m.operadora]);
-    await e.executar('UPDATE beneficiario_plano SET codigo_controle_ans = NULL WHERE contrato_plano_id = ?', [m.contrato]);
+    await e.executar('UPDATE beneficiario_plano SET codigo_controle_ans = NULL WHERE contrato_plano_id = ?', [
+      m.contrato,
+    ]);
   });
 }
 

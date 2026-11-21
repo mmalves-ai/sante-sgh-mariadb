@@ -1,23 +1,28 @@
-// Porta da contabilidade do `worker` sobre o banco do cliente (M54; lote F2.2 05-12), pelo @sgh/nucleo, somente
-// leitura: os estabelecimentos do cliente, a liberação do recurso `contabil` (liberacao_chave e recurso_prerequisito do
-// estabelecimento) e as contagens dos fatos por situação (fato_contabil). Toda leitura filtra o estabelecimento e os
+// Porta da contabilidade do `worker` sobre o banco do cliente (M54; lote F2.2 05-12), pelo @sgh/nucleo: os
+// estabelecimentos do cliente, a liberação do recurso `contabil` (liberacao_chave e recurso_prerequisito do
+// estabelecimento), as contagens dos fatos por situação (fato_contabil) e a contabilização automática dos pendentes. Toda leitura filtra o estabelecimento e os
 // registros excluídos (fato_contabil); liberacao_chave e recurso_prerequisito não têm exclusão lógica.
 // Melhoria: as fontes de fatos são os módulos que publicam fato_contabil na transação do próprio documento; o worker não
 // varre mais tabelas de outro sistema por faixa de chave (a leitura incremental de convivência saiu, ADR 0003).
 // Melhoria: a liberação é lida do estabelecimento (chave de escopo `hospital`, valor `*`, e pré-requisitos), e a regra é
 // a do domínio para quem age sobre o estabelecimento inteiro (`recursoLigadoNoEstabelecimento`): chave de pessoa, grupo
 // ou setor não liga nem desliga a contabilização automática (não há usuário de serviço fictício como sujeito).
-// Melhoria: operação sem modelo responde a recusa `modelo-pendente` com o nome da operação, nunca lista vazia: com zero
-// regras a contabilização marcaria todo fato como "sem regra" (o mesmo critério da porta da API, lote 04-01).
-// Pendências registradas (saida/05-12.json): (1) as versões publicadas das regras de contabilização não têm tabela no
-// modelo (pedido do lote 04-01): `ler` da contabilização recusa; (2) a gravação do lote (lançamento automático com as
-// partidas e a situação do fato, com trilha) é a da porta da API (`apps/api/src/modulos/contabil/porta-propria.ts`,
-// marcarSituacao e gravarLancamento); o pedido é movê-la a um pacote comum para o worker usar a mesma, sem cópia: até
-// lá, `gravar` recusa. Com as duas recusas, a contabilização automática no worker fica indisponível.
+// Melhoria (F2.4): a leitura do lote (fatos candidatos, plano, de-para, regras publicadas em versao_regra_contabil e
+// períodos) e a gravação (situação do fato, lançamento automático com as partidas, pelo Executor com a trilha) são as
+// mesmas da API, do pacote comum @sgh/persistencia-contabil, sem cópia. O processo automático grava sem usuário.
 import type { SituacaoFato } from '@sgh/contratos';
 import { CHAVE_CONTABIL, recursoDesligado } from '@sgh/contratos';
 import { recursoLigadoNoEstabelecimento } from '@sgh/dominio-config';
-import { ErroOperacao, type Leitor } from '@sgh/nucleo';
+import type { Executor, Leitor } from '@sgh/nucleo';
+import {
+  gravarContabilizacao,
+  lerDePara,
+  lerParaContabilizar,
+  lerPeriodos,
+  lerPlano,
+  lerRegras,
+} from '@sgh/persistencia-contabil';
+import type { AcaoContabilizacao } from '@sgh/dominio-contabil';
 import type { AcessoContabilizacao, GravacaoContabilizacao, LeituraContabilizacao } from './contabilizacao.js';
 
 type ChaveLida = Parameters<typeof recursoLigadoNoEstabelecimento>[0][number];
@@ -55,16 +60,8 @@ export interface PortaContabilWorker extends AcessoContabilizacao {
 /** O que a porta usa do NucleoProprio (os testes trocam). */
 export interface NucleoContabilWorker {
   lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  criarExecutor(): Pick<Executor, 'executar'>;
 }
-
-/** Recusa de operação sem tabela no modelo (o DDL está pedido). */
-export const modeloPendente = (operacao: string): ErroOperacao =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Operação indisponível',
-    `${operacao} aguarda a atualização do banco do cliente (pedido de modelo registrado).`,
-  );
 
 /** A chave `contabil` do estabelecimento inteiro ligada, com os pré-requisitos declarados cumpridos na hora. */
 export function contabilLigadaPor(lib: LiberacaoContabil, agora: Date): boolean {
@@ -86,6 +83,8 @@ export class PortaContabilWorkerPropria implements PortaContabilWorker {
     private readonly nucleo: NucleoContabilWorker,
     private readonly cliente: string,
   ) {}
+
+  private executorCriado: Pick<Executor, 'executar'> | null = null;
 
   private lerBanco<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
     return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'contabil-worker' }, fn);
@@ -162,13 +161,59 @@ export class PortaContabilWorkerPropria implements PortaContabilWorker {
     });
   }
 
-  /** Indisponível: as versões publicadas das regras de contabilização não têm tabela no modelo (pedido 04-01). */
-  ler(): Promise<LeituraContabilizacao> {
-    return Promise.reject(modeloPendente('A contabilização automática dos fatos (regras publicadas)'));
+  /** Um lote de candidatos com o plano, o de-para, as regras publicadas e os períodos, numa leitura só. */
+  ler(
+    estabelecimento: number,
+    situacoes: readonly SituacaoFato[],
+    competencia: string | null,
+    lote: number,
+  ): Promise<LeituraContabilizacao> {
+    return this.lerBanco(async (l) => {
+      const lido = await lerParaContabilizar(l, estabelecimento, situacoes, competencia, lote);
+      const [plano, dePara, publicadas, periodos] = [
+        await lerPlano(l, estabelecimento),
+        await lerDePara(l, estabelecimento),
+        await lerRegras(l, estabelecimento, {}),
+        await lerPeriodos(l, estabelecimento),
+      ];
+      return {
+        candidatos: lido.candidatos,
+        registrados: lido.registrados,
+        lancamentos: lido.lancamentos,
+        restam: lido.restam,
+        plano: plano.map((c) => ({
+          empresa: c.empresa,
+          codigo: c.codigo,
+          nome: c.nome,
+          grupo: c.grupo,
+          tipo: c.tipo,
+          natureza: c.natureza,
+          referencialTipo: c.referencialTipo,
+          referencialConta: c.referencialConta,
+          contaExportacao: c.contaExportacao,
+          exigeCentroCusto: c.exigeCentroCusto,
+          ativa: c.ativa,
+        })),
+        dePara,
+        publicadas: publicadas.map((p) => ({ id: p.id, regra: p.regra })),
+        periodos: periodos.map((p) => ({ empresa: p.empresa, competencia: p.competencia, situacao: p.situacao })),
+      };
+    });
   }
 
-  /** Indisponível: a gravação do lote é a da porta da API, a mover para um pacote comum (pedido 05-12). */
-  gravar(): Promise<GravacaoContabilizacao> {
-    return Promise.reject(modeloPendente('A gravação do lote da contabilização automática'));
+  /** O lote numa transação do Executor, com a trilha das contagens (processo automático, sem usuário). */
+  gravar(
+    estabelecimento: number,
+    _competencia: string | null,
+    acoes: readonly AcaoContabilizacao[],
+    diferenca: string,
+  ): Promise<GravacaoContabilizacao> {
+    this.executorCriado ??= this.nucleo.criarExecutor();
+    return gravarContabilizacao(
+      this.executorCriado,
+      { cliente: this.cliente, estabelecimento, usuario: null, correlacao: 'contabil-worker' },
+      acoes,
+      diferenca,
+    );
   }
 }

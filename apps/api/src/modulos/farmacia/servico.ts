@@ -655,7 +655,7 @@ ${l.fechado ? `<p>Fechado por ${esc(l.fechado.por)} em ${esc(l.fechado.em)}; gua
       s,
       EVENTOS_AUDITAVEIS.suprimentosLivroFechado.codigo,
       'suprimentos.controlados',
-      (x: { id: number }) => ({ tabela: 'SGH_SUP_LIVRO_CONTROLADO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'livro_controlado', id: String(x.id) }),
       (g) =>
         g.fecharLivro({
           livro: montado,

@@ -1,6 +1,6 @@
 import {
   EXCECOES_DELETE_CLINICO,
-  TABELAS_CLINICAS_LEGADO,
+  TABELAS_CLINICAS_MODELO,
   deleteClinicoProibido,
   ehTabelaClinica,
 } from '@sgh/contratos';
@@ -13,29 +13,21 @@ import {
   resumirDeleteClinico,
 } from './imutabilidade.js';
 
-const CLINICA = TABELAS_CLINICAS_LEGADO[0]!;
+// Os retratos de privilégio trazem o identificador em maiúsculas; a lista do modelo é minúscula (a conferência ignora a caixa).
+const CLINICA = TABELAS_CLINICAS_MODELO[0]!.toUpperCase();
 const cab = { hospital: 'pc', versao: 'abc123', autorizacao: 'ESTADO.md, Autorizações, 29/10/2026 (ensaio)' };
 
 describe('M59-F3 regra 6: tabela clínica', () => {
-  it('lista do legado gerada, SGH_ pelo prefixo, exceções fora da proibição', () => {
-    expect(TABELAS_CLINICAS_LEGADO.length).toBeGreaterThan(40);
+  it('lista do modelo gerada do DDL, SGH_ pelo prefixo, exceções fora da proibição', () => {
+    expect(TABELAS_CLINICAS_MODELO.length).toBeGreaterThan(40);
     expect(ehTabelaClinica(CLINICA)).toBe(true);
-    expect(ehTabelaClinica('TBCONVEN')).toBe(false);
+    expect(ehTabelaClinica('convenio')).toBe(false);
     expect(ehTabelaClinica('SGH_PEP_DOC')).toBe(true);
     expect(ehTabelaClinica('SGH_DOC_ASSINATURA')).toBe(true);
     expect(ehTabelaClinica('SGH_CC_FA_GANHO')).toBe(true);
     expect(ehTabelaClinica('SGH_IDEMPOTENCIA')).toBe(false);
-    // Correção da revisão: SADT (resultado e laudo), CC (cirurgia e ficha anestésica) e hemoterapia entram; os
-    // cadastros do PEP saem.
-    for (const t of [
-      'SIRES01',
-      'SIRESOBS',
-      'SIRESVAR',
-      'SIRES01_DELETE',
-      'SIASSLAUDO_IMPRESSAO',
-      'CCCADCIR',
-      'CCLANCIR',
-    ])
+    // SADT (resultado e laudo), CC (cirurgia), prontuário e a trilha entram; os cadastros saem.
+    for (const t of ['emissao_laudo', 'entrega_resultado', 'ato_cirurgico', 'prescricao', 'trilha_auditoria', 'PRESCRICAO'])
       expect(ehTabelaClinica(t)).toBe(true);
     for (const t of [
       'SGH_SADT_LAUDO_EMITIDO',
@@ -48,13 +40,7 @@ describe('M59-F3 regra 6: tabela clínica', () => {
       'SGH_CC_CHECKLIST',
     ])
       expect(ehTabelaClinica(t)).toBe(true);
-    for (const t of [
-      'TBUNIDMEDIDA_PRINC_VALID',
-      'TBHORMED_TBUNIDAD',
-      'SIORCAME',
-      'CCAGENDA',
-      'SGH_SADT_HEMO_ESTOQUE',
-    ])
+    for (const t of ['unidade_medida', 'sala_cirurgica', 'SGH_SADT_HEMO_ESTOQUE'])
       expect(ehTabelaClinica(t)).toBe(false);
     for (const e of EXCECOES_DELETE_CLINICO) {
       expect(ehTabelaClinica(e.tabela)).toBe(true);
@@ -70,7 +56,7 @@ describe('M59-F3 regra 6: plano por módulo', () => {
       { titular: 'SGH_MOD_PEP', objeto: CLINICA, acao: 'SELECT' as const },
       { titular: 'SGH_MOD_PEP', objeto: CLINICA, acao: 'UPDATE' as const },
       { titular: 'SGH_MOD_PEP', objeto: 'SGH_PEP_FORMNOVO_CASO', acao: 'DELETE' as const },
-      { titular: 'SGH_MOD_ATENDIMENTO', objeto: 'RECADATE', acao: 'DELETE' as const },
+      { titular: 'SGH_MOD_ATENDIMENTO', objeto: 'convenio', acao: 'DELETE' as const },
     ];
     expect(itensPlanoComDeleteClinico(plano)).toEqual([]);
     expect(() => exigirPlanoImutavel(plano)).not.toThrow();
@@ -91,7 +77,7 @@ describe('M59-F3 regra 6: scripts da conta ampla', () => {
     { titular: 'SANTE_APP', objeto: CLINICA, acao: 'DELETE' as const },
     { titular: 'SANTE_APP', objeto: CLINICA, acao: 'DELETE' as const },
     { titular: 'SANTE_APP', objeto: CLINICA, acao: 'UPDATE' as const },
-    { titular: 'SANTE_APP', objeto: 'TBCONVEN', acao: 'DELETE' as const },
+    { titular: 'SANTE_APP', objeto: 'convenio', acao: 'DELETE' as const },
     { titular: 'SANTE_APP', objeto: 'SGH_PEP_FORMNOVO_CASO', acao: 'DELETE' as const },
     { titular: 'OUTRA', objeto: CLINICA, acao: 'DELETE' as const },
   ];
@@ -99,7 +85,7 @@ describe('M59-F3 regra 6: scripts da conta ampla', () => {
     const s = gerarScriptsImutabilidade('SANTE_APP', antes, cab);
     expect(s.tabelas).toEqual([CLINICA]);
     expect(s.aplicar).toContain([`REVOKE`, `DELETE`, `ON "${CLINICA}" FROM USER "SANTE_APP";`].join(' '));
-    expect(s.aplicar).not.toContain('TBCONVEN');
+    expect(s.aplicar).not.toContain('convenio');
     expect(s.aplicar).not.toContain('OUTRA');
     expect(s.recolher).toContain([`GRANT`, `DELETE`, `ON "${CLINICA}" TO USER "SANTE_APP";`].join(' '));
     expect(s.aplicar.trimEnd().endsWith('COMMIT;')).toBe(true);

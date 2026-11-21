@@ -102,7 +102,7 @@ const dataHora = (v: unknown, fuso: string): string | null => {
   const d = v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);
   if (Number.isNaN(d.getTime())) return null;
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 };
 /** A data civil (no fuso do estabelecimento) de um instante do banco. */
 const dataCivil = (v: unknown, fuso: string): string | null => dataHora(v, fuso)?.slice(0, 10) ?? null;
@@ -680,7 +680,7 @@ export class PortaSesmtPropria implements PortaSesmt {
         [est],
       );
       const rel = relogioNoFuso(r?.fuso_horario || FUSO_PADRAO);
-      return { hoje: rel.hoje, agora: `${rel.hoje}T${rel.hhmm.slice(0, 2)}:${rel.hhmm.slice(2, 4)}` };
+      return { hoje: rel.hoje, agora: `${rel.hoje}T${rel.hora}` };
     });
   }
 

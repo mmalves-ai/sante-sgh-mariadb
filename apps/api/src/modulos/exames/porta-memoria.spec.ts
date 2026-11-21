@@ -15,11 +15,11 @@ describe('relógio civil do estabelecimento', () => {
   it('data e hora no fuso; instante de volta; minutos e HH:MM', () => {
     const r = relogioDoEstabelecimento('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z'));
     expect(r).toEqual({ hoje: '2026-11-20', hora: '09:05' });
-    expect(relogioNoFuso('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z')).hhmm).toBe('0905');
+    expect(relogioNoFuso('America/Sao_Paulo', new Date('2026-11-20T12:05:00Z')).hora).toBe('09:05');
     expect(instanteCivil('2026-11-20', '09:05', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
     expect(horaCivil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30' });
     // A forma antiga (quatro dígitos) segue para os módulos de fora da agenda de exames.
-    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30', hhmm: '2330' });
+    expect(civil(new Date('2026-11-21T02:30:00Z'), 'America/Sao_Paulo')).toEqual({ data: '2026-11-20', hora: '23:30' });
     expect(instanteCivil('2026-11-20', '0905', 'America/Sao_Paulo').toISOString()).toBe('2026-11-20T12:05:00.000Z');
     expect(minutosDaHora('01:20')).toBe(80);
     expect(minutosDaHora('0120')).toBe(80);

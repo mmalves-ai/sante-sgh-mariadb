@@ -138,7 +138,7 @@ const motivo = ref('');
 function abrirMeta(p: ProtocoloDoPaciente, m: ProtocoloDoPaciente['metas'][number]): void {
   aberto.value = { protocolo: p.id, item: m.codigo, tipo: m.tipo };
   feita.value = 'sim';
-  hora.value = (d.value?.lidoEm ?? '').slice(11, 16).replace(':', '') || null;
+  hora.value = (d.value?.lidoEm ?? '').slice(11, 16) || null;
   motivo.value = '';
 }
 async function salvarMeta(): Promise<void> {

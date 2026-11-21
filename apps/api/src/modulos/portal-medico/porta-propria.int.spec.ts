@@ -13,6 +13,7 @@
 //     pelo resumo do código, link inválido) e a notificação do crítico (leitura por conta, aviso inexistente);
 //   - as operações ainda sem banco (409 com o código, nada lido vazio).
 // SGH_NUCLEO_SEM_BANCO=1 pula.
+import { cifrarSenha } from '@sgh/dominio-acesso';
 import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,6 +35,11 @@ const NUMERO = '931402';
 let UF = '';
 // Uma conta por profissional (a chave única do modelo): A, B e C para o vínculo e o ato; D e E para a bateria.
 const LOGINS = NOMES.map((_, i) => `l0402.conta.${'abcde'[i]}@exemplo.invalid`);
+
+/** O usuário de acesso sintético da conta do portal (a senha é a credencial dele). */
+const USUARIO_PORTAL = 'l0402.portal.medico';
+/** Argon2id leve dos testes (o formato é o mesmo do produto). */
+const LEVE = { memoria: 1024, passes: 1, paralelismo: 1 };
 
 interface Massa {
   readonly est: number;
@@ -62,9 +68,18 @@ async function limpar(e: Escritor): Promise<void> {
     LOGINS,
   );
   await e.executar(
+    'DELETE h FROM historico_senha h JOIN usuario u ON u.id = h.usuario_id WHERE u.login = ?',
+    [USUARIO_PORTAL],
+  );
+  await e.executar(
+    'DELETE c FROM credencial_usuario c JOIN usuario u ON u.id = c.usuario_id WHERE u.login = ?',
+    [USUARIO_PORTAL],
+  );
+  await e.executar(
     `DELETE FROM conta_portal_profissional_externo WHERE login IN (${LOGINS.map(() => '?').join(', ')})`,
     LOGINS,
   );
+  await e.executar('DELETE FROM usuario WHERE login = ?', [USUARIO_PORTAL]);
   const ps = await e.consultar(
     `SELECT p.id, p.pessoa_fisica_id FROM profissional p JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
       WHERE pf.nome IN (${em})`,
@@ -214,7 +229,12 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
       );
     const linhaDa = async (conta: number) =>
       (
-        await ler<{ versao: number; profissional_id: number; pessoa_fisica_id: number; autorizada_em: Date | null }>(
+        await ler<{
+          versao: number;
+          profissional_id: number;
+          pessoa_fisica_id: number;
+          autorizada_em: Date | null;
+        }>(
           'SELECT versao, profissional_id, pessoa_fisica_id, autorizada_em FROM conta_portal_profissional_externo WHERE id = ?',
           [conta],
         )
@@ -239,8 +259,13 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
       problema: { codigo: 'idempotencia-divergente' },
     });
     // A entrada de negócio passa pelo esquema da operação.
-    await expect(vincular(c(), contaA, -1)).rejects.toMatchObject({ problema: { codigo: 'entrada-invalida' } });
-    expect((await porta.vinculos(c(), [contaA])).get(contaA)).toMatchObject({ acesso: contaA, profissional: a });
+    await expect(vincular(c(), contaA, -1)).rejects.toMatchObject({
+      problema: { codigo: 'entrada-invalida' },
+    });
+    expect((await porta.vinculos(c(), [contaA])).get(contaA)).toMatchObject({
+      acesso: contaA,
+      profissional: a,
+    });
     await expect(vincular(c(), contaB, cc)).rejects.toMatchObject({
       problema: { codigo: 'profissional-sem-registro' },
     });
@@ -360,10 +385,55 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
     // Os atos do hospital sobre a conta ficam no histórico próprio (ato_conta_portal_profissional_externo).
     const atos = await porta.atosConta(ctx, m.contas[1]!);
     expect(atos.map((a) => a.ato)).toEqual(expect.arrayContaining(['bloqueio', 'desbloqueio']));
-    expect(atos.find((a) => a.ato === 'bloqueio')).toMatchObject({ situacaoAnterior: 'ativo', motivo: expect.any(String) });
-    await expect(
-      porta.gravar(c(), (g) => g.trocarSenha({ acesso: m.contas[0]!, senhaResumo: 'x', por: 'l0402' }), null),
-    ).rejects.toMatchObject({ problema: { status: 409, codigo: 'modelo-pendente' } });
+    expect(atos.find((a) => a.ato === 'bloqueio')).toMatchObject({
+      situacaoAnterior: 'ativo',
+      motivo: expect.any(String),
+    });
+  });
+
+  it('a troca de senha grava a credencial do usuário da conta (argon2id), o histórico e o ato', async () => {
+    const [ativa] = await ler<{ id: number }>(
+      `SELECT id FROM conta_portal_profissional_externo WHERE id IN (${m.contas.map(() => '?').join(', ')})
+          AND situacao = 'ativa' ORDER BY id LIMIT 1`,
+      [...m.contas],
+    );
+    const conta = Number(ativa!.id);
+    const trocar = (senhaResumo: string) =>
+      porta.gravar(c(), (g) => g.trocarSenha({ acesso: conta, senhaResumo, por: 'l0402' }), null);
+    const resumo = await cifrarSenha('Sintetica#2027x', LEVE);
+    // Sem o usuário de acesso da conta, recusa; o resumo que não é argon2id nem chega ao banco.
+    await expect(trocar(resumo)).rejects.toMatchObject({ problema: { codigo: 'conta-sem-usuario' } });
+    await expect(trocar('x')).rejects.toBeDefined();
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-senha-l0402' }, async (e) => {
+      const u = await e.inserir(
+        'INSERT INTO usuario (login, nome, dispensa_cpf, criado_em) VALUES (?, ?, TRUE, ?)',
+        [USUARIO_PORTAL, 'USUARIO PORTAL SINTETICO', new Date()],
+      );
+      await e.executar('UPDATE conta_portal_profissional_externo SET usuario_id = ? WHERE id = ?', [
+        u,
+        conta,
+      ]);
+    });
+    const r1 = await trocar(resumo);
+    const r2 = await trocar(await cifrarSenha('Sintetica#2028y', LEVE));
+    expect(r2.id).toBeGreaterThan(r1.id);
+    const cred = await ler<{ algoritmo: string; resumo_senha: string; troca_obrigatoria: number }>(
+      'SELECT c.algoritmo, c.resumo_senha, c.troca_obrigatoria FROM credencial_usuario c JOIN usuario u ON u.id = c.usuario_id WHERE u.login = ?',
+      [USUARIO_PORTAL],
+    );
+    expect(cred).toHaveLength(1);
+    expect(cred[0]).toMatchObject({ algoritmo: 'argon2id', troca_obrigatoria: 0 });
+    expect(cred[0]!.resumo_senha.startsWith('$argon2id$')).toBe(true);
+    const hist = await ler<{ operacao: string; forma_troca: string }>(
+      'SELECT h.operacao, h.forma_troca FROM historico_senha h JOIN usuario u ON u.id = h.usuario_id WHERE u.login = ? ORDER BY h.id',
+      [USUARIO_PORTAL],
+    );
+    expect(hist).toEqual([
+      { operacao: 'inclusao', forma_troca: 'troca_voluntaria' },
+      { operacao: 'alteracao', forma_troca: 'troca_voluntaria' },
+    ]);
+    const atos = await porta.atosConta(c(), conta);
+    expect(atos.filter((a) => a.ato === 'troca-senha')).toHaveLength(2);
   });
 
   it('a troca do e-mail: pedido, novo pedido cancela o anterior, confirmação e link inválido', async () => {
@@ -378,7 +448,14 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
     const pedir = (token: string, emailNovo: string, validoAte: Date) =>
       porta.gravar(
         c(),
-        (g) => g.pedirTrocaEmail({ acesso: conta, emailNovo, tokenResumo: resumo(token), validoAte, envio: 'halai' }),
+        (g) =>
+          g.pedirTrocaEmail({
+            acesso: conta,
+            emailNovo,
+            tokenResumo: resumo(token),
+            validoAte,
+            envio: 'halai',
+          }),
         null,
       );
     const amanha = new Date(Date.now() + 86_400_000);
@@ -401,7 +478,11 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
       situacao: 'pendente',
     });
     await expect(
-      porta.gravar(c(), (g) => g.confirmarTrocaEmail({ tokenResumo: resumo('outro'), agora: new Date(), por: 'l0402' }), null),
+      porta.gravar(
+        c(),
+        (g) => g.confirmarTrocaEmail({ tokenResumo: resumo('outro'), agora: new Date(), por: 'l0402' }),
+        null,
+      ),
     ).rejects.toMatchObject({ problema: { codigo: 'link-invalido' } });
     const ok = await porta.gravar(
       c(),
@@ -409,13 +490,16 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
       null,
     );
     expect(ok).toEqual({ acesso: conta, emailNovo: 'l0402.novo.b@exemplo.invalid', id: p2.id });
-    const [cp] = await ler<{ email: string }>('SELECT email FROM conta_portal_profissional_externo WHERE id = ?', [conta]);
+    const [cp] = await ler<{ email: string }>(
+      'SELECT email FROM conta_portal_profissional_externo WHERE id = ?',
+      [conta],
+    );
     expect(cp?.email).toBe('l0402.novo.b@exemplo.invalid');
     expect((await porta.trocaEmailPorToken(c(), resumo(tokenB)))?.situacao).toBe('confirmada');
     expect(await porta.trocaEmailPendente(c(), conta)).toBeNull();
-    await expect(
-      porta.gravar(c(), (g) => g.cancelarTrocaEmail(p2.id), null),
-    ).rejects.toMatchObject({ problema: { codigo: 'troca-nao-pendente' } });
+    await expect(porta.gravar(c(), (g) => g.cancelarTrocaEmail(p2.id), null)).rejects.toMatchObject({
+      problema: { codigo: 'troca-nao-pendente' },
+    });
   });
 
   it('a notificação do crítico: leitura por conta e as recusas', async () => {
@@ -430,7 +514,13 @@ describe.skipIf(SEM_BANCO)(`porta própria do portal do médico externo (MariaDB
     await expect(
       porta.gravar(
         c(),
-        (g) => g.notificarCritico({ aviso: 2_000_000_000, acesso: m.contas[0]!, envio: 'simulador', motivo: null }),
+        (g) =>
+          g.notificarCritico({
+            aviso: 2_000_000_000,
+            acesso: m.contas[0]!,
+            envio: 'simulador',
+            motivo: null,
+          }),
         null,
       ),
     ).rejects.toMatchObject({ problema: { codigo: 'aviso-inexistente' } });
@@ -521,7 +611,11 @@ describe.skipIf(SEM_BANCO).each([
   it('só a conta vigente prende o profissional; desligada, ele vai a outra conta', async () => {
     const [x, y] = cn.contas;
     const ligar = (conta: number) =>
-      cn.porta.gravar(cn.c(), (g) => g.vincular({ acesso: conta, profissional: cn.prof, por: 'l0402' }), null);
+      cn.porta.gravar(
+        cn.c(),
+        (g) => g.vincular({ acesso: conta, profissional: cn.prof, por: 'l0402' }),
+        null,
+      );
     await ligar(x);
     await expect(ligar(y)).rejects.toMatchObject({ problema: { codigo: 'profissional-em-outra-conta' } });
     await cn.porta.gravar(cn.c(), (g) => g.desvincular({ acesso: x, por: 'l0402' }), null);

@@ -40,7 +40,14 @@ import {
 import { z } from 'zod';
 import { civil, FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { mesmoValor, valorParaGravar } from './campos-contrato.js';
-import type { ContextoGravacaoPreco, CtxPrecos, FiltroPagina, FontePrecos, MudancaCarga, TrilhaPreco } from './fonte.js';
+import type {
+  ContextoGravacaoPreco,
+  CtxPrecos,
+  FiltroPagina,
+  FontePrecos,
+  MudancaCarga,
+  TrilhaPreco,
+} from './fonte.js';
 import { type NomeOperacaoPreco, OPERACOES_PRECO } from './operacoes.js';
 import {
   type AlteracaoPlano,
@@ -75,7 +82,8 @@ const textoN = (v: unknown) => (v === null || v === undefined || v === '' ? null
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1';
 const dataIso = (v: unknown): string | null =>
   v instanceof Date ? v.toISOString().slice(0, 10) : v ? String(v).slice(0, 10) : null;
-const numeroDeTexto = (v: unknown) => (v !== null && v !== undefined && /^\d{1,15}$/.test(String(v)) ? Number(v) : null);
+const numeroDeTexto = (v: unknown) =>
+  v !== null && v !== undefined && /^\d{1,15}$/.test(String(v)) ? Number(v) : null;
 /** Situação do convênio no vocabulário do contrato da tela (pedido de contrato: a situação nomeada). */
 const situacaoDaTela = (s: unknown) => (texto(s) === 'ativa' ? 'A' : 'I');
 const situacaoDaTabela = (s: unknown) => (texto(s) === 'ativa' ? 'A' : 'I');
@@ -109,7 +117,12 @@ const COLUNA_FONTE: Readonly<Record<string, string>> = {
   retornoDias: 'dias_retorno',
   prazoPagamentoDias: 'dias_pagamento_remessa',
   validaCarteira: 'exige_validade_carteira',
+  telefone: 'telefone',
+  uf: 'unidade_federativa_id',
+  nfUf: 'nota_fiscal_unidade_federativa_id',
 };
+/** Campos de UF: a tela fala a sigla, o banco guarda a unidade federativa (FK). */
+const CAMPOS_UF: ReadonlySet<string> = new Set(['uf', 'nfUf']);
 
 // A situação vale por estabelecimento; a fonte inativa na rede fica inativa em todos.
 const SQL_CONVENIO = `
@@ -248,7 +261,8 @@ export class FontePrecosPropria implements FontePrecos {
 
   private ler<T>(c: CtxPrecos, fn: (l: Leitor, est: number) => Promise<T>): Promise<T> {
     const est = c.estabelecimento;
-    if (est === null) return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
+    if (est === null)
+      return Promise.reject(recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.'));
     return this.nucleo.lerSomente(contextoDe(c), (l) => fn(l, est));
   }
 
@@ -261,7 +275,11 @@ export class FontePrecosPropria implements FontePrecos {
     const est = c.estabelecimento;
     if (est === null) throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
     const op =
-      nome === 'convenio.alterarSituacao' ? OP_SITUACAO : nome === 'convenio.alterarContrato' ? OP_CONTRATO : null;
+      nome === 'convenio.alterarSituacao'
+        ? OP_SITUACAO
+        : nome === 'convenio.alterarContrato'
+          ? OP_CONTRATO
+          : null;
     if (!op) throw erroNaoLiberada('o reajuste e o desfazer pelo lote aguardam a fonte própria');
     const r = await this.executor.executar(op as typeof OP_SITUACAO, c.cliente, entrada, {
       ...contextoDe(c),
@@ -279,7 +297,9 @@ export class FontePrecosPropria implements FontePrecos {
 
   convenios(c: CtxPrecos): Promise<ConvenioPreco[]> {
     return this.ler(c, async (l, est) =>
-      (await l.consultar(`${SQL_CONVENIO} ORDER BY f.nome, f.id`, [est, est, est, est, est], { teto: 5_000 })).map(convenioDe),
+      (
+        await l.consultar(`${SQL_CONVENIO} ORDER BY f.nome, f.id`, [est, est, est, est, est], { teto: 5_000 })
+      ).map(convenioDe),
     );
   }
 
@@ -294,6 +314,7 @@ export class FontePrecosPropria implements FontePrecos {
     return this.ler(c, async (l, est) => {
       const f = await l.uma(
         `SELECT f.nome, f.registro_ans, f.classe_fonte_pagadora_id, f.contato_nome, f.email, f.exige_validade_carteira,
+                f.telefone, ufp.sigla AS uf_sigla, ufn.sigla AS nf_uf_sigla,
                 COALESCE(fe.dias_retorno, f.dias_retorno) AS dias_retorno, f.dias_pagamento_remessa, pj.cnpj, pj.inscricao_estadual,
                 k.situacao AS situacao_acordo, k.vigencia_inicio, k.vigencia_fim, k.prazo_apresentacao_dias,
                 k.dia_corte_faturamento, k.exige_guia, k.cobra_insumos, k.fatura_pela_data_alta, k.abate_devolucao,
@@ -303,6 +324,8 @@ export class FontePrecosPropria implements FontePrecos {
            JOIN fonte_pagadora_estabelecimento fe
              ON fe.fonte_pagadora_id = f.id AND fe.estabelecimento_id = ? AND fe.excluido_em IS NULL
            LEFT JOIN pessoa_juridica pj ON pj.id = f.pessoa_juridica_id
+           LEFT JOIN unidade_federativa ufp ON ufp.id = f.unidade_federativa_id
+           LEFT JOIN unidade_federativa ufn ON ufn.id = f.nota_fiscal_unidade_federativa_id
            LEFT JOIN contrato_fonte_pagadora k ON k.id = (
                   SELECT x.id FROM contrato_fonte_pagadora x
                    WHERE x.fonte_pagadora_id = f.id AND x.estabelecimento_id = ? AND x.excluido_em IS NULL
@@ -321,6 +344,9 @@ export class FontePrecosPropria implements FontePrecos {
         classificacao: f['classe_fonte_pagadora_id'] === null ? null : texto(f['classe_fonte_pagadora_id']),
         contato: textoN(f['contato_nome']),
         convenioEmail: textoN(f['email']),
+        telefone: textoN(f['telefone']),
+        uf: textoN(f['uf_sigla']),
+        nfUf: textoN(f['nf_uf_sigla']),
         // O contrato da tela ainda fala "T"/"F" (pedido de contrato: booleano).
         validaCarteira: verdadeiro(f['exige_validade_carteira']) ? 'T' : 'F',
         retornoDias: f['dias_retorno'] === null ? null : texto(f['dias_retorno']),
@@ -346,9 +372,15 @@ export class FontePrecosPropria implements FontePrecos {
   opcoesClassificacao(c: CtxPrecos) {
     // A classificação é da rede inteira (sem estabelecimento).
     return this.ler(c, async (l) =>
-      (await l.consultar('SELECT id, descricao FROM classe_fonte_pagadora WHERE ativo = TRUE ORDER BY descricao', [], {
-        teto: 500,
-      })).map((r) => ({ valor: texto(r['id']), rotulo: texto(r['descricao']) })),
+      (
+        await l.consultar(
+          'SELECT id, descricao FROM classe_fonte_pagadora WHERE ativo = TRUE ORDER BY descricao',
+          [],
+          {
+            teto: 500,
+          },
+        )
+      ).map((r) => ({ valor: texto(r['id']), rotulo: texto(r['descricao']) })),
     );
   }
 
@@ -366,7 +398,14 @@ export class FontePrecosPropria implements FontePrecos {
       ).flatMap((r) => {
         const tipo = TIPO_ITEM_VIGENCIA[texto(r['tipo_item'])];
         return tipo
-          ? [{ tipo, tabela: n(r['tabela_preco_id']), inicio: dataIso(r['vigencia_inicio']) ?? '', fim: dataIso(r['vigencia_fim']) }]
+          ? [
+              {
+                tipo,
+                tabela: n(r['tabela_preco_id']),
+                inicio: dataIso(r['vigencia_inicio']) ?? '',
+                fim: dataIso(r['vigencia_fim']),
+              },
+            ]
           : [];
       }),
     );
@@ -386,7 +425,12 @@ export class FontePrecosPropria implements FontePrecos {
       );
       return {
         configurado: r !== null,
-        valores: r ? { codigoPrestador: texto(r['codigo_operadora']), codigoContratado: textoN(r['codigo_contratado_tiss']) } : {},
+        valores: r
+          ? {
+              codigoPrestador: texto(r['codigo_operadora']),
+              codigoContratado: textoN(r['codigo_contratado_tiss']),
+            }
+          : {},
         parametros: [],
       };
     });
@@ -401,7 +445,11 @@ export class FontePrecosPropria implements FontePrecos {
           [cod],
           { teto: 500 },
         )
-      ).map((r) => ({ quando: localDe(r['ocorrido_em'], fuso), nome: texto(r['nome']), classificacao: nn(r['classe_fonte_pagadora_id']) }));
+      ).map((r) => ({
+        quando: localDe(r['ocorrido_em'], fuso),
+        nome: texto(r['nome']),
+        classificacao: nn(r['classe_fonte_pagadora_id']),
+      }));
     });
   }
 
@@ -478,7 +526,12 @@ export class FontePrecosPropria implements FontePrecos {
           [est, ...tipos],
           { teto: 2_000 },
         )
-      ).map((r) => ({ codigo: n(r['id']), nome: texto(r['descricao']), situacao: situacaoDaTabela(r['situacao']), modo: textoN(r['moeda_calculo']) })),
+      ).map((r) => ({
+        codigo: n(r['id']),
+        nome: texto(r['descricao']),
+        situacao: situacaoDaTabela(r['situacao']),
+        modo: textoN(r['moeda_calculo']),
+      })),
     );
   }
 
@@ -493,11 +546,20 @@ export class FontePrecosPropria implements FontePrecos {
         [est],
         { teto: 5_000 },
       );
-      return new Map(ls.map((r) => [n(r['tabela_preco_id']), { itens: n(r['itens']), comCh: n(r['com_ch']), comPorte: n(r['com_porte']) }]));
+      return new Map(
+        ls.map((r) => [
+          n(r['tabela_preco_id']),
+          { itens: n(r['itens']), comCh: n(r['com_ch']), comPorte: n(r['com_porte']) },
+        ]),
+      );
     });
   }
 
-  itensHonorario(c: CtxPrecos, tab: number, f: FiltroPagina): Promise<{ itens: ItemHonorarioPreco[]; total: number }> {
+  itensHonorario(
+    c: CtxPrecos,
+    tab: number,
+    f: FiltroPagina,
+  ): Promise<{ itens: ItemHonorarioPreco[]; total: number }> {
     return this.ler(c, async (l, est) => {
       const busca = f.busca?.trim() ? ` AND COALESCE(pp.descricao_cobranca, it.descricao) LIKE ?` : '';
       const p = [f.data, f.data, tab, est, ...(busca ? [`%${f.busca!.trim().replace(/[%_\\]/g, '')}%`] : [])];
@@ -524,11 +586,24 @@ export class FontePrecosPropria implements FontePrecos {
     });
   }
 
-  itensParaReajuste(c: CtxPrecos, tab: number, codigos: readonly number[] | null, data: string, teto: number) {
+  itensParaReajuste(
+    c: CtxPrecos,
+    tab: number,
+    codigos: readonly number[] | null,
+    data: string,
+    teto: number,
+  ) {
     return this.ler(c, async (l, est) => {
       const filtro = codigos && codigos.length ? ` AND pp.id IN (${codigos.map(() => '?').join(', ')})` : '';
       return (
-        await l.consultar(`${SQL_ITENS_HONORARIO}${filtro} ORDER BY pp.id LIMIT ?`, [data, data, tab, est, ...(codigos ?? []), teto])
+        await l.consultar(`${SQL_ITENS_HONORARIO}${filtro} ORDER BY pp.id LIMIT ?`, [
+          data,
+          data,
+          tab,
+          est,
+          ...(codigos ?? []),
+          teto,
+        ])
       ).map(itemHonorarioDe);
     });
   }
@@ -596,7 +671,10 @@ export class FontePrecosPropria implements FontePrecos {
       ).map((r) => {
         let comp: Record<string, unknown>;
         try {
-          comp = typeof r['componentes_novos'] === 'string' ? JSON.parse(r['componentes_novos'] as string) : ((r['componentes_novos'] as Record<string, unknown>) ?? {});
+          comp =
+            typeof r['componentes_novos'] === 'string'
+              ? JSON.parse(r['componentes_novos'] as string)
+              : ((r['componentes_novos'] as Record<string, unknown>) ?? {});
         } catch {
           comp = {};
         }
@@ -604,13 +682,23 @@ export class FontePrecosPropria implements FontePrecos {
           tabela: n(r['tabela_preco_id']),
           codigo: n(r['preco_procedimento_id']),
           data: dataIso(r['vigencia_inicio']) ?? '',
-          valores: { ch: Number(comp['ch'] ?? 0), co: Number(comp['co'] ?? 0), filme: Number(comp['filme'] ?? 0), anes: Number(comp['anes'] ?? 0), outros: Number(comp['outros'] ?? 0) },
+          valores: {
+            ch: Number(comp['ch'] ?? 0),
+            co: Number(comp['co'] ?? 0),
+            filme: Number(comp['filme'] ?? 0),
+            anes: Number(comp['anes'] ?? 0),
+            outros: Number(comp['outros'] ?? 0),
+          },
         };
       }),
     );
   }
 
-  itensDiaria(c: CtxPrecos, tab: number, f: FiltroPagina): Promise<{ itens: ItemDiariaPreco[]; total: number }> {
+  itensDiaria(
+    c: CtxPrecos,
+    tab: number,
+    f: FiltroPagina,
+  ): Promise<{ itens: ItemDiariaPreco[]; total: number }> {
     return this.ler(c, async (l, est) => {
       const total = await l.uma<{ total: unknown }>(
         `SELECT COUNT(*) AS total FROM preco_diaria_taxa d JOIN tabela_preco t ON t.id = d.tabela_preco_id
@@ -665,8 +753,13 @@ export class FontePrecosPropria implements FontePrecos {
   edicoes(c: CtxPrecos) {
     // As edições da referência de mat/med são da rede inteira (publicação externa, sem estabelecimento).
     return this.ler(c, async (l) =>
-      (await l.consultar('SELECT id, numero_edicao FROM edicao_referencia_matmed ORDER BY vigencia_inicio DESC, id DESC', [], { teto: 500 }))
-        .map((r) => ({ id: n(r['id']), versao: Number(String(r['numero_edicao']).replace(/\D/g, '') || 0) })),
+      (
+        await l.consultar(
+          'SELECT id, numero_edicao FROM edicao_referencia_matmed ORDER BY vigencia_inicio DESC, id DESC',
+          [],
+          { teto: 500 },
+        )
+      ).map((r) => ({ id: n(r['id']), versao: Number(String(r['numero_edicao']).replace(/\D/g, '') || 0) })),
     );
   }
 
@@ -772,56 +865,80 @@ export class FontePrecosPropria implements FontePrecos {
   }
 
   async gravarPlano(c: CtxPrecos, p: NovoPlano, t: TrilhaPreco): Promise<{ id: number }> {
-    const r = await this.direta(c, 'convenio.incluir-plano', ['plano_fonte_pagadora', 'plano_fonte_pagadora_estabelecimento'], t, async (tx, est) => {
-      const f = await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [p.convenio]);
-      if (!f) throw recusa('nao-encontrado', 'Convênio não encontrado.');
-      if (p.fim !== null && p.fim < p.inicio)
-        throw recusa('vigencia-invalida', `O fim (${p.fim}) não pode ser antes do início (${p.inicio}).`);
-      const codigo = p.planoLegado !== null ? String(p.planoLegado) : null;
-      const ja = codigo
-        ? await tx.uma<{ id: unknown }>('SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ? AND excluido_em IS NULL', [p.convenio, codigo])
-        : null;
-      const plano =
-        ja !== null
-          ? n(ja.id)
-          : await tx.incluir('plano_fonte_pagadora', {
-              fonte_pagadora_id: p.convenio,
-              codigo: codigo ?? `P${Date.now().toString(36).toUpperCase()}`,
-              descricao: p.nome.slice(0, 150),
-            });
-      const id = await tx.incluir('plano_fonte_pagadora_estabelecimento', {
-        plano_fonte_pagadora_id: plano,
-        estabelecimento_id: est,
-        vigencia_inicio: p.inicio,
-        vigencia_fim: p.fim,
-        observacao: p.justificativa,
-      });
-      return { id };
-    });
+    const r = await this.direta(
+      c,
+      'convenio.incluir-plano',
+      ['plano_fonte_pagadora', 'plano_fonte_pagadora_estabelecimento'],
+      t,
+      async (tx, est) => {
+        const f = await tx.uma('SELECT id FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [
+          p.convenio,
+        ]);
+        if (!f) throw recusa('nao-encontrado', 'Convênio não encontrado.');
+        if (p.fim !== null && p.fim < p.inicio)
+          throw recusa('vigencia-invalida', `O fim (${p.fim}) não pode ser antes do início (${p.inicio}).`);
+        const codigo = p.planoLegado !== null ? String(p.planoLegado) : null;
+        const ja = codigo
+          ? await tx.uma<{ id: unknown }>(
+              'SELECT id FROM plano_fonte_pagadora WHERE fonte_pagadora_id = ? AND codigo = ? AND excluido_em IS NULL',
+              [p.convenio, codigo],
+            )
+          : null;
+        const plano =
+          ja !== null
+            ? n(ja.id)
+            : await tx.incluir('plano_fonte_pagadora', {
+                fonte_pagadora_id: p.convenio,
+                codigo: codigo ?? `P${Date.now().toString(36).toUpperCase()}`,
+                descricao: p.nome.slice(0, 150),
+              });
+        const id = await tx.incluir('plano_fonte_pagadora_estabelecimento', {
+          plano_fonte_pagadora_id: plano,
+          estabelecimento_id: est,
+          vigencia_inicio: p.inicio,
+          vigencia_fim: p.fim,
+          observacao: p.justificativa,
+        });
+        return { id };
+      },
+    );
     return r;
   }
 
-  async alterarPlano(c: CtxPrecos, a: AlteracaoPlano, t: TrilhaPreco): Promise<{ id: number; versao: number }> {
-    return this.direta(c, 'convenio.alterar-plano', ['plano_fonte_pagadora', 'plano_fonte_pagadora_estabelecimento'], t, async (tx, est) => {
-      const [pe] = await tx.consultarParaAtualizar<Linha>(
-        `SELECT pe.id, pe.versao, pe.vigencia_inicio, pe.plano_fonte_pagadora_id, p.versao AS versao_plano
+  async alterarPlano(
+    c: CtxPrecos,
+    a: AlteracaoPlano,
+    t: TrilhaPreco,
+  ): Promise<{ id: number; versao: number }> {
+    return this.direta(
+      c,
+      'convenio.alterar-plano',
+      ['plano_fonte_pagadora', 'plano_fonte_pagadora_estabelecimento'],
+      t,
+      async (tx, est) => {
+        const [pe] = await tx.consultarParaAtualizar<Linha>(
+          `SELECT pe.id, pe.versao, pe.vigencia_inicio, pe.plano_fonte_pagadora_id, p.versao AS versao_plano
            FROM plano_fonte_pagadora_estabelecimento pe JOIN plano_fonte_pagadora p ON p.id = pe.plano_fonte_pagadora_id
           WHERE pe.id = ? AND pe.estabelecimento_id = ? AND p.fonte_pagadora_id = ? AND pe.excluido_em IS NULL`,
-        [a.id, est, a.convenio],
-      );
-      if (!pe) throw recusa('nao-encontrado', 'Plano não encontrado.');
-      if (n(pe['versao']) !== a.versao) throw recusa('conflito-concorrente', 'O plano mudou depois que você abriu: abra de novo.');
-      const inicio = dataIso(pe['vigencia_inicio']) ?? '';
-      if (a.fim !== undefined && a.fim !== null && a.fim < inicio)
-        throw recusa('vigencia-invalida', `O fim (${a.fim}) não pode ser antes do início (${inicio}).`);
-      if (a.nome !== undefined)
-        await tx.alterar('plano_fonte_pagadora', n(pe['plano_fonte_pagadora_id']), n(pe['versao_plano']), { descricao: a.nome.slice(0, 150) });
-      const versao = await tx.alterar('plano_fonte_pagadora_estabelecimento', a.id, a.versao, {
-        ...(a.fim !== undefined ? { vigencia_fim: a.fim } : {}),
-        ...(a.ativo !== undefined ? { ativo: a.ativo } : {}),
-      });
-      return { id: a.id, versao };
-    });
+          [a.id, est, a.convenio],
+        );
+        if (!pe) throw recusa('nao-encontrado', 'Plano não encontrado.');
+        if (n(pe['versao']) !== a.versao)
+          throw recusa('conflito-concorrente', 'O plano mudou depois que você abriu: abra de novo.');
+        const inicio = dataIso(pe['vigencia_inicio']) ?? '';
+        if (a.fim !== undefined && a.fim !== null && a.fim < inicio)
+          throw recusa('vigencia-invalida', `O fim (${a.fim}) não pode ser antes do início (${inicio}).`);
+        if (a.nome !== undefined)
+          await tx.alterar('plano_fonte_pagadora', n(pe['plano_fonte_pagadora_id']), n(pe['versao_plano']), {
+            descricao: a.nome.slice(0, 150),
+          });
+        const versao = await tx.alterar('plano_fonte_pagadora_estabelecimento', a.id, a.versao, {
+          ...(a.fim !== undefined ? { vigencia_fim: a.fim } : {}),
+          ...(a.ativo !== undefined ? { ativo: a.ativo } : {}),
+        });
+        return { id: a.id, versao };
+      },
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
@@ -845,12 +962,25 @@ export class FontePrecosPropria implements FontePrecos {
       entrada: zChave,
       gravar: (tx) => fn(tx, est),
       alvo: (_e, r) => ({ tabela: tabelas[tabelas.length - 1]!, id: r['id'] ?? null }),
-      trilha: () => ({ dados: { evento: t.evento, recurso: t.recurso, operacao: t.operacao, chave: t.chaveNaturalAlvo, estacao: t.estacao } }),
+      trilha: () => ({
+        dados: {
+          evento: t.evento,
+          recurso: t.recurso,
+          operacao: t.operacao,
+          chave: t.chaveNaturalAlvo,
+          estacao: t.estacao,
+        },
+      }),
     });
     // A chave do pedido (Idempotency-Key): o reenvio devolve o mesmo resultado; sem ela, uma chave nova.
     const chave = t.chaveIdempotencia ?? `${nome.slice(0, 30)}:${randomUUID()}`;
     try {
-      const r = await this.executor.executar(op, c.cliente, { chave }, { ...contextoDe(c), chaveIdempotencia: chave });
+      const r = await this.executor.executar(
+        op,
+        c.cliente,
+        { chave },
+        { ...contextoDe(c), chaveIdempotencia: chave },
+      );
       return r.resultado as T;
     } catch (e) {
       // As recusas do plano voltam como o erro do plano (a tela as conhece pelo código).
@@ -876,7 +1006,10 @@ const COLUNAS_PRESTADOR: [string, string][] = [
 const zChave = z.object({ chave: z.string() });
 
 /** Situação do convênio no estabelecimento da sessão: suspender ou reativar, com o retrato em fonte_pagadora_versao. */
-const OP_SITUACAO = definirOperacao<AlterarSituacaoConvenioEntrada, { convenio: number; situacaoAntes: string; situacaoDepois: string }>({
+const OP_SITUACAO = definirOperacao<
+  AlterarSituacaoConvenioEntrada,
+  { convenio: number; situacaoAntes: string; situacaoDepois: string }
+>({
   nome: 'convenio.alterar-situacao',
   tabelas: ['fonte_pagadora_estabelecimento', 'fonte_pagadora_versao'],
   entrada: OPERACOES_PRECO['convenio.alterarSituacao'].entrada as z.ZodType<AlterarSituacaoConvenioEntrada>,
@@ -888,10 +1021,15 @@ const OP_SITUACAO = definirOperacao<AlterarSituacaoConvenioEntrada, { convenio: 
     const antes = texto(fe['situacao']);
     const depois = e.operacao === 'suspender' ? 'suspensa' : 'ativa';
     if (antes === depois) throw recusa('sem-efeito', `O convênio ${e.convenio} já está nessa situação.`);
-    if (antes === 'inativa') throw recusa('convenio-inativo', 'O convênio está inativo: a situação não muda por aqui.');
+    if (antes === 'inativa')
+      throw recusa('convenio-inativo', 'O convênio está inativo: a situação não muda por aqui.');
     await tx.alterar('fonte_pagadora_estabelecimento', n(fe['id']), n(fe['versao']), { situacao: depois });
     await retrato(tx, f, { ...fe, situacao: depois }, 'alteracao');
-    return { convenio: e.convenio, situacaoAntes: situacaoDaTela(antes), situacaoDepois: situacaoDaTela(depois) };
+    return {
+      convenio: e.convenio,
+      situacaoAntes: situacaoDaTela(antes),
+      situacaoDepois: situacaoDaTela(depois),
+    };
   },
   alvo: (e) => ({ tabela: 'fonte_pagadora', id: e.convenio }),
   trilha: (e) => ({ motivo: e.justificativa }),
@@ -908,7 +1046,19 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
     const semColuna = campos.filter((k) => !COLUNA_FONTE[k]);
     if (semColuna.length) throw modeloPendente(`Os campos ${semColuna.join(', ')} do contrato`);
     const { f, fe } = await travarNoEstabelecimento(tx, e.convenio);
+    // As siglas das UFs gravadas (a tela compara e grava pela sigla).
+    const siglas = new Map<number, string>();
+    for (const k of campos.filter((x) => CAMPOS_UF.has(x))) {
+      const idUf = nn(f[COLUNA_FONTE[k]!]);
+      if (idUf === null) continue;
+      const u = await tx.uma<{ sigla: unknown }>('SELECT sigla FROM unidade_federativa WHERE id = ?', [idUf]);
+      if (u) siglas.set(idUf, texto(u.sigla));
+    }
     const atual = (k: string) => {
+      if (CAMPOS_UF.has(k)) {
+        const idUf = nn(f[COLUNA_FONTE[k]!]);
+        return idUf === null ? null : (siglas.get(idUf) ?? null);
+      }
       // O retorno é o da unidade; nulo usa o da fonte pagadora.
       const v = k === 'retornoDias' ? (fe['dias_retorno'] ?? f['dias_retorno']) : f[COLUNA_FONTE[k]!];
       if (k === 'validaCarteira') return verdadeiro(v) ? 'T' : 'F';
@@ -916,18 +1066,30 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
     };
     const mudaram = campos.filter((k) => !mesmoValor(k, atual(k), e.lidos[k]));
     if (mudaram.length) throw erroConflitoVersao(mudaram);
-    if (campos.every((k) => mesmoValor(k, atual(k), e.valores[k]))) throw recusa('sem-efeito', 'Nenhum campo muda de valor.');
+    if (campos.every((k) => mesmoValor(k, atual(k), e.valores[k])))
+      throw recusa('sem-efeito', 'Nenhum campo muda de valor.');
     const valores: Record<string, unknown> = {};
     const daUnidade: Record<string, unknown> = {};
     for (const k of campos) {
       const v = valorParaGravar(k, e.valores[k] ?? null);
       const gravar =
-        k === 'validaCarteira' ? v === 'T' : k === 'retornoDias' || k === 'prazoPagamentoDias' || k === 'classificacao' ? (v === '' ? null : Number(v)) : v === '' ? null : v;
+        k === 'validaCarteira'
+          ? v === 'T'
+          : k === 'retornoDias' || k === 'prazoPagamentoDias' || k === 'classificacao'
+            ? v === ''
+              ? null
+              : Number(v)
+            : v === ''
+              ? null
+              : v;
       if (k === 'retornoDias') daUnidade['dias_retorno'] = gravar;
+      else if (CAMPOS_UF.has(k))
+        valores[COLUNA_FONTE[k]!] = gravar === null ? null : await idDaUf(tx, String(gravar), k);
       else valores[COLUNA_FONTE[k]!] = gravar;
     }
     if (Object.keys(valores).length) await tx.alterar('fonte_pagadora', e.convenio, n(f['versao']), valores);
-    if (Object.keys(daUnidade).length) await tx.alterar('fonte_pagadora_estabelecimento', n(fe['id']), n(fe['versao']), daUnidade);
+    if (Object.keys(daUnidade).length)
+      await tx.alterar('fonte_pagadora_estabelecimento', n(fe['id']), n(fe['versao']), daUnidade);
     if (campos.includes('nome') || campos.includes('classificacao'))
       await retrato(tx, { ...f, ...valores }, { ...fe, ...daUnidade }, 'alteracao');
     return { convenio: e.convenio, campos: campos.length };
@@ -936,9 +1098,23 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
   trilha: (e) => ({ motivo: e.justificativa, dados: { campos: Object.keys(e.valores).sort() } }),
 });
 
+/** A unidade federativa ativa pela sigla (recusa a sigla desconhecida). */
+async function idDaUf(tx: TxOperacao, sigla: string, campo: string): Promise<number> {
+  const u = await tx.uma<{ id: unknown }>(
+    'SELECT id FROM unidade_federativa WHERE sigla = ? AND ativo = TRUE',
+    [sigla.trim().toUpperCase()],
+  );
+  if (!u) throw recusa('uf-invalida', `A UF ${sigla} não está no cadastro.`, { campos: [campo] });
+  return n(u.id);
+}
+
 async function travarFonte(tx: TxOperacao, id: number): Promise<Linha> {
-  const [f] = await tx.consultarParaAtualizar<Linha>('SELECT * FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL', [id]);
-  if (!f) throw new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', 'O convênio não existe.');
+  const [f] = await tx.consultarParaAtualizar<Linha>(
+    'SELECT * FROM fonte_pagadora WHERE id = ? AND excluido_em IS NULL',
+    [id],
+  );
+  if (!f)
+    throw new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', 'O convênio não existe.');
   return f;
 }
 
@@ -951,7 +1127,12 @@ async function travarNoEstabelecimento(tx: TxOperacao, id: number): Promise<{ f:
     [id, tx.contexto.estabelecimento],
   );
   if (!fe)
-    throw new ErroOperacao(404, 'registro-inexistente', 'Registro não encontrado', 'O convênio não está credenciado neste estabelecimento.');
+    throw new ErroOperacao(
+      404,
+      'registro-inexistente',
+      'Registro não encontrado',
+      'O convênio não está credenciado neste estabelecimento.',
+    );
   return { f, fe };
 }
 
@@ -960,7 +1141,12 @@ const jsonDoRegistro = (v: unknown) =>
   JSON.stringify(v, (_k, x: unknown) => (typeof x === 'bigint' ? Number(x) : Buffer.isBuffer(x) ? null : x));
 
 /** Retrato completo do registro depois da operação: a fonte pagadora e a linha do estabelecimento. */
-async function retrato(tx: TxOperacao, f: Linha, fe: Linha, operacao: 'inclusao' | 'alteracao'): Promise<void> {
+async function retrato(
+  tx: TxOperacao,
+  f: Linha,
+  fe: Linha,
+  operacao: 'inclusao' | 'alteracao',
+): Promise<void> {
   await tx.incluir('fonte_pagadora_versao', {
     fonte_pagadora_id: n(f['id']),
     operacao,
@@ -973,10 +1159,18 @@ async function retrato(tx: TxOperacao, f: Linha, fe: Linha, operacao: 'inclusao'
 }
 
 const modeloPendente = (o: string) =>
-  new ErroOperacao(409, 'modelo-pendente', 'Recurso aguardando o modelo do banco', `${o} aguarda a coluna ou tabela no modelo do banco (pedido registrado): nada foi gravado.`);
+  new ErroOperacao(
+    409,
+    'modelo-pendente',
+    'Recurso aguardando o modelo do banco',
+    `${o} aguarda a coluna ou tabela no modelo do banco (pedido registrado): nada foi gravado.`,
+  );
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
-  const r = await l.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  const r = await l.uma<{ fuso_horario: string | null }>(
+    'SELECT fuso_horario FROM estabelecimento WHERE id = ?',
+    [est],
+  );
   return r?.fuso_horario || FUSO_PADRAO;
 }
 
@@ -984,10 +1178,14 @@ function localDe(v: unknown, fuso: string): string {
   if (v === null || v === undefined) return '';
   const d = v instanceof Date ? v : new Date(String(v));
   const c = civil(d, fuso);
-  return `${c.data} ${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data} ${c.hora}`;
 }
 
 function contextoDe(c: CtxPrecos): ContextoNucleo {
-  return { cliente: c.cliente, estabelecimento: c.estabelecimento, usuario: c.usuario, correlacao: (c.correlacao || c.traceId || 'precos').slice(0, 64) };
+  return {
+    cliente: c.cliente,
+    estabelecimento: c.estabelecimento,
+    usuario: c.usuario,
+    correlacao: (c.correlacao || c.traceId || 'precos').slice(0, 64),
+  };
 }
-

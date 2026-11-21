@@ -1,0 +1,36 @@
+{
+ "lote": "p-especialidades-nutricao",
+ "cliente_teste": "f24p_especialidadesnutricao",
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "tabela": "plano_refeicao_acompanhante_evento (nova)",
+   "colunas": "id; plano_refeicao_acompanhante_id BIGINT UNSIGNED NOT NULL (FK); evento VARCHAR(20) NOT NULL CHECK IN ('alterado','cancelado'); dados_antes LONGTEXT NULL e dados_depois LONGTEXT NULL (CHECK json_valid); motivo VARCHAR(500) NOT NULL; ocorrido_em DATETIME(3) NOT NULL; usuario_id BIGINT UNSIGNED NOT NULL (FK usuario); colunas de auditoria. Igual a preparo_lactario_evento.",
+   "motivo": "A alteração da refeição do acompanhante grava o histórico (antes, depois e motivo) na mesma transação (nutricao.controller: alterarAcompanhante + registrarAlteracao). Sem a tabela, registrarAlteracao da tabela plano_refeicao_acompanhante recusa com modelo-pendente e a alteração inteira volta (nada gravado); alteracoesAcompanhante fica sem linhas. Arquivo: apps/api/src/modulos/nutricao/porta-propria.ts."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "exame_oftalmologico_item (nova); exame_oftalmologico; exame_oftalmologico_valor",
+   "colunas": "exame_oftalmologico_item: exame_oftalmologico_id (FK), sequencia (UNIQUE com o exame), tipo_exame_oftalmologico_id (FK), olho CHECK IN ('direito','esquerdo','ambos'), resultado VARCHAR(500) NOT NULL. exame_oftalmologico: alertas LONGTEXT NULL CHECK json_valid (os alertas da gravação, que dependem do limite de PIO do parâmetro do estabelecimento e não se recalculam na leitura); tipo_exame_oftalmologico_id passa a NULL só quando há itens, ou carga do tipo 'avaliacao' (consolidado) no criar_cliente. exame_oftalmologico_valor: acuidade_visual_id BIGINT UNSIGNED NULL (FK acuidade_visual), porque a acuidade com e sem correção da tela é o cadastro de acuidade.",
+   "motivo": "O exame consolidado da tela traz itens por tipo de exame com resultado de até 500 caracteres; exame_oftalmologico_valor tem só o grupo e valor_texto de 50, e não guarda os alertas nem a acuidade do cadastro. registrarExame e exames() seguem com modelo-pendente em apps/api/src/modulos/especialidades/porta-propria.ts."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "protocolo_quimioterapia_droga",
+   "colunas": "nome_generico VARCHAR(60) NULL; item_prescritivel_id e unidade_prescricao_id passam a NULL com CHECK (item_prescritivel_id IS NOT NULL OR nome_generico IS NOT NULL); unidade_dose VARCHAR(10) NULL CHECK IN ('mg/m2','mg/kg','auc','mg') (hoje base_dose cobre a base, mas a dose fixa e a AUC precisam da unidade); administracao VARCHAR(120) NULL. Carga: via_de_uso com os códigos iv, vo, sc, im e it (ou mapa código da tela → via_de_uso).",
+   "motivo": "A publicação do protocolo versionado traz o fármaco pelo nome genérico (DCB), com a unidade da dose e a via por código; o modelo exige o item prescritível e a unidade de prescrição do cadastro. publicarProtocolo segue com modelo-pendente."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/pep/especialidades.ts (esquemaRegistrarCicloOncologico) e apps/api/src/modulos/especialidades/tipos.ts (NovoCicloOncologico)",
+   "mudanca": "O ciclo novo traz o diagnóstico oncológico (id de diagnostico_oncologico do paciente) e a intenção do tratamento (id de intencao_tratamento_oncologico), obrigatórios no ciclo 1 ou no tratamento novo; a porta cria o tratamento_oncologico do curso (protocolo, tipo, responsável = vínculo) e numera os ciclos nele.",
+   "motivo": "ciclo_quimioterapia pende de tratamento_oncologico, que exige diagnóstico e intenção (ddl-recusado.md, arq. 02-06: é contrato, não DDL). Sem isso, registrarCiclo e, por consequência, validarCiclo, vincularPrescricao, registrarEventoOnco, revogarVersao, mudarAndamentoCiclo, ajustarCiclo e desligarPrescricao seguem com modelo-pendente, e as leituras de protocolo, ciclo e eventos voltam vazias."
+  },
+  {
+   "tipo": "carga",
+   "arquivo": "tools/db/criar_cliente.py (sementes)",
+   "mudanca": "Semear um tipo_barreira_alta da categoria 'social' e os cadastros de acuidade_visual e graduacao_oftalmologica.",
+   "motivo": "O cliente novo vem sem eles: o registro social com barreira recusa com sem-tipo-barreira-social, e a tela da oftalmologia lista acuidade e graduação vazias."
+  }
+ ]
+}

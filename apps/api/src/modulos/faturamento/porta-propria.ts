@@ -336,7 +336,7 @@ function itemDaConta(x: Linha, fuso: string): ItemConta {
     tipo,
     grupo: grupo ? ROTULO_GRUPO[grupo] : '',
     data: quando?.data ?? '',
-    hora: quando ? `${quando.hhmm.slice(0, 2)}:${quando.hhmm.slice(2, 4)}` : '',
+    hora: quando ? quando.hora : '',
     codigo: codigoNumerico(x['item_codigo']),
     nome: texto(x['item_nome']),
     quantidade: n(x['quantidade']),

@@ -9,11 +9,16 @@
 // parâmetro do estabelecimento), e as classificações do recém-nascido pelo domínio só quando o valor existe (peso,
 // Apgar ou idade gestacional nulos dão classificação null, nunca a de um zero); horas no fuso do estabelecimento; o vínculo do login vem do
 // cadastro (usuario_vinculo_profissional + profissional_ocupacao), não de uma consulta por login em texto.
-// Pendências de modelo (pedidos do lote 02-06): o exame oftalmológico consolidado (acuidade, PIO, gonioscopia e
-// classificação), o protocolo oncológico versionado (hash, revogação), o ciclo calculado e validado (redução,
-// creatinina, validação), os eventos do tratamento, a ligação ciclo × prescrição, a ordem do lactário por paciente e o
-// histórico das alterações, e o recém-nascido com reanimação e observação. Até lá, essas leituras voltam vazias e as
-// gravações recusam com 'modelo-pendente' (409), dizendo o que falta; nada é gravado pela metade.
+// F2.4: o recém-nascido grava e lê a reanimação e a observação (registro_nascimento); a ordem do lactário é um preparo
+// por paciente (preparo_lactario, com a fórmula do cadastro e o manipulador do cadastro de colaboradores) e uma porção
+// por horário (preparo_lactario_item), com a conferência por outra pessoa, o cancelamento, a etiqueta e o histórico
+// (preparo_lactario_evento); a acuidade visual e a graduação vêm dos cadastros.
+// Pendências (pedido em docs/obra/fatias/f24/saida/p-especialidades-nutricao.json): o exame oftalmológico consolidado
+// (o item por tipo de exame com o resultado longo e os alertas não cabem em exame_oftalmologico_valor), a criação do
+// protocolo oncológico (o fármaco por nome genérico, sem o item prescritível) e do ciclo (o tratamento oncológico exige
+// o diagnóstico e a intenção, que a tela não traz), e por isso as operações sobre o ciclo e o protocolo. Essas leituras
+// voltam vazias (nada foi gravado por esta porta) e as gravações recusam com 'modelo-pendente' (409), dizendo o que
+// falta; nada é gravado pela metade.
 import { randomUUID } from 'node:crypto';
 import type { CicloDependente, LiquidoAmniotico } from '@sgh/contratos';
 import {
@@ -48,9 +53,16 @@ import {
   type VinculoDoLogin,
 } from './porta.js';
 import type {
+  AlteracaoLactarioRegistrada,
   CadastrosOftalmologia,
+  ConteudoOrdemLactario,
   InternacaoEspecialidadeLida,
+  NovaAlteracaoLactario,
+  NovaOrdemLactario,
   NovoPontoPartograma,
+  NovoRecemNascido,
+  OrdemLactarioAnterior,
+  OrdemLactarioRegistrada,
   PontoPartograma,
   PrescricaoDoCiclo,
   RecemNascidoRegistrado,
@@ -68,13 +80,40 @@ const textoOuNulo = (v: unknown) => (v === null || v === undefined || v === '' ?
 export const TETO_INTERNACOES = 50;
 
 /** Tabelas que a gravação direta das especialidades pode gravar (o Executor recusa as outras). */
-const TABELAS_GRAVACAO = ['partograma', 'partograma_registro'] as const;
+const TABELAS_GRAVACAO = [
+  'partograma',
+  'partograma_registro',
+  'registro_nascimento',
+  'preparo_lactario',
+  'preparo_lactario_item',
+  'preparo_lactario_evento',
+] as const;
+
+/** Evento do histórico do lactário (tela) ↔ evento do modelo. */
+const EVENTO_LACTARIO = { alterada: 'alterado', cancelada: 'cancelado', 'etiqueta-emitida': 'etiqueta_emitida' } as const;
+const EVENTO_LACTARIO_LIDO: Readonly<Record<string, AlteracaoLactarioRegistrada['evento']>> = {
+  alterado: 'alterada',
+  cancelado: 'cancelada',
+  etiqueta_emitida: 'etiqueta-emitida',
+};
+/** O histórico guarda o texto da tela como literal JSON (sem perda); a leitura devolve o texto. */
+const jsonDoTexto = (v: string | null) => (v === null ? null : JSON.stringify(v));
+function textoDoJson(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const t = String(v);
+  try {
+    const x = JSON.parse(t) as unknown;
+    return typeof x === 'string' ? x : t;
+  } catch {
+    return t;
+  }
+}
 
 /** Instante → "AAAA-MM-DDTHH:MM" no fuso do estabelecimento. */
 function minutoCivil(v: unknown, fuso: string): string {
   const d = v instanceof Date ? v : new Date(String(v));
   const c = civil(d, fuso);
-  return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+  return `${c.data}T${c.hora}`;
 }
 /** "AAAA-MM-DDTHH:MM" no fuso do estabelecimento → instante. */
 function deMinutoCivil(v: string, fuso: string): Date {
@@ -220,7 +259,7 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   relogio(c: ContextoEspecialidades) {
     return this.ler(c, async (l, est) => {
       const r = relogioNoFuso(await this.fuso(l, est));
-      return { agora: `${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2, 4)}`, hoje: r.hoje };
+      return { agora: `${r.hoje}T${r.hora}`, hoje: r.hoje };
     });
   }
 
@@ -297,7 +336,7 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
     });
   }
 
-  /** Cadastros da rede (grupos e exames oftalmológicos); acuidade, graduação e tipos de anexo: pendência de modelo. */
+  /** Cadastros da rede: grupos e exames oftalmológicos, acuidade visual e graduação. */
   cadastrosOftalmologia(c: ContextoEspecialidades): Promise<CadastrosOftalmologia> {
     return this.ler(c, async (l) => {
       const grupos = await l.consultar(
@@ -314,8 +353,13 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
           grupo: n(e['grupo_exame_oftalmologico_id']),
           nome: texto(e['descricao']),
         })),
-        acuidades: [],
-        graduacoes: [],
+        acuidades: (
+          await l.consultar('SELECT id, rotulo, tipo FROM acuidade_visual WHERE ativo ORDER BY ordem, id LIMIT 200')
+        ).map((a) => ({ codigo: n(a['id']), nome: texto(a['rotulo']), tipo: textoOuNulo(a['tipo']) })),
+        graduacoes: (
+          await l.consultar('SELECT id, sigla, descricao FROM graduacao_oftalmologica WHERE ativo ORDER BY sigla LIMIT 200')
+        ).map((g) => ({ codigo: n(g['id']), sigla: texto(g['sigla']), nome: texto(g['descricao']) })),
+        // Os tipos de anexo do exame acompanham o exame consolidado (pendência de modelo).
         tiposArquivo: [],
       };
     });
@@ -431,7 +475,7 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
       const linhas = await l.consultar(
         `SELECT rn.id, rn.nascido_em, sx.sigla AS sexo, rn.peso_gramas, rn.comprimento_cm, rn.perimetro_cefalico_cm,
                 rn.apgar_1_minuto, rn.apgar_5_minutos, rn.apgar_10_minutos, rn.idade_gestacional_semanas,
-                rn.idade_gestacional_dias, rn.tipo_parto_id, rn.criado_em, u.login
+                rn.idade_gestacional_dias, rn.tipo_parto_id, rn.reanimacao_neonatal, rn.observacao, rn.criado_em, u.login
            FROM registro_nascimento rn
            JOIN internacao i ON i.atendimento_id = rn.mae_atendimento_id
            LEFT JOIN sexo sx ON sx.id = rn.sexo_id
@@ -460,13 +504,12 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
           igSemanas: sem,
           igDias: dias,
           tipoParto: n(r['tipo_parto_id']),
-          // Pendência de modelo: a reanimação e a observação do recém-nascido (pedido do lote 02-06).
-          reanimacao: false,
+          reanimacao: r['reanimacao_neonatal'] === 1 || r['reanimacao_neonatal'] === true,
           // A idade gestacional só em semanas (dias não anotados) classifica pelas semanas completas.
           classificacaoIg: sem === null ? null : classificarIdadeGestacional(sem, dias ?? 0),
           classificacaoPeso: peso === null ? null : classificarPesoAoNascer(peso),
           classificacaoApgar: apgar5 === null ? null : classificarApgar(apgar5),
-          observacao: null,
+          observacao: textoOuNulo(r['observacao']),
           por: texto(r['login']),
           em: minutoCivil(r['criado_em'], fuso),
         };
@@ -474,7 +517,114 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
     });
   }
 
-  // Leituras que esperam o modelo do banco (pedidos do lote 02-06): vazias, sem inventar dado.
+  /** As ordens do lactário com o preparo no dia (no fuso do estabelecimento). */
+  ordensDoDia(c: ContextoEspecialidades, dia: string): Promise<OrdemLactarioRegistrada[]> {
+    return this.ler(c, async (l, est) =>
+      this.ordens(l, est, await this.fuso(l, est), 'p.data_preparo = ?', [dia]),
+    );
+  }
+
+  ordem(c: ContextoEspecialidades, id: number): Promise<OrdemLactarioRegistrada | null> {
+    return this.ler(c, async (l, est) => (await this.ordens(l, est, await this.fuso(l, est), 'p.id = ?', [id]))[0] ?? null);
+  }
+
+  private async ordens(
+    l: Leitor,
+    est: number,
+    fuso: string,
+    filtro: string,
+    p: unknown[],
+  ): Promise<OrdemLactarioRegistrada[]> {
+    const rs = await l.consultar(
+      `SELECT p.id, p.lote, p.iniciado_em, p.validade_ate, p.observacao, p.situacao, p.criado_em, p.conferido_em,
+              p.cancelado_em, p.motivo_cancelamento, p.etiqueta_emitida_em, uc.login AS por, uf.login AS conferido_por,
+              (SELECT ue.login FROM preparo_lactario_evento e JOIN usuario ue ON ue.id = e.usuario_id
+                WHERE e.preparo_lactario_id = p.id AND e.evento = 'cancelado' ORDER BY e.id DESC LIMIT 1) AS cancelado_por
+         FROM preparo_lactario p
+         LEFT JOIN usuario uc ON uc.id = p.criado_por
+         LEFT JOIN usuario uf ON uf.id = p.conferido_por_usuario_id
+        WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND ${filtro}
+        ORDER BY p.iniciado_em, p.id LIMIT 500`,
+      [est, ...p],
+      { teto: 500 },
+    );
+    if (rs.length === 0) return [];
+    const ids = rs.map((r) => n(r['id']));
+    const itens = await l.consultar(
+      `SELECT it.preparo_lactario_id AS preparo, it.administrar_em, it.volume_ml, f.nome AS formula,
+              i.id AS internacao, i.paciente_id, pc.numero_prontuario
+         FROM preparo_lactario_item it
+         JOIN formula_lactea f ON f.id = it.formula_lactea_id
+         LEFT JOIN internacao i ON i.atendimento_id = it.atendimento_id AND i.estabelecimento_id = ? AND i.excluido_em IS NULL
+         LEFT JOIN paciente pc ON pc.id = i.paciente_id
+        WHERE it.preparo_lactario_id IN (${ids.map(() => '?').join(', ')}) AND it.excluido_em IS NULL
+        ORDER BY it.preparo_lactario_id, it.sequencia`,
+      [est, ...ids],
+      { teto: 10_000 },
+    );
+    return rs.flatMap((r) => {
+      const meus = itens.filter((x) => n(x['preparo']) === n(r['id']));
+      const primeiro = meus[0];
+      if (!primeiro) return [];
+      const cancelada = r['cancelado_em'] !== null && r['cancelado_em'] !== undefined;
+      return [
+        {
+          id: n(r['id']),
+          internacao: n(primeiro['internacao']),
+          prontuario: n(primeiro['numero_prontuario']),
+          paciente: n(primeiro['paciente_id']),
+          formula: texto(primeiro['formula']),
+          volumeMl: n(primeiro['volume_ml']),
+          horarios: meus.map((x) => minutoCivil(x['administrar_em'], fuso).slice(11, 16)),
+          preparoEm: minutoCivil(r['iniciado_em'], fuso),
+          validadeEm: minutoCivil(r['validade_ate'], fuso),
+          lote: textoOuNulo(r['lote']),
+          observacao: textoOuNulo(r['observacao']),
+          situacao: r['conferido_em'] ? 'conferida' : 'preparada',
+          por: texto(r['por']),
+          em: minutoCivil(r['criado_em'], fuso),
+          conferidoPor: textoOuNulo(r['conferido_por']),
+          conferidoEm: r['conferido_em'] ? minutoCivil(r['conferido_em'], fuso) : null,
+          canceladaPor: cancelada ? textoOuNulo(r['cancelado_por']) : null,
+          canceladaEm: cancelada ? minutoCivil(r['cancelado_em'], fuso) : null,
+          motivoCancelamento: textoOuNulo(r['motivo_cancelamento']),
+          etiquetaEm: r['etiqueta_emitida_em'] ? minutoCivil(r['etiqueta_emitida_em'], fuso) : null,
+        },
+      ];
+    });
+  }
+
+  /** O histórico das ordens (alteração, cancelamento e etiqueta), o mais recente primeiro. */
+  alteracoesOrdens(c: ContextoEspecialidades, ids: readonly number[]): Promise<AlteracaoLactarioRegistrada[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.ler(c, async (l, est) => {
+      const fuso = await this.fuso(l, est);
+      return (
+        await l.consultar(
+          `SELECT e.id, e.preparo_lactario_id, e.evento, e.dados_antes, e.dados_depois, e.motivo, e.ocorrido_em, u.login
+             FROM preparo_lactario_evento e
+             JOIN preparo_lactario p ON p.id = e.preparo_lactario_id AND p.estabelecimento_id = ?
+             LEFT JOIN usuario u ON u.id = e.usuario_id
+            WHERE e.preparo_lactario_id IN (${ids.map(() => '?').join(', ')})
+            ORDER BY e.ocorrido_em DESC, e.id DESC LIMIT 2000`,
+          [est, ...ids],
+          { teto: 2000 },
+        )
+      ).map((r) => ({
+        id: n(r['id']),
+        idRegistro: n(r['preparo_lactario_id']),
+        evento: EVENTO_LACTARIO_LIDO[texto(r['evento'])] ?? 'alterada',
+        antes: textoDoJson(r['dados_antes']),
+        depois: textoDoJson(r['dados_depois']),
+        motivo: textoOuNulo(r['motivo']),
+        por: texto(r['login']),
+        em: minutoCivil(r['ocorrido_em'], fuso),
+      }));
+    });
+  }
+
+  // Leituras do exame consolidado e da oncologia: nada foi gravado por esta porta (as gravações recusam com
+  // 'modelo-pendente'); as linhas que vierem da migração entram com o pedido de modelo.
   async exames() {
     return [];
   }
@@ -493,12 +643,6 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   async ciclosAValidar() {
     return [];
   }
-  async ordensDoDia() {
-    return [];
-  }
-  async ordem() {
-    return null;
-  }
   async eventosProtocolos() {
     return [];
   }
@@ -507,9 +651,6 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
   }
   async ciclosDaVersao(): Promise<{ total: number; emAndamento: number; cortada: boolean; itens: CicloDependente[] }> {
     return { total: 0, emAndamento: 0, cortada: false, itens: [] };
-  }
-  async alteracoesOrdens() {
-    return [];
   }
 }
 
@@ -520,23 +661,23 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
   };
   return {
     registrarPartograma: (x) => registrarPontoPartograma(tx, est, x),
+    registrarRecemNascido: (x) => registrarRecemNascido(tx, est, x),
+    registrarOrdem: (x) => registrarOrdemLactario(tx, est, x),
+    conferirOrdem: (x) => conferirOrdemLactario(tx, est, x.id),
+    alterarOrdem: (x) => alterarOrdemLactario(tx, est, x),
+    cancelarOrdem: (x) => cancelarOrdemLactario(tx, est, x),
+    marcarEtiqueta: (x) => marcarEtiquetaLactario(tx, est, x.id),
+    registrarAlteracao: (x) => registrarAlteracaoLactario(tx, est, x),
     registrarExame: pendente('O exame oftalmológico'),
     publicarProtocolo: pendente('O protocolo oncológico versionado'),
     registrarCiclo: pendente('O ciclo oncológico'),
     validarCiclo: pendente('A validação do ciclo oncológico'),
     vincularPrescricao: pendente('A ligação do ciclo com a prescrição'),
-    registrarRecemNascido: pendente('O registro do recém-nascido (reanimação e observação)'),
-    registrarOrdem: pendente('A ordem do lactário'),
-    conferirOrdem: pendente('A conferência da ordem do lactário'),
     registrarEventoOnco: pendente('O evento do tratamento oncológico'),
     revogarVersao: pendente('A revogação da versão do protocolo'),
     mudarAndamentoCiclo: pendente('O andamento do ciclo oncológico'),
     ajustarCiclo: pendente('O ajuste do ciclo oncológico'),
     desligarPrescricao: pendente('O desligamento da prescrição do ciclo'),
-    alterarOrdem: pendente('A alteração da ordem do lactário'),
-    cancelarOrdem: pendente('O cancelamento da ordem do lactário'),
-    marcarEtiqueta: pendente('A etiqueta da ordem do lactário'),
-    registrarAlteracao: pendente('O histórico das alterações do lactário'),
   };
 }
 
@@ -546,19 +687,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
  * ser do paciente informado.
  */
 async function registrarPontoPartograma(tx: TxOperacao, est: number, x: NovoPontoPartograma): Promise<number> {
-  const [i] = await tx.consultarParaAtualizar(
-    `SELECT id, atendimento_id, paciente_id, situacao FROM internacao
-      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
-    [x.internacao, est],
-  );
-  if (!i) throw new ErroOperacao(404, 'registro-inexistente', 'Internação não encontrada', 'A internação não existe neste estabelecimento.');
-  if (n(i['paciente_id']) !== x.paciente)
-    throw recusa('paciente-divergente', 'A internação é de outro paciente: recarregue a tela.');
-  if (!['ativa', 'alta_medica'].includes(texto(i['situacao'])))
-    throw recusa('internacao-encerrada', 'A internação não está aberta: o partograma não recebe registros.');
-  const f = await tx.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
-  const instante = deMinutoCivil(x.em, f?.fuso_horario || FUSO_PADRAO);
-  const atendimento = n(i['atendimento_id']);
+  const atendimento = await internacaoAberta(tx, est, x, 'o partograma não recebe registros');
+  const instante = deMinutoCivil(x.em, await fusoTx(tx, est));
   const [aberto] = await tx.consultarParaAtualizar(
     `SELECT id FROM partograma WHERE atendimento_id = ? AND estabelecimento_id = ? AND situacao = 'aberto'
         AND excluido_em IS NULL ORDER BY id DESC LIMIT 1`,
@@ -596,6 +726,294 @@ async function registrarPontoPartograma(tx: TxOperacao, est: number, x: NovoPont
     pressao_diastolica: x.paDiastolica,
     temperatura: x.temperatura,
     observacao: x.observacao,
+  });
+}
+
+/** Trava a internação (do estabelecimento, do paciente e aberta) e devolve o atendimento dela. */
+async function internacaoAberta(
+  tx: TxOperacao,
+  est: number,
+  x: { internacao: number; paciente: number },
+  efeito: string,
+): Promise<number> {
+  const [i] = await tx.consultarParaAtualizar(
+    `SELECT id, atendimento_id, paciente_id, situacao FROM internacao
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [x.internacao, est],
+  );
+  if (!i) throw new ErroOperacao(404, 'registro-inexistente', 'Internação não encontrada', 'A internação não existe neste estabelecimento.');
+  if (n(i['paciente_id']) !== x.paciente)
+    throw recusa('paciente-divergente', 'A internação é de outro paciente: recarregue a tela.');
+  if (!['ativa', 'alta_medica'].includes(texto(i['situacao'])))
+    throw recusa('internacao-encerrada', `A internação não está aberta: ${efeito}.`);
+  return n(i['atendimento_id']);
+}
+
+async function fusoTx(tx: TxOperacao, est: number): Promise<string> {
+  const f = await tx.uma<{ fuso_horario: string | null }>('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
+  return f?.fuso_horario || FUSO_PADRAO;
+}
+
+/** O recém-nascido do parto da internação da mãe: ordem do nascimento no atendimento e o partograma aberto, se houver. */
+async function registrarRecemNascido(tx: TxOperacao, est: number, x: NovoRecemNascido): Promise<number> {
+  const atendimento = await internacaoAberta(tx, est, x, 'o nascimento não é registrado');
+  const sexo = await tx.uma('SELECT id FROM sexo WHERE sigla = ?', [x.sexo]);
+  if (!sexo) throw recusa('sexo-inexistente', 'O sexo informado não está no cadastro.');
+  const ordem = await tx.uma<{ proxima: unknown }>(
+    'SELECT COALESCE(MAX(ordem_nascimento), 0) + 1 AS proxima FROM registro_nascimento WHERE mae_atendimento_id = ?',
+    [atendimento],
+  );
+  const partograma = await tx.uma(
+    `SELECT id FROM partograma WHERE atendimento_id = ? AND estabelecimento_id = ? AND excluido_em IS NULL
+      ORDER BY (situacao = 'aberto') DESC, id DESC LIMIT 1`,
+    [atendimento, est],
+  );
+  return tx.incluir('registro_nascimento', {
+    estabelecimento_id: est,
+    mae_paciente_id: x.paciente,
+    mae_atendimento_id: atendimento,
+    partograma_id: partograma ? n(partograma['id']) : null,
+    ordem_nascimento: n(ordem?.proxima ?? 1),
+    nascido_em: deMinutoCivil(x.nascimentoEm, await fusoTx(tx, est)),
+    tipo_parto_id: x.tipoParto,
+    sexo_id: n(sexo['id']),
+    idade_gestacional_semanas: x.igSemanas,
+    idade_gestacional_dias: x.igDias,
+    peso_gramas: x.pesoG,
+    comprimento_cm: x.comprimentoCm,
+    perimetro_cefalico_cm: x.perimetroCefalicoCm,
+    apgar_1_minuto: x.apgar1,
+    apgar_5_minutos: x.apgar5,
+    apgar_10_minutos: x.apgar10,
+    responsavel_profissional_id: x.vinculo,
+    reanimacao_neonatal: x.reanimacao,
+    observacao: x.observacao,
+  });
+}
+
+// ── Lactário ────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** A fórmula do cadastro de fórmulas lácteas do estabelecimento, pelo nome ou pelo código. */
+async function formulaDoCadastro(tx: TxOperacao, est: number, formula: string): Promise<number> {
+  const f = await tx.uma(
+    `SELECT id FROM formula_lactea
+      WHERE estabelecimento_id = ? AND ativo AND excluido_em IS NULL AND (UPPER(nome) = UPPER(?) OR UPPER(codigo) = UPPER(?))
+      ORDER BY id LIMIT 1`,
+    [est, formula.trim(), formula.trim()],
+  );
+  if (!f) throw recusa('formula-nao-cadastrada', 'A fórmula não está no cadastro de fórmulas lácteas do estabelecimento.');
+  return n(f['id']);
+}
+
+/** O colaborador ligado ao usuário da sessão (o manipulador ou o conferente do preparo). */
+async function colaboradorDoUsuario(tx: TxOperacao): Promise<number | null> {
+  if (tx.contexto.usuario === null) return null;
+  const r = await tx.uma('SELECT id FROM colaborador WHERE usuario_id = ? AND ativo AND excluido_em IS NULL ORDER BY id LIMIT 1', [
+    tx.contexto.usuario,
+  ]);
+  return r ? n(r['id']) : null;
+}
+
+/** As porções: um horário "HH:MM" vale no dia do preparo, ou no seguinte quando é antes da hora do preparo. */
+function porcoes(c: ConteudoOrdemLactario, fuso: string): Date[] {
+  const dia = c.preparoEm.slice(0, 10);
+  const hora = c.preparoEm.slice(11, 16);
+  const amanha = new Date(Date.parse(`${dia}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const validade = deMinutoCivil(c.validadeEm, fuso);
+  return c.horarios.map((h) => {
+    const em = deMinutoCivil(`${h >= hora ? dia : amanha}T${h}`, fuso);
+    if (em.getTime() > validade.getTime())
+      throw recusa('porcao-fora-da-validade', `A porção das ${h} fica depois da validade do preparo: ajuste os horários.`);
+    return em;
+  });
+}
+
+async function incluirPorcoes(
+  tx: TxOperacao,
+  preparo: number,
+  atendimento: number,
+  formula: number,
+  c: ConteudoOrdemLactario,
+  fuso: string,
+  rodada: number,
+): Promise<void> {
+  const s = await tx.uma<{ ultima: unknown }>(
+    'SELECT COALESCE(MAX(sequencia), 0) AS ultima FROM preparo_lactario_item WHERE preparo_lactario_id = ?',
+    [preparo],
+  );
+  let seq = n(s?.ultima);
+  const validade = deMinutoCivil(c.validadeEm, fuso);
+  for (const em of porcoes(c, fuso)) {
+    seq += 1;
+    await tx.incluir('preparo_lactario_item', {
+      preparo_lactario_id: preparo,
+      sequencia: seq,
+      atendimento_id: atendimento,
+      formula_lactea_id: formula,
+      volume_ml: c.volumeMl,
+      quantidade_frascos: 1,
+      administrar_em: em,
+      validade_ate: validade,
+      codigo_etiqueta: `LAC${preparo}-${rodada}-${seq}`,
+      situacao: 'preparado',
+    });
+  }
+}
+
+/** A ordem do paciente: um preparo com o número do estabelecimento e uma porção por horário. */
+async function registrarOrdemLactario(tx: TxOperacao, est: number, x: NovaOrdemLactario): Promise<number> {
+  const atendimento = await internacaoAberta(tx, est, x, 'o lactário não recebe ordens');
+  const fuso = await fusoTx(tx, est);
+  const formula = await formulaDoCadastro(tx, est, x.formula);
+  const manipulador = await colaboradorDoUsuario(tx);
+  if (manipulador === null)
+    throw recusa(
+      'sem-cadastro-colaborador',
+      'O usuário da sessão não está no cadastro de colaboradores: o preparo do lactário registra o manipulador.',
+    );
+  const s = await tx.uma<{ proximo: unknown }>(
+    'SELECT COALESCE(MAX(numero), 0) + 1 AS proximo FROM preparo_lactario WHERE estabelecimento_id = ?',
+    [est],
+  );
+  const numero = n(s?.proximo ?? 1);
+  const id = await tx.incluir('preparo_lactario', {
+    estabelecimento_id: est,
+    numero,
+    data_preparo: x.preparoEm.slice(0, 10),
+    manipulador_colaborador_id: manipulador,
+    lote: x.lote ?? `L${numero}`,
+    iniciado_em: deMinutoCivil(x.preparoEm, fuso),
+    validade_ate: deMinutoCivil(x.validadeEm, fuso),
+    situacao: 'preparado',
+    observacao: x.observacao,
+  });
+  await incluirPorcoes(tx, id, atendimento, formula, x, fuso, 1);
+  return id;
+}
+
+async function travarOrdem(tx: TxOperacao, est: number, id: number) {
+  const [o] = await tx.consultarParaAtualizar(
+    `SELECT id, versao, situacao, lote, iniciado_em, validade_ate, observacao, conferido_em, cancelado_em,
+            etiqueta_emitida_em, criado_por
+       FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [id, est],
+  );
+  return o ?? null;
+}
+
+async function conferirOrdemLactario(tx: TxOperacao, est: number, id: number): Promise<number> {
+  const o = await travarOrdem(tx, est, id);
+  const usuario = tx.contexto.usuario;
+  // Dupla checagem: quem confere não pode ter preparado nem alterado o conteúdo atual da ordem. A alteração refaz as
+  // porções (o autor delas é quem alterou) e fica no histórico como 'alterado'.
+  const mexeu =
+    o && usuario !== null
+      ? await tx.uma(
+          `SELECT 1 AS sim FROM preparo_lactario_item
+            WHERE preparo_lactario_id = ? AND excluido_em IS NULL AND criado_por = ?
+           UNION ALL
+           SELECT 1 FROM preparo_lactario_evento WHERE preparo_lactario_id = ? AND evento = 'alterado' AND usuario_id = ?
+           LIMIT 1`,
+          [id, usuario, id, usuario],
+        )
+      : null;
+  if (
+    !o ||
+    usuario === null ||
+    o['conferido_em'] ||
+    o['cancelado_em'] ||
+    texto(o['situacao']) !== 'preparado' ||
+    nn(o['criado_por']) === usuario ||
+    mexeu
+  )
+    throw recusa(
+      'ordem-nao-conferivel',
+      'A ordem já foi conferida, não existe ou foi preparada ou alterada por você: a conferência é de outra pessoa, uma vez.',
+    );
+  await tx.alterar('preparo_lactario', id, n(o['versao']), {
+    conferido_por_usuario_id: tx.contexto.usuario,
+    conferido_em: new Date(),
+    conferente_colaborador_id: await colaboradorDoUsuario(tx),
+  });
+  return id;
+}
+
+async function alterarOrdemLactario(
+  tx: TxOperacao,
+  est: number,
+  x: ConteudoOrdemLactario & { id: number },
+): Promise<OrdemLactarioAnterior> {
+  const o = await travarOrdem(tx, est, x.id);
+  if (!o || o['conferido_em'] || o['cancelado_em'] || texto(o['situacao']) !== 'preparado')
+    throw recusa('ordem-conferida', 'A ordem já foi conferida ou foi cancelada: não se altera; cancele com o motivo.');
+  const fuso = await fusoTx(tx, est);
+  const itens = await tx.consultarParaAtualizar(
+    `SELECT it.id, it.versao, it.atendimento_id, it.volume_ml, it.administrar_em, f.nome AS formula
+       FROM preparo_lactario_item it JOIN formula_lactea f ON f.id = it.formula_lactea_id
+      WHERE it.preparo_lactario_id = ? AND it.excluido_em IS NULL ORDER BY it.sequencia`,
+    [x.id],
+  );
+  const primeiro = itens[0];
+  if (!primeiro) throw recusa('ordem-sem-porcoes', 'A ordem não tem porções: cancele e registre de novo.');
+  const antes: OrdemLactarioAnterior = {
+    formula: texto(primeiro['formula']),
+    volumeMl: n(primeiro['volume_ml']),
+    horarios: itens.map((i) => minutoCivil(i['administrar_em'], fuso).slice(11, 16)),
+    preparoEm: minutoCivil(o['iniciado_em'], fuso),
+    validadeEm: minutoCivil(o['validade_ate'], fuso),
+    lote: textoOuNulo(o['lote']),
+    observacao: textoOuNulo(o['observacao']),
+  };
+  const formula = await formulaDoCadastro(tx, est, x.formula);
+  const versao = await tx.alterar('preparo_lactario', x.id, n(o['versao']), {
+    data_preparo: x.preparoEm.slice(0, 10),
+    lote: x.lote ?? texto(o['lote']),
+    iniciado_em: deMinutoCivil(x.preparoEm, fuso),
+    validade_ate: deMinutoCivil(x.validadeEm, fuso),
+    observacao: x.observacao,
+  });
+  for (const i of itens) await tx.excluir('preparo_lactario_item', n(i['id']), n(i['versao']));
+  await incluirPorcoes(tx, x.id, n(primeiro['atendimento_id']), formula, x, fuso, versao);
+  return antes;
+}
+
+async function cancelarOrdemLactario(tx: TxOperacao, est: number, x: { id: number; motivo: string }): Promise<number> {
+  const o = await travarOrdem(tx, est, x.id);
+  if (!o || o['cancelado_em']) throw recusa('ordem-cancelada', 'A ordem já foi cancelada (ou não existe).');
+  await tx.alterar('preparo_lactario', x.id, n(o['versao']), {
+    situacao: 'cancelado',
+    cancelado_em: new Date(),
+    motivo_cancelamento: x.motivo.slice(0, 500),
+  });
+  const itens = await tx.consultarParaAtualizar(
+    "SELECT id, versao FROM preparo_lactario_item WHERE preparo_lactario_id = ? AND excluido_em IS NULL AND situacao = 'preparado'",
+    [x.id],
+  );
+  for (const i of itens) await tx.alterar('preparo_lactario_item', n(i['id']), n(i['versao']), { situacao: 'cancelado' });
+  return x.id;
+}
+
+async function marcarEtiquetaLactario(tx: TxOperacao, est: number, id: number): Promise<number> {
+  const o = await travarOrdem(tx, est, id);
+  if (o?.['cancelado_em'])
+    throw recusa('ordem-cancelada', 'A ordem foi cancelada: não se emite etiqueta de fórmula cancelada.');
+  if (!o || o['etiqueta_emitida_em']) return 0;
+  await tx.alterar('preparo_lactario', id, n(o['versao']), { etiqueta_emitida_em: new Date(), etiquetas_impressas: true });
+  return 1;
+}
+
+async function registrarAlteracaoLactario(tx: TxOperacao, est: number, x: NovaAlteracaoLactario): Promise<number> {
+  const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [x.id, est]);
+  if (!o) throw recusa('ordem-inexistente', 'A ordem do lactário não existe neste estabelecimento.');
+  if (tx.contexto.usuario === null) throw recusa('sem-usuario', 'O histórico do lactário exige o usuário da sessão.');
+  return tx.incluir('preparo_lactario_evento', {
+    preparo_lactario_id: x.id,
+    evento: EVENTO_LACTARIO[x.evento],
+    dados_antes: jsonDoTexto(x.antes),
+    dados_depois: jsonDoTexto(x.depois),
+    motivo: x.motivo === null ? null : x.motivo.slice(0, 500),
+    ocorrido_em: new Date(),
+    usuario_id: tx.contexto.usuario,
   });
 }
 

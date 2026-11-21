@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Hora legada (regra 8): a tela mostra e aceita HH:MM, HHMM e H:MM; o modelo carrega HHMM de 4 dígitos.
-import { classificarHora, formatarHoraLegada, paraHhmm } from '@sgh/contratos';
+// Hora do dia (regra 8): a tela aceita HH:MM, H:MM, HHMM e HMM; o modelo carrega sempre "HH:MM" (formatacao/hora).
+import { FORMATO_HORA, lerHoraDigitada } from '@sgh/contratos';
 import InputText from 'openvue/inputtext';
 import { computed, ref, useId, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -16,7 +16,16 @@ const { t } = useI18n();
 const id = `sgh-hora-${useId()}`;
 const texto = ref('');
 const erro = ref<string | null>(null);
-const situacao = computed(() => classificarHora(valor.value));
+type SituacaoHora =
+  | { readonly tipo: 'vazia' }
+  | { readonly tipo: 'valida'; readonly texto: string }
+  | { readonly tipo: 'invalida'; readonly bruto: string };
+/** Valor fora de "HH:MM" aparece como veio, com alerta: nunca é "corrigido" em silêncio (regra 7). */
+function classificar(v: string | null | undefined): SituacaoHora {
+  if (v === null || v === undefined || v.trim() === '') return { tipo: 'vazia' };
+  return FORMATO_HORA.test(v.trim()) ? { tipo: 'valida', texto: v.trim() } : { tipo: 'invalida', bruto: v };
+}
+const situacao = computed(() => classificar(valor.value));
 /** Texto mostrado no campo na última carga do valor: só se grava quando o usuário mudou o texto. */
 let textoCarregado = '';
 watch(
@@ -24,7 +33,7 @@ watch(
   () => {
     if (!props.editavel || erro.value === null) {
       const s = situacao.value;
-      // Hora inválida do legado aparece como veio (bruta), com alerta; nunca "corrigida".
+      // Hora inválida aparece como veio (bruta), com alerta; nunca "corrigida".
       texto.value = s.tipo === 'valida' ? s.texto : s.tipo === 'invalida' ? s.bruto : '';
       textoCarregado = texto.value;
     }
@@ -40,8 +49,9 @@ function confirmar(): void {
     return;
   }
   try {
-    valor.value = paraHhmm(texto.value);
-    texto.value = formatarHoraLegada(valor.value) ?? '';
+    const h = lerHoraDigitada(texto.value);
+    valor.value = h;
+    texto.value = h ?? '';
     textoCarregado = texto.value;
     erro.value = null;
   } catch (e) {

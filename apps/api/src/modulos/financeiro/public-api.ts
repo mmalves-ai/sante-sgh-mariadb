@@ -13,3 +13,10 @@ export {
 export { type ArmazemFinanceiro, armazemFinanceiroMemoria, armazemFinanceiroS3 } from './armazem.js';
 export { ServicoFinanceiro } from './servico.js';
 export { ApoiosFinanceiro } from './apoios.js';
+export {
+  type EntradaTituloComposto,
+  gravadorTituloPagar,
+  type GravadorTituloPagar,
+  TABELAS_TITULO_PAGAR,
+  type TituloPagarGravado,
+} from './operacoes.js';

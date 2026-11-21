@@ -6,6 +6,7 @@
 // chegada. Quem tem `pessoas.sobreaviso.acionar` aciona o sobreaviso, registra a chegada (o atraso aparece) e cancela o
 // acionamento feito por engano (regra 10). Modo painel (`?painel=1`): atualiza a cada minuto, sem os formulários.
 import {
+  FORMATO_HORA,
   CODIGOS_TIPO_PLANTAO,
   type PlantaoAgoraLinha,
   type ResultadoEscala,
@@ -55,8 +56,7 @@ const consulta = useQuery({
   refetchInterval: computed(() => (painel.value && !filtro.value.instante ? 60_000 : false)),
 });
 const r = computed(() => consulta.data.value ?? null);
-const horaDe = (hhmm: string | null) =>
-  hhmm && /^\d{4}$/.test(hhmm) ? `${hhmm.slice(0, 2)}:${hhmm.slice(2)}` : null;
+const horaDe = (h: string | null) => (h && FORMATO_HORA.test(h) ? h : null);
 /** Sem hora, vai vazio e a API recusa com a mensagem do campo. */
 const instanteDaChegadaOuVazio = (acionadoEm: string, h: string | null) =>
   h ? instanteDaChegada(acionadoEm, h) : '';

@@ -71,7 +71,7 @@ const dataIso = (v: unknown): string | null =>
 const instante = (v: unknown): string => {
   if (v instanceof Date) {
     const c = civil(v, FUSO_PADRAO);
-    return `${c.data}T${c.hhmm.slice(0, 2)}:${c.hhmm.slice(2, 4)}`;
+    return `${c.data}T${c.hora}`;
   }
   return v ? String(v).replace(' ', 'T').slice(0, 16) : '';
 };

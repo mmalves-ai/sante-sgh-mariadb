@@ -1,0 +1,41 @@
+{
+  "lote": "p-farmacia",
+  "pedidos": [
+    {
+      "tipo": "semente",
+      "arquivo": "tools/db/configurar_numeracoes.py",
+      "assunto": "numerações da farmácia hospitalar",
+      "detalhe": "Incluir em NUMERACOES os tipos 'dispensacao', 'documento_estoque' e 'devolucao_dispensacao' (proximoNumero em gravador-dispensacao.ts). Sem a linha, a dispensação, a devolução e a perda recusam com 'sequencia-nao-configurada' (nada gravado)."
+    },
+    {
+      "tipo": "semente",
+      "arquivo": "db/sementes (suprimentos)",
+      "assunto": "tipos de movimento e motivos de devolução usados pela farmácia",
+      "detalhe": "tipo_movimento_estoque nativos (sistema = TRUE) com natureza/sentido consumo_paciente/saida, devolucao/entrada e perda/saida; motivo_devolucao_estoque com os códigos do contrato das telas: 'nao-administrado', 'suspenso', 'sobra', 'outro'. Sem eles a gravação recusa com 'dominio-nao-configurado'."
+    },
+    {
+      "tipo": "infra",
+      "arquivo": "apps/api/src/modulos/farmacia/modulo.ts + porta-propria.ts",
+      "assunto": "fechamento oficial do livro de controlados",
+      "detalhe": "O CHECK ck_livro_controlado_fechamento_oficial exige conteudo_arquivo_id: o conteúdo montado vai ao armazenamento de arquivos (ADR 0004). Quando a porta de armazenamento existir, injetá-la na porta da farmácia; até lá o fechamento oficial recusa com 503 'armazenamento-indisponivel' (o de conferência grava)."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/farmacia/entradas.ts",
+      "assunto": "local de estoque limitado a 99",
+      "detalhe": "const local = z.number().int().min(1).max(99): o local é o id de local_estoque, que passa de 99 em qualquer cliente real. Trocar pelo esquema de id (positivo até 2^31-1) no contrato, na web e nos testes."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos (farmácia) + apps/api/src/modulos/farmacia/tipos.ts, servico.ts + apps/web",
+      "assunto": "vocabulário neutro da entrega e da situação do horário",
+      "detalhe": "O contrato das telas ainda usa a situação da entrega por número (7, 8, 9), o documento de saída por ano/mês/número e a situação do horário por letra (S, N) na regra sugestoesDevolucao. A porta própria traduz na borda (NUMERO_DA_ENTREGA, CODIGO_DA_CHECAGEM). Trocar por 'em_transito' | 'entregue' | 'estornada', documento {id, numero, data} e situação de checagem por nome, de ponta a ponta."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/farmacia/servico.ts:658",
+      "assunto": "rótulo da trilha do livro",
+      "detalhe": "A trilha do fechamento do livro leva o rótulo 'SGH_SUP_LIVRO_CONTROLADO'; a porta própria grava o alvo real (livro_controlado), mas o rótulo deve virar 'livro_controlado'."
+    }
+  ]
+}

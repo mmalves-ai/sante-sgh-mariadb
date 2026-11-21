@@ -31,6 +31,40 @@ export interface MassaSuprimentos {
   readonly localB: number;
   readonly capelaA: number;
   readonly grupoManipulacao: number;
+  /** Estoque (F2.4): fornecedores, lote com validade suspeita e o carrinho com um item. */
+  readonly fornecedor: number;
+  readonly fornecedor2: number;
+  readonly loteSuspeito: number;
+  readonly kit: number;
+  readonly kitItem: number;
+}
+
+/** Os tipos de movimento do catálogo que a porta do estoque usa (código, natureza, sentido). */
+const TIPOS_MOVIMENTO_SINTETICOS: readonly (readonly [string, string, string])[] = [
+  ['saida_setor', 'consumo_setor', 'saida'],
+  ['saida_paciente', 'consumo_paciente', 'saida'],
+  ['saida_terceiro', 'saida', 'saida'],
+  ['devolucao_interna', 'devolucao', 'entrada'],
+  ['transferencia_saida', 'transferencia', 'saida'],
+  ['transferencia_entrada', 'transferencia', 'entrada'],
+  ['transferencia_envio', 'transferencia', 'saida'],
+  ['entrada_nota', 'entrada', 'entrada'],
+  ['acerto_entrada', 'inventario', 'entrada'],
+  ['acerto_saida', 'inventario', 'saida'],
+  ['estoque_inicial', 'entrada', 'entrada'],
+];
+
+/** CNPJ sintético válido (os dígitos verificadores calculados) a partir de 12 dígitos. */
+export function cnpjSintetico(base: string): string {
+  const b = base.replace(/\D/g, '').padStart(12, '0').slice(-12);
+  const dv = (s: string) => {
+    const pesos =
+      s.length === 12 ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2] : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const r = [...s].reduce((t, d, i) => t + Number(d) * pesos[i]!, 0) % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  const d1 = dv(b);
+  return `${b}${d1}${dv(`${b}${d1}`)}`;
 }
 
 /** O cliente de teste da onda (criado só se faltar; o comando recusa cliente existente). */
@@ -287,7 +321,111 @@ export async function montarMassa(nucleo: NucleoProprio): Promise<MassaSupriment
       { tipo: 'inventario_estoque', estabelecimento: estA, prefixo: 'INV-' },
       { usuario: null, agora: new Date() },
     );
+    for (const [codigo, natureza, sentido] of TIPOS_MOVIMENTO_SINTETICOS)
+      await garantir(e, 'SELECT id FROM tipo_movimento_estoque WHERE codigo = ?', [codigo], () =>
+        inserirMinimo(
+          e,
+          'tipo_movimento_estoque',
+          { codigo, descricao: `Teste ${codigo}`, natureza, sentido },
+          marca,
+        ),
+      );
+    await garantir(e, "SELECT id FROM tipo_entrada_estoque WHERE codigo = 'compra'", [], () =>
+      inserirMinimo(
+        e,
+        'tipo_entrada_estoque',
+        { codigo: 'compra', descricao: 'Compra', natureza: 'compra' },
+        marca,
+      ),
+    );
+    await garantir(e, "SELECT id FROM motivo_ajuste_estoque WHERE codigo = 'inventario'", [], () =>
+      inserirMinimo(e, 'motivo_ajuste_estoque', { codigo: 'inventario', descricao: 'Inventário' }, marca),
+    );
+    for (const tipo of ['documento_estoque', 'requisicao_material', 'nota_entrada'])
+      await garantirSequencia(e, { tipo, estabelecimento: estA }, { usuario: null, agora: new Date() });
+    const todas = {
+      pode_requisitar: true,
+      pode_atender: true,
+      pode_receber_nota: true,
+      pode_transferir: true,
+      pode_devolver: true,
+      pode_ajustar: true,
+      pode_inventariar: true,
+      pode_autorizar_pedido: true,
+      pode_desbloquear_fechamento: true,
+    };
+    for (const loc of [localA, localA2])
+      await inserirMinimo(
+        e,
+        'local_estoque_usuario',
+        { local_estoque_id: loc, usuario_id: usuario, ...todas },
+        marca,
+      );
+    // O supervisor aprova o pedido (alçada) no local A, sem as outras permissões.
+    await inserirMinimo(
+      e,
+      'local_estoque_usuario',
+      { local_estoque_id: localA, usuario_id: usuario3, pode_autorizar_pedido: true },
+      marca,
+    );
+    const forn = (k: string, base: string) =>
+      inserirMinimo(
+        e,
+        'empresa_fornecedora',
+        {
+          tipo_pessoa: 'juridica',
+          cnpj: cnpjSintetico(base),
+          razao_social: `${PREFIXO} FORNECEDOR ${k}`,
+          situacao: 'ativo',
+        },
+        marca,
+      );
+    const semente = String(Date.now()).slice(-9);
+    const fornecedor = await forn('A', `1${semente}01`);
+    const fornecedor2 = await forn('B', `1${semente}02`);
+    const loteSuspeito = await inserirMinimo(
+      e,
+      'lote_insumo',
+      {
+        estabelecimento_id: estA,
+        insumo_id: i1,
+        numero_lote: `${marca}LS`,
+        validade: '1927-03-31',
+        situacao: 'liberado',
+      },
+      marca,
+    );
+    const kit = await inserirMinimo(
+      e,
+      'kit_rastreavel',
+      {
+        estabelecimento_id: estA,
+        codigo: `${marca}K`,
+        nome: 'CARRINHO SINTETICO',
+        local_estoque_id: localA2,
+        situacao: 'disponivel',
+      },
+      marca,
+    );
+    const kitItem = await inserirMinimo(
+      e,
+      'kit_rastreavel_item',
+      {
+        kit_rastreavel_id: kit,
+        sequencia: 1,
+        insumo_id: i1,
+        unidade_medida_id: unidade,
+        quantidade_padrao: 2,
+        saldo_atual: 1,
+      },
+      marca,
+    );
     return {
+      fornecedor,
+      fornecedor2,
+      loteSuspeito,
+      kit,
+      kitItem,
       marca,
       estA,
       estB,
@@ -316,6 +454,72 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
   const like = `${PREFIXO}%`;
   await nucleo.escrever({ cliente: CLIENTE, correlacao: 'teste-f22l0314-limpa' }, async (e) => {
     const locais = `SELECT id FROM local_estoque WHERE codigo LIKE ?`;
+    const ests = `SELECT id FROM estabelecimento WHERE codigo LIKE ?`;
+    // Estoque (F2.4): os movimentos e os documentos ligam-se em ciclo (item ↔ movimento): solta antes de apagar.
+    await e.executar(
+      `UPDATE documento_estoque_item SET movimento_estoque_id = NULL WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(
+      `UPDATE movimento_estoque SET estorno_movimento_estoque_id = NULL WHERE estabelecimento_id IN (${ests})`,
+      [like],
+    );
+    await e.executar(
+      `DELETE FROM movimento_kit_rastreavel WHERE kit_rastreavel_id IN (SELECT id FROM kit_rastreavel WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(
+      `DELETE FROM movimento_lote WHERE movimento_estoque_id IN (SELECT id FROM movimento_estoque WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM movimento_estoque WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(
+      `UPDATE inventario_estoque SET documento_estoque_id = NULL WHERE estabelecimento_id IN (${ests})`,
+      [like],
+    );
+    await e.executar(
+      `DELETE FROM documento_estoque_item WHERE documento_estoque_id IN (SELECT id FROM documento_estoque WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM documento_estoque WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(
+      `DELETE FROM requisicao_material_item WHERE requisicao_material_id IN (SELECT id FROM requisicao_material WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM requisicao_material WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(
+      `DELETE FROM nota_entrada_item WHERE nota_entrada_id IN (SELECT id FROM nota_entrada WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM nota_entrada WHERE estabelecimento_id IN (${ests})`, [like]);
+    const cots = `SELECT id FROM cotacao WHERE estabelecimento_id IN (${ests})`;
+    await e.executar(
+      `DELETE FROM cotacao_resposta_item WHERE cotacao_fornecedor_id IN (SELECT id FROM cotacao_fornecedor WHERE cotacao_id IN (${cots}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM cotacao_fornecedor WHERE cotacao_id IN (${cots})`, [like]);
+    await e.executar(
+      `DELETE FROM pedido_compra_item WHERE pedido_compra_id IN (SELECT id FROM pedido_compra WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM cotacao_item WHERE cotacao_id IN (${cots})`, [like]);
+    await e.executar(`DELETE FROM pedido_compra WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(`DELETE FROM cotacao WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(
+      `DELETE FROM saldo_estoque_mensal WHERE saldo_estoque_id IN (SELECT id FROM saldo_estoque WHERE estabelecimento_id IN (${ests}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM parametro_reposicao WHERE estabelecimento_id IN (${ests})`, [like]);
+    const kits = `SELECT id FROM kit_rastreavel WHERE estabelecimento_id IN (${ests})`;
+    await e.executar(`DELETE FROM conferencia_kit_rastreavel WHERE kit_rastreavel_id IN (${kits})`, [like]);
+    await e.executar(
+      `DELETE FROM kit_rastreavel_lote WHERE kit_rastreavel_item_id IN (SELECT id FROM kit_rastreavel_item WHERE kit_rastreavel_id IN (${kits}))`,
+      [like],
+    );
+    await e.executar(`DELETE FROM kit_rastreavel_item WHERE kit_rastreavel_id IN (${kits})`, [like]);
+    await e.executar(`DELETE FROM kit_rastreavel WHERE estabelecimento_id IN (${ests})`, [like]);
+    await e.executar(`DELETE FROM local_estoque_usuario WHERE local_estoque_id IN (${locais})`, [like]);
+    await e.executar('DELETE FROM empresa_fornecedora WHERE razao_social LIKE ?', [like]);
     const invs = `SELECT id FROM inventario_estoque WHERE local_estoque_id IN (${locais})`;
     await e.executar(`DELETE FROM inventario_estoque_item WHERE inventario_estoque_id IN (${invs})`, [like]);
     await e.executar(`DELETE FROM inventario_estoque_contagem WHERE inventario_estoque_id IN (${invs})`, [
@@ -324,7 +528,10 @@ export async function limparMassa(nucleo: NucleoProprio, _m: MassaSuprimentos | 
     await e.executar(`DELETE FROM inventario_estoque WHERE local_estoque_id IN (${locais})`, [like]);
     await e.executar(`DELETE FROM saldo_estoque WHERE local_estoque_id IN (${locais})`, [like]);
     await e.executar(`DELETE FROM saldo_lote WHERE local_estoque_id IN (${locais})`, [like]);
-    await e.executar('DELETE FROM lote_insumo WHERE numero_lote LIKE ?', [like]);
+    await e.executar(`DELETE FROM lote_insumo WHERE estabelecimento_id IN (${ests}) OR numero_lote LIKE ?`, [
+      like,
+      like,
+    ]);
     await e.executar(
       `DELETE FROM capela_manipulacao_grupo WHERE capela_manipulacao_id IN (SELECT id FROM capela_manipulacao WHERE codigo LIKE ?)`,
       [like],

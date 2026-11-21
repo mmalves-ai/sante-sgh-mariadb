@@ -18,9 +18,13 @@
 // endereço diferente do cadastro. O retrato aceito é o registro do beneficiário no último envio SIB aceito (os dados do
 // envio_ans_item), gravado no retorno.
 // Base do DIOPS (eventos) = as contas médicas recebidas da rede (lote_conta_recebida) no período e os pagamentos dela.
-// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos), GRU e decisão do
-// ressarcimento (o aviso do ressarcimento ainda não liga o envio à cobrança), pendências do SIB, bases do SIP, das
-// contraprestações do DIOPS, do monitoramento e do ressarcimento respondem 501 `modelo-pendente`.
+// Ressarcimento ao SUS: o aviso gera a cobrança (cobranca_ressarcimento_sus: ofício, prazo da impugnação) e um
+// atendimento por item (ressarcimento_sus_atendimento), ligados ao envio e aos itens; a GRU paga fica na cobrança; a
+// decisão de cada atendimento marca o atendimento (impugnado ou devido) e abre a impugnação em elaboração.
+// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos), GRU da TPS,
+// identificação dos beneficiários do aviso, pendências do SIB, bases do SIP, das contraprestações do DIOPS e do
+// monitoramento respondem 501 (falha fechada).
+import { MOTIVOS_IMPUGNACAO_SUS, type MotivoImpugnacaoSus } from '@sgh/contratos';
 import { type Leitor, type Linha, recusa, type TxOperacao } from '@sgh/nucleo';
 import type { ContextoAns, GravadorAns, PortaAnsOperadora } from './ans-porta.js';
 import {
@@ -65,7 +69,23 @@ export const TABELAS_ANS = [
   'envio_ans_retorno',
   'beneficiario_plano',
   'complemento_sib_beneficiario',
+  'cobranca_ressarcimento_sus',
+  'ressarcimento_sus_atendimento',
+  'impugnacao_ressarcimento_sus',
 ] as const;
+
+/** Motivo da impugnação (código da tela) → natureza no banco: de cadastro do beneficiário ou técnico-assistencial. */
+const NATUREZA_MOTIVO: Readonly<Record<string, 'tecnico' | 'administrativo'>> = {
+  naoBeneficiario: 'administrativo',
+  foraDaVigencia: 'administrativo',
+  carencia: 'administrativo',
+  cartaoDesconto: 'administrativo',
+  duplicidade: 'administrativo',
+  cpt: 'tecnico',
+  segmentacao: 'tecnico',
+  abrangencia: 'tecnico',
+  outro: 'administrativo',
+};
 
 /** O endereço residencial do beneficiário no cadastro da pessoa (o principal, senão o primeiro vigente). */
 const SELECT_ENDERECO_BENEFICIARIO = `
@@ -161,7 +181,8 @@ export function periodoDaCompetencia(competencia: string): {
 function competenciaDoEnvio(e: Linha): string {
   const tri = numOuNulo(e['trimestre']);
   if (tri) return `${num(e['ano'])}-T${tri}`;
-  if (e['competencia'] !== null && e['competencia'] !== undefined) return (data(e['competencia']) ?? '').slice(0, 7);
+  if (e['competencia'] !== null && e['competencia'] !== undefined)
+    return (data(e['competencia']) ?? '').slice(0, 7);
   return data(e['periodo_inicio']) ?? '';
 }
 
@@ -177,13 +198,19 @@ const SELECT_ENVIO = `
          (SELECT r.descricao FROM envio_ans_retorno r
            WHERE r.envio_ans_id = e.id AND r.tipo = 'resumo_processamento' ORDER BY r.sequencia DESC LIMIT 1)
            AS retorno_resumo,
-         a.nome_original AS arquivo_nome, a.tamanho_bytes AS arquivo_bytes, a.hash_sha256 AS arquivo_hash
+         a.nome_original AS arquivo_nome, a.tamanho_bytes AS arquivo_bytes, a.hash_sha256 AS arquivo_hash,
+         cr.numero_oficio AS aviso_numero, cr.oficio_em AS aviso_recebido_em, cr.prazo_impugnacao AS aviso_prazo,
+         cr.numero_gru AS gru_numero, cr.pago_em AS gru_pago_em, cr.valor_pago AS gru_valor_pago
     FROM envio_ans e
     JOIN operadora_saude o ON o.id = e.operadora_saude_id
     LEFT JOIN usuario u ON u.id = COALESCE(e.gerado_por_usuario_id, e.criado_por)
-    LEFT JOIN arquivo a ON a.id = e.arquivo_id`;
+    LEFT JOIN arquivo a ON a.id = e.arquivo_id
+    LEFT JOIN cobranca_ressarcimento_sus cr ON cr.id = e.cobranca_ressarcimento_sus_id`;
 
-export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<GravadorAns> implements PortaAnsOperadora {
+export class PortaAnsOperadoraPropria
+  extends BasePortaOperadoraPropria<GravadorAns>
+  implements PortaAnsOperadora
+{
   constructor(
     nucleo: NucleoOperadora,
     cliente: string,
@@ -220,12 +247,12 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
       criadoPor: txt(e['gerado_login']),
       enviadoEm: instante(e['enviado_em']),
       retornoEm: instante(e['retorno_em']),
-      aviso: null,
-      recebidoEm: null,
-      prazo: null,
-      gru: null,
-      pagoEm: null,
-      valorPago: null,
+      aviso: txtOuNulo(e['aviso_numero']),
+      recebidoEm: data(e['aviso_recebido_em']),
+      prazo: data(e['aviso_prazo']),
+      gru: txtOuNulo(e['gru_numero']),
+      pagoEm: data(e['gru_pago_em']),
+      valorPago: numOuNulo(e['gru_valor_pago']),
     };
     return { ...resumo, quadros: null, retornoResumo: txtOuNulo(e['retorno_resumo']) };
   }
@@ -239,7 +266,8 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
           WHERE codigo_ans IS NOT NULL AND ativo = TRUE ORDER BY codigo_ans`,
       ),
     );
-    const grupo = (t: string) => (t.startsWith('inclus') ? 1 : t.startsWith('exclus') || t.startsWith('cancel') ? 3 : 2);
+    const grupo = (t: string) =>
+      t.startsWith('inclus') ? 1 : t.startsWith('exclus') || t.startsWith('cancel') ? 3 : 2;
     return linhas
       .filter((m) => /^\d+$/.test(txt(m['codigo_ans'])))
       .map((m) => ({
@@ -253,7 +281,9 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     return CAMPOS_SIB.map((x) => ({ ...x }));
   }
 
-  async valoresTps(c: ContextoAns): Promise<{ vigencia: string; valorAnual: number; valorTrimestral: number }[]> {
+  async valoresTps(
+    c: ContextoAns,
+  ): Promise<{ vigencia: string; valorAnual: number; valorTrimestral: number }[]> {
     const linhas = await this.ler(c, (l) =>
       l.consultar(
         `SELECT vigencia_inicio, valor_anual, valor_trimestral FROM taxa_saude_suplementar_vigencia
@@ -273,7 +303,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
 
   // ---- envios ----
 
-  envios(c: ContextoAns, f: FiltroEnviosPorta): Promise<{ itens: DadosEnvioAnsResumo[]; proxima: number | null }> {
+  envios(
+    c: ContextoAns,
+    f: FiltroEnviosPorta,
+  ): Promise<{ itens: DadosEnvioAnsResumo[]; proxima: number | null }> {
     const limite = Math.min(f.limite ?? LIMITE_PAGINA_ENVIOS, LIMITE_PAGINA_ENVIOS);
     const cond = ['e.estabelecimento_id = ?', 'e.excluido_em IS NULL'];
     const p: unknown[] = [c.estabelecimento ?? 0];
@@ -299,7 +332,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
       p.push(f.apos);
     }
     return this.ler(c, async (l) => {
-      const linhas = await l.consultar(`${SELECT_ENVIO} WHERE ${cond.join(' AND ')} ORDER BY e.id DESC LIMIT ${limite + 1}`, p);
+      const linhas = await l.consultar(
+        `${SELECT_ENVIO} WHERE ${cond.join(' AND ')} ORDER BY e.id DESC LIMIT ${limite + 1}`,
+        p,
+      );
       const itens = linhas.slice(0, limite).map((e) => this.envioDe(e));
       return { itens, proxima: linhas.length > limite ? (itens.at(-1)?.id ?? null) : null };
     });
@@ -330,10 +366,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
 
   envio(c: ContextoAns, id: number): Promise<DadosEnvioAns | null> {
     return this.ler(c, async (l) => {
-      const e = await l.uma(`${SELECT_ENVIO} WHERE e.id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL`, [
-        id,
-        c.estabelecimento ?? 0,
-      ]);
+      const e = await l.uma(
+        `${SELECT_ENVIO} WHERE e.id = ? AND e.estabelecimento_id = ? AND e.excluido_em IS NULL`,
+        [id, c.estabelecimento ?? 0],
+      );
       return e ? this.envioDe(e) : null;
     });
   }
@@ -376,10 +412,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
           cco: resultado === 'aceito' ? txtOuNulo(i['codigo_controle_ans']) : null,
           sugestao: txtOuNulo(d['sugestao']),
           decisao: (txtOuNulo(d['decisao']) as DadosItemEnvioAns['decisao']) ?? null,
-          motivo: null,
-          justificativa: null,
-          decididoEm: null,
-          decididoPor: null,
+          motivo: txtOuNulo(d['motivo']),
+          justificativa: txtOuNulo(d['justificativa']),
+          decididoEm: txtOuNulo(d['decididoEm']),
+          decididoPor: txtOuNulo(d['decididoPor']),
         };
       });
     });
@@ -469,7 +505,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     return this.ler(c, (l) => lerComplementoSib(l, c.estabelecimento ?? 0, beneficiario));
   }
 
-  beneficiarioDaOperadora(c: ContextoAns, beneficiario: number): Promise<DadosBeneficiarioDaOperadora | null> {
+  beneficiarioDaOperadora(
+    c: ContextoAns,
+    beneficiario: number,
+  ): Promise<DadosBeneficiarioDaOperadora | null> {
     return this.ler(c, async (l) => {
       const b = await l.uma(
         `SELECT b.id, k.operadora_saude_id, b.matricula, pf.nome
@@ -514,7 +553,10 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     });
   }
 
-  planos(c: ContextoAns, operadora: number): Promise<{ produto: number; nome: string; registroAns: string | null }[]> {
+  planos(
+    c: ContextoAns,
+    operadora: number,
+  ): Promise<{ produto: number; nome: string; registroAns: string | null }[]> {
     return this.ler(c, async (l) =>
       (
         await l.consultar(
@@ -524,7 +566,11 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
             ORDER BY p.nome`,
           [operadora, c.estabelecimento ?? 0],
         )
-      ).map((p) => ({ produto: num(p['id']), nome: txt(p['nome']), registroAns: txtOuNulo(p['numero_registro_ans']) })),
+      ).map((p) => ({
+        produto: num(p['id']),
+        nome: txt(p['nome']),
+        registroAns: txtOuNulo(p['numero_registro_ans']),
+      })),
     );
   }
 
@@ -546,7 +592,12 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
     inicio: string,
     fim: string,
   ): Promise<{
-    contas: { recebidaEm: string; apresentado: number; glosado: number; situacao: 'recebida' | 'analisada' | 'paga' | 'devolvida' }[];
+    contas: {
+      recebidaEm: string;
+      apresentado: number;
+      glosado: number;
+      situacao: 'recebida' | 'analisada' | 'paga' | 'devolvida';
+    }[];
     pagamentos: { pagoEm: string; valor: number }[];
   }> {
     return this.ler(c, async (l) => {
@@ -616,7 +667,8 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
       gerar: (g) => gerarEnvio(tx, est, g),
       async transmitir(a) {
         const e = await envio(a.id);
-        if (txt(e['situacao']) !== 'gerado') throw recusa('envio-transmitido', 'Só o envio gerado pode ser transmitido.');
+        if (txt(e['situacao']) !== 'gerado')
+          throw recusa('envio-transmitido', 'Só o envio gerado pode ser transmitido.');
         const versao = await tx.alterar('envio_ans', a.id, a.versao, {
           situacao: 'enviado',
           enviado_em: new Date(),
@@ -638,7 +690,11 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
         if (a.situacao !== 'rejeitado' && !txtOuNulo(e['numero_recibo']))
           throw recusa('recibo-ausente', 'O envio aceito precisa do recibo da transmissão.');
         const versao = await tx.alterar('envio_ans', a.id, a.versao, { situacao: SITUACAO[a.situacao] });
-        let seq = num((await tx.uma('SELECT MAX(sequencia) AS s FROM envio_ans_retorno WHERE envio_ans_id = ?', [a.id]))?.['s']);
+        let seq = num(
+          (
+            await tx.uma('SELECT MAX(sequencia) AS s FROM envio_ans_retorno WHERE envio_ans_id = ?', [a.id])
+          )?.['s'],
+        );
         const agora = new Date();
         await tx.incluir('envio_ans_retorno', {
           envio_ans_id: a.id,
@@ -655,7 +711,9 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
             [i.id, a.id],
           );
           if (!item) throw inexistente('O registro do envio');
-          await tx.alterar('envio_ans_item', i.id, num(item['versao']), { situacao: i.aceito ? 'aceito' : 'rejeitado' });
+          await tx.alterar('envio_ans_item', i.id, num(item['versao']), {
+            situacao: i.aceito ? 'aceito' : 'rejeitado',
+          });
           if (!i.aceito && i.erro)
             await tx.incluir('envio_ans_retorno', {
               envio_ans_id: a.id,
@@ -668,7 +726,8 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
           const benef = numOuNulo(item['beneficiario_plano_id']);
           if (a.sib && i.aceito && i.cco && benef) {
             const b = await tx.uma('SELECT versao FROM beneficiario_plano WHERE id = ?', [benef]);
-            if (b) await tx.alterar('beneficiario_plano', benef, num(b['versao']), { codigo_controle_ans: i.cco });
+            if (b)
+              await tx.alterar('beneficiario_plano', benef, num(b['versao']), { codigo_controle_ans: i.cco });
           }
           // O retrato aceito pela ANS: o registro deste envio, apontado no complemento do beneficiário.
           if (a.sib && i.aceito && benef) {
@@ -691,15 +750,19 @@ export class PortaAnsOperadoraPropria extends BasePortaOperadoraPropria<Gravador
         }
         return { id: a.id, versao };
       },
-      pagar: () => pendente('Pagamento da GRU'),
-      decidir: () => pendente('Decisão do atendimento do ressarcimento ao SUS'),
+      pagar: (a) => pagarGru(tx, est, a),
+      decidir: (a) => decidirAtendimento(tx, est, a),
       complemento: (x) => gravarComplementoSib(tx, est, x),
     };
   }
 }
 
 /** O complemento do SIB do beneficiário do estabelecimento (null: beneficiário de fora; versão 0: sem complemento). */
-async function lerComplementoSib(l: Leitor, est: number, beneficiario: number): Promise<DadosComplementoSib | null> {
+async function lerComplementoSib(
+  l: Leitor,
+  est: number,
+  beneficiario: number,
+): Promise<DadosComplementoSib | null> {
   const b = await l.uma(
     `SELECT b.id, b.codigo_controle_ans, b.cobertura_parcial_temporaria,
             k.versao AS versao_complemento, k.declaracao_nascido_vivo, k.reside_exterior, k.itens_excluidos_cobertura,
@@ -739,7 +802,12 @@ async function lerComplementoSib(l: Leitor, est: number, beneficiario: number): 
     itensExcluidos: bool(b['itens_excluidos_cobertura']),
     cco: txtOuNulo(b['codigo_controle_ans']),
     motivoCancelamento: motivo && /^\d+$/.test(motivo) ? Number(motivo) : null,
-    aceito: retrato === null || retrato === undefined ? null : typeof retrato === 'string' ? retrato : JSON.stringify(retrato),
+    aceito:
+      retrato === null || retrato === undefined
+        ? null
+        : typeof retrato === 'string'
+          ? retrato
+          : JSON.stringify(retrato),
     aceitoEm: instante(b['aceito_em']),
   };
 }
@@ -782,22 +850,32 @@ async function gravarComplementoSib(
       [String(x.motivoCancelamento)],
     );
     if (!m)
-      throw recusa('dominio-nao-cadastrado', 'O cadastro de motivos de movimentação não tem o código informado.', {
-        campos: ['motivoCancelamento'],
-      });
+      throw recusa(
+        'dominio-nao-cadastrado',
+        'O cadastro de motivos de movimentação não tem o código informado.',
+        {
+          campos: ['motivoCancelamento'],
+        },
+      );
     motivo = num(m['id']);
   }
   const b = await versaoDe(tx, 'beneficiario_plano', x.beneficiario, 'O beneficiário');
-  const op = await tx.uma('SELECT operadora_saude_id FROM contrato_plano WHERE id = ?', [num(b['contrato_plano_id'])]);
+  const op = await tx.uma('SELECT operadora_saude_id FROM contrato_plano WHERE id = ?', [
+    num(b['contrato_plano_id']),
+  ]);
   if (x.cco !== null) {
     const outro = await tx.uma(
       `SELECT b.id FROM beneficiario_plano b JOIN contrato_plano k ON k.id = b.contrato_plano_id
         WHERE b.codigo_controle_ans = ? AND b.id <> ? AND k.operadora_saude_id = ? AND b.excluido_em IS NULL LIMIT 1`,
       [x.cco, x.beneficiario, num(op?.['operadora_saude_id'])],
     );
-    if (outro) throw recusa('cco-em-uso', 'Este CCO já é de outro beneficiário da operadora.', { campos: ['cco'] });
+    if (outro)
+      throw recusa('cco-em-uso', 'Este CCO já é de outro beneficiário da operadora.', { campos: ['cco'] });
   }
-  if (txtOuNulo(b['codigo_controle_ans']) !== x.cco || bool(b['cobertura_parcial_temporaria']) !== x.coberturaParcial)
+  if (
+    txtOuNulo(b['codigo_controle_ans']) !== x.cco ||
+    bool(b['cobertura_parcial_temporaria']) !== x.coberturaParcial
+  )
     await tx.alterar('beneficiario_plano', x.beneficiario, num(b['versao']), {
       codigo_controle_ans: x.cco,
       cobertura_parcial_temporaria: x.coberturaParcial,
@@ -856,10 +934,26 @@ async function gerarEnvio(
     'SELECT MAX(numero_sequencial) AS n FROM envio_ans WHERE operadora_saude_id = ? AND obrigacao = ?',
     [g.operadora, obrigacao],
   );
+  // O aviso do ressarcimento ao SUS: a cobrança (ofício, prazo da impugnação), ligada ao envio desde a geração.
+  let cobranca: number | null = null;
+  if (obrigacao === 'ressarcimento_sus' && g.aviso) {
+    cobranca = await tx.incluir('cobranca_ressarcimento_sus', {
+      estabelecimento_id: est,
+      operadora_saude_id: g.operadora,
+      numero_oficio: caber(g.aviso.numero, 30, 'aviso'),
+      oficio_em: g.aviso.recebidoEm,
+      valor_oficio: Math.round(g.itens.reduce((t, i) => t + (i.valor ?? 0), 0) * 100) / 100,
+      competencia_inicio: per.competencia ?? per.inicio,
+      competencia_fim: per.competencia ?? per.inicio,
+      prazo_impugnacao: g.aviso.prazo,
+      situacao: 'notificada',
+    });
+  }
   const id = await tx.incluir('envio_ans', {
     estabelecimento_id: est,
     operadora_saude_id: g.operadora,
     obrigacao,
+    cobranca_ressarcimento_sus_id: cobranca,
     numero_sequencial: num(ultimo[0]?.['n']) + 1,
     tipo_envio: g.retificador ? 'retificador' : 'original',
     substituido_envio_ans_id: g.retificador ? substituidos[0] : null,
@@ -875,8 +969,39 @@ async function gerarEnvio(
     gerado_em: new Date(),
     gerado_por_usuario_id: tx.contexto.usuario,
   });
+  // Um atendimento do aviso por item, ligado ao item do envio.
+  const atendimentos = new Map<number, number>();
+  if (cobranca !== null) {
+    for (const i of g.itens) {
+      const d = lerJson(i.dados);
+      const inicio = typeof d['inicio'] === 'string' && d['inicio'] ? d['inicio'].slice(0, 10) : null;
+      if (!inicio)
+        throw recusa(
+          'atendimento-sem-data',
+          `O atendimento ${i.referencia} do aviso não tem a data de início.`,
+        );
+      const fim = typeof d['fim'] === 'string' && d['fim'] ? d['fim'].slice(0, 10) : null;
+      atendimentos.set(
+        i.ordem,
+        await tx.incluir('ressarcimento_sus_atendimento', {
+          cobranca_ressarcimento_sus_id: cobranca,
+          sequencia: i.ordem,
+          beneficiario_plano_id: i.beneficiario,
+          tipo_atendimento: i.tipo === 'APAC' ? 'ambulatorial' : 'internacao',
+          numero_atendimento: caber(i.referencia, 20, 'itens'),
+          competencia: `${inicio.slice(0, 7)}-01`,
+          data_inicio: inicio,
+          data_fim: fim,
+          valor_procedimento: i.valor,
+          valor_total: i.valor ?? 0,
+          situacao_validacao: 'pendente',
+        }),
+      );
+    }
+  }
   for (const i of g.itens)
     await tx.incluir('envio_ans_item', {
+      ressarcimento_sus_atendimento_id: atendimentos.get(i.ordem) ?? null,
       envio_ans_id: id,
       sequencia: i.ordem,
       tipo_registro: TIPO_REGISTRO[i.tipo] ?? 'quadro_contabil',
@@ -894,4 +1019,148 @@ async function gerarEnvio(
       situacao: 'pendente',
     });
   return { id, versao: 1 };
+}
+
+/** O texto no tamanho da coluna (nunca cortado: o maior recusa com o campo). */
+function caber(v: string, max: number, campo: string): string {
+  const t = v.trim();
+  if (t.length > max) throw recusa('texto-longo', `O campo passa de ${max} caracteres.`, { campos: [campo] });
+  return t;
+}
+
+/** O texto JSON guardado (objeto vazio quando não é JSON). */
+function lerJson(v: unknown): Record<string, unknown> {
+  if (v === null || v === undefined) return {};
+  if (typeof v === 'object') return v as Record<string, unknown>;
+  try {
+    const o: unknown = JSON.parse(String(v));
+    return o && typeof o === 'object' ? (o as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** O envio do estabelecimento, travado, na versão vista pela tela, com a cobrança do ressarcimento. */
+async function envioDoRessarcimento(tx: TxOperacao, est: number, id: number, versao: number): Promise<Linha> {
+  const e = await versaoDe(tx, 'envio_ans', id, 'O envio');
+  if (num(e['estabelecimento_id']) !== est) throw inexistente('O envio');
+  if (num(e['versao']) !== versao)
+    throw recusa('conflito-versao', 'O envio mudou depois que você abriu: abra de novo.');
+  return e;
+}
+
+/**
+ * O pagamento da GRU: no ressarcimento ao SUS, a cobrança do aviso guarda a GRU, o valor e a data do pagamento (paga);
+ * a GRU da TPS ainda não tem onde ficar no modelo (pedido registrado).
+ */
+async function pagarGru(
+  tx: TxOperacao,
+  est: number,
+  a: { id: number; versao: number; gru: string; valor: number; data: string },
+): Promise<{ id: number; versao: number }> {
+  const e = await envioDoRessarcimento(tx, est, a.id, a.versao);
+  if (txt(e['obrigacao']) !== 'ressarcimento_sus') return pendente('Pagamento da GRU da TPS');
+  const cobranca = numOuNulo(e['cobranca_ressarcimento_sus_id']);
+  if (cobranca === null)
+    throw recusa('aviso-sem-cobranca', 'O envio do ressarcimento não tem o aviso registrado.');
+  const cr = await versaoDe(tx, 'cobranca_ressarcimento_sus', cobranca, 'A cobrança do ressarcimento');
+  if (cr['numero_gru'] !== null && cr['numero_gru'] !== undefined)
+    throw recusa('situacao-nao-permite', 'A GRU deste aviso já foi registrada.');
+  await tx.alterar('cobranca_ressarcimento_sus', cobranca, num(cr['versao']), {
+    numero_gru: caber(a.gru, 30, 'gru'),
+    valor_gru: a.valor,
+    pago_em: a.data,
+    valor_pago: a.valor,
+    situacao: 'paga',
+  });
+  const versao = await tx.alterar('envio_ans', a.id, a.versao, { situacao: txt(e['situacao']) });
+  return { id: a.id, versao };
+}
+
+/**
+ * A decisão de um atendimento do aviso: impugnar abre a impugnação (em elaboração, com o motivo e o valor) e marca o
+ * atendimento impugnado; aceitar marca o atendimento devido e desiste da impugnação aberta. A decisão, o motivo, a
+ * justificativa, quando e quem ficam no item do envio.
+ */
+async function decidirAtendimento(
+  tx: TxOperacao,
+  est: number,
+  a: {
+    id: number;
+    versao: number;
+    item: number;
+    decisao: 'impugnar' | 'aceitar';
+    motivo: string | null;
+    justificativa: string | null;
+    usuario: string;
+  },
+): Promise<{ id: number; versao: number }> {
+  const e = await envioDoRessarcimento(tx, est, a.id, a.versao);
+  if (txt(e['obrigacao']) !== 'ressarcimento_sus' || txt(e['situacao']) !== 'gerado')
+    throw recusa('situacao-nao-permite', 'Só o aviso do ressarcimento ainda não enviado recebe a decisão.');
+  const [it] = await tx.consultarParaAtualizar<Linha>(
+    'SELECT id, versao, dados, ressarcimento_sus_atendimento_id FROM envio_ans_item WHERE id = ? AND envio_ans_id = ? AND excluido_em IS NULL',
+    [a.item, a.id],
+  );
+  if (!it) throw recusa('item-de-outro-envio', 'O atendimento não está neste aviso.');
+  const d = lerJson(it['dados']);
+  if (d['decisao'] === null || d['decisao'] === undefined)
+    throw recusa('item-de-outro-envio', 'O atendimento não está neste aviso.');
+  const impugnar = a.decisao === 'impugnar';
+  if (impugnar && !a.motivo)
+    throw recusa('motivo-obrigatorio', 'Escolha o motivo da impugnação.', { campos: ['motivo'] });
+  const agora = new Date();
+  await tx.alterar('envio_ans_item', num(it['id']), num(it['versao']), {
+    dados: JSON.stringify({
+      ...d,
+      decisao: a.decisao,
+      motivo: impugnar ? a.motivo : null,
+      justificativa: a.justificativa,
+      decididoEm: agora.toISOString().slice(0, 19),
+      decididoPor: a.usuario,
+    }),
+  });
+  const atendimento = numOuNulo(it['ressarcimento_sus_atendimento_id']);
+  if (atendimento !== null) {
+    const at = await versaoDe(tx, 'ressarcimento_sus_atendimento', atendimento, 'O atendimento do aviso');
+    await tx.alterar('ressarcimento_sus_atendimento', atendimento, num(at['versao']), {
+      situacao_validacao: impugnar ? 'impugnado' : 'devido',
+      validado_em: agora,
+    });
+    const abertas = await tx.consultarParaAtualizar<Linha>(
+      `SELECT id, versao FROM impugnacao_ressarcimento_sus
+        WHERE ressarcimento_sus_atendimento_id = ? AND situacao = 'em_elaboracao' AND excluido_em IS NULL`,
+      [atendimento],
+    );
+    for (const x of abertas)
+      await tx.alterar('impugnacao_ressarcimento_sus', num(x['id']), num(x['versao']), {
+        situacao: 'desistida',
+      });
+    if (impugnar) {
+      const prazo = await tx.uma('SELECT prazo_impugnacao FROM cobranca_ressarcimento_sus WHERE id = ?', [
+        num(e['cobranca_ressarcimento_sus_id']),
+      ]);
+      const seq = await tx.uma(
+        'SELECT COALESCE(MAX(sequencia), 0) + 1 AS s FROM impugnacao_ressarcimento_sus WHERE ressarcimento_sus_atendimento_id = ?',
+        [atendimento],
+      );
+      await tx.incluir('impugnacao_ressarcimento_sus', {
+        ressarcimento_sus_atendimento_id: atendimento,
+        sequencia: num(seq?.['s']) || 1,
+        instancia: 'impugnacao',
+        natureza_motivo: NATUREZA_MOTIVO[a.motivo ?? ''] ?? 'administrativo',
+        // O código oficial do motivo na ANS fica vazio: o motivo é o da tela, pela descrição do contrato.
+        codigo_motivo: null,
+        motivo:
+          MOTIVOS_IMPUGNACAO_SUS[a.motivo as MotivoImpugnacaoSus] ?? caber(String(a.motivo), 500, 'motivo'),
+        fundamentacao: a.justificativa,
+        prazo_final: data(prazo?.['prazo_impugnacao']),
+        valor_impugnado: num(at['valor_total']),
+        situacao: 'em_elaboracao',
+        responsavel_usuario_id: tx.contexto.usuario,
+      });
+    }
+  }
+  const versao = await tx.alterar('envio_ans', a.id, a.versao, { situacao: 'gerado' });
+  return { id: a.id, versao };
 }

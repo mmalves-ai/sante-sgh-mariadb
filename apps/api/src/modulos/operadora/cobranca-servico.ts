@@ -754,7 +754,7 @@ export class ServicoCobrancaOperadora {
   }
 
   async acordo(s: SessaoCadastro, e: AcordoEntrada): Promise<ResultadoAcordo> {
-    const { k, acordo } = await this.montarAcordo(s, e);
+    const { k, hoje, acordo } = await this.montarAcordo(s, e);
     const pagador = await this.pagador(s, k);
     const r = await this.gravar(
       s,
@@ -764,9 +764,26 @@ export class ServicoCobrancaOperadora {
       (x: { id: number; acordo: number; ids: number[] }) =>
         `acordo:${x.acordo};renegociadas:${e.cobrancas.length};parcelas:${x.ids.length}`,
       async (g) => {
-        const numero = await g.proximoAcordo();
-        for (const c of e.cobrancas)
-          await g.renegociar({ id: c.id, versao: c.versao, contrato: k.id, acordo: numero, por: s.login });
+        const { acordo: numero } = await g.registrarAcordo({
+          contrato: k.id,
+          data: hoje,
+          principal: acordo.principal,
+          encargos: acordo.encargos,
+          total: acordo.total,
+          cobrancas: e.cobrancas.map((c) => {
+            const x = acordo.cobrancas.find((a) => a.id === c.id);
+            return {
+              id: c.id,
+              versao: c.versao,
+              valor: x?.valor ?? 0,
+              multa: x?.encargos.multa ?? 0,
+              juros: x?.encargos.juros ?? 0,
+            };
+          }),
+          parcelas: acordo.parcelas.map((p) => ({ ...p })),
+          dispensaMotivo: e.dispensarEncargos ? (e.motivoDispensa ?? null) : null,
+          por: s.login,
+        });
         const ids: number[] = [];
         for (const p of acordo.parcelas) {
           const descricao = `Parcela ${p.numero}/${acordo.parcelas.length} do acordo ${numero}`;
@@ -973,7 +990,12 @@ export class ServicoCobrancaOperadora {
       T.reajuste,
       () => `contrato:${r0.contrato};competencia:${r0.competencia}`,
       (g) =>
-        g.cancelarReajuste({ id, motivo, por: s.login, ...(r0.versao !== undefined ? { versao: r0.versao } : {}) }),
+        g.cancelarReajuste({
+          id,
+          motivo,
+          por: s.login,
+          ...(r0.versao !== undefined ? { versao: r0.versao } : {}),
+        }),
     );
     return { ok: true, id: r.id, versao: 0, mensagem: 'Reajuste cancelado.', avisos: [] };
   }

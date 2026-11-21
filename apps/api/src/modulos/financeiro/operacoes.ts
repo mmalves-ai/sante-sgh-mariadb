@@ -13,11 +13,12 @@
 // Melhoria: o escopo de movimentação (pagar, receber, lançar, transferir) exige pode_movimentar; consultar, pode_consultar.
 // Melhoria: o escopo de contas bancárias vem de permissao_conta_bancaria (quem não tem nenhuma linha vê todas as
 // contas ativas do estabelecimento, como a regra do escopo sem restrição).
-import type {
-  BaixarTituloEntrada,
-  CriarTituloPagarEntrada,
-  CriarTituloReceberEntrada,
-  LancarMovimentoEntrada,
+import {
+  type BaixarTituloEntrada,
+  type CriarTituloPagarEntrada,
+  type CriarTituloReceberEntrada,
+  esquemaCriarTituloPagar,
+  type LancarMovimentoEntrada,
 } from '@sgh/contratos';
 import {
   type AprovacaoRegistrada,
@@ -46,6 +47,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import type { z } from 'zod';
 import { ESQUEMAS_OPERACAO_FINANCEIRO } from './esquemas.js';
 import {
   CREDOR_DO_TIPO,
@@ -333,7 +335,8 @@ async function exigirContaDoEscopo(
 
 // ── financeiro.criarTituloPagar ─────────────────────────────────────────────────────────────────────────────────
 
-const TABELAS_TITULO_PAGAR = [
+/** Tabelas que a inclusão do título a pagar grava (quem compõe o gravador na própria operação as declara). */
+export const TABELAS_TITULO_PAGAR: readonly string[] = [
   'titulo_pagar',
   'parcela_pagar',
   'retencao_titulo',
@@ -567,6 +570,52 @@ async function excluirTituloPagar(
     serie: String(p['serie_documento'] ?? ''),
     acao: 'excluir',
     ids: irmas.map((r) => numero(r['id'])).join(','),
+  };
+}
+
+/** O título a pagar gravado na transação de quem compôs o gravador. */
+export interface TituloPagarGravado {
+  readonly tituloPagar: number;
+  readonly numero: string;
+  /** As parcelas, na ordem. */
+  readonly parcelas: readonly number[];
+  /** O evento que a operação que compõe publica (o mesmo de financeiro.criarTituloPagar). */
+  readonly evento: { readonly tipo: 'financeiro.titulo_pagar.lancado'; readonly carga: { titulo: number; parcelas: number } };
+}
+
+/** A entrada do título composto: a de financeiro.criarTituloPagar (acao incluir), antes dos padrões do contrato. */
+export type EntradaTituloComposto = Omit<Extract<z.input<typeof esquemaCriarTituloPagar>, { acao: 'incluir' }>, 'acao'>;
+
+/** Gravador do título a pagar sobre a transação de outra operação do Executor (integração folha → financeiro). */
+export interface GravadorTituloPagar {
+  /**
+   * Inclui o título com as parcelas, as retenções e o rateio, com as mesmas validações e recusas de
+   * financeiro.criarTituloPagar (credor, documento repetido, parcelas, retenções, centro de custo), no estabelecimento
+   * e com o usuário do contexto da transação. A operação que compõe declara TABELAS_TITULO_PAGAR e publica o evento.
+   */
+  incluir(entrada: EntradaTituloComposto): Promise<TituloPagarGravado>;
+}
+
+export function gravadorTituloPagar(tx: TxOperacao): GravadorTituloPagar {
+  return {
+    async incluir(entrada) {
+      const analise = esquemaCriarTituloPagar.safeParse({ ...entrada, acao: 'incluir' });
+      if (!analise.success || (analise.data as CriarTituloPagarEntrada).acao !== 'incluir')
+        throw recusa('titulo-invalido', 'O título a pagar composto não passou na validação do contrato.');
+      const e = analise.data as Extract<CriarTituloPagarEntrada, { acao: 'incluir' }>;
+      const r = await incluirTituloPagar(tx, e, tx.contexto);
+      const parcelas = String(r['ids'] ?? '')
+        .split(',')
+        .filter((x) => x !== '')
+        .map(Number);
+      const tituloPagar = numero(r['tituloPagar']);
+      return {
+        tituloPagar,
+        numero: String(r['numero']),
+        parcelas,
+        evento: { tipo: 'financeiro.titulo_pagar.lancado', carga: { titulo: tituloPagar, parcelas: parcelas.length } },
+      };
+    },
   };
 }
 
