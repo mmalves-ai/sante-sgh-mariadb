@@ -50,6 +50,16 @@ export async function limparSesmt(
     ests,
   );
   await e.executar(`DELETE FROM aso WHERE estabelecimento_id IN (${em})`, ests);
+  // Os marcos da sorologia (tabela do 15_RH/05) saem antes da exposição; sem a tabela, não há o que apagar.
+  const sorologia = await e.uma<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sorologia_exposicao'",
+    [],
+  );
+  if (Number(sorologia?.n) > 0)
+    await e.executar(
+      `DELETE s FROM sorologia_exposicao s JOIN exposicao_biologica x ON x.id = s.exposicao_biologica_id WHERE x.estabelecimento_id IN (${em})`,
+      ests,
+    );
   await e.executar(`DELETE FROM exposicao_biologica WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(`DELETE FROM comunicacao_acidente WHERE estabelecimento_id IN (${em})`, ests);
   await e.executar(

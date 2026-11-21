@@ -3576,3 +3576,22 @@ saneamento_acesso_item	ADM	principal	F3	Plano do saneamento dos perfis de acesso
 uso_acao_usuario	ADM	historico	F3	Uso das ações do sistema por conta, estabelecimento e dia, base do saneamento e da recertificação dos perfis	F2.2 onda 2 final (pedido do lote 02-04; db/migracoes)	01	0
 ciclo_certificacao	ADM	principal	F3	Ciclo de avaliação da certificação do prontuário eletrônico (autoavaliação, pré-auditoria, auditoria) com parecer	F2.2 onda 2 final (pedido do lote 02-06; db/migracoes)	01	0
 ciclo_certificacao_item	ADM	item	F3	Requisito avaliado num ciclo de certificação: resultado, não conformidade, correção e verificação por outra pessoa	F2.2 onda 2 final (pedido do lote 02-06; db/migracoes)	01	0
+passagem_ficha_anestesica	CC	item	F3	Passagem do caso anestésico entre anestesistas durante o ato, com o resumo entregue	F2.2 onda 3 final (pedido do lote 03-01; db/migracoes)	04	0
+lacuna_ficha_anestesica	CC	item	F3	Intervalo sem registro na ficha anestésica, com o motivo declarado	F2.2 onda 3 final (pedido do lote 03-01; db/migracoes)	04	0
+adendo_ficha_anestesica	CC	historico	F3	Adendo à ficha anestésica depois de assinada	F2.2 onda 3 final (pedido do lote 03-01; db/migracoes)	04	0
+codigo_painel_familia	CC	item	F3	Código do paciente no painel de acompanhamento da família no centro cirúrgico, por dia	F2.2 onda 3 final (pedido do lote 03-01; db/migracoes)	04	0
+agendamento_cirurgico_versao	CC	historico	F3	Versões anteriores do pedido de cirurgia, guardadas a cada correção	F2.2 onda 3 final (pedido do lote 03-01; db/migracoes)	04	0
+competencia_avaliacao	RH	dominio	F8	Competência avaliada no estabelecimento, ligada ao critério do modelo de avaliação	F2.2 onda 3 final (pedido do lote 03-02; db/migracoes)	07	0
+cargo_competencia	RH	item	F8	Competências avaliadas em cada cargo	F2.2 onda 3 final (pedido do lote 03-02; db/migracoes)	07	0
+plano_desenvolvimento	RH	principal	F8	Plano de desenvolvimento individual do colaborador, a partir da avaliação	F2.2 onda 3 final (pedido do lote 03-02; db/migracoes)	07	0
+atestado_colaborador	RH	principal	F8	Atestado entregue pelo colaborador, com o CID de leitura restrita	F2.2 onda 3 final (pedido do lote 03-02; db/migracoes)	07	0
+atestado_colaborador_acesso	RH	historico	F8	Trilha de leitura do atestado do colaborador (LGPD)	F2.2 onda 3 final (pedido do lote 03-02; db/migracoes)	07	0
+evento_escala	RH	historico	F3	Histórico de cada mudança da escala e dos plantões	F2.2 onda 3 final (pedido do lote 03-04; db/migracoes)	07	0
+conferencia_eventos_esocial	RH	principal	F8	Conferência das contagens de eventos do eSocial na competência	F2.2 onda 3 final (pedido do lote 03-05; db/migracoes)	07	0
+conferencia_eventos_esocial_item	RH	item	F8	Contagem por tipo de evento na conferência do eSocial	F2.2 onda 3 final (pedido do lote 03-05; db/migracoes)	07	0
+lote_folha_intercambio	RH	principal	F8	Lote de intercâmbio com a folha de pagamento externa: o exportado e o retorno recebido, com a conferência	F2.2 onda 3 final (pedido do lote 03-06; db/migracoes)	07	0
+lote_folha_intercambio_resumo	RH	item	F8	Linhas do lote de intercâmbio da folha por vínculo, centro de custo e rubrica	F2.2 onda 3 final (pedido do lote 03-06; db/migracoes)	07	0
+parametro_obrigacao	RH	dominio	F8	Parâmetros das obrigações trabalhistas por vigência	F2.2 onda 3 final (pedido do lote 03-06; db/migracoes)	07	0
+sorologia_exposicao	RH	item	F8	Marco do acompanhamento sorológico depois da exposição a material biológico	F2.2 onda 3 final (pedido do lote 03-10; db/migracoes)	07	0
+leitura_dosimetria	RH	principal	F8	Leitura do dosímetro do colaborador exposto a radiação ionizante, por período	F2.2 onda 3 final (pedido do lote 03-10; db/migracoes)	07	0
+exposicao_quimioterapico	RH	principal	F8	Exposição do colaborador a quimioterápico antineoplásico no manuseio	F2.2 onda 3 final (pedido do lote 03-10; db/migracoes)	07	0

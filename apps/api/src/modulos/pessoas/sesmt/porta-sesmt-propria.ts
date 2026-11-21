@@ -554,7 +554,8 @@ function sorologiaDe(r: Linha): SorologiaAcidente {
     marco: texto(r['marco']),
     prevista: dataIso(r['data_prevista']) ?? '',
     realizada: dataIso(r['data_realizada']),
-    resultado: ou(r['resultado']),
+    // No banco o resultado é snake_case (ADR 0002); no contrato, com hífen.
+    resultado: ou(r['resultado'])?.replace(/_/g, '-') ?? null,
     observacao: ou(r['observacao']),
   };
 }
@@ -1256,7 +1257,7 @@ function gravador(tx: TxOperacao, est: number, anotacao: AnotacaoGravacao): Grav
           throw recusa('sorologia-registrada', 'O resultado deste marco já foi registrado.');
         await tx.alterar('sorologia_exposicao', Number(so['id']), Number(so['versao']), {
           data_realizada: x.realizada,
-          resultado: x.resultado,
+          resultado: String(x.resultado).replace(/-/g, '_'),
           observacao: x.observacao,
         });
         if (x.resultado === 'soroconversao')
