@@ -49,3 +49,22 @@ teto_M: 87
 - **Riscos:**
   - `criar_cliente.py` também é editado pela F2.4 (sementes) no `main`. O orquestrador resolve no merge.
   - Volume da semente licenciada: cerca de 6,2 milhões de linhas, com o disco medido antes.
+
+## Estouro do teto (medido em 21/11, 17h33) e a decisão do orquestrador
+
+- **Gasto:** 87,3 M, igual ao teto (87 M), com 23 de 34 agentes concluídos.
+  - Construtor: 4,4 M por agente, contra 2,5 M previstos.
+  - Corretor: 1,7 M por agente, contra 0,8 M previstos.
+  - Compartilhado: 5,6 M por agente, contra 4,5 M previstos.
+- **Causa:**
+  - Cada lote de 4 fatias converteu cerca de 27 tabelas de "descarte" em carga (eram 245 bloqueadas; restam 108) e,
+    ao mesmo tempo, aplicou as regras novas do ADR 0007. Foram 130 turnos por construtor.
+  - O lote de 4 fatias saiu grande demais para o tipo de trabalho: conversão com prova de conciliação.
+- **Decisão:**
+  - Não interromper os 8 agentes em andamento. Parar no meio perde o trabalho já pago e obriga a refazer.
+  - **Otimização do restante:**
+    - o conferidor só aplica pedidos e verifica, sem refazer fatia, que vai para no máximo 2 "refazer" pequenos;
+    - o L9 e o L10 seguem como orçados.
+  - **Teto revisto: 125 M**, com projeção de 115 a 120 M.
+  - **Lição para as próximas rodadas do conector:** lotes de 2 fatias quando o trabalho é conversão com prova (no
+    lugar de 4).
