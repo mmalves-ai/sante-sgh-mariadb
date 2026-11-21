@@ -40,7 +40,7 @@ export const mensagensOnboarding = {
     sincronizar: 'Sincronizar',
     confirmaImportar: 'Importar a base de origem para o cliente {codigo}?',
     confirmaSincronizar:
-      'Trazer as alterações da origem para o cliente {codigo}? Em conflito, a origem vence e a edição feita aqui fica guardada.',
+      'Trazer as linhas novas da origem para o cliente {codigo}? Nesta etapa, linhas alteradas ou apagadas na origem e edições feitas aqui ficam como pendência para conferência; nada é sobrescrito. Em conflito, a origem vence e a edição feita aqui fica guardada.',
     semVinculo: 'Vincule um arquivo para importar.',
   },
   execucao: {

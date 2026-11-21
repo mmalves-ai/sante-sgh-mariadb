@@ -221,17 +221,50 @@ describe.skipIf(SEM_BANCO)(
         final.entidades.length + 1,
       );
       expect(final.pendencias.criticas).toBeGreaterThan(0);
-      expect(final.pendencias.porRegra.some((p) => p.regra === 'prontuario_duplicado')).toBe(true);
+      const regra = (r: string) =>
+        final.pendencias.porRegra.filter((p) => p.regra === r).reduce((a, p) => a + p.quantidade, 0);
+      expect(regra('prontuario_duplicado')).toBe(1);
+      expect(regra('entrada_sentinela')).toBe(1); // recusada com pendência, sem derrubar a execução
+      expect(regra('login_duplicado')).toBe(2); // 'JOÃO SILVA' = 'joao.silva' na collation do destino
+      expect(regra('cnes_duplicado')).toBe(1);
+      // toda linha recusada tem a regra gravada com ela e uma pendência desta execução
+      expect(valor(ctl, `SELECT COUNT(*) FROM conector_origem WHERE id_destino IS NULL AND tabela_origem<>'TBTPEMP' AND regra_recusa IS NULL`)).toBe(0);
+      expect(semPendencia(execucao)).toBe(0);
       expect(sha256(resolve(ORIGENS, ARQUIVO))).toBe(shaAntes);
     }, 900_000);
 
-    it('Sincronizar sem mudança na origem: nada duplicado, conciliação 100%', async () => {
+    it('Sincronizar: nada duplicado; alteração na origem e edição no destino viram pendência, sem falhar', async () => {
+      const ctl = `conector_ctl_${CLIENTE}`;
+      const b = `cliente_${CLIENTE}`;
+      // simula a origem que seguiu operando: o hash guardado de um paciente e de uma alta deixa de bater
+      sql(
+        ctl,
+        `UPDATE conector_origem SET hash_linha=UNHEX(REPEAT('00',16)) WHERE tabela_origem='RICADPAC'
+           AND entidade_destino='paciente' AND id_destino IS NOT NULL ORDER BY id LIMIT 1;
+         UPDATE conector_origem SET hash_linha=UNHEX(REPEAT('00',16)) WHERE tabela_origem='REALTA'
+           AND id_destino IS NOT NULL ORDER BY id LIMIT 1;`,
+      );
+      // edição manual no sistema novo durante a avaliação (o próprio sistema marca versão e alteração)
+      sql(
+        b,
+        `UPDATE usuario SET situacao='bloqueado', bloqueado_em=UTC_TIMESTAMP(), alterado_em=UTC_TIMESTAMP(3), versao=versao+1
+           WHERE origem='migracao' AND situacao='ativo' ORDER BY id LIMIT 1;`,
+      );
       const { execucao } = await c.pedir(req, CLIENTE, { tipo: 'sincronizar' });
       const { final } = await rodarMotor(c, req, execucao);
       expect(final.motivoFalha).toBe(null);
       expect(final.estado).toBe('concluida');
       expect(final.entidades.every((e) => e.conferido)).toBe(true);
-      const b = `cliente_${CLIENTE}`;
+      const regra = (r: string) =>
+        final.pendencias.porRegra.filter((p) => p.regra === r).reduce((a, p) => a + p.quantidade, 0);
+      expect(regra('alteracao_aguarda_sincronizar')).toBe(2);
+      expect(regra('edicao_no_destino')).toBe(1);
+      expect(regra('prontuario_duplicado')).toBe(1); // a recusa reaparece com a regra em toda execução
+      expect(semPendencia(execucao)).toBe(0);
+      // o hash guardado da linha alterada NÃO é sobrescrito: o Sincronizar do L9 ainda a detecta
+      expect(
+        valor(ctl, `SELECT COUNT(*) FROM conector_origem WHERE hash_linha=UNHEX(REPEAT('00',16)) AND tabela_origem IN ('RICADPAC','REALTA')`),
+      ).toBe(2);
       expect(valor(b, `SELECT COUNT(*) FROM paciente WHERE origem = 'migracao'`)).toBe(
         manifesto.esperado_destino['paciente'],
       );
@@ -244,6 +277,16 @@ describe.skipIf(SEM_BANCO)(
     }, 900_000);
   },
 );
+
+/** Linhas recusadas (fora o de-para sem destino) sem pendência na execução `eid`: tem de ser 0. */
+function semPendencia(eid: number): number {
+  return valor(
+    `conector_ctl_${CLIENTE}`,
+    `SELECT COUNT(*) FROM conector_origem co WHERE co.id_destino IS NULL AND co.tabela_origem<>'TBTPEMP'
+       AND NOT EXISTS (SELECT 1 FROM pendencia p WHERE p.execucao_id=${eid} AND p.tabela_origem=co.tabela_origem
+                       AND p.chave_original=co.chave_original COLLATE utf8mb4_bin)`,
+  );
+}
 
 async function problemaStatus(p: Promise<unknown>): Promise<number> {
   try {

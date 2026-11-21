@@ -402,6 +402,28 @@ segue verde (16 testes).
   520 (número repetido, paciente inexistente, paciente recusado, categoria desconhecida, caráter ausente), fichas
   515 de 522, altas 138 de 139; todas as entidades conferidas; sha256 do .fdb igual antes e depois; o Sincronizar
   seguinte conclui sem duplicar.
+- **Correções da avaliação do L3 (2026-11-21, mapa `l3-2026-11-21b`):**
+  - entrada sentinela (1899-12-30, ano < 1800) é testada depois da conversão: recusa `entrada_sentinela`, nunca
+    TypeError nem NOT NULL; a imagem sintética injeta o caso;
+  - unicidade conferida no banco de destino (mesma collation: `JOÃO SILVA` = `joao.silva`), inclusive código e CNES
+    do estabelecimento; cada linha nova sob SAVEPOINT: restrição violada recusa só a linha
+    (`restricao_destino_<código>`), sem valor;
+  - linha alterada na origem (inclusive ficha e alta) fica com `alteracao_aguarda_sincronizar`, fora da soma e SEM
+    trocar o hash guardado; alta nova de atendimento já carregado aguarda o L9; linha que sumiu da origem vira
+    `apagada_aguarda_sincronizar`; edição no destino (`versao`/`alterado_em`) vira `edicao_no_destino` (conflito
+    visível). Nenhuma delas faz a execução falhar; divergência sem rastro continua falhando;
+  - recusa gravada com a linha (`conector_origem.regra_recusa`) e pendência no mesmo commit do lote; toda execução
+    reemite a regra de todo recusado; pendências de qualidade só na primeira carga da linha;
+  - soma de controle com os campos de texto (nome, mãe, logradouro, documento, telefone, alta e saída do
+    atendimento) em bytes CP1252: bytes crus normalizados da origem x texto do destino reconvertido; o resumo de
+    cada linha gravada fica em `conector_origem.hash_destino` (base do L9); o atendimento liga ao paciente e a
+    ficha/alta ao atendimento pela chave da origem relida do destino;
+  - Sincronizar no painel avisa que, até o L9, traz só linhas novas; `contadores.carga.modo` registra isso;
+  - `conector/testes/test_l3.py` (9 testes: CP1252 exaustivo, sentinelas, documentos, telefone, login, recusa por
+    restrição, pendência no mesmo commit, reemissão, alterada não regravada, edição no destino); autoconferência
+    25 testes verdes; ponta a ponta 4 testes verdes (66 s): estabelecimentos 3/3 (1 CNES duplicado), usuários 13 de
+    15, atendimentos 514 de 520; no Sincronizar, 2 alteradas e 1 edição no destino viram pendência e a execução
+    conclui conferida.
 - **Para o L4/L5/L9:** carregador oficial do TISS 23 (hoje a prova semeia as duas linhas como faria o carregador);
   catálogos reais de sexo/tipos pelo de-para do L4; convênios e profissionais reais (L5) completando os provisórios;
   diferencial de verdade (linha alterada hoje fica com pendência `alteracao_aguarda_sincronizar`); item de menu do

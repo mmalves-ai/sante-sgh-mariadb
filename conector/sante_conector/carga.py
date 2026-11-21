@@ -8,7 +8,12 @@ Regras (plano F4, seções 6, 6.1 e 7):
 - toda linha lida fica em `conector_origem` (tabela, chave original, entidade, id de destino, hash dos bytes crus);
   linha recusada fica com id de destino NULL e uma pendência (tabela, chave, regra; nunca o valor);
 - linha já carregada com o mesmo hash é pulada (a importação é idempotente); com hash diferente fica para o
-  Sincronizar (L9), com pendência `alteracao_aguarda_sincronizar`;
+  Sincronizar (L9), com pendência `alteracao_aguarda_sincronizar`, SEM trocar o hash guardado (o L9 a detecta);
+  linha que sumiu da origem fica com `apagada_aguarda_sincronizar`; nenhuma das duas faz a execução falhar;
+- a recusa é gravada com a linha (regra e gravidade em `conector_origem`) e a pendência vai na mesma transação do
+  commit por lote: uma falha no meio não perde o motivo, e a reexecução reemite a regra de toda linha recusada;
+- unicidade conferida no próprio banco de destino (mesma collation) antes de inserir; e cada linha nova é inserida
+  sob SAVEPOINT: uma restrição violada recusa só aquela linha (`restricao_destino_<código>`), nunca a execução;
 - sentinelas (datas 1899-12-30, 1900-01-01, ano < 1800), CPF/CNPJ com dígito errado, telefone fora do padrão viram
   NULL com pendência; conversão CP1252 -> Unicode determinística (texto.py);
 - catálogos PRÓPRIOS do cliente que o mapa exige (sexo, tipos de documento, endereço e telefone, categoria de
@@ -17,18 +22,25 @@ Regras (plano F4, seções 6, 6.1 e 7):
 - convênio e profissional do atendimento ainda não têm carga própria (L5): entram como cadastro provisório, por
   chave da origem, registrado em `conector_origem` (hash zero) para a onda que os completar, com pendência;
 - conciliação por entidade: registros lidos na origem = gravados no destino (lidos de volta do banco) + recusados,
-  e soma de controle (sha256 da lista ordenada de chave e campos de negócio) calculada da origem e relida do
-  destino. Só agregados saem daqui.
+  e soma de controle (sha256 da lista ordenada de "chave|resumo dos campos") calculada da origem e relida do
+  destino. Os campos de texto entram na soma como BYTES CP1252: do lado da origem, os bytes crus normalizados no
+  próprio domínio de bytes (`bruto`); do lado do destino, o texto gravado reconvertido por `texto_para_cp1252`.
+  Assim a soma prova a conversão de ida e volta, não só a persistência. O resumo de cada linha gravada fica em
+  `conector_origem.hash_destino`; numa reexecução, a linha igual entra na soma da origem com esse resumo, e uma
+  diferença no destino com rastro de edição (`versao`/`alterado_em`) vira pendência `edicao_no_destino` (conflito
+  visível; a origem vence no L9), não falha. Só agregados saem daqui.
 """
 import datetime
 import decimal
 import hashlib
 import re
 
-from .leitor import hash_linha
-from .texto import cp1252_para_texto
+import pymysql
 
-VERSAO_MAPA = "l3-2026-11-21"
+from .leitor import hash_linha
+from .texto import cp1252_para_texto, texto_para_cp1252
+
+VERSAO_MAPA = "l3-2026-11-21b"
 
 MAPA = {
     "TBTPEMP": {"entidade": "tipo_empresa", "chave": "ID", "colunas": ["ID", "NOME"], "sem_destino": True},
@@ -62,6 +74,9 @@ TIPOS_PROPRIOS = {
 SENTINELAS = {datetime.date(1899, 12, 30), datetime.date(1900, 1, 1)}
 AGORA = "UTC_TIMESTAMP(3)"
 HASH_ZERO = b"\0" * 16
+RECUSADO = "-"
+# erros de restrição do banco que recusam só a linha (o resto, como conexão perdida, derruba a execução)
+ERROS_LINHA = {1048, 1062, 1264, 1292, 1366, 1406, 1452, 3819, 4025}
 ENT_FILHA = {"RECADATE": "atendimento_ficha", "REALTA": "atendimento_alta"}
 # entidade de destino de cada tabela (o resumo que sai para o painel nunca leva nome de tabela da origem)
 ENTIDADE_DA_TABELA = dict({t: m["entidade"] for t, m in MAPA.items()}, RECADATE="atendimento_ficha",
@@ -78,9 +93,26 @@ def txt(b, limite=None):
     if s is None:
         return None
     s = re.sub(r"\s+", " ", s).strip()
-    if not s:
+    if limite:
+        s = s[:limite].rstrip(" ")
+    return s or None
+
+
+# espaços em branco que `str.isspace` vê nos 256 caracteres do CP1252 (teste exaustivo em test_l3)
+_ESPACO_B = re.compile(rb"[\t\n\x0b\x0c\r\x1c-\x1f \xa0]+")
+
+
+def bruto(b, limite=None):
+    """Lado da ORIGEM da soma de controle: a mesma normalização de `txt`, feita nos bytes crus (sem decodificar).
+    Comparada com `texto_para_cp1252(texto gravado)`, prova a conversão CP1252 -> utf8mb4 de ida e volta."""
+    if b is None:
         return None
-    return s[:limite] if limite else s
+    if not isinstance(b, (bytes, bytearray)):
+        b = texto_para_cp1252(str(b))
+    b = _ESPACO_B.sub(b" ", bytes(b)).strip(b" ")
+    if limite:
+        b = b[:limite].rstrip(b" ")
+    return b or None
 
 
 def digitos(v):
@@ -163,8 +195,17 @@ def telefone(v):
 
 
 def fmt(v):
+    """Forma canônica de um campo na soma de controle. Texto vira os bytes CP1252 (hex): o texto gravado no destino e
+    os bytes crus normalizados da origem têm de dar o mesmo resultado."""
     if v is None:
         return ""
+    if isinstance(v, (bytes, bytearray)):
+        return "b" + bytes(v).hex()
+    if isinstance(v, str):
+        try:
+            return "b" + texto_para_cp1252(v).hex()
+        except KeyError:  # fora do CP1252: só pode vir do destino; nunca casa com a origem
+            return "u" + v.encode("utf-8").hex()
     if isinstance(v, bool):
         return "1" if v else "0"
     if isinstance(v, datetime.datetime):
@@ -172,6 +213,14 @@ def fmt(v):
     if isinstance(v, datetime.date):
         return v.isoformat()
     return str(v)
+
+
+def resumo(campos):
+    return hashlib.sha256("|".join(fmt(c) for c in campos).encode()).digest()
+
+
+def login_de(nome):
+    return re.sub(r"[\s:]+", ".", (txt(nome) or "").lower()).strip(".")[:60]
 
 
 def soma(linhas):
@@ -189,11 +238,17 @@ class Carga:
     def __init__(self, leitor, cr, ctl, eid, imagem_id, progresso=None):
         self.lt, self.cr, self.ctl, self.eid, self.img = leitor, cr, "`%s`" % ctl, eid, imagem_id
         self.progresso = progresso or (lambda pct, etapa: None)
-        self.pend = []                      # (tabela, chave, regra, gravidade)
-        self.origem_soma = {}               # entidade-chave -> linhas "chave|campos"
-        self.cont = {"catalogos_criados": 0, "provisorios": 0, "puladas_iguais": 0, "alteradas_aguardam": 0}
-        self.existente = {}                 # tabela -> {chave: (id_destino, hash)}
+        self.pend = []                      # (tabela, chave, regra, gravidade): todas, para o resumo
+        self._buf = []                      # pendências ainda não gravadas (vão no próximo commit)
+        self._diario = []                   # registros em memória desde o último SAVEPOINT (para desfazer)
+        self.origem = {}                    # entidade -> {chave: resumo hex da linha, calculado da origem}
+        self.aguardam = {}                  # entidade -> chaves alteradas na origem (ficam para o L9)
+        self.vistas = {}                    # tabela -> chaves lidas nesta execução
+        self.cont = {"catalogos_criados": 0, "provisorios": 0, "puladas_iguais": 0, "alteradas_aguardam": 0,
+                     "recusas_por_restricao": 0}
+        self.existente = {}                 # tabela -> {chave: (id_destino, hash, hash_destino, regra, gravidade)}
         self.pre = {}                       # REALTA/RECADATE lidos antes do atendimento
+        self.atend_novos = set()            # atendimentos gravados nesta execução
         self.tabelas = []
 
     # ----- utilidades -----
@@ -201,13 +256,36 @@ class Carga:
         return self.cr.cursor()
 
     def _pendencia(self, tab, chave, regra, grav):
-        self.pend.append((tab, None if chave is None else str(chave)[:500], regra, grav))
+        p = (tab, None if chave is None else str(chave)[:500], regra, grav)
+        self.pend.append(p)
+        self._buf.append(p)
+
+    def _commit(self):
+        """Pendências e linhas na MESMA transação: uma falha depois deste ponto não perde nenhum motivo."""
+        if self._buf:
+            with self._c() as c:
+                c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
+                              " criado_em) VALUES (%s, %%s, %%s, %%s, %%s, %s)" % (self.ctl, int(self.eid), AGORA),
+                              self._buf)
+            self._buf = []
+        self.cr.commit()
+        self._diario = []
 
     def _um(self, sql, args=()):
         with self._c() as c:
             c.execute(sql, args)
             r = c.fetchone()
             return r[0] if r else None
+
+    def _todas(self, sql, args=()):
+        with self._c() as c:
+            c.execute(sql, args)
+            return c.fetchall()
+
+    def _existe(self, tabela, coluna, valor):
+        """Unicidade conferida pelo próprio banco (mesma collation do índice único: sem acento e sem caixa)."""
+        return valor is not None and bool(self._um("SELECT COUNT(*) FROM `%s` WHERE `%s`=%%s" % (tabela, coluna),
+                                                   (valor,)))
 
     def _inserir(self, tabela, valores):
         cols = list(valores)
@@ -219,18 +297,57 @@ class Carga:
 
     def _carregar_existente(self, tab):
         with self._c() as c:
-            c.execute("SELECT chave_original, id_destino, hash_linha FROM %s.conector_origem WHERE tabela_origem=%%s"
-                      % self.ctl, (tab,))
-            self.existente[tab] = {k: (i, bytes(h)) for k, i, h in c.fetchall()}
+            c.execute("SELECT chave_original, id_destino, hash_linha, hash_destino, regra_recusa, gravidade_recusa"
+                      " FROM %s.conector_origem WHERE tabela_origem=%%s" % self.ctl, (tab,))
+            self.existente[tab] = {k: (i, bytes(h), bytes(hd) if hd is not None else None, r, g)
+                                   for k, i, h, hd, r, g in c.fetchall()}
 
-    def _registrar(self, tab, chave, entidade, id_destino, h):
+    def _registrar(self, tab, chave, entidade, id_destino, h, hd=None, recusa=None):
+        regra, grav = recusa or (None, None)
         with self._c() as c:
             c.execute("INSERT INTO %s.conector_origem (tabela_origem, chave_original, entidade_destino, id_destino,"
-                      " hash_linha, imagem_id, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%s)"
+                      " hash_linha, hash_destino, regra_recusa, gravidade_recusa, imagem_id, criado_em)"
+                      " VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%%s,%s)"
                       " ON DUPLICATE KEY UPDATE id_destino=VALUES(id_destino), hash_linha=VALUES(hash_linha),"
-                      " imagem_id=VALUES(imagem_id), alterado_em=%s, versao=versao+1" % (self.ctl, AGORA, AGORA),
-                      (tab, chave, entidade, id_destino, h, self.img))
-        self.existente.setdefault(tab, {})[chave] = (id_destino, h)
+                      " hash_destino=VALUES(hash_destino), regra_recusa=VALUES(regra_recusa),"
+                      " gravidade_recusa=VALUES(gravidade_recusa), imagem_id=VALUES(imagem_id), alterado_em=%s,"
+                      " versao=versao+1" % (self.ctl, AGORA, AGORA),
+                      (tab, chave, entidade, id_destino, h, hd, regra, grav, self.img))
+        t = self.existente.setdefault(tab, {})
+        self._diario.append((tab, chave, t.get(chave)))
+        t[chave] = (id_destino, h, hd, regra, grav)
+
+    def _recusar(self, tab, chave, entidade, h, regra, grav):
+        self._pendencia(tab, chave, regra, grav)
+        self._registrar(tab, chave, entidade, None, h, recusa=(regra, grav))
+
+    def _linha_nova(self, tab, chave, entidade, h, fazer):
+        """Grava uma linha nova (todas as inserções dela) sob SAVEPOINT. Restrição violada no destino: desfaz só esta
+        linha (banco, memória e pendências) e a recusa com o código do erro, sem valor. Devolve o retorno de `fazer`
+        ou None."""
+        marca = (len(self._diario), len(self.pend), len(self._buf), dict(self.cont))
+        with self._c() as c:
+            c.execute("SAVEPOINT linha_conector")
+        try:
+            return fazer()
+        except pymysql.err.MySQLError as e:
+            cod = e.args[0] if e.args and isinstance(e.args[0], int) else None
+            if cod not in ERROS_LINHA:
+                raise
+            with self._c() as c:
+                c.execute("ROLLBACK TO SAVEPOINT linha_conector")
+            for t, k, ant in reversed(self._diario[marca[0]:]):
+                if ant is None:
+                    self.existente[t].pop(k, None)
+                else:
+                    self.existente[t][k] = ant
+            del self._diario[marca[0]:]
+            del self.pend[marca[1]:]
+            del self._buf[marca[2]:]
+            self.cont = marca[3]
+            self.cont["recusas_por_restricao"] += 1
+            self._recusar(tab, chave, entidade, h, "restricao_destino_%d" % cod, "critica")
+            return None
 
     def _de_para(self, tab, chave):
         """id de destino da linha `chave` de `tab` já carregada: (id ou None, existe_registro)."""
@@ -257,23 +374,41 @@ class Carga:
             for t in sorted(it, key=lambda t: bytes(t[i]) if isinstance(t[i], (bytes, bytearray)) else str(t[i]).encode()):
                 yield dict(zip(nomes, t))
 
+    def _situacao(self, tab, chave, h):
+        """'nova', 'igual' ou 'alterada', contra o estado guardado. Linha já vista e recusada: reemite a regra da
+        recusa (todo recusado tem regra no resumo de toda execução). Alterada: pendência, e nada é regravado."""
+        self.vistas.setdefault(tab, set()).add(chave)
+        ant = self.existente.get(tab, {}).get(chave)
+        if ant is None:
+            return "nova", None
+        if ant[0] is None and not MAPA.get(tab, {}).get("sem_destino"):
+            self._pendencia(tab, chave, ant[3] or "recusa_sem_regra_registrada", ant[4] or "alta")
+        if ant[1] == h:
+            self.cont["puladas_iguais"] += 1
+            return "igual", ant
+        self.cont["alteradas_aguardam"] += 1
+        self._pendencia(tab, chave, "alteracao_aguarda_sincronizar", "baixa")
+        return "alterada", ant
+
     def _ciclo(self, tab, linha):
-        """(chave, hash, situação): 'nova', 'igual' ou 'alterada'."""
         m = MAPA[tab]
         chave = chave_txt(linha[m["chave"]])
         h = bytes.fromhex(hash_linha([linha[c] for c in m["colunas"]]))
-        ant = self.existente.get(tab, {}).get(chave)
-        if ant is None:
-            return chave, h, "nova"
-        if ant[1] == h:
-            self.cont["puladas_iguais"] += 1
-            return chave, h, "igual"
-        self.cont["alteradas_aguardam"] += 1
-        self._pendencia(tab, chave, "alteracao_aguarda_sincronizar", "baixa")
-        return chave, h, "alterada"
+        sit, ant = self._situacao(tab, chave, h)
+        return chave, h, sit, ant
 
-    def _somar(self, entidade, *campos):
-        self.origem_soma.setdefault(entidade, []).append("|".join(fmt(c) for c in campos))
+    def _ja_carregada(self, ent, chave, sit, ant):
+        """Linha aceita numa execução anterior: entra na soma da origem com o resumo do que foi gravado (a conversão
+        já foi provada quando a linha entrou); alterada na origem fica fora da soma, à espera do L9."""
+        if sit == "alterada":
+            self.aguardam.setdefault(ent, set()).add(chave)
+        else:
+            self.origem.setdefault(ent, {})[chave] = ant[2].hex() if ant[2] is not None else "sem_resumo_gravado"
+
+    def _resumir(self, ent, chave, *campos):
+        hd = resumo(campos)
+        self.origem.setdefault(ent, {})[chave] = hd.hex()
+        return hd
 
     # ----- catálogos -----
     def _catalogo(self, tabela, codigo, valores):
@@ -301,90 +436,82 @@ class Carga:
             self._pendencia("ATCABECATEND", None, "catalogo_oficial_ausente_carater_tiss", "critica")
         if not self.municipio:
             self._pendencia("RICADPAC", None, "catalogo_oficial_ausente_municipio_ibge", "alta")
-        self.cr.commit()
+        self._commit()
 
     # ----- entidades -----
     def _tipo_empresa(self, linhas):
         for l in linhas:
-            chave, h, sit = self._ciclo("TBTPEMP", l)
+            chave, h, sit, ant = self._ciclo("TBTPEMP", l)
             if sit == "nova":
                 self._registrar("TBTPEMP", chave, "tipo_empresa", None, h)
-            self._somar("tipo_empresa", chave)
+            self.origem.setdefault("tipo_empresa", {})[chave] = ""
+        self._commit()
 
     def _estabelecimentos(self, linhas):
-        cnpjs = set(r[0] for r in self._todas("SELECT cnpj FROM estabelecimento WHERE cnpj IS NOT NULL"))
         for l in linhas:
-            chave, h, sit = self._ciclo("TBHOSPIT", l)
-            if sit != "nova" and self._de_para("TBHOSPIT", chave)[0] is None:
+            chave, h, sit, ant = self._ciclo("TBHOSPIT", l)
+            if sit != "nova":
+                if ant[0] is not None:
+                    self._ja_carregada("estabelecimento", chave, sit, ant)
                 continue
             razao = txt(l["NOME"], 150) or txt(l["NOME_HOT"], 150)
             if not razao:
-                self._pendencia("TBHOSPIT", chave, "nome_ausente", "critica")
-                if sit == "nova":
-                    self._registrar("TBHOSPIT", chave, "estabelecimento", None, h)
-                continue
+                self._recusar("TBHOSPIT", chave, "estabelecimento", h, "nome_ausente", "critica"); continue
+            codigo = chave[:30]
+            if self._existe("estabelecimento", "codigo", codigo):
+                self._recusar("TBHOSPIT", chave, "estabelecimento", h, "codigo_duplicado", "critica"); continue
             doc, ruim = cnpj(l["CGC"])
             if ruim:
                 self._pendencia("TBHOSPIT", chave, "cnpj_invalido", "media")
-            if doc and doc in cnpjs and sit == "nova":
+            if self._existe("estabelecimento", "cnpj", doc):
                 self._pendencia("TBHOSPIT", chave, "cnpj_duplicado", "alta"); doc = None
             cnes = digitos(l["CNES"]); cnes = cnes.zfill(7) if cnes and len(cnes) <= 7 else None
+            if self._existe("estabelecimento", "codigo_cnes", cnes):
+                self._pendencia("TBHOSPIT", chave, "cnes_duplicado", "alta"); cnes = None
             cep = digitos(l["CEP"]); cep = cep.zfill(8) if cep and len(cep) <= 8 else None
             inicio, sent = data(l["DTINI"])
             if sent:
                 self._pendencia("TBHOSPIT", chave, "data_sentinela", "baixa")
-            num = digitos(l["NUMERO"])
-            self._somar("estabelecimento", chave, doc, cnes, cep)
-            if sit != "nova":
-                continue
-            v = dict(codigo=chave[:30], nome_fantasia=txt(l["NOME_HOT"], 150) or razao, razao_social=razao,
+            num = digitos(l["NUMERO"])[:10] or None
+            v = dict(codigo=codigo, nome_fantasia=txt(l["NOME_HOT"], 150) or razao, razao_social=razao,
                      cnpj=doc, codigo_cnes=cnes, cep=cep, logradouro=txt(l["ENDERECO"], 150),
-                     numero=num[:10] or None, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAI"], 100),
+                     numero=num, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAI"], 100),
                      telefone=txt(l["FONE"], 20), email=txt(l["EMAIL"], 254), inicio_atividade=inicio,
                      origem="migracao")
-            if doc:
-                cnpjs.add(doc)
-            self._registrar("TBHOSPIT", chave, "estabelecimento", self._inserir("estabelecimento", v), h)
-        self.cr.commit()
+            razao_b = bruto(l["NOME"], 150) or bruto(l["NOME_HOT"], 150)
+            hd = resumo((codigo, doc, cnes, cep, razao_b, bruto(l["NOME_HOT"], 150) or razao_b,
+                         bruto(l["ENDERECO"], 150), bruto(l["BAI"], 100), num, inicio))
 
-    def _todas(self, sql, args=()):
-        with self._c() as c:
-            c.execute(sql, args)
-            return c.fetchall()
+            def gravar():
+                self._registrar("TBHOSPIT", chave, "estabelecimento", self._inserir("estabelecimento", v), h, hd)
+                return True
+            if self._linha_nova("TBHOSPIT", chave, "estabelecimento", h, gravar):
+                self.origem.setdefault("estabelecimento", {})[chave] = hd.hex()
+        self._commit()
 
     def _usuarios(self, linhas):
-        logins = {r[0].lower() for r in self._todas("SELECT login FROM usuario")}
-        cpfs = {r[0] for r in self._todas("SELECT cpf FROM usuario WHERE cpf IS NOT NULL AND origem<>'migracao'")}
-        vistos = set()  # duplicidade decidida na ordem da origem: igual em toda execução
         agora = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0)
         for l in linhas:
-            chave, h, sit = self._ciclo("TBUSERS", l)
-            login = re.sub(r"[\s:]+", ".", (txt(l["NOME"]) or "").lower()).strip(".")[:60]
+            chave, h, sit, ant = self._ciclo("TBUSERS", l)
+            if sit != "nova":
+                if ant[0] is not None:
+                    self._ja_carregada("usuario", chave, sit, ant)
+                continue  # recusada antes: segue recusada (a regra foi reemitida; o Sincronizar reavalia)
+            login = login_de(l["NOME"])
             nome = txt(l["NOMEC"], 150) or txt(l["NOME"], 150)
-            if sit != "nova" and self._de_para("TBUSERS", chave)[0] is None:
-                continue  # recusada antes: segue recusada (o Sincronizar reavalia)
-            if sit == "nova" and (not login or not nome):
-                self._pendencia("TBUSERS", chave, "login_ausente", "alta")
-                self._registrar("TBUSERS", chave, "usuario", None, h); continue
-            if sit == "nova" and login in logins:
-                self._pendencia("TBUSERS", chave, "login_duplicado", "alta")
-                self._registrar("TBUSERS", chave, "usuario", None, h); continue
+            if not login or not nome:
+                self._recusar("TBUSERS", chave, "usuario", h, "login_ausente", "alta"); continue
+            if self._existe("usuario", "login", login):  # 'JOÃO' = 'joao' na collation do índice único
+                self._recusar("TBUSERS", chave, "usuario", h, "login_duplicado", "alta"); continue
             doc, ruim = cpf(l["CPF"])
             if ruim:
                 self._pendencia("TBUSERS", chave, "cpf_invalido", "media")
-            if doc and (doc in vistos or doc in cpfs):
-                if sit == "nova":
-                    self._pendencia("TBUSERS", chave, "cpf_duplicado", "alta")
-                doc = None
-            if doc:
-                vistos.add(doc)
-            if not doc and sit == "nova":
+            if self._existe("usuario", "cpf", doc):
+                self._pendencia("TBUSERS", chave, "cpf_duplicado", "alta"); doc = None
+            if not doc:
                 self._pendencia("TBUSERS", chave, "usuario_sem_cpf", "media")
             bloq = (txt(l["BLOQUEADO"]) or "").upper() == "S"
             situacao = "bloqueado" if bloq else ("inativo" if (txt(l["STATUS"]) or "").upper() == "I" else "ativo")
-            self._somar("usuario", chave, login, doc, situacao)
-            if sit != "nova":
-                continue
             nasc, sent = data(l["DT_NASC"])
             if sent:
                 self._pendencia("TBUSERS", chave, "data_sentinela", "baixa")
@@ -392,54 +519,48 @@ class Carga:
             v = dict(login=login, nome=nome, cpf=doc, dispensa_cpf=doc is None, tipo_conta="pessoa",
                      situacao=situacao, bloqueado_em=agora if bloq else None, data_nascimento=nasc,
                      email=email if email and "@" in email else None, exige_troca_senha=True, origem="migracao")
-            logins.add(login)
-            self._registrar("TBUSERS", chave, "usuario", self._inserir("usuario", v), h)
-        self.cr.commit()
+            hd = resumo((login, doc, situacao, bruto(l["NOMEC"], 150) or bruto(l["NOME"], 150), nasc))
+            if self._linha_nova("TBUSERS", chave, "usuario", h, lambda: self._registrar(
+                    "TBUSERS", chave, "usuario", self._inserir("usuario", v), h, hd) or True):
+                self.origem.setdefault("usuario", {})[chave] = hd.hex()
+        self._commit()
 
     def _pacientes(self, linhas):
         pronts = {r[0] for r in self._todas("SELECT numero_prontuario FROM paciente")}
-        cpfs = {r[0] for r in self._todas("SELECT cpf FROM pessoa_fisica WHERE cpf IS NOT NULL AND origem<>'migracao'")}
-        vistos = set()
-        self.pront_origem = {}
+        cpfs = {r[0] for r in self._todas("SELECT cpf FROM pessoa_fisica WHERE cpf IS NOT NULL")}
         estab = self._estab_principal()
         n = 0
         for l in linhas:
             n += 1
             if n % 1000 == 0:
-                self.cr.commit()
-            chave, h, sit = self._ciclo("RICADPAC", l)
+                self._commit()
+            chave, h, sit, ant = self._ciclo("RICADPAC", l)
+            if sit != "nova":
+                if ant[0] is not None:
+                    self._ja_carregada("paciente", chave, sit, ant)
+                    self._subs_ja_carregadas(chave, l, somar=sit == "igual")
+                continue
             nome = txt(l["NOME"], 150)
             pront = l["PRONT"] if isinstance(l["PRONT"], int) and l["PRONT"] > 0 else None
-            if sit == "nova":
-                regra = None if nome else "nome_ausente"
-                regra = regra or (None if pront else "prontuario_ausente")
-                regra = regra or ("prontuario_duplicado" if pront in pronts else None)
-                if regra:
-                    self._pendencia("RICADPAC", chave, regra, "critica")
-                    self._registrar("RICADPAC", chave, "paciente", None, h); continue
-            elif self._de_para("RICADPAC", chave)[0] is None:
-                continue  # recusada antes: segue recusada (o Sincronizar reavalia)
-            self.pront_origem[chave] = pront
+            regra = None if nome else "nome_ausente"
+            regra = regra or (None if pront else "prontuario_ausente")
+            regra = regra or ("prontuario_duplicado" if pront in pronts else None)
+            if regra:
+                self._recusar("RICADPAC", chave, "paciente", h, regra, "critica"); continue
             doc, ruim = cpf(l["CPF"])
             if ruim:
                 self._pendencia("RICADPAC", chave, "cpf_invalido", "media")
-            if doc and (doc in vistos or doc in cpfs):
-                if sit == "nova":
-                    self._pendencia("RICADPAC", chave, "cpf_duplicado", "alta")
-                doc = None
-            if doc:
-                vistos.add(doc)
+            if doc and doc in cpfs:
+                self._pendencia("RICADPAC", chave, "cpf_duplicado", "alta"); doc = None
             nasc, sent = data(l["NASC"])
             if sent:
                 self._pendencia("RICADPAC", chave, "data_sentinela", "baixa")
             obito, s2 = data(l["DTOBITO"])
+            if s2:
+                self._pendencia("RICADPAC", chave, "data_sentinela", "baixa")
             if obito and nasc and obito < nasc:
                 self._pendencia("RICADPAC", chave, "obito_antes_nascimento", "alta"); obito = None
             situacao = "obito" if obito else ("inativo" if (txt(l["ATIVO"]) or "S").upper() == "N" else "ativo")
-            self._somar("paciente", chave, pront, nasc, doc, situacao)
-            if sit != "nova":
-                self._sub_paciente(chave, l, None, h, gravar=False)
-                continue
             cns = digitos(l["CNS"])
             if cns and len(cns) != 15:
                 self._pendencia("RICADPAC", chave, "cns_invalido", "baixa"); cns = ""
@@ -447,60 +568,101 @@ class Carga:
             pf = dict(nome=nome, cpf=doc, cns=cns or None, data_nascimento=nasc, sexo_id=self.sexo.get(sexo),
                       nome_mae=txt(l["MAE"], 150), nome_pai=txt(l["PAI"], 150), falecida=bool(obito),
                       data_obito=obito, origem="migracao")
-            pfid = self._inserir("pessoa_fisica", pf)
-            pid = self._inserir("paciente", dict(pessoa_fisica_id=pfid, numero_prontuario=pront, situacao=situacao,
-                                                 falecido=bool(obito), nome_mae=pf["nome_mae"],
-                                                 cadastro_estabelecimento_id=estab, origem="migracao"))
-            pronts.add(pront)
-            self._registrar("RICADPAC", chave, "paciente", pid, h)
-            self._sub_paciente(chave, l, pfid, h)
+            hd = resumo((pront, nasc, doc, situacao, bruto(l["NOME"], 150), bruto(l["MAE"], 150), cns or None, obito))
+            subs = []
 
-    def _sub(self, chave, sub, entidade, id_destino, h, gravar=True):
-        if gravar:
-            self._registrar("RICADPAC", "%s/%s" % (chave, sub), entidade, id_destino, h)
-        self._somar(entidade, "%s/%s" % (chave, sub), id_destino is not None)
+            def gravar():
+                pfid = self._inserir("pessoa_fisica", pf)
+                pid = self._inserir("paciente", dict(pessoa_fisica_id=pfid, numero_prontuario=pront, situacao=situacao,
+                                                     falecido=bool(obito), nome_mae=pf["nome_mae"],
+                                                     cadastro_estabelecimento_id=estab, origem="migracao"))
+                self._registrar("RICADPAC", chave, "paciente", pid, h, hd)
+                subs.extend(self._sub_paciente(chave, l, pfid, h))
+                return True
+            if self._linha_nova("RICADPAC", chave, "paciente", h, gravar):
+                self.origem.setdefault("paciente", {})[chave] = hd.hex()
+                for ent, k, v in subs:
+                    self.origem.setdefault(ent, {})[k] = v
+                pronts.add(pront)
+                if doc:
+                    cpfs.add(doc)
+        self._commit()
 
-    def _sub_paciente(self, chave, l, pfid, h, gravar=True):
-        """Documento, endereço e telefones da pessoa. Com gravar=False (linha já carregada), só a soma de controle
-        da origem: a decisão (grava ou pendência) é a mesma, tirada só da linha e dos catálogos."""
-        sim = True  # marcador de "seria gravado" quando gravar=False
+    SUBS = (("IDENT", "documento", "documento_pessoa"), ("ENDERECO", "endereco", "endereco_pessoa"),
+            ("FONE", "telefone_residencial", "telefone_pessoa"), ("CELULAR", "telefone_celular", "telefone_pessoa"))
+
+    def _subs_ja_carregadas(self, chave, l, somar=True):
+        """Paciente já carregado: reemite a regra das subentidades recusadas e, se igual, põe as subentidades que a
+        linha da origem produz na soma, com o resumo gravado. Alterado (fora da soma): só a reemissão."""
+        for col, sub, ent in self.SUBS:
+            k = "%s/%s" % (chave, sub)
+            ant = self.existente.get("RICADPAC", {}).get(k)
+            if not somar:
+                if ant is not None and ant[0] is None:
+                    self._pendencia("RICADPAC", k, ant[3] or "recusa_sem_regra_registrada", ant[4] or "baixa")
+                continue
+            if not txt(l[col]):
+                continue
+            if ant is None:
+                v = "sem_registro"
+            elif ant[0] is None:
+                v = RECUSADO
+                self._pendencia("RICADPAC", k, ant[3] or "recusa_sem_regra_registrada", ant[4] or "baixa")
+            else:
+                v = ant[2].hex() if ant[2] is not None else "sem_resumo_gravado"
+            self.origem.setdefault(ent, {})[k] = v
+
+    def _sub_paciente(self, chave, l, pfid, h):
+        """Documento, endereço e telefones da pessoa (dentro do SAVEPOINT do paciente). Devolve as linhas da soma da
+        origem: (entidade, chave, resumo ou RECUSADO)."""
+        out = []
+
+        def sub(nome, ent, idd, campos, recusa=None):
+            k = "%s/%s" % (chave, nome)
+            if recusa:
+                self._recusar("RICADPAC", k, ent, h, *recusa)
+                out.append((ent, k, RECUSADO))
+            else:
+                hd = resumo(campos)
+                self._registrar("RICADPAC", k, ent, idd, h, hd)
+                out.append((ent, k, hd.hex()))
         ident = txt(l["IDENT"], 40)
         if ident:
-            did = sim if not gravar else self._inserir("documento_pessoa", dict(pessoa_fisica_id=pfid, sequencia=1, numero=ident,
-                                tipo_documento_identificacao_id=self.tipo[("tipo_documento_identificacao", "rg")],
-                                principal=True, origem="migracao"))
-            self._sub(chave, "documento", "documento_pessoa", did, h, gravar)
+            did = self._inserir("documento_pessoa", dict(
+                pessoa_fisica_id=pfid, sequencia=1, numero=ident,
+                tipo_documento_identificacao_id=self.tipo[("tipo_documento_identificacao", "rg")], principal=True,
+                origem="migracao"))
+            sub("documento", "documento_pessoa", did, (bruto(l["IDENT"], 40),))
         if txt(l["ENDERECO"]):
             cep = digitos(l["CEP"]); cep = cep.zfill(8) if cep and len(cep) <= 8 else None
-            ibge = digitos(l["IBGE"])
-            mun = self.municipio.get(ibge.zfill(7)) if ibge else None
+            ibge = digitos(l["IBGE"]); ibge = ibge.zfill(7) if ibge else None
+            mun = self.municipio.get(ibge) if ibge else None
             if not cep or not mun:
-                if gravar:
-                    self._pendencia("RICADPAC", chave, "endereco_sem_cep_ou_municipio", "media")
-                self._sub(chave, "endereco", "endereco_pessoa", None, h, gravar)
+                sub("endereco", "endereco_pessoa", None, None, ("endereco_sem_cep_ou_municipio", "media"))
             else:
-                num = digitos(l["NUMERO"])[:10]
-                eid = sim if not gravar else self._inserir("endereco_pessoa", dict(
+                num = digitos(l["NUMERO"])[:10] or None
+                eid = self._inserir("endereco_pessoa", dict(
                     pessoa_fisica_id=pfid, sequencia=1, tipo_endereco_id=self.tipo[("tipo_endereco", "residencial")],
-                    logradouro=txt(l["ENDERECO"], 150), cep=cep, municipio_ibge_id=mun, numero=num or None,
+                    logradouro=txt(l["ENDERECO"], 150), cep=cep, municipio_ibge_id=mun, numero=num,
                     sem_numero=not num, complemento=txt(l["COMPL"], 100), bairro_nome=txt(l["BAIRRO"], 100),
                     principal=True, origem="migracao"))
-                self._sub(chave, "endereco", "endereco_pessoa", eid, h, gravar)
+                sub("endereco", "endereco_pessoa", eid, (bruto(l["ENDERECO"], 150), cep, ibge, num,
+                                                         bruto(l["COMPL"], 100), bruto(l["BAIRRO"], 100)))
         seq = 0
-        for col, tipo in (("FONE", "residencial"), ("CELULAR", "celular")):
+        for col, nome, _ in self.SUBS[2:]:
             if not txt(l[col]):
                 continue
             tel, ruim = telefone(l[col])
             if ruim or not tel:
-                if gravar:
-                    self._pendencia("RICADPAC", chave, "telefone_invalido", "baixa")
-                self._sub(chave, "telefone_" + tipo, "telefone_pessoa", None, h, gravar)
+                sub(nome, "telefone_pessoa", None, None, ("telefone_invalido", "baixa"))
                 continue
             seq += 1
-            tid = sim if not gravar else self._inserir("telefone_pessoa", dict(pessoa_fisica_id=pfid, sequencia=seq, ddi="55", ddd=tel[0],
-                                numero=tel[1], tipo_telefone_id=self.tipo[("tipo_telefone", tipo)],
-                                principal=seq == 1, origem="migracao"))
-            self._sub(chave, "telefone_" + tipo, "telefone_pessoa", tid, h, gravar)
+            tipo = nome.split("_", 1)[1]
+            tid = self._inserir("telefone_pessoa", dict(
+                pessoa_fisica_id=pfid, sequencia=seq, ddi="55", ddd=tel[0], numero=tel[1],
+                tipo_telefone_id=self.tipo[("tipo_telefone", tipo)], principal=seq == 1, origem="migracao"))
+            sub(nome, "telefone_pessoa", tid, (tel[0], tel[1]))
+        return out
 
     def _estab_principal(self):
         """O estabelecimento do atendimento: o de menor código entre os carregados da origem (a origem medida tem
@@ -555,41 +717,39 @@ class Carga:
         numeros = {r[0] for r in self._todas("SELECT numero FROM atendimento WHERE estabelecimento_id=%s", (estab,))} \
             if estab else set()
         categoria = {}
-        self.num_origem = {}
         n = 0
         for l in linhas:
             n += 1
             if n % 1000 == 0:
-                self.cr.commit()
-            chave, h, sit = self._ciclo("ATCABECATEND", l)
-            numero = str(l["COD_ATENDIMENTO"]) if l["COD_ATENDIMENTO"] is not None else None
+                self._commit()
+            chave, h, sit, ant = self._ciclo("ATCABECATEND", l)
+            if sit != "nova":
+                if ant[0] is not None:
+                    self._ja_carregada("atendimento", chave, sit, ant)
+                continue
+            numero = str(l["COD_ATENDIMENTO"])[:20] if l["COD_ATENDIMENTO"] is not None else None
             pac_chave = str(l["ID_RICADPAC"])
             pac, pac_existe = self._de_para("RICADPAC", pac_chave)
             tp = (txt(l["TP_ATENDIMENTO"]) or "").upper()
             car = CARATER.get(l["CARATER_ATEND"])
-            if sit == "nova":
-                regra = None
-                if not estab:
-                    regra = ("estabelecimento_ausente", "critica")
-                elif not pac:
-                    regra = ("pai_pendente" if pac_existe else "paciente_inexistente", "critica")
-                elif not numero or numero in numeros:
-                    regra = ("numero_duplicado" if numero else "numero_ausente", "critica")
-                elif tp not in CATEGORIAS:
-                    regra = ("categoria_desconhecida", "alta")
-                elif not car:
-                    regra = ("carater_ausente", "alta")
-                elif car not in self.carater:
-                    regra = ("catalogo_oficial_ausente_carater_tiss", "critica")
-                elif l["DATA_HORA_ENTRADA"] is None:
-                    regra = ("entrada_ausente", "critica")
-                if regra:
-                    self._pendencia("ATCABECATEND", chave, *regra)
-                    self._registrar("ATCABECATEND", chave, "atendimento", None, h); continue
-            elif self._de_para("ATCABECATEND", chave)[0] is None:
-                continue
-            self.num_origem[chave] = numero
-            entrada, _ = momento(l["DATA_HORA_ENTRADA"])
+            entrada, s0 = momento(l["DATA_HORA_ENTRADA"])
+            regra = None
+            if not estab:
+                regra = ("estabelecimento_ausente", "critica")
+            elif not pac:
+                regra = ("pai_pendente" if pac_existe else "paciente_inexistente", "critica")
+            elif not numero or numero in numeros:
+                regra = ("numero_duplicado" if numero else "numero_ausente", "critica")
+            elif tp not in CATEGORIAS:
+                regra = ("categoria_desconhecida", "alta")
+            elif not car:
+                regra = ("carater_ausente", "alta")
+            elif car not in self.carater:
+                regra = ("catalogo_oficial_ausente_carater_tiss", "critica")
+            elif entrada is None:  # depois de momento(): sentinela (1899-12-30, ano < 1800) também não serve
+                regra = ("entrada_sentinela" if s0 else "entrada_ausente", "critica")
+            if regra:
+                self._recusar("ATCABECATEND", chave, "atendimento", h, *regra); continue
             saida, s1 = momento(l["DATA_HORA_SAIDA_EFETIVA"])
             if saida and saida < entrada:
                 self._pendencia("ATCABECATEND", chave, "saida_antes_entrada", "media"); saida = None
@@ -604,44 +764,56 @@ class Carga:
             elif saida:
                 situacao = "encerrado"
                 desfecho = "alta" if (chave in altas or alta) else "administrativo"
-                if desfecho == "administrativo" and sit == "nova":
+                if desfecho == "administrativo":
                     self._pendencia("ATCABECATEND", chave, "desfecho_nao_informado", "baixa")
             else:
                 situacao = "aberto"
-            self._somar("atendimento", chave, numero, self.pront_origem.get(pac_chave), entrada, situacao)
-            if sit != "nova":
-                continue
-            if tp not in categoria:
-                cod, desc = CATEGORIAS[tp]
-                categoria[tp] = self._catalogo("categoria_atendimento", cod, {"descricao": desc, "tipo_base": cod})
-            v = dict(estabelecimento_id=estab, numero=numero[:20], paciente_id=pac,
-                     categoria_atendimento_id=categoria[tp], carater_atendimento_tiss_id=self.carater[car],
-                     fonte_pagadora_id=self._fonte(l["ID_TBCONVEN"]),
-                     profissional_id=self._profissional(l["ID_TBCBOPRO_ATENDIMENTO"]), entrada_em=entrada,
-                     saida_em=saida, alta_medica_em=alta, situacao=situacao, desfecho=desfecho, origem="migracao")
-            numeros.add(numero)
-            self._registrar("ATCABECATEND", chave, "atendimento", self._inserir("atendimento", v), h)
-        self.cr.commit()
+            hd = resumo((numero, pac_chave, entrada, saida, alta, situacao, desfecho))
+
+            def gravar():
+                if tp not in categoria:
+                    cod, desc = CATEGORIAS[tp]
+                    categoria[tp] = self._catalogo("categoria_atendimento", cod, {"descricao": desc, "tipo_base": cod})
+                v = dict(estabelecimento_id=estab, numero=numero, paciente_id=pac,
+                         categoria_atendimento_id=categoria[tp], carater_atendimento_tiss_id=self.carater[car],
+                         fonte_pagadora_id=self._fonte(l["ID_TBCONVEN"]),
+                         profissional_id=self._profissional(l["ID_TBCBOPRO_ATENDIMENTO"]), entrada_em=entrada,
+                         saida_em=saida, alta_medica_em=alta, situacao=situacao, desfecho=desfecho, origem="migracao")
+                self._registrar("ATCABECATEND", chave, "atendimento", self._inserir("atendimento", v), h, hd)
+                return True
+            cat_antes = dict(categoria)
+            if self._linha_nova("ATCABECATEND", chave, "atendimento", h, gravar):
+                self.origem.setdefault("atendimento", {})[chave] = hd.hex()
+                numeros.add(numero)
+                self.atend_novos.add(chave)
+            else:
+                categoria.clear(); categoria.update(cat_antes)
+        self._commit()
         # fichas (RECADATE) e altas (REALTA) ligadas ao atendimento de destino
         for tab, pai_de in (("RECADATE", lambda k, l: str(l["ID_ATCABECATEND"])),
                             ("REALTA", lambda k, l: str(ficha_atend.get(k)) if k in ficha_atend else None)):
+            ent = ENT_FILHA[tab]
             for k, l, h in self.pre.get(tab, []):
-                pai = pai_de(k, l)
-                ant = self.existente.get(tab, {}).get(k)
-                if ant and ant[1] == h:
-                    self.cont["puladas_iguais"] += 1
-                    if ant[0]:
-                        self._somar(ENT_FILHA[tab], k, self.num_origem.get(pai))
+                sit, ant = self._situacao(tab, k, h)
+                if sit != "nova":
+                    if ant[0] is not None:
+                        self._ja_carregada(ent, k, sit, ant)
                     continue
+                pai = pai_de(k, l)
                 aid, existe = self._de_para("ATCABECATEND", pai) if pai else (None, False)
                 if aid is None:
-                    if not ant:
-                        self._pendencia(tab, k, "pai_pendente" if existe else "atendimento_inexistente", "alta")
-                        self._registrar(tab, k, "atendimento", None, h)
+                    self._recusar(tab, k, "atendimento", h, "pai_pendente" if existe else "atendimento_inexistente",
+                                  "alta")
                     continue
-                self._somar(ENT_FILHA[tab], k, self.num_origem.get(pai))
-                self._registrar(tab, k, "atendimento", aid, h)
-        self.cr.commit()
+                if tab == "REALTA" and pai not in self.atend_novos:
+                    # a alta muda o atendimento já carregado (alta_medica_em, desfecho): só o Sincronizar (L9) aplica
+                    self._recusar(tab, k, "atendimento", h, "alta_de_atendimento_ja_carregado_aguarda_sincronizar",
+                                  "baixa")
+                    continue
+                hd = resumo((pai,))
+                self._registrar(tab, k, "atendimento", aid, h, hd)
+                self.origem.setdefault(ent, {})[k] = hd.hex()
+        self._commit()
 
     # ----- execução -----
     def executar(self, presentes, contagens):
@@ -659,85 +831,131 @@ class Carga:
               "REALTA": lambda ls: self._pre("REALTA", ls), "RECADATE": lambda ls: self._pre("RECADATE", ls)}
         if "ATCABECATEND" in self.tabelas and "RICADPAC" not in self.tabelas:
             raise ErroCarga("atendimento sem a tabela de pacientes na origem")
-        self.pront_origem, self.num_origem = getattr(self, "pront_origem", {}), {}
         for i, t in enumerate(self.tabelas):
             self.progresso(i / len(self.tabelas), "carregando %s" % MAPA[t]["entidade"])
             fn[t](self._linhas(t))
-        self._gravar_pendencias()
-        return self.conciliar(contagens)
-
-    def _gravar_pendencias(self):
-        with self._c() as c:
-            c.executemany("INSERT INTO %s.pendencia (execucao_id, tabela_origem, chave_original, regra, gravidade,"
-                          " criado_em) VALUES (%s, %%s, %%s, %%s, %%s, %s)" % (self.ctl, int(self.eid), AGORA),
-                          self.pend)
-        self.cr.commit()
+        self._commit()
+        res = self.conciliar(contagens)
+        self._commit()
+        return res
 
     # ----- conciliação (destino relido do banco) -----
+    # (entidade, tabela de origem, SELECT chave, campos do resumo (mesma ordem do lado da origem), editado)
+    EDITADO = "(d.versao > 1 OR d.alterado_em IS NOT NULL)"
     DESTINO = {
-        "estabelecimento": ("TBHOSPIT", "estabelecimento",
-                            "SELECT co.chave_original, d.cnpj, d.codigo_cnes, d.cep FROM {ctl}.conector_origem co"
-                            " JOIN estabelecimento d ON d.id=co.id_destino AND d.origem='migracao'"
-                            " WHERE co.tabela_origem='TBHOSPIT' AND co.excluido_em IS NULL"),
-        "usuario": ("TBUSERS", "usuario",
-                    "SELECT co.chave_original, d.login, d.cpf, d.situacao FROM {ctl}.conector_origem co"
-                    " JOIN usuario d ON d.id=co.id_destino AND d.origem='migracao'"
-                    " WHERE co.tabela_origem='TBUSERS' AND co.excluido_em IS NULL"),
-        "paciente": ("RICADPAC", "paciente",
-                     "SELECT co.chave_original, d.numero_prontuario, pf.data_nascimento, pf.cpf, d.situacao"
+        "estabelecimento": ("TBHOSPIT",
+                            "SELECT co.chave_original, d.codigo, d.cnpj, d.codigo_cnes, d.cep, d.razao_social,"
+                            " d.nome_fantasia, d.logradouro, d.bairro_nome, d.numero, d.inicio_atividade, {ed}"
+                            " FROM {ctl}.conector_origem co JOIN estabelecimento d ON d.id=co.id_destino"
+                            " AND d.origem='migracao' WHERE co.tabela_origem='TBHOSPIT'"),
+        "usuario": ("TBUSERS",
+                    "SELECT co.chave_original, d.login, d.cpf, d.situacao, d.nome, d.data_nascimento, {ed}"
+                    " FROM {ctl}.conector_origem co JOIN usuario d ON d.id=co.id_destino AND d.origem='migracao'"
+                    " WHERE co.tabela_origem='TBUSERS'"),
+        "paciente": ("RICADPAC",
+                     "SELECT co.chave_original, d.numero_prontuario, pf.data_nascimento, pf.cpf, d.situacao, pf.nome,"
+                     " pf.nome_mae, pf.cns, pf.data_obito,"
+                     " ({ed} OR pf.versao > 1 OR pf.alterado_em IS NOT NULL)"
                      " FROM {ctl}.conector_origem co JOIN paciente d ON d.id=co.id_destino AND d.origem='migracao'"
                      " JOIN pessoa_fisica pf ON pf.id=d.pessoa_fisica_id"
-                     " WHERE co.tabela_origem='RICADPAC' AND co.entidade_destino='paciente' AND co.excluido_em IS NULL"),
-        "atendimento": ("ATCABECATEND", "atendimento",
-                        "SELECT co.chave_original, d.numero, p.numero_prontuario, d.entrada_em, d.situacao"
+                     " WHERE co.tabela_origem='RICADPAC' AND co.entidade_destino='paciente'"),
+        "atendimento": ("ATCABECATEND",
+                        "SELECT co.chave_original, d.numero, cp.chave_original, d.entrada_em, d.saida_em,"
+                        " d.alta_medica_em, d.situacao, d.desfecho, {ed}"
                         " FROM {ctl}.conector_origem co JOIN atendimento d ON d.id=co.id_destino"
-                        " AND d.origem='migracao' JOIN paciente p ON p.id=d.paciente_id"
-                        " WHERE co.tabela_origem='ATCABECATEND' AND co.excluido_em IS NULL"),
-        "atendimento_ficha": ("RECADATE", "atendimento",
-                                 "SELECT co.chave_original, d.numero FROM {ctl}.conector_origem co"
-                                 " JOIN atendimento d ON d.id=co.id_destino WHERE co.tabela_origem='RECADATE'"
-                                 " AND co.excluido_em IS NULL"),
-        "atendimento_alta": ("REALTA", "atendimento",
-                               "SELECT co.chave_original, d.numero FROM {ctl}.conector_origem co"
-                               " JOIN atendimento d ON d.id=co.id_destino WHERE co.tabela_origem='REALTA'"
-                               " AND co.excluido_em IS NULL"),
+                        " AND d.origem='migracao' LEFT JOIN {ctl}.conector_origem cp ON cp.entidade_destino='paciente'"
+                        " AND cp.id_destino=d.paciente_id AND cp.tabela_origem='RICADPAC'"
+                        " WHERE co.tabela_origem='ATCABECATEND'"),
+        "atendimento_ficha": ("RECADATE",
+                              "SELECT co.chave_original, ca.chave_original, {ed} FROM {ctl}.conector_origem co"
+                              " JOIN atendimento d ON d.id=co.id_destino LEFT JOIN {ctl}.conector_origem ca"
+                              " ON ca.entidade_destino='atendimento' AND ca.id_destino=d.id"
+                              " AND ca.tabela_origem='ATCABECATEND' WHERE co.tabela_origem='RECADATE'"),
+        "atendimento_alta": ("REALTA",
+                             "SELECT co.chave_original, ca.chave_original, {ed} FROM {ctl}.conector_origem co"
+                             " JOIN atendimento d ON d.id=co.id_destino LEFT JOIN {ctl}.conector_origem ca"
+                             " ON ca.entidade_destino='atendimento' AND ca.id_destino=d.id"
+                             " AND ca.tabela_origem='ATCABECATEND' WHERE co.tabela_origem='REALTA'"),
     }
-    SUB = {"documento_pessoa": "documento_pessoa", "endereco_pessoa": "endereco_pessoa",
-           "telefone_pessoa": "telefone_pessoa"}
+    SUB = {"documento_pessoa": "SELECT co.chave_original, co.id_destino, d.id, d.numero, {ed}",
+           "endereco_pessoa": "SELECT co.chave_original, co.id_destino, d.id, d.logradouro, d.cep, m.codigo_ibge,"
+                              " d.numero, d.complemento, d.bairro_nome, {ed}",
+           "telefone_pessoa": "SELECT co.chave_original, co.id_destino, d.id, d.ddd, d.numero, {ed}"}
+
+    def _conferir(self, ent, tab, destino, vistas, excluir):
+        """destino: {chave: (resumo hex, editado)} só das chaves vistas na origem. Linha diferente com rastro de
+        edição no destino vira pendência (conflito visível), fora da soma; o resto tem de bater linha a linha."""
+        origem = self.origem.get(ent, {})
+        fora = set(excluir)
+        editados = 0
+        for k, (hx, ed) in destino.items():
+            if k not in fora and ed and origem.get(k) != hx:
+                self._pendencia(tab, k, "edicao_no_destino", "media")
+                editados += 1
+                fora.add(k)
+        so = soma("%s|%s" % (k, v) for k, v in origem.items() if k not in fora)
+        sd = soma("%s|%s" % (k, v[0]) for k, v in destino.items() if k not in fora)
+        return so, sd, editados
 
     def conciliar(self, contagens):
         res = {}
-        for ent, (tab, _, sql) in self.DESTINO.items():
+        for ent, (tab, sql) in self.DESTINO.items():
             if tab not in self.tabelas:
                 continue
-            linhas = self._todas(sql.format(ctl=self.ctl))
-            destino = ["|".join(fmt(v) for v in r) for r in linhas]
-            recusadas = self._um("SELECT COUNT(*) FROM %s.conector_origem WHERE tabela_origem=%%s AND id_destino IS NULL"
-                                 " AND chave_original NOT LIKE '%%%%/%%%%'" % self.ctl, (tab,))
+            vistas = self.vistas.get(tab, set())
+            destino, apagadas = {}, 0
+            for r in self._todas(sql.format(ctl=self.ctl, ed=self.EDITADO)):
+                if r[0] not in vistas:
+                    apagadas += 1
+                    self._pendencia(tab, r[0], "apagada_aguarda_sincronizar", "media")
+                    continue
+                destino[r[0]] = (resumo(r[1:-1]).hex(), bool(r[-1]))
+            aguardam = self.aguardam.get(ent, set())
+            so, sd, editados = self._conferir(ent, tab, destino, vistas, aguardam)
+            recusadas = sum(1 for k in vistas if self.existente.get(tab, {}).get(k, (None,))[0] is None)
             lidos = int(contagens.get(tab, 0))
-            so, sd = soma(self.origem_soma.get(ent, [])), soma(destino)
-            ok = lidos == len(destino) + int(recusadas) and so == sd
+            ok = lidos == len(vistas) == len(destino) + recusadas and so == sd
             res[ent] = {"tabela_origem": tab, "registros_origem": lidos, "registros_destino": len(destino),
-                        "recusados": int(recusadas), "soma_origem": so, "soma_destino": sd, "conferido": ok}
+                        "recusados": recusadas, "aguardam_sincronizar": len(aguardam),
+                        "editados_no_destino": editados, "apagados_na_origem": apagadas,
+                        "soma_origem": so, "soma_destino": sd, "conferido": ok}
         if "RICADPAC" in self.tabelas:
-            for ent, tabela in self.SUB.items():
-                linhas = self._todas("SELECT co.chave_original, d.id IS NOT NULL FROM %s.conector_origem co"
-                                     " LEFT JOIN `%s` d ON d.id=co.id_destino WHERE co.tabela_origem='RICADPAC'"
-                                     " AND co.entidade_destino=%%s" % (self.ctl, tabela), (ent,))
-                destino = ["%s|%s" % (k, fmt(bool(v))) for k, v in linhas]
-                gravados = sum(1 for _, v in linhas if v)
-                so, sd = soma(self.origem_soma.get(ent, [])), soma(destino)
-                res[ent] = {"tabela_origem": "RICADPAC", "registros_origem": len(linhas), "registros_destino": gravados,
-                            "recusados": len(linhas) - gravados, "soma_origem": so, "soma_destino": sd,
-                            "conferido": so == sd}
+            pais_fora = self.aguardam.get("paciente", set())
+            vistos = self.vistas.get("RICADPAC", set())
+            for ent, sel in self.SUB.items():
+                juncao = " LEFT JOIN `%s` d ON d.id=co.id_destino" % ent
+                if ent == "endereco_pessoa":
+                    juncao += " LEFT JOIN municipio_ibge m ON m.id=d.municipio_ibge_id"
+                destino = {}
+                for r in self._todas(sel.format(ed=self.EDITADO) + " FROM %s.conector_origem co%s WHERE"
+                                     " co.tabela_origem='RICADPAC' AND co.entidade_destino=%%s" % (self.ctl, juncao),
+                                     (ent,)):
+                    pai = r[0].split("/", 1)[0]
+                    if pai not in vistos or pai in pais_fora:
+                        continue
+                    if r[1] is None:
+                        destino[r[0]] = (RECUSADO, False)
+                    elif r[2] is None:
+                        destino[r[0]] = ("destino_ausente", False)
+                    else:
+                        destino[r[0]] = (resumo(r[3:-1]).hex(), bool(r[-1]))
+                so, sd, editados = self._conferir(ent, "RICADPAC", destino, None, ())
+                origem = self.origem.get(ent, {})
+                gravados = sum(1 for v in destino.values() if v[0] != RECUSADO)
+                res[ent] = {"tabela_origem": "RICADPAC", "registros_origem": len(origem), "registros_destino": gravados,
+                            "recusados": len(destino) - gravados, "editados_no_destino": editados,
+                            "soma_origem": so, "soma_destino": sd,
+                            "conferido": set(origem) == set(destino) and so == sd}
         if "TBTPEMP" in self.tabelas:
-            n = self._um("SELECT COUNT(*) FROM %s.conector_origem WHERE tabela_origem='TBTPEMP'" % self.ctl)
             ks = [r[0] for r in self._todas("SELECT chave_original FROM %s.conector_origem WHERE tabela_origem="
                                             "'TBTPEMP'" % self.ctl)]
-            so, sd = soma(self.origem_soma.get("tipo_empresa", [])), soma(ks)
-            res["tipo_empresa"] = {"tabela_origem": "TBTPEMP", "registros_origem": int(contagens.get("TBTPEMP", 0)),
-                                   "registros_destino": int(n), "recusados": 0, "soma_origem": so, "soma_destino": sd,
-                                   "conferido": int(n) == int(contagens.get("TBTPEMP", 0)) and so == sd,
+            vistas = self.vistas.get("TBTPEMP", set())
+            ks = [k for k in ks if k in vistas]
+            so, sd = soma(self.origem.get("tipo_empresa", {})), soma(ks)
+            lidos = int(contagens.get("TBTPEMP", 0))
+            res["tipo_empresa"] = {"tabela_origem": "TBTPEMP", "registros_origem": lidos,
+                                   "registros_destino": len(ks), "recusados": 0, "soma_origem": so, "soma_destino": sd,
+                                   "conferido": len(ks) == lidos and so == sd,
                                    "observacao": "de-para guardado; vira campo do estabelecimento"}
         por_regra = {}
         for tab, _, regra, grav in self.pend:
@@ -753,7 +971,6 @@ class Carga:
                           % (self.ctl, AGORA),
                           (self.eid, ent, r["registros_origem"], r["registros_destino"], r["recusados"],
                            r["soma_destino"], r["conferido"]))
-        self.cr.commit()
         return {"versao_mapa": VERSAO_MAPA, "entidades": res, "pendencias": {
             "total": len(self.pend), "criticas": sum(1 for p in self.pend if p[3] == "critica"),
             "por_regra": por_regra}, "carga": dict(self.cont)}

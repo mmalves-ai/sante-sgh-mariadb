@@ -105,14 +105,18 @@ def _gerar_mapa(r, ins):
                    "contato@exemplo.invalid", datetime.datetime(2001, 3, 1), "naoler"])
     q("TBHOSPIT", [2, "Ambulatório Exemplo", None, 0.0, 0, None, None, None, None, None, None, None,
                    datetime.datetime(1899, 12, 30), None])
-    esp["estabelecimento"] = 2
+    # unidade com o mesmo CNES da 1 (índice único no destino): entra sem CNES, com pendência cnes_duplicado
+    q("TBHOSPIT", [3, "Unidade Exemplo Norte", None, 0.0, 1234567, None, None, None, None, None, None, None,
+                   datetime.datetime(2010, 5, 1), None])
+    esp["estabelecimento"] = 3
     # usuários: 14 linhas; 'Joao Silva' colide no login com 'JOAO SILVA' (recusado); sem CPF, CPF repetido,
     # bloqueado, inativo, login com ':' e espaço
     cpfs_u = [_cpf_falso(r) for _ in range(14)]
+    # 'JOÃO SILVA' difere de 'joao.silva' só no acento: a collation do índice único do destino iguala os dois
     nomes = ["ADMIN", "ANA.PAULA", "BRUNO", "CARLA", "DIEGO", "ELISA", "FABIO", "GABI", "HUGO", "IARA", "JOAO SILVA",
-             "Joao Silva", "REC:01", "ZECA"]
+             "Joao Silva", "REC:01", "ZECA", "JOÃO SILVA"]
     for i, nome in enumerate(nomes, 1):
-        c = cpfs_u[i - 1]
+        c = cpfs_u[i - 1] if i <= len(cpfs_u) else None
         if nome == "DIEGO":
             c = None
         if nome == "ELISA":
@@ -120,8 +124,8 @@ def _gerar_mapa(r, ins):
         q("TBUSERS", [nome, i, "I" if nome == "FABIO" else "A", c, "%s@exemplo.invalid" % nome.lower()[:5],
                       "S" if nome == "GABI" else "N", datetime.date(1980, 1, 1) + datetime.timedelta(days=i * 97),
                       "Usuário %s de exemplo" % nome.title(), "naoler", "naoler"])
-    esp["usuario"] = len(nomes) - 1
-    recusa("login_duplicado")
+    esp["usuario"] = len(nomes) - 2
+    recusa("login_duplicado"); recusa("login_duplicado")
     # pacientes: 320 linhas (IDs com lacunas); um prontuário repetido (recusado), sem nome (recusado), CPF com dígito
     # errado, CPF repetido, nascimento sentinela, óbito, inativo, telefones bons e ruins, endereço sem CEP
     ids = [i for i in range(1, 400) if i % 5]  # 320 ids
@@ -176,9 +180,11 @@ def _gerar_mapa(r, ins):
             saida = entrada - datetime.timedelta(hours=2)
         alta = saida - datetime.timedelta(minutes=30) if saida and n % 10 == 1 else None
         ativo = "N" if n == 36 else "S"
+        if n == 37:
+            entrada = datetime.datetime(1899, 12, 30)  # entrada sentinela: recusada com pendência, sem derrubar nada
         q("ATCABECATEND", [aid, cod, pac, entrada, saida, alta, tp, car, 1 + n % 4,
                            None if n % 11 == 0 else 7000 + n % 6, ativo, entrada])
-        recusado = n in (30, 31, 32, 33, 34)
+        recusado = n in (30, 31, 32, 33, 34, 37)
         if not recusado:
             esp["atendimento"] += 1
         reg += 1
@@ -197,7 +203,8 @@ def _gerar_mapa(r, ins):
         reg += 1
         q("RECADATE", [reg, 1, None, 1, 1])
         recusa("ficha_de_atendimento_inexistente")
-    for x in ("numero_duplicado", "paciente_inexistente", "pai_pendente", "categoria_desconhecida", "carater_ausente"):
+    for x in ("numero_duplicado", "paciente_inexistente", "pai_pendente", "categoria_desconhecida", "carater_ausente",
+              "entrada_sentinela"):
         recusa(x)
     return esp
 

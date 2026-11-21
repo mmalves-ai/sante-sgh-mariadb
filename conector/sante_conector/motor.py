@@ -121,8 +121,14 @@ def executar(trab, eid):
                 finally:
                     cc.close()
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",
-                                                          "recusados", "conferido", "soma_destino")}
+                                                          "recusados", "conferido", "soma_destino",
+                                                          "aguardam_sincronizar", "editados_no_destino",
+                                                          "apagados_na_origem") if x in v}
                                      for k, v in resumo["entidades"].items()}
+                # até o L9, o Sincronizar roda a mesma carga: traz linhas novas; alteradas, apagadas e editadas no
+                # destino ficam com pendência (nunca sobrescrita silenciosa). O resumo diz isso ao painel.
+                resumo["carga"]["modo"] = ("sincronizar_parcial_ate_l9" if ex["tipo"] == "sincronizar"
+                                           else "importar")
                 cont.update(versao_mapa=resumo["versao_mapa"], pendencias=resumo["pendencias"], carga=resumo["carga"])
                 ruins = sorted(k for k, v in resumo["entidades"].items() if not v["conferido"])
                 if ruins:

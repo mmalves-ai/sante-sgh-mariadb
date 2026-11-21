@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS {b}.conector_origem (
 ) COMMENT='De-para linha da origem -> registro de destino, com o hash para o diferencial';
 ALTER TABLE {b}.conector_origem MODIFY chave_original VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
   COMMENT 'Chave da linha na origem (identificador técnico; binária: a origem diferencia maiúsculas)';
+ALTER TABLE {b}.conector_origem
+  ADD COLUMN IF NOT EXISTS hash_destino BINARY(32) NULL
+    COMMENT 'sha256 do resumo dos campos gravados no destino (texto em bytes CP1252): base da conciliação e do L9',
+  ADD COLUMN IF NOT EXISTS regra_recusa VARCHAR(80) NULL COMMENT 'Regra que recusou a linha (nunca o valor)',
+  ADD COLUMN IF NOT EXISTS gravidade_recusa VARCHAR(10) NULL;
 CREATE TABLE IF NOT EXISTS {b}.pendencia (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL,
