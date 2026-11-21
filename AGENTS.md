@@ -47,6 +47,71 @@ SPDATA entram por um **conector diferencial**. A decisão de fundo é o
      - **Modelo:** todos os agentes usam o modelo da sessão. Não se troca por modelo mais leve (decisão do
        dono).
 
+## Orquestração com orçamento: obrigatória e com travas (dono, 2026-11-21)
+
+Esta é uma ordem do dono, dada depois do gasto de cerca de 1,4 bilhão de tokens equivalentes em 21/11/2026, dos
+quais de 600 a 700 milhões eram evitáveis.
+
+- **Vale para toda sessão e todo agente.**
+- **Plano completo:** [`docs/obra/plano-orquestracao.md`](docs/obra/plano-orquestracao.md). Em caso de
+  conflito, ele **prevalece** sobre o protocolo.
+
+### Travas técnicas
+
+O guardião `tools/obra/guardiao.py` é um gancho do `.claude/settings.json` que **recusa** o que estiver fora do
+plano:
+
+| Regra | Recusa quando |
+|---|---|
+| **G1** | Um Workflow não declara `// ORCAMENTO: <id>`, ou não existe `docs/obra/orcamentos/<id>.md` com `estimativa_M` e `teto_M` |
+| **G2** | Uma chamada de subagente não começa pelo `PREFIXO` idêntico (cache compartilhado) |
+| **G3** | O script não tem `LIMITE_AGENTES` e o invólucro `chamar(...)`, ou chama `agent(` direto |
+| **G4** | O `PREFIXO` não traz o brief da tarefa nem as regras de economia |
+| **G5** | Um subagente avulso não traz `ORCAMENTO: <id>` válido (os tipos só de leitura Explore, claude-code-guide e web-fetch passam) |
+
+**Proibido contornar o guardião:**
+- desligar o gancho;
+- editar `.claude/settings.json`;
+- renomear arquivos;
+- lançar trabalho por outro caminho.
+
+Mudar o guardião ou o plano só com pedido explícito do dono.
+
+### Regras do plano
+
+1. **Orçamento antes de lançar.**
+   - É análise do **orquestrador**: o dono não aprova orçamento (decisão de 2026-11-21).
+   - A estimativa sai da tabela da seção 6 do plano, e o teto fica 30% acima dela.
+   - Ao passar do teto, o orquestrador para, analisa a causa, otimiza e só depois segue.
+   - Ao fechar, registra em `consumo.md` o que foi estimado e o que foi gasto.
+2. **Cache.**
+   - O `PREFIXO` é idêntico byte a byte em todos os agentes, com o brief colado nele. A parte que varia vai no
+     fim.
+   - Agentes do mesmo papel são lançados juntos, porque o cache expira em 5 minutos.
+   - Nunca usar fork.
+3. **Leitura mínima.**
+   - A fatia é gerada por script e já traz os trechos necessários.
+   - O construtor segue um roteiro fixo:
+     - lê tudo num comando só;
+     - grava o resultado com 1 a 3 scripts;
+     - meta de 15 a 40 turnos, teto de 100.
+   - O revisor lê só o diff.
+   - O corretor recebe só os achados.
+   - O orquestrador lê só resumos gerados por script.
+4. **Ordem de toda rodada.**
+   1. Mudança compartilhada primeiro, por um agente só, em sequência.
+   2. Fatias uma vez só, com o verificador de completude ativo.
+   3. Conferência enxuta, com no máximo uma volta de correção.
+   4. Lotes de até cerca de 15 arquivos.
+5. **A qualidade não se troca por economia.**
+   - Revisão adversarial, verificação por script e conferência final independente são mantidas sempre.
+   - Se a qualidade cair, a regra de economia que causou a queda é desfeita.
+6. **Relatório de 50 minutos com a seção Economia:**
+   - gasto contra o orçamento;
+   - custo por papel;
+   - percentual em relação à linha de base;
+   - efeito na qualidade.
+
 ## Produto, não projeto de um cliente (ADR 0002)
 
 - Nada é engessado para a Rede Santé. Ela é **um cliente**. A única exceção é a identidade visual, por
