@@ -21,7 +21,7 @@ from sante_conector import mapa  # noqa: E402
 OUT = RAIZ / "docs/obra/fatias/f4"
 ALVO = 25
 LIMITE_BYTES = 160_000
-CAMPOS_MAPA = ["ordem", "tabela", "tipo", "destinos", "tabelas_destino", "registros", "chave", "pk_inteira",
+CAMPOS_MAPA = ["ordem", "tabela", "tipo", "destinos", "tabelas_destino", "destinos_oficiais", "registros", "chave", "pk_inteira",
                "col_alteracao", "estrategia", "depende_de", "dep_fora_do_mapa", "motivo"]
 
 

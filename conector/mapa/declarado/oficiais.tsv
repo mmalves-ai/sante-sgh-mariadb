@@ -1,0 +1,2 @@
+tabela	oficial	motivo
+terminologia	S	cadastro das terminologias oficiais (CID-10, TUSS, tabelas da ANS): criado pelo carregador versionado; a versão fica em terminologia_edicao, por isso não tem versao_fonte

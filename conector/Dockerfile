@@ -15,4 +15,5 @@ ENV FIREBIRD=/opt/firebird \
 WORKDIR /app
 COPY sante_conector /app/sante_conector
 COPY testes /app/testes
+COPY mapa /app/mapa
 ENTRYPOINT ["python3", "-s", "-m", "sante_conector.cli"]

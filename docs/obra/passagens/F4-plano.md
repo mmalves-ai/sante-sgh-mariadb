@@ -468,3 +468,35 @@ pulado no container: o do mapa do repositório, que roda no host); `python3 -I t
 - **Colunas declaradas**: 33 do L3 em `declarado/colunas.tsv` (o verificador já pegou dois nomes errados do
   primeiro rascunho). As regras geradas por nome (booleano por nome, de-para por nome) são proposta: os lotes L5 a
   L8 confirmam.
+
+- **Correções pós-avaliação (21/11):**
+  - **Catálogo oficial (regra 7):** o grupo oficial sai do DDL (coluna `versao_fonte`: 108 tabelas) mais
+    `declarado/oficiais.tsv` (`terminologia`), não de lista fixa. Destino oficial sai de `tabelas_destino` e vai para
+    a coluna nova `destinos_oficiais` (de-para pelo código); sem resto, `depara_catalogo_oficial`. Resultado: 251
+    tabelas só de-para (eram 71) e 100 mistas (a parte não oficial segue no lote: TBCID10 grava só
+    `agravo_notificavel_cid`, TBMUIBGE só `regra_retencao`, TBBANCOS só cobrança). O histórico de entidade oficial
+    também não é gravado. Verificador: falha em tabela carregável ou coluna declarada com destino oficial, em tabela
+    com destino oficial sem declaração em `catalogos.tsv` (276 propostas acrescentadas pelo `--propor-catalogos`,
+    a revisar nos lotes) e em tabela declarada como catálogo sem destino oficial.
+  - **Dicionário com subtipo:** `conector.sh dicionario <relativo>` (só metadado, snapshot; sha256 do .fdb real igual
+    ao arquivo lateral depois da leitura) dá 37.978 colunas com subtipo (BLOB: 548 texto, 70 binários). O gerador
+    recusa dicionário com BLOB sem subtipo. `texto_longo` (SUB_TYPE 1): CP1252 para utf8mb4 sem mexer em quebras e
+    espaços; `sentinela.regra_efetiva` corrige pelo dicionário vivo do cliente. Nas carregáveis: 178 `texto_longo`,
+    26 `blob`.
+  - **Texto:** `texto` só apara as pontas; `texto_nome` (652 colunas de nome) colapsa espaços; `texto_char` apara só o
+    preenchimento à direita; `codigo_char` preserva a caixa, e `sentinela.colisoes_caixa` aponta colisões para a
+    pendência `codigo_colisao_caixa`.
+  - **Hora em TIMESTAMP:** a regra `hora_em_timestamp` (1899-12-30 HH:MM vira TIME; outra data: pendência
+    `hora_com_data`) vale para TIMESTAMP com nome de hora (9 nas carregáveis). Em `data_hora`, a sentinela com hora
+    preenchida vira `hora_sem_data`, não some. O verificador exige regra de hora para destino TIME.
+  - **Pendências:** o `Propagador` guarda um conjunto por linha (própria por regra e uma `pai_pendente` por pai);
+    resolver um pai não apaga a pendência própria nem a de outro pai.
+  - **`tabela_sem_mapa` existe:** em toda execução o motor confronta a contagem do cliente com o mapa (montado em
+    `/app/mapa`). Tabela com linhas fora do mapa e fora de descarte incondicional vira pendência `tabela_sem_mapa`
+    (alta) e entra no resumo do painel. Na imagem sintética, as 7 tabelas `EX_` dão 7 pendências (test_l4 e ponta a
+    ponta). A estratégia de diferencial e o "vazia" são proposta do volume de referência, revista por cliente.
+  - **Prova:** `verificar_mapa.py` ok (1.503 tabelas, 1.185 carregáveis, 13.869 colunas); `conector.sh testes` 44
+    verdes (1 pulado: mapa do repositório, que roda no host); `fatiar_conector.py --conferir` ok (59 fatias).
+  - **Ponta a ponta:** 2 de 4 testes falham também no HEAD, sem esta correção. Os estabelecimentos são recusados
+    com `restricao_destino_4025` (CHECK do DDL novo depois do merge da F2.2), e o Sincronizar herda isso. É
+    pendência do L3, fora deste lote.

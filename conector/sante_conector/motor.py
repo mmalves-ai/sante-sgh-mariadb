@@ -14,7 +14,7 @@ import time
 
 import pymysql
 
-from . import banco, caminho, carga, controle, disco, imagem, plataforma
+from . import banco, caminho, carga, controle, disco, imagem, mapa, plataforma
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -37,6 +37,7 @@ def executar(trab, eid):
     try:
         ex = plataforma.consultar(conn, eid)
         cont["disco"] = disco.verificar(ex["tipo"], ex["origem_tamanho"])
+        mapa_exec = mapa.carregar_execucao()  # sem o mapa não há como rever o que a origem traz: falha antes de abrir
         plataforma.progresso(conn, eid, 1, "validando o arquivo de origem", cont)
         origem = caminho.validar_origem(ex["origem_caminho"])
         if origem["tamanho"] != ex["origem_tamanho"]:
@@ -90,7 +91,15 @@ def executar(trab, eid):
                     iid = c.lastrowid
                     c.executemany("INSERT INTO imagem_tabela (imagem_id, tabela_origem, registros, criado_em)"
                                   " VALUES (%s,%s,%s,UTC_TIMESTAMP(3))", [(iid, t, n) for t, n in contagens.items()])
+                    # o mapa e a estratégia saem da imagem de referência: a contagem DESTE cliente revê. Tabela com
+                    # linhas fora do mapa (descarte "vazia" que não está vazia) vira pendência, nunca é ignorada
+                    sem_mapa = mapa.tabelas_sem_mapa(contagens, mapa_exec["tabelas"], mapa_exec["descartes"])
+                    if sem_mapa:
+                        c.executemany("INSERT INTO pendencia (execucao_id, tabela_origem, chave_original, regra,"
+                                      " gravidade, criado_em) VALUES (%s,%s,NULL,'tabela_sem_mapa','alta',"
+                                      "UTC_TIMESTAMP(3))", [(eid, t) for t, _ in sem_mapa])
                 cr.commit()
+                cont["tabelas_sem_mapa"] = {"tabelas": len(sem_mapa), "registros": sum(n for _, n in sem_mapa)}
                 with cr.cursor() as c:  # o gravado, lido de volta, contra o gstat (não contra o próprio dicionário)
                     c.execute("SELECT tabela_origem, registros FROM imagem_tabela WHERE imagem_id=%s", (iid,))
                     gravado = {t: int(n) for t, n in c.fetchall()}
@@ -133,6 +142,12 @@ def executar(trab, eid):
                 ruins = sorted(k for k, v in resumo["entidades"].items() if not v["conferido"])
                 if ruins:
                     raise FalhaExecucao("conciliação por entidade divergiu: %s" % ", ".join(ruins))
+        # a pendência tabela_sem_mapa entra no resumo do painel (por regra), com as da carga
+        if cont.get("tabelas_sem_mapa", {}).get("tabelas"):
+            pend = cont.setdefault("pendencias", {"total": 0, "criticas": 0, "por_regra": {}})
+            n = cont["tabelas_sem_mapa"]["tabelas"]
+            pend["total"] = pend.get("total", 0) + n
+            pend.setdefault("por_regra", {})["imagem:tabela_sem_mapa:alta"] = n
         plataforma.mudar_estado(conn, eid, "conciliando", etapa="conferindo contagens e o arquivo", percentual=95,
                                 contadores=cont)
         plataforma.progresso(conn, eid, 97, "conferindo o arquivo de origem (sha256, tamanho e mtime)")

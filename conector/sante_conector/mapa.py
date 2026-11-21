@@ -6,7 +6,18 @@ Arquivos em `conector/mapa/` (o mapa é a única parte que conhece nomes da orig
 - `dependencias.tsv`  GERADO: arestas filha -> pai (FKs da origem entre tabelas carregadas);
 - `colunas.tsv`       GERADO pelo dicionário da origem (só nomes e tipos): regra de sentinela, referência e de-para;
 - `declarado/*.tsv`   À MÃO (revisado): ciclos quebrados em duas fases, descartes fora do mapa da análise,
-                      tabelas que são catálogo oficial e colunas com destino declarado (valem por cima das geradas).
+                      tabelas que são catálogo oficial, tabelas do modelo que são catálogo oficial além das que têm
+                      `versao_fonte` (oficiais.tsv) e colunas com destino declarado (valem por cima das geradas).
+
+Catálogo oficial (AGENTS.md regra 7): uma tabela do modelo é oficial quando tem a coluna `versao_fonte` no DDL (só o
+carregador versionado a preenche) ou quando `declarado/oficiais.tsv` diz que é (e `N` lá tira uma). Nenhuma tabela da
+origem grava nelas: o destino oficial sai de `tabelas_destino` e vai para `destinos_oficiais` (a parte oficial vira
+de-para pelo código); se nada sobra, a estratégia é `depara_catalogo_oficial`. O verificador recusa tabela carregável
+com destino oficial e tabela com destino oficial sem declaração em `declarado/catalogos.tsv`.
+
+Estratégia de diferencial e "vazia" dos descartes: saem do volume da imagem de referência (um cliente) e são PROPOSTA.
+Em toda execução o motor revê pela contagem do cliente: tabela da origem com linhas que não está no mapa (nem em
+descarte incondicional) vira pendência `tabela_sem_mapa` (`tabelas_sem_mapa`), nunca carga nem descarte silencioso.
 
 `montar()` é determinístico e não precisa do dicionário: o verificador refaz tabelas e dependências e compara.
 Sem banco e sem Firebird: roda na esteira (`python3 -I conector/verificar_mapa.py`).
@@ -23,6 +34,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 MAPA_ANALISE = "docs/analise/rodada2/final/mapa-spdata.tsv"
 VOLUME = "docs/analise/origem-fb/volume-pc-20261019.tsv"
 DIR = "conector/mapa"
+DIR_PACOTE = Path(__file__).resolve().parents[1] / "mapa"  # conector/mapa no repositório, /app/mapa no container
 LIMITE_PEQUENA = 100_000
 ESTRATEGIAS = {
     "hash_linha": "< 100 mil registros: hash de cada linha (bytes crus) contra o conector_origem",
@@ -37,10 +49,9 @@ ESTRATEGIAS = {
 # mecanismos do mapa da análise -> tabelas físicas do modelo (historico_entidade:<t> soma a própria entidade)
 MECANISMOS = {"parametro": ["parametro_definicao", "parametro_valor"], "historico_entidade": ["trilha_auditoria"],
               "arquivo": ["arquivo"], "integracao": [], "framework": [], "datamart": []}
-# catálogos oficiais (carregador próprio, AGENTS.md regra 7): o conector nunca grava neles
-OFICIAIS = {"banco", "municipio_ibge", "unidade_federativa", "pais_referencia", "ocupacao_cbo", "termo_terminologia",
-            "terminologia", "capitulo_cid10", "agrupamento_cid10",  # gitleaks:allow (nomes de tabela, não segredo)
-            "procedimento_sigtap", "compatibilidade_sigtap", "dominio_sigtap", "grupo_sigtap", "habilitacao_sigtap", "servico_classificacao_sigtap"}
+# catálogos oficiais (carregador próprio, AGENTS.md regra 7): o conector nunca grava neles. Gerado do DDL
+# (`versao_fonte`) mais `declarado/oficiais.tsv`: ver `oficiais()`.
+COLUNA_OFICIAL = "versao_fonte"
 # lotes de domínio (plano F4, seção 8: L5 a L8) por módulo da análise; L3 já carregado
 LOTES = [("L5", "cadastros e administração", ["SIS", "ADM", "CAD", "RH"]),
          ("L6", "prontuário, assinatura e assistência", ["REC", "AGE", "PEP", "INT", "CC", "HOT"]),
@@ -50,7 +61,7 @@ FEITAS_L3 = {"TBTPEMP", "TBHOSPIT", "TBUSERS", "RICADPAC", "REALTA", "RECADATE",
 # ordem de carga (plano, seção 6): usuários, estabelecimento, catálogos, cadastros, movimento, auditoria
 PRIORIDADE = {"TBUSERS": 0, "TBHOSPIT": 1, "TBTPEMP": 1}
 _AUDITORIA = re.compile(r"TRILHA|AUDIT|^HT|LOG$|^LOG|HIST")
-CAMPOS_TABELAS = ["tabela", "tipo", "destinos", "tabelas_destino", "modulo", "lote", "ordem", "registros", "chave", "pk_inteira",
+CAMPOS_TABELAS = ["tabela", "tipo", "destinos", "tabelas_destino", "destinos_oficiais", "modulo", "lote", "ordem", "registros", "chave", "pk_inteira",
                   "col_alteracao", "estrategia", "depende_de", "dep_fora_do_mapa", "motivo"]
 CAMPOS_COLUNAS = ["tabela", "coluna", "forma", "obrigatoria", "regra", "referencia", "depara"]
 
@@ -108,6 +119,26 @@ def ler_ddl(raiz=RAIZ):
     return ddl
 
 
+def oficiais(ddl, declarados=()):
+    """Tabelas do modelo que são catálogo oficial: as que têm `versao_fonte` no DDL, mais as declaradas com `S` e
+    menos as declaradas com `N` em declarado/oficiais.tsv."""
+    sim = {d["tabela"] for d in declarados if d.get("oficial") == "S"}
+    nao = {d["tabela"] for d in declarados if d.get("oficial") == "N"}
+    return frozenset(({t for t, x in ddl.items() if COLUNA_OFICIAL in x["colunas"]} | sim) - nao)
+
+
+def tipo_coluna_ddl(ddl, tabela, coluna):
+    """Tipo SQL (maiúsculo, sem tamanho) da coluna no CREATE ou num ADD COLUMN; '' se não achar."""
+    x = ddl.get(tabela)
+    if not x:
+        return ""
+    for txt in [x["create"]] + x["alter"]:
+        m = re.search(r"(?:^|\bADD COLUMN (?:IF NOT EXISTS )?)\s*`?%s`?\s+(\w+)" % re.escape(coluna), txt, re.M)
+        if m:
+            return m.group(1).upper()
+    return ""
+
+
 # ---------------- montagem (determinística) ----------------
 def lote_de(tabela, modulo, destinos, estrategia):
     if tabela in FEITAS_L3:
@@ -120,22 +151,29 @@ def lote_de(tabela, modulo, destinos, estrategia):
     return "L8"
 
 
-def fisicos(tipo, destinos):
-    """Tabelas do modelo que recebem a tabela da origem (mecanismo resolvido); [] = nada a gravar."""
-    if tipo != "MECANISMO":
-        return list(destinos)
-    saida = []
+def fisicos(tipo, destinos, oficiais_=frozenset()):
+    """(a gravar, oficiais): tabelas do modelo que recebem a tabela da origem (mecanismo resolvido) e as que são
+    catálogo oficial (nunca gravadas: viram de-para). O histórico de uma entidade oficial também não é gravado (a
+    versão vem do carregador). ([], []) = nada a gravar."""
+    saida, ofi = [], []
     for d in destinos:
+        if tipo != "MECANISMO":
+            (ofi if d in oficiais_ else saida).append(d)
+            continue
         nome, _, alvo = d.partition(":")
+        if alvo and alvo in oficiais_:
+            ofi.append(alvo)
+            continue
         saida += MECANISMOS.get(nome, ["?" + nome]) + ([alvo] if alvo else [])
-    return saida
+    return [d for d in saida if d not in oficiais_], ofi + [d for d in saida if d in oficiais_]
 
 
-def estrategia_de(v, destinos, tipo):
+def estrategia_de(v, destinos, tipo, destinos_oficiais=()):
+    """Proposta pelo volume da imagem de referência; o motor revê pela contagem de cada cliente na execução."""
+    if tipo != "NAO" and not destinos and destinos_oficiais:
+        return "depara_catalogo_oficial"
     if tipo == "MECANISMO" and not destinos:
         return "sem_carga"
-    if tipo != "NAO" and destinos and all(d in OFICIAIS for d in destinos):
-        return "depara_catalogo_oficial"
     n = int(v.get("registros") or 0)
     pk = v.get("pk") or ""
     if n < LIMITE_PEQUENA:
@@ -221,18 +259,19 @@ def componentes_ciclicas(nos, arestas):
     return sorted(comps)
 
 
-def montar(analise, volume, ciclos_declarados):
-    """Linhas de tabelas.tsv e dependencias.tsv a partir do mapa da análise, do volume e dos ciclos declarados."""
+def montar(analise, volume, ciclos_declarados, oficiais_=frozenset()):
+    """Linhas de tabelas.tsv e dependencias.tsv a partir do mapa da análise, do volume, dos ciclos declarados e do
+    conjunto de tabelas oficiais (`oficiais()`)."""
     vol = {r["tabela"]: r for r in volume}
     linhas, carregaveis = {}, set()
     for r in analise:
         t = r["tabela"]
         v = vol.get(t, {})
         destinos = [d for d in (r["destino"] or "").split(";") if d]
-        fis = fisicos(r["destino_tipo"], destinos) if r["destino_tipo"] != "NAO" else []
-        est = estrategia_de(v, fis, r["destino_tipo"]) if r["destino_tipo"] != "NAO" else "descartada"
+        fis, ofi = fisicos(r["destino_tipo"], destinos, oficiais_) if r["destino_tipo"] != "NAO" else ([], [])
+        est = estrategia_de(v, fis, r["destino_tipo"], ofi) if r["destino_tipo"] != "NAO" else "descartada"
         linhas[t] = {"tabela": t, "tipo": r["destino_tipo"], "destinos": ";".join(destinos),
-                     "tabelas_destino": ";".join(fis),
+                     "tabelas_destino": ";".join(fis), "destinos_oficiais": ";".join(ofi),
                      "modulo": r["modulo"], "registros": v.get("registros", "0"), "chave": v.get("pk", ""),
                      "pk_inteira": v.get("pk_inteira_unica", ""), "col_alteracao": v.get("col_alteracao", ""),
                      "estrategia": est, "motivo": (r.get("motivo") or "").replace("\t", " ").strip()}
@@ -290,10 +329,16 @@ def propor_quebras(ciclos, arestas, linhas):
 
 # ---------------- verificador ----------------
 def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes, colunas, colunas_decl,
-                    catalogos_decl):
+                    catalogos_decl, oficiais_decl=()):
     """Lista de erros (vazia = mapa válido). Só nomes de tabela/coluna e regras; nunca valores."""
     erros = []
-    esperado_tab, esperado_deps, ciclos, arestas = montar(analise, volume, ciclos_decl)
+    ofi = oficiais(ddl, oficiais_decl)
+    for d in oficiais_decl:
+        if d.get("tabela") not in ddl:
+            erros.append("oficiais.tsv cita tabela inexistente no DDL: %s" % d.get("tabela"))
+        if d.get("oficial") not in ("S", "N") or not (d.get("motivo") or "").strip():
+            erros.append("oficiais.tsv sem oficial S/N ou sem motivo: %s" % d.get("tabela"))
+    esperado_tab, esperado_deps, ciclos, arestas = montar(analise, volume, ciclos_decl, ofi)
     if ciclos:
         for c in ciclos:
             erros.append("ciclo não declarado em declarado/ciclos.tsv: %s" % ",".join(c))
@@ -328,6 +373,8 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             for d in [x for x in r["tabelas_destino"].split(";") if x]:
                 if d not in ddl:
                     erros.append("destino inexistente no DDL: %s -> %s" % (t, d))
+                elif d in ofi:  # regra 7: catálogo oficial só pelo carregador versionado
+                    erros.append("tabela carregável grava em catálogo oficial: %s -> %s" % (t, d))
             if r["estrategia"] not in ESTRATEGIAS:
                 erros.append("estratégia desconhecida: %s" % t)
     regs = [(re.compile(d["padrao"]), d) for d in descartes]
@@ -353,7 +400,8 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             erros.append("de-para desconhecido: %s.%s" % (c["tabela"], c["coluna"]))
         if c.get("referencia") and c["referencia"] not in vol:
             erros.append("referência a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
-    # colunas declaradas: destino existe no DDL e pertence aos destinos da tabela
+    # colunas declaradas: destino existe no DDL, pertence aos destinos da tabela e o tipo casa com a regra
+    gerada = {(c["tabela"], c["coluna"]): c["regra"] for c in colunas}
     for c in colunas_decl:
         t = c["tabela"]
         if t not in por or not por[t]["tabelas_destino"]:
@@ -372,6 +420,17 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                 erros.append("coluna de destino inexistente no DDL: %s.%s -> %s" % (t, c["coluna"], dest))
             elif dt not in por[t]["tabelas_destino"].split(";") and dt not in (c.get("via") or "").split(";"):
                 erros.append("coluna de destino fora dos destinos da tabela: %s.%s -> %s" % (t, c["coluna"], dest))
+            elif dt in ofi:
+                erros.append("coluna declarada grava em catálogo oficial: %s.%s -> %s" % (t, c["coluna"], dest))
+            else:
+                regra = c.get("regra") or gerada.get((t, c["coluna"]), "")
+                tipo = tipo_coluna_ddl(ddl, dt, dc)
+                if tipo == "TIME" and regra and regra not in sentinela.REGRAS_TIME:
+                    erros.append("destino TIME com regra %s (use hora_em_timestamp, hora_hhmm ou hora): %s.%s -> %s"
+                                 % (regra, t, c["coluna"], dest))
+                elif regra in sentinela.REGRAS_TIME and tipo and tipo != "TIME":
+                    erros.append("regra %s com destino %s (esperado TIME): %s.%s -> %s" % (regra, tipo, t, c["coluna"],
+                                                                                         dest))
     # catálogos oficiais: alvo existe no DDL; tabelas declaradas existem e são carregáveis
     usados = {c.get("depara") for c in colunas + colunas_decl} | {c["catalogo"] for c in catalogos_decl}
     for nome, cat in depara.CATALOGOS.items():
@@ -383,11 +442,23 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
         t = c["tabela"]
         if t not in por or por[t]["tipo"] == "NAO":
             erros.append("catálogo declarado fora do mapa: %s" % t)
-        elif c["catalogo"] not in depara.CATALOGOS and not (c.get("motivo") or "").strip():
+            continue
+        if c["catalogo"] not in depara.CATALOGOS and not (c.get("motivo") or "").strip():
             erros.append("catálogo declarado desconhecido e sem motivo: %s" % t)
+        # declarada como catálogo: a parte oficial é de-para (nunca gravada); só o resto pode ser carregado
+        if not por[t].get("destinos_oficiais"):
+            erros.append("tabela declarada como catálogo sem destino oficial (seria gravada inteira): %s (%s)"
+                         % (t, por[t]["estrategia"]))
+        elif por[t]["tabelas_destino"] and por[t]["estrategia"] == "depara_catalogo_oficial":
+            erros.append("estratégia depara_catalogo_oficial com destino gravável: %s" % t)
+        elif not por[t]["tabelas_destino"] and por[t]["estrategia"] != "depara_catalogo_oficial":
+            erros.append("tabela declarada como catálogo com estratégia %s (esperado depara_catalogo_oficial): %s"
+                         % (por[t]["estrategia"], t))
+    declaradas = {c["tabela"] for c in catalogos_decl}
     for r in tabelas:
-        if r["estrategia"] == "depara_catalogo_oficial" and r["tabela"] not in {c["tabela"] for c in catalogos_decl}:
-            erros.append("tabela de catálogo oficial sem declaração em declarado/catalogos.tsv: %s" % r["tabela"])
+        if (r["estrategia"] == "depara_catalogo_oficial" or r.get("destinos_oficiais")) and r["tabela"] not in declaradas:
+            erros.append("tabela com destino em catálogo oficial sem declaração em declarado/catalogos.tsv: %s"
+                         % r["tabela"])
     return erros
 
 
@@ -398,8 +469,30 @@ def carregar(raiz=RAIZ):
     return dict(analise=ler_tsv(raiz / MAPA_ANALISE), volume=ler_tsv(raiz / VOLUME), ddl=ler_ddl(raiz),
                 tabelas=ler("tabelas.tsv"), deps=ler("dependencias.tsv"), ciclos_decl=ler("declarado/ciclos.tsv"),
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
-                colunas_decl=ler("declarado/colunas.tsv"), catalogos_decl=ler("declarado/catalogos.tsv"))
+                colunas_decl=ler("declarado/colunas.tsv"), catalogos_decl=ler("declarado/catalogos.tsv"),
+                oficiais_decl=ler("declarado/oficiais.tsv"))
 
 
 def verificar(raiz=RAIZ):
     return verificar_dados(**carregar(raiz))
+
+
+# ---------------- revisão por execução (motor) ----------------
+def carregar_execucao(d=None):
+    """O que o motor precisa do mapa em toda execução: tabelas do mapa (com tipo) e descartes declarados. Lê de
+    `CONECTOR_MAPA_DIR`, ou de conector/mapa (repositório) / /app/mapa (container)."""
+    import os
+    d = Path(d or os.environ.get("CONECTOR_MAPA_DIR") or DIR_PACOTE)
+    if not (d / "tabelas.tsv").exists():
+        raise FileNotFoundError("mapa do conector ausente: %s" % (d / "tabelas.tsv"))
+    return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv")}
+
+
+def tabelas_sem_mapa(contagens, tabelas, descartes):
+    """Tabelas da origem COM linhas nesta imagem que não estão no mapa nem em descarte incondicional (`qualquer`).
+    O descarte `vazia` vale só para tabela vazia: com linhas, vira pendência `tabela_sem_mapa` (nunca carga nem
+    descarte silencioso). Devolve [(tabela, registros)] em ordem; só nomes e contagens."""
+    no_mapa = {r["tabela"] for r in tabelas}
+    incond = [re.compile(d["padrao"]) for d in descartes if d.get("condicao") == "qualquer"]
+    return sorted((t, int(n)) for t, n in contagens.items()
+                  if int(n or 0) > 0 and t not in no_mapa and not any(rx.fullmatch(t) for rx in incond))

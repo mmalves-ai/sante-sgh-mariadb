@@ -227,6 +227,10 @@ describe.skipIf(SEM_BANCO)(
       expect(regra('entrada_sentinela')).toBe(1); // recusada com pendência, sem derrubar a execução
       expect(regra('login_duplicado')).toBe(2); // 'JOÃO SILVA' = 'joao.silva' na collation do destino
       expect(regra('cnes_duplicado')).toBe(1);
+      // tabelas do cliente de exemplo com linhas e fora do mapa: pendência tabela_sem_mapa (nunca ignoradas em silêncio)
+      const foraDoMapa = Object.entries(manifesto.contagens).filter(([t, n]) => t.startsWith('EX_') && n > 0).length;
+      expect(foraDoMapa).toBeGreaterThan(0);
+      expect(regra('tabela_sem_mapa')).toBe(foraDoMapa);
       // toda linha recusada tem a regra gravada com ela e uma pendência desta execução
       expect(valor(ctl, `SELECT COUNT(*) FROM conector_origem WHERE id_destino IS NULL AND tabela_origem<>'TBTPEMP' AND regra_recusa IS NULL`)).toBe(0);
       expect(semPendencia(execucao)).toBe(0);

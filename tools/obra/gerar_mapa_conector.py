@@ -2,10 +2,15 @@
 
 uso: python3 -I tools/obra/gerar_mapa_conector.py [--dicionario CAMINHO] [--propor-ciclos] [--propor-catalogos]
 
+O dicionário (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo) sai de `conector/conector.sh dicionario
+<relativo.fdb> --saida /saida/dicionario-pc.txt` (só metadado; fica em .tmp/conector, fora do git). Sem o subtipo,
+um BLOB de texto não se distingue de um binário: o gerador recusa dicionário com BLOB sem subtipo.
+
 Entradas: docs/analise/rodada2/final/mapa-spdata.tsv (destinos), docs/analise/origem-fb/volume-pc-20261019.tsv
 (chave, volume, dependências) e o dicionário de colunas da origem (só nomes e tipos; fora do git, uso local).
 Saídas em conector/mapa/: tabelas.tsv, dependencias.tsv e colunas.tsv. Os arquivos de declarado/ são revisados à
-mão; --propor-ciclos e --propor-catalogos só os criam quando faltam (ponto de partida da revisão).
+mão; --propor-ciclos só cria ciclos.tsv quando falta; --propor-catalogos acrescenta a catalogos.tsv uma proposta para
+cada tabela com destino oficial ainda sem declaração (as linhas já revisadas ficam como estão).
 Nenhum dado de linha é lido: só metadado.
 """
 import argparse
@@ -43,13 +48,18 @@ CATALOGO_FONTE = {
 
 
 def ler_dicionario(p):
-    cols = {}
+    cols, sem_subtipo = {}, 0
     for linha in open(p, encoding="utf-8", errors="replace"):
         partes = linha.rstrip("\n").split("|")
         if len(partes) < 6:
             continue
         t, c, tipo, tam, esc, nn = partes[:6]
-        cols.setdefault(t, []).append((c, int(tipo), int(tam), int(esc), nn.strip() == "1"))
+        sub = int(partes[6]) if len(partes) > 6 and partes[6].strip() else None
+        if int(tipo) == 261 and sub is None:
+            sem_subtipo += 1
+        cols.setdefault(t, []).append((c, int(tipo), int(tam), int(esc), nn.strip() == "1", sub or 0))
+    if sem_subtipo:
+        raise SystemExit("dicionário sem o subtipo de %d BLOB(s): gere com conector/conector.sh dicionario" % sem_subtipo)
     return cols
 
 
@@ -72,8 +82,8 @@ def gerar_colunas(tabelas, dicionario, tabelas_origem, catalogo_de):
         if not r["tabelas_destino"]:
             continue
         t = r["tabela"]
-        for nome, tipo, tam, esc, nn in dicionario.get(t, []):
-            regra = sentinela.classificar(nome, tipo, tam, esc)
+        for nome, tipo, tam, esc, nn, sub in dicionario.get(t, []):
+            regra = sentinela.classificar(nome, tipo, tam, esc, sub)
             ref = referencia(nome, tabelas_origem, t) if regra == "chave_origem" else ""
             dp = catalogo_de.get(ref, "") if ref else ""
             if not ref:
@@ -94,14 +104,16 @@ def main():
     a = ap.parse_args()
     analise = mapa.ler_tsv(RAIZ / mapa.MAPA_ANALISE)
     volume = mapa.ler_tsv(RAIZ / mapa.VOLUME)
+    arq_ofi = DIR / "declarado/oficiais.tsv"
+    ofi = mapa.oficiais(mapa.ler_ddl(RAIZ), mapa.ler_tsv(arq_ofi) if arq_ofi.exists() else [])
     arq_ciclos = DIR / "declarado/ciclos.tsv"
     ciclos_decl = mapa.ler_tsv(arq_ciclos) if arq_ciclos.exists() else []
-    tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl)
+    tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi)
     if ciclos and a.propor_ciclos and not ciclos_decl:
         prop = mapa.propor_quebras(ciclos, arestas, tab)
         mapa.escrever_tsv(arq_ciclos, ["tabela", "depende_de", "tratamento", "motivo"], prop)
         ciclos_decl = prop
-        tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl)
+        tab, deps, ciclos, arestas = mapa.montar(analise, volume, ciclos_decl, ofi)
     if ciclos:
         print("ciclos não declarados (%d): rode com --propor-ciclos ou declare em %s" % (len(ciclos), arq_ciclos))
         for c in ciclos[:20]:
@@ -109,22 +121,34 @@ def main():
     mapa.escrever_tsv(DIR / "tabelas.tsv", mapa.CAMPOS_TABELAS, tab)
     mapa.escrever_tsv(DIR / "dependencias.tsv", ["tabela", "depende_de", "quebra"], deps)
     arq_cat = DIR / "declarado/catalogos.tsv"
-    if a.propor_catalogos and not arq_cat.exists():
+    if a.propor_catalogos:
+        atuais = mapa.ler_tsv(arq_cat) if arq_cat.exists() else []
+        feitas = {c["tabela"] for c in atuais}
         prop = []
         for r in tab:
+            if r["tabela"] in feitas or not r["destinos_oficiais"]:
+                continue
             fonte = CATALOGO_FONTE.get(r["tabela"])
             if fonte:
                 prop.append({"tabela": r["tabela"], "catalogo": fonte[0], "coluna_codigo": fonte[1],
                              "motivo": fonte[2]})
-            elif r["estrategia"] == "depara_catalogo_oficial":
-                ds = r["destinos"].split(";")
-                cat = "sigtap_auxiliar" if any(d.endswith("_sigtap") for d in ds) else "tiss_ans"
-                prop.append({"tabela": r["tabela"], "catalogo": cat, "coluna_codigo": "",
-                             "motivo": "tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá "
-                                       "de-para pelo código" if cat == "sigtap_auxiliar" else
-                             "terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência "
-                             "até ele existir"})
-        mapa.escrever_tsv(arq_cat, ["tabela", "catalogo", "coluna_codigo", "motivo"], prop)
+                continue
+            ofs = r["destinos_oficiais"].split(";")
+            if any("sigtap" in d for d in ofs):
+                cat = "sigtap_auxiliar"
+            elif any(d in ("termo_terminologia", "terminologia") or "tiss" in d or "tuss" in d for d in ofs):
+                cat = "tiss_ans"
+            else:
+                cat = "oficial:" + ofs[0]
+            resto = (" A parte não oficial (%s) segue no lote." % r["tabelas_destino"].replace(";", ", ")
+                     if r["tabelas_destino"] else "")
+            prop.append({"tabela": r["tabela"], "catalogo": cat, "coluna_codigo": "",
+                         "motivo": "catálogo oficial (%s): só o carregador versionado grava; a origem dá de-para pelo "
+                                   "código (o lote declara a coluna) e referência sem correspondência vira pendência."
+                                   % ", ".join(ofs) + resto})
+        if prop or not arq_cat.exists():
+            mapa.escrever_tsv(arq_cat, ["tabela", "catalogo", "coluna_codigo", "motivo"], atuais + prop)
+            print("catalogos.tsv: %d proposta(s) acrescentada(s) para revisão" % len(prop))
     dic = Path(a.dicionario) if a.dicionario else RAIZ / "referencias/spdata-colunas-raw.txt"
     if not dic.exists():
         print("dicionário da origem ausente (%s): colunas.tsv mantido como está" % dic.name)

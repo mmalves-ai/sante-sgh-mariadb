@@ -1,9 +1,12 @@
 """Autoconferência do L4 (mapa declarativo, verificador, de-para oficial, sentinelas e pendência "pai pendente").
 
-Sem banco e sem Firebird; só valores inventados. O último caso roda o verificador sobre o mapa real do repositório.
+Sem banco; só valores inventados. O caso da imagem SINTÉTICA (BLOB de texto e tabela_sem_mapa) roda no container do
+conector (`conector/conector.sh testes`); o verificador sobre o mapa real do repositório roda no host (esteira).
 """
 import datetime
 import decimal
+import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +21,18 @@ class Sentinelas(unittest.TestCase):
         self.assertEqual(c("FL_URGENTE", 37, 1, 0), "booleano_sn")
         self.assertEqual(c("SEXO", 14, 1, 0), "codigo_char")
         self.assertEqual(c("NOME", 14, 40, 0), "texto_char")
-        self.assertEqual(c("NOME", 37, 40, 0), "texto")
+        self.assertEqual(c("NOME", 37, 40, 0), "texto_nome")
+        self.assertEqual(c("OBSERVACAO", 37, 400, 0), "texto")
+        self.assertEqual(c("NOTA", 261, 8, 0, 1), "texto_longo")
+        self.assertEqual(c("NOTA", 261, 8, 0, 0), "blob")
+        self.assertEqual(c("HORARIO", 35, 8, 0), "hora_em_timestamp")
+        self.assertEqual(c("HR_INICIO_INICIAL", 35, 8, 0), "hora_em_timestamp")
+        self.assertEqual(c("HORA_SUGERIDA_COLETA_PEP", 35, 8, 0), "hora_em_timestamp")
+        self.assertEqual(c("DATA_HORA", 35, 8, 0), "data_hora")
+        self.assertEqual(c("DT_HR_GER", 35, 8, 0), "data_hora")
+        self.assertEqual(sentinela.regra_efetiva("blob", 1), "texto_longo")
+        self.assertEqual(sentinela.regra_efetiva("texto_longo", 0), "blob")
+        self.assertEqual(sentinela.regra_efetiva("texto", 0), "texto")
         self.assertEqual(c("DT", 12, 4, 0), "data")
         self.assertEqual(c("DH", 35, 8, 0), "data_hora")
         self.assertEqual(c("HORA_INICIO", 8, 4, 0), "hora_hhmm")
@@ -38,18 +52,35 @@ class Sentinelas(unittest.TestCase):
         self.assertEqual(a("booleano_sn", "X"), (None, "valor_fora_do_dominio"))
         self.assertEqual(a("booleano_01", 1), (True, None))
         self.assertEqual(a("booleano_01", 2), (None, "valor_fora_do_dominio"))
-        for d in (datetime.date(1899, 12, 30), datetime.date(1900, 1, 1), datetime.date(1, 1, 1),
-                  datetime.datetime(1899, 12, 30, 10, 0)):
-            self.assertEqual(a("data_hora" if isinstance(d, datetime.datetime) else "data", d), (None, "data_sentinela"))
+        for d in (datetime.date(1899, 12, 30), datetime.date(1900, 1, 1), datetime.date(1, 1, 1)):
+            self.assertEqual(a("data", d), (None, "data_sentinela"))
+        # TIMESTAMP: sentinela com hora 00:00 é data fictícia; com hora preenchida a hora não some calada
+        self.assertEqual(a("data_hora", datetime.datetime(1899, 12, 30)), (None, "data_sentinela"))
+        self.assertEqual(a("data_hora", datetime.datetime(1899, 12, 30, 10, 0)), (None, "hora_sem_data"))
+        self.assertEqual(a("data_hora", datetime.datetime(2024, 5, 1, 0, 0)), (datetime.datetime(2024, 5, 1), None))
+        # só hora em TIMESTAMP (convenção 1899-12-30 HH:MM): vira TIME
+        self.assertEqual(a("hora_em_timestamp", datetime.datetime(1899, 12, 30, 10, 0)), (datetime.time(10, 0), None))
+        self.assertEqual(a("hora_em_timestamp", datetime.datetime(1899, 12, 30)), (datetime.time(0, 0), None))
+        self.assertEqual(a("hora_em_timestamp", datetime.datetime(2024, 5, 1, 7, 15)), (datetime.time(7, 15),
+                                                                                       "hora_com_data"))
         self.assertEqual(a("data", datetime.date(2020, 2, 29)), (datetime.date(2020, 2, 29), None))
         self.assertEqual(a("hora_hhmm", 830), (datetime.time(8, 30), None))
         self.assertEqual(a("hora_hhmm", 0), (datetime.time(0, 0), None))
         self.assertEqual(a("hora_hhmm", 2400), (None, "hora_invalida"))
         self.assertEqual(a("hora_hhmm", 1261), (None, "hora_invalida"))
         self.assertEqual(a("texto_char", b"ABC     "), ("ABC", None))
-        self.assertEqual(a("texto", b"  Jo\xe3o   da\xa0Silva "), ("João da Silva", None))
+        self.assertEqual(a("texto_char", b"AB  CD    "), ("AB  CD", None))  # só o preenchimento à direita
+        self.assertEqual(a("texto_char", b"  AB"), ("  AB", None))
+        self.assertEqual(a("texto_nome", b"  Jo\xe3o   da\xa0Silva "), ("João da Silva", None))
+        self.assertEqual(a("texto", b"linha1\r\nlinha2   fim  "), ("linha1\r\nlinha2   fim", None))
         self.assertEqual(a("texto", b"   "), (None, None))
-        self.assertEqual(a("codigo_char", b"m"), ("M", None))
+        self.assertEqual(a("codigo_char", b"m"), ("m", None))  # caixa preservada: 'm' e 'M' são códigos distintos
+        self.assertEqual(a("codigo_char", b"M"), ("M", None))
+        self.assertEqual(sentinela.colisoes_caixa(["a", "A", "b", None, "c", "C", "c"]), [["A", "a"], ["C", "c"]])
+        self.assertEqual(sentinela.colisoes_caixa(["a", "b"]), [])
+        longo = "Observação:\r\n  item 1\r\n\r\n  item 2  ".encode("cp1252")
+        self.assertEqual(a("texto_longo", longo), ("Observação:\r\n  item 1\r\n\r\n  item 2  ", None))
+        self.assertEqual(a("texto_longo", b" \r\n "), (None, None))
         self.assertEqual(a("flutuante", 0.1 + 0.2), (decimal.Decimal("0.30000000000000004"), None))
         self.assertEqual(a("blob", b"\x00\xff"), (b"\x00\xff", None))
         with self.assertRaises(KeyError):
@@ -96,11 +127,37 @@ class PaiPendente(unittest.TestCase):
         self.assertEqual(p.avaliar("TBFILHA", 11, [("ID_TBPAI", "TBPAI", 2)]), [])
         p.registrar("TBFILHA", 12, "data_sentinela", "baixa")
         p.avaliar("TBFILHA", 12, [("ID_TBPAI", "TBPAI", 1)])
+        self.assertEqual(p.pendencias("TBFILHA", 12), ["data_sentinela", "pai_pendente"])
         self.assertEqual(p.resolver("TBPAI", 1), [("TBFILHA", "10"), ("TBFILHA", "12"), ("TBNETA", "100")])
         self.assertFalse(p.pendente("TBNETA", 100))
+        self.assertEqual(p.pendencias("TBFILHA", 12), ["data_sentinela"])  # a própria continua
         for x in s + n:  # pendência sem valor: só tabela, chave, coluna e regra
             self.assertEqual(set(x), {"tabela_origem", "chave_original", "regra", "gravidade", "coluna", "tabela_pai",
                                       "chave_pai", "raiz"})
+
+
+    def test_pai_mais_grave_nao_apaga_pendencia_propria(self):
+        p = pendencia.Propagador()
+        p.registrar("C", "1", "cpf_invalido", "baixa")
+        p.registrar("A", "9", "x", "alta")
+        self.assertEqual(p.avaliar("C", "1", [("ID_A", "A", "9")])[0]["gravidade"], "alta")
+        self.assertEqual(p.resolver("A", "9"), [("C", "1")])
+        self.assertTrue(p.pendente("C", "1"))
+        self.assertEqual(p.pendencias("C", "1"), ["cpf_invalido"])
+
+    def test_dois_pais_pendentes(self):
+        p = pendencia.Propagador()
+        p.registrar("A", "1", "x", "critica")
+        p.registrar("B", "2", "y", "baixa")
+        p.avaliar("C", "5", [("ID_A", "A", "1"), ("ID_B", "B", "2")])
+        p.avaliar("D", "7", [("ID_C", "C", "5")])
+        # resolve primeiro o pai cuja raiz era a guardada (a mais grave): o filho segue pendente pelo outro
+        self.assertEqual(p.resolver("A", "1"), [("C", "5")])
+        self.assertEqual(p.pendencias("C", "5"), ["pai_pendente"])
+        self.assertTrue(p.pendente("D", "7"))  # o neto segue pendente: o pai dele ainda está
+        self.assertEqual(p.resolver("B", "2"), [("C", "5"), ("D", "7")])
+        self.assertFalse(p.pendente("C", "5"))
+        self.assertFalse(p.pendente("D", "7"))
 
 
 DDL = """CREATE TABLE pai (
@@ -206,9 +263,122 @@ class MapaEVerificador(unittest.TestCase):
         self.assertTrue(any(x.startswith("tabelas.tsv desatualizado") for x in e))
         self.assertIn("regra de coluna desconhecida: TBFILHA.ID_TBPAI", e)
 
+    def test_catalogo_oficial_nunca_gravado(self):
+        # `pai` passa a ser oficial (versao_fonte): TBPAI vira de-para; parte oficial de uma tabela mista sai do destino
+        c = _cenario()
+        ddl_ofi = DDL.replace("codigo VARCHAR(30) NOT NULL,", "codigo VARCHAR(30) NOT NULL,\n  versao_fonte VARCHAR(30) NULL,")
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "db/migracoes/01_X").mkdir(parents=True)
+            Path(d, "db/migracoes/01_X/01_tabelas.sql").write_text(ddl_ofi, encoding="utf-8")
+            c["ddl"] = mapa.ler_ddl(d)
+        ofi = mapa.oficiais(c["ddl"])
+        self.assertEqual(ofi, {"pai"})
+        # mapa antigo (pai gravado): o verificador recusa
+        e = mapa.verificar_dados(**c)
+        self.assertIn("tabela carregável grava em catálogo oficial: TBPAI -> pai", e)
+        # tabela mista: a parte oficial vira de-para; só o resto é gravado
+        c["analise"][1]["destino"] = "filha;pai"
+        c["tabelas"], c["deps"], _, _ = mapa.montar(c["analise"], c["volume"], [], ofi)
+        por = {r["tabela"]: r for r in c["tabelas"]}
+        self.assertEqual((por["TBPAI"]["estrategia"], por["TBPAI"]["tabelas_destino"], por["TBPAI"]["destinos_oficiais"]),
+                         ("depara_catalogo_oficial", "", "pai"))
+        self.assertEqual((por["TBFILHA"]["tabelas_destino"], por["TBFILHA"]["destinos_oficiais"]), ("filha", "pai"))
+        e = mapa.verificar_dados(**c)
+        self.assertIn("tabela com destino em catálogo oficial sem declaração em declarado/catalogos.tsv: TBPAI", e)
+        self.assertIn("tabela com destino em catálogo oficial sem declaração em declarado/catalogos.tsv: TBFILHA", e)
+        c["catalogos_decl"] = [{"tabela": "TBPAI", "catalogo": "oficial:pai", "coluna_codigo": "", "motivo": "teste"},
+                               {"tabela": "TBFILHA", "catalogo": "oficial:pai", "coluna_codigo": "", "motivo": "teste"}]
+        c["colunas_decl"] = []
+        self.assertEqual(mapa.verificar_dados(**c), [])
+        # declarada como catálogo mas sem destino oficial (seria gravada inteira): recusa
+        c2 = _cenario()
+        c2["catalogos_decl"] = [{"tabela": "TBPAI", "catalogo": "cid10", "coluna_codigo": "COD", "motivo": ""}]
+        self.assertIn("tabela declarada como catálogo sem destino oficial (seria gravada inteira): TBPAI (hash_linha)",
+                      mapa.verificar_dados(**c2))
+        # oficiais.tsv: N tira uma tabela do grupo; tabela inexistente ou sem motivo é recusada
+        self.assertEqual(mapa.oficiais(c["ddl"], [{"tabela": "pai", "oficial": "N", "motivo": "x"}]), frozenset())
+        c["oficiais_decl"] = [{"tabela": "nao_existe", "oficial": "S", "motivo": ""}]
+        e = mapa.verificar_dados(**c)
+        self.assertIn("oficiais.tsv cita tabela inexistente no DDL: nao_existe", e)
+        self.assertIn("oficiais.tsv sem oficial S/N ou sem motivo: nao_existe", e)
+
+    def test_destino_time_exige_regra_de_hora(self):
+        c = _cenario()
+        ddl_t = DDL.replace("nova VARCHAR(10) NULL", "nova TIME NULL")
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "db/migracoes/01_X").mkdir(parents=True)
+            Path(d, "db/migracoes/01_X/01_tabelas.sql").write_text(ddl_t, encoding="utf-8")
+            c["ddl"] = mapa.ler_ddl(d)
+        self.assertEqual(mapa.tipo_coluna_ddl(c["ddl"], "filha", "nova"), "TIME")
+        c["colunas"].append({"tabela": "TBFILHA", "coluna": "HORARIO", "regra": "data_hora", "referencia": "", "depara": ""})
+        c["colunas_decl"].append({"tabela": "TBFILHA", "coluna": "HORARIO", "destino": "filha.nova"})
+        self.assertIn("destino TIME com regra data_hora (use hora_em_timestamp, hora_hhmm ou hora): TBFILHA.HORARIO -> "
+                      "filha.nova", mapa.verificar_dados(**c))
+        c["colunas_decl"][-1]["regra"] = "hora_em_timestamp"
+        self.assertEqual(mapa.verificar_dados(**c), [])
+
+    def test_tabelas_sem_mapa(self):
+        tab = [{"tabela": "TBPAI"}, {"tabela": "TBVELHA"}]
+        desc = [{"padrao": "SGH_.*", "condicao": "qualquer", "motivo": "x"}, {"padrao": ".*", "condicao": "vazia",
+                                                                              "motivo": "y"}]
+        cont = {"TBPAI": 5, "TBVELHA": 3, "SGH_X": 9, "TBVAZIA": 0, "TBNOVA": 7, "OUTRA": 1}
+        self.assertEqual(mapa.tabelas_sem_mapa(cont, tab, desc), [("OUTRA", 1), ("TBNOVA", 7)])
+
     @unittest.skipUnless((mapa.RAIZ / mapa.MAPA_ANALISE).exists(), "fora do repositório (container): a esteira roda")
     def test_mapa_do_repositorio_valido(self):
         self.assertEqual(mapa.verificar(), [])
+
+
+@unittest.skipUnless(os.path.exists("/opt/firebird/bin/isql"), "só no container do conector (imagem sintética)")
+class ImagemSintetica(unittest.TestCase):
+    """BLOB de texto (EX_ANEXO.NOTA, SUB_TYPE 1) e tabela_sem_mapa sobre a imagem SINTÉTICA do cliente de exemplo."""
+
+    @classmethod
+    def setUpClass(cls):
+        from sante_conector import sintetica
+        cls.dir = os.path.join(os.environ.get("CONECTOR_TRABALHO_DIR", "/trabalho"), "origens-teste-l4")
+        shutil.rmtree(cls.dir, ignore_errors=True)
+        os.makedirs(cls.dir)
+        cls.arq = os.path.join(cls.dir, "exemplo-l4.fdb")
+        cls.manif = sintetica.gerar(cls.arq, mapa=True)
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.dir, ignore_errors=True)
+
+    def test_blob_texto_vira_texto_e_hash_fica_nos_bytes(self):
+        from sante_conector import abridor
+        from sante_conector.leitor import Leitor, hash_linha
+        from sante_conector.texto import cp1252_para_texto
+        with abridor.abrir(self.arq, modo="snapshot", cow_mb=64) as ab, Leitor(ab.dispositivo) as lt:
+            cols = {c["nome"]: c for c in lt.colunas("EX_ANEXO")}
+            regra = {n: sentinela.classificar(n, c["codigo_tipo"], c["bytes"], c["escala"], c["subtipo"])
+                     for n, c in cols.items()}
+            self.assertEqual((regra["NOTA"], regra["CONTEUDO"]), ("texto_longo", "blob"))
+            # mapa gerado de dicionário sem subtipo: o dicionário vivo corrige na execução
+            self.assertEqual(sentinela.regra_efetiva("blob", cols["NOTA"]["subtipo"]), "texto_longo")
+            nomes, it = lt.ler_faixa("EX_ANEXO", "ID", 1, 21)
+            linhas = list(it)
+        i_nota, i_cont = nomes.index("NOTA"), nomes.index("CONTEUDO")
+        self.assertTrue(linhas)
+        for l in linhas:
+            texto, pend = sentinela.aplicar("texto_longo", l[i_nota])
+            self.assertIsNone(pend)
+            self.assertIsInstance(texto, str)
+            self.assertTrue(texto.startswith("ação nota "))
+            self.assertEqual(texto, cp1252_para_texto(l[i_nota]))
+            self.assertEqual(sentinela.aplicar("blob", l[i_cont]), (l[i_cont], None))  # binário intacto
+            self.assertIsInstance(hash_linha(l), str)  # o hash da linha continua sobre os bytes crus
+            self.assertNotEqual(hash_linha(l), hash_linha(tuple(texto if k == i_nota else v for k, v in enumerate(l))))
+
+    def test_tabela_sem_mapa_na_imagem_sintetica(self):
+        m = mapa.carregar_execucao()  # o mapa montado no container (/app/mapa)
+        sem = dict(mapa.tabelas_sem_mapa(self.manif["contagens"], m["tabelas"], m["descartes"]))
+        ex = {t for t, n in self.manif["contagens"].items() if t.startswith("EX_") and n > 0}
+        self.assertTrue(ex)
+        self.assertEqual(set(sem), ex)  # as do cliente de exemplo, fora do mapa, viram pendência
+        for t in ("TBUSERS", "TBHOSPIT", "RICADPAC", "ATCABECATEND"):
+            self.assertNotIn(t, sem)
 
 
 if __name__ == "__main__":

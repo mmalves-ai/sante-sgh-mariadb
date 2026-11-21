@@ -20,6 +20,17 @@ commit, SAVEPOINT por linha, linha igual pulada, alterada/apagada/editada no des
   (`tabela, coluna, destino=tabela.coluna, regra, depara, via, motivo`); a declarada vale por cima da gerada.
 - Regras válidas: `sentinela.REGRAS`; de-para oficial: `depara.CATALOGOS` (cid10, sigtap, cbo, ibge_municipio,
   ibge_uf, banco). Catálogo oficial **nunca é criado**: código ausente vira pendência `catalogo_codigo_*`.
+- Catálogo oficial **nunca é gravado** (regra 7): tabela do modelo com `versao_fonte` ou declarada em
+  `declarado/oficiais.tsv`. Ela sai de `tabelas_destino` e aparece em `destinos_oficiais`: a parte oficial é de-para
+  pelo código (declare a coluna em `declarado/catalogos.tsv`); só o resto da tabela é carregado. O verificador recusa
+  destino oficial em coluna declarada.
+- Texto: `texto` só apara as pontas (quebras de linha e espaços internos ficam); `texto_nome` colapsa espaços;
+  `texto_char` apara só o preenchimento; `texto_longo` (BLOB SUB_TYPE 1) converte CP1252 sem mexer em nada; `blob`
+  (SUB_TYPE 0) fica em bytes. `codigo_char` preserva a caixa ('a' e 'A' são códigos distintos): colisão de caixa num
+  domínio vira pendência `codigo_colisao_caixa` (`sentinela.colisoes_caixa`).
+- Hora: TIMESTAMP que guarda só hora (1899-12-30 HH:MM) usa `hora_em_timestamp` (destino TIME; o verificador exige
+  regra de hora para destino TIME). `data_hora` com data sentinela e hora preenchida vira pendência `hora_sem_data`.
+- Pendências: `pendencia.Propagador` guarda um conjunto por linha (própria por regra + uma `pai_pendente` por pai).
 - Referência a linha pendente ou recusada: `pendencia.Propagador` (`pai_pendente`, com a raiz da cadeia).
 - Ciclo novo: `conector/mapa/declarado/ciclos.tsv` (duas fases, com motivo). Nunca edite os `.tsv` gerados.
 

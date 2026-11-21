@@ -42,7 +42,7 @@ mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
 PRIV=()
-case "$1" in registrar|ler-faixa|testes|worker) PRIV=(--privileged) ;; esac
+case "$1" in registrar|ler-faixa|dicionario|testes|worker) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 MARIADB_CT=${CONECTOR_MARIADB_CONTAINER:-sante-sgh-mariadb}
 REDE_INT=sante-sgh-conector-int
@@ -74,7 +74,7 @@ trap 'docker volume rm -f "$VOL" >/dev/null 2>&1 || true' EXIT
 
 docker run --rm "${REDE[@]}" "${PRIV[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
-  -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" \
+  -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" -v "$AQUI/mapa:/app/mapa:ro" \
   -v "$RAIZ/db/plataforma:/db-plataforma:ro" \
   -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
   -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" \

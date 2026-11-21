@@ -6,6 +6,8 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   sintetica <arquivo.fdb> [--versao N] [--mapa]  gera a imagem sintética do cliente de exemplo (no trabalho)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
+  dicionario <relativo> --saida ARQ        dicionário de colunas (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo),
+                                          só metadado, para o gerador do mapa (tools/obra/gerar_mapa_conector.py)
   testes                                  suíte unittest (precisa de --privileged e do MariaDB)
 Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
@@ -46,6 +48,8 @@ def main(argv=None):
     p = sub.add_parser("registrar"); p.add_argument("relativo")
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--sem-gstat", action="store_true")
     p.add_argument("--sha256", action="store_true"); p.add_argument("--saida")
+    p = sub.add_parser("dicionario"); p.add_argument("relativo"); p.add_argument("--saida", required=True)
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     p = sub.add_parser("ler-faixa"); p.add_argument("relativo"); p.add_argument("--tabela", required=True)
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     sub.add_parser("testes")
@@ -141,6 +145,19 @@ def main(argv=None):
         reg["abertura"] = ab.resumo()
         reg["segundos_total"] = round(time.time() - t0, 1)
         return _json(reg, a.saida)
+    if a.cmd == "dicionario":
+        n = 0
+        with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt, \
+                open(a.saida, "w", encoding="utf-8") as f:
+            for t in lt.tabelas():
+                for c in lt.colunas(t):
+                    f.write("%s|%s|%d|%d|%d|%d|%d\n" % (t, c["nome"], c["codigo_tipo"], c["bytes"], c["escala"],
+                                                         1 if c["obrigatoria"] else 0, c["subtipo"]))
+                    n += 1
+        uid = os.environ.get("CONECTOR_UID")
+        if uid:
+            os.chown(a.saida, int(uid), int(os.environ.get("CONECTOR_GID", uid)))
+        return _json({"colunas": n, "modo": ab.modo})
     if a.cmd == "ler-faixa":
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab:
             with Leitor(ab.dispositivo) as lt:
