@@ -325,7 +325,10 @@ CARREGADAS = ("GELANPED", "GELANPEDENTREGA", "GERASVALBAL", "GEUSERS_TBCENCUS", 
               "GERASVALDEVLOTE", "GEDISPHOR", "PREXTRATOITEM_SUBST", "PREXTRATOITEM_TBSITFARM", "PRINTEGRACAOESTOQUE",
               "GEANTIMI")
 BLOQUEADAS = ()
-DESCARTADAS = ("GEPARAM", "GEQTDELOTEVALLOTEDOCSAIDA")
+# rodada 5 (ADR 0006): GEPARAM (trilha do usuário) e GEQTDELOTEVALLOTEDOCSAIDA (trilha do lote da saída) carregam
+# r5c: GEPARAM e GEQTDELOTEVALLOTEDOCSAIDA PENDENTES (pedidos r5b_parametros_estoque e r5b_lote_liquido)
+BLOQUEADAS = ("GEPARAM", "GEQTDELOTEVALLOTEDOCSAIDA")
+DESCARTADAS = ()
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 
@@ -557,6 +560,8 @@ def linhas(r, ins):
     # liberações de antimicrobiano sobre a ficha de GECADANTIMI (pai externo): 4 dias zero (CHECK), 6 ficha
     # inexistente (pai_inexistente + 1048), 7 vigência invertida (CHECK), 8 S/N fora do domínio, 3 e 9 autorreferência
     # (3 aponta a 5, adiante: duas fases; 9 aponta a 4, recusada), 10 usuário inexistente, 5 interrompida (suspenso)
+    # rodada 5: quantidade líquida do lote da saída na trilha (lote 99 nunca visto: NULL com pai_inexistente)
+    # parâmetros do estoque por usuário (usuário ze nunca visto: NULL com pai_inexistente)
     ini = ts(2025, 3, 1, 8, 0)
     for i, ficha, dias, ant, fim_d, extra, usu in [
             (1, 1, 7, None, 7, "N", "ana"), (2, 1, 3, 1, 3, "S", "bia"), (3, 2, 5, 5, 5, "N", "ana"),
@@ -584,6 +589,7 @@ def linhas(r, ins):
         "PREXTRATOITEM_TBSITFARM": {"gravados": 1, "pendencias": {r48: 1}},
         "GERASVALSAIDLOTE": {"gravados": 2, "pendencias": {"pai_pendente": 1}},
         "GEDISPHOR": {"gravados": 2, "pendencias": {}},
+        # lote 3 recusado: pai_pendente recusa a linha (a trilha não grava referência a linha recusada)
         "PRINTEGRACAOESTOQUE": {"gravados": 0, "pendencias": {pi: 2}},
         "GELANPED": {"gravados": 3, "pendencias": {pi: 1, r48: 1, r25: 1}},
         "GECADDISPENSACAO": {"gravados": 3, "pendencias": {pi: 5, r48: 1, r25: 1}},

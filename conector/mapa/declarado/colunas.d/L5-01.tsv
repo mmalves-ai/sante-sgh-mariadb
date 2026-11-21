@@ -115,3 +115,13 @@ TBAGEUSE	=1	usuario_tipo_agenda.pode_cancelar				L5-01 rodada 3 (revisão): como
 TBAGEUSE	#codigo_derivado:TPAGE:30:tipo_agenda_	categoria_agenda.codigo	inteiro		categoria_agenda;antes;adotar:codigo	L5-01 rodada 3 (revisão): o tipo de agenda é o código NUMÉRICO do domínio de tipo de agenda da origem (o mesmo SMALLINT do tipo da agenda e da marcação), não as letras do cadastro de tipos: prefixo de domínio + número (tipo_agenda_0), criado uma vez e adotado depois, ou adotado se o cliente já o tiver; nunca descartado (lista não vazia restringe o usuário, como no sistema antigo)
 TBAGEUSE	#codigo_derivado:TPAGE:150:tipo_agenda_	categoria_agenda.descricao	inteiro		categoria_agenda	L5-01 rodada 3 (revisão): descrição provisória pelo código; renomeada e associada às agendas na implantação
 TBAGEUSE	=0	categoria_agenda.ativo			categoria_agenda	L5-01 rodada 3 (revisão): criada inativa (não aparece para agendas novas) até a implantação nomear o tipo; a restrição do usuário vale do mesmo jeito
+FPCON	DATA_HORA	evento_sessao.ocorrido_em	data_hora			r5 ADR 0006/0007: conexão do sistema antigo vira evento de sessão (histórico de acesso, continuidade)
+FPCON	=entrada	evento_sessao.tipo_evento				r5 ADR 0006/0007: cada linha é uma conexão aberta (entrada)
+FPCON	NOME_USUARIO	evento_sessao.usuario_id			ref:TBUSERS	r5 ADR 0006/0007: login do sistema; nunca visto: NULL com pai_inexistente (o evento entra)
+FPCON	NOME_COMPUTADOR	evento_sessao.nome_maquina	texto_nome			r5 ADR 0006/0007: estação
+FPCON	IP	evento_sessao.endereco_ip	texto			r5 ADR 0006/0007: endereço da estação
+FPCON	#retrato:*-DATA_HORA,NOME_COMPUTADOR,IP,NOME_USUARIO	evento_sessao.agente_usuario				r5 ADR 0006/0007: usuário do sistema operacional, domínio, grupo de trabalho e situação da conexão, sem perda (JSON)
+FPCON	NOME_USUARIO_SO		texto			r5 ADR 0006/0007: no retrato do evento (agente_usuario)
+FPCON	DOMINIO		texto			r5 ADR 0006/0007: no retrato do evento (agente_usuario)
+FPCON	GRUPO_TRABALHO		texto			r5 ADR 0006/0007: no retrato do evento (agente_usuario)
+FPCON	SITUACAO		codigo_char			r5 ADR 0006/0007: no retrato do evento (agente_usuario)

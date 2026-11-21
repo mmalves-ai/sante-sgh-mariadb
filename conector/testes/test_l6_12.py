@@ -22,19 +22,23 @@ VALORES = mapa.DIR_PACOTE / "declarado" / "valores.d" / "L6-12.tsv"
 SEM_CARGA = mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv"
 CARREGADAS = {"PRGEDIMP", "PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARACTLAN", "PRPRESCHEMO", "PRCABEVOL",
               "PRCONTEVOL", "PRALERGIAPAC", "PRATESTREQIMP", "PRASSINATURA_DOC", "PRPRESCMED", "PRITENSGERAL",
-              "PREVOLPAC", "PRALERGIAPAC_TBPRINC"}
+              "PREVOLPAC", "PRALERGIAPAC_TBPRINC",
+              # rodada 5 (ADR 0006): rascunhos como rascunho do autor, monitorização, planejamento com a prescrição
+              # futura e a ligação evento x assinatura do exame (complementa)
+              "PRCABEVOLTMP", "PREVOLPACTMP", "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC", "PRCABEC_MONITORIZACAO",
+              "PRPLANPRESC", "PRASS_DOC_PREXAMEASS"}
 # cadastros de outras fatias lidos por chave alternativa/encadeada e carregados pela declaração delas
-DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA", "PRTPASSINATURA"}
+DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA", "PRTPASSINATURA",
+             "PRCADRESP", "PRPERGUNTA"}  # rodada 5: o catálogo de respostas carrega na L6-05 (fora do plano da conferência: MAPA_TESTE)
 # lidas só pela encadeada terminada em coluna, sem carga (TBPRINC: descarte catalogo_oficial na L7-07)
 # rodada 4: PRASSINATURA_CAB passa a carregar (L6-11, documento do prontuário) e TBPRINC também (L7-07,
 # principio_ativo_cliente): só lidas ficam a pergunta e o catálogo de respostas
-SO_LEITURA = {"PRPERGUNTA", "PRCADRESP"}
-DESCARTES = {"PRASS_DOC_PREXAMEASS", "PRCABEC_MONITORIZACAO", "PRPLANPRESC", "PRCABEVOLTMP",
-             "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC"}
+SO_LEITURA = set()  # rodada 5: a pergunta carrega na L6-10
+DESCARTES = set()  # rodada 5 (ADR 0006): nenhum descarte
 # o anexo do prontuário só existe como binário na origem: bloqueada até o mecanismo de arquivo (#arquivo, M4)
 BLOQUEADA = set()  # conferidor r4: PRGEDIMP carrega com #arquivo
 INTERMEDIARIAS = {"HTPACIENTE", "HTATENDIMENTO", "TBCBOPRO"}
-COMPLEMENTAM = {"PRCONTEVOL"}
+COMPLEMENTAM = {"PRCONTEVOL", "PRASS_DOC_PREXAMEASS"}
 AUDITORIA = {"id", "criado_em", "origem", "versao"}
 NAO_COLUNA = {"CONSTRAINT", "KEY", "UNIQUE", "PRIMARY", "FULLTEXT", "INDEX", "CHECK"}
 CAUSAS = {"sem_valor", "duplicado", "licenciado", "catalogo_oficial", "mecanismo_do_produto"}
@@ -93,8 +97,10 @@ class FatiaL612(unittest.TestCase):
 
     def test_declaracoes_cobrem_os_not_null_de_todos_os_destinos(self):
         por_dt = {}
+        # r5: destino secundário com complementa (ex.: respostas do rascunho por PREVOLPACTMP) não insere
+        comp = {(c["tabela"], c["destino"].split(".")[0]) for c in self.decl if "complementa" in c["via"].split(";")}
         for c in self.decl:
-            if c["tabela"] not in COMPLEMENTAM:  # completa a linha do pai: não insere
+            if c["tabela"] not in COMPLEMENTAM and (c["tabela"], c["destino"].split(".")[0]) not in comp:
                 dt, dc = c["destino"].split(".")
                 por_dt.setdefault((c["tabela"], dt), set()).add(dc)
         self.assertIn(("PRALERGIAPAC", "alergia_paciente_evento"), por_dt)
@@ -191,7 +197,9 @@ class FatiaL612(unittest.TestCase):
         # intermediária carregada (por esta ou por outra fatia) nunca é pai externo; só a que fica fora do plano
         plano = {p["tabela"] for p in carga_mapa.planejar(self.m, nomes)}
         self.assertFalse(set(l6_12.PAIS_EXTERNOS) & plano)
-        self.assertEqual(set(l6_12.PAIS_EXTERNOS) & nomes, set())
+        # r5: ATCABECATEND é pai externo e também está na imagem só para a condição de saída do atendimento (fora do
+        # plano pelo MAPA_TESTE)
+        self.assertEqual(set(l6_12.PAIS_EXTERNOS) & nomes, {"ATCABECATEND"})
         self.assertFalse(SO_LEITURA & plano)
 
     def test_principio_ativo_pelo_catalogo_oficial(self):
@@ -285,7 +293,8 @@ class ConferenciaL612(unittest.TestCase):
         # pergunta), antes das respostas; a resposta adota a opção do campo x código
         self.assertEqual(tuple(lido["opcao"]), (4, 4, "Resposta falsa 1"))
         # princípio pelo código DCB no catálogo oficial (zeros à esquerda normalizados)
-        self.assertEqual(lido["princ"], ["00777", "01234"])
+        # rodada 5: mais o princípio da alergia em RASCUNHO (PRALERGIAPACTMP_TBPRINC 1 -> 01234)
+        self.assertEqual(lido["princ"], ["00777", "01234", "01234"])
 
 
 if __name__ == "__main__":

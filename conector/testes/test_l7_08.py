@@ -97,9 +97,13 @@ class FatiaL708(unittest.TestCase):
             self.assertFalse(self._d(t, "=concluido"))
 
     def test_sem_duas_fontes_na_mesma_coluna_e_saldo_vigente_fora(self):
-        self.assertFalse([c for c in self.decl if c["tabela"] == "GEQTDELOTEVALLOTEDOCSAIDA"])
+        # r5c: a quantidade líquida fica PENDENTE (movimento_lote.quantidade_liquida, pedido r5b_lote_liquido); a trilha
+        # não conta como carga
+        q = [c for c in self.decl if c["tabela"] == "GEQTDELOTEVALLOTEDOCSAIDA" and c.get("destino")]
+        self.assertFalse(q)
         self.assertFalse([c for c in self.decl if c.get("destino") == "inventario_estoque_lote.saldo_sistema"])
-        self.assertIn("GEQTDELOTEVALLOTEDOCSAIDA", l7_08.DESCARTADAS)
+        self.assertIn("GEQTDELOTEVALLOTEDOCSAIDA", l7_08.BLOQUEADAS)
+        self.assertEqual(l7_08.DESCARTADAS, ())
 
     def test_regra_presumida_entra_inativa(self):
         self.assertTrue(self._d("PRPARINTEGEST", "=0", "regra_integracao_prescricao.ativo"))

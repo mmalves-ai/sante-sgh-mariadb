@@ -20,76 +20,201 @@ TBTPWEBSERV	NOME	padrao_troca.descricao	texto_nome			L8-17: descrição; vazia: 
 TBTPWEBSERV	=~api	padrao_troca.familia				L8-17: a origem só nomeia o padrão do serviço web: família 'api' presumida (valor_presumido) para o cliente reclassificar
 TBTISSURLWSSGH	ID_TBTISSSCHEMA	transacao_tiss_webservice.id	chave_origem		ref:TBTISSSCHEMA;complementa	L8-17 (cobertura): COMPLEMENTA a transação já gravada por TBTISSSCHEMA (UPDATE, sem linha nova); transação recusada: pai_pendente; nunca vista: pai_inexistente
 TBTISSURLWSSGH	URL_SERVICO	transacao_tiss_webservice.caminho_padrao	texto			L8-17 (cobertura): endereço do serviço da transação vira o caminho padrão (pontas aparadas); o endereço por operadora fica no canal TISS da fonte pagadora
-TBSAFEWEB_FORMA_ASSIN_ICP	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: código e nome do formato na API de um provedor em nuvem fixo são parâmetros do adaptador do produto para aquele provedor; o formato genérico vem de TBFORMA_ASSINATURA_ICP); coluna sem destino, não carregada
-TBSAFEWEB_FORMA_ASSIN_ICP	CODIGO		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: código e nome do formato na API de um provedor em nuvem fixo são parâmetros do adaptador do produto para aquele provedor; o formato genérico vem de TBFORMA_ASSINATURA_ICP); coluna sem destino, não carregada
-TBSAFEWEB_FORMA_ASSIN_ICP	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: código e nome do formato na API de um provedor em nuvem fixo são parâmetros do adaptador do produto para aquele provedor; o formato genérico vem de TBFORMA_ASSINATURA_ICP); coluna sem destino, não carregada
-TBSAFEWEB_FORMA_ASSIN_ICP	ID_TBFORMA_ASSINATURA_ICP		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: código e nome do formato na API de um provedor em nuvem fixo são parâmetros do adaptador do produto para aquele provedor; o formato genérico vem de TBFORMA_ASSINATURA_ICP); coluna sem destino, não carregada
-TBVIDAAS_FORMA_ASSIN_ICP	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: mesmo motivo de TBSAFEWEB_FORMA_ASSIN_ICP (outro provedor)); coluna sem destino, não carregada
-TBVIDAAS_FORMA_ASSIN_ICP	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: mesmo motivo de TBSAFEWEB_FORMA_ASSIN_ICP (outro provedor)); coluna sem destino, não carregada
-TBVIDAAS_FORMA_ASSIN_ICP	ID_TBFORMA_ASSINATURA_ICP		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: mesmo motivo de TBSAFEWEB_FORMA_ASSIN_ICP (outro provedor)); coluna sem destino, não carregada
-TBSAFEWEB_SITAUTORIZA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de situação (CHECK de autorizacao_assinatura_nuvem.situacao)); coluna sem destino, não carregada
-TBSAFEWEB_SITAUTORIZA	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de situação (CHECK de autorizacao_assinatura_nuvem.situacao)); coluna sem destino, não carregada
-TBSAFEWEB_TIPOATENDIMENTO	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de tipo de atendimento (CHECK de autorizacao_assinatura_nuvem.tipo_atendimento)); coluna sem destino, não carregada
-TBSAFEWEB_TIPOATENDIMENTO	DESCRICAO		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de tipo de atendimento (CHECK de autorizacao_assinatura_nuvem.tipo_atendimento)); coluna sem destino, não carregada
-TBSEXO_PIXPDQ	CODIGO		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: códigos de sexo do padrão HL7 (tabela pública 0001); sexo.codigo_hl7 vem do padrão, não do cliente (pedido 1)); coluna sem destino, não carregada
-TBSEXO_PIXPDQ	DESCRICAO		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: códigos de sexo do padrão HL7 (tabela pública 0001); sexo.codigo_hl7 vem do padrão, não do cliente (pedido 1)); coluna sem destino, não carregada
-TBSEXO_PIXPDQ	ID_DIGITAL		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: códigos de sexo do padrão HL7 (tabela pública 0001); sexo.codigo_hl7 vem do padrão, não do cliente (pedido 1)); coluna sem destino, não carregada
-TBSGHINTEGRADOR_PARAM	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: liga e desliga do integrador antigo; o conector é o integrador do produto); coluna sem destino, não carregada
-TBSGHINTEGRADOR_PARAM	ATIVADO		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: liga e desliga do integrador antigo; o conector é o integrador do produto); coluna sem destino, não carregada
-TBSGHINTEGRADOR_TABELA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: tabelas replicadas pelo integrador antigo; os fatos publicáveis são do produto); coluna sem destino, não carregada
-TBSGHINTEGRADOR_TABELA	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: tabelas replicadas pelo integrador antigo; os fatos publicáveis são do produto); coluna sem destino, não carregada
-TBSIPANSPROC	COD_PROCEDIMENTO		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: equivalência procedimento x grupo SIP publicada pela ANS: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-TBSIPANSPROC	ID_TBSIPANSATO		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: equivalência procedimento x grupo SIP publicada pela ANS: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-TBSIPANSPROC	DATA_VIGENCIA_INICIAL		data			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: equivalência procedimento x grupo SIP publicada pela ANS: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-TBSIPANSPROC	DATA_VIGENCIA_FINAL		data			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: equivalência procedimento x grupo SIP publicada pela ANS: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-TBSMSTPAGENDA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de periodicidade (CHECK de regra_envio_mensagem_paciente.periodicidade)); coluna sem destino, não carregada
-TBSMSTPAGENDA	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: domínio fixo de periodicidade (CHECK de regra_envio_mensagem_paciente.periodicidade)); coluna sem destino, não carregada
-TBTISSREMUNERAOPERPS	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: terminologia TISS de modelo de remuneração; o modelo é o CHECK de remuneracao_capitacao.modelo_remuneracao); coluna sem destino, não carregada
-TBTISSREMUNERAOPERPS	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: terminologia TISS de modelo de remuneração; o modelo é o CHECK de remuneracao_capitacao.modelo_remuneracao); coluna sem destino, não carregada
-TBTISSREMUNERAOPERPS	DATA_VIGENCIA_INICIAL		data			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: terminologia TISS de modelo de remuneração; o modelo é o CHECK de remuneracao_capitacao.modelo_remuneracao); coluna sem destino, não carregada
-TBTISSREMUNERAOPERPS	DATA_VIGENCIA_FINAL		data			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: terminologia TISS de modelo de remuneração; o modelo é o CHECK de remuneracao_capitacao.modelo_remuneracao); coluna sem destino, não carregada
-TBTPEXPIPERGS	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: lista fixa do leiaute de exportação de um parceiro; o código externo entra pelo mapeamento de código externo ao configurar o parceiro); coluna sem destino, não carregada
-TBTPEXPIPERGS	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, mecanismo_do_produto: lista fixa do leiaute de exportação de um parceiro; o código externo entra pelo mapeamento de código externo ao configurar o parceiro); coluna sem destino, não carregada
-PRCABNEXODATA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	ID_HTATENDIMENTO		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	ID_HTPACIENTE		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	REFERENCIA_NEXODATA		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	JSON_ORIGINAL_NEXODATA		blob			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	IDPRESCRICAO_NEXODATA		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	IDPRESCRICAOSTATUS_NEXODATA		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	REGISTRO_VALIDO		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	DATA_HORA_EXCLUSAO		data_hora			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	DATA_HORA_EVENTO_TMP		data_hora			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	ID_TBCBOPRO_TMP		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRCABNEXODATA	VERSAO_API		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: registro de envio à plataforma de receita digital sem a receita ou prescrição enviada (o modelo exige uma delas); a receita migra pelo prontuário e a cópia validável fica na plataforma); coluna sem destino, não carregada
-PRLANCNEXODATA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: documento do envio descartado (PRCABNEXODATA); mesmo motivo); coluna sem destino, não carregada
-PRLANCNEXODATA	ID_PRCABNEXODATA		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: documento do envio descartado (PRCABNEXODATA); mesmo motivo); coluna sem destino, não carregada
-PRLANCNEXODATA	HASH_BUSCA		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: documento do envio descartado (PRCABNEXODATA); mesmo motivo); coluna sem destino, não carregada
-PRLANCNEXODATA	ID_PRTPASSINATURA		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: documento do envio descartado (PRCABNEXODATA); mesmo motivo); coluna sem destino, não carregada
-SIWSLANCETQTA	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: etiqueta devolvida pelo laboratório de apoio para imprimir na coleta já feita; sem laboratório nem amostra na origem (NOT NULL do destino)); coluna sem destino, não carregada
-SIWSLANCETQTA	ID_SILANEXA		flutuante			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: etiqueta devolvida pelo laboratório de apoio para imprimir na coleta já feita; sem laboratório nem amostra na origem (NOT NULL do destino)); coluna sem destino, não carregada
-SIWSLANCETQTA	DATA_HORA_RETORNO		data_hora			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: etiqueta devolvida pelo laboratório de apoio para imprimir na coleta já feita; sem laboratório nem amostra na origem (NOT NULL do destino)); coluna sem destino, não carregada
-SIWSLANCETQTA	IDENT_LIS		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: etiqueta devolvida pelo laboratório de apoio para imprimir na coleta já feita; sem laboratório nem amostra na origem (NOT NULL do destino)); coluna sem destino, não carregada
-SIWSLANCETQTA	ID_SIWSETIQUETA		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, sem_valor: etiqueta devolvida pelo laboratório de apoio para imprimir na coleta já feita; sem laboratório nem amostra na origem (NOT NULL do destino)); coluna sem destino, não carregada
-HTCID	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	ID_TBCID10		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	DATA_HORA_HISTORICO		data_hora			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	NOME		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	CLASSIFICACAO		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	CATEGORIA		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	SUB_CATEGORIA		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	SEXO		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	VIG_SANITARIA		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	TP_AGRAVO		inteiro			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCID	ID_TBVERSAOCID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CID-10: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	ID		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	ID_TBCIAP		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	CODIGO		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	NOME_ORIGINAL		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	NOME_LEIGO		texto_nome			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	COMPETENCIA_INICIAL		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	ID_TBUSERS		texto			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	DATA_HORA_GRAVACAO		data_hora			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	ID_TBVERSAOCIAP		chave_origem			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	ATIVO		booleano_sn			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
-HTCIAP	SEXO		codigo_char			L8-17 (cobertura): descarte de produto (declarado/sem_carga.tsv, catalogo_oficial: histórico de termos da CIAP: conteúdo do carregador versionado (regra 7)); coluna sem destino, não carregada
+TBSEXO_PIXPDQ	CODIGO		codigo_char			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSEXO_PIXPDQ	DESCRICAO		texto			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSEXO_PIXPDQ	ID_DIGITAL		texto			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSIPANSPROC	COD_PROCEDIMENTO		inteiro			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSIPANSPROC	ID_TBSIPANSATO		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSIPANSPROC	DATA_VIGENCIA_INICIAL		data			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSIPANSPROC	DATA_VIGENCIA_FINAL		data			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBTISSREMUNERAOPERPS	ID		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBTISSREMUNERAOPERPS	NOME		texto_nome			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBTISSREMUNERAOPERPS	DATA_VIGENCIA_INICIAL		data			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBTISSREMUNERAOPERPS	DATA_VIGENCIA_FINAL		data			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	ID		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	ID_TBCIAP		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	CODIGO		texto			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	NOME_ORIGINAL		texto_nome			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	NOME_LEIGO		texto_nome			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	COMPETENCIA_INICIAL		texto			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	ID_TBUSERS		texto			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	DATA_HORA_GRAVACAO		data_hora			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	ID_TBVERSAOCIAP		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	ATIVO		booleano_sn			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCIAP	SEXO		codigo_char			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+TBSAFEWEB_FORMA_ASSIN_ICP	#codigo_derivado:CODIGO+ID_TBFORMA_ASSINATURA_ICP:200	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSAFEWEB_FORMA_ASSIN_ICP	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSAFEWEB_FORMA_ASSIN_ICP	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSAFEWEB_FORMA_ASSIN_ICP	#codigo_derivado:CODIGO+ID_TBFORMA_ASSINATURA_ICP:200	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBSAFEWEB_FORMA_ASSIN_ICP	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_FORMA_ASSIN_ICP	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSAFEWEB_FORMA_ASSIN_ICP	CODIGO		inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): vai no valor (código na API do provedor)
+TBSAFEWEB_FORMA_ASSIN_ICP	ID_TBFORMA_ASSINATURA_ICP		chave_origem			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): vai no valor (formato ICP-Brasil correspondente)
+TBSAFEWEB_FORMA_ASSIN_ICP	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSAFEWEB_FORMA_ASSIN_ICP	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_FORMA_ASSIN_ICP	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSAFEWEB_FORMA_ASSIN_ICP	=migracao.formato_assinatura_nuvem_a	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSAFEWEB_FORMA_ASSIN_ICP	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_FORMA_ASSIN_ICP	=Formatos de assinatura do provedor de assinatura em nuvem A (valor = código na API do provedor _ formato ICP-Brasil da lista migracao.formato_assinatura_icp)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_FORMA_ASSIN_ICP	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBVIDAAS_FORMA_ASSIN_ICP	#codigo_derivado:ID+ID_TBFORMA_ASSINATURA_ICP:200	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBVIDAAS_FORMA_ASSIN_ICP	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBVIDAAS_FORMA_ASSIN_ICP	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBVIDAAS_FORMA_ASSIN_ICP	#codigo_derivado:ID+ID_TBFORMA_ASSINATURA_ICP:200	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBVIDAAS_FORMA_ASSIN_ICP	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBVIDAAS_FORMA_ASSIN_ICP	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBVIDAAS_FORMA_ASSIN_ICP	ID_TBFORMA_ASSINATURA_ICP		chave_origem			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): vai no valor (formato ICP-Brasil correspondente)
+TBVIDAAS_FORMA_ASSIN_ICP	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBVIDAAS_FORMA_ASSIN_ICP	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBVIDAAS_FORMA_ASSIN_ICP	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBVIDAAS_FORMA_ASSIN_ICP	=migracao.formato_assinatura_nuvem_b	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBVIDAAS_FORMA_ASSIN_ICP	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBVIDAAS_FORMA_ASSIN_ICP	=Formatos de assinatura do provedor de assinatura em nuvem B (valor = código do provedor _ formato ICP-Brasil da lista migracao.formato_assinatura_icp)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBVIDAAS_FORMA_ASSIN_ICP	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_SITAUTORIZA	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSAFEWEB_SITAUTORIZA	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSAFEWEB_SITAUTORIZA	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSAFEWEB_SITAUTORIZA	ID	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBSAFEWEB_SITAUTORIZA	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_SITAUTORIZA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSAFEWEB_SITAUTORIZA	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSAFEWEB_SITAUTORIZA	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_SITAUTORIZA	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSAFEWEB_SITAUTORIZA	=migracao.situacao_autorizacao_nuvem	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSAFEWEB_SITAUTORIZA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_SITAUTORIZA	=Situação da autorização de assinatura em nuvem (rótulos da origem; valor do produto em autorizacao_assinatura_nuvem.situacao)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_SITAUTORIZA	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_TIPOATENDIMENTO	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSAFEWEB_TIPOATENDIMENTO	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSAFEWEB_TIPOATENDIMENTO	DESCRICAO	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSAFEWEB_TIPOATENDIMENTO	ID	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBSAFEWEB_TIPOATENDIMENTO	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_TIPOATENDIMENTO	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSAFEWEB_TIPOATENDIMENTO	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSAFEWEB_TIPOATENDIMENTO	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_TIPOATENDIMENTO	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSAFEWEB_TIPOATENDIMENTO	=migracao.tipo_atendimento_autorizacao_nuvem	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSAFEWEB_TIPOATENDIMENTO	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_TIPOATENDIMENTO	=Tipo de atendimento da autorização em nuvem (rótulos da origem; valor do produto em autorizacao_assinatura_nuvem.tipo_atendimento)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSAFEWEB_TIPOATENDIMENTO	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSMSTPAGENDA	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSMSTPAGENDA	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSMSTPAGENDA	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSMSTPAGENDA	ID	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBSMSTPAGENDA	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSMSTPAGENDA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSMSTPAGENDA	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSMSTPAGENDA	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSMSTPAGENDA	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSMSTPAGENDA	=migracao.periodicidade_envio_mensagem	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSMSTPAGENDA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSMSTPAGENDA	=Periodicidade do envio agendado de mensagem ao paciente (rótulos da origem; valor do produto em regra_envio_mensagem_paciente.periodicidade)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSMSTPAGENDA	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBTPEXPIPERGS	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBTPEXPIPERGS	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBTPEXPIPERGS	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBTPEXPIPERGS	ID	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBTPEXPIPERGS	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBTPEXPIPERGS	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBTPEXPIPERGS	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBTPEXPIPERGS	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBTPEXPIPERGS	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBTPEXPIPERGS	=migracao.tipo_prestador_exportacao	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBTPEXPIPERGS	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBTPEXPIPERGS	=Tipo de prestador no leiaute de exportação do parceiro (rótulos da origem; código externo em mapeamento_codigo_externo)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBTPEXPIPERGS	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_TABELA	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSGHINTEGRADOR_TABELA	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSGHINTEGRADOR_TABELA	NOME	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSGHINTEGRADOR_TABELA	ID	parametro_opcao.rotulo	texto			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBSGHINTEGRADOR_TABELA	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_TABELA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSGHINTEGRADOR_TABELA	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSGHINTEGRADOR_TABELA	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_TABELA	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSGHINTEGRADOR_TABELA	=migracao.entidade_replicada_integrador	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSGHINTEGRADOR_TABELA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_TABELA	=Entidades replicadas pelo integrador da origem (a conferir em tipo_evento_publicado)	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_TABELA	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_PARAM	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBSGHINTEGRADOR_PARAM	ID	parametro_opcao.sequencia	inteiro			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBSGHINTEGRADOR_PARAM	ID	parametro_opcao.rotulo	texto_nome			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBSGHINTEGRADOR_PARAM	=migracao	parametro_opcao.origem				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_PARAM	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBSGHINTEGRADOR_PARAM	ATIVADO	parametro_opcao.ativo	booleano_sn			L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): integrador ligado (S/N); vazio fica com o padrão
+TBSGHINTEGRADOR_PARAM	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBSGHINTEGRADOR_PARAM	=Listas de valores trazidas da origem	modulo_sistema.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_PARAM	=0	modulo_sistema.ativo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBSGHINTEGRADOR_PARAM	=migracao.integrador_ativado	parametro_definicao.chave			antes;adotar:chave	L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBSGHINTEGRADOR_PARAM	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_PARAM	=Liga e desliga do integrador da origem (ativo = ligado); a conferir na situação de assinatura_evento_parceiro	parametro_definicao.descricao				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBSGHINTEGRADOR_PARAM	=lista	parametro_definicao.tipo				L8-17 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+PRCABNEXODATA	@estabelecimento	envio_prescricao_plataforma.estabelecimento_id			principal	L8-17 r5 (ADR 0006): envio à plataforma de receita digital
+PRCABNEXODATA	ID_HTATENDIMENTO	envio_prescricao_plataforma.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L8-17 r5 (ADR 0006): atendimento pelo histórico
+PRCABNEXODATA	ID_HTPACIENTE	envio_prescricao_plataforma.paciente_id			ref:HTPACIENTE/paciente_versao@paciente_id	L8-17 r5 (ADR 0006): paciente pela versão
+PRCABNEXODATA	ID_TBCBOPRO_TMP	envio_prescricao_plataforma.profissional_id			ref:TBCBOPRO/inscricao_conselho@profissional_id	L8-17 r5 (ADR 0006): prescritor pela inscrição
+PRCABNEXODATA	@id:sistema_externo	envio_prescricao_plataforma.sistema_externo_id				L8-17 r5 (ADR 0006): plataforma
+PRCABNEXODATA	IDPRESCRICAO_NEXODATA	envio_prescricao_plataforma.identificador_externo	texto			L8-17 r5 (ADR 0006): identificador na plataforma
+PRCABNEXODATA	REFERENCIA_NEXODATA	envio_prescricao_plataforma.referencia_externa	texto			L8-17 r5 (ADR 0006): referência
+PRCABNEXODATA	IDPRESCRICAOSTATUS_NEXODATA	envio_prescricao_plataforma.situacao_externa	texto			L8-17 r5 (ADR 0006): situação como a plataforma informou
+PRCABNEXODATA	JSON_ORIGINAL_NEXODATA	envio_prescricao_plataforma.conteudo_retorno	texto_longo			L8-17 r5 (ADR 0006): retorno original
+PRCABNEXODATA	VERSAO_API	envio_prescricao_plataforma.versao_api	texto			L8-17 r5 (ADR 0006): versão da API
+PRCABNEXODATA	DATA_HORA_EVENTO_TMP	envio_prescricao_plataforma.enviado_em	data_hora			L8-17 r5 (ADR 0006): envio
+PRCABNEXODATA	DATA_HORA_EXCLUSAO	envio_prescricao_plataforma.cancelado_em	data_hora			L8-17 r5 (ADR 0006): exclusão vira cancelamento
+PRCABNEXODATA	=cancelada	envio_prescricao_plataforma.situacao			se:DATA_HORA_EXCLUSAO	L8-17 r5b: excluído na origem = cancelado
+PRCABNEXODATA	=rejeitada	envio_prescricao_plataforma.situacao			se:REGISTRO_VALIDO=N,n	L8-17 r5b: registro inválido na origem = rejeitado
+PRCABNEXODATA	=enviada	envio_prescricao_plataforma.situacao				L8-17 r5b: os demais foram enviados
+PRCABNEXODATA	=migracao	envio_prescricao_plataforma.origem				L8-17 r5 (ADR 0006): origem
+PRCABNEXODATA	ID		chave_origem			L8-17 r5 (ADR 0006): chave interna
+PRCABNEXODATA	REGISTRO_VALIDO		codigo_char			L8-17 r5b: condição da situação (N = rejeitada)
+PRCABNEXODATA	=~prescricao_digital	sistema_externo.codigo			antes;adotar:codigo	L8-17 r5 (ADR 0006): mesma plataforma de TBDIGITAL_ESPECIALIDADE (presumida)
+PRCABNEXODATA	=Parceiro de prescrição digital	sistema_externo.nome				L8-17 r5 (ADR 0006): nome
+PRCABNEXODATA	=outro	sistema_externo.categoria				L8-17 r5 (ADR 0006): categoria
+PRCABNEXODATA	=Prescrição digital: equivalência das especialidades do hospital com as do parceiro	sistema_externo.finalidade				L8-17 r5 (ADR 0006): mesma finalidade (adoção)
+PRLANCNEXODATA	ID_PRCABNEXODATA	envio_prescricao_plataforma.id			ref:PRCABNEXODATA;complementa	L8-17 r5 (ADR 0006): documento do envio completa o envio
+PRLANCNEXODATA	HASH_BUSCA	envio_prescricao_plataforma.codigo_validacao	texto_resumo:100			L8-17 r5 (ADR 0006): código de busca e validação
+PRLANCNEXODATA	ID		chave_origem			L8-17 r5 (ADR 0006): chave interna
+PRLANCNEXODATA	ID_PRTPASSINATURA		chave_origem			L8-17 r5 (ADR 0006): tipo de assinatura do documento: a assinatura migra pelo prontuário
+SIWSLANCETQTA	@estabelecimento	etiqueta_amostra_apoio.estabelecimento_id			principal	L8-17 r5 (ADR 0006): etiqueta devolvida pelo laboratório de apoio
+SIWSLANCETQTA	ID_SILANEXA	etiqueta_amostra_apoio.exame_item_id			ref:SILANEXA	L8-17 r5 (ADR 0006): exame
+SIWSLANCETQTA	ID_SILANEXA	etiqueta_amostra_apoio.laboratorio_apoio_id			ref:SILANEXA@laboratorio_apoio_id	L8-17 r5 (ADR 0006): laboratório do exame
+SIWSLANCETQTA	ID_SIWSETIQUETA	etiqueta_amostra_apoio.amostra_biologica_id			ref:SIWSETIQUETA/etiqueta_amostra_apoio@amostra_biologica_id	L8-17 r5 (ADR 0006): amostra da etiqueta
+SIWSLANCETQTA	IDENT_LIS	etiqueta_amostra_apoio.identificador_externo	texto			L8-17 r5 (ADR 0006): identificador no laboratório
+SIWSLANCETQTA	DATA_HORA_RETORNO	etiqueta_amostra_apoio.recebido_em	data_hora			L8-17 r5 (ADR 0006): retorno
+SIWSLANCETQTA	ID		chave_origem			L8-17 r5 (ADR 0006): chave interna
+SIWSLANCETQTA	=migracao	etiqueta_amostra_apoio.origem				L8-17 r5 (ADR 0006): origem
+HTCID	ID		chave_origem			r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	NOME					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	CLASSIFICACAO					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	CATEGORIA					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	SUB_CATEGORIA					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	SEXO					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	VIG_SANITARIA					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	TP_AGRAVO					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	ID_TBVERSAOCID					r5c (ADR 0006): preservado no #retrato:* da trilha_auditoria (item do hospital visível; estrutura própria pedida em r5c-1, saida/L8-17.json)
+HTCID	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): histórico da CID-10 do hospital na origem (nunca na vigência oficial); termo oficial pelo código; código sem par = local
+HTCID	=alteracao	trilha_auditoria.acao				
+HTCID	=termo_terminologia	trilha_auditoria.entidade				
+HTCID	DATA_HORA_HISTORICO	trilha_auditoria.ocorrido_em	data_hora			
+HTCID	=histórico da CID-10 do hospital na origem (nunca na vigência oficial); termo oficial pelo código; código sem par = local	trilha_auditoria.motivo				
+HTCID	ID_TBCID10	trilha_auditoria.entidade_id	codigo_char	cid10	ref:TBCID10>COD	
+HTCIAP	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): histórico da CIAP-2 do hospital na origem; a CIAP ainda sem carregador oficial
+HTCIAP	=alteracao	trilha_auditoria.acao				
+HTCIAP	=termo_terminologia	trilha_auditoria.entidade				
+HTCIAP	DATA_HORA_GRAVACAO	trilha_auditoria.ocorrido_em	data_hora			
+HTCIAP	=histórico da CIAP-2 do hospital na origem; a CIAP ainda sem carregador oficial	trilha_auditoria.motivo				
+TBSIPANSPROC	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): equivalência procedimento x grupo SIP usada pelo hospital; conciliar com a publicação da ANS
+TBSIPANSPROC	=inclusao	trilha_auditoria.acao				
+TBSIPANSPROC	=termo_terminologia	trilha_auditoria.entidade				
+TBSIPANSPROC	DATA_VIGENCIA_INICIAL	trilha_auditoria.ocorrido_em	data			
+TBSIPANSPROC	=equivalência procedimento x grupo SIP usada pelo hospital; conciliar com a publicação da ANS	trilha_auditoria.motivo				
+TBSEXO_PIXPDQ	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): códigos de sexo do padrão HL7 usados pelo hospital; conciliar com sexo.codigo_hl7
+TBSEXO_PIXPDQ	=inclusao	trilha_auditoria.acao				
+TBSEXO_PIXPDQ	=sexo	trilha_auditoria.entidade				
+TBSEXO_PIXPDQ	=@data_carga	trilha_auditoria.ocorrido_em				
+TBSEXO_PIXPDQ	=códigos de sexo do padrão HL7 usados pelo hospital; conciliar com sexo.codigo_hl7	trilha_auditoria.motivo				
+TBTISSREMUNERAOPERPS	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	r5c (ADR 0006): modelos de remuneração do prestador usados pelo hospital; conciliar com a terminologia TISS
+TBTISSREMUNERAOPERPS	=inclusao	trilha_auditoria.acao				
+TBTISSREMUNERAOPERPS	=termo_terminologia	trilha_auditoria.entidade				
+TBTISSREMUNERAOPERPS	DATA_VIGENCIA_INICIAL	trilha_auditoria.ocorrido_em	data			
+TBTISSREMUNERAOPERPS	=modelos de remuneração do prestador usados pelo hospital; conciliar com a terminologia TISS	trilha_auditoria.motivo				

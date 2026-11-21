@@ -163,10 +163,11 @@ CREATE TABLE MFPARAM ("EMPRESA" INTEGER NOT NULL, "ANOPRO" SMALLINT NOT NULL, "M
 CREATE TABLE TBINTIMP ("EMPRESA" SMALLINT NOT NULL, "TIPO_CTA" SMALLINT NOT NULL, "TIPO" VARCHAR(1) NOT NULL, "DT_VIG_I" DATE, "DT_VIG_F" DATE, "COFINS" NUMERIC(9,2), "ISS" NUMERIC(9,2), "PIS" NUMERIC(9,2), "CSLL" NUMERIC(9,2), "COFINS_C" INTEGER, "ISS_C" INTEGER, "PIS_C" INTEGER, "CSLL_C" INTEGER, "FGTS_C" INTEGER, "IPI_C" INTEGER, "IRRF_C" INTEGER, "INSS_C" INTEGER, "IRRF" NUMERIC(9,2), "PIS_COFINS_CSLL" NUMERIC(9,2), "COD_MFREFDES_PIS_COFINS_CSLL" INTEGER, "ALIQUOTA_ADICIONAL_INSS" NUMERIC(9,2), "ALIQUOTA_CBS" NUMERIC(9,2), "ALIQUOTA_IBS" NUMERIC(9,2), "CODIGO_CBS" INTEGER, "CODIGO_IBS" INTEGER, PRIMARY KEY ("EMPRESA", "TIPO_CTA", "TIPO"));
 """
 CARREGADAS = ("TBAGEBAN", "TBCTABAN", "MFBORDER", "MFCTAUSU", "TBCENCUS", "TBCLIENT", "MFREFDES", "TBGRUDES",
-              "MFADIFOR", "MFLANCTO", "MFSALATU", "MFSALDOS", "TBINTIMP", "MFPARAM", "MFCTAREC")
+              "MFADIFOR", "MFLANCTO", "MFSALATU", "MFSALDOS", "TBINTIMP", "MFPARAM", "MFCTAREC",
+              "MFADIFOR_TBCBOPRO")
 NAO_CARREGADAS = ("TBFINCODRECOL", "TBINDNIF")
 # MFCONPAG e afins são da L8-12 (carregam lá): aqui só lidos, como as demais de fora da fatia
-SO_ORIGEM = ("TBBANCOS", "TBUSERS", "MFADIFOR_TBCBOPRO", "TBCBOPRO", "MFCONPAG", "MFCONPAG_TBCBOPRO", "MFPAGADF",
+SO_ORIGEM = ("TBBANCOS", "TBUSERS", "TBCBOPRO", "MFCONPAG", "MFCONPAG_TBCBOPRO", "MFPAGADF",
              "SDMFCONPAG", "MFDESACR", "MFLANGSI")
 PROPRIAS = ()
 # fornecedores e profissionais de fora da fatia (L7, L5), dados como já carregados
@@ -377,8 +378,10 @@ def linhas(r, ins):
             ID_MFCABECLANC=i, ID_TBCTABAN_CRE=cc, CDC_CRE=ccc, ID_TBCTABAN_DEV=cd, CDC_DEB=ccd, TIPO_TRF="T",
             USUARIO="usuario.falso")
     # não carregadas: formas da origem só para a imagem
+    for i, rot in [(1, 'Beneficiário com NIF'), (2, 'Beneficiário dispensado do NIF'), (3, 'País não exige NIF')]:  # rodada 5 (revisão): código E rótulo da prova (provas.d/TBINDNIF.sql)
+        ins("TBINDNIF", [i, rot])
     for t in NAO_CARREGADAS:
-        if t in PROPRIAS:
+        if t in PROPRIAS or t == "TBINDNIF":
             continue
         for k in (1, 2):
             ins(t, _linha(f[t], {f[t][0][0]: k}, r))
@@ -434,6 +437,7 @@ ESPERADO = {
                                                "restricao_destino_4025": 1}},
     "MFPARAM": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 2, "restricao_destino_1062": 1}},
     "TBAGEBAN": {"gravados": 5, "pendencias": {"adotado_existente": 1, "catalogo_codigo_inexistente": 1,
+                                               "mescla_conflito_origem_guardada": 1,
                                                "restricao_destino_1048": 2, "valor_fora_do_dominio": 2}},
     "TBCTABAN": {"gravados": 7, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
                                                "valor_fora_do_dominio": 4}},
@@ -457,6 +461,9 @@ ESPERADO = {
                                                "restricao_destino_1062": 1, "valor_presumido": 4}},
     "MFSALDOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
                                                "restricao_destino_1062": 1, "valor_presumido": 6}},
+    # rodada 5 (ADR 0006): o vínculo com a inscrição complementa o adiantamento (UPDATE do credor profissional);
+    # o adiantamento 3 é recusado (CHECK): pai_pendente
+    "MFADIFOR_TBCBOPRO": {"gravados": 1, "pendencias": {"pai_pendente": 1}},
     "MFADIFOR": {"gravados": 4, "pendencias": {"pai_inexistente": 9, "pai_pendente": 1, "restricao_destino_1048": 2,
                                                "restricao_destino_4025": 3, "valor_fora_do_dominio": 3}},
     # gravados = movimentos (itens): 2 + 1 + 1 + 1 + 1 + 1

@@ -186,12 +186,6 @@ TBLOCCON	CPP		codigo_char			L8-03 r3 (correção): sem destino HOJE, não descar
 TBLOCCON	REFUNI		inteiro			L8-03 r3 (correção): sem destino HOJE, não descartada: tabela de mat/med, de materiais e referências de preço (unificada, operadora) e marcas de cobrança ao paciente usadas por padrão no lançamento do local; o modelo não tem a regra de cobrança por local: pedido 14 (local_cobranca_regra, à F2.2) no L8-03.json, com a declaração pronta
 TBLOCCON	DESPAC		codigo_char			L8-03 r3 (correção): sem destino HOJE, não descartada: tabela de mat/med, de materiais e referências de preço (unificada, operadora) e marcas de cobrança ao paciente usadas por padrão no lançamento do local; o modelo não tem a regra de cobrança por local: pedido 14 (local_cobranca_regra, à F2.2) no L8-03.json, com a declaração pronta
 TBLOCCON	REFGEAP		inteiro			L8-03 r3 (correção): sem destino HOJE, não descartada: tabela de mat/med, de materiais e referências de preço (unificada, operadora) e marcas de cobrança ao paciente usadas por padrão no lançamento do local; o modelo não tem a regra de cobrança por local: pedido 14 (local_cobranca_regra, à F2.2) no L8-03.json, com a declaração pronta
-TBCONVPERCTAPAC	ID		chave_origem			L8-03 r4 (revisão): BLOQUEADA, não descarte: lista fixa das opções do percentual de taxa em pacote; só vira descarte (domínio do produto) quando a L5-06 declarar a escolha de cada fonte pagadora (TBCONVEN.ID_TBCONVPERCTAPAC, pedido 19 do L8-02.json)
-TBCONVPERCTAPAC	NOME		texto_nome			L8-03 r4 (revisão): BLOQUEADA, não descarte: lista fixa das opções do percentual de taxa em pacote; só vira descarte (domínio do produto) quando a L5-06 declarar a escolha de cada fonte pagadora (TBCONVEN.ID_TBCONVPERCTAPAC, pedido 19 do L8-02.json)
-TBCTRTAT	COD		inteiro			L8-03: descarte (mecanismo_do_produto): as 3 linhas são o domínio do padrão do tipo de atendimento (CHECK de tipo_atendimento_tabela.padrao: sus, tuss, presencial, proprio), não tipos; o padrão de cada tipo vem de TBITEATE.TAB por de-para de valores confirmado na implantação (pedido no L8-03.json)
-TBCTRTAT	NOME		texto_nome			L8-03: descarte (mecanismo_do_produto): as 3 linhas são o domínio do padrão do tipo de atendimento (CHECK de tipo_atendimento_tabela.padrao: sus, tuss, presencial, proprio), não tipos; o padrão de cada tipo vem de TBITEATE.TAB por de-para de valores confirmado na implantação (pedido no L8-03.json)
-TBIRREGCTRCTA	ID		chave_origem			L8-03: não carregada: opções do modo de controle da irregularidade, escolhidas uma vez no parâmetro global (FCPARAM.ID_TBIRREGCTRCTA): não são tipos de pendência; vão para o mecanismo de parâmetros (pedido no L8-03.json)
-TBIRREGCTRCTA	NOME		texto_nome			L8-03: não carregada: opções do modo de controle da irregularidade, escolhidas uma vez no parâmetro global (FCPARAM.ID_TBIRREGCTRCTA): não são tipos de pendência; vão para o mecanismo de parâmetros (pedido no L8-03.json)
 TBPACTHM	CON		inteiro			L8-03 r3 (correção): bloqueada (mecanismo, pedidos 3 e 4): o pacote é agrupado por CON,CONTAS,THM e precisa do código de três colunas (pedido 3); o item incluso depende do TIPO (honorário pela ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id, que JÁ existe desde a r3 com o item faturável de TBPROCTO; diária/taxa pela TBTABDTH; mat/med pela TBMATMED, bloqueada) e as tabelas de cada tipo numeram desde 1: sem a referência condicionada ao tipo (pedido 4) a ligação sairia errada em silêncio
 TBPACTHM	CONTAS		codigo_char			L8-03 r3 (correção): bloqueada (mecanismo, pedidos 3 e 4): o pacote é agrupado por CON,CONTAS,THM e precisa do código de três colunas (pedido 3); o item incluso depende do TIPO (honorário pela ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id, que JÁ existe desde a r3 com o item faturável de TBPROCTO; diária/taxa pela TBTABDTH; mat/med pela TBMATMED, bloqueada) e as tabelas de cada tipo numeram desde 1: sem a referência condicionada ao tipo (pedido 4) a ligação sairia errada em silêncio
 TBPACTHM	THM		inteiro			L8-03 r3 (correção): bloqueada (mecanismo, pedidos 3 e 4): o pacote é agrupado por CON,CONTAS,THM e precisa do código de três colunas (pedido 3); o item incluso depende do TIPO (honorário pela ref:TBTABTHM(TABELA,PROCTO)@item_faturavel_id, que JÁ existe desde a r3 com o item faturável de TBPROCTO; diária/taxa pela TBTABDTH; mat/med pela TBMATMED, bloqueada) e as tabelas de cada tipo numeram desde 1: sem a referência condicionada ao tipo (pedido 4) a ligação sairia errada em silêncio
@@ -297,3 +291,43 @@ TBREFUNI	COD		inteiro			L8-03 conferidor r4: chave da origem (código do item), 
 TBREFUNI	CLASSIF		inteiro			L8-03 conferidor r4: não carregada: duplicado: a classificação do item já está no item (TBMATMED.CLASSIF, código derivado); fonte_pagadora_id nulo = referência unificada
 TBREFUNI	CONDIA		decimal			L8-03 conferidor r4: não carregada: sem significado confirmado no dicionário (sem destino no modelo); fonte_pagadora_id nulo = referência unificada
 TBREFUNI	OLD_ID_TBREFMEMTUSS		inteiro			L8-03 conferidor r4: não carregada: identificador técnico antigo da origem, sem uso; fonte_pagadora_id nulo = referência unificada
+TBCONVPERCTAPAC	ID		chave_origem			L8-03 R5 (ADR 0006): chave da origem (conector_origem)
+TBCONVPERCTAPAC	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-03 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBCONVPERCTAPAC	=Faturamento	modulo_sistema.descricao				L8-03 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBCONVPERCTAPAC	=faturamento.consistenciaPercentualTaxaPacote	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-03 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBCONVPERCTAPAC	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-03 R5 (ADR 0006): módulo gravado ou adotado acima
+TBCONVPERCTAPAC	=Opções do percentual de taxa em pacote	parametro_definicao.descricao				L8-03 R5 (ADR 0006): descrição do parâmetro
+TBCONVPERCTAPAC	=lista	parametro_definicao.tipo				L8-03 R5 (ADR 0006): parâmetro de lista
+TBCONVPERCTAPAC	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-03 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBCONVPERCTAPAC	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-03 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBCONVPERCTAPAC	ID	parametro_opcao.sequencia	inteiro			L8-03 R5 (ADR 0006): ordem da opção = código da origem
+TBCONVPERCTAPAC	ID	parametro_opcao.valor	texto			L8-03 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBCONVPERCTAPAC	NOME	parametro_opcao.rotulo	texto_nome			L8-03 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBCONVPERCTAPAC	=migracao	parametro_opcao.origem				L8-03 R5 (ADR 0006): opção trazida pela migração
+TBCTRTAT	COD		inteiro			L8-03 R5 (ADR 0006): chave da origem (conector_origem)
+TBCTRTAT	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-03 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBCTRTAT	=Faturamento	modulo_sistema.descricao				L8-03 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBCTRTAT	=faturamento.padraoTabelaTipoAtendimento	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-03 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBCTRTAT	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-03 R5 (ADR 0006): módulo gravado ou adotado acima
+TBCTRTAT	=Opções do padrão de tabela do tipo de atendimento	parametro_definicao.descricao				L8-03 R5 (ADR 0006): descrição do parâmetro
+TBCTRTAT	=lista	parametro_definicao.tipo				L8-03 R5 (ADR 0006): parâmetro de lista
+TBCTRTAT	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-03 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBCTRTAT	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-03 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBCTRTAT	COD	parametro_opcao.sequencia	inteiro			L8-03 R5 (ADR 0006): ordem da opção = código da origem
+TBCTRTAT	COD	parametro_opcao.valor	texto			L8-03 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBCTRTAT	NOME	parametro_opcao.rotulo	texto_nome			L8-03 R5 (ADR 0006): rótulo da opção (a origem aceita vazio: o presumido abaixo)
+TBCTRTAT	=~opção sem nome no sistema anterior	parametro_opcao.rotulo				L8-03 R5 (ADR 0006): nome vazio na origem: rótulo presumido (valor_presumido), o código fica no valor
+TBCTRTAT	=migracao	parametro_opcao.origem				L8-03 R5 (ADR 0006): opção trazida pela migração
+TBIRREGCTRCTA	ID		chave_origem			L8-03 R5 (ADR 0006): chave da origem (conector_origem)
+TBIRREGCTRCTA	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-03 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBIRREGCTRCTA	=Faturamento	modulo_sistema.descricao				L8-03 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBIRREGCTRCTA	=faturamento.controleIrregularidadeConta	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-03 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBIRREGCTRCTA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-03 R5 (ADR 0006): módulo gravado ou adotado acima
+TBIRREGCTRCTA	=Opções do modo de controle de irregularidade da conta	parametro_definicao.descricao				L8-03 R5 (ADR 0006): descrição do parâmetro
+TBIRREGCTRCTA	=lista	parametro_definicao.tipo				L8-03 R5 (ADR 0006): parâmetro de lista
+TBIRREGCTRCTA	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-03 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBIRREGCTRCTA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-03 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBIRREGCTRCTA	ID	parametro_opcao.sequencia	inteiro			L8-03 R5 (ADR 0006): ordem da opção = código da origem
+TBIRREGCTRCTA	ID	parametro_opcao.valor	texto			L8-03 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBIRREGCTRCTA	NOME	parametro_opcao.rotulo	texto_nome			L8-03 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBIRREGCTRCTA	=migracao	parametro_opcao.origem				L8-03 R5 (ADR 0006): opção trazida pela migração

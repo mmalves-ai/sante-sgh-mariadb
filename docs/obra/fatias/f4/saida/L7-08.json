@@ -87,6 +87,22 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (_valores, colunas concorrentes)",
    "mudanca": "coluna concorrente: avaliar a fonte seguinte só quando a anterior vier nula (sem pendência da fonte reserva não usada)",
    "motivo": "Na imagem sintética da L7-08, fontes reservas (momento do documento, nome e centro de custo do local de consumo) deixam pai_inexistente mesmo quando a 1ª fonte tinha valor: ruído de gravidade média no painel. PRIORIDADE (rodada 3, revisão): GECADSAI.atendimento_id tem duas fontes que se excluem (internação por PAC no destino 1, atendimento por CONTA no destino 3); hoje a que não casa deixa pai_inexistente em cerca de 570 mil documentos na referência (504.292 do destino 1 e 65.396 do destino 3, mais 206 do 5), e as reservas presumidas de PRPARINTEGEST marcam valor_presumido mesmo com o de-para resolvido"
+  },
+  {
+   "id": "r5b_lote_liquido",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2, modelo)",
+   "trilha": "F2.2",
+   "prioridade": "alta (rastreio por lote: recall)",
+   "mudanca": "movimento_lote: ADD quantidade_liquida DECIMAL(15,4) NULL COMMENT 'Quantidade do lote no movimento depois das devoluções (saída menos devolução)' com CHECK (quantidade_liquida IS NULL OR (quantidade_liquida >= 0 AND quantidade_liquida <= quantidade))",
+   "motivo": "GEQTDELOTEVALLOTEDOCSAIDA tem a MESMA chave do lote da saída (GERASVALSAIDLOTE) e guarda a quantidade líquida (57.114 linhas menores que a bruta, medição registrada). Com a coluna, a fatia declara QTDE -> movimento_lote.quantidade_liquida com via ref:GERASVALSAIDLOTE;complementa (UPDATE da linha do lote da saída), cópia exata sem recálculo; a prova derivado (bruta menos devoluções) não é possível hoje porque a devolução não liga ao lote da saída. Até lá: retrato na trilha (dado preservado, saldo por lote ainda pela bruta: aviso)."
+  },
+  {
+   "id": "r5b_parametros_estoque",
+   "arquivo": "semente do produto (parametro_definicao, módulo de estoque) + fatia L7-08",
+   "trilha": "F2.2 (semente)",
+   "prioridade": "alta (ADR 0006/0003: comportamento do estoque)",
+   "mudanca": "semente de parametro_definicao com permite_usuario=1 (e permite_estabelecimento=1) para as opções do estoque por usuário que a origem guarda em GEPARAM (cerca de 270 colunas: fonte de recurso padrão, consumo automático, código de barras, validade, emissão de nota etc.; lista em docs/obra/fatias/f4/L7-08.md, seção GEPARAM), com chave estoque.<nome_de_negocio>, tipo pelo tipo da coluna (S/N -> booleano; inteiro; data; texto) e o padrão do produto",
+   "motivo": "a carga em parametro_valor é por desdobrar (uma linha por opção com valor: #item = valor, #rotulo com cod:parametro_definicao.chave, nivel=usuario, usuario_id ref:TBUSERS, vigencia_inicio @vigencia_carga), mas parametro_definicao não pode ser criado pela migração (catálogo do produto) e o nome de negócio de cada opção é decisão da semente. Sem a definição, cada opção sem correspondente deixará pendência codigo_inexistente_destino. Até lá: retrato completo na trilha (aviso)."
   }
  ]
 }

@@ -66,7 +66,8 @@ class L607(unittest.TestCase):
             c = self.cols(t)
             if "codigo" in c:
                 self.assertIn(c["codigo"]["coluna"], ("ID", "#codigo_derivado:ID:30:anexo_",
-                                                     "#codigo_derivado:ID:30:evolucao_"))
+                                                     "#codigo_derivado:ID:30:evolucao_",
+                                                     "#codigo_derivado:COD_TIPO_PERGUNTA_PARAMETRO+ID:30:param_"))
                 self.assertIn(c["codigo"]["regra"], ("texto", "texto_char"))
         c = self.cols("PRSITUACAOCHECAGEM")["codigo"]
         self.assertEqual((c["regra"], c["depara"]), ("texto_char", "valores"))
@@ -86,9 +87,35 @@ class L607(unittest.TestCase):
             self.assertEqual((self.cols(t)[dc]["coluna"], self.cols(t)[dc]["depara"]), (col, "valores"), t)
             self.assertTrue(self.cols(t)[dc]["valores"], t)
         # nenhuma constante silenciosa ('=' sem '~') além da categoria com evidência
+        # (rodada 5: as constantes de estrutura das listas do hospital, módulo, lista e origem, não são presunção)
         fixos = [(d["tabela"], d["coluna"]) for d in self.decl
-                 if d["coluna"].startswith("=") and not d["coluna"].startswith("=~")]
-        self.assertEqual(fixos, [("PRTPCOMP", "=evolucao")])
+                 if d["coluna"].startswith("=") and not d["coluna"].startswith("=~")
+                 and not d["destino"].startswith(("parametro_opcao.", "modulo_sistema.", "parametro_definicao."))]
+        # rodada 5: o parâmetro da pergunta entra INATIVO de propósito (destino do dado presumido, o hospital configura)
+        self.assertEqual(fixos, [("PRTPCOMP", "=evolucao"), ("PRTIPOPERGPAR", "=0")])
+
+    def test_listas_do_hospital_e_parametro_pelo_rotulo(self):  # rodada 5 (ADR 0006, 1; ADR 0007, 18)
+        for t in ("PRTIPONOTIFICACAO", "PRTPASSINATURA_TBOID"):
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_opcao", t)
+        vals = {(v["destino"], v["valor_origem"]): v["valor_destino"] for v in mapa.ler_valores(mapa.DIR_PACOTE)
+                if v["tabela"] == "PRTIPOPERGPAR"}
+        self.assertEqual([vals[("destino_campo_estruturado.%s" % c, "Peso")] for c in ("entidade_destino", "tipo_dado")],
+                         ["afericao", "numero"])
+        self.assertNotIn(("destino_campo_estruturado.ativo", "Peso"), vals)  # nunca ativado por palpite de nome
+        self.assertEqual(vals[("destino_campo_estruturado.entidade_destino", "CID")], "diagnostico_atendimento")
+        decl = [(d["coluna"], d["depara"]) for d in self.decl if d["tabela"] == "PRTIPOPERGPAR"
+                and d["destino"] == "destino_campo_estruturado.ativo"]
+        self.assertEqual(decl, [("=0", "")])  # revisão 2: sempre inativo até o hospital confirmar
+        rot = [(d["coluna"], d["via"].split(";")[-1]) for d in self.decl if d["tabela"] == "PRTPASSINATURA_TBOID"
+               and d["destino"] == "parametro_opcao.rotulo"]
+        self.assertEqual(rot[0], ("ID_TBOID", "ref:TBOID@descricao"))  # o identificador no rótulo, validado
+
+    def test_parametro_da_pergunta_carrega_inativo(self):  # ADR 0006: carrega como item do hospital
+        c = self.cols("PRTIPOPERGPAR")
+        self.assertEqual(self.plano["PRTIPOPERGPAR"]["destinos"], ["destino_campo_estruturado"])
+        self.assertEqual(c["ativo"]["coluna"], "=0")
+        self.assertTrue(c["entidade_destino"]["coluna"].startswith("=~"))
+        self.assertTrue(c["codigo"]["coluna"].endswith(":param_"))
 
     def test_valores_no_dominio(self):
         dom = {"situacao_checagem.processo_enfermagem": {"administracao", "cuidado", "afericao", "coleta", "conferencia"},

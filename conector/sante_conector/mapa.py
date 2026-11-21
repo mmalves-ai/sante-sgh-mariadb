@@ -243,13 +243,13 @@ def ref_simples(spec):
 
 # colunas especiais da carga dirigida pelo mapa (carga_mapa.py); `=<texto>` é literal (e `=~<texto>`, presumido)
 _ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][a-z0-9_]*|@vigencia_carga|#item[2-9]?|#item@[A-Z0-9_$]+|#rotulo[2-9]?|#retrato|#seq:[A-Z0-9_$]+|#sha256:[A-Z0-9_$]+"
-                        r"|#cofre:[A-Z0-9_$]+|#arquivo:[A-Z0-9_$]+(?::[a-z][a-z0-9_]{0,59})?|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?"
+                        r"|#cofre:[A-Z0-9_$]+|#arquivo:[A-Z0-9_$]+(?::[a-z][a-z0-9_]{0,59})?|#data:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#data_hora:[A-Z0-9_$]+,[A-Z0-9_$]+(?:,[A-Z0-9_$]+)?|#codigo_derivado:[A-Z0-9_$]+:[1-9][0-9]*(?::[^:\t]{1,80})?"
                         r"|#dias:[A-Z0-9_$]+,(?:[A-Z0-9_$]+|=[a-z]+)"
                         r"|(?:#sha256:)?#retrato:(?:\*(?:-[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)"
                         r"|#sha256:#retrato|#grupo_contar|#grupo_seq|#grupo_(?:somar|min|max):[A-Z0-9_$]+"
                         # rodada 4
                         r"|#data_hora_mais:[A-Z0-9_$]+,[A-Z0-9_$]+,[A-Z0-9_$]+"
-                        r"|#codigo_derivado:[A-Z0-9_$]+(?:\+[A-Z0-9_$]+)+:[1-9][0-9]*(?::[a-z0-9_]{1,20})?"
+                        r"|#codigo_derivado:[A-Z0-9_$]+(?:\+[A-Z0-9_$]+)+:[1-9][0-9]*(?::[^:\t]{1,80})?"
                         r"|#grupo_json:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
                         r"|#grupo_seq@[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*|#grupo_razao:[A-Z0-9_$]+@[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
                         r"|#filhos_(?:min|max|somar|contar):[A-Z0-9_$]+\.[A-Z0-9_$]+(?:\|[A-Z0-9_$]+\.[A-Z0-9_$]+)*"

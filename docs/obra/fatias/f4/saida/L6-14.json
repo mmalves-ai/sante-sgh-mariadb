@@ -106,6 +106,16 @@
    "arquivo": "domínio da numeração (prontuário e internação) + conciliação da virada",
    "mudanca": "ao ligar a sequência do produto ao tipo prontuario/internacao, valor inicial = MAIOR entre a sequência migrada ativa e MAX(número migrado)+1; a conciliação confere proximo_valor > MAX(número migrado)",
    "motivo": "medido: os contadores de RIPARAM estão abaixo do maior prontuário e registro migrados (defasados); ligar a sequência pelo contador repetiria números"
+  },
+  {
+   "arquivo": "conector/sante_conector/sintetica_d/l6_15.py (imagem de TBTISSREGINT) + colunas.d/L6-14.tsv",
+   "mudanca": "r5: carregar TBTISSREGINT em regime_atendimento_internacao: codigo = ID (texto), codigo_tiss = ID com inteiro_faixa:1,3 e adotar:codigo_tiss (mescla com a semente), descricao = NOME (texto_nome), vigencia_inicio/fim; tirar de NAO_CARREGADAS da L6-15 e do sem_carga",
+   "motivo": "ADR 0006 (4): códigos oficiais ligados, o resto como item do hospital; a imagem é da L6-15 (não editada por esta trilha)"
+  },
+  {
+   "arquivo": "colunas.d/L6-15.tsv (TBTISSREGINT, dona da declaração) + sintetica_d/l6_15.py (NAO_CARREGADAS, esperado) + sem_carga.tsv",
+   "mudanca": "r5b: mudança coordenada pronta: TBTISSREGINT -> regime_atendimento_internacao: ID codigo (texto); ID codigo_tiss (regra faixa:1,3; via principal;adotar:codigo_tiss: mescla com a semente hospitalar/hospital_dia/domiciliar); NOME descricao (texto_nome); DATA_VIGENCIA_INICIAL vigencia_inicio (data); DATA_VIGENCIA_FINAL vigencia_fim (data); fora da faixa = item do hospital, ativo. Tirar de NAO_CARREGADAS da L6-15 e a linha do sem_carga",
+   "motivo": "ADR 0006 (4): o descarte catalogo_oficial não vale; a linha em sem_carga.tsv passou a BLOQUEADA (r5b) para não esconder a tabela da meta; a declaração e a imagem são da L6-15 (não editadas por esta trilha)"
   }
  ]
 }

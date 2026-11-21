@@ -463,3 +463,22 @@ GERASVALINICIAL	=saldo inicial do lote na fotografia	trilha_auditoria.motivo				
 GERASVALINICIAL	ITEM		inteiro			L7-07 r4 (correção): sem coluna própria: o item é o do lote; no retrato
 GERASVALINICIAL	QTDE		decimal			L7-07 r4 (correção): sem coluna própria: a quantidade fotografada vai no retrato
 GERASVALINICIAL	ID_GERASVALFINAL		chave_origem			L7-07 r4 (correção): sem coluna própria: a fotografia ligada vai no retrato (35 de 681 na referência)
+#GEUSERS_TBCLASSI	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	L7-07 r5 (ADR 0006): retrato COMPLETO da linha (todas as colunas, sem segredo): permissão do usuário por classificação; o produto restringe por grupo de insumo (usuario_estoque_classificacao) e a classificação não leva a um grupo (1:N): a permissão fica visível na trilha do usuário para a implantação gravar o grupo | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	=@data_carga	trilha_auditoria.ocorrido_em				L7-07 r5 (ADR 0006): a origem não data a linha: momento da inclusão pela migração (não é vigência) | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	=inclusao	trilha_auditoria.acao				L7-07 r5 (ADR 0006): natureza do registro na trilha | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	=usuario	trilha_auditoria.entidade				L7-07 r5 (ADR 0006): entidade do produto a que o registro se refere | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	USUARIO_GEUSERS	trilha_auditoria.entidade_id	chave_origem		ref:TBUSERS	L7-07 r5 (ADR 0006): usuário (login); nunca visto: NULL com pai_inexistente, a linha fica | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	=permissão do usuário por classificação de despesa da origem	trilha_auditoria.motivo				L7-07 r5 (ADR 0006): o que o retrato guarda | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+#GEUSERS_TBCLASSI	ID_TBCLASSI		chave_origem			L7-07 r5 (ADR 0006): no retrato (classificação de despesa) | r5c: PENDENTE até r5b_classificacao_usuario (saida/L7-07.json)
+GEKITKPI	#codigo_derivado:ITEM_PRI:30:kit_acomp_	kit_material.codigo			kit_material;antes;agrupar:ITEM_PRI	L7-07 r5 (ADR 0006): um kit por item principal (insumo que leva os secundários junto); código do domínio kit_acomp_ + código do item
+GEKITKPI	@estabelecimento	kit_material.estabelecimento_id				L7-07 r5 (ADR 0006): único estabelecimento do cliente
+GEKITKPI	ITEM_PRI	kit_material.nome			ref:GEITENS@nome	L7-07 r5 (ADR 0006): nome do kit = nome do insumo principal (lido do destino); insumo ausente: NULL recusa
+GEKITKPI	=rotina	kit_material.tipo				L7-07 r5 (ADR 0006): item que acompanha o principal no uso de rotina
+GEKITKPI	=migracao	kit_material.origem				L7-07 r5 (ADR 0006): origem da linha
+GEKITKPI	=itens que acompanham o insumo principal (cadastro da origem)	kit_material.observacao				L7-07 r5 (ADR 0006): natureza do kit
+GEKITKPI	@id:kit_material	kit_material_item.kit_material_id			principal	L7-07 r5 (ADR 0006): o item liga ao kit do principal
+GEKITKPI	#grupo_seq	kit_material_item.sequencia				L7-07 r5 (ADR 0006): posição do secundário no kit
+GEKITKPI	ITEM_SEC	kit_material_item.insumo_id	chave_origem		ref:GEITENS	L7-07 r5 (ADR 0006): insumo secundário; recusado: pai_pendente; nunca visto: pai_inexistente e recusa
+GEKITKPI	ITEM_SEC	kit_material_item.unidade_medida_id			ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r5 (ADR 0006): unidade de estoque do insumo secundário, como GEKITITE
+GEKITKPI	QTDE	kit_material_item.quantidade	decimal			L7-07 r5 (ADR 0006): nula recusa (NOT NULL); zero ou negativa recusa (CHECK)
+GEKITKPI	=migracao	kit_material_item.origem				L7-07 r5 (ADR 0006): origem da linha

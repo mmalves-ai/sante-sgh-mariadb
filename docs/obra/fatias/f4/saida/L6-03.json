@@ -145,6 +145,11 @@
    "mudanca": "REPACAGI com LIVRE N (horário bloqueado): criar o bloqueio_agenda pela própria linha só quando bloqueado (opção 'se:LIVRE=N' num secundário antes, motivo de bloqueio pelo código migracao), ou ck_horario_agenda_bloqueio aceitar bloqueio nulo quando origem='migracao'",
    "motivo": "a declaração pronta de REPACAGI grava situacao bloqueado para LIVRE N e para as situações HR/Q/P sem paciente; o CHECK exige bloqueio_agenda_id e a linha seria recusada (visível, 4025). Sem isso o horário bloqueado some, o que equivale a não oferecer a vaga, mas perde o registro do bloqueio",
    "atendido": "rodada 4 (integrador): destino_se:LIVRE=N no secundário (bloqueio só do horário bloqueado)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros, como 14_FIN/14)",
+   "mudanca": "Rodada 5 (ADR 0006): semear em parametro_definicao as definições agenda.retorno.tipoRetorno, agenda.retorno.criterioRetorno (tipo lista; opções em parametro_opcao), com módulo, descrição, nível rede e tela",
+   "motivo": "A fatia carrega a lista e os parâmetros do hospital (opções com origem migracao e valores em parametro_valor) pela chave do catálogo do produto (cod:parametro_definicao.chave), que a migração nunca cria; sem a semente cada linha é recusada com codigo_inexistente_destino (visível no relatório de conciliação), nunca perdida em silêncio. A conferência da fatia semeia as mesmas chaves no PREPARO_DESTINO."
   }
  ],
  "declaracao_pronta": {

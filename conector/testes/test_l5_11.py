@@ -9,6 +9,10 @@ from sante_conector.sintetica_d import l5_11
 
 DECLARADAS = {"FPVACINA", "POTPCONTTEMP", "PEPERIOD_JUSTIF", "PETP_MOVIM", "POCLASSIFMARC", "POTPTRABFOLGA",
               "POTPHORA", "PETPINTERVALO", "POREPHOMOLOGADO", "FPVALE"}
+# rodada 5 (ADR 0006): listas fixas sem prova possível entram como listas do hospital (parametro_opcao sob
+# parametro_definicao migracao.<lista>); a configuração do ponto (PEPARAM) entra inteira como parâmetro json
+LISTAS = {"POPROGSIT", "POPROSITUACAO", "POBANCOHRTP", "PETP_INTEGR_EVENTO"}
+DECLARADAS = DECLARADAS | LISTAS | {"PEPARAM"}
 # classificador NOT NULL sem fonte na origem: literal presumido (=~), com pendência valor_presumido por linha
 PRESUMIDOS = {"PEPERIOD_JUSTIF": ("abrangencia_justificativa", "abrangencia"),
               "PETP_MOVIM": ("tipo_movimento_ponto", "natureza"),
@@ -19,8 +23,10 @@ PRESUMIDOS = {"PEPERIOD_JUSTIF": ("abrangencia_justificativa", "abrangencia"),
               "POREPHOMOLOGADO": ("tipo_relogio_ponto", "categoria_portaria"),
               "FPVALE": ("beneficio", "tipo")}
 # descarte de produto (declarado/sem_carga.tsv): domínio de CHECK no consumidor, catálogo oficial, parâmetro
-SEM_CARGA = {"FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO", "STEMITENTE", "PEPARAM", "PODIA", "POPROGSIT",
-             "POPROSITUACAO", "PETP_INTEGR_EVENTO", "POBANCOHRTP", "POTPINIBANCO", "POTPJORNADA"}
+SEM_CARGA = {"FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO", "STEMITENTE", "PODIA", "POTPINIBANCO", "POTPJORNADA"}
+# BLOQUEADAS com pedido (sem_carga.tsv `bloqueada`): parâmetros do ponto sem definição no produto; listas legais do
+# eSocial até o item do hospital (pedido r5-1 da L5-07)
+BLOQUEADAS = {"POTPJORNADA", "FPTP_SAL", "FPTP_TREINAMENTO_CAPACITACAO", "STEMITENTE"}
 
 
 def _raiz():
@@ -48,22 +54,29 @@ class FatiaL511(unittest.TestCase):
         p = carga_mapa.planejar(self.m, DECLARADAS | SEM_CARGA)
         self.assertEqual({x["tabela"] for x in p}, DECLARADAS)
         for x in p:
-            self.assertEqual(len(x["destinos"]), 1, x["tabela"])  # destino secundário do mapa não é usado
+            if x["tabela"] in LISTAS:
+                self.assertEqual(x["destinos"][0], "parametro_opcao", x["tabela"])
+            elif x["tabela"] == "PEPARAM":
+                self.assertEqual(x["destinos"][0], "parametro_definicao")
+            else:
+                self.assertEqual(len(x["destinos"]), 1, x["tabela"])  # destino secundário do mapa não é usado
 
     def test_colunas_existem_no_ddl_e_regra_valida(self):
         self.assertEqual({c["tabela"] for c in self.decl}, DECLARADAS)
         for c in self.decl:
+            if not c["destino"]:  # SEM DESTINO, declarada (PEPARAM: parâmetro sem definição no produto)
+                continue
             t, col = c["destino"].split(".")
             self.assertIn(col, self.ddl[t]["colunas"], c["destino"])
             if c["regra"]:
                 sentinela.aplicar(c["regra"], None)  # regra conhecida (também as parametrizadas)
             self.assertNotEqual(c["regra"], "chave_origem")  # chave própria vira código, não referência
-            if c["destino"].endswith(".codigo"):
+            if c["destino"].endswith(".codigo") and not c["destino"].startswith("modulo_sistema"):
                 self.assertEqual(c["regra"], "texto", c["destino"])  # VARCHAR no destino: soma de controle igual
 
     def test_literal_so_presumido_e_dentro_do_check(self):
         """Literal só como presumido (=~), em classificador sem fonte, com valor aceito pelo CHECK do destino."""
-        lits = [c for c in self.decl if c["coluna"].startswith("=")]
+        lits = [c for c in self.decl if c["coluna"].startswith("=") and c["tabela"] not in LISTAS | {"PEPARAM"}]  # nível fixo
         self.assertTrue(all(c["coluna"].startswith("=~") for c in lits))
         for t, (dt, col) in PRESUMIDOS.items():
             c = next(x for x in lits if x["tabela"] == t and x["destino"] == "%s.%s" % (dt, col))
@@ -84,7 +97,14 @@ class FatiaL511(unittest.TestCase):
         self.assertEqual(sorted(SEM_CARGA - set(sc)), [])
         self.assertEqual(sorted(DECLARADAS & set(sc)), [])  # tabela carregada não fica também como descarte
         for t in SEM_CARGA & set(sc):
-            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertEqual(sc[t]["situacao"], "bloqueada" if t in BLOQUEADAS else "descarte", t)
+        # rodada 5: a configuração do ponto carrega inteira (retrato JSON de todas as colunas), uma definição por
+        # empresa, até as definições pessoas.ponto.* do produto existirem (pedido em saida/L5-11.json)
+        cs = {c["destino"]: c["coluna"] for c in self.decl if c["tabela"] == "PEPARAM"}
+        self.assertEqual(cs["parametro_definicao.valor_padrao"], "#retrato:*")
+        self.assertTrue(cs["parametro_definicao.chave"].startswith("#codigo_derivado:COD_EMP:"))
+        self.assertFalse([c for c in self.decl if c["tabela"] == "PEPARAM" and c["coluna"][:1] != "="
+                              and "ponto." in c["coluna"]])   # nenhuma chave de definição inventada
 
     def test_vale_com_codigo_prefixado(self):
         """FPVALE grava em beneficio(codigo) com o prefixo v; o tipo de vale (FPTPVALE) virou descarte de domínio do
@@ -93,17 +113,37 @@ class FatiaL511(unittest.TestCase):
         self.assertEqual(c["coluna"], "#codigo_derivado:ID:30:v")
         pai = [x for x in self.m["colunas_decl"] if x["tabela"] == "FPTPVALE" and x["destino"] == "beneficio.codigo"]
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        self.assertTrue(pai == [] and sc["FPTPVALE"]["situacao"] == "descarte" or [x["coluna"] for x in pai] == ["ID"])
+        # o tipo de vale (FPTPVALE, L5-10) não grava código sem prefixo no mesmo cadastro (situação dela é da L5-10)
+        self.assertTrue(pai == [] and sc["FPTPVALE"]["situacao"] in ("descarte", "bloqueada")
+                        or [x["coluna"] for x in pai] == ["ID"])
 
     def test_sintetica_cobre_as_declaradas(self):
-        self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l5_11.DDL)), DECLARADAS)
+        self.assertEqual(set(re.findall(r"CREATE TABLE (\w+)", l5_11.DDL)), DECLARADAS | set(l5_11.PROVADAS))
         for c in self.decl:
             if c["coluna"][:1] in "=@#":
-                if c["coluna"].startswith("#"):
-                    self.assertRegex(l5_11.DDL, r"CREATE TABLE %s \(.*\b%s\b" % (c["tabela"], c["coluna"].split(":")[1]))
+                arg = c["coluna"].split(":")[1] if c["coluna"].startswith("#") and ":" in c["coluna"] else ""
+                if re.fullmatch(r"[A-Z0-9_]+", arg):
+                    self.assertRegex(l5_11.DDL, r"CREATE TABLE %s \((?s:.*?)\b%s\b" % (c["tabela"], arg))
                 continue
             ddl_t = re.search(r"CREATE TABLE %s \((.*?)\);" % c["tabela"], l5_11.DDL, re.S).group(1)
             self.assertRegex(ddl_t, r"\b%s\b" % c["coluna"])
+
+
+    def test_prova_das_listas_fixas(self):
+        """Lista fixa descartada só COM prova derivado (ADR 0006, 1): código e rótulo; cada valor equivalente está no
+        CHECK do domínio do produto (DDL do modelo)."""
+        import glob, pathlib, re
+        raiz = pathlib.Path("/app") if pathlib.Path("/app/db/migracoes").exists() else mapa.RAIZ
+        pv = {x["tabela"]: x for x in mapa.carregar_execucao().get("provas") or []}
+        sqls = "\n".join(open(f, encoding="utf-8").read() for f in glob.glob(str(raiz / "db/migracoes/*/*.sql")))
+        for t, ck in {'PODIA': 'ck_horario_jornada_dia', 'POTPINIBANCO': 'ck_regra_banco_horas_criterio'}.items():
+            self.assertEqual((pv[t]["tipo"], pv[t]["chave"], [v[0] for v in pv[t]["valores"]]), ("derivado", ["ID"], ["ID", "NOME"]))
+            m = re.search(r"CONSTRAINT %s CHECK \((.*?)\),?\n" % ck, sqls)
+            self.assertTrue(m, ck)
+            vals = re.findall(r"'(\w+)' AS valor_produto", pv[t]["sql"])
+            self.assertTrue(vals, t)
+            for v in vals:
+                self.assertIn("'%s'" % v, m.group(1), (t, v))
 
 
 if __name__ == "__main__":

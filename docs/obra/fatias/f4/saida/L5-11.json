@@ -10,6 +10,24 @@
    "arquivo": "tools/obra/fatiar_conector.py (docs/obra/fatias/f4/*.md, indice.tsv)",
    "mudanca": "regenerar as fatias depois de integrar os colunas.d",
    "motivo": "a seção 3 da fatia ainda mostra as colunas geradas, não as declaradas"
+  },
+  {
+   "arquivo": "motor (carga_mapa.py, mapa.py, cobertura_conector.py)",
+   "mudanca": "prova de tipo `dominio` para lista fixa SEM consumidor no mapa (POPROGSIT, POBANCOHRTP, PETP_INTEGR_EVENTO): a tradução de cada item vem de um de-para declarado NA PRÓPRIA LISTA (valores.d: tabela da lista, coluna NOME, destino <tabela>.<coluna> do domínio) e a prova confere que todo item da origem tem par e que o valor está no CHECK vivo do destino (information_schema.CHECK_CONSTRAINTS); valor do domínio do produto sem item na origem não conta",
+   "motivo": "correção da rodada 5: o pedido anterior supunha um consumidor com depara=valores, mas NENHUMA tabela do mapa consome essas listas (os destinos horario_jornada, escala, apuracao_ponto, regra_banco_horas e integracao_ponto_folha só recebem a própria lista). PODIA e POTPINIBANCO saíram do pedido: têm correspondência 1 a 1 com o domínio e prova derivado por código e rótulo (provas.d). POPROGSIT (5 itens para 4 valores), POBANCOHRTP (4 para 3) e PETP_INTEGR_EVENTO (13 eventos de integração, não uma forma) não têm tradução estimável sem ler os rótulos: seguem BLOQUEADAS. POPROSITUACAO (3 para 5) também, pela mesma razão",
+   "rodada": 5
+  },
+  {
+   "arquivo": "modelo/semente do produto (F2.2): parametro_definicao do módulo ponto",
+   "rodada": 5,
+   "mudanca": "definições do ponto em packages/contratos/src/parametros/pessoas.ts (nível estabelecimento) para o que o produto ainda não tem: pessoas.ponto.toleranciaHoraExtraMin (QTD_MIN_HR_EXT, separada da de atraso), pessoas.ponto.intervaloMinimoMarcacoesMin (INT_ENT_MARC), pessoas.ponto.descontoFaltaMarcacao (booleano, DESC_MIN_FALTA_MARC) com pessoas.ponto.descontoFaltaMarcacaoMin (QTD_MIN_DESC, só com a flag), pessoas.ponto.bancoHoras (UTILIZA_BHRS), pessoas.ponto.horaNoturnaInicio/Fim (hora), pessoas.ponto.abaterAtrasoHoraExtra, pessoas.ponto.marcacaoAntecipadaHoraExtra (MIN_MARC_ADT_HR_EXT), pessoas.ponto.integrarFolha (INT_FOLHA_PGTO), pessoas.ponto.politicaMarcacao (POL_MARCACAO), pessoas.ponto.tipoTolerancia (TP_TOLERANCIA: por marcação ou diária), extra em feriado normal, escalonado, meio período e intervalo sem registro em escala (4 booleanos), início e fim do período de apuração (PER_INICIAL/PER_FINAL), mensagem de aniversário (MSG_ANIVER); NRO_PORTA_COM, CAMIN_FOTO e EDIT_REL são da estação antiga (porta serial, pasta, editor): pedir decisão de destino (retrato na trilha da configuração migrada)",
+   "motivo": "correção da rodada 5 (achado da revisão): as chaves ponto.* usadas antes eram inventadas e só existiam no PREPARO da sintética; as do produto são pessoas.ponto.*. Ligação já possível: QTD_MIN_ATR -> pessoas.ponto.toleranciaMarcacaoMin quando TP_TOLERANCIA for por marcação, senão pessoas.ponto.toleranciaDiariaMin. Carregar só essa parte perderia o resto da configuração do cálculo: PEPARAM fica BLOQUEADA (sem_carga.tsv, mecanismo_pedido) até as definições; depois, a fatia declara o desdobrar por coluna com cod:parametro_definicao.chave, sem semear definição"
+  },
+  {
+   "rodada": 5,
+   "arquivo": "motor/verificador e modelo 15_RH (pedido r5-1 da L5-07)",
+   "mudanca": "item do hospital nas listas legais do eSocial (ADR 0006, 4): POTPJORNADA, FPTP_SAL, FPTP_TREINAMENTO_CAPACITACAO, STEMITENTE seguem o mesmo pedido r5-1",
+   "motivo": "achado da revisão: o código local ou de versão antiga só vira pendência no consumidor e não entra ativo; as 4 passaram de descarte catalogo_oficial a BLOQUEADA mecanismo_pedido (como FPAFAST_COD e FPALIQRATCNAE)"
   }
  ],
  "aplicado_pela_fatia": [

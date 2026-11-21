@@ -44,6 +44,26 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores)",
    "mudanca": "par padrão presumido no de-para de valores (ex.: valor_origem '*' = destino presumido, com pendência baixa valor_presumido em vez de NULL + valor_fora_do_dominio)",
    "motivo": "PRTPLAN.ID -> tipo_item_prescricao.categoria tem evidência por código (1-4 dieta, 6 medicamento, 7 solucao, 8 hemocomponente, 11/12 ventilacao, 13 procedimento, 14 cuidado), mas a coluna não tem padrão: código sem par recusaria o tipo de item e derrubaria os filhos. Com o par padrão, os conhecidos entram classificados e o resto 'outro' presumido"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (trilha F2.2) + conector/mapa/declarado/provas.tsv",
+   "mudanca": "tabela rotulo_dominio_hospital (dominio VARCHAR(64) = 'tabela.coluna' do produto, codigo_origem VARCHAR(30), rotulo VARCHAR(150) NOT NULL, valor_produto VARCHAR(30) NULL, ativo, origem CHECK sistema|migracao; UNIQUE (dominio, codigo_origem))",
+   "motivo": "ADR 0006, 1: listas fixas do hospital que no produto são domínio com CHECK (ação do alerta, modo da requisição, campo autopreenchido, situação e 'manter' do lançamento de diagnóstico) não têm tabela onde carregar, e a prova por item com os ids literais da origem (padrão L8-10/L8-13) exige conhecer os ids reais, que esta fatia não lê. Com a tabela, cada lista CARREGA (rótulo do hospital + valor do produto pelo de-para de valores) e a tela mostra o nome que o hospital usava",
+   "atendido": false,
+   "tabelas": [
+    "PRTIPONOTIFICACAO"
+   ],
+   "rodada5": true
+  },
+  {
+   "arquivo": "db/migracoes/02_ADM (trilha F2.2)",
+   "tabelas": [
+    "PRTPASSINATURA_TBOID"
+   ],
+   "mudanca": "vínculo tipo_documento_clinico_oid (tipo_documento_clinico_id FK, oid_icp_id FK, obrigatorio BOOLEAN; UNIQUE par)",
+   "motivo": "quais campos do certificado cada tipo de documento exige: dado de configuração do hospital (19 linhas); o produto só tem o OID único do tipo (codigo_oid) e o cadastro oid_icp. Com o vínculo: ID_PRTPASSINATURA -> ref:PRTPASSINATURA, ID_TBOID -> ref:TBOID",
+   "atendido": false,
+   "rodada5": true
   }
  ]
 }

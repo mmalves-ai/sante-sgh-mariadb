@@ -157,17 +157,18 @@ def linhas(r, ins):
     ins("RIPARAM", [5000, 7000, 10, 2026, 0, None, 123.0, 456.0, None, 12, 9, 2026, 10, 2026])
     return {
         "RETPLEITO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "valor_presumido": 5}},
-        "RIBLOCOS": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1062": 1,
+        # r5b: motor r5 (ADR 0007, 20): mescla não destrutiva guarda o conflito da origem (pendência baixa)
+        "RIBLOCOS": {"gravados": 4, "pendencias": {"mescla_conflito_origem_guardada": 2, "restricao_destino_1048": 2, "restricao_destino_1062": 1,
                                                    "valor_fora_do_dominio": 2, "adotado_existente": 2,
                                                    "valor_presumido": 7}},
         "RISITREGLEITO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
         "TBALTARN": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
         "RITITFIC": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5,
                                                    "adotado_existente": 1, "valor_fora_do_dominio": 1}},
-        "RIMODFIC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "pai_pendente": 1, "valor_presumido": 6,
+        "RIMODFIC": {"gravados": 5, "pendencias": {"mescla_conflito_origem_guardada": 1, "restricao_destino_1048": 1, "pai_pendente": 1, "valor_presumido": 6,
                                                    "adotado_existente": 1, "valor_fora_do_dominio": 3,
                                                    "pai_inexistente": 2}},
-        "RICONFIC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "pai_pendente": 1,
+        "RICONFIC": {"gravados": 5, "pendencias": {"mescla_conflito_origem_guardada": 1, "restricao_destino_1048": 1, "pai_pendente": 1,
                                                    "adotado_existente": 1, "valor_fora_do_dominio": 1,
                                                    "pai_inexistente": 4}},
         "RIESPFIC": {"gravados": 4, "pendencias": {"adotado_existente": 1}},
@@ -185,7 +186,7 @@ def linhas(r, ins):
         # 1, 2, 3 e 5 gravam; 4 (quarto do bloco recusado) pai_pendente; sigla X sem par (valor_fora_do_dominio);
         # o literal presumido 'livre' concorrente da L6-15 (=~livre) marca valor_presumido em cada linha gravada
         "RILEITOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "valor_fora_do_dominio": 1,
-                                                   "valor_presumido": 4}},
+                                                   "valor_presumido": 2}},  # r5b: a declaração da L6-15 (dona) hoje presume em 2 linhas,
         # quatro sequências (itens) da única linha, inativas e presumidas
         "RIPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 1}},
     }

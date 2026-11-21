@@ -184,7 +184,8 @@ class Plano(unittest.TestCase):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
         self.assertFalse(com_destino & set(l8_04.BLOQUEADAS))
         # TBPERTHM, TBREFMEMTUSS, TBREFUNI e TBTIPPRO passaram à L8-03 (rodada 3); TBEMIREFMATMED entrou pelo índice
-        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 22)
+        # R5: as 4 listas que estavam no L8-05.tsv voltaram à dona pelo índice
+        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 26)
 
     def test_credito_da_producao(self):
         # rodada 3: profissional e ocupação pela inscrição (encadeadas), tipo de conta pelo código no catálogo do
@@ -240,6 +241,15 @@ class Sintetica(unittest.TestCase):
             self.assertEqual(cont[t], e["gravados"] + recusas + l8_04.RECUSADAS_SEM_PAI.get(t, 0), t)
         for t in l8_04.BLOQUEADAS:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t)
+
+    def test_r5_listas_carregam_como_parametro_de_lista(self):
+        # R5 (ADR 0006): nenhuma lista é descarte; cada uma vira opções de um parâmetro de lista do faturamento
+        raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "sem_carga.tsv"
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(raiz)}
+        plano = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), set(l8_04.LISTAS_R5))}
+        for t in l8_04.LISTAS_R5:
+            self.assertNotIn(t, sc, t)
+            self.assertEqual(plano[t]["destinos"], ["parametro_opcao", "modulo_sistema", "parametro_definicao"], t)
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_04.DDL.splitlines() if l.startswith("CREATE TABLE")}

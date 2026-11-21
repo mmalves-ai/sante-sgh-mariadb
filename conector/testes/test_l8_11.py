@@ -5,6 +5,7 @@ import datetime
 import decimal
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_11
@@ -133,7 +134,9 @@ class Plano(unittest.TestCase):
         # a conta vem primeiro: conta recusada recusa a linha antes das outras colunas
         self.assertEqual(self.plano["MFADIFOR"]["colunas"]["adiantamento"][0]["destino"], "conta_bancaria_id")
         self.assertEqual((a["numero"]["coluna"], a["valor_pago"]["regra"]), ("ID_MFADIFOR", "decimal_nao_negativo"))
-        self.assertNotIn("MFADIFOR_TBCBOPRO", self.plano)  # descarte duplicado: o profissional já é o credor
+        # rodada 5 (ADR 0006): o vínculo com a inscrição carrega como complemento do adiantamento
+        v = self.plano["MFADIFOR_TBCBOPRO"]["colunas"]["adiantamento"]
+        self.assertEqual({c["destino"] for c in v}, {"id", "profissional_id"})
         # pago com data de pagamento; saldo a compensar = pago até a compensação carregar
         self.assertEqual(self.pares("MFADIFOR", "DT_PGTO"), {("1", "pago")})
         self.assertEqual((a["situacao"]["coluna"], a["situacao"]["regra"]), ("DT_PGTO", "preenchido"))
@@ -247,6 +250,28 @@ class Sintetica(unittest.TestCase):
         ids_ctaban = {c["ID"] for c in lin["TBCTABAN"]}
         self.assertFalse({u["ID_TBCTABAN"] for u in lin["MFCTAUSU"]} & ids_ctaban)
 
+
+
+class ProvaIndicadorNifR5(unittest.TestCase):
+    """Rodada 5 (revisão): TBINDNIF não é copiada (indicador oficial = domínio beneficiario_exterior.indicador_nif);
+    a prova compara código E descrição, e cada valor pareado existe no CHECK do modelo."""
+
+    def test_prova_codigo_e_rotulo_no_dominio(self):
+        import re as _re
+        base = Path(mapa.__file__).resolve().parents[1] / "mapa"
+        pv = {p["tabela"]: p for p in mapa.ler_provas(base)}["TBINDNIF"]
+        self.assertEqual((pv["tipo"], pv["chave"], pv["valores"]), ("derivado", ["ID"], [("ID", "inteiro"), ("DESCRICAO", "texto_nome")]))
+        pares = _re.findall(r"SELECT (\d+) AS item, '([^']*)' AS valor_produto, '[^']+' AS rotulo", pv["sql"])
+        self.assertEqual([int(k) for k, _ in pares], [1, 2, 3])
+        ddl = ""
+        for r in (Path(mapa.__file__).resolve().parents[2], Path("/app")):
+            if (r / "db" / "migracoes").is_dir():
+                ddl = "\n".join(p.read_text(encoding="utf-8") for p in sorted((r / "db" / "migracoes").rglob("*.sql")))
+                break
+        ck = _re.search(r"ck_beneficiario_exterior_indicador_nif CHECK \((.*)\)", ddl)
+        self.assertIsNotNone(ck)
+        for _, v in pares:
+            self.assertIn("'%s'" % v, ck.group(1))
 
 if __name__ == "__main__":
     unittest.main()

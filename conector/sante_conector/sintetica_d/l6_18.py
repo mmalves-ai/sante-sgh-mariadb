@@ -26,7 +26,11 @@ Dados 100% falsos (nomes, códigos e logins inventados). Carregadas (CARREGADAS)
   antigo por paciente (criado na primeira movimentação, adotado nas seguintes: adotado_existente), paciente nunca
   visto (pai_inexistente + 1048), usuário e operação nunca vistos (pai_inexistente + 1048), excluído S (data da
   carga) e fora do domínio (valor_fora_do_dominio).
-Descartadas (DESCARTADAS, `declarado/sem_carga.tsv`): TBTPDIETA (lida pelas consumidoras), CHPARAM, CVPARAM.
+Rodada 5 (ADR 0006, continuidade; antes descartadas): TBTPDIETA vira opções da lista `nutricao.tipoDieta`
+(parametro_opcao: código, ordem e rótulo do hospital); CHPARAM e CVPARAM viram parametro_valor do estabelecimento
+(linha inteira em JSON, vigência pela evidência); a senha mestra de visita vai ao cofre (credencial_integracao,
+só com senha; sem chave mestra na conferência: segredo_aguarda_cofre). As definições do produto vêm do preparo
+(semente pedida em saida/L6-18.json).
 """
 import datetime
 import decimal
@@ -61,7 +65,7 @@ CREATE TABLE GDPRONTMOVIM (ID INTEGER NOT NULL PRIMARY KEY, ID_GDPRONTCADOPER SM
   ID_RISETOR_ORIGEM SMALLINT, ID_RISETOR_DESTINO SMALLINT, ID_RIMOTIVO SMALLINT, NOME_RESPONSAVEL VARCHAR(70),
   OBSERVACAO BLOB SUB_TYPE 1, CIENTIFICO CHAR(1), DATA_VALIDADE_PRONTUARIO DATE, EXCLUIDO CHAR(1),
   USUARIO_EXCLUSAO VARCHAR(31));
-CREATE TABLE ATCONTA (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL);
+CREATE TABLE ATCONTA (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL, COD_CONTA BIGINT NOT NULL);
 CREATE TABLE ATCABECATEND (ID BIGINT NOT NULL PRIMARY KEY, ID_RICADPAC INTEGER NOT NULL);
 CREATE TABLE CVPARAM (COD_TBHOSPIT SMALLINT NOT NULL PRIMARY KEY, GRAVAR_FOTO_BANCO CHAR(1),
   COR_LEGENDA_EM_VISITA VARCHAR(20), COR_LEGENDA_VISITA_FINALIZADA VARCHAR(20), COR_LEGENDA_SAIDA_PENDENTE VARCHAR(20),
@@ -89,6 +93,26 @@ def _id_externo(tabela, chave):
     raise KeyError((tabela, chave))
 
 
+def _preparo_definicoes(chaves, modulo):
+    """SQL do PREPARO_DESTINO: módulo do produto e definições dos parâmetros (catálogo do produto; a migração nunca
+    cria definição). Próprio da fatia, para não depender do preparo de outra."""
+    sel = " UNION ALL ".join("SELECT '%s' AS c" % c for c in chaves)
+    return ("INSERT INTO modulo_sistema (codigo, descricao, criado_em) SELECT '%s', '%s', UTC_TIMESTAMP(3) FROM DUAL"
+            " WHERE NOT EXISTS (SELECT 1 FROM modulo_sistema WHERE codigo = '%s');"
+            " INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_estabelecimento,"
+            " criado_em) SELECT x.c, (SELECT MIN(id) FROM modulo_sistema WHERE codigo = '%s'), x.c, 'texto', TRUE,"
+            " UTC_TIMESTAMP(3) FROM (%s) x WHERE NOT EXISTS (SELECT 1 FROM parametro_definicao d WHERE d.chave = x.c)"
+            % (modulo, modulo, modulo, modulo, sel))
+
+
+# r5 achado (ADR 0006/0003): um valor por chave do produto (CHPARAM e CVPARAM desdobrados em parametro_valor)
+CHAVES_PARAMETROS = ("hotelaria.higienizacao.situacaoLeitoAposAlta", "hotelaria.higienizacao.materialLimpezaPadrao",
+                     "hotelaria.visita.gravarFotoNoBanco", "hotelaria.visita.corEmVisita",
+                     "hotelaria.visita.corVisitaFinalizada", "hotelaria.visita.corSaidaPendente",
+                     "hotelaria.visita.corVisitaEmEspera", "hotelaria.visita.diretorioFotos",
+                     "hotelaria.visita.exigeDataNascimento", "hotelaria.visita.exigeCelular",
+                     "hotelaria.visita.exigeDocumento", "hotelaria.visita.modeloEtiqueta",
+                     "hotelaria.visita.situacaoAcessoPadrao", "hotelaria.visita.imprimirEtiquetaSemVisualizar")
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
                    # tipo documental da carga de domínio do produto (09_HOT/06_chaves.sql), que o banco descartável
@@ -105,10 +129,15 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " estabelecimento_id BIGINT UNSIGNED NOT NULL, nome VARCHAR(150) NOT NULL, usuario_id BIGINT UNSIGNED"
                    " NULL, UNIQUE KEY uq_profissional_higienizacao_usuario (estabelecimento_id, usuario_id));"
                    " INSERT IGNORE INTO profissional_higienizacao (estabelecimento_id, nome, usuario_id) VALUES"
-                   " (1, 'Profissional exemplo', %d)" % _id_externo("TBUSERS", "bia.exemplo"))
+                   " (1, 'Profissional exemplo', %d); " % _id_externo("TBUSERS", "bia.exemplo")
+                   # r5 achado: definições dos parâmetros da higienização e da visita (catálogo do produto, pedido em
+                   # saida/L6-18.json; a migração nunca cria definição)
+                   + _preparo_definicoes(CHAVES_PARAMETROS, "hotelaria"))
 CARREGADAS = ("PRTPREFEIC", "RISETOR", "PRVIAADMIN", "TBDIETAS", "PRCARACT_TBDIETAS", "CHTPLIMPEZA_GEITENS", "PRHORPAD",
-              "TBLEITO_CHPROFISLIMP", "CHSOLICITLIMP", "CHEXECLIMPEZA", "CHSOLICITLIMP_TBLEITO", "GDPRONTMOVIM")
-DESCARTADAS = ("TBTPDIETA", "CHPARAM", "CVPARAM")
+              "TBLEITO_CHPROFISLIMP", "CHSOLICITLIMP", "CHEXECLIMPEZA", "CHSOLICITLIMP_TBLEITO", "GDPRONTMOVIM",
+              "TBTPDIETA", "CHPARAM", "CVPARAM")
+DESCARTADAS = ()
+
 NAO_CARREGADAS = ()
 
 
@@ -138,7 +167,7 @@ def linhas(r, ins):
               (5, 4, "1200", "A", 1), (6, 9, "1500", "A", 1), (7, 5, "1900", "A", 4), (8, 2, "0930", "X", 3)]:
         ins("PRHORPAD", list(x))
     ins("CHPARAM", [1, 1, 10])
-    ins("CVPARAM", [1, "N", "verde", "azul", "amarelo", "cinza", None, 1, 0, 1, None, None, 1, "S"])
+    ins("CVPARAM", [1, "N", "verde", "azul", "amarelo", "cinza", None, 1, 0, 1, "senha-falsa-1", None, 1, "S"])
     for x in [(1, 1), (1, 2), (2, 1), (3, 9), (7, 1)]:
         ins("TBLEITO_CHPROFISLIMP", list(x))
     t0 = datetime.datetime(2025, 5, 1, 8, 0)
@@ -162,7 +191,7 @@ def linhas(r, ins):
         ins("CHSOLICITLIMP_TBLEITO", list(x))
     # trâmite do prontuário: conta -> atendimento -> paciente (só as colunas lidas pela encadeada); 7604 leva a um
     # paciente nunca visto
-    for x in [(7801, 7601), (7802, 7602), (7803, 7603), (7804, 7604)]:
+    for x in [(7801, 7601, 1), (7802, 7602, 1), (7803, 7603, 1), (7804, 7604, 1)]:  # COD_CONTA: forma do dicionário
         ins("ATCONTA", list(x))
     for x in [(7601, 7701), (7602, 7701), (7603, 7702), (7604, 7799)]:
         ins("ATCABECATEND", list(x))
@@ -202,7 +231,18 @@ def linhas(r, ins):
                                                         "codigo_inexistente_destino": 2,
                                                         "restricao_destino_4025": 1}},
         "GDPRONTMOVIM": {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 3,
-                                                       "adotado_existente": 2, "valor_fora_do_dominio": 1}},
+                                                       "adotado_existente": 2, "valor_fora_do_dominio": 1,
+                                                       # r5: a mescla guarda o conflito da 2ª linha do volume
+                                                       "mescla_conflito_origem_guardada": 2}},
+        # r5 (ADR 0006): opções da lista do produto; parâmetros do estabelecimento (vigência pela evidência: a
+        # imagem não tem data própria da linha); CVPARAM com senha mestra e sem chave mestra na conferência: o cofre
+        # falha fechado (segredo_aguarda_cofre) e a credencial sem referência recusa a linha (1048, visível)
+        # módulo 'migracao' e definição: TBTPDIETA (ordem 431) cria os dois e as 3 linhas seguintes adotam (6);
+        # CHPARAM adota o módulo (1); a linha recusada de CVPARAM não deixa adoção
+        "TBTPDIETA": {"gravados": 4, "pendencias": {"adotado_existente": 6}},
+        "CHPARAM": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 1, "adotado_existente": 1}},
+        "CVPARAM": {"gravados": 0, "pendencias": {"restricao_destino_1048": 1, "segredo_aguarda_cofre": 1,
+                                                  "vigencia_sem_fonte": 1}},
         "CHSOLICITLIMP_TBLEITO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                 "restricao_destino_4025": 1,
                                                                 "valor_fora_do_dominio": 1}},

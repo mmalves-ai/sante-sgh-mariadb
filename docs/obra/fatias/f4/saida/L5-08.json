@@ -30,6 +30,54 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
    "mudanca": "Especial de descrição pelo catálogo oficial: ex. '#oficial:codigo_esocial:18:ID' grava a descricao da linha do catálogo oficial (codigo_esocial) de mesmo código (vigente na data da carga), sem gravar o catálogo; código ausente: pendência catalogo_codigo_inexistente e o rótulo provisório. Depois, trocar em colunas.d/L5-08.tsv o '#codigo_derivado:ID:150:esocial_tabela_18_' de motivo_afastamento.descricao por ele.",
    "motivo": "Achado 3 (regra 7): a descrição do motivo oficial não pode vir do NOME da origem; hoje fica o rótulo provisório esocial_tabela_18_<código>."
+  },
+  {
+   "id": "r5-2",
+   "rodada": 5,
+   "arquivo": "db/migracoes (trilha F2.2: tabela nova) e conector/mapa/declarado/colunas.d da fatia",
+   "mudanca": "Tabela genérica de listas próprias do hospital sem equivalente no produto, ex. lista_hospital_valor (lista VARCHAR(60), codigo VARCHAR(30), descricao VARCHAR(300), valor_produto VARCHAR(60) NULL = valor equivalente do domínio do produto quando houver, ativo, origem, criado_em..., UNIQUE(lista, codigo)); com ela as tabelas FPESOCPARAMS1210, FPINTAGRUP, FPINTROTINA CARREGAM (código pela chave, descrição, ativo) e o consumidor pode ligar por FK, sem prova de 'não copiar'.",
+   "motivo": "ADR 0006, item 1: sem consumidor carregado nem de-para conhecido (o significado de cada item só está no rótulo da origem, que não pode entrar no código), não há prova honesta de que a lista continua utilizável; uma prova com mapeamento inventado seria tautológica. Até a tabela existir, a fatia fica com FPESOCPARAMS1210, FPINTAGRUP, FPINTROTINA BLOQUEADA(s) descarte_sem_prova.",
+   "tabelas": [
+    "FPESOCPARAMS1210",
+    "FPINTAGRUP",
+    "FPINTROTINA"
+   ],
+   "tabelas_bloqueadas": [
+    "FPESOCPARAMS1210",
+    "FPINTAGRUP",
+    "FPINTROTINA"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; inclui tipo_rescisao.causa_demissao_id (FPTIPORESC.ID_FPRESC_CAUSA, tese de duplicado retirada) e o de-para dos consumidores FPTPEVENTOAUT_TBEMPHOS (L5-12, evento_gatilho) e FPVALE (L5-11, beneficio.tipo) no lugar do =~outro, outro só para código sem par.",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
+  },
+  {
+   "id": "r5-1",
+   "rodada": 5,
+   "arquivo": "conector/sante_conector/mapa.py (verificador) e carga_mapa.py",
+   "mudanca": "Item do hospital nas listas legais (ADR 0006, item 4): permitir que a carga grave em catálogo oficial SÓ linha com item_hospital = TRUE e motivo_item_hospital codigo_local/versao_antiga",
+   "tabelas_bloqueadas": [
+    "FPEPC",
+    "FPESOCAUTORIA",
+    "FPESOCCADRESEV",
+    "FPESOCDESONER",
+    "FPESOCINDAVISO",
+    "FPESOCINDPROC",
+    "FPESOCINDSUSP",
+    "FPESOCORIRETIF",
+    "FPESOCPTOELET",
+    "FPESOCTPAVISO",
+    "FPESOCTPJORTRAB",
+    "FPESOCTRABTEMP",
+    "FPEXPAGNOCIVO",
+    "FPGRAUEXPAGNOC",
+    "FPINDICDECPRO",
+    "FPLOTACAOTRIB"
+   ],
+   "revisao": "Revisão (2026-11-21): estas tabelas ficam bloqueada/mecanismo_pedido em sem_carga.tsv até o pedido ser atendido; a conciliação compara cada código e descrição da origem com o catálogo oficial carregado (casados, locais, divergentes); fonte extinta (FPAFAST_COD, FPAFAST_RAIS, FPRESC_SEFIP, FPOCOR_SEFIP, FPRESC_CAGED, FPRESC_RAIS) entra inteira como versao_antiga, ligada ao motivo atual por de-para declarado. Também falta o carregador oficial versionado de codigo_esocial, aliquota_rat_cnae, aliquota_terceiros e codigo_retorno_esocial.",
+   "motivo": "ADR 0006, itens 1 e 4: a lista legal da origem não pode ser descartada sem prova; o código oficial liga pelo código e o código local ou de versão antiga tem de entrar como item do hospital ATIVO. O modelo já tem as colunas (15_RH/40_tabelas.sql: item_hospital, motivo_item_hospital), mas o verificador (mapa.py, 'grava em catálogo oficial') e o motor recusam qualquer destino oficial, e os domínios CHECK não guardam item local. Até lá as tabelas ficam bloqueada/mecanismo_pedido (sem_carga.tsv).",
+   "atendido": true,
+   "resposta": "conferidor r5: respondido por decisão em docs/obra/passagens/F4-decisoes-destino.md (seção \"pedidos r5-1 e r5-2\"): a lista entra como lista do hospital em parametro_opcao sob parametro_definicao rh.lista.<nome> criada pela carga (antes;adotar:chave); nada gravado em codigo_esocial antes do carregador oficial"
   }
  ],
  "resolvidos_na_cobertura": [

@@ -18,13 +18,16 @@ CARREGADAS = {"FCTPMOTGLOSA": "grupo_motivo_glosa", "RPDEDUTIVEL": "tipo_deducao
               "FCORLAME": "orcamento_particular_item", "RPEVENTOESOC": "evento_repasse_incidencia",
               "RPLANEVE": "lancamento_repasse", "RPLANEVE_COMPOSICAOBASE": "lancamento_repasse_base",
               "FCTPPGTONFSE": "condicao_pagamento", "RECONTAS": "conta_hospitalar_etapa",
-              "FCREFUND": "preco_referencia_matmed"}
-DESCARTES = {"FCEMPAUDPLANSERV": "sem_valor", "FCPROCUNIBHMED": "sem_valor", "RPLANEVE_TBCBOPRO": "duplicado",
-             "RPPARAM": "mecanismo_do_produto"}
+              "FCREFUND": "preco_referencia_matmed",
+              # R5 (ADR 0006): passam a carregar
+              "FCEMPAUDPLANSERV": "parametro_opcao", "RPPARAM": "sequencia_negocio",
+              "RPLANEVE_TBCBOPRO": "lancamento_repasse"}
+DESCARTES = {"FCPROCUNIBHMED": "sem_valor"}
 # r4: FCREFUND carrega (preço das tabelas próprias; as de referência comercial são puladas pelo filtro de linha)
 BLOQUEADAS = set()
 EXTRAS = {"RPLANEVE": ["favorecido_repasse"],
-          "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed"]}  # destino secundário declarado pela via
+          "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed"],  # destino secundário declarado pela via
+          "FCEMPAUDPLANSERV": ["modulo_sistema", "parametro_definicao"]}
 CONTA = "FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)"
 PROF = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 

@@ -8,12 +8,12 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_05
 
 CARREGADAS = ["GECADANTIMI", "GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
-              "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC",
-              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFICHAREL", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
-              "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA"]
+              "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC", "PRCADRESP",
+              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PREMAILOPCAO", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFICHAREL", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
+              "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA", "PRLAYIMPPRESC"]
 # descarte de produto (declarado/sem_carga.tsv), com a causa aceita
-DESCARTADAS = {"PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
-               "PRLAYIMPPRESC": "mecanismo_do_produto"}
+# rodada 5 (ADR 0006): nenhuma; as três antes descartadas carregam como opções de parâmetro do produto
+DESCARTADAS = {}
 # dado que o hospital usa e que ainda não carrega: declaração pronta, comentada, à espera do pedido (saida/L6-05.json);
 # nunca descarte (a ficha do antimicrobiano é clínica; o leiaute é do hospital)
 BLOQUEADAS = {}
@@ -26,7 +26,8 @@ MULTIDESTINO = {"GECADANTIMI": ["ficha_antimicrobiano"], "PRDADOSENVIOOPERADORA"
                 "PRFICHAREL": ["modelo_impressao_clinica", "tipo_modelo_impressao"]}
 # colunas da origem declaradas sem destino, de propósito (motivo na declaração)
 SEM_DESTINO = {("GECADANTIMI", "ID_GECADANTIMI"), ("GECADANTIMI", "CRM"), ("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
-               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")} | {("PRFICHAREL", c) for c in ("ID_FICHAREL", "COD", "NOMECOMP", "NOMECLASSE", "NOME",
+               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO"),
+               ("PREMAILOPCAO", "ID_PREMAILMODULO")} | {("PRFICHAREL", c) for c in ("ID_FICHAREL", "COD", "NOMECOMP", "NOMECLASSE", "NOME",
                                                  "COMPONENTE", "CONTEUDO", "PARENT", "TIPO", "SEQUENCIA")}
 DECLARADO = Path(__file__).resolve().parents[1] / "mapa" / "declarado"
 # coluna clínica sem fonte direta: de-para de valores pelo nome ou pelo número de doses, nunca literal presumido
@@ -147,6 +148,14 @@ class Plano(unittest.TestCase):
                     self.assertNotIn(fim, descarte, (p["tabela"], c["coluna"]))
                 elif c.get("referencia"):
                     self.assertNotIn(c["referencia"], descarte, (p["tabela"], c["coluna"]))
+
+    def test_r5_listas_viram_opcoes_de_parametro(self):
+        for t, chave in l6_05.PARAMETROS_LISTA.items():
+            self.assertEqual(self.por[t]["destinos"], ["parametro_opcao"], t)
+            lit = {c["destino"]: c["coluna"] for c in self.por[t]["colunas"]["parametro_opcao"]}
+            self.assertEqual(lit["parametro_definicao_id"], "=" + chave, t)
+            self.assertEqual(lit["origem"], "=migracao", t)
+            self.assertIn(chave, l6_05.PREPARO_DESTINO)
 
     def test_codigo_da_via_e_escopo_do_filtro(self):
         d = self._col("GETABVIA", "codigo_interoperabilidade")[0]

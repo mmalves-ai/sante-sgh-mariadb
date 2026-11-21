@@ -15,8 +15,8 @@ Anomalias cobertas:
 - categoria com código da terminologia maior que o destino: não recusa (o código é a chave), e o alergeno dela entra.
 - cobertura total: TBCLASSIFALERGIA no mesmo cadastro de TBCBARACATEGORIA com prefixo de domínio no código (mesmas
   chaves 1 e 2 nas duas, sem colisão).
-PRTPREQUISICAO, TBACAOGRAUGRA, TBDIGITAL_VIAACESSO, PRTPRESPOSTA e PRPARRECMED ficam na imagem e NÃO são carregadas
-(descarte de produto em declarado/sem_carga.tsv: os pais de PRTPRESPOSTA e PRPARRECMED são descartados na L6-05).
+Rodada 5 (ADR 0006): PRTPREQUISICAO e TBACAOGRAUGRA carregam como opções de parâmetro de lista do hospital;
+PRTPRESPOSTA complementa a informação clínica (L6-05, pai externo) e PRPARRECMED o leiaute de impressão (L6-05).
 """
 
 DDL = """
@@ -31,6 +31,9 @@ CREATE TABLE PRTPPROT (COD INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(40), COR V
   LINTRATOBR VARCHAR(1), TIPO VARCHAR(1), PERMITE_ALT_ITEM_PROT_NP_CONV CHAR(1), SEPARAR_DOC_GERADO_EST SMALLINT,
   OBRIGAR_AUT_ITENS_AGE_AUT_PEXT CHAR(1));
 CREATE TABLE PRTPRECMED (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30), PADRAO CHAR(1) NOT NULL);
+CREATE TABLE PRFICHAREL (ID_FICHAREL INTEGER NOT NULL PRIMARY KEY, COD SMALLINT NOT NULL, NOMECOMP VARCHAR(30) NOT NULL,
+  NOMECLASSE VARCHAR(30), NOME VARCHAR(50), COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1, PARENT VARCHAR(30),
+  TIPO SMALLINT NOT NULL, SEQUENCIA SMALLINT);
 CREATE TABLE PRPARRECMED (COD_PRFICHAREL SMALLINT NOT NULL PRIMARY KEY, ID_PRTPRECMED SMALLINT NOT NULL);
 CREATE TABLE PRTPREQUISICAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20) NOT NULL);
 CREATE TABLE PRTPRESPOSTA (ID INTEGER NOT NULL PRIMARY KEY, ID_PRTPPERGUNTA INTEGER NOT NULL,
@@ -61,12 +64,30 @@ CREATE TABLE TBDIGITAL_VIAACESSO (ID VARCHAR(36) NOT NULL PRIMARY KEY, CODIGO VA
   NOME VARCHAR(100) NOT NULL);
 """
 PAIS_EXTERNOS = {"PRTPLAN": ["1", "2", "3"], "PRFREQUENCIA": ["1", "2", "3"], "PRTPINFUSAO": ["1", "2"],
-                 "GETABVIA": ["VO", "EV"]}
+                 "GETABVIA": ["VO", "EV"], "PRDADOSENVIOOPERADORA": ["1", "2", "3", "4", "5"]}
 CARREGADAS = ("PRTPLAN_PRFREQUENCIA", "PRTPLAN_PRTPINFUSAO", "PRTPNOTALEMB", "PRTPPERGUNTA", "PRTPPROT", "PRTPRECMED",
               "PRTPTCLE", "PRUNIDINFUSAO", "PRKITSOL", "PRUNIDRESPOSTA", "PRVALIDARMEDDUPLICPRESC", "PRVIAAEREA",
               "TBCBARACATEGORIA", "TBCBARAAGENTE", "TBCBARACLASSIFREACAO", "TBCBARAORIGEMINFO", "TBCBARASEVERIDADE",
-              "TBCLASSINTMED", "TBCLASSIFALERGIA")
-NAO_CARREGADAS = ("PRTPREQUISICAO", "TBACAOGRAUGRA", "TBDIGITAL_VIAACESSO", "PRTPRESPOSTA", "PRPARRECMED")
+              "TBCLASSINTMED", "TBCLASSIFALERGIA", "TBDIGITAL_VIAACESSO", "PRTPREQUISICAO", "TBACAOGRAUGRA",
+              "PRTPRESPOSTA", "PRPARRECMED")
+NAO_CARREGADAS = ()
+# complementa sem o pai (dado de envio 7; leiaute fora da imagem, PRFICHAREL é da L6-05): a linha é recusada
+RECUSA_PAI_INEXISTENTE = {"PRTPRESPOSTA": 1, "PRPARRECMED": 1}
+# pai de fora da fatia presente na imagem só para a referência por chave alternativa (o esperado é da L6-05)
+PAIS_NA_IMAGEM = ("PRFICHAREL",)
+# vias de uso do hospital (L6-05, dadas como já carregadas) com o identificador da prescrição digital: 1 e 2
+# existem; o 3 não é usado por via nenhuma (codigo_inexistente_destino; NOT NULL recusa a linha)
+# informação clínica que a L6-05 gravou (pai externo de PRTPRESPOSTA, que a complementa): ids 1..100, como a
+# conferência numera os pais externos (desta fatia e das que a requerem)
+PREPARO_INFORMACAO = ("INSERT INTO informacao_clinica_operadora (id, codigo, descricao, grupo_informacao_clinica_operadora_id,"
+                      " criado_em) SELECT n, CONCAT('externo_', n), CONCAT('Informação externa ', n), 1, UTC_TIMESTAMP(3)"
+                      " FROM (WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE n < 100) SELECT n FROM s) x;\n")
+PREPARO_DESTINO = PREPARO_INFORMACAO + ("CREATE TABLE IF NOT EXISTS via_de_uso (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo VARCHAR(30) NOT NULL, descricao VARCHAR(150) NOT NULL,"
+                   " codigo_interoperabilidade VARCHAR(36) NULL, criado_em DATETIME(3) NOT NULL);\n"
+                   "INSERT INTO via_de_uso (codigo, descricao, codigo_interoperabilidade, criado_em) VALUES"
+                   " ('vdx1', 'Via falsa 1', '%s', NOW(3)), ('vdx2', 'Via falsa 2', '%s', NOW(3));"
+                   % ("00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"))
 GUID = "00000000-0000-0000-0000-0000000000%02d"
 
 
@@ -90,13 +111,22 @@ def linhas(r, ins):
         ins("PRTPPROT", [c, nome, "clExemplo", c, "SN"[c % 2], tipo, "S", 2 if c == 2 else c % 2, "N"])
     for v in [(1, "Receita simples exemplo", "S"), (2, "Receita especial exemplo", "N"), (3, "Receita três", "X")]:
         ins("PRTPRECMED", list(v))
+    # leiaute de impressão (L6-05) na imagem, com as MESMAS linhas da L6-05 (na imagem conjunta valem as dela): o
+    # tipo de receita 1 complementa o leiaute de código 1 (tipo_receita_id conferido); o código 3 não existe
+    for v in [[1, 1, "Painel1", "TPanel", "Cabeçalho exemplo", b"Left = 8\r\nTop = 4", "Título falso".encode("cp1252"), None, 1, 2],
+                    [2, 1, "Label1", "TLabel", None, b"Caption = 'Nome'", None, "Painel1", 2, 1],
+                    [3, 2, "Memo1", "TMemo", "Observação", None, "Texto de exemplo\nlinha 2".encode("cp1252"), None, 3, 1],
+                    [4, 1, "Image1", "TImage", None, None, None, "Painel1", 4, None]]:
+        ins("PRFICHAREL", v)
     for v in [(1, 1), (2, 3)]:
         ins("PRPARRECMED", list(v))
-    for v in [(1, "Por horário"), (2, "Por dia")]:
+    for v in [(1, "Por horário"), (2, "Por dia"), (3, "   ")]:  # 3: sem nome, rótulo = código
         ins("PRTPREQUISICAO", list(v))
     # respostas: 3 pergunta sem nome (1048); 4 pergunta nunca vista e 5 dado de envio nunca visto (pai_inexistente,
     # 1048); 6 nome da pergunta com espaços repetidos (colapsados na descrição)
-    for v in [(1, 1, 1), (2, 2, 1), (3, 3, 1), (4, 9, 1), (5, 1, 7), (6, 4, 1)]:
+    # 7: SEGUNDO tipo do dado de envio 1 (N:1); o complemento é UPDATE e o último (chave maior) vence; pedido ao
+    # motor em saida/L6-08.json: conflito de complemento vira pendência e o valor anterior fica no histórico
+    for v in [(1, 1, 1), (2, 2, 2), (3, 3, 3), (4, 9, 4), (5, 1, 7), (6, 4, 5), (7, 2, 1)]:
         ins("PRTPRESPOSTA", list(v))
     for v in [(1, "Pendente exemplo"), (2, "Assinado exemplo"), (3, "Recusado exemplo")]:
         ins("PRTPTCLE", list(v))
@@ -150,11 +180,18 @@ def linhas(r, ins):
         ins("TBCBARASEVERIDADE", list(v) + [None])
     for v in [(1, "Alimentos exemplo"), (2, "Medicamentos exemplo"), (3, "  Ambiental   exemplo ")]:
         ins("TBCLASSIFALERGIA", list(v))
-    for i in range(1, 3):
+    for i in range(1, 4):
         ins("TBDIGITAL_VIAACESSO", [GUID % i, "V%d" % i, "Via digital exemplo %d" % i])
     for v in [(1, "Farmacocinética", "S"), (2, "Farmacodinâmica", "S"), (3, "Outra exemplo", "N")]:
         ins("TBCLASSINTMED", list(v))
     return {
+        "PRTPREQUISICAO": {"gravados": 3, "pendencias": {"adotado_existente": 4}},
+        "TBACAOGRAUGRA": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+        "PRTPRESPOSTA": {"gravados": 6, "pendencias": {"pai_inexistente": 2, "valor_presumido": 2}},
+        "PRPARRECMED": {"gravados": 1, "pendencias": {"pai_inexistente": 1}},
+        "TBDIGITAL_VIAACESSO": {"gravados": 2, "pendencias": {"codigo_inexistente_destino": 1, "adotado_existente": 2,
+                                                              "valor_presumido": 3,
+                                                              "restricao_destino_1048": 1}},
         "PRTPLAN_PRFREQUENCIA": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2,
                                                                "restricao_destino_1048": 2}},
         "PRTPLAN_PRTPINFUSAO": {"gravados": 3, "pendencias": {}},

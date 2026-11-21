@@ -207,6 +207,14 @@
    "id": "r4_principio_cliente_ligacoes",
    "mudanca": "PRALERGIAPAC_TBPRINC, PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC: SEMPRE principio_ativo_cliente_id por ref:TBPRINC (sem se: e sem a coluna do oficial), como GEITENS_TBPRINC na correção da rodada 4",
    "motivo": "TBPRINC carrega em principio_ativo_cliente, que guarda a ligação ao oficial (DCB ou nome). Ligar ao oficial direto pelo DCB recusa a linha (CHECK de um só princípio) quando o DCB não está no catálogo, e a alergia/composição clínica se perde; COD_DCB vazio nas 138 linhas da referência"
+  },
+  {
+   "id": "r5b_classificacao_usuario",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2, modelo)",
+   "trilha": "F2.2",
+   "prioridade": "alta (segurança: permissão do usuário)",
+   "mudanca": "usuario_estoque_classificacao: ADD classificacao_despesa_id BIGINT UNSIGNED NULL (FK classificacao_despesa) e grupo_insumo_id passa a NULL, com CHECK (grupo_insumo_id IS NOT NULL OR classificacao_despesa_id IS NOT NULL) e a unicidade trocando grupo_insumo_id por COALESCE(grupo_insumo_id,0) e COALESCE(classificacao_despesa_id,0); a regra do domínio passa a restringir também pela classificação do insumo",
+   "motivo": "GEUSERS_TBCLASSI: a restrição do usuário na origem é por CLASSIFICAÇÃO de despesa, não por grupo; uma classificação cobre insumos de vários grupos e um grupo tem insumos de várias classificações, então converter para grupos (regra 18) alargaria ou estreitaria a permissão. Com a coluna, a fatia declara: USUARIO_GEUSERS -> usuario_id (ref:TBUSERS), ID_TBCLASSI -> classificacao_despesa_id (ref:TBCLASSI), @estabelecimento, vigencia_inicio @vigencia_carga, permite_requisitar=1/permite_movimentar=1 (a origem só restringe), com o retrato na trilha só como evidência; teste: usuário restrito continua restrito. Até lá a linha fica só no retrato da trilha (dado preservado, permissão ainda NÃO aplicada: aviso ao orquestrador)."
   }
  ]
 }

@@ -2,7 +2,8 @@ tabela	coluna	destino	regra	depara	via	motivo
 TBOID	OID	oid_icp.codigo	texto			L5-03: o próprio identificador é o código (único)
 TBOID	OID	oid_icp.oid	texto			L5-03: identificador em notação pontuada (único; repetido recusa a linha)
 TBOID	DESCRICAO	oid_icp.descricao	texto			L5-03
-TBOID	=outro	oid_icp.tipo_oid				L5-03: a origem guarda o tipo em ID_TBTIPOOID (tabela de tipo, ordem 46) e o conselho em ID_TBCONSPROF (id interno, sem de-para genérico para conselho_classe): os dois ainda não têm via no motor (pedido no L5-03.json). Até lá todas as linhas (85 na imagem de referência) entram como 'outro', que a validação de certificado não usa, e conselho_classe_id fica NULL; ao declarar as colunas, as linhas aparecem alteradas e o Sincronizar corrige
+TBOID	ID_TBTIPOOID	oid_icp.tipo_oid	texto_nome	valores	ref:TBTIPOOID>NOME	r5 ADR 0006/0007: tipo do OID pelo NOME do tipo (pedido da L5-02; nomes públicos da ICP-Brasil); sem par: a seguinte
+TBOID	=~outro	oid_icp.tipo_oid				r5 ADR 0006/0007: tipo sem par ou nulo: outro presumido (visível)
 TBTPMINISTCER	COD_TBTPMINISTCER	orgao_certificador.codigo	texto			L5-03: sem código recusa a linha (NOT NULL)
 TBTPMINISTCER	NOME	orgao_certificador.descricao	texto_nome			L5-03
 TBTPACAOAUDIT	ID	tipo_acao_auditavel.codigo	texto			L5-03: código é a chave da origem, gravado como texto; esta tabela é a única alimentadora de tipo_acao_auditavel (o teste da fatia acusa outra declaração no mesmo código; pedido no L5-03.json)
@@ -90,3 +91,13 @@ TBLANTRILHASGH	#seq:ID_TBCABTRILHA	evento_auditoria_registro.sequencia				L5-03
 TBLANTRILHASGH	TABELA_CAMPO	evento_auditoria_registro.entidade	texto			L5-03: tabela e campo como registrados no histórico (dado do histórico)
 TBLANTRILHASGH	ID_TABELA	evento_auditoria_registro.entidade_id	inteiro			L5-03: id do registro no sistema anterior
 TBLANTRILHASGH	=~alteracao	evento_auditoria_registro.operacao				L5-03: registro por campo; o tipo de ação do cabeçalho é cadastro do cliente (sem código padrão para de-para genérico): alteração presumida (valor_presumido)
+TBHISTSENHA	USUARIO	historico_senha.usuario_id			ref:TBUSERS	r5 ADR 0006/0007: dono da senha (ADR 0007, 17: credencial copiada); login nunca visto recusa (NOT NULL)
+TBHISTSENHA	DATA_HORA	historico_senha.ocorrido_em	data_hora			r5 ADR 0006/0007: data original da troca
+TBHISTSENHA	#senha_hash:SENHA:sha256	historico_senha.hash_senha				r5 ADR 0006/0007: resumo importado como está (hex; base64 vira hex), conferido pelo formato; inválido: senha_hash_invalido e a linha recusada
+TBHISTSENHA	=sha256_sal_externo	historico_senha.algoritmo			se:SALT	r5 (revisão): com SAL na origem o resumo não traz o sal embutido: algoritmo sha256_sal_externo (sal no retrato dados.SALT; composição sal+senha a confirmar no PSQL da origem; a API não compara até confirmar; decisão em F4-decisoes-destino.md)
+TBHISTSENHA	=sha256	historico_senha.algoritmo				r5 (revisão): sem sal, SHA-256 simples da senha (hex; base64 vira hex)
+TBHISTSENHA	=alteracao	historico_senha.operacao				r5 ADR 0006/0007: 
+TBHISTSENHA	=migracao	historico_senha.forma_troca				r5 ADR 0006/0007: troca feita no sistema antigo
+TBHISTSENHA	#retrato:SALT	historico_senha.dados				r5 ADR 0006/0007: sal da origem (não é segredo) junto do resumo, para a regra de não reutilizar; a SENHA nunca entra no retrato
+TBHISTSENHA	SENHA		texto			r5 ADR 0006/0007: lida só pelo #senha_hash
+TBHISTSENHA	SALT		texto			r5 ADR 0006/0007: no retrato (dados)

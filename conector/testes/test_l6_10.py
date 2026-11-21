@@ -31,7 +31,8 @@ class L6_10(unittest.TestCase):
         sem = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
         self.assertEqual(l6_10.BLOQUEADAS, ())
         causas = {t: (sem[t]["situacao"], sem[t]["causa"]) for t in l6_10.DESCARTADAS}
-        self.assertEqual(causas, {"PRPERGUNTA": ("descarte", "duplicado")})
+        self.assertEqual(causas, {})  # rodada 5 (ADR 0006): o banco de perguntas carrega
+        self.assertNotIn("PRPERGUNTA", sem)
         # PRRESPOSTA é da L6-11 (a linha dela em sem_carga.tsv é de lá); as carregadas daqui não têm linha
         for t in ("TBTPSITUACAOMP", "PRPARAMSUMARIOALTA"):
             self.assertNotIn(t, sem)
@@ -61,8 +62,11 @@ class L6_10(unittest.TestCase):
     def test_literal_sempre_presumido(self):
         # valor que a origem não tem (classificação ou rótulo) só entra com pendência de revisão (=~): nenhum fixo
         # única exceção: a marca "qualquer origem" da regra de situação, que é o significado da própria linha da origem
+        # (rodada 5: constantes de estrutura do banco de perguntas, origem, modelo, versão e tipo, não são presunção)
         fixos = [(c["destino"], c["coluna"]) for c in self.decl
-                 if c["coluna"].startswith("=") and not c["coluna"].startswith("=~")]
+                 if c["coluna"].startswith("=") and not c["coluna"].startswith("=~")
+                 and not c["destino"].startswith(("modelo_campo.origem", "tipo_documento_clinico.",
+                                                  "modelo_documento_clinico.", "modelo_documento_versao."))]
         self.assertEqual(fixos, [("regra_transicao_situacao_prescricao.qualquer_origem", "=1")])
 
     def test_regra_de_situacao_vale_vinda_de_qualquer_origem(self):
@@ -86,10 +90,21 @@ class L6_10(unittest.TestCase):
                  if x.startswith("ref:PRPERGUNTA>")}
         completa = ({"DESCRICAO", "TIPOPERG", "CONTEVOL", "ATIVO"} <= lidas
                     and bool({"UNIDPERG", "ID_TBUNIDADEMEDIDA"} & lidas))
-        if sem["PRPERGUNTA"]["situacao"] == "descarte":
-            self.assertTrue(completa, "descarte duplicado de PRPERGUNTA sem a PRPADEVOL ler: %s" % sorted(lidas))
-        else:
-            self.assertEqual(sem["PRPERGUNTA"]["situacao"], "bloqueada")
+        self.assertTrue(completa, "a PRPADEVOL não lê a pergunta inteira: %s" % sorted(lidas))
+        self.assertNotIn("PRPERGUNTA", sem)  # rodada 5: carrega (banco de perguntas) além de ser lida pela ligação
+        self.assertEqual(self.plano["PRPERGUNTA"]["destinos"][0], "modelo_campo")
+        # mesmo de-para da ligação (tipo, destino estruturado, reuso, situação): a pergunta vale igual nos dois
+        vals = mapa.ler_valores(mapa.DIR_PACOTE)
+        par = lambda t, cs: {(v["destino"], v["valor_origem"]): v["valor_destino"] for v in vals  # noqa: E731
+                             if v["tabela"] == t and v["coluna"] in cs}
+        lig = par("PRPADEVOL", {"ID_PRPERGUNTA"})
+        per = par("PRPERGUNTA", {"TIPOPERG", "MANTERHIST"})
+        # revisão 2: a pergunta inativa NÃO vira excluída na data da carga (ADR 0007, 16): a situação fica no retrato
+        self.assertFalse([k for k in per if k[0] == "modelo_campo.excluido_em"])
+        lig = {k: v for k, v in lig.items() if k[0] != "modelo_campo.excluido_em"}
+        self.assertTrue(lig)
+        self.assertEqual({k: v for k, v in per.items() if k in lig}, lig)
+        self.assertEqual(set(lig) - set(per), set())
         if pad:  # o título vem sempre pela encadeada (não há coluna TITULO)
             tit = [c for c in pad if c["destino"] == "modelo_campo.titulo"]
             self.assertEqual([c["via"].split(";")[0] for c in tit], ["ref:PRPERGUNTA>DESCRICAO"])

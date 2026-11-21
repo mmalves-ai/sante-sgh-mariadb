@@ -15,3 +15,31 @@ TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	PLANTÃO 24 HORAS	plantao_
 TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Plantão 24 horas	plantao_24h	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
 TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	SOB DEMANDA	sob_demanda	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
 TBFORNEC	DISPONIB	empresa_fornecedora.disponibilidade	Sob demanda	sob_demanda	L7-06: disponibilidade pelo nome da lista do cliente (grafias comuns)
+GPPARAMG	#item@APURACAOPORCDC	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@APURACAOPORCDC	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@APURACAOPORCDC	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@APURACAOPORCDC	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONTABILIDADE	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONTABILIDADE	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONTABILIDADE	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONTABILIDADE	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CUSTOS	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CUSTOS	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CUSTOS	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CUSTOS	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@DEPRECIAR	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@DEPRECIAR	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@DEPRECIAR	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@DEPRECIAR	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@FINANCEIRO	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@FINANCEIRO	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@FINANCEIRO	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@FINANCEIRO	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@AVSEGREV	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@AVSEGREV	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@AVSEGREV	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@AVSEGREV	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONSIDERA_VALOR_RESIDUAL	parametro_valor.valor	S	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONSIDERA_VALOR_RESIDUAL	parametro_valor.valor	s	sim	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONSIDERA_VALOR_RESIDUAL	parametro_valor.valor	N	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano
+GPPARAMG	#item@CONSIDERA_VALOR_RESIDUAL	parametro_valor.valor	n	nao	L7-06 r5c: marcação S/N -> convenção sim/nao do parâmetro booleano

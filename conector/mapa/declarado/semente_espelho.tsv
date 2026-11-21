@@ -1,1 +1,8 @@
 catalogo	tabela	coluna	campo	motivo
+brasindice	TBVLRMEM	COD	codigo	L8-05 r5 (ADR 0006, 3): código do item na publicação, o mesmo pelo qual TBPERMEM liga ao espelho (espelho:brasindice@VERSAO)
+brasindice	TBVLRMEM	ID_TBMATMED>TBMATMED>NOME	descricao	L8-05 r5 (ADR 0006, 3): descrição pelo cadastro do item (pai pela chave)
+brasindice	TBVLRMEM	=outro	tipo_produto	L8-05 r5 (ADR 0006, 3): a origem não separa material de medicamento (mesma decisão da L8-03 para o item): outro, para o cliente classificar
+brasindice	TBVLRMEM	VALOR_PFB_BRASINDICE	preco_fabrica	L8-05 r5 (ADR 0006, 3): preço de fábrica da edição
+brasindice	TBVLRMEM	VALOR_PMC_BRASINDICE	preco_maximo_consumidor	L8-05 r5 (ADR 0006, 3): preço máximo ao consumidor da edição
+brasindice	TBVLRMEM	ID_TBVERSAOBRASIN>TBVERSAOBRASIN>VERSAO	#edicao	L8-05 r5 (ADR 0006, 3): edição pela versão da publicação (pai pela chave)
+brasindice	TBVLRMEM	DATA	#vigencia	L8-05 r5 (ADR 0006, 3): vigência da edição = a data mais antiga dos preços dela

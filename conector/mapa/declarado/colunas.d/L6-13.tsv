@@ -352,20 +352,6 @@ PRLANCEXAMEESTRUTURADO	UNIDADE	exame_lancado_valor.unidade_texto	texto			L6-13: 
 PRLANCEXAMEESTRUTURADO	FAIXA_NORMALIDADE	exame_lancado_valor.faixa_normalidade	texto			L6-13: faixa
 PRLANCEXAMEESTRUTURADO	ID		chave_origem			L6-13: não aproveitada: chave da origem: fica em conector_origem
 PRLANCEXAMEESTRUTURADO	TIPO_RESULTADO		codigo_char			L6-13: não aproveitada: sem coluna equivalente no destino do produto
-PRLANCREGISTROTEMPO	ID		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_TBCBOPRO		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	ID_PRCABNEXODATA		chave_origem			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA		data_hora			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	FUSO_HORARIO		inteiro			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	HORARIO_VERAO		codigo_char			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_UTC		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO		data_hora			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	FUSO_HORARIO_GRAVACAO		inteiro			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	HORARIO_VERAO_GRAVACAO		codigo_char			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO_UTC		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
-PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-13: descarte pedido (sem_valor): ver F4-decisoes-destino.md
 HTATENDALTA	@estabelecimento	alta_medica.estabelecimento_id				L6-13: estabelecimento do cliente
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.atendimento_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND;adotar:atendimento_id	L6-13: uma alta por atendimento: a primeira versão grava e as demais versões do mesmo atendimento ADOTAM a linha (adotado_existente), sem alta duplicada
 HTATENDALTA	ID_HTATENDIMENTO	alta_medica.paciente_id			ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND>ID_RICADPAC>RICADPAC	L6-13: paciente do atendimento
@@ -428,3 +414,22 @@ HTPARAMORIGEMCABIMP	=histórico da origem dos dados do cabeçalho de impressão	
 HTPARAMORIGEMCABIMP	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L6-13: retrato completo da versão (tipo, origem dos dados, data, usuário)
 HTPARAMORIGEMCABIMP	ID		chave_origem			L6-13: chave da versão (conector_origem)
 HTPARAMORIGEMCABIMP	ORIGEM_DADOS		codigo_char			L6-13: no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	=envio_prescricao_plataforma	trilha_auditoria.entidade			trilha_auditoria;principal	L6-13 r5 (ADR 0006): horário de situação do envio à plataforma de prescrição digital, guardado na trilha do envio
+PRLANCREGISTROTEMPO	ID_PRCABNEXODATA	trilha_auditoria.entidade_id			ref:PRCABNEXODATA;trilha_auditoria	L6-13 r5 (ADR 0006): o envio (L8-17); não carregado: pendência, a chave original fica no retrato
+PRLANCREGISTROTEMPO	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L6-13 r5 (ADR 0006): único estabelecimento
+PRLANCREGISTROTEMPO	=alteracao	trilha_auditoria.acao			trilha_auditoria	L6-13 r5 (ADR 0006): mudança de situação do envio
+PRLANCREGISTROTEMPO	DATA_HORA	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-13 r5 (ADR 0006): horário do evento
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria	L6-13 r5 (ADR 0006): sem horário: a gravação (concorrente)
+PRLANCREGISTROTEMPO	=horário de situação do envio à plataforma de prescrição digital	trilha_auditoria.motivo			trilha_auditoria	L6-13 r5 (ADR 0006): o que a linha registra
+PRLANCREGISTROTEMPO	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L6-13 r5 (ADR 0006): retrato completo (profissional, situação, justificativas)
+PRLANCREGISTROTEMPO	ID		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	ID_TBCBOPRO		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	ID_PRSITDOCUMENTO		chave_origem			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	FUSO_HORARIO		inteiro			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	HORARIO_VERAO		codigo_char			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	DATA_HORA_UTC		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	FUSO_HORARIO_GRAVACAO		inteiro			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	HORARIO_VERAO_GRAVACAO		codigo_char			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	DATA_HORA_GRAVACAO_UTC		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSPENSAO		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)
+PRLANCREGISTROTEMPO	JUSTIFICATIVA_SUSP_RETROATIVA		texto			L6-13 r5 (ADR 0006): no retrato completo (dados_depois)

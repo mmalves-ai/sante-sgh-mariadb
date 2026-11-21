@@ -18,6 +18,12 @@ servidor de e-mail inativo.
 import datetime as _dt
 
 DDL = """
+CREATE TABLE FPCON (DATA_HORA TIMESTAMP NOT NULL, NOME_USUARIO_SO VARCHAR(50) NOT NULL, NOME_COMPUTADOR VARCHAR(50) NOT NULL,
+  IP VARCHAR(50) NOT NULL, DOMINIO VARCHAR(50) NOT NULL, GRUPO_TRABALHO VARCHAR(50) NOT NULL, SITUACAO VARCHAR(1),
+  NOME_USUARIO VARCHAR(31) NOT NULL, PRIMARY KEY (DATA_HORA, NOME_USUARIO, NOME_USUARIO_SO));
+CREATE TABLE TBDIGITAR (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(25) NOT NULL);
+CREATE TABLE TBDIGITAR_CNSCADPAC (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(25) NOT NULL);
+CREATE TABLE TBDIGITAR_FILIACAO (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(10) NOT NULL);
 CREATE TABLE TBGRUUSU (NOME VARCHAR(50) NOT NULL PRIMARY KEY, ATIVO CHAR(1));
 CREATE TABLE PREMAILMODULO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 CREATE TABLE PRTIPO_JUSTIF_EXPORTACAO (ID INTEGER NOT NULL PRIMARY KEY, JUSTIFICATIVA_EXPORTACAO VARCHAR(200));
@@ -204,7 +210,18 @@ def linhas(r, ins):
     # tipos de agenda por usuário (código numérico): 0 criado uma vez e adotado; 2 criado; login inexistente (NOT NULL)
     for u, tp in [("ana", 0), ("bia", 0), ("caio", 0), ("ana", 2), ("zeca", 0)]:
         ins("TBAGEUSE", [u, tp])
+    # r5 (ADR 0006): conexões do sistema antigo viram evento de sessão; login nunca visto entra sem usuário
+    for i, (u, so) in enumerate([("ana", "user1"), ("bia", "user2"), ("zeca", "user3")]):
+        ins("FPCON", [_ts("2026-03-0%d 08:0%d" % (i + 1, i)), so, "ESTACAO-%d" % i, "10.0.0.%d" % (i + 1),
+                       "DOMINIO-EXEMPLO", "GRUPO", "A" if i else None, u])
+    # listas de exigência (provadas em provas.tsv: cada código tem equivalente no domínio do produto)
+    for t, ds in [("TBDIGITAR", ["Não", "Sim", "Obrigatório"]),
+                  ("TBDIGITAR_CNSCADPAC", ["Não", "Sim", "Obrigatório", "Obrig.atend.SUS"]),
+                  ("TBDIGITAR_FILIACAO", ["Não", "Ambos", "Mãe", "Pai"])]:
+        for i, d in enumerate(ds, 1):
+            ins(t, [i, d])
     return {
+        "FPCON": {"gravados": 3, "pendencias": {"pai_inexistente": 1}},
         "TBGRUUSU": {"gravados": 8, "pendencias": {"codigo_derivado": 1, "restricao_destino_1062": 1,
                                                    "valor_fora_do_dominio": 1}},
         "PREMAILMODULO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},

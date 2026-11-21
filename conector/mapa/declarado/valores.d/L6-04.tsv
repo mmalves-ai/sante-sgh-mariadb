@@ -49,3 +49,6 @@ SIPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	P	manutencao	L6-04 r4: horário 
 SIPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	P	Manutenção	L6-04 r4: horário de exame e marcação de consulta
 REPACAGD	RETORNO	marcacao_horario.tipo_marcacao_id	S	retorno	L6-04 r4: horário de exame e marcação de consulta
 REPACAGD	RETORNO	marcacao_horario.tipo_marcacao_id	N		L6-04 r4: horário de exame e marcação de consulta
+AGCADEIRA	TIPO	recurso_agendavel.tipo	0	cadeira	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)
+AGCADEIRA	TIPO	recurso_agendavel.tipo	1	cadeira	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)
+AGCADEIRA	TIPO	recurso_agendavel.tipo	2	poltrona	L6-04 r5 (revisão, ADR 0007 18): tipo da cadeira estimado pelo rótulo da tela de origem (cadeiras e poltronas)

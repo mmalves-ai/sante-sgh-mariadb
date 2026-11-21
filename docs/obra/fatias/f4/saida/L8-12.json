@@ -109,6 +109,11 @@
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "Pedido 30 (rodada 4). Não contar como CARREGA a tabela cujo esperado na imagem sintética da fatia tem gravados 0 (ou marcar 'carrega, aguarda motor')",
    "motivo": "MFCONPAG e as 4 filhas aparecem como carrega, mas gravam 0 até o pedido 26 (ordem dos `antes` pela dependência @id:); provado numa cópia isolada do conector com o motor corrigido: gravados MFCONPAG 4, MFCONPAG_TBCBOPRO 2, SDMFCONPAG 1, MFDESACR 3, MFPAGADF 1 (COM_ORDEM_POR_ID em sintetica_d/l8_12.py)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_provas) + sentinela (regra de prova)",
+   "mudanca": "r5-5 (motor, genérico): regra de VALOR de prova que compare o RÓTULO da origem por palavra-chave, sem copiar o rótulo real para o código: o SQL da prova devolve, por item, um padrão (ex.: 'VENDA', 'REMESSA') e o comparador aceita quando o rótulo normalizado da origem (maiúsculas, sem acento, espaços colapsados) CONTÉM o padrão (ex.: valores `ID!inteiro,NOME!rotulo_contem`). Com ela, as provas das listas fixas passam a conferir ID e significado; ordem diferente de IDs num cliente vira prova_nao_conferida (alta).",
+   "motivo": "Achado da rodada 5: a prova compara só o ID com a sequência 1..N. Igualdade exata com o rótulo não é possível sem copiar texto da imagem real para o código (regra 5); hoje a troca de significado com o mesmo ID passaria. Tabelas desta fatia: TBTPNATOPENF, TBTIPOCARTAO, TBTIPOTAXACARTAO, TBTIPOPERMISSAO."
   }
  ],
  "retirados": [

@@ -41,7 +41,9 @@ class FatiaL810(unittest.TestCase):
         self.assertEqual(sum(map(len, grupos)), 21)
         for t, (_, cols) in l8_10.FORMAS.items():
             for c, _, _ in cols:
-                self.assertTrue(self._decl(t, c), (t, c))
+                # rodada 5: coluna lida por especial (#data) ou desdobrada (desdobrar:) também conta
+                self.assertTrue(self._decl(t, c) or [x for x in self.decl if x["tabela"] == t and (
+                    c in x["coluna"].replace(":", ",").split(",") or "%s=" % c in (x.get("via") or ""))], (t, c))
         for c in self.decl:
             self.assertTrue(c.get("_arquivo", "").endswith("L8-10.tsv"), c["tabela"])
             self.assertTrue(c["motivo"].strip(), (c["tabela"], c["coluna"]))
@@ -122,8 +124,9 @@ class FatiaL810(unittest.TestCase):
         self.assertEqual(d["destino"], "grupo_lancamento_financeiro.data_operacao")
         self.assertTrue(d["coluna"].endswith("@ID_MFCABECLANC"))
         self.assertIn("SINDICAL", self.sem_carga["MFTPCONTRIBUICAO"]["motivo"])
-        for t in ("NFSEEMPDESENT", "NFSEEMPDESENV", "SDNATRECEITA"):
-            self.assertNotEqual(self.sem_carga[t]["causa"], "catalogo_oficial", t)
+        self.assertNotEqual(self.sem_carga["SDNATRECEITA"]["causa"], "catalogo_oficial")
+        for t in ("NFSEEMPDESENT", "NFSEEMPDESENV", "MFCABECRENEGO", "MFTIPOLANC_TBOPCOES"):  # r5: carregam
+            self.assertNotIn(t, self.sem_carga, t)
 
     def test_valores_presumidos_e_regras(self):
         lit = {(c["tabela"], c["destino"]): c["coluna"] for c in self.decl if c["coluna"].startswith("=")
@@ -183,7 +186,12 @@ class FatiaL810(unittest.TestCase):
             por[t] = por.get(t, 0) + 1
         self.assertEqual(set(por), set(FATIA) | set(l8_10.CATALOGOS_ORIGEM) | set(l8_10.SO_ORIGEM))
         self.assertFalse(set(l8_10.CATALOGOS_ORIGEM) & set(FATIA))
+        itens = {"SDPARAM": 2, "MOPARAM": 3}  # rodada 5: desdobradas (itens de uma linha lida), sem definição: recusados
         for t, e in esp.items():  # lidas = gravadas + recusadas (as recusas são de restrição do destino)
+            if t in itens:
+                self.assertEqual((por[t], e["gravados"], e["pendencias"]),
+                                 (1, 0, {"codigo_inexistente_destino": itens[t], "restricao_destino_1048": 1}), t)
+                continue
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
             recusas += RECUSA_SEM_PAI.get(t, 0)
             self.assertEqual(por[t], e["gravados"] + recusas, t)
@@ -192,6 +200,58 @@ class FatiaL810(unittest.TestCase):
         self.assertIn("CREATE TABLE SDPARAM (", l8_10.DDL)
         self.assertIn("PRIMARY KEY (EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM)", l8_10.DDL)
 
+
+
+# ---- rodada 5 (ADR 0006, item 1): prova de "não copiar" das listas fixas ----
+PROVADAS_R5 = ['MFTPAPURACAO', 'SDNATRECEITA', 'MFTPCONTRIBUICAO']
+
+
+class ProvaListaFixaR5(unittest.TestCase):
+    """Cada lista fixa provada tem a linha em declarado/provas.tsv e o SQL em provas.d/<T>.sql; cada valor do produto
+    pareado com um item existe no domínio do modelo (CHECK da coluna, ou a coluna, quando não há CHECK)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import re as _re
+        base = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado"
+        cls.provas = {p["tabela"]: p for p in mapa.ler_provas(base.parent)}
+        cls.sem_carga = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
+        ddl = ""
+        for r in (Path(mapa.__file__).resolve().parents[2], Path("/app")):
+            if (r / "db" / "migracoes").is_dir():
+                ddl = "\n".join(p.read_text(encoding="utf-8") for p in sorted((r / "db" / "migracoes").rglob("*.sql")))
+                break
+        cls.ddl, cls.re = ddl, _re
+
+    def _bloco(self, tabela):
+        m = self.re.search(r"CREATE TABLE %s \((.*?)\n\)" % tabela, self.ddl, self.re.S)
+        self.assertIsNotNone(m, tabela)
+        return m.group(1)
+
+    def test_prova_declarada_e_dominio_do_produto(self):
+        for t in PROVADAS_R5:
+            pv = self.provas.get(t)
+            self.assertIsNotNone(pv, t)
+            self.assertEqual((pv["tipo"], pv["chave"], [c for c, _ in pv["valores"]][:1], len(pv["valores"])),
+                             ("derivado", ["ID"], ["ID"], 2), t)
+            self.assertEqual(pv["valores"][1][1], "texto_nome", t)  # rodada 5 (revisão): código E rótulo
+            self.assertTrue(self.re.findall(r"AS valor_produto, '[^']+' AS rotulo", pv["sql"]), t)
+            self.assertEqual(self.sem_carga[t]["situacao"], "descarte", t)
+            m = self.re.search(r"domínio do produto \((\w+)\.(\w+),", pv["sql"])
+            self.assertIsNotNone(m, t)
+            tabela, coluna = m.groups()
+            pares = self.re.findall(r"SELECT (\d+) AS item, '([^']*)' AS valor_produto", pv["sql"])
+            self.assertTrue(pares, t)
+            self.assertEqual([int(k) for k, _ in pares], list(range(1, len(pares) + 1)), t)
+            bloco = self._bloco(tabela)
+            self.assertRegex(bloco, r"\n\s+%s\s" % coluna, (t, coluna))
+            checks = [c for c in self.re.findall(r"CONSTRAINT \w+ CHECK \((.*)\),?\n", bloco)
+                      if self.re.search(r"\b%s\b" % coluna, c) and "'" in c]
+            for _, v in pares:
+                if checks:
+                    self.assertTrue(any("'%s'" % v in c for c in checks), (t, v))
+                else:
+                    self.assertRegex(v, r"^\d+$", (t, v))  # coluna numérica ou booleana sem CHECK de lista
 
 if __name__ == "__main__":
     unittest.main()

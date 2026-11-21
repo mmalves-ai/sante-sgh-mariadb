@@ -10,7 +10,7 @@ from sante_conector.sintetica_d import l5_10
 
 FATIA = "colunas.d/L5-10.tsv"
 RAIZ = pathlib.Path(__file__).resolve().parents[2]
-CAUSAS = {"catalogo_oficial", "mecanismo_do_produto"}
+CAUSAS = {"mecanismo_pedido"}  # rodada 5, revisão: bloqueadas até r5-1 ou r5-2, nunca descarte sem prova
 
 
 def _ddl():
@@ -66,13 +66,16 @@ class L5_10(unittest.TestCase):
         sc = _sem_carga()
         for t in l5_10.DESCARTADAS:
             self.assertIn(t, sc, t)
-            self.assertEqual(sc[t]["situacao"], "descarte", t)
+            self.assertEqual(sc[t]["situacao"], "bloqueada", t)
+            self.assertRegex(sc[t]["motivo"], r"^BLOQUEADA até o pedido r5-[12] \(saida/L5-10\.json\)", t)
             self.assertIn(sc[t]["causa"], CAUSAS, t)
             self.assertTrue(sc[t]["motivo"], t)
         for c in self.decl:
             if c["tabela"] in l5_10.DESCARTADAS:
                 self.assertEqual(c["destino"], "", c["tabela"])
-                self.assertTrue(c["motivo"].startswith("descarte ("), c["tabela"])
+                # o motivo da declaração é o MESMO de sem_carga.tsv (sem causa trocada entre os dois arquivos)
+                self.assertEqual(c["motivo"], "bloqueada (mecanismo_pedido, sem_carga.tsv): " + sc[c["tabela"]]["motivo"],
+                                 c["tabela"])
 
     def test_literal_de_classificacao_so_presumido(self):
         # literal sem pendência gravaria regra de pagamento errada em silêncio: só =~ (valor_presumido)

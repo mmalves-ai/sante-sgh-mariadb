@@ -7,7 +7,7 @@ from sante_conector import carga_mapa, mapa
 from sante_conector.sintetica_d import l6_13
 
 FATIA = "colunas.d/L6-13.tsv"
-SEM_CARGA = {"PRLANCREGISTROTEMPO"}
+SEM_CARGA = set()  # rodada 5 (ADR 0006): nenhum descarte
 
 
 class L6_13(unittest.TestCase):

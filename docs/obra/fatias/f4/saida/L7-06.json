@@ -81,6 +81,21 @@
    "arquivo": "produto (F2.2): modelo de retenção por credor",
    "mudanca": "tabela (ou colunas) de retenção tributária por credor: alíquota e indicador de retenção de ISS, INSS, PIS, Cofins, CSLL, IR, CBS, IBS e valor mínimo do ISS, para PJ e PF; e `pode_vender` em local_estoque_usuario (TIPO_MOV V)",
    "motivo": "TBFORNEC guarda as retenções do fornecedor; hoje ficam na trilha da empresa fornecedora (sem perda) e os indicadores S/N esperam o destino"
+  },
+  {
+   "id": "r5b_parametros_patrimonio",
+   "arquivo": "semente do produto (parametro_definicao, módulo de patrimônio)",
+   "trilha": "F2.2 (semente)",
+   "prioridade": "media",
+   "mudanca": "semente de parametro_definicao (permite_estabelecimento=1) para os parâmetros do patrimônio de GPPARAMG: patrimonio.depreciar (booleano), patrimonio.tipo_depreciacao, patrimonio.tipo_calculo_depreciacao, patrimonio.coeficiente_depreciacao_acelerada, patrimonio.aplicar_coeficiente, patrimonio.considera_valor_residual (booleano), patrimonio.apuracao_por_centro_custo, patrimonio.apurar_centro_custo_por, patrimonio.integra_contabilidade, patrimonio.integra_custos, patrimonio.integra_financeiro, patrimonio.forma_integracao (lista), patrimonio.aviso_seguro_revisao, patrimonio.dias_aviso_revisao (inteiro), patrimonio.dias_aviso_seguro (inteiro), patrimonio.dias_garantia (inteiro), patrimonio.responsavel (texto), patrimonio.nome_responsavel (texto)",
+   "motivo": "GPPARAMG -> parametro_valor (nivel=estabelecimento, uma linha por parâmetro com valor por desdobrar e #rotulo cod:parametro_definicao.chave, vigencia_inicio @vigencia_carga); a definição é catálogo do produto e nunca é criada pela migração. Até lá: retrato completo na trilha (aviso)."
+  },
+  {
+   "id": "r5b_sequencia_por_competencia",
+   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
+   "prioridade": "alta (numeração de documento: colisão)",
+   "mudanca": "(a) regras ano_competencia e mes_competencia (AAAAMM -> ano e mês; inválida: NULL e valor_fora_do_dominio); (b) agrupar:C1,C2 no principal combinável com adotar:<chave única> quando a mescla de um agregado guarda o MAIOR (opção adotar_maior:<coluna>), ou equivalente",
+   "motivo": "GEULTDOCGER (841.105 números usados por tipo e competência) e GEGERSEQ (25 contadores, só os períodos correntes): a prova mecanismo por tipo e competência NÃO passa com a carga de hoje, porque os períodos antigos não têm contador no destino e o produto recomeçaria do 1 num documento retroativo (colisão). Correção: GEULTDOCGER grava sequencia_documento_estoque agrupado por (ID_GETPLANCTO, ANO_MES), reinicio=mensal, ano/mes pela competência, proximo_numero = #grupo_max:ULT_NUM_DOC_GERADO com inteiro_mais_um, adotando o contador do GEGERSEQ pelo maior; depois a prova mecanismo em provas.tsv (chave ID_GETPLANCTO,ANO_MES,ULT_NUM_DOC_GERADO; valor ULT_NUM_DOC_GERADO!inteiro_mais_um). Feito nesta volta: a competência inválida deixou de recusar a linha (2ª fonte =@data_carga)."
   }
  ]
 }

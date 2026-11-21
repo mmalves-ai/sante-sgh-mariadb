@@ -12,12 +12,12 @@ from sante_conector.sintetica_d import l8_18
 RAIZ = Path(__file__).resolve().parents[1]  # /app no container (db/migracoes montado só leitura)
 CARREGADAS = set(l8_18.CARREGADAS)
 NA_IMAGEM = CARREGADAS | set(l8_18.NAO_CARREGADAS)
-DESTINOS = {"TBAGRUPRELAT": ["agrupamento_relatorio"], "TBEDITREL": ["relatorio", "triagem_relatorio_legado", "relatorio_tela"],
-            "TBAGRUPRELAT_TBEDITREL": ["agrupamento_relatorio_item"], "TBEDITPARAM": ["relatorio_parametro"],
+DESTINOS = {"TBAGRUPRELAT": ["agrupamento_relatorio"], "TBEDITREL": ["relatorio", "triagem_relatorio_legado", "trilha_auditoria", "relatorio_tela"],
+            "TBAGRUPRELAT_TBEDITREL": ["agrupamento_relatorio_item"], "TBEDITPARAM": ["relatorio_parametro", "trilha_auditoria"],
             "TBEDITREL_GRUUSU": ["relatorio_permissao"], "TBEDITREL_TBUSERS": ["relatorio_permissao"],
             "TBOPCAOREL": ["categoria_relatorio"],
-            "TBEDITPESQ": ["relatorio_parametro_pesquisa", "relatorio_parametro"],
-            "TBEDITREL_AGENDA": ["agendamento_relatorio", "agendamento_relatorio_destinatario"],
+            "TBEDITPESQ": ["relatorio_parametro_pesquisa", "relatorio_parametro", "trilha_auditoria"],
+            "TBEDITREL_AGENDA": ["agendamento_relatorio", "agendamento_relatorio_destinatario", "trilha_auditoria"],
             "TBEDITREL_AGENDA_LOG": ["envio_relatorio"], "TBBTNOPREL": ["relatorio_tela"],
             "TBPARAMOPREL": ["relatorio_tela_parametro"]}
 COMPLEMENTOS = {("TBEDITPESQ", "relatorio_parametro")}  # UPDATE da linha do pai: as obrigatórias já estão nela
@@ -113,7 +113,7 @@ class Plano(unittest.TestCase):
     def test_obrigatorias_sem_padrao_cobertas(self):
         for t, dts in DESTINOS.items():
             for dt in dts:
-                if (t, dt) in COMPLEMENTOS:
+                if (t, dt) in COMPLEMENTOS or dt not in self.ddl:  # trilha_auditoria: DDL de outro módulo
                     continue
                 obrig = {m.group(1) for m in re.finditer(r"^\s*(\w+)\s+[^\n]*?NOT NULL(?![^\n]*DEFAULT)",
                                                           self.ddl[dt], re.M)}
@@ -145,6 +145,8 @@ class Plano(unittest.TestCase):
     def test_literais_dentro_do_check(self):
         for t, dts in DESTINOS.items():
             for dt in dts:
+                if dt not in self.ddl:
+                    continue
                 for dc, c in self.cols(t, dt).items():
                     if not c["coluna"].startswith("="):
                         continue
@@ -193,11 +195,30 @@ class PerdasEPresumidos(unittest.TestCase):
 
     def test_parametro_colunas_perdidas_declaradas(self):
         decl = {c["coluna"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "TBEDITPARAM"}
-        for col in ("ORDEM", "VISIVEL", "TIPO_DEFAULT"):
+        # r5 (ADR 0006): ordem, oculto e códigos sem domínio ficam no retrato da trilha do registro, nunca perdidos
+        self.assertEqual((decl["VISIVEL"]["destino"], decl["VISIVEL"]["regra"]),
+                         ("relatorio_parametro.visivel", "booleano_sn"))
+        for col in ("ORDEM", "TIPO_DEFAULT", "TIPO"):
             self.assertIn(col, decl)
             self.assertFalse(decl[col].get("destino"), col)
-            self.assertIn("PERDA DECLARADA", decl[col]["motivo"], col)
-        self.assertIn("PERDA DECLARADA", decl["#seq:ID_TBEDITREL"]["motivo"])
+            self.assertIn("retrato", decl[col]["motivo"], col)
+        retratos = {(c["tabela"], c["coluna"]) for c in self.mapa["colunas_decl"]
+                    if c.get("destino") == "trilha_auditoria.dados_depois" and c["tabela"] in CARREGADAS}
+        self.assertEqual(retratos, {("TBEDITPARAM", "#retrato:*"), ("TBEDITPESQ", "#retrato:*"),
+                                    ("TBEDITREL_AGENDA", "#retrato:*-EMAILS_DESTINO"), ("TBEDITREL", "#retrato:*-TEXTOSQL"),
+                                    ("TBEDITREL_PRMODELOREL", "#retrato")})
+
+    def test_periodicidade_presumida_so_com_dias_especificos(self):
+        per = [c for c in self.mapa["colunas_decl"]
+               if c["tabela"] == "TBEDITREL_AGENDA" and c.get("destino") == "agendamento_relatorio.periodicidade"]
+        self.assertEqual([(c["coluna"], c["via"]) for c in per],
+                         [("=diaria", "se:DIAS_ESPECIFICOS="), ("=~diaria", "se:DIAS_ESPECIFICOS")])
+
+    def test_modelo_de_impressao_leva_o_leiaute_do_relatorio(self):
+        cont = [c for c in self.mapa["colunas_decl"]
+                if c["tabela"] == "TBEDITREL_PRMODELOREL" and c.get("destino") == "modelo_impressao_clinica.conteudo"]
+        self.assertTrue(cont[0]["via"].startswith("ref:TBEDITQRP.ID_EDITREL@dados"))
+        self.assertEqual(cont[1]["coluna"], "#retrato")
 
     def test_triagem_agregados_presumidos(self):
         tri = {c["destino"]: c for c in self.plano["TBEDITREL"]["colunas"]["triagem_relatorio_legado"]}
@@ -240,3 +261,66 @@ class RiscoParametroDeOutroRelatorio(unittest.TestCase):
         self.assertEqual(c._seguir({"PARAMETRO": "DATA_INI"}, "PARAMETRO", passos)[2], "pai_ambiguo")
         # o botão é do relatório 1, e CONVENIO é parâmetro só do relatório 8: ligado ao parâmetro 7 (risco)
         self.assertEqual(c._seguir({"PARAMETRO": "CONVENIO"}, "PARAMETRO", passos)[1], ("TBEDITPARAM", "7"))
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0006: portal do painel, leiaute do relatório e relatório como modelo de impressão CARREGAM."""
+    @classmethod
+    def setUpClass(cls):
+        cls.decl = [d for d in _tsv(RAIZ / "mapa/declarado/colunas.d/L8-18.tsv")]
+
+    def _d(self, t, destino):
+        return [d for d in self.decl if d["tabela"] == t and d["destino"] == destino]
+
+    def test_sem_carga_so_a_lista_fixa(self):
+        sc = {d["tabela"] for d in _tsv(RAIZ / "mapa/declarado/sem_carga.tsv")}
+        for t in ("PNCONFIGPORTAL", "TBEDITQRP", "TBEDITREL_PRMODELOREL", "TBEDITREL_AGENDA_SITUACAO"):
+            self.assertNotIn(t, sc, t)
+            self.assertIn(t, CARREGADAS, t)
+
+    def test_paginas_do_portal_na_configuracao(self):
+        self.assertIn("agrupar:ID_PNCONFIG", self._d("PNCONFIGPORTAL", "painel_tv.codigo")[0]["via"])
+        self.assertEqual(self._d("PNCONFIGPORTAL", "painel_tv.configuracao")[0]["coluna"],
+                         "#grupo_json:ORDEM,NOME,CONFIGURACAO")
+        self.assertEqual(self._d("PNCONFIGPORTAL", "painel_tv.situacao")[0]["coluna"], "=rascunho")
+
+    def test_leiaute_do_relatorio_numa_versao(self):
+        self.assertIn("agrupar:ID_EDITREL", self._d("TBEDITQRP", "relatorio_versao.relatorio_id")[0]["via"])
+        js = self._d("TBEDITQRP", "relatorio_versao.dados")[0]["coluna"]
+        for c in ("SEQUENCIA", "NOMECOMP", "NOMECLASSE", "PARENT", "FIELD_NAME", "COMPONENTE", "CONTEUDO"):
+            self.assertIn(c, js)
+        self.assertIn("ref:TBEDITREL@numero_versao",
+                      self._d("TBEDITQRP", "relatorio_versao.numero_versao")[0]["via"])
+
+    def test_relatorio_como_modelo_de_impressao(self):
+        via = self._d("TBEDITREL_PRMODELOREL", "modelo_impressao_clinica.codigo")[0]["via"]
+        self.assertIn("principal", via)
+        self.assertEqual(self._d("TBEDITREL_PRMODELOREL", "modelo_impressao_clinica.ativo")[0]["coluna"], "=0")
+        self.assertIn("ref:PRMODELOREL",
+                      self._d("TBEDITREL_PRMODELOREL", "modelo_impressao_clinica.tipo_modelo_impressao_id")[0]["via"])
+
+    def _trilha(self, t):
+        return {c["destino"].split(".")[1]: c for c in self.decl
+                if c["tabela"] == t and (c.get("destino") or "").startswith("trilha_auditoria.")}
+
+    def test_portal_ligado_ao_painel_de_chamada(self):
+        # ADR 0007/19: o código derivado não é a única ligação; o id do painel de chamada fica no vínculo e a
+        # pendência do pai (recusado: pai_pendente; nunca visto: pai_inexistente) chega ao portal
+        tr = self._trilha("PNCONFIGPORTAL")
+        self.assertEqual(tr["entidade_id"]["via"].split(";")[0], "ref:PNCONFIG")
+        self.assertEqual(tr["entidade"]["coluna"], "=painel_chamada")
+        self.assertEqual(tr["correlacao"]["coluna"], self._d("PNCONFIGPORTAL", "painel_tv.codigo")[0]["coluna"])
+        plano = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), NA_IMAGEM)}
+        self.assertIn("trilha_auditoria", plano["PNCONFIGPORTAL"]["destinos"])
+
+    def test_modelo_ligado_ao_relatorio(self):
+        tr = self._trilha("TBEDITREL_PRMODELOREL")
+        self.assertEqual(tr["entidade_id"]["via"].split(";")[0], "ref:TBEDITREL")
+        self.assertEqual(tr["entidade"]["coluna"], "=relatorio")
+        self.assertEqual(tr["dados_depois"]["coluna"], "#retrato")
+        self.assertEqual(tr["correlacao"]["coluna"],
+                         self._d("TBEDITREL_PRMODELOREL", "modelo_impressao_clinica.codigo")[0]["coluna"])
+
+    def test_botao_de_agrupamento_carrega(self):
+        self.assertIn("ref:TBAGRUPRELAT",
+                      self._d("TBBTNOPREL", "relatorio_tela.agrupamento_relatorio_id")[0]["via"])

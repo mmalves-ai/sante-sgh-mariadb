@@ -141,8 +141,9 @@ class Plano(unittest.TestCase):
             self.assertNotIn(t, sc, t)  # bloqueio visível, nunca descarte
             self.assertTrue(all("BLOQUEADA" in m[-1] or "NÃO é descarte" in m[-1] for m in com[t]), t)
         # conferidor r4: acordo de mat/med carrega pelo item de referência (modelo 12_FAT/13), nunca descarte
-        pm = {d["destino"]: d.get("via") for d in self.mapa["colunas_decl"] if d["tabela"] == "TBPERMEM" and d["destino"]}
-        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED")
+        pm = {d["destino"]: d.get("via") for d in self.mapa["colunas_decl"] if d["tabela"] == "TBPERMEM" and d["destino"]
+              and d["coluna"] != "COD"}
+        self.assertEqual(pm["preco_negociado_matmed.item_referencia_matmed_id"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,")
         self.assertNotIn("TBPERMEM", sc)
         self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
         self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
@@ -268,7 +269,7 @@ class Sintetica(unittest.TestCase):
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
         self.assertEqual(criadas, TABELAS | set(l8_05.BLOQUEADAS) | set(l8_05.SO_ORIGEM))
-        self.assertEqual(len(criadas), 25 + (1 if l8_05.RPLANRPA_ATIVA else 0))  # r4: RPLANRPA entra aqui
+        self.assertEqual(len(criadas), 22 + (1 if l8_05.RPLANRPA_ATIVA else 0))  # r4: RPLANRPA entra aqui
         self.assertNotIn("TBTISSPARDEF", criadas)  # DDL da L8-04 (imagem conjunta dos lotes)
 
     def test_colunas_das_linhas_batem_com_a_forma(self):
@@ -276,6 +277,66 @@ class Sintetica(unittest.TestCase):
         l8_05.linhas(random.Random(1), lambda t, v: vistos.append((t, len(v))))
         for t, n in vistos:
             self.assertEqual(n, len(l8_05.COLUNAS[t]), t)
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """Rodada 5 (ADR 0006): o licenciado de mat/med é semeado no espelho (não no cliente) e a associação RPA x
+    inscrição tem prova de não copiar linha a linha."""
+
+    def test_acordo_liga_ao_espelho_pelo_codigo(self):
+        """ADR 0006 (3): o acordo de mat/med da tabela com a referência licenciada liga o item ao ESPELHO pelo código
+        (o mesmo da semente); o da tabela própria, ao item gravado pela L8-03. Condições exclusivas (REF_BRA)."""
+        dec = [c for c in mapa.carregar_execucao()["colunas_decl"] if c["tabela"] == "TBPERMEM"
+               and c["destino"] == "preco_negociado_matmed.item_referencia_matmed_id"]
+        por = {c["coluna"]: c["via"] for c in dec}
+        self.assertEqual(por["COD"], "espelho:brasindice;se:TAB>TBCTRMEM>REF_BRA=S")
+        self.assertEqual(por["ID_TBMATMED"], "ref:TBMATMED;se:TAB>TBCTRMEM>REF_BRA=N,")
+        self.assertEqual(mapa.espelho_spec("espelho:brasindice")["catalogo"], "brasindice")
+        from sante_conector import semente_espelho
+        self.assertEqual(semente_espelho.ler_declaracao()["brasindice"]["tabela"], "TBVLRMEM")
+        # a imagem grava o acordo ligado ao espelho (77) e acusa o código fora dele (78)
+        esp = l8_05.linhas(__import__("random").Random(1), lambda t, v: None)["TBPERMEM"]
+        self.assertEqual(esp["gravados"], 4)
+        self.assertEqual(esp["pendencias"]["espelho_codigo_inexistente"], 1)
+
+    def test_semente_do_espelho_declarada(self):
+        from sante_conector import semente_espelho
+        decl = semente_espelho.ler_declaracao()
+        self.assertEqual(decl["brasindice"]["tabela"], "TBVLRMEM")
+        campos = decl["brasindice"]["campos"]
+        self.assertEqual(campos["#edicao"], "ID_TBVERSAOBRASIN>TBVERSAOBRASIN>VERSAO")
+        self.assertEqual(campos["#vigencia"], "DATA")
+        self.assertEqual((campos["preco_fabrica"], campos["preco_maximo_consumidor"]),
+                         ("VALOR_PFB_BRASINDICE", "VALOR_PMC_BRASINDICE"))
+        try:
+            lic = semente_espelho.licenciados()
+        except Exception:  # noqa: BLE001 - carregador fora do container
+            lic = None
+        if lic is not None:
+            self.assertEqual(semente_espelho.erros_declaracao(decl, lic), [])
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(Path(mapa.DIR_PACOTE) / "declarado/sem_carga.tsv")}
+        self.assertNotIn("TBVLRMEM", sc)
+        # r5 (achado): o cliente recebe só o preço das tabelas PRÓPRIAS; o publicado (PFB/PMC) nunca vai ao cliente
+        dados = [c for c in mapa.carregar_execucao()["colunas_decl"] if c["tabela"] == "TBVLRMEM" and c["destino"]]
+        self.assertFalse({c["coluna"] for c in dados} & {"VALOR_PFB_BRASINDICE", "VALOR_PMC_BRASINDICE"})
+        item = [c for c in dados if c["destino"] == "preco_referencia_matmed.item_referencia_matmed_id"]
+        self.assertEqual(len(item), 1)
+        for x in ("so_se:TAB>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada",
+                  "so_se:TAB>TBCTRMEM>REF_SIMP=N,F,!licenca_nao_comprovada", "ref:TBMATMED"):
+            self.assertIn(x, item[0]["via"])
+        ret = [c["coluna"] for c in dados if c["destino"] == "preco_referencia_matmed.dados"]
+        self.assertEqual(ret, ["#retrato:*-VALOR_PFB_BRASINDICE,VALOR_PMC_BRASINDICE"])
+        esp = l8_05.linhas(__import__("random").Random(1), lambda t, v: None)["TBVLRMEM"]
+        self.assertEqual((esp["gravados"], esp["pendencias"].get("licenca_nao_comprovada")), (2, 1))
+
+    def test_prova_da_associacao_rpa_inscricao(self):
+        pv = {p["tabela"]: p for p in mapa.ler_provas(Path(mapa.DIR_PACOTE))}["RPRPA_TBCBOPRO"]
+        self.assertEqual((pv["tipo"], pv["chave"], pv["valores"]), ("derivado", ["ID_RPRPA"],
+                                                                     [("ID_TBCBOPRO", "inteiro")]))
+        self.assertRegex(pv["sql"], r"^SELECT o\.chave_original")
+        for x in ("{ctl}.conector_origem", "JOIN rpa r", "inscricao_conselho", "HAVING COUNT(DISTINCT ic.id) = 1"):
+            self.assertIn(x, pv["sql"])
+        self.assertEqual(mapa.erros_provas([pv], {"RPRPA_TBCBOPRO": ["ID_RPRPA", "ID_TBCBOPRO"]}), [])
 
 
 if __name__ == "__main__":

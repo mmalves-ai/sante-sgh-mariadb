@@ -34,6 +34,39 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L6-10.tsv + valores.d/L6-10.tsv",
    "mudanca": "TBCBARANOTIFICACAO.ID_TBCBARASEVERIDADE -> acao_alerta_alergia.gravidade_aplicavel pelo NOME da gravidade (ref:TBCBARASEVERIDADE>NOME + de-para: Leve 1, Moderada 2, Grave 3, Fatal 4), não pela chave",
    "motivo": "a L6-08 deixou de derivar gravidade_reacao_adversa.nivel da chave (nada prova que 1 = menor; a sintética usa 1 = Grave). A premissa 'nível = chave' que a L6-10 herdou faria alerta grave virar leve"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (trilha F2.2) + conector/mapa/declarado/provas.tsv",
+   "mudanca": "tabela rotulo_dominio_hospital (dominio VARCHAR(64) = 'tabela.coluna' do produto, codigo_origem VARCHAR(30), rotulo VARCHAR(150) NOT NULL, valor_produto VARCHAR(30) NULL, ativo, origem CHECK sistema|migracao; UNIQUE (dominio, codigo_origem))",
+   "motivo": "ADR 0006, 1: listas fixas do hospital que no produto são domínio com CHECK (ação do alerta, modo da requisição, campo autopreenchido, situação e 'manter' do lançamento de diagnóstico) não têm tabela onde carregar, e a prova por item com os ids literais da origem (padrão L8-10/L8-13) exige conhecer os ids reais, que esta fatia não lê. Com a tabela, cada lista CARREGA (rótulo do hospital + valor do produto pelo de-para de valores) e a tela mostra o nome que o hospital usava",
+   "atendido": true,
+   "tabelas": [
+    "PRTPREQUISICAO",
+    "TBACAOGRAUGRA"
+   ],
+   "rodada5": true,
+   "dispensado": "rodada 5, 2ª volta: as listas carregam como parametro_opcao (padrão L8-14/L8-18), sem tabela nova"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-05.tsv (fatia L6-05)",
+   "tabelas": [
+    "PRTPRESPOSTA",
+    "PRPARRECMED"
+   ],
+   "mudanca": "carregar os pais PRDADOSENVIOOPERADORA (em informacao_clinica_operadora) e PRFICHAREL (modelo de impressão), hoje descarte sem prova",
+   "motivo": "PRTPRESPOSTA complementa informacao_clinica_operadora.tipo_dado (ref:PRDADOSENVIOOPERADORA;complementa + ref:PRTPPERGUNTA@tipo_dado) e PRPARRECMED liga tipo_receita ao modelo de impressão: as duas só carregam depois dos pais (coluna obrigatória por pai descartado = BLOQUEADA pai_nao_carregado)",
+   "atendido": true,
+   "rodada5": true
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py (motor)",
+   "tabelas": [
+    "TBDIGITAL_VIAACESSO"
+   ],
+   "mudanca": "criar no banco descartável as tabelas alvo de cod: (como as de destino do plano), ou PREPARO_DOS_REQUERIDOS = True na sintetica_d/l6_17.py",
+   "motivo": "TBDIGITAL_VIAACESSO passou a carregar por cod:via_de_uso.codigo_interoperabilidade; via_de_uso não é destino de nenhuma fatia que REQUER a L6-08, então a conferência de quem REQUER a L6-08 sem o preparo dela falha com 1146. L6-09 e L6-10 já ligaram PREPARO_DOS_REQUERIDOS; a L6-17 (outra fatia) precisa do mesmo ou da mudança no motor. Rodada 5, 2ª volta: o preparo da L6-08 também grava a informação clínica externa (ids 1..100) que a PRTPRESPOSTA complementa; sem ele, a conciliação de informacao_clinica_operadora diverge (destino 0). Só PREPARO_DOS_REQUERIDOS = True na L6-17 resolve as duas",
+   "atendido": false,
+   "rodada5": true
   }
  ]
 }

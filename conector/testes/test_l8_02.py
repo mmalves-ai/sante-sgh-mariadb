@@ -17,7 +17,8 @@ DESCARTES = {"RPRPA_TBCBOPRO"}
 # r4: SIREFCON carrega (item pelo procedimento do exame); as listas de opções são descarte de produto
 # r4 (revisão adversarial): as listas de opções seguem BLOQUEADAS até a L5-06 declarar a escolha de cada fonte pagadora
 LISTAS_OPCOES = {"TBCONSBRASINATIVO", "TBCONSIDCALCVLR", "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD"}
-BLOQUEADAS = set(LISTAS_OPCOES)
+# R5 (ADR 0006): as listas CARREGAM como opções de um parâmetro de lista (parametro_opcao), nunca descarte
+BLOQUEADAS = set()
 LISTAS_SEM_CARGA = LISTAS_OPCOES | {"TBCONVPERCTAPAC", "TBCTRTAT"}
 # colunas de TBCONVEN com a escolha da fonte pagadora (L5-06): só com elas declaradas a lista vira descarte
 ESCOLHA_TBCONVEN = ("ID_TBCONVMEDREQATD", "ID_TBCONVCOBTXPA", "ID_TBCONVCONSMAT", "ID_TBCONVPERCTAPAC",
@@ -175,14 +176,14 @@ class FatiaL802(unittest.TestCase):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
         # r4 (revisão): a lista só é descarte (domínio do produto) quando a escolha de cada fonte pagadora (colunas
         # ID_TBCONS*/ID_TBCONV* de TBCONVEN, L5-06, pedido 19) está declarada com destino; antes, bloqueada e visível
-        escolha = [c for c in self.m["colunas_decl"] if c["tabela"] == "TBCONVEN" and c["destino"]
-                   and c["coluna"].replace("#item@", "").startswith(ESCOLHA_TBCONVEN)]
-        for t in LISTAS_SEM_CARGA - {"TBCTRTAT"}:
-            if escolha:
-                self.assertEqual(sc[t]["situacao"], "descarte", t)
-            else:
-                self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "depende_declaracao_L5-06:TBCONVEN"), t)
-        self.assertEqual((sc["TBCTRTAT"]["situacao"], sc["TBCTRTAT"]["causa"]), ("descarte", "mecanismo_do_produto"))
+        # R5 (ADR 0006): as listas saem do sem_carga e carregam em parametro_opcao (parâmetro de lista por lista,
+        # módulo e definição gravados antes e adotados); TBCONVPERCTAPAC e TBCTRTAT carregam pela L8-03
+        for t in LISTAS_SEM_CARGA:
+            self.assertNotIn(t, sc, t)
+        for t in LISTAS_OPCOES:
+            self.assertEqual(self.plano[t]["destinos"], ["parametro_opcao", "modulo_sistema", "parametro_definicao"], t)
+            self.assertEqual(self._via(t, "parametro_definicao.chave"), "parametro_definicao;antes;adotar:chave")
+            self.assertEqual(self._col(t, "parametro_definicao_id")["coluna"], "@id:parametro_definicao")
         # r4: SIREFCON carrega: item faturável pelo procedimento do exame (não depende de exame.item_faturavel_id)
         self.assertNotIn("SIREFCON", sc)
         self.assertIn("SIREFCON", self.plano)

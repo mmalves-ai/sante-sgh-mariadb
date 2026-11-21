@@ -63,11 +63,11 @@ CREATE TABLE TBTIPOOID (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT N
 CREATE TABLE TBTIPOREPRE (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(60) NOT NULL, ATIVO CHAR(1) NOT NULL);
 """ % ", ".join("%s CHAR(1)" % c for c in FLAGS_SUS)
 
-NAO_CARREGADAS = ["TBMOVTERMSTATUS", "TBPROCBACKUP", "TBSITBACKUP", "TBTIPOOID", "TBTIPOREPRE"]
+NAO_CARREGADAS = ["TBPROCBACKUP", "TBSITBACKUP", "TBTIPOOID", "TBTIPOREPRE"]
 CARREGADAS = ["TBLEITORBIOME", "TBLGPDANONMOT", "TBLGPDANONUSERFUNCAO", "TBMENSAG", "TBNVLCRITICID", "TBPAPEL",
               "TBTERMCONREVTP", "TBTIPOCERTIFICADO", "TBMODULO", "TBOPCOES", "TBEVENTOS", "TBPAPEL_TBOPCOES",
-              "TBPERUSU", "TBPERMISSAO_SUS", "TBSGHCONEXAO"]
-DESCARTE = list(NAO_CARREGADAS)  # descarte de produto (sem_carga.tsv)
+              "TBPERUSU", "TBPERMISSAO_SUS", "TBSGHCONEXAO", "TBMOVTERMSTATUS"]
+DESCARTE = list(NAO_CARREGADAS)  # descarte de produto (sem_carga.tsv) com prova (provas.tsv; r5, ADR 0006)
 
 PAIS_EXTERNOS = {"TBUSERS": ["usuario1", "usuario2", "usuario3"], "TBGRUUSU": ["Grupo A", "Grupo B"]}
 # permissão SUS: (ID, login, indicadores); None = sem indicador (não gera linha), N = negação explícita (gera linha)
@@ -129,7 +129,7 @@ def linhas(r, ins):
     for i, nome in MODULOS:
         ins("TBMODULO", [i, "SGH", nome, "Janela do módulo %d" % i, "Botão %d" % i, "Abertura do módulo %d" % i,
                          ("Resumo do módulo %d. " % i) * (12 if i == 13 else 1), "modulo%d.exe" % i])
-    for i, d in [(1, "Emitido"), (2, "Autorizado"), (3, "Revogado")]:
+    for i, d in [(1, "Emitido"), (2, "Autorizado"), (3, "Revogado"), (4, "Em análise")]:
         ins("TBMOVTERMSTATUS", [i, d, "S"])
     for row in NIVEIS:
         ins("TBNVLCRITICID", list(row))
@@ -164,17 +164,21 @@ def linhas(r, ins):
         ins("TBPROCBACKUP", [i, d])
     for row in CONEXOES:
         ins("TBSGHCONEXAO", list(row))
-    for i, d in [(1, "Concluído"), (2, "Falhou")]:
+    for i, d in [(1, "Concluído"), (2, "Falhou"), (3, "Em andamento"), (4, "Cancelada")]:
         ins("TBSITBACKUP", [i, d])
     for row in TERMOS:
         ins("TBTERMCONREVTP", list(row))
     for row in CERTIFICADOS:
         ins("TBTIPOCERTIFICADO", list(row))
-    for i, d in [(1, "Política A1"), (2, "CPF do titular")]:
+    for i, d in [(1, "Política"), (2, "CPF"), (3, "CNPJ"), (4, "Nome"), (5, "Data de nascimento"),
+                 (6, "Título de eleitor"), (7, "Registro no conselho"), (8, "UF do conselho"), (9, "Especialidade"),
+                 (10, "CNES")]:
         ins("TBTIPOOID", [i, d])
     for i, d in [(1, "Titular"), (2, "Representante legal")]:
         ins("TBTIPOREPRE", [i, d, "S"])
     return {
+        # r5: rótulo sem par (Em análise): etapa pendente presumida, final e autoriza no padrão
+        "TBMOVTERMSTATUS": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3, "valor_presumido": 1}},
         "TBLEITORBIOME": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "TBLGPDANONMOT": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "texto_resumido": 1}},
         "TBMENSAG": {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 3,

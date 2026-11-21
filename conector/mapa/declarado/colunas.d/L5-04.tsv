@@ -83,8 +83,13 @@ SHTECNIC	=~assistencial	profissional.tipo				L5-04 r3: a origem não diz a rela�
 SHTECNIC	SITUACAO	profissional.situacao	codigo_char	valores		L5-04 r3: A ativo, I inativo (valores.d); outro: NULL com valor_fora_do_dominio e o padrão ativo; inativo sem data de inativação na origem recusa a linha pelo CHECK do destino (4025, visível), como TBPROFIS, até a data presumida condicional (pedido em saida/L5-04.json)
 SHTECNIC	FONE	profissional.telefone_comercial	texto			L5-04 r3: telefone de contato do técnico
 SHTECNIC	CELULAR	profissional.celular	texto			L5-04 r3: celular do técnico
-SHTECNIC	CONSELHO_PROFISSIONAL		inteiro			L5-04 r3: código do conselho sem tabela de domínio na origem (nem sigla, nem FK): não prova o conselho; a inscrição exige conselho_classe_id (catálogo oficial) e não é presumida (decisão em F4-decisoes-destino.md)
-SHTECNIC	NCONSELHO		inteiro			L5-04 r3: número no conselho: fica fora com o conselho (inscrição sem conselho provado)
+SHTECNIC	CONSELHO_PROFISSIONAL		inteiro			L5-04 r5: código do conselho sem domínio na origem (1 linha na imagem de referência, sem sigla nem FK; não há evidência para estimar, ADR 0007/18): guardado com o número no retrato do profissional (profissional_versao.dados); inscrição não presumida (decisão em F4-decisoes-destino.md)
+SHTECNIC	NCONSELHO		inteiro			L5-04 r5: número no conselho guardado no retrato do profissional (profissional_versao.dados) junto do código do conselho
+SHTECNIC	@id	profissional_versao.profissional_id			profissional_versao	L5-04 r5 achado: versão do cadastro do profissional gravado ou adotado
+SHTECNIC	=inclusao	profissional_versao.operacao			profissional_versao	L5-04 r5 achado
+SHTECNIC	#retrato:*	profissional_versao.dados			profissional_versao	L5-04 r5 achado: retrato completo da linha (conselho, número no conselho e endereço do técnico incluídos), sem segredo
+SHTECNIC	#sha256:#retrato:*	profissional_versao.hash_dados			profissional_versao	L5-04 r5 achado: SHA-256 do mesmo JSON
+SHTECNIC	=@data_carga	profissional_versao.ocorrido_em			profissional_versao	L5-04 r5 achado: a origem não data o cadastro; versão registrada na carga (não é vigência)
 SITECNIC	@id:pessoa_fisica	profissional.pessoa_fisica_id			adotar:pessoa_fisica_id	L5-04 r3: o técnico é um PROFISSIONAL (destino principal: a referência ao técnico do laboratório (SILANEXA.TECNICO, pela chave CRM) acha o profissional) da pessoa física gravada ou adotada antes na mesma linha; a pessoa que já é profissional (outro cadastro de técnicos, o cadastro de profissionais) é ADOTADA sem sobrescrever (adotado_existente: um profissional por pessoa, UNIQUE do destino)
 SITECNIC	CPF	pessoa_fisica.cpf	cpf		pessoa_fisica;antes;adotar:cpf	L5-04 r3: pessoa única pelo CPF (adotado_existente se já existe); dígitos verificadores conferidos (inválido: documento_invalido e a pessoa nasce só pelo nome)
 SITECNIC	NOME	pessoa_fisica.nome	texto_nome		pessoa_fisica	L5-04 r3: nome civil; nulo (linha marcadora sem pessoa) recusa SÓ a linha, visível (1048), nunca a tabela inteira
@@ -94,6 +99,11 @@ SITECNIC	FONE	profissional.telefone_comercial	texto			L5-04 r3: telefone de cont
 SITECNIC	CELULAR	profissional.celular	texto			L5-04 r3: celular do técnico
 SITECNIC	APELIDO	profissional.nome_exibicao	texto_nome			L5-04 r3: nome curto em agendas, laudos e listas
 SITECNIC	CRM		inteiro			L5-04 r3: chave de negócio do técnico (conector_origem: é por ela que SILANEXA.TECNICO acha o profissional); a origem não diz o conselho (técnico de laboratório: CRBM, CRF, CRQ...), então não vira inscricao_conselho presumida (decisão em F4-decisoes-destino.md)
+SITECNIC	@id	profissional_versao.profissional_id			profissional_versao	L5-04 r5 achado: versão do cadastro do profissional gravado ou adotado
+SITECNIC	=inclusao	profissional_versao.operacao			profissional_versao	L5-04 r5 achado
+SITECNIC	#retrato:*	profissional_versao.dados			profissional_versao	L5-04 r5 achado: retrato completo da linha (conselho, número no conselho e endereço do técnico incluídos), sem segredo
+SITECNIC	#sha256:#retrato:*	profissional_versao.hash_dados			profissional_versao	L5-04 r5 achado: SHA-256 do mesmo JSON
+SITECNIC	=@data_carga	profissional_versao.ocorrido_em			profissional_versao	L5-04 r5 achado: a origem não data o cadastro; versão registrada na carga (não é vigência)
 TBCLINICA	COD	clinica_assistencial.codigo	codigo_char			L5-04: código de 1 caractere com a caixa preservada; colisão de caixa: codigo_colisao_caixa
 TBCLINICA	NOME	clinica_assistencial.descricao	texto_nome			L5-04: 
 TBCLINICA	SITUACAO	clinica_assistencial.ativo	booleano_ai			L5-04: A ativa, I inativa; vazio fica o padrão (ativa)

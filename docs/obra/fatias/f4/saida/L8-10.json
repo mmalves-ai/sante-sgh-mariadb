@@ -41,6 +41,36 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
    "mudanca": "Pedido B (r4 correção). MFLANGSI agora declarada (rateio_lancamento pelo título agrupado: ref:MFCONPAG.(..)/titulo_pagar se TP_LAN=1, ref:MFCTAREC.(..)/titulo_receber se TP_LAN=2). Ordem: MFLANGSI (756) vem ANTES de MFCTAREC (776) e MFCONPAG (882): declarar MFLANGSI -> MFCTAREC e MFLANGSI -> MFCONPAG. Não há ciclo real: a natureza dos títulos lê o rateio só na ORIGEM (ref:MFLANGSI.(..)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES termina em TBITEDES); se o gerador emitir MFCTAREC/MFCONPAG -> MFLANGSI por essa encadeada, ela não deve virar aresta (só o último passo grava referência). Também depende do pedido 20 da L8-11 (títulos gravados)."
+  },
+  {
+   "arquivo": "db/migracoes/02_ADM (semente do catálogo de parâmetros, parametro_definicao)",
+   "mudanca": "r5-1: definir as chaves fiscal.escrituracao.anoProcessamento, fiscal.escrituracao.mesProcessamento (inteiro), orcamento.anoCompetencia, orcamento.mesCompetencia (inteiro), orcamento.digitaCentroCusto (booleano S/N) e orcamento.regime (lista) no catálogo do produto",
+   "motivo": "SDPARAM e MOPARAM passaram a CARREGAR em parametro_valor (desdobrar + cod:parametro_definicao.chave), ADR 0006; sem a definição no cliente cada item é recusado com codigo_inexistente_destino (visível). A conferência sintética cria as definições no PREPARO_DESTINO."
+  },
+  {
+   "arquivo": "db/migracoes/14_FIN (provedor_nota_municipal) + carga_mapa.py (gravar item do hospital em tabela oficial)",
+   "mudanca": "r5-2: provedor_nota_municipal com item_hospital/motivo_item_hospital (como banco, cfop, cbo; ADR 0006 item 4) e o motor gravando só linhas item_hospital = TRUE em tabela oficial (pedido já registrado em F4-decisoes-destino.md, rodada 5 modelo)",
+   "motivo": "NFSEEMPDESENT (9) e NFSEEMPDESENV (38, com versão do XML) são listas locais de provedores de NFS-e: pelo ADR 0006 (4) entram como itens do hospital, ativos, na tabela do produto. Seguem BLOQUEADAS (descarte_sem_prova:sem_valor) até o mecanismo existir; prova por domínio não cabe (nome e versão do provedor não têm equivalente no domínio). ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+  },
+  {
+   "arquivo": "db/migracoes/14_FIN (modelo) ou decisão do orquestrador",
+   "mudanca": "r5-3: vínculo tipo de credor x tela (tipo_credor_tela: tipo_credor_id, tela_sistema_id, origem) para carregar MFTIPOLANC_TBOPCOES (1312 linhas) por ref:MFTIPOLANC e ref:TBOPCOES (tela_sistema já carregada)",
+   "motivo": "permissao_tipo_lancamento é por perfil e operação; a liberação da origem é por tela, sem perfil: gravar nela daria permissão errada, e não há prova de que a informação continue utilizável. Segue BLOQUEADA até o modelo ter onde guardar a liberação por tela (a API combina tela do perfil x tipo). ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+  },
+  {
+   "arquivo": "db/migracoes/14_FIN (renegociacao) + declaração da L8-10",
+   "mudanca": "r5-4: renegociacao com origem = 'migracao' aceitando devedor, valores, parcelas e primeiro vencimento nulos (CHECK condicionado à origem, como registro_assistencial_rascunho.autor) e vínculo parcela_pagar.renegociacao_id (MFCONPAG.ID_MFCABECRENEGO, L8-12)",
+   "motivo": "MFCABECRENEGO (2 linhas: data e responsável) é histórico financeiro e deve CARREGAR (ADR 0006); o acordo (valores, devedor) não está na origem e inventá-lo violaria o CHECK de total. Com o modelo aceitando a renegociação migrada incompleta, a declaração é: numero=ID, tipo=pagar, renegociado_em=DATA_HORA_RENEGOCIACAO, responsavel por cod:usuario.login (ou nome), estabelecimento @unico. Segue BLOQUEADA até a decisão. ATUALIZAÇÃO r5 (correção): a tabela já CARREGA no destino INTERINO trilha_auditoria (evento com retrato JSON, visível; F4-decisoes-destino.md); este pedido é o destino definitivo, sem bloquear."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_provas) + sentinela (regra de prova)",
+   "mudanca": "r5-5 (motor, genérico): regra de VALOR de prova que compare o RÓTULO da origem por palavra-chave, sem copiar o rótulo real para o código: o SQL da prova devolve, por item, um padrão (ex.: 'VENDA', 'REMESSA') e o comparador aceita quando o rótulo normalizado da origem (maiúsculas, sem acento, espaços colapsados) CONTÉM o padrão (ex.: valores `ID!inteiro,NOME!rotulo_contem`). Com ela, as provas das listas fixas passam a conferir ID e significado; ordem diferente de IDs num cliente vira prova_nao_conferida (alta).",
+   "motivo": "Achado da rodada 5: a prova compara só o ID com a sequência 1..N. Igualdade exata com o rótulo não é possível sem copiar texto da imagem real para o código (regra 5); hoje a troca de significado com o mesmo ID passaria. Tabelas desta fatia: MFTPAPURACAO, SDNATRECEITA, MFTPCONTRIBUICAO."
+  },
+  {
+   "arquivo": "db/migracoes/15_RH (título de contribuição sindical) ou 14_FIN",
+   "mudanca": "r5-6: domínio do TIPO de contribuição sindical (compulsoria, associativa, assistencial, confederativa; tabela tpContribSind do eSocial S-1300) na tabela do título ou do desconto sindical, para que a consumidora (título sindical e S-1300, vazios na referência) leve o tipo pelo de-para de MFTPCONTRIBUICAO",
+   "motivo": "Revisão r5: o domínio tributo_folha.tipo tem só contribuicao_sindical; a prova de MFTPCONTRIBUICAO agora confere código E rótulo dos 4 tipos, mas o produto ainda não guarda o tipo. Não bloqueia: as consumidoras estão vazias na referência."
   }
  ]
 }

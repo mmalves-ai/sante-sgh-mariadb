@@ -95,6 +95,21 @@
    "arquivo": "db/migracoes/03_CAD (trilha F2.2) e carga_mapa.py",
    "mudanca": "tipo_endereco nativo 'residencial' (código do produto) e destino secundário cuja restrição recusa só o secundário (pendência) e não a linha",
    "motivo": "endereço do técnico (CEP, logradouro, número, bairro, IBGE) em endereco_pessoa: exige tipo_endereco_id e CHECK de CEP+município; sem código nativo e com recusa da linha inteira, gravar o endereço faria perder o técnico. Até lá o endereço do técnico fica fora (contato vai para profissional)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mescla do adotar, rodada 5)",
+   "mudanca": "a conciliação da entidade que CRIOU a linha não pode divergir quando uma tabela posterior a ADOTA e a mescla preenche colunas vazias (ex.: profissional criado por SHTECNIC e mesclado por SITECNIC): conferir pelo hash do que a própria tabela gravou, ou recalcular o hash_destino da criadora após a mescla",
+   "motivo": "L5-04 r5: conferir-fatia L5-04 acusa 'conciliação divergiu em profissional (origem 4, destino 2, recusados 2)' nas duas cargas, sem mudança nos arquivos da fatia desde a r4; e o esperado da imagem sintética precisa ser refeito para o motor r5: mescla_conflito_origem_guardada (GETABFUN 1, SITECNIC 3, TBECIV 2), REPACAGN grava 5 (era 4 com 1 recusa 1048) e SIPACAGN grava 2 (era 0 com 2 recusas 1048) — mudança de comportamento do motor r5 a confirmar pelo integrador antes de aceitar o novo esperado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliar/_mesclar)",
+   "mudanca": "REFORÇO r5 do pedido da mescla: quando _mesclar preenche colunas vazias de uma linha criada por OUTRA tabela, recalcular o hash de origem da entidade criadora (self.origem[ent_criadora][chave]) com os valores relidos, ou excluir da soma as colunas preenchidas por mescla",
+   "motivo": "conferir-fatia L5-04 r5 com o esperado refeito: único erro restante é 'conciliação divergiu em profissional (origem 4, destino 2, recusados 2)' nas duas cargas (SITECNIC adota e completa o profissional criado por SHTECNIC, mescla_preenchidas=2); contagens batem (2 + 2 = 4), só a soma de controle diverge"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "destino secundário cuja restrição recusa só o secundário (pendência) e não a linha",
+   "motivo": "r5 achado: endereço do técnico hoje fica no retrato (profissional_versao.dados); com a regra, declarar endereco_pessoa (tipo_endereco residencial por antes;adotar:codigo) sem risco de perder o técnico pelo CHECK de CEP + município"
   }
  ],
  "aplicado_pela_fatia": [

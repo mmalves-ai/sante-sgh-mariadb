@@ -115,6 +115,41 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (M3)",
    "mudanca": "agregado do grupo pelo ÚLTIMO da ordem da chave (ex.: #grupo_ultimo:ID_PRSITDOCUMENTO)",
    "motivo": "documento_prontuario.situacao_documento_prontuario_id = situação atual (último evento); hoje fica a do primeiro e o histórico completo está nos eventos"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (registro_assistencial_rascunho) ou conector/sante_conector/carga_mapa.py (conciliar)",
+   "mudanca": "r5: respostas JSON NOT NULL DEFAULT ('[]') no rascunho, OU conciliação que exclua da soma de controle a coluna gravada por complementa de outra tabela",
+   "motivo": "levar as respostas em edição (PREVOLPACTMP) para o próprio rascunho; hoje ficam na trilha do rascunho (#grupo_json), sem perda"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "r5: especial de número de negócio pela sequência do destino (próximo número de sequencia_negocio/MAX+1) para registro criado pela migração sem número na origem",
+   "motivo": "prescrição futura de PRPLANPRESC usa hoje 9000000+chave (sem colisão, mas fora da sequência)"
+  },
+  {
+   "arquivo": "docs/obra/fatias/f4/L6-12.md e indice.tsv (fatiar_conector)",
+   "mudanca": "r5: regenerar a fatia (o conferir acusa 'arquivo diferente do gerado' por mudanças compartilhadas do mapa)",
+   "motivo": "orquestrador"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.condicao (PRIORIDADE ALTA)",
+   "mudanca": "r5b: condição por comparação com a data da carga: se:/destino_se: 'COL>@data_carga' e 'COL<=@data_carga' (também no fim da encadeada)",
+   "motivo": "PRCABEC_MONITORIZACAO: encerrada se VIGENCIA_FINAL <= carga, senão ativa; PRPLANPRESC: programada/futura só se DATA_HORA_FINAL_VIGENCIA > carga, senão cancelada/vencida. Hoje a decisão usa a saída efetiva do atendimento (encerrado = encerrada/cancelado); falta o caso do atendimento em curso com vigência já passada"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (verificador) + carga_mapa.py",
+   "mudanca": "r5b: a MESMA coluna da origem declarada mais de uma vez para o mesmo destino com vias diferentes (concorrentes; mesmo pedido da L6-13)",
+   "motivo": "PRCABEC_MONITORIZACAO.responsavel_profissional_id: assistente, senão solicitante (ref:HTATENDIMENTO>ID_TBCBOPRO_SOLICITANTE...), senão o profissional do atendimento (ATCABECATEND.ID_TBCBOPRO_ATENDIMENTO); hoje sem assistente a linha recusa (1048)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação) — PRIORITÁRIO",
+   "mudanca": "r5b: coluna regravada por destino 'complementa' de OUTRA tabela sai da soma de controle da entidade do pai (registro_assistencial_rascunho.respostas, gravada por PREVOLPACTMP)",
+   "motivo": "a declaração já grava as respostas no PRÓPRIO rascunho (ADR 0006, 2); a conferência da L6-12 diverge SÓ nessa entidade (conferido false, origem 5, destino 4, recusados 1) até isso entrar"
+  },
+  {
+   "arquivo": "domínio do prontuário (contrato de resposta do registro) ou conector",
+   "mudanca": "r5b: converter a lista do grupo (#grupo_json com ID_RESPOSTA, SEQ, ORDEM, RESPALFA, RESPVALOR, RESPDATA, RESPHORA, RESPSNAO, UNIDRESP, CONTEVOL...) ao contrato de resposta do registro (campo do modelo pela opção/pergunta)",
+   "motivo": "o rascunho já abre com as respostas, mas no formato da origem; a tela precisa delas no contrato para finalizar"
   }
  ]
 }

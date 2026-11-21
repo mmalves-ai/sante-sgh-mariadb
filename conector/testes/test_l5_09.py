@@ -92,10 +92,18 @@ class L509(unittest.TestCase):
         self.assertFalse(set(l5_09.SEM_CARGA) & set(l5_09.BLOQUEADAS))
         for t, (causa, motivo) in l5_09.SEM_CARGA.items():
             # sem carregador de catálogo trabalhista, nenhum descarte pode depender dele
-            self.assertIn(causa, ("mecanismo_do_produto", "duplicado"), t)
+            # rodada 5 (ADR 0006, item 4): listas legais como catálogo oficial ligado pelo código no consumidor
+            self.assertIn(causa, ("catalogo_oficial", "mecanismo_do_produto", "duplicado"), t)
             self.assertNotIn("carregador oficial", motivo, t)
             self.assertNotIn("de-para codigo_esocial", motivo, t)
-        self.assertEqual(l5_09.BLOQUEADAS["FPMOTDESLIG"][0], "catalogo_oficial_faltante")
+        self.assertEqual(l5_09.BLOQUEADAS["FPMOTDESLIG"][0], "mecanismo_pedido")
+        # rodada 5, revisão: o que a sintética diz é o que sem_carga.tsv diz (bloqueada até r5-1 ou r5-2)
+        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
+        for t, (causa, pedido) in l5_09.BLOQUEADAS.items():
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", causa), t)
+            self.assertTrue(sc[t]["motivo"].startswith("BLOQUEADA até o pedido %s (saida/L5-09.json)" % pedido), t)
+        self.assertIn("causa_demissao_id", sc["FPRESC_CAUSA"]["motivo"])
+        self.assertIn("RETIRADA", sc["FPRESC_CAUSA"]["motivo"])
 
     def test_codigo_da_situacao_preserva_caixa(self):
         cols = {c["destino"]: c for c in self.plano["FPSIT_FUNC"]["colunas"]["situacao_colaborador"]}
@@ -110,14 +118,15 @@ class L509(unittest.TestCase):
         self.assertEqual(sentinela.aplicar("texto", "   ")[0], None)
         self.assertEqual(sentinela.aplicar("texto_nome", "  Tipo   com  espaços  ")[0], "Tipo com espaços")
 
-    def test_causa_de_demissao_descartada_com_motivo(self):
+    def test_causa_de_demissao_aguarda_r5_2_com_motivo(self):
         import csv
         with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L5-09.tsv", encoding="utf-8") as f:
             decl = [r for r in csv.DictReader(f, delimiter="\t")]
         causa = [r for r in decl if (r["tabela"], r["coluna"]) == ("FPTIPORESC", "ID_FPRESC_CAUSA")]
         self.assertEqual(len(causa), 1)
         self.assertEqual(causa[0]["destino"], "")
-        self.assertIn("DESCARTE", causa[0]["motivo"])
+        self.assertIn("NÃO carregada até o pedido r5-2", causa[0]["motivo"])
+        self.assertIn("causa_demissao_id", causa[0]["motivo"])
 
     @unittest.expectedFailure
     def test_depara_codigo_esocial_filtra_fonte_e_versao(self):

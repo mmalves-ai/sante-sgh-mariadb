@@ -70,8 +70,6 @@ class FatiaL512(unittest.TestCase):
         """Coluna NOT NULL que aguarda o motor ou o modelo: fora do plano, com o motivo e o pedido (recusa 1364)."""
         p = {x["tabela"]: x for x in carga_mapa.planejar(self.m, set(FATIA))}
         faltam = {"FPTPEVENTOAUT_TBEMPHOS": ("lancamento_automatico_rubrica", "rubrica_id")}
-        for t in l5_12.INCIDENCIAS:
-            faltam[t] = ("incidencia_rubrica", "codigo_incidencia_rubrica_id")
         for t, (dt, dc) in faltam.items():
             self.assertNotIn(dc, {c["destino"] for c in p[t]["colunas"][dt]}, t)
             self.assertTrue(any(d["tabela"] == t and not d["destino"] and "AGUARDA" in d["motivo"] for d in self.decl), t)
@@ -98,6 +96,15 @@ class FatiaL512(unittest.TestCase):
         comp = {c["destino"]: c for c in p["FPREMESSA"]["colunas"]["competencia_folha"]}
         self.assertEqual((comp["aberta_em"]["coluna"], comp["fechada_em"]["coluna"]), ("DTA_INI_APUR", "DTA_FIN_APUR"))
         inc = {t: {c["destino"]: c for c in p[t]["colunas"]["incidencia_rubrica"]} for t in l5_12.INCIDENCIAS}
+        # rodada 5 (correção): tributo literal na coluna do modelo; código pelo cod: composto (tributo, código);
+        # vigência = início da rubrica gravada (ADR 0007, 16), nunca a data da carga
+        for t, trib in (("FPRUBRICAFGTS_FPEVENTO", "fgts"), ("FPRUBRICAINSS_FPEVENTO", "inss"),
+                        ("FPRUBRICAIRRF_FPEVENTO", "irrf"), ("FPRUBRICASIND_FPEVENTO", "contribuicao_sindical")):
+            self.assertEqual(inc[t]["tributo"]["coluna"], "=" + trib)
+            self.assertEqual(inc[t]["codigo_incidencia_rubrica_id"]["coluna"], "ID_" + t[:-len("_FPEVENTO")])
+            self.assertEqual(inc[t]["vigencia_inicio"]["coluna"], "ID_FPEVENTO")
+        self.assertFalse(any(c["coluna"] == "@vigencia_carga" and c["destino"].startswith("incidencia_rubrica.")
+                             for c in self.decl))
         self.assertEqual(inc["FPRUBRICAFGTS_FPEVENTO"]["tributo_folha_id"]["coluna"], "=fundo_garantia")
         self.assertEqual(inc["FPRUBRICAIRRF_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "tipo"))
         self.assertEqual(inc["FPRUBRICAINSS_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "codigo"))

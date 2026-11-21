@@ -118,6 +118,9 @@ FORMAS = {
 NOVAS_R3 = {"TBCOOPER": "COD", "TBINDPRO": "CONV,PROCTO,DATA", "FCPORANE": "TAB,PORTE,DATA_PORTE"}
 CARREGADAS = ("RPRENDISENTO", "RPTIPOPRESTADOR", "TBCLASSI", "RPEMPCALCIMP", "RPEVENTO", "RPINTEVE", "RPPARUSUEMP",
               "RPRPA", "SIORCAME", "SIEXAORC") + tuple(NOVAS_R3) + ("SIREFCON",)
+# R5 (ADR 0006): listas de opções carregadas como opções de um parâmetro de lista (parametro_opcao)
+LISTAS_R5 = ("TBCONSBRASINATIVO", "TBCONSIDCALCVLR", "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD")
+CARREGADAS = CARREGADAS + LISTAS_R5
 COM_DADOS = CARREGADAS + ("RPRPA_TBCBOPRO",)  # intermediária da referência encadeada do RPA (descarte pedido)
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
@@ -253,6 +256,10 @@ DT = datetime.date
 
 
 def linhas(r, ins):
+    # R5 (ADR 0006): cada lista com duas opções e uma terceira sem nome (só espaços: 1048, recusada)
+    for t in LISTAS_R5:
+        for i, nome in ((1, "Opção exemplo um"), (2, "Opção  exemplo dois"), (3, "   ")):
+            _ins(ins, t, ID=i, NOME=nome)
     for tab, cols in COLUNAS.items():
         if tab not in COM_DADOS:
             for i in (1, 2):
@@ -405,4 +412,12 @@ def esperado():
     e["SIREFCON"] = {"gravados": 2, "pendencias": {"escolha_pelo_menor": 1, "pai_inexistente": 2,
                                                    "restricao_destino_4025": 2, "valor_fora_do_dominio": 1,
                                                    "vigencia_sem_fonte": 4}}
+    # R5 (ADR 0006): cada lista grava 2 opções; a 3 só espaços recusa (1048). O módulo faturamento e a definição
+    # do parâmetro: a 1ª lista na ordem do mapa cria os dois na 1ª linha e a 2ª linha os adota (2); as outras adotam
+    # o módulo já na 1ª linha (3)
+    for t in LISTAS_R5:
+        e[t] = {"gravados": 2, "pendencias": {"restricao_destino_1048": 1,
+                                              "adotado_existente": 2 if t == "TBCONSBRASINATIVO" else 3}}
+    # rodada 5 (ADR 0007, item 20): a adoção da pessoa jurídica MESCLA; o conflito guarda o valor da origem
+    e["TBCOOPER"]["pendencias"]["mescla_conflito_origem_guardada"] = 1
     return e

@@ -152,16 +152,6 @@ GELANTRA	VLRMED	movimento_estoque.custo_unitario	decimal_nao_negativo		movimento
 GELANTRA	ID_GECADTRA	movimento_estoque.documento_estoque_id	chave_origem		ref:GECADTRA;movimento_estoque	L7-05 r3: documento de transferência
 GELANTRA	@id	movimento_estoque.documento_estoque_item_id			movimento_estoque	L7-05 r3: item do documento que gerou o movimento
 GELANTRA	ID_GECADTRA	movimento_estoque.usuario_id	chave_origem		ref:GECADTRA>USUARIO>TBUSERS;movimento_estoque	L7-05 r3: quem lançou = usuário do documento; sem usuário: NOT NULL recusa a linha (visível)
-GECOMPRA	ITEM					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	DATA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	FORN					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	NF					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	DOC					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	QTDE					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	UNIT					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	CUSTO					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	MARCA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
-GECOMPRA	VENDA					L7-05: descarte pedido (duplicado): histórico de compra derivado das notas de entrada (GELANNFS -> nota_entrada_item) e dos pedidos (GELANPED -> pedido_compra_item)
 GEKONCDC	ANO					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
 GEKONCDC	MES					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
 GEKONCDC	CDC					L7-05 r4: consumo por centro de custo somado por ano, mês, centro de custo e insumo (agrupar: no destino principal): coluna lida (agrupamento, soma ou retrato do grupo; a linha da origem fica no conector_origem)
@@ -190,9 +180,6 @@ GECTRVMM	ITEM	lote_insumo.insumo_id	chave_origem		ref:GEITENS	L7-05 r3 (conferid
 GECTRVMM	LOTE	lote_insumo.numero_lote	texto			L7-05 r3 (conferidor): número do lote (mesma regra da GEVALMEM, para a adoção casar)
 GECTRVMM	LOTE	lote_insumo.validade	data		ref:GEVALMEM.(ITEM,LOTE)=(ITEM,LOTE)@validade	L7-05 r3 (conferidor): validade do lote como gravada pela GEVALMEM (o que o cliente vê); lote em mais de um local: pai_ambiguo (média, informativa: a adoção pelo insumo e número resolve o lote); sem par: pai_inexistente e, sem lote a adotar, recusa
 GECTRVMM	DATA		data			L7-05 r3 (conferidor): não carregada: data da dispensação = a do movimento de saída (GELANSAI) a que o lote pertence
-GECADTER	NOME					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
-GECADTER	NASC					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
-GECADTER	COD					L7-05: descarte pedido (sem_valor): 5 terceiros só com nome e nascimento, sem documento nem finalidade; o terceiro do produto exige pessoa identificada; os terceiros das vendas vêm de GEINFVENEXT
 GEHORMED	@estabelecimento	horario_padrao_dose.estabelecimento_id			horario_padrao_dose	L7-05 r3 (conferidor): horário padrão do ESTABELECIMENTO (grade_horario_unidade_id nulo = padrão do estabelecimento); a origem não traz estabelecimento
 GEHORMED	#item	horario_padrao_dose.horario	hora_hhmm		horario_padrao_dose;desdobrar:H11=1|1,H21=2|1,H22=2|2,H31=3|1,H32=3|2,H33=3|3,H41=4|1,H42=4|2,H43=4|3,H44=4|4,H61=6|1,H62=6|2,H63=6|3,H64=6|4,H65=6|5,H66=6|6,H81=8|1,H82=8|2,H83=8|3,H84=8|4,H85=8|5,H86=8|6,H87=8|7,H88=8|8,H121=12|1,H122=12|2,H123=12|3,H124=12|4,H125=12|5,H126=12|6,H127=12|7,H128=12|8,H129=12|9,H1210=12|10,H1211=12|11,H1212=12|12	L7-05 r3 (conferidor): destino revisto (F4-decisoes-destino.md): a grade antiga é por NÚMERO DE DOSES AO DIA, coluna H<doses><posição>, o mesmo grão de horario_padrao_dose (o padrão por frequência exigiria inventar a frequência). Uma linha por coluna preenchida; horário HHMM inteiro (0 = 00:00, válido na grade de 4/4h); inválido: hora_invalida e sem linha; nenhuma coluna válida: sem_item_a_gravar
 GEHORMED	#rotulo	horario_padrao_dose.doses_por_dia			horario_padrao_dose	L7-05 r3 (conferidor): 1.ª parte do rótulo: doses ao dia (o 1.º número do nome da coluna)
@@ -247,3 +234,25 @@ GEDESPDS	DESCRICAO	pedido_compra_item.descricao_servico	texto_longo			L7-05: esp
 GEDESPDS	ANO		inteiro			L7-05: parte da referência ao item
 GEDESPDS	DOC		inteiro			L7-05: parte da referência ao item
 GEDESPDS	SEQ		inteiro			L7-05: parte da referência ao item
+GECADTER	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	L7-05 r5 (ADR 0006): retrato COMPLETO da linha (todas as colunas, sem segredo): terceiro só com nome e nascimento; o administrador o cadastra como terceiro_destinatario a partir daqui (antes: descarte sem_valor, revogado)
+GECADTER	=@data_carga	trilha_auditoria.ocorrido_em				L7-05 r5 (ADR 0006): a origem não data a linha: momento da inclusão pela migração (não é vigência)
+GECADTER	=inclusao	trilha_auditoria.acao				L7-05 r5 (ADR 0006): natureza do registro na trilha
+GECADTER	=terceiro_destinatario	trilha_auditoria.entidade				L7-05 r5 (ADR 0006): entidade do produto a que o registro se refere
+GECADTER	=terceiro da origem sem documento: aguarda identificação para virar terceiro_destinatario	trilha_auditoria.motivo				L7-05 r5 (ADR 0006): o que o retrato guarda
+GECADTER	NOME		texto_nome			L7-05 r5 (ADR 0006): no retrato (o terceiro do produto exige pessoa identificada e finalidade, que a origem não tem)
+GECADTER	NASC		data			L7-05 r5 (ADR 0006): no retrato
+GECADTER	COD		inteiro			L7-05 r5 (ADR 0006): no retrato (código do terceiro na origem)
+#GECOMPRA	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria;principal	L7-05 r5 (ADR 0006): retrato COMPLETO da linha (todas as colunas, sem segredo): histórico de compra por insumo (data, fornecedor, nota, quantidade, unitário, custo, marca, venda) na trilha do insumo, consultável no produto; antes descarte duplicado sem prova de que notas e pedidos o reproduzem linha a linha | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	DATA	trilha_auditoria.ocorrido_em	data			L7-05 r5 (ADR 0006): data da linha na origem | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	=operacao	trilha_auditoria.acao				L7-05 r5 (ADR 0006): natureza do registro na trilha | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	=insumo	trilha_auditoria.entidade				L7-05 r5 (ADR 0006): entidade do produto a que o registro se refere | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	ITEM	trilha_auditoria.entidade_id	chave_origem		ref:GEITENS	L7-05 r5 (ADR 0006): insumo comprado (L7-07); nunca visto: NULL com pai_inexistente, a linha fica | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	=histórico de compra do insumo na origem	trilha_auditoria.motivo				L7-05 r5 (ADR 0006): o que o retrato guarda | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	FORN		inteiro			L7-05 r5 (ADR 0006): no retrato (fornecedor) | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	NF		inteiro			L7-05 r5 (ADR 0006): no retrato (nota) | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	DOC		inteiro			L7-05 r5 (ADR 0006): no retrato (documento) | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	QTDE		decimal			L7-05 r5 (ADR 0006): no retrato | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	UNIT		decimal			L7-05 r5 (ADR 0006): no retrato | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	CUSTO		decimal			L7-05 r5 (ADR 0006): no retrato | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	MARCA		texto			L7-05 r5 (ADR 0006): no retrato | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)
+#GECOMPRA	VENDA		decimal			L7-05 r5 (ADR 0006): no retrato (preço de venda da compra) | r5c: PENDENTE até r5b_historico_compra (saida/L7-05.json)

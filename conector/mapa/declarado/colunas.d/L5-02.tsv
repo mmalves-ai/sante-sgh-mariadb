@@ -86,3 +86,10 @@ TBSGHCONEXAO	MODULO	ultimo_acesso_usuario.modulo_sistema_id	chave_origem		ref:TB
 TBSGHCONEXAO	DATA_ULTIMA_CONEXAO	ultimo_acesso_usuario.ultimo_acesso_em	data			L5-02: a origem guarda só a data do último acesso: entra com hora 00:00 (tipar DATE em DATETIME); o produto atualiza com data e hora no próximo acesso
 TBSGHCONEXAO	=migracao	ultimo_acesso_usuario.origem				L5-02: registro trazido pelo conector (distingue do acesso registrado pelo produto)
 TBSGHCONEXAO	ENVIADO		codigo_char			L5-02: sem destino: marcador de envio da rotina de sincronização do sistema antigo, sem significado no produto (o último acesso em si carrega)
+TBMOVTERMSTATUS	#codigo_derivado:ID:30:legado_situacao_	situacao_termo_consentimento.codigo			situacao_termo_consentimento;principal	r5 ADR 0006/0007: situação do termo do cliente como item dele (código legado_situacao_<n>, original guardado no código)
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.descricao	texto			r5 ADR 0006/0007: rótulo do cliente
+TBMOVTERMSTATUS	ATIVO	situacao_termo_consentimento.ativo	booleano_sn			r5 ADR 0006/0007: 
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	texto_nome	valores		r5 ADR 0006/0007: etapa pelo rótulo (ADR 0007, 18); sem par: a seguinte (presumida)
+TBMOVTERMSTATUS	=~pendente	situacao_termo_consentimento.etapa				r5 ADR 0006/0007: rótulo sem par: pendente presumida (valor_presumido, visível)
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	texto_nome	valores		r5 ADR 0006/0007: encerra o termo pelo rótulo; sem par: padrão (falso)
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	texto_nome	valores		r5 ADR 0006/0007: libera o procedimento pelo rótulo; sem par: padrão (falso)

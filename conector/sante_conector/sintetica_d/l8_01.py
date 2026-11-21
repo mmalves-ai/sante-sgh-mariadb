@@ -295,6 +295,13 @@ def linhas(r, ins):
         linha("RPLANEVE_COMPOSICAOBASE", ID=i, ID_RPLANEVE=lanc, PARCELA=1, BASE_CALCULO=D("100.00"), ALIQUOTA=aliq,
               VALOR=valor, VALOR_BRUTO=D("100.00"), ID_EVENTO=1)
 
+    # R5 (ADR 0006): empresas de auditoria (lista de nomes sem CNPJ) -> opções de um parâmetro de lista; 3 só
+    # espaços (1048)
+    for i, nome in ((1, "Auditoria Exemplo Um"), (2, "Auditoria  Exemplo Dois"), (3, "   ")):
+        linha("FCEMPAUDPLANSERV", ID=i, NOME=nome)
+    # R5: numeração do RPA: o último número (41) vira o próximo da sequência (42), série como prefixo
+    linha("RPPARAM", EMPRESA=1, SERIE_RPA="A", NUMERO_RPA=41, HAB_RET_IRRF="S", HABILITA_DATA_PREVISAO="N")
+
     return ESPERADO
 
 
@@ -355,3 +362,19 @@ ESPERADO = {
     "RPLANEVE_COMPOSICAOBASE": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_pendente": 1,
                                                               "restricao_destino_1048": 2}},
 }
+
+# rodada 5 (ADR 0007, item 20): a adoção MESCLA; o conflito mantém o destino e guarda o valor da origem (pendência
+# baixa, uma por linha adotada com valor diferente)
+for _t in ("FAPARUSU", "FCCPSCON", "FCPARUSU", "RPLANEVE"):
+    ESPERADO[_t]["pendencias"]["mescla_conflito_origem_guardada"] = 1
+# R5 (ADR 0006): passam a carregar
+ESPERADO.update({
+    # opções do parâmetro de lista das empresas de auditoria: 3 só espaços (1048); módulo e definição criados pela
+    # 1ª linha e adotados pela 2ª
+    "FCEMPAUDPLANSERV": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 2}},
+    # numeração do RPA: uma sequência (item desdobrado), inativa e presumida
+    "RPPARAM": {"gravados": 1, "pendencias": {"valor_presumido": 1}},
+    # complemento do lançamento: 101, 102 e 103 gravam; 104, 106 e 107 têm o lançamento recusado (pai_pendente);
+    # (a inscrição 303 do lançamento 104 nem chega a ser procurada: o pai recusado decide antes)
+    "RPLANEVE_TBCBOPRO": {"gravados": 3, "pendencias": {"pai_pendente": 3}},
+})

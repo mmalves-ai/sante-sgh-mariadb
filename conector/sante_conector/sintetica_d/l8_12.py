@@ -30,6 +30,10 @@ CREATE TABLE TBCADPAG (COD SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(20), PADR
   ADIANTAMENTO VARCHAR(1), TIPO_PAG VARCHAR(1), RECEBIMENTO_CHEQUE CHAR(1), ID_TBORIGEMRECEBIMENTO INTEGER);
 CREATE TABLE TBTIPOLANCVLR (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(25));
 CREATE TABLE TBTPCONTA (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(15));
+CREATE TABLE TBTIPOCARTAO (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(20));
+CREATE TABLE TBTIPOTAXACARTAO (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(20));
+CREATE TABLE TBTIPOPERMISSAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(40) NOT NULL);
+CREATE TABLE TBTPNATOPENF (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(20) NOT NULL);
 CREATE TABLE TBNATOPE (COD SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(60), ATIVO CHAR(1), ID_TBTPNATOPENF INTEGER);
 CREATE TABLE TBTPOCORBANCOPGTO (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBTABBCO VARCHAR(3) NOT NULL, CODIGO VARCHAR(2),
   NOME VARCHAR(150));
@@ -263,6 +267,11 @@ DADOS = [
 # só ORIGEM lida pelas referências encadeadas (não entram no esperado): grupo (1 despesa, 2 receita, 4 sem
 # classificação) e modelos de documento fiscal (código oficial)
 AUXILIARES = [
+    # rodada 5 (ADR 0006): listas fixas provadas (declarado/provas.tsv), com todos os itens do domínio
+    ("TBTIPOCARTAO", [[1, 'Débito'], [2, 'Crédito']]),
+    ("TBTIPOTAXACARTAO", [[1, 'Percentual'], [2, 'Valor fixo']]),
+    ("TBTIPOPERMISSAO", [[1, 'Sempre'], [2, 'Só no bloqueio'], [3, 'Só no desbloqueio'], [4, 'Nunca']]),
+    ("TBTPNATOPENF", [[1, 'Nenhum'], [2, 'Simples remessa'], [3, 'Venda']]),
     ("TBGRUDES", [[1, "Grupo despesa exemplo", None, 0, "N", None, None, "A", None, "D"],
                   [2, "Grupo receita exemplo", None, 0, "N", None, None, "A", None, "R"],
                   [4, "Grupo sem classe exemplo", None, 0, "N", None, None, "A", None, None]]),

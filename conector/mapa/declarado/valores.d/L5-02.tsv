@@ -79,3 +79,75 @@ TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	Remoto	nuvem	L5-02: modalidad
 TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	Remoto	nuvem	L5-02: repositório pela modalidade
 TBTIPOCERTIFICADO	NOME	tipo_certificado.modalidade	REMOTO	nuvem	L5-02: modalidade pelo nome
 TBTIPOCERTIFICADO	NOME	tipo_certificado.repositorio	REMOTO	nuvem	L5-02: repositório pela modalidade
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	PENDENTE	pendente	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	PENDENTE	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	PENDENTE	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Pendente	pendente	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Pendente	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Pendente	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	EMITIDO	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	EMITIDO	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	EMITIDO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Emitido	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Emitido	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Emitido	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	EMITIDA	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	EMITIDA	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	EMITIDA	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Emitida	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Emitida	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Emitida	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	IMPRESSO	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	IMPRESSO	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	IMPRESSO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Impresso	emitido	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Impresso	0	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Impresso	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	AUTORIZADO	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	AUTORIZADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	AUTORIZADO	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Autorizado	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Autorizado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Autorizado	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	ASSINADO	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	ASSINADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	ASSINADO	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Assinado	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Assinado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Assinado	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	CONSENTIDO	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	CONSENTIDO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	CONSENTIDO	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Consentido	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Consentido	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Consentido	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	ACEITO	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	ACEITO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	ACEITO	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Aceito	assinado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Aceito	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Aceito	1	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	RECUSADO	recusado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	RECUSADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	RECUSADO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Recusado	recusado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Recusado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Recusado	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	NEGADO	recusado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	NEGADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	NEGADO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Negado	recusado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Negado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Negado	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	REVOGADO	revogado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	REVOGADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	REVOGADO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Revogado	revogado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Revogado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Revogado	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	CANCELADO	cancelado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	CANCELADO	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	CANCELADO	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.etapa	Cancelado	cancelado	r5 ADR 0006/0007: etapa pelo rótulo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.final	Cancelado	1	r5 ADR 0006/0007: situação que encerra o termo
+TBMOVTERMSTATUS	DESCRICAO	situacao_termo_consentimento.autoriza_procedimento	Cancelado	0	r5 ADR 0006/0007: só o termo assinado libera o procedimento

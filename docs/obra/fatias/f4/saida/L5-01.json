@@ -90,6 +90,11 @@
    "arquivo": "conector/mapa/tabelas.tsv (gerador) e decisão de RETPAGEN",
    "mudanca": "revisar o descarte de RETPAGEN (duplicado de categoria_agenda): o domínio numérico de tipo de agenda (RETPAGEN.COD) é o que TBAGEUSE.TPAGE, AGCADAGENDA.TPAGEN, RETIPAGE.TPAGEN e SIPACAGD/REPACAGD.TP_AGE usam, e não é o das letras de AGTPAGENDA; carregando RETPAGEN em categoria_agenda com código tipo_agenda_<COD> (o mesmo código derivado que TBAGEUSE grava), a categoria criada por TBAGEUSE passa a ser adotada com o nome real",
    "motivo": "TBAGEUSE cria a categoria tipo_agenda_<n> inativa com descrição provisória; com RETPAGEN carregado antes, o nome vem da origem"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv + valores.d/L5-06.tsv (fatia L5-06, ATPARAMGERAL)",
+   "mudanca": "r5 (revisão): filiação por campo: DIGITAR_FILIACAO vira DUAS linhas de regra_campo_cadastro (campos da mãe e do pai, pares do desdobrar com o mesmo item), com de-para próprio de cada campo: 1 Não = oculto/oculto, 2 Ambos = obrigatorio/obrigatorio, 3 Mãe = obrigatorio/opcional, 4 Pai = opcional/obrigatorio; CNS código 4 (Obrig.atend.SUS) = obrigatorio com tipo/fonte SUS (ou a regra SUS do produto), não opcional",
+   "motivo": "achado alto da revisão: hoje 2 Ambos e 4 Pai viram opcional e a distinção mãe/pai se perde; a prova da L5-01 (código E rótulo) só garante que a lista é a conhecida, a tradução fiel do parâmetro é da L5-06"
   }
  ]
 }

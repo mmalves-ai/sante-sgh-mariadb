@@ -108,6 +108,16 @@
   {
    "arquivo": "plataforma/conector (estabelecimento por empresa)",
    "mudanca": "Pedido 22. Cadastro do estabelecimento por EMPRESA da origem (de-para EMPRESA -> estabelecimento do cliente, no painel): hoje @estabelecimento é o único do cliente e a segunda empresa de MFPARAM/TBINTIMP colide (1062, visível). Decisão provisória registrada em F4-decisoes-destino.md."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_provas) ou modelo (item_hospital em codigo_receita_federal)",
+   "mudanca": "r5-6: TBFINCODRECOL (ADR 0006 item 4). (a) prova de CONTIDO: tipo de prova em que cada código da origem tem de existir no destino (faltando = prova_nao_conferida), sem exigir que o catálogo oficial não tenha códigos a mais (o `continuidade.comparar` atual conta sobrando_no_destino como falha); SQL: SELECT CAST(codigo_receita AS UNSIGNED), ... FROM codigo_receita_federal. (b) código ausente no oficial entra como item do hospital, ativo: o mesmo mecanismo do pedido r5-2 da L8-10 (coluna item_hospital na tabela oficial e o motor gravando só essas linhas).",
+   "motivo": "Achado da rodada 5: o descarte catalogo_oficial não prova que todo código da origem existe no oficial. Sem (a) a prova linha a linha falharia sempre pelos códigos oficiais que o hospital não usa; sem (b) o código local ou antigo não tem onde entrar. Segue DESCARTE catalogo_oficial (aceito pela cobertura) até lá."
+  },
+  {
+   "arquivo": "db/migracoes/14_FIN/40 (codigo_receita_federal) + carga_mapa.py (item do hospital em tabela oficial, o mesmo de r5-2 da L8-10)",
+   "mudanca": "r5-7: codigo_receita_federal com item_hospital/motivo_item_hospital (como banco e cfop) e o motor gravando, de TBFINCODRECOL, só o código que NÃO casa com a fonte oficial (codigo_local ou versao_antiga), ativo pelo ATIVO da origem; o que casa só liga pelo código",
+   "motivo": "ADR 0006, item 4: código local, versão antiga e personalização entram como item do hospital. Hoje TBFINCODRECOL é descarte catalogo_oficial (a cobertura aceita) e MFREFDES guarda o código de receita como texto; sem o carregador oficial, nada confere que o código exista na fonte."
   }
  ]
 }

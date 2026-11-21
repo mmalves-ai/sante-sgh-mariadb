@@ -135,6 +135,27 @@
    "arquivo": "db/migracoes/06_PEP (semente do produto, trilha F2.2)",
    "mudanca": "situação NATIVA de migração em situacao_documento_prontuario: codigo='migrado_sem_assinatura', descricao 'Documento migrado sem assinatura', categoria='aguardando_assinatura', permite_edicao=0, final=0 (como os tipos nativos de migração do estoque)",
    "motivo": "PRASSINATURA_CAB sem evento de assinatura (150 na referência) carrega pelo atendimento (autor = assistente, momento = entrada); a situação vai por cod:situacao_documento_prontuario.codigo com =~migrado_sem_assinatura (declarada). Sem a semente: codigo_inexistente_destino e recusa visível. As situações da origem (PRSITDOCUMENTO, L6-07) têm código = chave da origem e não servem como padrão genérico"
+  },
+  {
+   "arquivo": "db/migracoes (parâmetros do prontuário)",
+   "mudanca": "r5: coluna de referência ao cofre para a senha de liberação da alteração do planejamento (PRPARAM.SENHAALTPLAN)",
+   "motivo": "ADR 0007 (17): a referência do cofre (67 caracteres) não cabe em trilha_auditoria.correlacao; hoje a senha fica sem destino (nunca no retrato)",
+   "atendido": "r5b: contornado sem modelo novo: credencial_integracao (referencia_cofre por #cofre:SENHAALTPLAN, destino_se), como a senha mestra da visita (CVPARAM)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros do produto, trilha F2.2)",
+   "mudanca": "r5b: semear em parametro_definicao (módulo pep) as 158 chaves pep.* listadas no desdobrar de PRPARAM (colunas.d/L6-11.tsv), com tipo, padrão e descrição de negócio; até lá o cod:parametro_definicao.chave dá codigo_inexistente_destino",
+   "motivo": "ADR 0006: os parâmetros globais do prontuário e da prescrição (validação farmacêutica, prescrição de urgência, checagens, percentuais, tolerâncias, impressão) entram como VALOR do parâmetro do produto; a imagem sintética semeia as definições no PREPARO_DESTINO (como a L6-06)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar) ou catálogo de parâmetros (tipo referência)",
+   "mudanca": "r5b: valor de parâmetro que é referência a cadastro (id do destino pela ref: por item do desdobrar, ou parâmetro de tipo referência) para PRPARAM ID_TBCENCUS, ID_PRLAYIMPPRESC, ID_PREVOLUCAO_ITEM_NAO_PADRON, ID_PREVOLUCAO_INTERCORRENCIA, ID_PREVOLUCAO_RAC, ID_EVOLFICADM, ID_EVOLLAUDOINT, ID_EVOLANTIMI, ID_PRPARTAMPADPRESC, ID_PRTPREQUISICAO, ID_PRCAB_IDENTIFIC_PAC, ID_PRVALIDARMEDDUPLICPRESC, ID_PRTIPONOTIFICACAO*, COD_PRFICHAREL_*; e a hora HORA_INICIO_VIS_IMP_DADOS_MONI (regra por item)",
+   "motivo": "o id da origem não serve no produto: hoje ficam só no retrato (trilha); com o mecanismo viram parametro_valor como os outros 158"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (modelo, trilha F2.2)",
+   "mudanca": "r5b: vínculo classificacao_filtro_painel_despesa (classificacao_filtro_painel_id, classificacao_despesa_id, UNIQUE dos dois) para PRAGRUP_PRFILTROCLASSIF (ref:PRFILTROCLASSIF e ref:TBCLASSI)",
+   "motivo": "ADR 0006: o critério do filtro do painel por classificação de item precisa continuar no produto; até o vínculo existir a ligação fica só na trilha do filtro (continuidade PENDENTE, não carregada no lugar certo)"
   }
  ]
 }

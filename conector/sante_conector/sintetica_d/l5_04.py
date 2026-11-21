@@ -243,24 +243,27 @@ def linhas(r, ins):
         "TBCLINICA": {"gravados": 3, "pendencias": {"valor_presumido": 4, "codigo_colisao_caixa": 2,
                                                      "valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "FPECIV": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
-        "TBECIV": {"gravados": 6, "pendencias": {"adotado_existente": 3, "restricao_destino_1048": 1}},
+        # r5 (ADR 0007/20): adoção com valor diferente mantém o destino e guarda o da origem (mescla_conflito_origem_guardada)
+        "TBECIV": {"gravados": 6, "pendencias": {"adotado_existente": 3, "restricao_destino_1048": 1,
+                                                  "mescla_conflito_origem_guardada": 2}},
         "GETABFUN": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "adotado_existente": 1,
                                                     "documento_invalido": 2, "catalogo_codigo_inexistente": 1,
-                                                    "restricao_destino_1048": 1}},
+                                                    "restricao_destino_1048": 1, "mescla_conflito_origem_guardada": 1}},
         # técnico: tipo presumido em toda linha lida (4); 101 adota a pessoa e o profissional do técnico da hemoterapia
         # só quando o CPF em DOUBLE já é lido (pedido); 103 inativo sem data recusado pelo CHECK (4025)
         "SITECNIC": {"gravados": 3, "pendencias": {"adotado_existente": 3 if MOTOR_CPF_DOUBLE else 1,
                                                     "documento_invalido": 1, "valor_fora_do_dominio": 1,
-                                                    "valor_presumido": 4, "restricao_destino_4025": 1}},
+                                                    "valor_presumido": 4, "restricao_destino_4025": 1,
+                                                    "mescla_conflito_origem_guardada": 3}},
         # marcador sem pessoa recusa só a linha (1048); inativo sem data (4025); CPF em DOUBLE e CPF inválido
         "SHTECNIC": {"gravados": 2, "pendencias": {"documento_invalido": 1 if MOTOR_CPF_DOUBLE else 2,
                                                     "valor_fora_do_dominio": 1, "valor_presumido": 4,
                                                     "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
         "TBFONTE_PAGADORA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
-        "REPACAGN": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "catalogo_codigo_inexistente": 1,
-                                                    "pai_inexistente": 4, "data_sentinela": 1, "documento_invalido": 1,
-                                                    "restricao_destino_1048": 1}},
-        "SIPACAGN": {"gravados": 0, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2}},
+        # r4 (03_CAD/08): data de nascimento opcional no pré-cadastro: a marcação sem data grava
+        "REPACAGN": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "catalogo_codigo_inexistente": 1,
+                                                    "pai_inexistente": 4, "data_sentinela": 1, "documento_invalido": 1}},
+        "SIPACAGN": {"gravados": 2, "pendencias": {"pai_inexistente": 4}},
         "RESEGUR": {"gravados": 0, "pendencias": dict({"pai_inexistente": 6, "restricao_destino_1048": 3}, **doc)},
         "FAMEDSOL": {"gravados": 0, "pendencias": {"pai_inexistente": 2}},
         # inscrição: 1 e 2 gravam (2 com competência inválida); conselho fora (CRF), UF fora (XX) e CBO fora: catálogo

@@ -132,12 +132,12 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 CARREGADAS = ("GECAPELAMP", "GEDESCOM", "GEGRUPOMP", "GECAPELAMP_GEGRUPOMP", "GEGRUPOS", "GEITEACAODOSE", "GEKITS",
               "GELOCARM", "GEKITRAS", "GEATUALIZASALDO", "GECADTRA", "GEESTINI", "GEGERSEQ", "GELIMLOC",
               "GELANTRA", "GEFECMES", "GEARMLOC", "GECONITL", "GELANESI", "GEDESPDS", "GEHORMED", "GECTRVMM",
-              "GEKONCDC")
-FORMAS_BLOQUEADAS = {
-    'GECADTER': ('VARCHAR', 'DATE', 'INTEGER'),
-    'GECOMPRA': ('INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC'),
-}
-BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
+              "GEKONCDC", "GECADTER")
+# rodada 5 (ADR 0006): GECADTER e GECOMPRA deixam o descarte e carregam na trilha (retrato completo da linha)
+FORMAS_BLOQUEADAS = {}
+# r5c: GECOMPRA PENDENTE (pedido r5b_historico_compra): na imagem, nada esperado no destino
+# r5c: GECOMPRA PENDENTE (pedido r5b_historico_compra): na imagem, nada esperado no destino
+BLOQUEADAS = tuple(FORMAS_BLOQUEADAS) + ("GECOMPRA",) + ("GECOMPRA",)
 
 D = decimal.Decimal
 
@@ -396,6 +396,15 @@ def linhas(r, ins):
     # "gravados" conta as linhas da origem gravadas (4, em 3 grupos: test_l7_05 confere as somas)
     esp["GEKONCDC"] = {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 1}}
     esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 3}}
+
+    # --- rodada 5 (ADR 0006): terceiros só com nome e nascimento e histórico de compra na trilha (retrato completo);
+    # compra do insumo 9 (nunca visto): entidade_id NULL com pai_inexistente, a linha fica
+    for x in [("Terceiro Exemplo Um", datetime.date(1980, 1, 2), 1), ("Terceiro Exemplo Dois", datetime.date(1975, 5, 6), 2)]:
+        ins("GECADTER", list(x))
+    for x in [(1, datetime.date(2025, 3, 5), 10, 100, 1000, D("2.000"), D("5.0000"), D("10.0000"), "Marca exemplo", None),
+              (2, datetime.date(2025, 3, 6), 11, 101, 1001, D("1.000"), D("3.5000"), D("3.5000"), None, D("4.0000"))]:
+        ins("GECOMPRA", list(x))
+    esp["GECADTER"] = {"gravados": 2, "pendencias": {}}
 
     return dict(esp, **{
         "GECAPELAMP": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 1}},

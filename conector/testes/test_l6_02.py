@@ -41,8 +41,12 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.plano["TBFLUXOATEND"]["destinos"], ["evento_senha"])
         # o histórico vai só para a trilha: o segundo destino do mapa (atendimento) criaria atendimentos falsos
         self.assertEqual(self.plano["HTATENDIMENTO"]["destinos"], ["trilha_auditoria"])
-        # tipo de pré-atendimento não é módulo de recepção: descarte (sem_carga.tsv), sem declaração
-        self.assertIn("TBTIPO_ATENDIMENTO", l6_02.DESCARTADAS)
+        # rodada 5 (correção): tipo de atendimento no cadastro de tipos (categoria_atendimento), inativo; nunca
+        # como módulo de recepção
+        self.assertIn("TBTIPO_ATENDIMENTO", l6_02.CARREGADAS)
+        self.assertEqual(self.plano["TBTIPO_ATENDIMENTO"]["destinos"][0], "categoria_atendimento")
+        self.assertNotIn("modulo_recepcao", {c["destino"].split(".")[0] for c in self.mapa["colunas_decl"]
+                                             if c["tabela"] == "TBTIPO_ATENDIMENTO" and c.get("destino")})
 
     def test_obrigatorias_do_destino_cobertas(self):
         obrig = {("TBRECEPCAO", "ponto_recepcao"): {"estabelecimento_id", "codigo", "descricao"},
@@ -141,7 +145,11 @@ class Plano(unittest.TestCase):
         completa = {t for t in fonte if {c["destino"] for c in self.mapa["colunas_decl"] if c["tabela"] == t}
                     >= {"atendimento_conta.conta_hospitalar_id", "atendimento_conta.atendimento_id"}}
         if completa >= {"FCCTAEXT", "RICONTAS"}:
-            return  # fonte declarada: ATCONTA pode ser descarte `duplicado`
+            # fonte declarada: ATCONTA é descarte `duplicado` só com a PROVA derivado declarada (ADR 0006, 1)
+            pv = {x["tabela"]: x for x in self.mapa.get("provas") or []}
+            self.assertEqual((pv["ATCONTA"]["tipo"], pv["ATCONTA"]["chave"]), ("derivado", ["ID_ATCABECATEND", "COD_CONTA"]))
+            self.assertIn("atendimento_conta", pv["ATCONTA"]["sql"])
+            return
         self.assertIn("ATCONTA", sc)
         self.assertEqual(sc["ATCONTA"]["situacao"], "bloqueada")
         self.assertIn("ATCONTA", l6_02.BLOQUEADAS)
@@ -227,7 +235,7 @@ class Sintetica(unittest.TestCase):
 
     def test_ddl_so_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l6_02.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, TABELAS)
+        self.assertEqual(criadas, TABELAS | {"ATCONTA"})   # ATCONTA: só a prova derivado a lê (rodada 5)
 
     def test_acoes_da_l6_01_que_o_evento_usa(self):
         # o esperado do evento supõe as ações da L6-01 (REQUER): letras únicas, 'c' e 'C' distintas, X recusada, Z ausente

@@ -93,6 +93,10 @@ CREATE TABLE FPRUBRICAIRRF_FPEVENTO (ID_FPEVENTO INTEGER NOT NULL, ID_FPRUBRICAI
   (ID_FPEVENTO));
 CREATE TABLE FPRUBRICASIND_FPEVENTO (ID_FPEVENTO INTEGER NOT NULL, ID_FPRUBRICASIND SMALLINT NOT NULL, PRIMARY KEY
   (ID_FPEVENTO));
+CREATE TABLE FPRUBRICAFGTS (ID SMALLINT NOT NULL, NOME VARCHAR(60), COD_FPRUBRICAFGTS VARCHAR(5), PRIMARY KEY (ID));
+CREATE TABLE FPRUBRICAINSS (ID SMALLINT NOT NULL, NOME VARCHAR(60), COD_FPRUBRICAINSS VARCHAR(5), PRIMARY KEY (ID));
+CREATE TABLE FPRUBRICAIRRF (ID SMALLINT NOT NULL, NOME VARCHAR(60), COD_FPRUBRICAIRRF VARCHAR(5), PRIMARY KEY (ID));
+CREATE TABLE FPRUBRICASIND (ID SMALLINT NOT NULL, NOME VARCHAR(60), COD_FPRUBRICASIND VARCHAR(5), PRIMARY KEY (ID));
 CREATE TABLE FPTPEVENTOAUT_TBEMPHOS (ID_FPTPEVENTOAUT SMALLINT NOT NULL, ID_TBEMPHOS SMALLINT NOT NULL,
   LANCAR_TP_EVENTO_AUTOM_FOLHA CHAR(1), PRIMARY KEY (ID_FPTPEVENTOAUT,ID_TBEMPHOS));
 CREATE TABLE PEJUSTIF (ID_JUSTIF INTEGER NOT NULL, COD_EMP INTEGER NOT NULL, COD_JUSTIF INTEGER NOT NULL, NOME
@@ -145,6 +149,8 @@ CREATE TABLE FPPARAMVIG (COD_EMP SMALLINT NOT NULL, DATA_HORA_VIGENCIA TIMESTAMP
 CARREGADAS = ("FPEVENTO", "FPLOTTRIBCAD", "FPREMESSA", "FPRESP", "FPRUBRICAFGTS_FPEVENTO",
               "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO", "FPTPEVENTOAUT_TBEMPHOS",
               "PEJUSTIF", "TBTPTRIBUTO", "FPPARAM", "FPPARAMVIG")
+# listas oficiais da origem (catálogo oficial, nunca gravadas): só a encadeada lê o código guardado nelas
+LISTAS_INCIDENCIA = ("FPRUBRICAFGTS", "FPRUBRICAINSS", "FPRUBRICAIRRF", "FPRUBRICASIND")
 INCIDENCIAS = ("FPRUBRICAFGTS_FPEVENTO", "FPRUBRICAINSS_FPEVENTO", "FPRUBRICAIRRF_FPEVENTO", "FPRUBRICASIND_FPEVENTO")
 PAIS_EXTERNOS = {"FPTP_EVENTO": ["P", "D"], "FPTP_REFER": ["H", "V"], "FPTP_FOLHA": ["1", "2"]}
 PREPARO_PROPRIO = (
@@ -170,7 +176,15 @@ PREPARO_PROPRIO = (
     " ('1000', 'Natureza exemplo', '2018-01-01', 'teste', UTC_TIMESTAMP(3)),"
     " ('1200', 'Natureza exemplo antiga', '2018-01-01', 'teste', UTC_TIMESTAMP(3)),"
     " ('1200', 'Natureza exemplo nova', '2021-01-01', 'teste', UTC_TIMESTAMP(3));"
-    "INSERT IGNORE INTO fpas (codigo_fpas, descricao, criado_em) VALUES ('515', 'FPAS exemplo', UTC_TIMESTAMP(3));")
+    "INSERT IGNORE INTO fpas (codigo_fpas, descricao, criado_em) VALUES ('515', 'FPAS exemplo', UTC_TIMESTAMP(3));"
+    # código de incidência (catálogo oficial, só leitura pelo cod: composto): '11' nos quatro tributos
+    "CREATE TABLE IF NOT EXISTS codigo_incidencia_rubrica (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, tributo"
+    " VARCHAR(30) NOT NULL, codigo_incidencia VARCHAR(5) NOT NULL, descricao VARCHAR(300) NOT NULL, vigencia_inicio DATE"
+    " NULL, versao_fonte VARCHAR(30) NULL, criado_em DATETIME(3) NOT NULL);"
+    "INSERT INTO codigo_incidencia_rubrica (tributo, codigo_incidencia, descricao, vigencia_inicio, versao_fonte,"
+    " criado_em) SELECT x.t, '11', 'Incidencia exemplo', '2018-01-01', 'teste', UTC_TIMESTAMP(3) FROM (SELECT 'fgts' t"
+    " UNION ALL SELECT 'inss' UNION ALL SELECT 'irrf' UNION ALL SELECT 'contribuicao_sindical') x WHERE NOT EXISTS"
+    " (SELECT 1 FROM codigo_incidencia_rubrica c WHERE c.tributo = x.t AND c.codigo_incidencia = '11');")
 
 
 def _dono(tabela):
@@ -215,7 +229,7 @@ def _colunas():
 
 
 COLUNAS = _colunas()
-FATIA = tuple(t for t in COLUNAS if t != "TBEMPHOS")
+FATIA = tuple(t for t in COLUNAS if t != "TBEMPHOS" and t not in LISTAS_INCIDENCIA)
 
 
 def __getattr__(nome):
@@ -284,7 +298,7 @@ TS = datetime.datetime
 
 def linhas(r, ins):
     for tab, cols in COLUNAS.items():
-        if tab not in CARREGADAS and tab != "TBEMPHOS":
+        if tab not in CARREGADAS and tab != "TBEMPHOS" and tab not in LISTAS_INCIDENCIA:
             for i in (1, 2):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
     # justificativa de ponto: 3 sem nome (NOT NULL no destino); 4 repete o código 10 de outra empresa: o UNIQUE(codigo)
@@ -305,10 +319,15 @@ def linhas(r, ins):
                                        TP_EVENTO=tp, TP_REFER=rf, PERC_INC=decimal.Decimal("50.00"), PRIORIDADE=10,
                                        SITUACAO="I" if i == 2 else "A", ID_FPNATRUBRICA=nat,
                                        FORMULA=b"SALARIO * 0.5" if i == 1 else None, FOLHA="S", FERIAS="N"))
-    # incidências: rubricas 1 e 2 gravadas; o código de incidência aguarda o mecanismo (pedido 14): recusa 1364
+    # listas oficiais da origem: 1 código '11' (no catálogo do destino); 2 código '99' (fora: codigo_inexistente_destino)
+    for lst in LISTAS_INCIDENCIA:
+        for i, cod in ((1, "11"), (2, "99")):
+            _ins(ins, lst, **{"ID": i, "NOME": "Incidencia %d" % i, "COD_" + lst: cod})
+    # incidências: rubrica 1 com o código 1; rubrica 2 com o código 2 (fora do catálogo: entra pelo tributo, código
+    # NULL a completar); vigência = início da rubrica gravada
     for t in INCIDENCIAS:
         for i in (1, 2):
-            _ins(ins, t, **_obrig(t, ID_FPEVENTO=i))
+            _ins(ins, t, **_obrig(t, **{"ID_FPEVENTO": i, "ID_" + t[:-len("_FPEVENTO")]: i}))
     # lotação tributária: 1 FPAS 515 no catálogo; 2 FPAS fora do catálogo (codigo_inexistente_destino, NOT NULL recusa)
     for i, fpas in ((1, 515), (2, 999)):
         _ins(ins, "FPLOTTRIBCAD", ID=i, NOME="Lotacao %d" % i, DATA_VIGENCIA_INICIAL=D(2020, 1, i),
@@ -355,18 +374,20 @@ def linhas(r, ins):
                    (19, TS(2024, 3, 1, 10, 0))]:
         _ins(ins, "FPPARAMVIG", **_obrig("FPPARAMVIG", COD_EMP=emp, DATA_HORA_VIGENCIA=q, COD_GPS=2100, COD_CATEG=1))
     esperado = {
-        "PEJUSTIF": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1}},
+        # rodada 5: o código repetido da justificativa não colide mais no destino (modelo); as 5 com descrição gravam
+        "PEJUSTIF": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
         "TBTPTRIBUTO": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "FPEVENTO": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 4, "codigo_inexistente_destino": 1,
                                                   "pai_ambiguo": 1, "restricao_destino_1048": 2}},
         "FPLOTTRIBCAD": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, "restricao_destino_1048": 1}},
-        "FPTPEVENTOAUT_TBEMPHOS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 2, "valor_presumido": 2,
-                                                                "restricao_destino_1364": 2}},
+        # rodada 5: a coluna que recusava com 1364 aceita a linha no modelo atual
+        "FPTPEVENTOAUT_TBEMPHOS": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 2, "valor_presumido": 2}},
         "FPREMESSA": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
         "FPRESP": {"gravados": 2, "pendencias": {"valor_presumido": 4, "catalogo_codigo_inexistente": 1,
                                                 "documento_invalido": 1, "restricao_destino_1048": 2}},
-        "FPPARAM": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 2, "valor_fora_do_dominio": 1,
+        # rodada 5 (ADR 0007, 16): a vigência vem da evidência da linha, sem vigencia_sem_fonte
+        "FPPARAM": {"gravados": 1, "pendencias": {"valor_fora_do_dominio": 1,
                                                  "catalogo_codigo_inexistente": 1, "restricao_destino_1048": 1,
                                                  "pai_pendente": 1}},
         "FPPARAMVIG": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
@@ -374,9 +395,11 @@ def linhas(r, ins):
     # incidências: o tributo é achado depois de TBTPTRIBUTO (arestas de ordem do pedido 15, aplicadas); o código de
     # incidência aguarda o de-para por tributo (pedido 14): a linha é recusada com 1364, visível
     for t in INCIDENCIAS:
-        esperado[t] = {"gravados": 0, "pendencias": {"restricao_destino_1364": 2, "vigencia_sem_fonte": 2}}
-        if t == "FPRUBRICASIND_FPEVENTO":  # sem tributo sindical na lista da origem nem no destino: visível
-            esperado[t]["pendencias"]["codigo_inexistente_destino"] = 2
+        # rodada 5: o modelo dá padrão à coluna e a recusa visível passa a ser o CHECK (4025)
+        # rodada 5 (correção): tributo pela coluna do modelo e código pelo cod: composto; as duas gravam
+        esperado[t] = {"gravados": 2, "pendencias": {"codigo_inexistente_destino": 1}}
+        if t == "FPRUBRICASIND_FPEVENTO":  # sem tributo sindical na lista da origem nem no destino: visível (guia)
+            esperado[t]["pendencias"]["codigo_inexistente_destino"] = 3
     if DONO_EMPRESA:  # o esperado de TBEMPHOS é o da dona (lido dela, sem inserir nada) mais as 3 empresas desta fatia
         dono = MOD_DONO.linhas(random.Random(0), lambda t, v: None).get("TBEMPHOS", {"gravados": 0, "pendencias": {}})
         esperado["TBEMPHOS"] = {"gravados": dono["gravados"] + len(empresas), "pendencias": dict(dono["pendencias"])}

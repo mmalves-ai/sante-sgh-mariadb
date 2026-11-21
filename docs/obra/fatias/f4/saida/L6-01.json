@@ -65,6 +65,12 @@
    "arquivo": "conector/sante_conector/conferencia.py + sintetica.py",
    "mudanca": "Opção da fatia SO_LEITURA = [tabelas]: tabelas criadas na imagem sintética só para as encadeadas lerem (fora de `presentes`, não planejadas nem conciliadas)",
    "motivo": "Não bloqueia. Provar na sintética o caminho ATIVO da regra de impressão (pai na origem: ref:TBCONVEN>COD, ref:TBESPEC>COD, ref:TBUNIDAD>COD); hoje os pais só podem ser PAIS_EXTERNOS e toda regra por critério entra inativa na conferência"
+  },
+  {
+   "arquivo": "motor (carga_mapa.py, mapa.py, cobertura_conector.py)",
+   "mudanca": "motor (carga_mapa._provas, mapa.validar_provas, cobertura_conector.py): prova de tipo `dominio` em provas.tsv para lista fixa cujo conteúdo é domínio de CHECK do produto: `valores` = coluna da lista (código ou nome) e um alvo `<tabela_destino>.<coluna>` (+ a coluna consumidora da origem com depara=valores); confere que TODA linha da lista tem par no de-para de valores do consumidor (ou regra declarada) e que o valor do par está no CHECK da coluna do destino (information_schema.CHECK_CONSTRAINTS); valores do domínio do produto sem linha na origem NÃO contam como sobra",
+   "rodada": 5,
+   "motivo": "correção da rodada 5: TBMOTCANCTP saiu do pedido (2 itens = atendimento e marcação do domínio do escopo; prova derivado por código e rótulo em provas.d). Segue para TBPROCEDPADRAO (4 itens para 7 valores; o consumidor TBPROCED traduz pelo NOME em valores.d/L6-01.tsv): a prova `dominio` confere que todo NOME da lista tem par no de-para do consumidor e que o valor está no CHECK vivo"
   }
  ]
 }

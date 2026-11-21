@@ -23,22 +23,8 @@ import datetime
 import decimal
 
 FORMAS = {
-    'TBTPOBRIGAMAT': ('ID', [
-        ('ID', 'SMALLINT', True), ('DESCRICAO', 'VARCHAR(15)', False),
-    ]),
-    'TBTPPERFILUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(40)', True),
-    ]),
     'TBTPPROFPROC': ('ID', [
         ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(20)', True),
-    ]),
-    'TBTPTRATUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(40)', True),
-    ]),
-    'TBTPCLASSIFUNIBH': ('ID', [
-        ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(60)', True), ('CLASSIFICACAO', 'VARCHAR(60)', True),
-        ('ID_TBTPTRATUNIBH', 'SMALLINT', True), ('ID_TBTPPERFILUNIBH', 'SMALLINT', True),
-        ('ID_TBTPFASEUNIBH', 'SMALLINT', True),
     ]),
     'TBTABDTH': ('ID', [
         ('ID', 'INTEGER', True), ('TAB', 'SMALLINT', True), ('OPE', 'INTEGER', True),
@@ -299,18 +285,24 @@ RPLANRPA_ATIVA = ("RPLANRPA" not in _l8_02.FORMAS
 if RPLANRPA_ATIVA:
     FORMAS['RPLANRPA'] = ('ID_RPRPA,ID_RPLANEVE', [('ID_RPRPA', 'INTEGER', True), ('ID_RPLANEVE', 'INTEGER', True)])
 
+# r5 (ADR 0006, 3): a tabela de mat/med (L8-03) é lida pela condição do acordo (referência licenciada ou própria)
+FORMAS['TBCTRMEM'] = ('COD', [('COD', 'SMALLINT', True), ('NOME', 'VARCHAR(50)', False), ('REF_BRA', 'VARCHAR(1)', False),
+    ('ALT_EST', 'VARCHAR(1)', False), ('REF_SIMP', 'VARCHAR(1)', False), ('GPC', 'VARCHAR(1)', False),
+    ('SITUACAO', 'VARCHAR(1)', False), ('GRAVAR_REFERENCIA_ABC_FARMA', 'CHAR(1)', False)])
+ESPELHO_ITEM = 9501  # item da referência licenciada no espelho padrão da base (copiado no cliente pelo criar_cliente)
 
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TBUSERS", "TBCONVEN_TBTISSPARDEF",
               "TBEMIREF", "TBENTCON", "TBVLRTHM", "TBTIPPLCONV", "TBTISS", "TBVLRDTH",
-              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
+              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM", "TBVLRMEM") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
 # declaração pronta e comentada (BLOQUEADA, motivo na linha); as três primeiras com linhas específicas na imagem
 COMENTADAS = ()  # conferidor r4: TBPERMEM carrega (modelo 12_FAT/13); TBEMIREFMATMED é da L8-04
 COM_LINHAS = ()
 # só lida pela referência encadeada (cadastro de versões TISS da origem, catálogo oficial nunca gravado)
-SO_ORIGEM = ("TBVERSAOTISS",)
-DESCARTES = ("TBTPOBRIGAMAT", "TBTPPERFILUNIBH", "TBTPTRATUNIBH", "TBTPCLASSIFUNIBH",
-             "TBVERSAOBRASIN", "TBVLRMEM")
+SO_ORIGEM = ("TBVERSAOTISS", "TBCTRMEM")
+# r5: TBTPOBRIGAMAT e as listas do campo adicional da guia saíram da fatia (L8-04, dona pelo índice, pedido R5-1)
+# r5 (achado): TBVLRMEM carrega o preço das tabelas PRÓPRIAS (o licenciado vive no espelho)
+DESCARTES = ("TBVERSAOBRASIN",)
 BLOQUEADAS = tuple(t for t in FORMAS if t not in CARREGADAS and t not in SO_ORIGEM)
 
 
@@ -330,7 +322,7 @@ PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"], "TBUSERS": ["AN
                  "TBCLASSI": ["1", "2"], "TBTABTHM": ["1|10", "1|11"],
                  "RECADATE": ["500", "501"], "TBLOCCON": ["1"],
                  "TBTPLANC": ["1", "2"], "TBITEDES": ["1|1|1"],
-                 "TBMATMED": ["1", "2"], "TBCTRMEM": ["1"]}
+                 "TBMATMED": ["1", "2"]}  # r5: TBCTRMEM entra na imagem (lida pela condição do acordo e carregada)
 if RPLANRPA_ATIVA:  # RPA da L8-02 e lançamento de repasse da L8-01
     PAIS_EXTERNOS.update({"RPRPA": ["1", "2"], "RPLANEVE": ["10", "11"]})
 # id de destino dado pela conferência a cada pai externo: 1, 2... na ordem das tabelas (nome) e das chaves
@@ -351,8 +343,11 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
     " VALUES ('4.03.00', 'troca', 'Versao exemplo', '2024-01-01', 'exemplo', UTC_TIMESTAMP(3));"
     # atendimentos já carregados pelo L3 (pais externos RECADATE 500 e 501): o paciente vem da cópia da coluna
     " CREATE TABLE IF NOT EXISTS atendimento (id BIGINT UNSIGNED PRIMARY KEY, paciente_id BIGINT UNSIGNED NULL);"
-    " INSERT INTO atendimento (id, paciente_id) VALUES (%d, 7001), (%d, 7002)" % (
-        _IDS_EXTERNOS[("RECADATE", "500")], _IDS_EXTERNOS[("RECADATE", "501")]))
+    " INSERT INTO atendimento (id, paciente_id) VALUES (%d, 7001), (%d, 7002);"
+    # r5 (ADR 0006, 3): o espelho padrão da base no cliente (criar_cliente): um item da referência licenciada
+    " INSERT INTO item_referencia_matmed (id, fonte_referencia, codigo_referencia, descricao, tipo_produto, criado_em)"
+    " VALUES (%d, 'brasindice', '77', 'Item exemplo da referencia', 'outro', UTC_TIMESTAMP(3))" % (
+        _IDS_EXTERNOS[("RECADATE", "500")], _IDS_EXTERNOS[("RECADATE", "501")], ESPELHO_ITEM))
 
 
 def _falso(tipo, i):
@@ -384,6 +379,20 @@ def linhas(r, ins):
               (1, 3, dt(2025, 3, 1), None, 1, D("7.00"), None, 99, "E"),
               (2, 4, dt(2025, 4, 1), None, 1, D("3.25"), D("1.000"), 1, "Z")]:
         ins("TBPERMEM", list(x))
+    # r5 (ADR 0006, 3): tabela 3 com a referência licenciada: o item liga ao espelho pelo código (77, no espelho:
+    # gravado sem pendência; 78, fora do espelho: espelho_codigo_inexistente e sem item nenhum, CHECK 4025); o item
+    # da origem (ID_TBMATMED 55, inexistente) nem é consultado
+    _ins(ins, "TBCTRMEM", COD=1, NOME="Tabela exemplo propria", REF_BRA="N", REF_SIMP="N", SITUACAO="A")
+    _ins(ins, "TBCTRMEM", COD=3, NOME="Tabela exemplo referencia", REF_BRA="S", REF_SIMP="N", SITUACAO="A")
+    for x in [(1, 77, dt(2025, 5, 1), D("10.0"), 3, None, None, 55, "I"),
+              (2, 78, dt(2025, 5, 1), D("12.0"), 3, None, None, 55, "I")]:
+        ins("TBPERMEM", list(x))
+    # r5 (ADR 0006, 3; achado): valores por tabela e data: 1 e 2 tabela própria (gravados numa edição de migração da
+    # tabela, agrupada); 3 tabela com referência licenciada (pulada: licenca_nao_comprovada); 4 sem valor (CHECK 4025)
+    for tab_, cod, d, val, item in [(1, 10, dt(2025, 1, 1), 12.5, 1), (1, 10, dt(2025, 2, 1), 13.0, 1),
+                                     (3, 20, dt(2025, 1, 1), 9.0, 2), (1, 11, dt(2025, 1, 1), None, 2)]:
+        _ins(ins, "TBVLRMEM", TAB=tab_, COD=cod, DATA=d, VALOR=val, PFB="N", ID_TBVERSAOBRASIN=1, ID_TBMATMED=item,
+             VALOR_PFB_BRASINDICE=None, VALOR_PMC_BRASINDICE=None)
     for tab in BLOQUEADAS:
         if tab in COM_LINHAS:
             continue
@@ -560,8 +569,10 @@ def linhas(r, ins):
                                                    "valor_presumido": 4}},
     })
     # conferidor r4: preço negociado de mat/med pelo item de referência
-    esperado["TBPERMEM"] = {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 1,
-                                                          "valor_fora_do_dominio": 1}}
+    # r5: + item ligado ao espelho (gravado) e código fora do espelho (espelho_codigo_inexistente + CHECK 4025)
+    esperado["TBPERMEM"] = {"gravados": 4, "pendencias": {"pai_inexistente": 1, "restricao_destino_4025": 2,
+                                                          "valor_fora_do_dominio": 1, "espelho_codigo_inexistente": 1}}
+    esperado["TBVLRMEM"] = {"gravados": 2, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_4025": 1}}
     if RPLANRPA_ATIVA:
         esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     return esperado

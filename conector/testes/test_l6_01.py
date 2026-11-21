@@ -22,7 +22,7 @@ class PlanoL601(unittest.TestCase):
 
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(len(FATIA), 19)
-        self.assertEqual((len(l6_01.CARREGADAS), len(l6_01.DESCARTADAS), len(l6_01.SEM_CARGA)), (15, 4, 0))
+        self.assertEqual((len(l6_01.CARREGADAS), len(l6_01.DESCARTADAS), len(l6_01.SEM_CARGA)), (18, 1, 0))
         self.assertEqual(set(self.plano), set(l6_01.CARREGADAS))
 
     def test_ordem_do_mapa_pai_antes(self):
@@ -108,13 +108,24 @@ class PlanoL601(unittest.TestCase):
 
     def test_descartes_com_causa_de_produto(self):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        causas = {"TBMOTEXC": "duplicado", "TBMOTCANCMOD": "sem_valor",
-                  "TBMOTCANCTP": "mecanismo_do_produto", "TBPROCEDPADRAO": "mecanismo_do_produto"}
+        causas = {"TBMOTCANCTP": "mecanismo_do_produto"}
         self.assertEqual(set(causas), set(l6_01.DESCARTADAS))
         for t, causa in causas.items():
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
             self.assertTrue(sc[t]["motivo"], t)
         self.assertFalse(set(l6_01.SEM_CARGA) & set(sc))
+        self.assertFalse({"TBMOTEXC", "TBMOTCANCMOD", "TBPROCEDPADRAO"} & set(sc))   # rodada 5: carregam (ADR 0006)
+
+    def test_motivo_do_recibo_e_modulo_do_cancelamento_carregam(self):
+        cs = self.cols("TBMOTEXC", "motivo_exclusao_registro")
+        self.assertEqual((cs["codigo"]["coluna"], cs["escopo"]["coluna"]), ("#codigo_derivado:COD:30:rc", "=documento"))
+        # rodada 5 (revisão): o módulo do escopo de cancelamento é lista do hospital, nunca módulo de recepção
+        self.assertNotIn("modulo_recepcao", {c["destino"].split(".")[0] for c in self.m["colunas_decl"]
+                                             if c["tabela"] == "TBMOTCANCMOD" and c.get("destino")})
+        cs = self.cols("TBMOTCANCMOD", "parametro_definicao")
+        self.assertEqual(cs["chave"]["coluna"], "=migracao.modulo_escopo_cancelamento")
+        cs = self.cols("TBPROCEDPADRAO", "parametro_definicao")
+        self.assertEqual(cs["chave"]["coluna"], "=migracao.classificacao_procedencia")
 
     def test_exclusao_de_atendimento_vai_para_a_trilha(self):
         cs = self.cols("REEXCATE", "trilha_auditoria")
@@ -202,3 +213,20 @@ class ImagemL601(unittest.TestCase):
     def test_ddl_tem_as_19_tabelas(self):
         criadas = {x.split()[2] for x in l6_01.DDL.split(";") if x.strip().startswith("CREATE TABLE")}
         self.assertEqual(criadas, set(l6_01.CARREGADAS) | set(l6_01.NAO_CARREGADAS))
+
+
+    def test_prova_das_listas_fixas(self):
+        """Lista fixa descartada só COM prova derivado (ADR 0006, 1): código e rótulo; cada valor equivalente está no
+        CHECK do domínio do produto (DDL do modelo)."""
+        import glob, pathlib, re
+        raiz = pathlib.Path("/app") if pathlib.Path("/app/db/migracoes").exists() else mapa.RAIZ
+        pv = {x["tabela"]: x for x in mapa.carregar_execucao().get("provas") or []}
+        sqls = "\n".join(open(f, encoding="utf-8").read() for f in glob.glob(str(raiz / "db/migracoes/*/*.sql")))
+        for t, ck in {'TBMOTCANCTP': 'ck_motivo_cancelamento_operacao_escopo_operacao'}.items():
+            self.assertEqual((pv[t]["tipo"], pv[t]["chave"], [v[0] for v in pv[t]["valores"]]), ("derivado", ["ID"], ["ID", "NOME"]))
+            m = re.search(r"CONSTRAINT %s CHECK \((.*?)\),?\n" % ck, sqls)
+            self.assertTrue(m, ck)
+            vals = re.findall(r"'(\w+)' AS valor_produto", pv[t]["sql"])
+            self.assertTrue(vals, t)
+            for v in vals:
+                self.assertIn("'%s'" % v, m.group(1), (t, v))

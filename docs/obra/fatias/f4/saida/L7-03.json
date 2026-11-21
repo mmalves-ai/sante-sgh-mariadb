@@ -111,6 +111,18 @@
    "arquivo": "fatia L7-04 (sem_carga.tsv linhas SIRESVAR e SIHISTVLREFELEMENTO)",
    "mudanca": "Reabrir SIRESVAR (valor digitado de cada variável por resultado: variável por ref:SIVARFORMULA pela CODIGOVARFORMULA, resultado pela SILANEXA) e rever o motivo do descarte de SIHISTVLREFELEMENTO.",
    "motivo": "O motivo de SIRESVAR ('a variável não migra, SIVARFORMULA descartada') deixou de valer; o de SIHISTVLREFELEMENTO ('a vigente vem de faixa_referencia') só vale depois do pedido 15."
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT (modelo)",
+   "rodada": "r5",
+   "mudanca": "tabela de modelos de comunicação alternativos da interface (interface_equipamento_modelo: interface, modelo, ativo)",
+   "motivo": "SITPEQV_SITPEQVMODELO carrega hoje na trilha da interface com o retrato; com a tabela, as ligações viram dado operacional (a escolhida continua em interface_equipamento.modelo_comunicacao_id)",
+   "atendido": false
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT (DDL para a trilha F2.2) + conector/mapa/declarado/provas.tsv",
+   "mudanca": "(a) Vínculo interface_equipamento_modelo (interface_equipamento_id, modelo_comunicacao_id, escolhido BOOLEAN; UNIQUE par) para as ligações N:N; SITPEQV_SITPEQVMODELO passa a carregar nele (a trilha fica secundária com o retrato). (b) Enquanto isso, prova em provas.tsv: `SITPEQV\tderivado\tCODIGO\tID_SITPEQV_SITPEQVMODELO!inteiro\tmodelo escolhido pertence às ligações da interface` com provas.d/SITPEQV.sql: SELECT ci.chave_original, CAST(cl.chave_original AS UNSIGNED) FROM interface_equipamento ie JOIN {ctl}.conector_origem ci ON ci.tabela_origem='SITPEQV' AND ci.entidade_destino='interface_equipamento' AND ci.id_destino=ie.id AND ci.excluido_em IS NULL JOIN trilha_auditoria ta ON ta.entidade='interface_equipamento' AND ta.entidade_id=ie.id JOIN {ctl}.conector_origem cl ON cl.tabela_origem='SITPEQV_SITPEQVMODELO' AND cl.id_destino=ta.id AND cl.excluido_em IS NULL JOIN {ctl}.conector_origem cm ON cm.tabela_origem='SITPEQVMODELO' AND cm.id_destino=ie.modelo_comunicacao_id AND cm.chave_original=JSON_UNQUOTE(JSON_EXTRACT(ta.dados_depois,'$.ID_SITPEQVMODELO'))",
+   "motivo": "Achado r5: as 6 ligações da origem hoje ficam só na trilha (operacao, data pela evidência, retrato); a conciliação de que o modelo escolhido pertence às ligações da interface está só na sintética (test_l7_03.test_ligacao_interface_modelo_r5). provas.tsv é compartilhado."
   }
  ]
 }

@@ -157,11 +157,38 @@ class Sintetica(unittest.TestCase):
         for t, e in esp.items():
             pref = ("restricao_destino_", "pai_pendente")
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
+            recusas += l6_08.RECUSA_PAI_INEXISTENTE.get(t, 0)  # complementa sem o pai: a linha é recusada
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
 
     def test_ddl_so_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l6_08.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, NA_IMAGEM)
+        self.assertEqual(criadas, NA_IMAGEM | set(l6_08.PAIS_NA_IMAGEM))
+
+
+class Complementos(unittest.TestCase):  # revisão 2: o complemento é provado com sucesso e o N:1 fica na imagem
+    def test_imagem_traz_o_leiaute_e_o_tipo_repetido(self):
+        vistos = {}
+        l6_08.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(list(v)))
+        cods = {r[1] for r in vistos["PRFICHAREL"]}
+        self.assertTrue([r for r in vistos["PRPARRECMED"] if r[0] in cods])  # ao menos um leiaute complementado
+        por_dado = {}
+        for r in vistos["PRTPRESPOSTA"]:
+            por_dado.setdefault(r[2], []).append(r[1])
+        self.assertTrue([d for d, ts in por_dado.items() if len(set(ts)) > 1])  # dado de envio com dois tipos
+
+
+class ViaDigital(unittest.TestCase):  # rodada 5 (ADR 0006): o catálogo de vias do parceiro carrega
+    def test_via_digital_no_mapeamento_externo(self):
+        import csv
+        from sante_conector import mapa
+        with open(mapa.DIR_PACOTE / "declarado" / "colunas.d" / "L6-08.tsv", encoding="utf-8") as f:
+            d = {r["destino"]: r for r in csv.DictReader(f, delimiter="\t") if r["tabela"] == "TBDIGITAL_VIAACESSO"}
+        self.assertEqual(d["mapeamento_codigo_externo.entidade_id"]["via"],
+                         "cod:via_de_uso.codigo_interoperabilidade;mapeamento_codigo_externo;principal")
+        self.assertEqual(d["mapeamento_codigo_externo.entidade"]["coluna"], "=via_de_uso")
+        self.assertEqual(d["mapeamento_codigo_externo.codigo_externo"]["coluna"], "CODIGO")
+        with open(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv", encoding="utf-8") as f:
+            self.assertNotIn("TBDIGITAL_VIAACESSO", {r["tabela"] for r in csv.DictReader(f, delimiter="\t")})
 
 
 if __name__ == "__main__":

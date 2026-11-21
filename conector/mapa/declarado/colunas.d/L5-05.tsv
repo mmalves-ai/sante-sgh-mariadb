@@ -199,3 +199,12 @@ TBMUIBGE	DIGITO		inteiro			L5-05 rodada 3: catálogo oficial: dígito verificado
 TBMUIBGE	MUNICIPIO_TOM		inteiro			L5-05 rodada 3: catálogo oficial: código TOM da Receita, de carregador oficial versionado (municipio_ibge.codigo_tom), nunca da cópia do cliente
 TBMUIBGE	OLD_CEP		texto			L5-05 rodada 3: sem valor: CEP antigo de município (prefixo OLD), substituído pelo CEP por logradouro
 TBMUIBGE	SITUACAO		codigo_char			L5-05 rodada 3: catálogo oficial: situação do município no cadastro, do carregador oficial
+TBEMPHOSLOGO	@estabelecimento	logotipo_estabelecimento.estabelecimento_id				r5 ADR 0006/0007: logotipo do estabelecimento do cliente (único; vários: escolha no painel)
+TBEMPHOSLOGO	ID_TBEMPHOS	logotipo_estabelecimento.sequencia	inteiro			r5 ADR 0006/0007: uma sequência por empresa da origem
+TBEMPHOSLOGO	=documento	logotipo_estabelecimento.finalidade			se:LOGO_EMPRESA	r5 ADR 0006/0007: logotipo da empresa: documentos
+TBEMPHOSLOGO	=orgao_publico	logotipo_estabelecimento.finalidade				r5 ADR 0006/0007: só o da prefeitura: órgão público
+TBEMPHOSLOGO	#arquivo:LOGO_EMPRESA:logotipo	logotipo_estabelecimento.arquivo_id				r5 ADR 0006/0007: binário ao armazenamento de arquivos (ADR 0004), uma vez, pelo SHA-256
+TBEMPHOSLOGO	#arquivo:LOGO_PREFEITURA:logotipo	logotipo_estabelecimento.arquivo_id				r5 ADR 0006/0007: sem o da empresa: o da prefeitura (com os dois, o da prefeitura aguarda #arquivo em item desdobrado: pedido em saida/L5-05.json)
+TBEMPHOSLOGO	=migracao	logotipo_estabelecimento.origem				r5 ADR 0006/0007: 
+TBEMPHOSLOGO	LOGO_EMPRESA		blob			r5 ADR 0006/0007: lido pelo #arquivo
+TBEMPHOSLOGO	LOGO_PREFEITURA		blob			r5 ADR 0006/0007: lido pelo #arquivo

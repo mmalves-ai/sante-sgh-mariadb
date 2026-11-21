@@ -1,109 +1,129 @@
 {
- "pedidos": [
-  {
-   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
-   "mudanca": "acrescentar as 8 linhas de 'linhas_sem_carga' (tabela, descarte, causa, motivo), prontas para colar; as colunas dessas tabelas em colunas.d/L8-08.tsv ficam sem destino, só com motivo",
-   "motivo": "descartes de produto da fatia (a edição direta do arquivo compartilhado foi negada nesta rodada paralela); sem elas as 8 tabelas seguem BLOQUEADAS na cobertura",
-   "atendido": "sem_carga.tsv já traz as 8 linhas (cobertura: DESCARTE 8)"
-  },
-  {
-   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus, CHECK ck_dominio_sus_lista)",
-   "mudanca": "acrescentar a lista 'localizacao_tumor' (migração nova se a 01 já estiver aplicada); depois trocar LOCALIZACAO_NO_CHECK para True em sintetica_d/l8_08.py (o teste test_localizacao_tumor_no_check_trava_o_estado acusa a troca)",
-   "motivo": "laudo_apac_oncologia.localizacao_primaria_dominio_sus_id é 'lista SUS', mas a lista não existe no CHECK: hoje toda linha de TBLOCPRI (49 na imagem de referência) é recusada com restricao_destino_4025, visível no painel (a conciliação prova a contagem, não a carga)",
-   "atendido": "rodada 4 (DDL): db/migracoes/13_SUS/06; falta na fatia: LOCALIZACAO_NO_CHECK = True na sintetica_d/l8_08.py"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (mesmo pedido 13 da L7-08)",
-   "mudanca": "regra genérica faltante: coluna do DESTINO da linha referenciada (ex.: via 'ref:FCLANEXT@item_faturavel_id' grava conta_hospitalar_item.item_faturavel_id do pai). Com ela FCCTRLANCIHA declara equivalencia_sigtap_item: item_faturavel_id pela regra nova, procedimento_sigtap_id por ID_TBPROSUS (depara sigtap), instrumento '=ciha', início pela data da carga (especial da cobertura), par repetido adotado pelas colunas do único (sem 1062); e conector/mapa/tabelas.tsv tira registro_ciha_procedimento dos destinos (registro_ciha sem fonte na origem)",
-   "motivo": "FCCTRLANCIHA (660776 linhas na imagem de referência) é a equivalência item da conta -> SIGTAP da CIHA gravada por lançamento; sem a regra nova não carrega (o pai FCLANEXT, L8-06, também ainda não carrega)",
-   "atendido": "rodada 3, grupo 2: ref:T@<coluna>; FCCTRLANCIHA declarada (ref:FCLANEXT@item_faturavel_id;adotar:item_faturavel_id,procedimento_sigtap_id,instrumento, ref:TBPROSUS>COD com depara sigtap, =ciha, @vigencia_carga); registro_ciha_procedimento não declarado (o destino da tabela é só o declarado)"
-  },
-  {
-   "arquivo": "conector/mapa (alimentadora de unidade_internacao) e colunas.d/L8-08.tsv",
-   "mudanca": "quando RIBLOCOS (L6-14) gravar unidade_internacao com a unidade assistencial, ligar FHLEITOUTI.ID_TBUNIDAD a leito_uti_habilitado.unidade_internacao_id por referência à unidade de internação da unidade assistencial (pede referência ao destino secundário pela coluna, ou chave alternativa)",
-   "motivo": "hoje a UTI habilitada carrega com unidade nula (habilitação do estabelecimento, sentido do modelo e do SUS); a unidade da origem fica sem destino"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (opção do destino)",
-   "mudanca": "opção genérica `somar:<coluna>` junto de `adotar:<c1>,...`: a linha adotada recebe a soma da coluna (ex.: FHLEITOUTI na via de quantidade_leitos com adotar:estabelecimento_id,tipo_uti_dominio_sus_id,vigencia_inicio); conciliação pelo relido",
-   "motivo": "FHLEITOUTI: a habilitação SUS é do estabelecimento por tipo; duas unidades com o mesmo tipo gravam hoje duas linhas de unidade nula (o único não barra NULL). Com a opção, uma linha por tipo com a soma dos leitos"
-  },
-  {
-   "arquivo": "tools/obra/conferir-fatia-f4.sh",
-   "mudanca": "rodar 'python3 -I tools/obra/cobertura_conector.py --fatia <F> --falhar-se-bloqueada' e acusar tabela bloqueada da fatia",
-   "motivo": "a autoconferência devolvia ok com 9 tabelas bloqueadas na cobertura",
-   "atendido": "passo 6 da autoconferência acusa a tabela BLOQUEADA da fatia"
-  },
-  {
-   "arquivo": "tools/obra/cobertura_conector.py",
-   "mudanca": "tratar como BLOQUEADA (restricao_destino) a tabela cujo literal '=<lista>' fica fora do CHECK de lista do destino",
-   "motivo": "TBLOCPRI conta CARREGA e grava 0 linhas enquanto 'localizacao_tumor' falta no ck_dominio_sus_lista"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (opcional, só se o dono quiser migrar a competência aberta)",
-   "mudanca": "especial `#competencia:<ANO>,<MES>` (texto AAAAMM) e fim do período derivado (último dia do mês)",
-   "motivo": "FIPARAM/FAPARAM/FAPARAMA -> competencia_sus: `#data` não serve (competencia é CHAR(6) e periodo_fim NOT NULL); hoje descarte mecanismo_do_produto registrado"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-06.tsv (fatia L8-06)",
-   "mudanca": "nenhuma nesta fatia: FCCTRLANCIHA fica CARREGA assim que FCLANEXT (L8-06) carregar conta_hospitalar_item com item_faturavel_id",
-   "motivo": "única bloqueada da fatia: pai_nao_carregado:FCLANEXT (a coluna obrigatória item_faturavel_id vem da linha que o lançamento grava; sem o lançamento, toda linha seria recusada). Declarações, imagem sintética e testes já prontos e conciliados (7 lidas, 3 gravadas, 1 par adotado, 4 recusadas)",
-   "atendido": "rodada 3: FCLANEXT carrega; FCCTRLANCIHA conta CARREGA na cobertura"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (opção do destino junto de adotar)",
-   "mudanca": "opção genérica `divergente:<coluna>` junto de `adotar:`: quando a linha adotada tem outro valor nessa coluna, pendência MÉDIA `adotado_divergente` (tabela, chave original, regra; sem valor), em vez de só a baixa `adotado_existente`. Uso: FCCTRLANCIHA `adotar:item_faturavel_id,instrumento;divergente:procedimento_sigtap_id`",
-   "motivo": "uma equivalência vigente por item (regra do produto): o item informado com procedimentos diferentes em lançamentos diferentes (30 de 2627 itens na imagem de referência) adota a primeira em silêncio; o cliente precisa ver e decidir no painel"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (_gravar_ou_adotar)",
-   "mudanca": "não adotar quando uma coluna obrigatória (NOT NULL sem padrão) do destino está nula na linha: seguir para o INSERT e a recusa 1048, como sem adoção",
-   "motivo": "com adotar fora da coluna nula (FCCTRLANCIHA adota pelo item e instrumento), o lançamento com código fora do catálogo de um item que já tem equivalência é adotado em vez de recusado (a pendência catalogo_codigo_inexistente continua, mas a conciliação conta como gravado)"
-  },
-  {
-   "arquivo": "db/migracoes/13_SUS (trilha F2.2) e conector/mapa/declarado/colunas.d/L8-08.tsv",
-   "mudanca": "coluna do procedimento informado por lançamento (ex.: conta_hospitalar_item.procedimento_sigtap_informado_id, FK procedimento_sigtap, NULL); depois FCCTRLANCIHA grava também essa coluna por `complementa` na linha do lançamento",
-   "motivo": "a origem guarda o procedimento da CIHA por lançamento (660776 linhas); a equivalência do item guarda só um: o histórico de qual lançamento foi informado com qual procedimento se perde sem a coluna",
-   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: FCCTRLANCIHA por complementa"
-  },
-  {
-   "arquivo": "db/migracoes/13_SUS/02_tabelas.sql e 02_chaves.sql (trilha F2.2) ou catalogos/carregadores/sigtap.py",
-   "mudanca": "regra_prestador_sus.tipo_prestador_dominio_sigtap_id (NOT NULL, FK dominio_sigtap) passar a apontar para dominio_sus (lista tipo_prestador), ou o carregador oficial passar a gravar a lista tipo_prestador em dominio_sigtap (só se houver fonte oficial)",
-   "motivo": "o carregador oficial não grava tipo_prestador; a lista do hospital agora carrega em dominio_sus (TBPRESUS): a FK atual não tem linha para apontar"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/catalogos.tsv (TBPRESTP, TBPRONIV)",
-   "mudanca": "rever a declaração sigtap_auxiliar (de-para para dominio_sigtap): tipo de prestador e nível não estão no carregador oficial; o valor da relação procedimento x tipo de prestador / nível vem da lista de dominio_sus (TBPRESUS, TBNIVSUS)",
-   "motivo": "como está, toda relação cairia em catalogo_codigo_inexistente (procedimento_sigtap_atributo.valor_dominio_sigtap_id sem linha)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/dependencias.tsv",
-   "mudanca": "TBNIVEL depende de TBNIVSUS (versão com id carrega antes da antiga sem id)",
-   "motivo": "as duas carregam na lista nivel_atencao com adotar:lista,codigo; pela ordem atual (745 antes de 746) a antiga cria e a descrição dela fica nos 8 códigos comuns",
-   "atendido": "rodada 3 (conferidor): aresta TBNIVEL -> TBNIVSUS acrescentada pela fatia em declarado/dependencias.tsv e mapa regenerado (gerar_mapa_conector.py, fatiar_conector.py); TBNIVSUS carrega antes (ordem 717, TBNIVEL 718) e os 2 adotado_existente passam a TBNIVEL na sintética"
-  },
-  {
-   "arquivo": "db/migracoes (trilha F2.2): cadastro de autorizador SUS e de órgão gestor por estabelecimento",
-   "mudanca": "modelo para o CNS e nome do autorizador das AIH/APAC e para o órgão gestor (código, nome, endereço, responsável) por estabelecimento; até lá, item na lista de implantação (o cliente recadastra)",
-   "motivo": "FIPARAM.CNS_AUTORIZACOES e FAPARAM/FAPARAMA SUDS_*, NOME_ORGAO, AUTORIZADOR vão no cabeçalho dos instrumentos e o modelo só tem remessa_bpa.orgao_destino"
-  }
- ],
- "linhas_sem_carga": [
-  "FIPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da AIH do programa antigo: as opções são parâmetros do catálogo do produto (parametro_definicao, nunca criado pela migração), confirmados por estabelecimento na implantação; a competência da AIH é aberta pelo cliente no produto e a produção migrada traz a competência de cada registro; dados do hospital pelo cadastro do estabelecimento; como RIPARAM e SIPARGER (fatia L8-08; F4-decisoes-destino.md)",
-  "FAPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento do BPA do programa antigo, mesma decisão do FIPARAM; órgão gestor e hospital pelos cadastros próprios (fatia L8-08; F4-decisoes-destino.md)",
-  "FAPARAMA\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da APAC do programa antigo, mesma decisão do FIPARAM (fatia L8-08; F4-decisoes-destino.md)",
-  "TBLOCSUS\tdescarte\tcatalogo_oficial\tmodalidade de atendimento da tabela unificada: o carregador oficial versionado grava (catalogos/carregadores/sigtap.py, dominio_sigtap lista modalidade, tb_modalidade); a relação procedimento x modalidade da origem dá de-para pelo código (fatia L8-08; F4-decisoes-destino.md)",
-  "TBPRESSE\tdescarte\tduplicado\tversão antiga, sem id, da lista de tipo de prestador do SUS: os códigos são os mesmos de TBPRESUS (medido na imagem de referência: 8 de 8), que carrega a lista 'tipo_prestador' em dominio_sus (fatia L8-08; F4-decisoes-destino.md)"
- ],
- "resolvidos_na_cobertura": [
-  "FHLEITOUTI: carrega em leito_uti_habilitado (@estabelecimento, @vigencia_carga, tipo pela referência gerada; unidade nula)",
-  "TBLOCPRI: declarada em dominio_sus lista localizacao_tumor (recusa 4025 até a migração pedida)",
-  "FIPARAM, FAPARAM, FAPARAMA: descarte mecanismo_do_produto (substitui os pedidos de mecanismo de parâmetro, de cabeçalho e de competência AAAAMM)",
-  "TBFONTE_ORCAMENTARIA_SUS: versionada (código = id da origem, codigo_oficial = código do leiaute, vigencia_inicio = competência): nenhuma versão recusada (sintética: 4 gravadas, 1 valor_fora_do_dominio)",
-  "FIPARAM, FAPARAM, FAPARAMA: motivos por coluna reescritos sem texto de bloqueio (competência, cadastro, instalação, opção de crítica do catálogo de parâmetros)",
-  "TBPRESUS e TBNIVSUS: CARREGAM em dominio_sus (listas tipo_prestador e nivel_atencao); TBNIVEL carrega na mesma lista (1 código só dela); TBPRESSE descarte duplicado (8 de 8 códigos iguais); TBLOCSUS segue catalogo_oficial",
-  "FCCTRLANCIHA: uma equivalência vigente por item e instrumento (adotar:item_faturavel_id,instrumento); TBPROSUS.COD INTEGER na sintética, como na origem",
-  "FIPARAM/FAPARAM/FAPARAMA: motivos do CNS do autorizador e do órgão gestor corrigidos (sem destino no modelo; pedido de modelo)",
-  "TBNIVEL depende de TBNIVSUS (declarado/dependencias.tsv): a versão com id cria os códigos comuns com a descrição dela; a antiga adota 2 e cria 1 (sintética: TBNIVSUS 3 gravadas + 1 recusa 1048; TBNIVEL 3 gravadas, 2 adotado_existente)"
- ]
+  "pedidos": [
+    {
+      "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+      "mudanca": "acrescentar as 8 linhas de 'linhas_sem_carga' (tabela, descarte, causa, motivo), prontas para colar; as colunas dessas tabelas em colunas.d/L8-08.tsv ficam sem destino, só com motivo",
+      "motivo": "descartes de produto da fatia (a edição direta do arquivo compartilhado foi negada nesta rodada paralela); sem elas as 8 tabelas seguem BLOQUEADAS na cobertura",
+      "atendido": "sem_carga.tsv já traz as 8 linhas (cobertura: DESCARTE 8)"
+    },
+    {
+      "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus, CHECK ck_dominio_sus_lista)",
+      "mudanca": "acrescentar a lista 'localizacao_tumor' (migração nova se a 01 já estiver aplicada); depois trocar LOCALIZACAO_NO_CHECK para True em sintetica_d/l8_08.py (o teste test_localizacao_tumor_no_check_trava_o_estado acusa a troca)",
+      "motivo": "laudo_apac_oncologia.localizacao_primaria_dominio_sus_id é 'lista SUS', mas a lista não existe no CHECK: hoje toda linha de TBLOCPRI (49 na imagem de referência) é recusada com restricao_destino_4025, visível no painel (a conciliação prova a contagem, não a carga)",
+      "atendido": "rodada 4 (DDL): db/migracoes/13_SUS/06; falta na fatia: LOCALIZACAO_NO_CHECK = True na sintetica_d/l8_08.py"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (mesmo pedido 13 da L7-08)",
+      "mudanca": "regra genérica faltante: coluna do DESTINO da linha referenciada (ex.: via 'ref:FCLANEXT@item_faturavel_id' grava conta_hospitalar_item.item_faturavel_id do pai). Com ela FCCTRLANCIHA declara equivalencia_sigtap_item: item_faturavel_id pela regra nova, procedimento_sigtap_id por ID_TBPROSUS (depara sigtap), instrumento '=ciha', início pela data da carga (especial da cobertura), par repetido adotado pelas colunas do único (sem 1062); e conector/mapa/tabelas.tsv tira registro_ciha_procedimento dos destinos (registro_ciha sem fonte na origem)",
+      "motivo": "FCCTRLANCIHA (660776 linhas na imagem de referência) é a equivalência item da conta -> SIGTAP da CIHA gravada por lançamento; sem a regra nova não carrega (o pai FCLANEXT, L8-06, também ainda não carrega)",
+      "atendido": "rodada 3, grupo 2: ref:T@<coluna>; FCCTRLANCIHA declarada (ref:FCLANEXT@item_faturavel_id;adotar:item_faturavel_id,procedimento_sigtap_id,instrumento, ref:TBPROSUS>COD com depara sigtap, =ciha, @vigencia_carga); registro_ciha_procedimento não declarado (o destino da tabela é só o declarado)"
+    },
+    {
+      "arquivo": "conector/mapa (alimentadora de unidade_internacao) e colunas.d/L8-08.tsv",
+      "mudanca": "quando RIBLOCOS (L6-14) gravar unidade_internacao com a unidade assistencial, ligar FHLEITOUTI.ID_TBUNIDAD a leito_uti_habilitado.unidade_internacao_id por referência à unidade de internação da unidade assistencial (pede referência ao destino secundário pela coluna, ou chave alternativa)",
+      "motivo": "hoje a UTI habilitada carrega com unidade nula (habilitação do estabelecimento, sentido do modelo e do SUS); a unidade da origem fica sem destino"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (opção do destino)",
+      "mudanca": "opção genérica `somar:<coluna>` junto de `adotar:<c1>,...`: a linha adotada recebe a soma da coluna (ex.: FHLEITOUTI na via de quantidade_leitos com adotar:estabelecimento_id,tipo_uti_dominio_sus_id,vigencia_inicio); conciliação pelo relido",
+      "motivo": "FHLEITOUTI: a habilitação SUS é do estabelecimento por tipo; duas unidades com o mesmo tipo gravam hoje duas linhas de unidade nula (o único não barra NULL). Com a opção, uma linha por tipo com a soma dos leitos"
+    },
+    {
+      "arquivo": "tools/obra/conferir-fatia-f4.sh",
+      "mudanca": "rodar 'python3 -I tools/obra/cobertura_conector.py --fatia <F> --falhar-se-bloqueada' e acusar tabela bloqueada da fatia",
+      "motivo": "a autoconferência devolvia ok com 9 tabelas bloqueadas na cobertura",
+      "atendido": "passo 6 da autoconferência acusa a tabela BLOQUEADA da fatia"
+    },
+    {
+      "arquivo": "tools/obra/cobertura_conector.py",
+      "mudanca": "tratar como BLOQUEADA (restricao_destino) a tabela cujo literal '=<lista>' fica fora do CHECK de lista do destino",
+      "motivo": "TBLOCPRI conta CARREGA e grava 0 linhas enquanto 'localizacao_tumor' falta no ck_dominio_sus_lista"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (opcional, só se o dono quiser migrar a competência aberta)",
+      "mudanca": "especial `#competencia:<ANO>,<MES>` (texto AAAAMM) e fim do período derivado (último dia do mês)",
+      "motivo": "FIPARAM/FAPARAM/FAPARAMA -> competencia_sus: `#data` não serve (competencia é CHAR(6) e periodo_fim NOT NULL); hoje descarte mecanismo_do_produto registrado"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-06.tsv (fatia L8-06)",
+      "mudanca": "nenhuma nesta fatia: FCCTRLANCIHA fica CARREGA assim que FCLANEXT (L8-06) carregar conta_hospitalar_item com item_faturavel_id",
+      "motivo": "única bloqueada da fatia: pai_nao_carregado:FCLANEXT (a coluna obrigatória item_faturavel_id vem da linha que o lançamento grava; sem o lançamento, toda linha seria recusada). Declarações, imagem sintética e testes já prontos e conciliados (7 lidas, 3 gravadas, 1 par adotado, 4 recusadas)",
+      "atendido": "rodada 3: FCLANEXT carrega; FCCTRLANCIHA conta CARREGA na cobertura"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (opção do destino junto de adotar)",
+      "mudanca": "opção genérica `divergente:<coluna>` junto de `adotar:`: quando a linha adotada tem outro valor nessa coluna, pendência MÉDIA `adotado_divergente` (tabela, chave original, regra; sem valor), em vez de só a baixa `adotado_existente`. Uso: FCCTRLANCIHA `adotar:item_faturavel_id,instrumento;divergente:procedimento_sigtap_id`",
+      "motivo": "uma equivalência vigente por item (regra do produto): o item informado com procedimentos diferentes em lançamentos diferentes (30 de 2627 itens na imagem de referência) adota a primeira em silêncio; o cliente precisa ver e decidir no painel"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (_gravar_ou_adotar)",
+      "mudanca": "não adotar quando uma coluna obrigatória (NOT NULL sem padrão) do destino está nula na linha: seguir para o INSERT e a recusa 1048, como sem adoção",
+      "motivo": "com adotar fora da coluna nula (FCCTRLANCIHA adota pelo item e instrumento), o lançamento com código fora do catálogo de um item que já tem equivalência é adotado em vez de recusado (a pendência catalogo_codigo_inexistente continua, mas a conciliação conta como gravado)"
+    },
+    {
+      "arquivo": "db/migracoes/13_SUS (trilha F2.2) e conector/mapa/declarado/colunas.d/L8-08.tsv",
+      "mudanca": "coluna do procedimento informado por lançamento (ex.: conta_hospitalar_item.procedimento_sigtap_informado_id, FK procedimento_sigtap, NULL); depois FCCTRLANCIHA grava também essa coluna por `complementa` na linha do lançamento",
+      "motivo": "a origem guarda o procedimento da CIHA por lançamento (660776 linhas); a equivalência do item guarda só um: o histórico de qual lançamento foi informado com qual procedimento se perde sem a coluna",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: FCCTRLANCIHA por complementa"
+    },
+    {
+      "arquivo": "db/migracoes/13_SUS/02_tabelas.sql e 02_chaves.sql (trilha F2.2) ou catalogos/carregadores/sigtap.py",
+      "mudanca": "regra_prestador_sus.tipo_prestador_dominio_sigtap_id (NOT NULL, FK dominio_sigtap) passar a apontar para dominio_sus (lista tipo_prestador), ou o carregador oficial passar a gravar a lista tipo_prestador em dominio_sigtap (só se houver fonte oficial)",
+      "motivo": "o carregador oficial não grava tipo_prestador; a lista do hospital agora carrega em dominio_sus (TBPRESUS): a FK atual não tem linha para apontar"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/catalogos.tsv (TBPRESTP, TBPRONIV)",
+      "mudanca": "rever a declaração sigtap_auxiliar (de-para para dominio_sigtap): tipo de prestador e nível não estão no carregador oficial; o valor da relação procedimento x tipo de prestador / nível vem da lista de dominio_sus (TBPRESUS, TBNIVSUS)",
+      "motivo": "como está, toda relação cairia em catalogo_codigo_inexistente (procedimento_sigtap_atributo.valor_dominio_sigtap_id sem linha)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv",
+      "mudanca": "TBNIVEL depende de TBNIVSUS (versão com id carrega antes da antiga sem id)",
+      "motivo": "as duas carregam na lista nivel_atencao com adotar:lista,codigo; pela ordem atual (745 antes de 746) a antiga cria e a descrição dela fica nos 8 códigos comuns",
+      "atendido": "rodada 3 (conferidor): aresta TBNIVEL -> TBNIVSUS acrescentada pela fatia em declarado/dependencias.tsv e mapa regenerado (gerar_mapa_conector.py, fatiar_conector.py); TBNIVSUS carrega antes (ordem 717, TBNIVEL 718) e os 2 adotado_existente passam a TBNIVEL na sintética"
+    },
+    {
+      "arquivo": "db/migracoes (trilha F2.2): cadastro de autorizador SUS e de órgão gestor por estabelecimento",
+      "mudanca": "modelo para o CNS e nome do autorizador das AIH/APAC e para o órgão gestor (código, nome, endereço, responsável) por estabelecimento; até lá, item na lista de implantação (o cliente recadastra)",
+      "motivo": "FIPARAM.CNS_AUTORIZACOES e FAPARAM/FAPARAMA SUDS_*, NOME_ORGAO, AUTORIZADOR vão no cabeçalho dos instrumentos e o modelo só tem remessa_bpa.orgao_destino"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (especial de competência em texto)",
+      "rodada": "r5",
+      "mudanca": "especial `#competencia:<ANO>,<MES>` (ou regra `competencia_texto` sobre DATE) que grava a competência como texto 'AAAAMM' (mês com dois dígitos; mês fora de 1..12 ou ano < 1800: NULL com valor_fora_do_dominio). Hoje `#data:ANO,MES` dá DATE e `competencia_aaaamm` faz o caminho inverso; `competencia_sus.competencia` é CHAR(6) 'AAAAMM' (CHECK).",
+      "motivo": "ADR 0006: FIPARAM, FAPARAM e FAPARAMA (competência em processamento da AIH, do BPA e da APAC) devem CARREGAR uma linha em competencia_sus (instrumento aih/bpa/apac, situação aberta, período PERINI/PERFIN ou o mês da competência, origem migracao) para o hospital continuar na competência em que estava; sem a especial seguem BLOQUEADAS (descarte_sem_prova). As opções de tela (DIG_*, SOMA_*, COT_*) ficam para o pedido do mecanismo de parâmetros já registrado.",
+      "tabelas": [
+        "FIPARAM",
+        "FAPARAM",
+        "FAPARAMA"
+      ]
+    },
+    {
+      "arquivo": "conector/mapa/declarado/dependencias.tsv + gerar_mapa_conector.py (integrador: arquivo gerado compartilhado)",
+      "rodada": "r5",
+      "mudanca": "TBPRESSE depende de TBPRESUS (como TBNIVEL -> TBNIVSUS), e regenerar tabelas.tsv/fichas.",
+      "motivo": "TBPRESSE (versão antiga) passou a carregar na lista tipo_prestador com adotar:lista,codigo e hoje vem ANTES de TBPRESUS (ordem 724 < 725): na mescla, a descrição da versão antiga fica no destino e a da atual vai ao historico_mescla_migracao. Com a dependência a atual cria e a antiga só preenche o vazio. Ao aplicar: trocar a expectativa da sintética l8_08 (TBPRESUS rec(3) sem adotado; TBPRESSE com adotado_existente 2) e mover TBPRESSE de MESMA_LISTA_MESCLA para MESMA_LISTA no teste.",
+      "tabelas": [
+        "TBPRESSE"
+      ]
+    }
+  ],
+  "linhas_sem_carga": [
+    "FIPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da AIH do programa antigo: as opções são parâmetros do catálogo do produto (parametro_definicao, nunca criado pela migração), confirmados por estabelecimento na implantação; a competência da AIH é aberta pelo cliente no produto e a produção migrada traz a competência de cada registro; dados do hospital pelo cadastro do estabelecimento; como RIPARAM e SIPARGER (fatia L8-08; F4-decisoes-destino.md)",
+    "FAPARAM\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento do BPA do programa antigo, mesma decisão do FIPARAM; órgão gestor e hospital pelos cadastros próprios (fatia L8-08; F4-decisoes-destino.md)",
+    "FAPARAMA\tdescarte\tmecanismo_do_produto\tlinha única de opções e estado do faturamento da APAC do programa antigo, mesma decisão do FIPARAM (fatia L8-08; F4-decisoes-destino.md)",
+    "TBLOCSUS\tdescarte\tcatalogo_oficial\tmodalidade de atendimento da tabela unificada: o carregador oficial versionado grava (catalogos/carregadores/sigtap.py, dominio_sigtap lista modalidade, tb_modalidade); a relação procedimento x modalidade da origem dá de-para pelo código (fatia L8-08; F4-decisoes-destino.md)",
+    "TBPRESSE\tdescarte\tduplicado\tversão antiga, sem id, da lista de tipo de prestador do SUS: os códigos são os mesmos de TBPRESUS (medido na imagem de referência: 8 de 8), que carrega a lista 'tipo_prestador' em dominio_sus (fatia L8-08; F4-decisoes-destino.md)"
+  ],
+  "resolvidos_na_cobertura": [
+    "FHLEITOUTI: carrega em leito_uti_habilitado (@estabelecimento, @vigencia_carga, tipo pela referência gerada; unidade nula)",
+    "TBLOCPRI: declarada em dominio_sus lista localizacao_tumor (recusa 4025 até a migração pedida)",
+    "FIPARAM, FAPARAM, FAPARAMA: descarte mecanismo_do_produto (substitui os pedidos de mecanismo de parâmetro, de cabeçalho e de competência AAAAMM)",
+    "TBFONTE_ORCAMENTARIA_SUS: versionada (código = id da origem, codigo_oficial = código do leiaute, vigencia_inicio = competência): nenhuma versão recusada (sintética: 4 gravadas, 1 valor_fora_do_dominio)",
+    "FIPARAM, FAPARAM, FAPARAMA: motivos por coluna reescritos sem texto de bloqueio (competência, cadastro, instalação, opção de crítica do catálogo de parâmetros)",
+    "TBPRESUS e TBNIVSUS: CARREGAM em dominio_sus (listas tipo_prestador e nivel_atencao); TBNIVEL carrega na mesma lista (1 código só dela); TBPRESSE descarte duplicado (8 de 8 códigos iguais); TBLOCSUS segue catalogo_oficial",
+    "FCCTRLANCIHA: uma equivalência vigente por item e instrumento (adotar:item_faturavel_id,instrumento); TBPROSUS.COD INTEGER na sintética, como na origem",
+    "FIPARAM/FAPARAM/FAPARAMA: motivos do CNS do autorizador e do órgão gestor corrigidos (sem destino no modelo; pedido de modelo)",
+    "TBNIVEL depende de TBNIVSUS (declarado/dependencias.tsv): a versão com id cria os códigos comuns com a descrição dela; a antiga adota 2 e cria 1 (sintética: TBNIVSUS 3 gravadas + 1 recusa 1048; TBNIVEL 3 gravadas, 2 adotado_existente)"
+  ]
 }

@@ -77,6 +77,16 @@
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (apelido de destino)",
    "mudanca": "dois destinos secundários da MESMA tabela numa linha (ex.: pessoa_fisica#responsavel e pessoa_fisica#contador), cada um com opções, @id:<destino#apelido> e conector_origem <chave>/<destino#apelido>",
    "motivo": "TBEMPHOS: responsável legal e contador (OLD_NOMECONT, OLD_CPFCONTADOR) são duas pessoas físicas; hoje só o responsável grava e o contador fica no retrato da trilha (mantenedora.contador_pessoa_fisica_id NULL)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ regenerar tabelas.tsv) e decisão do integrador",
+   "mudanca": "r5 (ADR 0006): TBPESSOA passar a CARREGAR depois dos consumidores (TBPROFIS, PSBENEFI, TBEMPHOS, TBFORNEC): destino pessoa_fisica (TIPO_PESSOA = F, adotar:cpf) e pessoa_juridica (J, adotar:cnpj) por destino_se, mescla não destrutiva; documento sem pessoa criada por consumidor: recusa visível (pessoa_sem_nome). Hoje a ordem (74) vem antes deles e os consumidores dependem de TBPESSOA (aresta a inverter).",
+   "motivo": "índice de identidade sem nome: não forma pessoa sozinho; sem a ordem nova continua BLOQUEADA descarte_sem_prova:duplicado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (motor, genérico)",
+   "mudanca": "r5: #arquivo:<COL> como #item do desdobrar (ex.: TBEMPHOSLOGO desdobrar:LOGO_EMPRESA=1|documento,LOGO_PREFEITURA=2|orgao_publico)",
+   "motivo": "hoje os dois logotipos da mesma empresa são concorrentes: com os dois, só o da empresa entra"
   }
  ]
 }

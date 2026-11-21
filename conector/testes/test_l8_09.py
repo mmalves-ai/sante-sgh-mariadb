@@ -2,6 +2,7 @@
 imagem sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L8-09`."""
 import datetime
 import os
+import re
 import random
 import unittest
 
@@ -131,7 +132,7 @@ class Plano(unittest.TestCase):
             self.assertIn(sc[t][2], {"sem_valor", "duplicado", "licenciado", "catalogo_oficial",
                                      "mecanismo_do_produto"}, t)
             self.assertTrue(sc[t][3].strip(), t)
-        self.assertEqual(len(l8_09.DESCARTADAS), 12)
+        self.assertEqual(len(l8_09.DESCARTADAS), 0)  # r5 (ADR 0006): as listas carregam
         self.assertNotIn("COPARAM", sc)
         self.assertNotIn("CTPARAM", sc)
 
@@ -193,7 +194,7 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in FORA:  # presença na imagem, nada esperado no destino
-            self.assertEqual(cont[t], {"COSPEDSITEMP": 3}.get(t, 2), t)
+            self.assertEqual(cont[t], dict(l8_09.PROVADAS, COSPEDSITEMP=3).get(t, 2), t)
         self.assertEqual((cont["FCRECIBO"], cont["COSPEDHSTSEMP"]), (13, 4))
 
     def test_ddl_das_tabelas_da_fatia(self):
@@ -207,6 +208,35 @@ class Sintetica(unittest.TestCase):
         l8_09.linhas(random.Random(1), lambda t, v: lidas.setdefault(t, set()).add(len(v)))
         for t, ns in lidas.items():
             self.assertEqual(ns, {ncols[t]}, t)
+
+
+
+class ListasR5(unittest.TestCase):
+    """Rodada 5 (ADR 0006, 1 e 4): as listas fixas e os catálogos sem carregador oficial CARREGAM como opções de um
+    parâmetro de lista (nada descartado, nenhuma prova de não copiar): uma linha da origem = uma opção, com o nome."""
+
+    def test_listas_carregam_como_opcoes(self):
+        decl = [c for c in mapa.carregar_execucao()["colunas_decl"] if c["tabela"] in l8_09.LISTAS_R5]
+        with open(os.path.join(RAIZ, "sem_carga.tsv"), encoding="utf-8") as f:
+            sc = {l.split("\t")[0] for l in f}
+        with open(os.path.join(RAIZ, "provas.tsv"), encoding="utf-8") as f:
+            pv = {l.split("\t")[0] for l in f}
+        chaves = set()
+        for t in l8_09.LISTAS_R5:
+            d = {(c["coluna"], c["destino"]): c.get("via") or "" for c in decl if c["tabela"] == t}
+            dest = {x for _, x in d}
+            self.assertTrue({"parametro_opcao.parametro_definicao_id", "parametro_opcao.sequencia",
+                             "parametro_opcao.valor", "parametro_opcao.rotulo", "parametro_opcao.origem"} <= dest, t)
+            self.assertEqual(d[("@id:parametro_definicao", "parametro_opcao.parametro_definicao_id")],
+                             "parametro_opcao;principal", t)
+            ch = [c["coluna"] for c in decl if c["tabela"] == t and c["destino"] == "parametro_definicao.chave"]
+            self.assertEqual(len(ch), 1, t)
+            chaves.add(ch[0])
+            self.assertNotIn(t, sc, t)
+            self.assertNotIn(t, pv, t)
+            self.assertFalse(re.search(r"[A-Z]{4,}", ch[0]), ch[0])  # chave de negócio, sem nome da origem
+        self.assertEqual(len(chaves), len(l8_09.LISTAS_R5))  # uma definição por lista
+        self.assertFalse(os.path.exists(os.path.join(RAIZ, "provas.d", "CTWTPREGRA.sql")))
 
 
 if __name__ == "__main__":

@@ -77,6 +77,11 @@
    "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (marcacao_horario)",
    "mudanca": "coluna 'senha_autorizacao VARCHAR(20) NULL' (número de autorização da fonte pagadora informado na marcação, antes da guia)",
    "motivo": "REPACAGD/SIPACAGD.SENHA_SOL: o nome é de segredo para o motor (fora do #retrato), mas é dado de cobrança; sem coluna fica sem carga (zero em 100% das marcações de exame do perfil do sistema anterior)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros, como 14_FIN/14)",
+   "mudanca": "Rodada 5 (ADR 0006): semear em parametro_definicao as definições pep.alergia.estadoConfirmacao (tipo lista; opções em parametro_opcao); e agenda.cadeira.quantidadeAgendas, agenda.cadeira.situacaoDesmarcada, agenda.cadeira.agendamentoPendenteAnterior, agenda.cadeira.duracaoMedia, agenda.cadeira.duracaoLonga, agenda.cadeira.duracaoCurta, agenda.cadeira.motivoFeriado, agenda.cadeira.motivoIndisponibilidade, agenda.cadeira.motivoOcupada, agenda.cadeira.motivoForaExpediente, agenda.cadeira.situacaoRealizada, agenda.cadeira.exibirEspecialidadeCbo, agenda.cadeira.preferenciaAgenda, agenda.cadeira.canalGeracaoPlanejamento, agenda.cadeira.situacaoGeracaoPlanejamento, agenda.cadeira.agendamentoAutomaticoPlanejamento, agenda.cadeira.digitarEnfermeiroResponsavel (valor, tipo texto ou o tipo próprio, padrão nulo), com módulo, descrição, nível rede e tela",
+   "motivo": "A fatia carrega a lista e os parâmetros do hospital (opções com origem migracao e valores em parametro_valor) pela chave do catálogo do produto (cod:parametro_definicao.chave), que a migração nunca cria; sem a semente cada linha é recusada com codigo_inexistente_destino (visível no relatório de conciliação), nunca perdida em silêncio. A conferência da fatia semeia as mesmas chaves no PREPARO_DESTINO."
   }
  ],
  "atendidos_da_rodada_anterior": [

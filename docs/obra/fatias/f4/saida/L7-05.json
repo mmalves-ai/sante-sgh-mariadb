@@ -111,6 +111,14 @@
    "arquivo": "conector/sante_conector/sintetica_d/l7_07.py e testes/test_l7_07.py (fatia L7-07)",
    "mudanca": "conferir ponta a ponta GERASVALTRANSFLOTE -> movimento_lote pelo movimento de saída que a GELANTRA grava agora (ref:GELANTRA/movimento_estoque)",
    "motivo": "pedido mov_transferencia da L7-07 atendido na L7-05 (rodada 3); a prova positiva do lote de transferência é da L7-07 ou da carga integrada (na imagem desta fatia o insumo, de outra fatia, não existe)"
+  },
+  {
+   "id": "r5b_historico_compra",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2, modelo)",
+   "trilha": "F2.2",
+   "prioridade": "media (cotação e reposição)",
+   "mudanca": "CREATE TABLE historico_compra_insumo (id, insumo_id NOT NULL FK insumo, empresa_fornecedora_id NULL FK empresa_fornecedora, nota_entrada_id NULL FK nota_entrada, numero_nota VARCHAR(30) NULL, numero_documento VARCHAR(30) NULL, comprado_em DATE NOT NULL, quantidade DECIMAL(15,4) NULL, valor_unitario DECIMAL(19,6) NULL, custo_unitario DECIMAL(19,6) NULL, marca VARCHAR(100) NULL, preco_venda DECIMAL(19,6) NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', colunas de auditoria; KEY (insumo_id, comprado_em), KEY (empresa_fornecedora_id))",
+   "motivo": "GECOMPRA (59.376 linhas) é o histórico de compra por insumo usado em cotação e reposição (último preço e fornecedor). Não é reproduzível linha a linha por nota_entrada_item (a origem não guarda ANO/MES da nota no histórico e há compras sem nota carregada), então a prova derivado não é possível. Com a tabela: ITEM ref:GEITENS, FORN ref:TBFORNEC (fornecedor), nota pela chave alternativa de GECADNFS quando existir (opcional), DATA, QTDE, UNIT, CUSTO, MARCA, VENDA. Até lá: retrato completo na trilha ligado ao insumo (aviso)."
   }
  ]
 }

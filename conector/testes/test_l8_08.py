@@ -1,6 +1,7 @@
 """Fatia L8-08 (faturamento e restantes, módulo SUS): declarações planejadas, regras das colunas e coerência da
 imagem sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em
 `conector.sh conferir-fatia L8-08`."""
+import os
 import random
 import unittest
 
@@ -8,7 +9,7 @@ from sante_conector import carga_mapa, conferencia, depara, mapa, sentinela
 from sante_conector.sintetica_d import l8_08
 
 TABELAS = set(l8_08.CARREGADAS)
-DOMINIO = TABELAS - {"FHLEITOUTI", "FCCTRLANCIHA"}
+DOMINIO = TABELAS - {"FHLEITOUTI", "FCCTRLANCIHA", "FIPARAM", "FAPARAM", "FAPARAMA"}
 BLOQUEADAS = set(l8_08.BLOQUEADAS)
 LISTA = {"TBALTSUS": "motivo_saida", "TBASSOCI": "associacao_quimioterapia", "TBCARATERATEND": "carater_atendimento",
          "TBDRS": "regional_saude", "TBFONTE_ORCAMENTARIA_SUS": "fonte_orcamentaria", "TBGRUATE": "grupo_atendimento",
@@ -16,6 +17,9 @@ LISTA = {"TBALTSUS": "motivo_saida", "TBASSOCI": "associacao_quimioterapia", "TB
          "TBPRESUS": "tipo_prestador", "TBNIVSUS": "nivel_atencao"}
 # versão antiga sem id que carrega na MESMA lista da versão com id (adoção pelo código)
 MESMA_LISTA = {"TBNIVEL": "TBNIVSUS"}
+# versão antiga da lista que carrega ANTES da atual (ordem do mapa) e se mescla com ela (adotar:lista,codigo nas duas;
+# ADR 0007, 20); a dependência que inverteria a ordem é pedido em saida/L8-08.json
+MESMA_LISTA_MESCLA = {"TBPRESSE": "TBPRESUS"}
 # catálogo oficial da tabela unificada (regra 7): nunca lista própria, só de-para para dominio_sigtap. Só a modalidade:
 # tipo de prestador e nível NÃO vêm no pacote oficial (catalogos/carregadores/sigtap.py não os grava)
 OFICIAIS = {"TBLOCSUS"}
@@ -106,7 +110,7 @@ class Plano(unittest.TestCase):
         self.assertNotIn("adotado_existente", e["TBNIVSUS"]["pendencias"])
 
     def test_descartes_e_sem_mecanismo(self):
-        self.assertEqual(set(l8_08.DESCARTADAS.values()), {"mecanismo_do_produto", "catalogo_oficial", "duplicado"})
+        self.assertEqual(set(l8_08.DESCARTADAS.values()), {"catalogo_oficial"})
         self.assertEqual(set(l8_08.BLOQUEADAS), set(l8_08.DESCARTADAS) | set(l8_08.SEM_MECANISMO))
         self.assertFalse(set(l8_08.BLOQUEADAS) & TABELAS)
 
@@ -129,16 +133,44 @@ class Plano(unittest.TestCase):
         self.assertEqual(cs["codigo"]["coluna"], "ID")
         self.assertEqual(cs["codigo_oficial"]["coluna"], "CODIGO")
 
-    def test_parametros_descartados_sem_texto_de_bloqueio(self):
-        for c in self.mapa["colunas_decl"]:
-            if c["tabela"] in ("FIPARAM", "FAPARAM", "FAPARAMA"):
-                self.assertNotRegex(c["motivo"].lower(), r"bloquead|por ora|sem mecanismo", c["coluna"])
+    def test_parametros_sus_carregam_em_json(self):
+        """r5 (ADR 0006): opções e competência aberta do faturamento SUS (AIH, BPA, APAC) carregam num parâmetro JSON
+        do estabelecimento com o retrato da linha inteira; vigência pela competência aberta; nada em sem_carga."""
+        with open(os.path.join(os.path.dirname(__file__), "..", "mapa", "declarado", "sem_carga.tsv"),
+                  encoding="utf-8") as f:
+            sc = {l.split("\t")[0] for l in f}
+        chaves = set()
+        for t in ("FIPARAM", "FAPARAM", "FAPARAMA"):
+            self.assertIn(t, TABELAS)
+            self.assertNotIn(t, sc)
+            d = {}
+            for c in self.mapa["colunas_decl"]:
+                if c["tabela"] == t:
+                    d.setdefault(c["destino"], []).append(c["coluna"])
+                    self.assertNotRegex(c["motivo"].lower(), r"bloquead|por ora|sem mecanismo|descartad", c["coluna"])
+            self.assertEqual(d["parametro_valor.valor"], ["#retrato:*"], t)
+            self.assertEqual(d["parametro_valor.vigencia_inicio"], ["#data:ANOPRO,MESPRO", "@vigencia_carga"], t)
+            self.assertEqual(d["parametro_valor.nivel"], ["=estabelecimento"], t)
+            chaves.add(d["parametro_definicao.chave"][0])
+        self.assertEqual(len(chaves), 3)
 
     def test_listas_distintas_e_sem_outra_alimentadora(self):
         self.assertEqual(len(set(LISTA.values())), len(LISTA))
         outras = {c["coluna"] for c in self.mapa["colunas_decl"]
-                  if c.get("destino") == "dominio_sus.lista" and c["tabela"] not in set(LISTA) | set(MESMA_LISTA)}
+                  if c.get("destino") == "dominio_sus.lista" and c["tabela"] not in set(LISTA) | set(MESMA_LISTA) | set(MESMA_LISTA_MESCLA)}
         self.assertFalse(outras & {"=" + x for x in LISTA.values()})
+
+    def test_versao_antiga_mescla_na_mesma_lista(self):
+        for antiga, atual in MESMA_LISTA_MESCLA.items():
+            a = {c["destino"]: c for c in self.plano[antiga]["colunas"]["dominio_sus"]}
+            b = {c["destino"]: c for c in self.plano[atual]["colunas"]["dominio_sus"]}
+            self.assertEqual(a["lista"]["coluna"], b["lista"]["coluna"], antiga)
+            for tab in (antiga, atual):
+                vias = [c.get("via") or "" for c in self.mapa["colunas_decl"]
+                        if c["tabela"] == tab and c.get("destino") == "dominio_sus.codigo"]
+                self.assertTrue(any("adotar:lista,codigo" in v for v in vias), tab)
+        e = l8_08.linhas(random.Random(1), lambda t, v: None)
+        self.assertEqual(e["TBPRESUS"]["pendencias"].get("adotado_existente"), 2)
 
     def test_bloqueadas_sem_destino(self):
         self.assertFalse(BLOQUEADAS & set(self.plano))
@@ -212,3 +244,15 @@ class Sintetica(unittest.TestCase):
         for t, cols in l8_08.COLUNAS.items():
             do_mapa = [c["coluna"] for c in m["colunas"] if c["tabela"] == t]
             self.assertEqual([c for c, _, _ in cols], do_mapa, t)
+
+
+class TestProvaModalidadeL808(unittest.TestCase):
+    def test_tblocsus_prova_de_conciliacao_com_a_lista_oficial(self):
+        from pathlib import Path
+        pv = {p["tabela"]: p for p in mapa.ler_provas(Path(mapa.DIR_PACOTE))}["TBLOCSUS"]
+        self.assertEqual((pv["tipo"], pv["chave"], pv["valores"]), ("derivado", ["COD"], [("COD", "inteiro")]))
+        self.assertIn("dominio_sigtap", pv["sql"])
+        self.assertIn("'modalidade'", pv["sql"])
+        self.assertEqual(mapa.erros_provas([pv], {"TBLOCSUS": ["ID", "COD", "NOME"]}), [])
+        self.assertIn("dominio_sigtap", l8_08.PREPARO_DESTINO)
+

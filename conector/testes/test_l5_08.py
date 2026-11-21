@@ -70,8 +70,10 @@ class DeclaracoesL5_08(unittest.TestCase):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado" / "sem_carga.tsv")}
         for t in FATIA - set(CARREGADAS):
             self.assertIn(t, sc, t)
-            self.assertEqual(sc[t]["situacao"], "descarte", t)
-            self.assertIn(sc[t]["causa"], CAUSAS_DESCARTE, t)
+            # rodada 5, revisão (ADR 0006, itens 1 e 4): nenhuma lista desta fatia é descarte sem prova; todas
+            # aguardam r5-1 (item do hospital no catálogo oficial) ou r5-2 (lista própria do hospital)
+            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "mecanismo_pedido"), t)
+            self.assertRegex(sc[t]["motivo"], r"^BLOQUEADA até o pedido r5-[12] \(saida/L5-08\.json\)", t)
             self.assertTrue(sc[t]["motivo"].strip(), t)
         self.assertFalse(set(CARREGADAS) & set(sc))
 

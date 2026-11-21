@@ -113,6 +113,15 @@ class Plano(unittest.TestCase):
             self.assertTrue(sc[t]["motivo"].strip(), t)
         self.assertFalse([c for c in self.decl if c["tabela"] in l8_14.NAO_CARREGADAS])
 
+    def test_listas_de_valores_do_hospital(self):
+        # rodada 5 (ADR 0006): a lista da origem vira opções (código e rótulo) de uma definição migracao.<lista>
+        for t in l8_14.LISTAS:
+            ds = {(c["coluna"], c["destino"]) for c in self.decl if c["tabela"] == t}
+            self.assertIn(("ID", "parametro_opcao.valor"), ds, t)
+            self.assertIn(("NOME", "parametro_opcao.rotulo"), ds, t)
+            self.assertIn(("@id:parametro_definicao", "parametro_opcao.parametro_definicao_id"), ds, t)
+            self.assertTrue(any(d == "parametro_definicao.chave" and c.startswith("=migracao.") for c, d in ds), t)
+
     def test_codigo_e_descricao(self):
         for t in DESTINOS:
             c = self.cols(t)
@@ -163,8 +172,6 @@ class Sintetica(unittest.TestCase):
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
             presumidas = sum(1 for c in decl if c["tabela"] == t and c["destino"] and c["coluna"].startswith("=~"))
             self.assertEqual(e["pendencias"].get("valor_presumido", 0), cont[t] * presumidas, t)
-        for t in l8_14.NAO_CARREGADAS:
-            self.assertEqual(cont[t], 2, t)
 
     def test_linhas_com_o_numero_de_colunas_do_ddl(self):
         def conferir(t, v):
@@ -173,7 +180,8 @@ class Sintetica(unittest.TestCase):
 
     def test_ddl_so_das_tabelas_da_fatia(self):
         self.assertEqual(len(DA_FATIA), 23)
-        self.assertEqual(set(l8_14.NAO_CARREGADAS) | set(DESTINOS) | set(l8_14.MOVIMENTOS), DA_FATIA)
+        self.assertEqual(set(l8_14.LISTAS) | set(DESTINOS) | set(l8_14.MOVIMENTOS), DA_FATIA)
+        self.assertEqual(l8_14.NAO_CARREGADAS, ())
         self.assertEqual(SO_ORIGEM, {"PSBENEFI"})
 
 

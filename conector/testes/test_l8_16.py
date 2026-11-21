@@ -13,14 +13,22 @@ CARREGADAS = ["GEINTAPOIOCOT", "RETPPROTOLIFE", "SIMATHP", "SITBELHP", "SITBEXEQ
               "TBMEDSOLWEBCAD"]
 # declaradas na fatia por outra rodada (sem imagem sintética própria aqui)
 OUTRAS_DECLARADAS = ["TBREGUL_TABELAS", "TBREGUL_VLR_TABELAS"]
-DESCARTE = {"FPESOCTPAMB": "mecanismo_do_produto", "PRCABEARQINTEGRAQT": "mecanismo_do_produto",
-            "TBCID10": "catalogo_oficial", "TBDIGITAL_INTEG_TYPE": "mecanismo_do_produto",
-            "TBDIGITAL_INTEG_FIELD": "mecanismo_do_produto", "TBFORMA_ASSINATURA_ICP": "mecanismo_do_produto",
-            "TBENDPOINT": "mecanismo_do_produto", "TBENDPOINTURI": "mecanismo_do_produto",
-            "TBOPERSCHEMA": "mecanismo_do_produto", "TBINFBANCO": "sem_valor",
-            "TBREGUL_ENDPOINT": "mecanismo_do_produto", "TBIDENTIFICACAOENDPOINT": "mecanismo_do_produto",
-            "SIMODULO_SIWEBATOS": "mecanismo_do_produto"}
-OBRIGATORIAS = {"perfil_prioridade_externa": {"codigo", "descricao"},
+# rodada 5 (ADR 0006): configuração de integração e listas do hospital passam a carregar
+NOVAS_R5 = ["FPESOCTPAMB", "PRCABEARQINTEGRAQT", "SIMODULO_SIWEBATOS", "TBDIGITAL_INTEG_FIELD", "TBDIGITAL_INTEG_TYPE",
+            "TBENDPOINT", "TBENDPOINTURI", "TBFORMA_ASSINATURA_ICP", "TBIDENTIFICACAOENDPOINT", "TBINFBANCO",
+            "TBOPERSCHEMA", "TBREGUL_ENDPOINT", "TBCID10"]
+CARREGADAS = sorted(CARREGADAS + NOVAS_R5)
+DESCARTE = {}  # r5c: TBCID10 carrega na trilha (ADR 0006, 4)
+OBRIGATORIAS = {"parametro_opcao": {"parametro_definicao_id", "sequencia", "valor", "rotulo"},
+                "sistema_externo": {"codigo", "nome", "categoria", "finalidade"},
+                "ponto_integracao": {"estabelecimento_id", "codigo", "nome", "sistema_externo_id", "padrao_troca_id",
+                                     "direcao", "transporte", "formato_conteudo"},
+                "operacao_ponto_integracao": {"ponto_integracao_id", "sequencia", "codigo", "descricao"},
+                "credencial_integracao": {"codigo", "descricao", "tipo", "referencia_cofre"},
+                "tipo_evento_publicado": {"codigo", "descricao", "entidade"},
+                "esquema_mensagem": {"padrao_troca_id", "codigo", "descricao", "versao_esquema", "formato",
+                                     "vigencia_inicio"},
+                "perfil_prioridade_externa": {"codigo", "descricao"},
                 "vinculo_pedido_compra_portal": {"pedido_compra_id", "portal_cotacao_id", "codigo_cotacao_portal"},
                 "equivalencia_exame_equipamento": {"interface_equipamento_id", "exame_id",
                                                    "codigo_exame_equipamento"},

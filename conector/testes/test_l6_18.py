@@ -109,12 +109,20 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("CHSOLICITLIMP_TBLEITO", "solicitacao_limpeza_local")["sequencia"]["coluna"],
                          "#seq:ID_CHSOLICITLIMP")
 
-    def test_descartes_com_motivo_de_produto(self):
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        causa = {"TBTPDIETA": "duplicado", "CHPARAM": "mecanismo_do_produto", "CVPARAM": "mecanismo_do_produto"}
-        for t in DESCARTADAS:
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa[t]), t)
-            self.assertTrue(sc[t]["motivo"], t)
+    def test_continuidade_r5(self):
+        # ADR 0006: nada da fatia fica em sem_carga.tsv; parâmetros e lista entram pela definição do produto
+        sc = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        self.assertFalse({"TBTPDIETA", "CHPARAM", "CVPARAM"} & sc)
+        self.assertEqual(DESCARTADAS, set())
+        for t, dt, chave in (("CHPARAM", "parametro_valor", "migracao.parametros_higienizacao"),
+                             ("CVPARAM", "parametro_valor", "migracao.parametros_visitante"),
+                             ("TBTPDIETA", "parametro_opcao", "migracao.tipo_dieta")):
+            self.assertEqual(self.plano[t]["destinos"][0], dt, t)
+            c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == t}
+            self.assertEqual(c["parametro_definicao.chave"]["coluna"], "=" + chave)
+        c = {x["destino"]: x for x in self.mapa["colunas_decl"] if x["tabela"] == "CVPARAM"}
+        self.assertEqual(c["parametro_valor.valor"]["coluna"], "#retrato:*")
+        self.assertEqual(c["credencial_integracao.referencia_cofre"]["coluna"], "#cofre:SENHA_MASTER_LIB_VISITA")
 
     def test_referencias(self):
         refs = {("TBDIETAS", "modalidade_dieta", "local_estoque_id"): "GELOCARM",
@@ -200,6 +208,16 @@ class Sintetica(unittest.TestCase):
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
+
+    def test_sinonimos_do_tipo_de_dieta_r5(self):
+        # r5 (achado; ADR 0007, 18): siglas e nomes usuais do domínio têm par nas duas consumidoras; o tipo próprio
+        # sem par continua visível (valor_fora_do_dominio), nunca presumido
+        pl = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), TABELAS | BLOQUEADAS | DESCARTADAS)}
+        for t, dt, dc in [("PRVIAADMIN", "via_dieta", "modalidade"), ("TBDIETAS", "modalidade_dieta", "classe")]:
+            v = {c["destino"]: c for c in pl[t]["colunas"][dt]}[dc]["valores"]
+            for o, d in [("SNE", "enteral"), ("NPT", "parenteral"), ("VO", "oral"), ("Dieta zero", "jejum")]:
+                self.assertEqual(v.get(o), d, (t, o))
+            self.assertNotIn("Especial exemplo", v)
 
 
 if __name__ == "__main__":

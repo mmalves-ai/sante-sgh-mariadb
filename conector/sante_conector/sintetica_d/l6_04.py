@@ -3,8 +3,11 @@ das marcações de consulta canceladas e excluídas): situações da marcação 
 aceitas por agenda (consultas e exames), especialidades por agenda, pedidos de geração da grade da agenda de exames e
 os cancelamentos e exclusões de marcação de consulta em registro_excluido.
 
-Descartes com motivo de produto (`declarado/sem_carga.tsv`): estado de confirmação de ALERGIA (domínio fixo do
-produto), agenda e cadeira padrão "não informado", indisponibilidade fictícia e parâmetros da agenda de cadeiras.
+Rodada 5 (ADR 0006, nenhum descarte): estado de confirmação de ALERGIA como opções do parâmetro de lista do produto
+(parametro_opcao); parâmetros da agenda de cadeiras em parametro_valor (desdobrar, texto da origem; vigência pela
+evidência); agenda de cadeiras (agenda_servico com categoria 'agenda de cadeiras' e setor dono criados ou adotados),
+cadeira (recurso_agendavel tipo cadeira, ligada à agenda em agenda_recurso) e indisponibilidade (bloqueio_agenda da
+agenda e da cadeira, com o motivo de migração criado ou adotado). Definições dos parâmetros no PREPARO_DESTINO.
 Rodada 4: horários da agenda de exames (SIPACAGI: fim pela duração da agenda; o horário bloqueado HR, Q, P cria o
 bloqueio e o motivo) e marcações de exame e de consulta (SIPACAGD, REPACAGD: horário pela agenda, data e hora; situação
 pela do horário; sem paciente cadastrado, o pré-cadastro). REPACAGI e REAGENDA (L6-03) entram na imagem só com a
@@ -29,11 +32,28 @@ o pai de outra fatia com a forma parcial.
 import datetime as _dt
 import re
 
+from .l6_06 import preparo_parametros
+
 FATIA = ("SIPACAGI", "TBESTADOCONFIRMACAO", "TBSITAGE", "AGPARAM", "SIAGENDA", "SIAGECRI", "REAGENDA_TBCONVEN",
          "SIAGENDA_TBCONVEN", "AGCADAGENDA", "AGCADEIRA", "AGDIASINDISP", "REAGENDA_TBESPEC", "REPACAGD", "RECANAGE",
          "REPACAGD_EXCLUSAO", "SIPACAGD")
 
 DDL = """
+CREATE TABLE TBESTADOCONFIRMACAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL, ATIVO CHAR(1));
+CREATE TABLE AGPARAM (AGENDAQT SMALLINT NOT NULL, SITAGE_DES VARCHAR(2) NOT NULL, OLD_AGENDPEND INTEGER,
+  MEDIADUR TIMESTAMP, LONGADUR TIMESTAMP, CURTADUR TIMESTAMP, MOTIVO_FERIADO INTEGER, MOTIVO_DIASINDISP INTEGER,
+  MOTIVO_OCUPADA INTEGER, MOTIVO_FORAEXPED INTEGER, ID_TBSITAGE_REALIZADO VARCHAR(2) NOT NULL,
+  EXIBIR_ESPECIALIDADE_CBO CHAR(1), PREFERENCIA_AGENDA_CADEIRA CHAR(1), ID_RETIPAGE_GERACAO_PLAN_PEP SMALLINT,
+  ID_TBSITAGE_GERACAO_PLAN_PEP VARCHAR(2), AGEND_AUTOM_PLANEJ_QT_PEP CHAR(1), DIGITAR_ENFERMEIRO_RESP CHAR(1));
+CREATE TABLE AGCADAGENDA (ID_CADAGENDA INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL, TPAGEN SMALLINT NOT NULL,
+  UNID_ATEND SMALLINT NOT NULL, STATUS VARCHAR(1), AGENDA_DOMICILIAR CHAR(1), ID_TBCENCUS INTEGER);
+CREATE TABLE TBCENCUS (COD INTEGER NOT NULL PRIMARY KEY, ID INTEGER);
+CREATE TABLE AGCADEIRA (ID_CADEIRA INTEGER NOT NULL PRIMARY KEY, ID_CADAGENDA INTEGER NOT NULL, TIPO SMALLINT,
+  PRIORIDADE SMALLINT, FAIXA_INICIAL SMALLINT, FAIXA_FINAL SMALLINT, ID_COMPLEXIDADE SMALLINT NOT NULL,
+  ID_DURACAO SMALLINT NOT NULL, STATUS VARCHAR(1), COD_IDENT VARCHAR(15));
+CREATE TABLE AGDIASINDISP (ID_DIASINDISP INTEGER NOT NULL PRIMARY KEY, ID_CADAGENDA INTEGER NOT NULL, DATA_INICIAL DATE,
+  HR_INICIO_INICIAL TIMESTAMP, DATA_FINAL DATE, HR_FIM_FINAL TIMESTAMP, MOTIVO VARCHAR(200), DATA_GRAV TIMESTAMP,
+  USUARIO VARCHAR(31) NOT NULL, ID_CADEIRA INTEGER NOT NULL);
 CREATE TABLE TBSITAGE (COD VARCHAR(2) NOT NULL PRIMARY KEY, NOME VARCHAR(40), EXTENSAO VARCHAR(5),
   ICONE BLOB SUB_TYPE 0, INT_AGENDA_ONLINE CHAR(1));
 CREATE TABLE REAGENDA_TBCONVEN (ID INTEGER NOT NULL PRIMARY KEY, ID_REAGENDA INTEGER NOT NULL,
@@ -75,7 +95,21 @@ _SLOT = "Agenda consulta exemplo|101|2026-04-01|"
 PAIS_EXTERNOS = {"REAGENDA": ["1", "2", "3"], "TBCONVEN": ["1", "2", "3"], "TBESPEC": ["1", "2", "3"],
                  "TBUSERS": ["ana", "bia"], "RICADPAC": ["7"], "TBPROFIS": ["9001"], "TBUNIDAD": ["3"],
                  "RETP_INTEG_AGENDA_ONLINE": ["1"], "RETIPAGE": ["1", "2"], "RESITAGE": ["AG"],
-                 "REPACAGI": [_SLOT + "08:00", _SLOT + "08:20"], "TBPROCTO": ["1"], "TBMEDSOL": ["1"]}
+                 "REPACAGI": [_SLOT + "08:00", _SLOT + "08:20"], "TBPROCTO": ["1"], "TBMEDSOL": ["1"],
+                 "AGCOMPLEXIDADE": ["1", "2"], "AGDURACAO": ["1", "2"],
+                 "TBCENCUS": ["50"]}  # r5 (revisão): centro de custo (L8-11) só na imagem com COD e ID (chave alternativa)
+# rodada 5: parâmetros do produto (definição do catálogo; semente pedida em saida/L6-04.json)
+PARAMETROS_LISTA = {"TBESTADOCONFIRMACAO": "pep.alergia.estadoConfirmacao"}
+PARAMETROS_VALOR = ("agenda.cadeira.quantidadeAgendas", "agenda.cadeira.situacaoDesmarcada",
+                    "agenda.cadeira.agendamentoPendenteAnterior", "agenda.cadeira.duracaoMedia",
+                    "agenda.cadeira.duracaoLonga", "agenda.cadeira.duracaoCurta", "agenda.cadeira.motivoFeriado",
+                    "agenda.cadeira.motivoIndisponibilidade", "agenda.cadeira.motivoOcupada",
+                    "agenda.cadeira.motivoForaExpediente", "agenda.cadeira.situacaoRealizada",
+                    "agenda.cadeira.exibirEspecialidadeCbo", "agenda.cadeira.preferenciaAgenda",
+                    "agenda.cadeira.canalGeracaoPlanejamento", "agenda.cadeira.situacaoGeracaoPlanejamento",
+                    "agenda.cadeira.agendamentoAutomaticoPlanejamento", "agenda.cadeira.digitarEnfermeiroResponsavel")
+# linhas da origem que gravam vários itens (desdobrar: "gravados" conta itens)
+LINHAS_COM_ITEM = {"AGPARAM": 1}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo, a situação da
 # agenda de CONSULTAS (outra fatia) já gravada com o código cru 'C' e o cadastro de categorias de agenda do cliente
 # (uma de natureza 'exame', uma de 'consulta') vêm daqui
@@ -84,15 +118,19 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " INSERT INTO situacao_marcacao (codigo, descricao, significado, criado_em)"
                    " VALUES ('C', 'Consulta exemplo', 'cancelada', NOW(3));"
                    " CREATE TABLE IF NOT EXISTS categoria_agenda (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " codigo VARCHAR(30) NOT NULL, natureza VARCHAR(30) NOT NULL);"
-                   " INSERT INTO categoria_agenda (codigo, natureza) VALUES ('exames', 'exame'), ('consultas', 'consulta');"
+                   " codigo VARCHAR(30) NOT NULL, descricao VARCHAR(150) NOT NULL, natureza VARCHAR(30) NOT NULL,"
+                   " criado_em DATETIME(3) NOT NULL);"
+                   " INSERT INTO categoria_agenda (codigo, descricao, natureza, criado_em) VALUES ('exames', 'Exames', 'exame',"
+                   " NOW(3)), ('consultas', 'Consultas', 'consulta', NOW(3)),"
+                   " ('agenda_cadeiras', 'Agenda de cadeiras', 'sessao', NOW(3));"
                    " CREATE TABLE IF NOT EXISTS tipo_marcacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL, natureza VARCHAR(30) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE);"
                    " INSERT INTO tipo_marcacao (codigo, natureza) VALUES ('exame', 'exame'), ('consulta', 'primeira_vez'),"
                    " ('retorno', 'retorno');"
                    " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em)"
                    " SELECT '3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3) FROM DUAL"
-                   " WHERE NOT EXISTS (SELECT 1 FROM municipio_ibge WHERE codigo_ibge = '3550308')")
+                   " WHERE NOT EXISTS (SELECT 1 FROM municipio_ibge WHERE codigo_ibge = '3550308'); "
+                   + preparo_parametros())
 
 
 def __getattr__(nome):
@@ -262,7 +300,30 @@ def linhas(r, ins):
                TS(2026, 1, 5, 9, 10), "bia", TS(1899, 12, 30, 0, 0), None)]:  # sentinela: data_sentinela e recusa
         ins(EXC, list(v))
     _agenda_marcacoes(ins)
+    _cadeiras(ins)
     return _esperado()
+
+
+def _cadeiras(ins):
+    """Rodada 5: estado de confirmação de alergia, parâmetros, agenda de cadeiras, cadeira e indisponibilidade."""
+    for v in [(1, "Confirmada exemplo", "S"), (2, "Suspeita  exemplo", "N"), (3, "Descartada €", None),
+              (4, "   ", "S")]:                                    # sem rótulo: 1048
+        ins("TBESTADOCONFIRMACAO", list(v))
+    _ins(ins, "AGPARAM", AGENDAQT=5, SITAGE_DES="D", MOTIVO_FERIADO=1, ID_TBSITAGE_REALIZADO="R",
+         EXIBIR_ESPECIALIDADE_CBO="S", PREFERENCIA_AGENDA_CADEIRA="N", ID_RETIPAGE_GERACAO_PLAN_PEP=1,
+         AGEND_AUTOM_PLANEJ_QT_PEP="N", DIGITAR_ENFERMEIRO_RESP="S")  # 9 colunas com valor: 9 itens
+    _ins(ins, "AGCADAGENDA", ID_CADAGENDA=1, NOME="Agenda de cadeiras exemplo", TPAGEN=1, UNID_ATEND=3, STATUS="A",
+         AGENDA_DOMICILIAR="S", ID_TBCENCUS=77)                    # domiciliar: categoria própria criada; CC inexistente
+    _ins(ins, "TBCENCUS", COD=50, ID=5)                            # centro de custo já carregado (ID difere do COD)
+    _ins(ins, "AGCADAGENDA", ID_CADAGENDA=2, NOME="Cadeiras  inativas exemplo", TPAGEN=1, UNID_ATEND=0, STATUS="I",
+         ID_TBCENCUS=5)                                            # sem unidade; categoria adotada; CC pelo ID
+    _ins(ins, "AGCADEIRA", ID_CADEIRA=10, ID_CADAGENDA=1, TIPO=1, PRIORIDADE=0, FAIXA_INICIAL=1, FAIXA_FINAL=5,
+         ID_COMPLEXIDADE=1, ID_DURACAO=1, STATUS="A", COD_IDENT="CAD-01")
+    _ins(ins, "AGCADEIRA", ID_CADEIRA=11, ID_CADAGENDA=2, PRIORIDADE=1, ID_COMPLEXIDADE=2, ID_DURACAO=2,
+         STATUS="A")                                               # sem identificação: descrição fixa
+    _ins(ins, "AGDIASINDISP", ID_DIASINDISP=1, ID_CADAGENDA=1, DATA_INICIAL=D(2026, 5, 1),
+         HR_INICIO_INICIAL=TS(1899, 12, 30, 8, 0), DATA_FINAL=D(2026, 5, 1), HR_FIM_FINAL=TS(1899, 12, 30, 12, 0),
+         MOTIVO="Manutenção  da cadeira", DATA_GRAV=TS(2026, 4, 20, 10, 0), USUARIO="ana", ID_CADEIRA=10)
 
 
 def _esperado():
@@ -276,7 +337,10 @@ def _esperado():
         AGE: {"gravados": 6, "pendencias": {"restricao_destino_4025": 1, "restricao_destino_1048": 1,
                                             "restricao_destino_1062": 1, "pai_inexistente": 2, "pai_ambiguo": 1,
                                             "valor_fora_do_dominio": 1}},
-        SICONV: {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 1,
+        # rodada 5: as 2 agendas de cadeiras (ordem 806) gravam antes da agenda de exames e deslocam os ids dela; no
+        # banco descartável o par (2, 3) passa a coincidir com o de um pai EXTERNO fictício (1062 a mais; na carga
+        # real os ids nunca coincidem)
+        SICONV: {"gravados": 3, "pendencias": {"restricao_destino_1062": 2, "pai_inexistente": 1,
                                                "restricao_destino_1048": 1}},
         GRADE: {"gravados": 4, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2,
                                               "restricao_destino_1048": 3, "hora_invalida": 1,
@@ -304,6 +368,18 @@ def _esperado():
         "REPACAGD": {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3,
                                                    "valor_fora_do_dominio": 2}},
         EXC: {"gravados": 1, "pendencias": {"valor_presumido": 3, "data_sentinela": 1, "restricao_destino_1048": 2}},
+        # rodada 5
+        "TBESTADOCONFIRMACAO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
+        "AGPARAM": {"gravados": 9, "pendencias": {"vigencia_sem_fonte": 1}},
+        # duração do horário e natureza do setor presumidas (2 por linha); categoria criada pela 1, adotada pela 2
+        # r5 (revisão): a 1 (domiciliar) cria a categoria domiciliar; a 2 adota a de cadeiras do cadastro; centro de
+        # custo 77 sem linha na origem (pai_inexistente, entra sem custo)
+        "AGCADAGENDA": {"gravados": 2, "pendencias": {"valor_presumido": 4, "adotado_existente": 1,
+                                                      "pai_inexistente": 1}},
+        # r5 (revisão): código = identificação da origem (10) ou o de reserva pelo id (11); tipo 1 = cadeira (10),
+        # sem tipo: cadeira presumida (11)
+        "AGCADEIRA": {"gravados": 2, "pendencias": {"valor_presumido": 1}},
+        "AGDIASINDISP": {"gravados": 1, "pendencias": {}},
     }
 
 

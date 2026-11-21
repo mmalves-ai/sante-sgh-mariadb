@@ -187,8 +187,11 @@ class Plano(unittest.TestCase):
         self.assertEqual(decl[("SIWEBPARPERFIL", "perfil_portal_resultado.id")]["via"], "ref:SIWEBCADPERFIL;complementa")
         self.assertEqual(decl[("SIRESPAD", "modelo_resultado.exame_id")]["via"], "ref:SITABPRO(ATO,EXAME)")
         self.assertTrue(self.plano["SIWEBPARPERFIL"]["opcoes"]["perfil_portal_resultado"]["complementa"])
-        # a ligação interface x modelo não grava: o modelo vem de uma só fonte (a SITPEQV)
-        self.assertNotIn("SITPEQV_SITPEQVMODELO", self.plano)
+        # r5 (ADR 0006): a ligação interface x modelo entra na trilha da interface (retrato); o modelo ESCOLHIDO
+        # continua vindo de uma só fonte (a SITPEQV), sem gravar por cima da interface
+        self.assertEqual(self.plano["SITPEQV_SITPEQVMODELO"]["destinos"], ["trilha_auditoria"])
+        self.assertEqual(decl[("SITPEQV_SITPEQVMODELO", "trilha_auditoria.entidade_id")]["via"],
+                         "ref:SITPEQV;trilha_auditoria")
         # ordem: o exame vem antes do resultado padrão e do analito no exame
         ordem = {p["tabela"]: i for i, p in enumerate(carga_mapa.planejar(self.mapa, TABELAS))}
         self.assertLess(ordem["SITABPRO"], ordem["SIRESPAD"])
@@ -226,12 +229,13 @@ class Plano(unittest.TestCase):
     def test_descartes_com_causa_de_produto(self):
         sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
         self.assertNotIn("SIVARFORMULA", sc)  # rodada 3: carrega (fórmula da SIFORMUL)
-        esperado = {"SITPEQV_SITPEQVMODELO": "duplicado", "SIWEBPARDATA": "mecanismo_do_produto",
-                    "SIWEBPARTPATU": "mecanismo_do_produto"}
-        for t, causa in esperado.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
-            self.assertTrue(sc[t]["motivo"].strip(), t)
-        self.assertEqual(set(esperado), set(l7_03.DESCARTADAS))
+        # r5 (ADR 0006): nenhum descarte; as listas do portal viram opções da lista do produto
+        self.assertFalse({"SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU"} & set(sc))
+        self.assertEqual(set(l7_03.DESCARTADAS), set())
+        for t, chave in (("SIWEBPARDATA", "migracao.periodo_portal_resultado"), ("SIWEBPARTPATU", "migracao.tipo_atualizacao_portal")):
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_opcao", t)
+            c = {x["destino"]: x["coluna"] for x in self.mapa["colunas_decl"] if x["tabela"] == t}
+            self.assertEqual(c["parametro_definicao.chave"], "=" + chave)
 
 
 class Regras(unittest.TestCase):
@@ -296,6 +300,26 @@ class Conferencia(unittest.TestCase):
         r = conferencia.conferir("L7-03", depois_da_primeira=ler)
         self.assertEqual(r["erros"], [])
         self.assertEqual(lidos["apoio"], [["7", "HB", "HGB", "1", "0"]])
+
+    def test_ligacao_interface_modelo_r5(self):
+        # r5 (achado): a ligação vai à trilha como operação trazida da origem, datada pela evidência (nunca a carga)
+        pl = {p["tabela"]: p for p in carga_mapa.planejar(mapa.carregar_execucao(), TABELAS | BLOQUEADAS)}
+        t = {c["destino"]: c for c in pl["SITPEQV_SITPEQVMODELO"]["colunas"]["trilha_auditoria"]}
+        self.assertEqual(t["acao"]["coluna"], "=operacao")
+        self.assertEqual(t["ocorrido_em"]["coluna"], "#vigencia")
+        self.assertIn("vigencia", t["ocorrido_em"])
+        # conciliação na imagem: o modelo escolhido de cada interface pertence ao conjunto das ligações dela
+        lig, esc = {}, {}
+        def ins(tab, v):
+            d = dict(zip(l7_03.COLUNAS[tab], v))
+            if tab == "SITPEQV_SITPEQVMODELO":
+                lig[d["ID"]] = (d["ID_SITPEQV"], d["ID_SITPEQVMODELO"])
+            elif tab == "SITPEQV":
+                esc[d["CODIGO"]] = d["ID_SITPEQV_SITPEQVMODELO"]
+        l7_03.linhas(random.Random(1), ins)
+        fora = [k for k, e in esc.items() if lig[e][0] != k and k != 4]  # a 4 é recusada (sem nome)
+        self.assertEqual(fora, [])
+        self.assertEqual(len([k for k, (i, _) in lig.items() if i == 1]), 2)  # escolhida + alternativa
 
 
 if __name__ == "__main__":

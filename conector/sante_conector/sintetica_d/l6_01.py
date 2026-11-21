@@ -65,8 +65,8 @@ DDL = DDL % ", ".join("%s CHAR(1)" % c for c in HERANCA)
 
 CARREGADAS = ["PNTIPO", "REMODFIC", "RETITFIC", "RECONFIC", "REESPFIC", "REGRPFIC", "RETPINDATEND", "REUNIFIC",
               "TBACAOFLUXOSENHA", "TBCADGRUPOATEN", "TBGRUPOPRIORIDADE", "TBMODULO_RECEPCAO", "TBPROCED",
-              "REEXCATE", "REPARATE"]
-DESCARTADAS = ["TBMOTCANCTP", "TBPROCEDPADRAO", "TBMOTEXC", "TBMOTCANCMOD"]
+              "REEXCATE", "REPARATE", "TBMOTEXC", "TBMOTCANCMOD", "TBPROCEDPADRAO"]
+DESCARTADAS = ["TBMOTCANCTP"]
 SEM_CARGA = []
 NAO_CARREGADAS = DESCARTADAS + SEM_CARGA
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBESPEC": ["10"], "TBUNIDAD": ["1", "2"], "TBUSERS": ["usuario1"]}
@@ -185,4 +185,10 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 1}},
         # 20 itens (10 S + 10 N com com_falso); 'X' fora do domínio; linha sem marcação recusada
         "REPARATE": {"gravados": 20, "pendencias": {"valor_fora_do_dominio": 1, "sem_item_a_gravar": 1}},
+        # rodada 5 (ADR 0006): motivo do recibo e módulo do escopo de cancelamento carregam; nome vazio recusa
+        "TBMOTEXC": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1}},
+        # rodada 5 (revisão): o módulo do escopo de cancelamento e a classificação padrão da procedência entram como
+        # listas do hospital (parametro_opcao); sem nome, o rótulo é o código; módulo e definição adotados depois
+        "TBMOTCANCMOD": {"gravados": 5, "pendencias": {"adotado_existente": 8}},
+        "TBPROCEDPADRAO": {"gravados": 4, "pendencias": {"adotado_existente": 7}},
     }

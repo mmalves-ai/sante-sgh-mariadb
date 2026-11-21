@@ -108,10 +108,16 @@ class PlanoL507(unittest.TestCase):
         for t in l5_07.NAO_CARREGADAS:
             r = self.sem_carga.get(t)
             self.assertIsNotNone(r, t)
-            self.assertEqual(r["situacao"], "descarte", t)
-            esp = ("mecanismo_do_produto" if t in DOMINIO_FIXO else "sem_valor" if t in SEM_VALOR
-                   else "catalogo_oficial")
-            self.assertEqual(r["causa"], esp, t)
+            # rodada 5, revisão (ADR 0006, itens 1 e 4): só o catálogo com carregador versionado é descarte
+            # (catalogo_oficial, ligado pelo código); as demais listas ficam BLOQUEADAS até r5-1 (item do hospital no
+            # catálogo oficial) ou r5-2 (lista própria do hospital), nunca descartadas sem prova
+            if t == "FPBANCOPIS":
+                self.assertEqual((r["situacao"], r["causa"]), ("descarte", "catalogo_oficial"), t)
+            else:
+                self.assertEqual((r["situacao"], r["causa"]), ("bloqueada", "mecanismo_pedido"), t)
+                self.assertRegex(r["motivo"], r"^BLOQUEADA até o pedido r5-[12] \(saida/L5-07\.json\)", t)
+            if t in {"FPAFAST_COD", "FPAFAST_RAIS"}:  # versão antiga: entra como item do hospital, não some
+                self.assertIn("versao_antiga", r["motivo"], t)
             self.assertTrue(r["motivo"].strip(), t)
         self.assertEqual(DOMINIO_FIXO | SEM_VALOR | set(CATALOGO), set(l5_07.NAO_CARREGADAS))
 

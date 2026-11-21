@@ -14,12 +14,14 @@ CARREGADAS = {"TBSITAGE": "situacao_marcacao", "SIAGENDA": "agenda_servico", "SI
               "REAGENDA_TBCONVEN": "agenda_fonte_pagadora", "SIAGENDA_TBCONVEN": "agenda_fonte_pagadora",
               "REAGENDA_TBESPEC": "agenda_especialidade", "RECANAGE": "registro_excluido",
               "REPACAGD_EXCLUSAO": "registro_excluido", "SIPACAGI": "horario_agenda",
-              "SIPACAGD": "marcacao_horario", "REPACAGD": "marcacao_horario"}
+              "SIPACAGD": "marcacao_horario", "REPACAGD": "marcacao_horario",
+              # rodada 5 (ADR 0006): as antes descartadas carregam
+              "TBESTADOCONFIRMACAO": "parametro_opcao", "AGPARAM": "parametro_valor", "AGCADAGENDA": "agenda_servico",
+              "AGCADEIRA": "recurso_agendavel", "AGDIASINDISP": "bloqueio_agenda"}
 # rodada 4: as declarações prontas carregam (fim do horário por #data_hora_mais)
 PRONTAS = {}
 SIGNIFICADOS = {"aguardando", "confirmada", "chegou", "em_atendimento", "realizada", "cancelada", "falta", "bloqueada"}
-DESCARTES = {"TBESTADOCONFIRMACAO": "mecanismo_do_produto", "AGPARAM": "mecanismo_do_produto",
-             "AGCADAGENDA": "sem_valor", "AGCADEIRA": "sem_valor", "AGDIASINDISP": "sem_valor"}
+DESCARTES = {}
 BLOQUEADAS = set(PRONTAS)
 # a agenda de exames é identificada por NOME e CRM, a junção do próprio sistema antigo (o EXAME é atributo)
 AGENDA_EXAME = [{"tabela": "SIAGENDA", "modo": "alt_composta", "arg": ["NOME", "CRM"], "cols": ["NOME", "CRM"]}]
@@ -177,7 +179,9 @@ class L604(unittest.TestCase):
                          ("confirmada", "cancelada", "falta", "realizada", "chegou", "bloqueada"))
 
     def test_estado_de_confirmacao_de_alergia_nao_vai_para_a_agenda(self):
-        self.assertNotIn("TBESTADOCONFIRMACAO", self.plano)
+        self.assertEqual(self.plano["TBESTADOCONFIRMACAO"]["destinos"], ["parametro_opcao"])
+        self.assertEqual(self.cols("TBESTADOCONFIRMACAO")["parametro_definicao_id"]["coluna"],
+                         "=" + l6_04.PARAMETROS_LISTA["TBESTADOCONFIRMACAO"])
         for p in self.plano.values():
             self.assertNotIn("situacao_confirmacao", p["destinos"])
 
@@ -228,8 +232,29 @@ class L604(unittest.TestCase):
         esp = l6_04.linhas(__import__("random").Random(1), lambda t, v: linhas.append(t))
         self.assertEqual(set(esp), set(CARREGADAS))
         for t, e in esp.items():
+            if t in l6_04.LINHAS_COM_ITEM:  # desdobrar: "gravados" conta itens
+                self.assertEqual(linhas.count(t), l6_04.LINHAS_COM_ITEM[t], t)
+                continue
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
             self.assertEqual(e["gravados"] + recusas + l6_04.RECUSAS_SEM_RESTRICAO.get(t, 0), linhas.count(t), t)
+
+    def test_r5_agenda_de_cadeiras_e_parametros(self):
+        self.assertEqual(self.plano["AGCADAGENDA"]["destinos"][0], "agenda_servico")
+        self.assertEqual(set(self.plano["AGCADAGENDA"]["destinos"]), {"agenda_servico", "categoria_agenda", "setor_funcional"})
+        self.assertEqual(set(self.plano["AGCADEIRA"]["destinos"]), {"recurso_agendavel", "agenda_recurso"})
+        tipos = [c["coluna"] for c in self.todas("AGCADEIRA", "tipo")]
+        self.assertEqual(tipos, ["TIPO", "=~cadeira"])
+        self.assertEqual([c["coluna"] for c in self.todas("AGCADEIRA", "codigo")][0], "COD_IDENT")
+        self.assertFalse(self.todas("AGCADEIRA", "codigo_integracao"))
+        self.assertEqual(self.cols("AGDIASINDISP")["criado_em"]["coluna"], "DATA_GRAV")
+        ag = self.plano["AGCADAGENDA"]["colunas"]
+        self.assertIn("ref:TBCENCUS.ID", next(c for c in ag["setor_funcional"] if c["destino"] == "centro_custo_id")["via"])
+        self.assertIn("se:AGENDA_DOMICILIAR=S", next(c for c in ag["categoria_agenda"] if c["destino"] == "codigo")["via"])
+        self.assertEqual(set(self.plano["AGDIASINDISP"]["destinos"]), {"bloqueio_agenda", "motivo_bloqueio_agenda"})
+        item = self.todas("AGPARAM", "valor")[0]
+        self.assertEqual(item["coluna"], "#item")
+        for c in ("agenda.cadeira.quantidadeAgendas", "agenda.cadeira.digitarEnfermeiroResponsavel"):
+            self.assertIn(c, l6_04.PREPARO_DESTINO)
 
     def test_mapa_da_conferencia_so_com_esta_fatia(self):
         m = l6_04.MAPA_TESTE

@@ -29,6 +29,7 @@ do L5-05.json: tabelas atravessadas por referência encadeada na imagem comum).
 """
 
 DDL = """
+CREATE TABLE TBEMPHOSLOGO (ID_TBEMPHOS SMALLINT NOT NULL PRIMARY KEY, LOGO_EMPRESA BLOB SUB_TYPE 0, LOGO_PREFEITURA BLOB SUB_TYPE 0);
 CREATE TABLE TBGENERO_SOCIAL (ID SMALLINT NOT NULL PRIMARY KEY, CODIGO SMALLINT NOT NULL, NOME VARCHAR(30), ATIVO CHAR(1));
 CREATE TABLE TBGRAU_INST (COD_GRAU VARCHAR(1) NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(150), DESCRICAO_ESOCIAL VARCHAR(150),
   COD_ESOCIAL VARCHAR(2));
@@ -79,7 +80,7 @@ PAIS_EXTERNOS = {"TBPROFIS": ["100", "101"], "TBCBOPRO": ["10", "11", "12"]}
 # declarações das donas, a conferência tentaria carregá-los (mesmo mecanismo da L6-04)
 FATIA = ("TBGENERO_SOCIAL", "TBGRAU_INST", "TBGRUCONVEN", "TBPARENTE", "TBPESQUIPLANO", "TBRELIG", "TBTIPOATEUNIDADE",
          "TBVULNERABILIDADE_SOCIAL", "TBGERSEQ", "TBORGAOEMIS", "TBSEXO", "TBTIPOTELEFONE", "TBTPDOCUMENTO",
-         "TBUNID_IDADE", "TBUNIDAD", "TBCBOPRO_TBUNIDAD", "TBMEDSOL", "TBEMPHOS", "TBMUIBGE")
+         "TBUNID_IDADE", "TBUNIDAD", "TBCBOPRO_TBUNIDAD", "TBMEDSOL", "TBEMPHOS", "TBMUIBGE", "TBEMPHOSLOGO")
 
 
 def __getattr__(nome):
@@ -272,6 +273,10 @@ def linhas(r, ins):
         ins("TBUNIDAD", v)
     # unidade 1: diretor pelo CPF do profissional 100; autorizador com CPF sem profissional (pai_inexistente) e o
     # CNS do 101 de reserva; unidade 2: diretor só pelo CNS
+    # r5 (ADR 0007, 20): adotar agora MESCLA; o conflito com a linha já cadastrada guarda o valor da origem no
+    # histórico da mescla (pendência baixa, sem valor)
+    for _t, _n in [("TBSEXO", 2), ("TBTIPOTELEFONE", 2), ("TBTPDOCUMENTO", 1)]:
+        esperado[_t]["pendencias"]["mescla_conflito_origem_guardada"] = _n
     esperado["TBUNIDAD"] = {"gravados": 2, "pendencias": {
         "valor_presumido": 4, "valor_fora_do_dominio": 1, "pai_inexistente": 2,
         "restricao_destino_1048": 1, "restricao_destino_1062": 1}}
@@ -307,6 +312,11 @@ def linhas(r, ins):
         ins("TBCBOPRO_TBUNIDAD", list(v))
     # (10,1) e (11,1) gravadas; (10,2) mesma pessoa, estabelecimento e ocupação: adota a (10,1); (12,1) profissional
     # nunca carregado: pai_inexistente e recusa pelo NOT NULL (1048)
-    esperado["TBCBOPRO_TBUNIDAD"] = {"gravados": 3, "pendencias": {
+    esperado["TBCBOPRO_TBUNIDAD"] = {"gravados": 3, "pendencias": {"mescla_conflito_origem_guardada": 1, 
         "adotado_existente": 1, "pai_inexistente": 1, "vigencia_sem_fonte": 4, "restricao_destino_1048": 1}}
+    # r5 (ADR 0006): logotipo ao armazenamento de arquivos (#arquivo); sem nenhum logotipo: recusa (NOT NULL)
+    _png = lambda n: b"\x89PNG\r\n\x1a\n" + bytes([n]) * 32
+    for row in [[1, _png(1), _png(2)], [2, None, _png(3)], [3, None, None]]:
+        ins("TBEMPHOSLOGO", row)
+    esperado["TBEMPHOSLOGO"] = {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}
     return esperado

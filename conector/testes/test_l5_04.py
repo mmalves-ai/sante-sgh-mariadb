@@ -13,7 +13,8 @@ CARREGADAS = {"TBCOMPLEXIDADE_HOSPITALAR": ["complexidade_estabelecimento"],
               "TBCLASSC": ["classe_fonte_pagadora"], "TBESCOLARIDADE": ["nivel_escolaridade"],
               "TBCLINICA": ["clinica_assistencial"], "FPECIV": ["estado_civil"], "TBECIV": ["estado_civil"],
               "GETABFUN": ["pessoa_fisica", "conta_bancaria_credor"],
-              "SITECNIC": ["profissional", "pessoa_fisica"], "SHTECNIC": ["profissional", "pessoa_fisica"],
+              "SITECNIC": ["profissional", "pessoa_fisica", "profissional_versao"],
+              "SHTECNIC": ["profissional", "pessoa_fisica", "profissional_versao"],
               "TBFONTE_PAGADORA": ["origem_recurso_compra"],
               "REPACAGN": ["pre_cadastro"], "SIPACAGN": ["pre_cadastro"], "RESEGUR": ["titular_cobertura"],
               "FAMEDSOL": ["solicitante_externo"], "TBCBOPRO": ["inscricao_conselho"],
@@ -169,7 +170,7 @@ class PlanoL504(unittest.TestCase):
     def test_esperado_da_imagem_sintetica(self):
         esp = l5_04.linhas(random.Random(1), lambda t, v: None)
         self.assertEqual(set(esp), set(CARREGADAS))
-        self.assertEqual(sum(e["gravados"] for e in esp.values()), 64 if l5_04.MOTOR_APLICA_COLISAO else 65)
+        self.assertEqual(sum(e["gravados"] for e in esp.values()), 67 if l5_04.MOTOR_APLICA_COLISAO else 68)  # r5: pré-cadastro sem data grava (+3)
         self.assertEqual(esp["RESEGUR"]["pendencias"].get("documento_invalido", 0), 0 if l5_04.MOTOR_CPF_DOUBLE else 2)
 
 

@@ -34,10 +34,31 @@ ESPELHO_CONSULTA = {"brasindice": ["item_referencia_matmed", "preco_referencia_m
                     "cep": ["logradouro_cep"]}
 
 
-def ddl_destino(plano, raiz=RAIZ_APP):
-    """CREATE TABLE (sem FK) das tabelas de destino do plano e dos catálogos oficiais que ele usa, mais os ADD COLUMN."""
+def _tabelas_cod(x, saida):
+    """Tabelas consultadas por `cod:` (também dentro de `#item`/`#rotulo`) em qualquer nível da coluna planejada."""
+    if isinstance(x, dict):
+        for k, v in x.items():
+            if k == "cod" and isinstance(v, (tuple, list)) and v and isinstance(v[0], str):
+                saida.append(v[0])
+            else:
+                _tabelas_cod(v, saida)
+    elif isinstance(x, (list, tuple)):
+        for v in x:
+            _tabelas_cod(v, saida)
+
+
+def ddl_destino(plano, raiz=RAIZ_APP, preparo=""):
+    """CREATE TABLE (sem FK) das tabelas de destino do plano, dos catálogos oficiais que ele usa, das tabelas que um
+    `cod:` consulta e das que o `PREPARO_DESTINO` das fatias usa (conferidor r5), mais os ADD COLUMN."""
     ddl = mapa.ler_ddl(raiz)
     alvo = []
+    # a tabela que o próprio preparo cria (CREATE TABLE) fica com ele
+    criadas = set(re.findall(r"(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?(\w+)`?", preparo or ""))
+    for p in plano:
+        for dt in p["destinos"]:
+            _tabelas_cod(p["colunas"][dt], alvo)
+    alvo += [t for t in re.findall(r"(?i)\b(?:INSERT\s+(?:IGNORE\s+)?INTO|UPDATE|FROM|JOIN)\s+`?(\w+)`?", preparo or "")
+             if t in ddl and t not in criadas]
     for p in plano:
         for dt in p["destinos"]:
             alvo.append(dt)
@@ -138,12 +159,13 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                 contagens = {t: lt.contar(t) for t in presentes}
                 plano = carga_mapa.planejar(mapa_exec, presentes)
                 root.select_db(cliente)
-                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano)
-                if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
-                    banco.aplicar_script(root, ddl)
                 # com PREPARO_DOS_REQUERIDOS = True na fatia, o preparo das fatias de REQUER roda antes do dela (rodada
                 # 2, pedido da L7-01); opcional porque preparos diferentes que criam o estabelecimento colidiriam
                 fs = sintetica.resolver_fatias([nome]) if getattr(mod, "PREPARO_DOS_REQUERIDOS", False) else [nome]
+                prep = "\n".join(getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None) or "" for f in fs)
+                ddl = getattr(mod, "DDL_DESTINO", None) or ddl_destino(plano, preparo=prep)
+                if ddl.strip():  # fatia sem tabela carregável: nada a criar (L6-12, L6-13)
+                    banco.aplicar_script(root, ddl)
                 for f in fs:
                     preparo = getattr(sintetica.modulo_fatia(f), "PREPARO_DESTINO", None)
                     if preparo:

@@ -7,7 +7,7 @@ import unittest
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_17
 
-NA_IMAGEM = set(re.findall(r"CREATE TABLE (\w+) \(", l8_17.DDL))
+NA_IMAGEM = set(re.findall(r"CREATE TABLE (\w+) \(", l8_17.DDL)) - set(l8_17.PAIS_EXTERNOS)  # pai de outra fatia
 DESTINOS = {"TBSMSTPERRO": "codigo_retorno_mensageria", "TBSMSTPRETMSG": "codigo_retorno_mensageria",
             "TBTISSSCHEMA": "transacao_tiss_webservice", "TBTPWEBSERV": "padrao_troca",
             "TBTISSURLWSSGH": "transacao_tiss_webservice"}
@@ -42,8 +42,10 @@ class Plano(unittest.TestCase):
         return {c["destino"]: c for c in self.plano[t]["colunas"][DESTINOS[t]]}
 
     def test_so_as_carregadas_entram_no_plano(self):
-        self.assertEqual(set(self.plano), set(l8_17.CARREGADAS))
+        self.assertEqual(set(self.plano), set(l8_17.CARREGADAS) | set(l8_17.NOVAS))
         self.assertEqual(set(DESTINOS), set(l8_17.CARREGADAS))
+        for t in l8_17.LISTAS:  # rodada 5 (ADR 0006): lista do hospital
+            self.assertEqual(self.plano[t]["destinos"][0], "parametro_opcao", t)
         for t, dt in DESTINOS.items():
             self.assertEqual(self.plano[t]["destinos"], [dt], t)
 
@@ -113,7 +115,7 @@ class Plano(unittest.TestCase):
 
     def test_nao_carregadas_tem_motivo(self):
         for c in self.decl:
-            if c["tabela"] not in l8_17.CARREGADAS:
+            if c["tabela"] not in l8_17.CARREGADAS + l8_17.NOVAS:
                 self.assertEqual(c["destino"], "", (c["tabela"], c["coluna"]))
                 self.assertIn("não carregada", c["motivo"], (c["tabela"], c["coluna"]))
 
@@ -130,13 +132,31 @@ class Plano(unittest.TestCase):
     def test_cobertura_toda_tabela_carrega_ou_descarte_de_produto(self):
         arq = mapa.DIR_PACOTE / "declarado/sem_carga.tsv"
         sc = {r["tabela"]: r for r in mapa.ler_tsv(arq)}
-        for t in NA_IMAGEM - set(l8_17.CARREGADAS):
+        for t in NA_IMAGEM - set(l8_17.CARREGADAS) - set(l8_17.NOVAS):
             self.assertIn(t, sc, t)
             self.assertEqual(sc[t]["situacao"], "descarte", t)
             self.assertIn(sc[t]["causa"], CAUSAS_DESCARTE, t)
             self.assertTrue(sc[t]["motivo"].strip(), t)
-        for t in l8_17.CARREGADAS:
+        for t in l8_17.CARREGADAS + l8_17.NOVAS:
             self.assertNotIn(t, sc, t)
+
+
+    def test_r5b_situacao_do_envio_pela_origem(self):
+        # excluído = cancelada, inválido = rejeitada, o resto enviada: concorrentes na ordem declarada
+        sit = [(c["coluna"], c.get("via") or "") for c in self.mapa["colunas_decl"]
+               if c["tabela"] == "PRCABNEXODATA" and c.get("destino") == "envio_prescricao_plataforma.situacao"]
+        self.assertEqual(sit, [("=cancelada", "se:DATA_HORA_EXCLUSAO"), ("=rejeitada", "se:REGISTRO_VALIDO=N,n"),
+                               ("=enviada", "")])
+
+    def test_r5b_historico_cid_versao_com_retrato(self):
+        # r5c: o histórico do hospital vai à trilha, nunca à vigência do catálogo oficial (regra 7)
+        dec = {c["destino"]: c for c in self.mapa["colunas_decl"] if c["tabela"] == "HTCID" and c.get("destino")}
+        self.assertEqual(dec["trilha_auditoria.dados_depois"]["coluna"], "#retrato:*")
+        self.assertEqual(dec["trilha_auditoria.entidade_id"]["depara"], "cid10")
+        self.assertEqual(self.plano["HTCID"]["destinos"], ["trilha_auditoria"])
+        for t in l8_17.TRILHA:
+            self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] == t
+                              and (c.get("destino") or "").startswith("termo_terminologia")], t)
 
 
 class Regras(unittest.TestCase):
@@ -151,10 +171,15 @@ class ImagemSintetica(unittest.TestCase):
     def test_esperado_coerente(self):
         linhas = {}
         esp = l8_17.linhas(None, lambda t, v: linhas.setdefault(t, []).append(v))
-        self.assertEqual(set(esp), set(l8_17.CARREGADAS))
-        self.assertEqual(set(linhas), NA_IMAGEM)
+        self.assertEqual(set(esp), set(l8_17.CARREGADAS) | set(l8_17.NOVAS))
+        self.assertEqual(set(linhas), NA_IMAGEM | set(l8_17.PAIS_EXTERNOS))
         recusas = ("restricao_destino_1048", "restricao_destino_1062", "pai_pendente", "pai_inexistente")
         for t, e in esp.items():
+            if t in l8_17.NOVAS:  # uma linha recusada pode levar várias pendências: recusadas declaradas por tabela
+                self.assertEqual(e["gravados"] + l8_17.RECUSADAS.get(t, 0), len(linhas[t]), t)
+                if t not in l8_17.AGUARDAM_DDL:
+                    self.assertGreaterEqual(e["gravados"], 1, t)
+                continue
             n = len(linhas[t])
             recusadas = sum(e["pendencias"].get(r, 0) for r in recusas)
             self.assertEqual(e["gravados"] + recusadas, n, t)

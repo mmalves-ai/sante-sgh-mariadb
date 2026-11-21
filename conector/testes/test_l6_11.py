@@ -18,7 +18,7 @@ FORMA_FORA = set()
 
 
 _DIR = Path(os.environ.get("CONECTOR_MAPA_DIR") or mapa.DIR_PACOTE)
-DESCARTE = {"PRAGRUP_PRFILTROCLASSIF": "sem_valor", "PRPARAM": "mecanismo_do_produto"}
+DESCARTE = {}  # rodada 5 (ADR 0006): nenhum descarte
 # rodada 3 (revisão do achado): bloqueadas por falta de mecanismo, com a declaração pronta e comentada; nunca descarte
 BLOQUEADA = set()  # conferidor r4: PRPAREVOLIMG carrega com #arquivo
 
@@ -56,6 +56,7 @@ class FatiaL611(unittest.TestCase):
                   "PRPADEVOL": ["modelo_campo", "unidade_resposta"],
                   "PRITEM_GEITENS": ["parametro_clinico_item", "item_prescritivel"],
                   "PREVOLUCAO": ["modelo_documento_clinico", "modelo_documento_versao"],
+                  "PRPARAM": ["parametro_valor", "credencial_integracao", "trilha_auditoria", "logotipo_estabelecimento"],
                   "TBKITPRO": ["kit_cuidado_enfermagem", "kit_cuidado_enfermagem_item", "unidade_prescricao"]}
         for t, p in self.plano.items():
             self.assertEqual(p["destinos"], varios.get(t, p["destinos"][:1]), t)
@@ -128,7 +129,8 @@ class FatiaL611(unittest.TestCase):
                       "cuidado_enfermagem_id": "TBPROENF", "acomodacao_id": "TBACOMODLEITO",
                       "especialidade_medica_id": "TBESPEC", "alergeno_id": "TBALERGIA",
                       "tipo_documento_clinico_id": "PRTPASSINATURA",
-                      "modelo_documento_clinico_id": "PREVOLUCAO"}  # PRPAREVOLIMG (conferidor r4)
+                      "modelo_documento_clinico_id": "PREVOLUCAO",
+                      "entidade_id": "PRFILTROCLASSIF"}  # r5: trilha do filtro do painel  # PRPAREVOLIMG (conferidor r4)
         for (t, d), r in novas.items():
             esperado = {"PRITENSKITMED": "PRKITMED", "PRKITSOLITENS": "PRKITSOL"}.get(t) \
                 if d == "kit_prescricao_id" else por_coluna[d]
@@ -235,6 +237,9 @@ class FatiaL611(unittest.TestCase):
         for t, e in esp.items():  # lidas = gravadas + recusadas
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith("restricao_destino_") or k in ("pai_pendente", "codigo_colisao_caixa"))
+            if t == "PRPARAM":  # r5b: desdobrado (gravados = parâmetros): 1 linha recusada + 155 itens da outra
+                self.assertEqual((recusas, len(linhas[t])), (1, 2), t)
+                continue
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]), t)
 
     def test_documento_sem_evento_e_ultimo_evento(self):

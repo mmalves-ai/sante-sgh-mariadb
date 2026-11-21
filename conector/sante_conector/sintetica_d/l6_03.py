@@ -7,8 +7,9 @@ pelo de-para da legenda e aguardando para o código sem par), RETIPAGE (canal), 
 categoria criada ou adotada pela coluna EXAME, o profissional pela inscrição no conselho e o setor dono pela
 unidade), REAGECRI (geração da
 grade), RECTRAGE e SICTRAGE (escala semanal das agendas de consulta e de exame) e SICANAGE (cancelamento de marcação
-de exame, na trilha de auditoria como destino interino). CDTPRETCONS e PSTPRETORNO são descarte
-(declarado/sem_carga.tsv, mecanismo_do_produto). REPACAGI (horário da agenda, rodada 4): fim = início + duração
+de exame, na trilha de auditoria como destino interino). CDTPRETCONS e PSTPRETORNO (rodada 5, ADR 0006)
+carregam como opções dos parâmetros de lista do produto (parametro_opcao, origem migracao; definição do catálogo do
+produto, aqui no PREPARO_DESTINO). REPACAGI (horário da agenda, rodada 4): fim = início + duração
 (`#data_hora_mais`, sem duração na linha a da agenda); o horário bloqueado na origem (HR, Q, P) cria o bloqueio da
 agenda e o motivo (destinos secundários `antes` com `destino_se`).
 Pais de fora da fatia: TBUSERS (login) e TBPROFIS (profissional) como PAIS_EXTERNOS; TBCBOPRO (inscrição no
@@ -27,6 +28,8 @@ unidade inexistente, dia fora de 1..7, fim antes do início, hora inválida, age
 import datetime
 import decimal
 import re
+
+from .l6_06 import preparo_parametros
 
 DDL = """
 CREATE TABLE AGCADMOTIVO (ID_CADMOTIVO INTEGER NOT NULL, DESCRICAO VARCHAR(100), ID_RETPAGEN SMALLINT NOT NULL,
@@ -83,12 +86,14 @@ CREATE TABLE SIAGENDA (ID INTEGER NOT NULL PRIMARY KEY, CRM INTEGER NOT NULL, NO
   OBS_PORTAL_PAC_AGEND_ONLINE BLOB SUB_TYPE 1);
 """
 
-# descarte de produto (declarado/sem_carga.tsv): 2 linhas falsas cada
-NAO_CARREGADAS = {"CDTPRETCONS": 2, "PSTPRETORNO": 2}
-DESCARTADAS = ("CDTPRETCONS", "PSTPRETORNO")
+# rodada 5 (ADR 0006): nenhuma descartada; os domínios de retorno viram opções de parâmetro do produto
+NAO_CARREGADAS = {}
+DESCARTADAS = ()
 PRONTAS = ()
+PARAMETROS_LISTA = {"CDTPRETCONS": "agenda.retorno.tipoRetorno", "PSTPRETORNO": "agenda.retorno.criterioRetorno"}
 
-CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "RESITAGE", "RETIPAGE",
+CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "CDTPRETCONS",
+              "PSTPRETORNO", "RESITAGE", "RETIPAGE",
               "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "REAGENDA", "REAGECRI", "RECTRAGE", "REPACAGI", "SICTRAGE")
 # rodada 4: SICTRAGE depois de REAGENDA porque a agenda de exame (SIAGENDA, L6-04) passou a esperar o profissional
 PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia"], "TBPROFIS": ["1", "2"]}
@@ -97,8 +102,8 @@ PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia"], "TBPROFIS": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
                    " INSERT INTO categoria_agenda (codigo, descricao, natureza, criado_em)"
-                   " VALUES ('exame', 'Exame do cliente', 'exame', NOW(3))")
-
+                   " VALUES ('exame', 'Exame do cliente', 'exame', NOW(3)); "
+                   + preparo_parametros())
 
 def _colunas():
     """{tabela: [(coluna, tipo, obrigatoria)]} lidas do próprio DDL (fonte única da forma)."""
@@ -143,6 +148,10 @@ def linhas(r, ins):
         if tab not in CARREGADAS:
             for i in range(1, NAO_CARREGADAS[tab] + 1):
                 ins(tab, [_falso(tp, i) for _, tp, _ in cols])
+    # rodada 5: tipos e critérios de retorno (o 3, só espaços, sem rótulo: 1048)
+    for tab in ("CDTPRETCONS", "PSTPRETORNO"):
+        for i, n in [(1, "Retorno  exemplo"), (2, "Revisão exemplo €"), (3, "   ")]:
+            _ins(ins, tab, ID=i, NOME=n)
     # motivo da marcação: 3 sem descrição (NOT NULL do destino recusa a linha)
     for i, d in [(1, "Primeira consulta exemplo"), (2, "Retorno pós-operatório"), (3, None), (5, "Revisão  anual ")]:
         _ins(ins, "AGCADMOTIVO", ID_CADMOTIVO=i, DESCRICAO=d, ID_RETPAGEN=1)
@@ -250,6 +259,8 @@ def linhas(r, ins):
              TIPOHR=tipohr, DURACAO=dur, USUARIO=usu, TELEATENDIMENTO=tele, RETORNO="N", CONV=1, UNID=0, PROCED=0)
     return {
         "AGCADMOTIVO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
+        "CDTPRETCONS": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
+        "PSTPRETORNO": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "AGCOMPLEXIDADE": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1}},
         "AGDURACAO": {"gravados": 4, "pendencias": {}},
         "AGGRPFASEEVOL": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
@@ -264,8 +275,11 @@ def linhas(r, ins):
         # pela 1 e adotada pela 2, 3, 5 e 6; setor agenda_sem_unidade criado pela 1 e adotado pela 2, 3 e 6; a 5
         # (UNID 7, sem cadastro) cria agenda_unidade_7 com o nome fixo. pai_inexistente: login da 5 e a unidade 7 na
         # agenda, no nome e na unidade do setor. valor_presumido: setor presumido em cada linha lida (6)
+        # rodada 5 (ADR 0007, 20): a adoção MESCLA; o setor e a categoria adotados com valor diferente guardam o da
+        # origem no histórico (mescla_conflito_origem_guardada)
         "REAGENDA": {"gravados": 5, "pendencias": {"adotado_existente": 7, "pai_ambiguo": 1, "pai_inexistente": 4,
-                                                   "restricao_destino_1048": 1, "valor_presumido": 6}},
+                                                   "restricao_destino_1048": 1, "valor_presumido": 6,
+                                                   "mescla_conflito_origem_guardada": 2}},
         # geração: 1 gravada (agenda 1, C); a E da mesma agenda é a reversão (CHECK ck_geracao_grade_reversao: 4025,
         # visível até a gravação condicional pedida); sem responsável (1048); hora inválida 2575 em solicitada_em e
         # processada_em (2 hora_invalida, 1048); agenda inexistente (pai_inexistente, 1048)

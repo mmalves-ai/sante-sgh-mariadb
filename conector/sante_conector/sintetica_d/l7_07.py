@@ -90,6 +90,8 @@ CREATE TABLE GERASVALFINAL (ID INTEGER NOT NULL PRIMARY KEY, ID_GEVALMEM INTEGER
   QTDE NUMERIC(18,3) NOT NULL, DATA TIMESTAMP);
 CREATE TABLE GERASVALINICIAL (ID_GEVALMEM INTEGER NOT NULL, ITEM INTEGER NOT NULL, QTDE NUMERIC(18,3) NOT NULL,
   ID INTEGER NOT NULL PRIMARY KEY, DATA TIMESTAMP, ID_GERASVALFINAL INTEGER);
+CREATE TABLE GEKITKPI (ITEM_PRI INTEGER NOT NULL, ITEM_SEC INTEGER NOT NULL, QTDE NUMERIC(9,3), PRIMARY KEY (ITEM_PRI, ITEM_SEC));
+CREATE TABLE GEUSERS_TBCLASSI (USUARIO_GEUSERS VARCHAR(30) NOT NULL, ID_TBCLASSI SMALLINT NOT NULL, PRIMARY KEY (USUARIO_GEUSERS, ID_TBCLASSI));
 CREATE TABLE GEITENS_TBPRINC (ID_GEITENS INTEGER NOT NULL, ID_TBPRINC INTEGER NOT NULL, PRIMARY KEY (ID_GEITENS, ID_TBPRINC));
 CREATE TABLE TBPRINC (COD INTEGER NOT NULL, NOME VARCHAR(254), ATIVO CHAR(1), COD_DCB VARCHAR(10), ID_TBTERAPEUTICO INTEGER, ID_TBUNICON_PADRAO VARCHAR(7), PRIMARY KEY (COD));
 CREATE TABLE TBCENCUS (COD INTEGER NOT NULL PRIMARY KEY, ID INTEGER);
@@ -119,11 +121,13 @@ ORIGEM_PAIS = ("TBCENCUS", "TBCBOPRO")
 CARREGADAS = ("TBTP_ENV_LISTA_AVAL_FARM", "TBUNICON", "GEITENS", "GENOMCOM", "GEUNIPRESC", "GEVALMEM",
               "GEITEMKITRAS", "GERASVALESTINI", "GEVIASITEM", "GEKITITE", "GESALDOKITRAS", "GECADBAL", "GELANBAL",
               "GECADPED", "GELANNFS", "GECADNFS", "GERASVALNFS", "GERASVALTRANSFLOTE", "GELANPAC", "TBPRINC",
-              "GEITENS_TBPRINC", "GERASVALFINAL", "GERASVALINICIAL")
-DESCARTADAS = ("GEKITKPI", "GEUSERS_TBCLASSI")
+              "GEITENS_TBPRINC", "GERASVALFINAL", "GERASVALINICIAL", "GEKITKPI")
+# rodada 5 (ADR 0006): GEKITKPI carrega como kit do item principal; GEUSERS_TBCLASSI na trilha do usuário
+DESCARTADAS = ()
 # rodada 4: nenhuma bloqueada (o princípio do hospital carrega em principio_ativo_cliente; as fotografias do saldo
 # do lote carregam como histórico na trilha_auditoria, correção da rodada 4)
-BLOQUEADAS = ()
+# r5c: GEUSERS_TBCLASSI PENDENTE (pedido r5b_classificacao_usuario)
+BLOQUEADAS = ("GEUSERS_TBCLASSI",)
 NAO_CARREGADAS = DESCARTADAS + BLOQUEADAS
 COLS = {m.group(1): [c.split()[0] for c in re.split(r",\s+(?![0-9]+\))", re.sub(r",\s*(PRIMARY KEY|CONSTRAINT).*$", "", m.group(2))) if c.split()[0] not in ("PRIMARY", "CONSTRAINT")]
         for m in re.finditer(r"CREATE TABLE (\w+) \((.*?)\);", " ".join(DDL.split()))}
@@ -331,7 +335,12 @@ def linhas(r, ins):
            ID_TBCBOPRO=9 if x[0] == 7 else 1,
            CONTA=1.0, ID_TBFORNEC=2 if x[0] == 7 else None)
     # (linha 7: inscrição no conselho nunca vista: solicitante NULL com pai_inexistente)
+    # rodada 5: kit do item principal 101 com dois secundários; 102 com secundário nunca visto (insumo e unidade
+    # pai_inexistente, 1048: o cabeçalho do kit é desfeito)
+    for x in [(101, 102, D(2)), (101, 105, D(1)), (102, 199, D(1))]:
+        _l(ins, "GEKITKPI", ITEM_PRI=x[0], ITEM_SEC=x[1], QTDE=x[2])
     return {
+        "GEKITKPI": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1}},
         "TBPRINC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
                                                   "codigo_inexistente_destino": 4, "pai_inexistente": 1}},
         "GEITENS_TBPRINC": {"gravados": 6, "pendencias": {"pai_pendente": 1}},
@@ -374,7 +383,8 @@ def linhas(r, ins):
         "GEVALMEM": {"gravados": 5, "pendencias": {"adotado_existente": 1, "data_sentinela": 1,
                                                    "restricao_destino_1048": 1, "pai_pendente": 1,
                                                    "pai_inexistente": 1}},
-        "GEITEMKITRAS": {"gravados": 6, "pendencias": {"adotado_existente": 2, "restricao_destino_4025": 1,
+        "GEITEMKITRAS": {"gravados": 6, "pendencias": {"adotado_existente": 2, "mescla_conflito_origem_guardada": 2,
+                                                       "restricao_destino_4025": 1,
                                                        "pai_pendente": 1, "pai_inexistente": 3,
                                                        "restricao_destino_1048": 2}},
         "GERASVALESTINI": {"gravados": 4, "pendencias": {"restricao_destino_4025": 1, "restricao_destino_1048": 2,

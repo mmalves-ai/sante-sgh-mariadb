@@ -24,7 +24,9 @@ from pathlib import Path
 _MAPA = Path(__file__).resolve().parents[2] / "mapa"
 FATIA = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC", "TBINDICE",
          "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED", "TBPROCTO",
-         "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI"]
+         "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI",
+         # R5 (ADR 0006): listas de opções -> parametro_opcao (TBCTRTAT, também lida pelo TBITEATE, em PAIS_ORIGEM)
+         "TBIRREGCTRCTA", "TBCONVPERCTAPAC"]
 # r4: TBCTRTAT é só LIDA (a TAB do tipo de atendimento segue pelo nome da lista; a lista é descarte de produto)
 PAIS_ORIGEM = ["TBCBOPRO", "TBPRESER", "TBTABDTH", "TBCTRTAT"]
 
@@ -163,8 +165,14 @@ def linhas(r, ins):
     for ti, mo in ((1, 1), (2, 2), (3, 1), (5, 9)):
         q("TBIRREGULARID_TBMODULO", ID_TBIRREGULARID=ti, ID_TBMODULO=mo)
     # r4: a tabela do tipo de atendimento (lida pelo nome; a lista é descarte de produto)
-    for cod, n in ((1, "TUSS"), (2, "SUS")):
+    # R5 (ADR 0006): a lista também CARREGA (parametro_opcao); 4 sem nome: rótulo presumido
+    for cod, n in ((1, "TUSS"), (2, "SUS"), (4, None)):
         q("TBCTRTAT", COD=cod, NOME=n)
+    # R5: modo de controle da irregularidade (3 só espaços: 1048) e percentual de taxa em pacote
+    for i, n in ((1, "Somente alerta"), (2, "Bloqueia  a conta"), (3, "   ")):
+        q("TBIRREGCTRCTA", ID=i, NOME=n)
+    for i, n in ((1, "Percentual exemplo"), (2, "Sem percentual")):
+        q("TBCONVPERCTAPAC", ID=i, NOME=n)
     # tipo de atendimento: o COD 1 repete na tabela 2 (1062); 2|3 sem nome (1048); r4: tabela 3 inexistente
     # (pai_inexistente, padrão próprio presumido)
     for tab, cod, n in ((1, 1, "Consulta exemplo"), (1, 2, "Exame  exemplo"), (2, 1, "Consulta exemplo SUS"),
@@ -226,6 +234,12 @@ def linhas(r, ins):
                                             (2, 1, 10101012, d(2025, 3, 1), "I", dict(PERC_APOS_HORARIO=D("15.00")))):
         q("TBPERTHM", CONV=conv, TAB=tab, PROCTO=procto, DATA=data, TIPO_PAC=tp, **kw)
     return {
+        # R5 (ADR 0006): listas -> parametro_opcao; TBCTRTAT 4 sem nome com rótulo presumido; TBIRREGCTRCTA 3 (1048)
+        # módulo faturamento e definição do parâmetro: a 1ª lista na ordem do mapa (TBCONVPERCTAPAC) cria os dois e
+        # a 2ª linha adota (2); nas outras o módulo já existe (adotado em toda linha, a definição da 2ª em diante)
+        "TBCTRTAT": {"gravados": 3, "pendencias": {"valor_presumido": 1, "adotado_existente": 5}},
+        "TBIRREGCTRCTA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 3}},
+        "TBCONVPERCTAPAC": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
         "TBMATMED": {"gravados": 4, "pendencias": {"licenca_nao_comprovada": 1, "restricao_destino_1048": 1,
                                                    "valor_fora_do_dominio": 2, "valor_presumido": 4,
                                                    "codigo_inexistente_destino": 1}},

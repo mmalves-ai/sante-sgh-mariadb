@@ -1,9 +1,9 @@
 """Fatia L7-06 (suprimentos, módulo SUP: cadastros de estoque, compras e fornecedores): tabelas da origem com a forma
 do dicionário e dados 100% falsos.
 
-Cobertura total (colunas.d/L7-06.tsv): 21 tabelas carregadas e 4 descartadas com motivo de produto
-(declarado/sem_carga.tsv: GETPSALDO, GEULTDOCGER, GPPARAMG, TBDISPON), que entram na imagem só com a forma (TBDISPON
-com nomes, lida pela referência encadeada do fornecedor).
+Cobertura total (colunas.d/L7-06.tsv): 25 tabelas carregadas. Rodada 5 (ADR 0006): GETPSALDO, GEULTDOCGER, GPPARAMG e
+TBDISPON deixam o descarte e carregam na trilha (retrato completo; GEULTDOCGER uma linha por tipo e mês com a lista
+dos números gerados); TBDISPON continua lida pela referência encadeada do fornecedor.
 Rodada 2 da cobertura: GESALDOS (histórico mensal do saldo consolidado) e GESALCON (saldo consignado do fornecedor)
 carregam na trilha do insumo (âncora `complementa` no insumo, um valor por linha pelo `desdobrar`); TBFORNEC grava a
 conta bancária do credor só com CONTA preenchida (desdobrar) e as retenções na trilha da empresa; GEREFER guarda a
@@ -111,7 +111,11 @@ CARREGADAS = ("GENIVELSERV", "GEPADRAO_DATAMATRIX_QRCODE", "GEPORTALCOMPRAS", "G
               "GELOCUSU", "GESUBGRU", "GEUSERS", "PRPARVARUNIRESP", "TBFORNEC", "TBCATFOR", "TBFORNECTEL", "GEBARRAS",
               "GESALDOS", "GESALCON")
 # descarte de produto (declarado/sem_carga.tsv): só a forma, 2 linhas falsas cada (TBDISPON com nomes, 3 linhas)
-DESCARTADAS = ("GETPSALDO", "GEULTDOCGER", "GPPARAMG", "TBDISPON")
+# r5c: GEULTDOCGER PENDENTE (pedido r5b_sequencia_por_competencia); GPPARAMG em parametro_valor
+TRILHA_R5 = ("GETPSALDO", "GPPARAMG", "TBDISPON")
+BLOQUEADAS = ("GEULTDOCGER",)
+CARREGADAS = CARREGADAS + TRILHA_R5
+DESCARTADAS = ()
 PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo", "novo.exemplo"], "GELOCARM": [1, 2, 3],
                  "GEGRUPOS": [1, 2], "GEITENS": [10, 20], "TBTIPOTELEFONE": [1]}
 PREPARO_DESTINO = ("INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES"
@@ -196,11 +200,18 @@ def linhas(r, ins):
     # saldo consignado: fornecedor 1 e insumo 20 (1 linha com o retrato); insumo 30 nunca visto (pai_inexistente)
     for v in [(1, 20, D("3.000")), (2, 30, D("1.000"))]:
         ins("GESALCON", list(v))
-    for t in DESCARTADAS:
-        if t != "TBDISPON":
-            for i in (1, 2):
-                ins(t, _generica(t, i))
-    for v in [(1, "COMERCIAL"), (2, "Plantão 24 horas"), (3, "Horário especial exemplo")]:
+    # r5c: os 3 itens do tipo de saldo (prova derivado por ID 1..3)
+    for i in (1, 2, 3):
+        ins("GETPSALDO", _generica("GETPSALDO", i))
+    # r5c: parâmetros do patrimônio (a origem tem uma linha): 18 colunas, DIAS_GARANTIA vazio não gera item -> 17
+    # itens em parametro_valor do estabelecimento (S/N -> sim/nao; códigos como estão; dias; nome)
+    ins("GPPARAMG", [1, "S", "N", "S", "S", "N", "S", "L", "1", 30, 15, "Responsavel exemplo", None, "A", "1", "2",
+                     "X", "1", "N"])
+    # números gerados: tipo 1 em 01/2025 (2 linhas, um grupo), tipo 2 em 02/2025, tipo 9 nunca visto (NULL com
+    # pai_inexistente, a linha fica) e mês 13 (competência inválida: valor_fora_do_dominio; entra com o momento da carga, 2ª fonte)
+    for v in [(1, 202501, 10), (1, 202501, 11), (2, 202502, 5), (9, 202503, 1), (3, 202513, 1)]:
+        ins("GEULTDOCGER", list(v))
+    for v in [(1, "COMERCIAL"), (2, "Plantão 24 horas")]:
         ins("TBDISPON", list(v))
     # usuário x local: 1|1 criado e adotado pelo segundo tipo de movimento; usuário e local inexistentes (1048)
     for v in [("almox.exemplo", 1, "EN"), ("almox.exemplo", 1, "SA"), ("almox.exemplo", 2, "EN"),
@@ -317,6 +328,7 @@ def linhas(r, ins):
         # documento_invalido: a regra cruzada CPF x CNPJ da mesma coluna (6) + o CNPJ errado da linha 5 na empresa e
         # no titular da conta (2); catálogo: município da linha 6 e banco 999 da linha 6 (sem conta: nada gravado)
         "TBFORNEC": {"gravados": 4, "pendencias": {"documento_invalido": 8, "adotado_existente": 1,
+                                                   "mescla_conflito_origem_guardada": 1,
                                                    "valor_fora_do_dominio": 2, "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1, "catalogo_codigo_inexistente": 2}},
         "TBCATFOR": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_pendente": 2, "pai_inexistente": 1,
@@ -327,4 +339,37 @@ def linhas(r, ins):
         "GESALDOS": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
                                                    "pai_inexistente": 1}},
         "GESALCON": {"gravados": 1, "pendencias": {"pai_inexistente": 1}},
+        "GETPSALDO": {"gravados": 3, "pendencias": {}},
+        "GPPARAMG": {"gravados": 17, "pendencias": {}},
+        "TBDISPON": {"gravados": 2, "pendencias": {}},
     }
+
+
+# r5c: catálogo de parâmetros do patrimônio NA IMAGEM DE TESTE (no produto é semente, pedido r5b_parametros_patrimonio;
+# sem ela cada item recusa com codigo_inexistente_destino). Prova positiva do desdobrar em parametro_valor.
+PREPARO_DESTINO = PREPARO_DESTINO + (
+    ";\nINSERT IGNORE INTO modulo_sistema (codigo, descricao, ativo, criado_em) VALUES"
+    " ('patrimonio', 'Patrimonio', 1, UTC_TIMESTAMP(3));\n"
+    "INSERT IGNORE INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_estabelecimento,"
+    " criado_em) SELECT d.chave, m.id, d.chave, d.tipo, 1, UTC_TIMESTAMP(3) FROM modulo_sistema m JOIN (\n"
+    "SELECT 'x' AS chave, 'texto' AS tipo FROM DUAL WHERE 1 = 0" + "".join(
+        "\nUNION ALL SELECT '%s', '%s'" % kt for kt in [
+  ('patrimonio.apuracao_por_centro_custo', 'booleano'),
+  ('patrimonio.integra_contabilidade', 'booleano'),
+  ('patrimonio.integra_custos', 'booleano'),
+  ('patrimonio.depreciar', 'booleano'),
+  ('patrimonio.integra_financeiro', 'booleano'),
+  ('patrimonio.aviso_seguro_revisao', 'booleano'),
+  ('patrimonio.tipo_depreciacao', 'texto'),
+  ('patrimonio.responsavel', 'texto'),
+  ('patrimonio.dias_aviso_revisao', 'inteiro'),
+  ('patrimonio.dias_aviso_seguro', 'inteiro'),
+  ('patrimonio.nome_responsavel', 'texto'),
+  ('patrimonio.dias_garantia', 'inteiro'),
+  ('patrimonio.apurar_centro_custo_por', 'texto'),
+  ('patrimonio.forma_integracao', 'texto'),
+  ('patrimonio.coeficiente_depreciacao_acelerada', 'texto'),
+  ('patrimonio.aplicar_coeficiente', 'texto'),
+  ('patrimonio.tipo_calculo_depreciacao', 'texto'),
+  ('patrimonio.considera_valor_residual', 'booleano')
+    ]) + ") d WHERE m.codigo = 'patrimonio'")

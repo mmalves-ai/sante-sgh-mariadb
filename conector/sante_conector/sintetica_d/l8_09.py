@@ -9,8 +9,9 @@ booleanos pelo de-para da descrição), contas de receita do custeio (grupo pelo
 PRESUMIDA), grupos de exportação de custos (destino PRESUMIDO, ativo A/I) e o contexto de trabalho do usuário da
 folha, da contabilidade e do custeio (competência ANO+MES, usuário pelo login, estabelecimento único, o mesmo login
 noutra empresa adotado).
-Descartadas (12, declarado/sem_carga.tsv): catálogos oficiais, domínios de CHECK e parâmetros em colunas; entram na
-imagem só para provar que nada é gravado.
+Listas (12, rodada 5, ADR 0006): as listas fixas e os catálogos sem carregador oficial CARREGAM como opções de um
+parâmetro de lista do produto (parametro_opcao, origem migração; módulo e definição criados na 1ª linha e adotados):
+nome vazio recusa (1048) ou fica presumido, código maior que a ordem recusa, fim de vigência entra inativa.
 Anomalias: descrição vazia em destino NOT NULL (1048), data sentinela (data_sentinela + 1048), vigência invertida e
 valor zero (CHECK 4025), recibo cancelado sem data e motivo (data da carga e texto), número repetido (1062), CNPJ e CPF com
 dígito errado na coluna de CPF (documento_invalido), login sem usuário (pai_inexistente), situação e ativo fora do
@@ -77,6 +78,11 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 
 CARREGADAS = ("COPARAM", "COPERIODESCRIT", "COSPEDHSTSEMP", "COTP_ORIGEM_LANCAMENTO", "CTCTARECEITANCI", "CTPARAM",
               "CTTIPODADO", "CTWGRUPOEXPORTACAO", "FCRECIBO", "FPPARAM_USUARIO")
+# r5 (ADR 0006): listas -> parametro_opcao (nada descartado)
+LISTAS_R5 = ("CDTPCONTRCAIXA", "CONIRE", "COSPEDSITEMP", "COTIPOSOLICITACAOSENHA", "COTPSUBSTECD", "CTWTPREGRA",
+             "DMCADLEIAUTE", "ESTPCODAJUSTE", "FPFORMATRIBRENDEXT", "FPINFOBENEFRENDEXT", "FPTP_SERV_NF_TO",
+             "GPCOEFICIENTE_DEPREC")
+CARREGADAS = CARREGADAS + LISTAS_R5
 _TODAS = {
     'CDTPCONTRCAIXA': ('SMALLINT', 'VARCHAR(30)'),
     'CONIRE': ('VARCHAR(2)', 'SMALLINT', 'DATE', 'DATE'),
@@ -110,8 +116,8 @@ _TODAS = {
 }
 BLOQUEADAS = ()   # rodada 3: recibo e situação especial carregam (DATE em DATETIME pelo tipar, rodada 2)
 DESCARTADAS = tuple(t for t in _TODAS if t not in CARREGADAS and t not in BLOQUEADAS)   # declarado/sem_carga.tsv
-# fora da carga com duas linhas genéricas (só presença); a lista de situações tem linhas próprias (pai do histórico)
-FORMAS_FORA = {t: _TODAS[t] for t in DESCARTADAS if t != "COSPEDSITEMP"}
+FORMAS_FORA = {t: _TODAS[t] for t in DESCARTADAS}
+PROVADAS = {}  # r5: as listas antes provadas (COTIPOSOLICITACAOSENHA, CTWTPREGRA) carregam com os nomes
 # recibo: só o valor por extenso presumido (13); conta e paciente pela conta da origem, que não está nesta imagem (e
 # vem depois na ordem até a dependência pedida): NULL com pai_inexistente nas duas colunas (26) + login (1); situação
 # 'X': fora do domínio na situação, na data e no motivo do cancelamento (3)
@@ -142,7 +148,7 @@ def _valor(forma, i, k):
 def linhas(r, ins):
     # --- fora da carga: duas linhas por tabela (só presença)
     for t, formas in FORMAS_FORA.items():
-        for i in (1, 2):
+        for i in range(1, PROVADAS.get(t, 2) + 1):  # lista provada: todos os itens (a prova confere item a item)
             ins(t, [_valor(f, i, k) for k, f in enumerate(formas)])
 
     dt = datetime.date
@@ -198,7 +204,31 @@ def linhas(r, ins):
               (4, 2025, "usuario.inexistente", 202504)]:
         ins("CTPARAM", [x[0], x[1], "S", x[2], "N", x[3], "N"])
 
-    # --- situações especiais (só presença: lista oficial descartada; é o pai do histórico): códigos 1 e 5 oficiais,
+    # --- r5 (ADR 0006): listas -> opções de parâmetro de lista. (ID, NOME): 3 só espaços (1048)
+    for t in ("CDTPCONTRCAIXA", "COTIPOSOLICITACAOSENHA", "CTWTPREGRA", "ESTPCODAJUSTE"):
+        for x in [(1, "Exemplo A"), (2, "Exemplo  B"), (3, "   ")]:
+            ins(t, list(x))
+    # prefixo por UF: RJ com fim de vigência (inativa), UF vazia (rótulo NULL: 1048)
+    for x in [("SP", 35, dt(2000, 1, 1), None), ("RJ", 33, dt(2000, 1, 1), dt(2010, 1, 1)), ("  ", 31, None, None)]:
+        ins("CONIRE", list(x))
+    # motivo com código não numérico: ordem NULL (valor_fora_do_dominio + 1048)
+    for x in [("001", "Motivo exemplo A"), ("002", "Motivo  exemplo B"), ("X1", "Motivo exemplo C")]:
+        ins("COTPSUBSTECD", list(x))
+    for x in [(2024, "A1B2C3"), (2025, "D4E5F6")]:
+        ins("DMCADLEIAUTE", list(x))
+    # rendimento no exterior: 2 sem código (o da linha) e sem descrição (presumido); 3 descrição longa (cortada)
+    longa = ("Descrição exemplo " * 12).encode("cp1252")
+    for t in ("FPFORMATRIBRENDEXT", "FPINFOBENEFRENDEXT"):
+        for x in [(1, 10, "Texto exemplo\r\n linha".encode("cp1252")), (2, None, None), (3, 30, longa)]:
+            ins(t, list(x))
+    # serviço tomado: 2 sem descrição (presumido); 70000 maior que a ordem (valor_fora_do_dominio + 1048)
+    for x in [(1, "Serviço exemplo A"), (2, None), (70000, "Serviço exemplo C")]:
+        ins("FPTP_SERV_NF_TO", list(x))
+    # coeficiente: 3 sem percentual (valor presumido)
+    for x in [(1, "Um turno", D("1.00")), (2, "Dois turnos", D("1.50")), (3, "Três turnos", None)]:
+        ins("GPCOEFICIENTE_DEPREC", list(x))
+
+    # --- situações especiais (lista do hospital, r5: carrega; é o pai do histórico): códigos 1 e 5 oficiais,
     # 0 fora do domínio do produto
     for x in [(1, 1, "Extinção exemplo"), (2, 5, "Cisão total exemplo"), (3, 0, "Situação normal exemplo")]:
         ins("COSPEDSITEMP", list(x))
@@ -234,23 +264,40 @@ def linhas(r, ins):
     rec(12, 1012, cancelado="X")                                    # situação fora do domínio: padrão emitido
     rec(13, 1013, data=dt(1899, 12, 30))                            # data sentinela: data_sentinela + 1048
 
-    return {
+    r5 = {t: {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}
+          for t in ("CDTPCONTRCAIXA", "COTIPOSOLICITACAOSENHA", "CTWTPREGRA", "ESTPCODAJUSTE", "CONIRE")}
+    r5["COTPSUBSTECD"] = {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}}
+    r5["DMCADLEIAUTE"] = {"gravados": 2, "pendencias": {}}
+    r5["COSPEDSITEMP"] = {"gravados": 3, "pendencias": {}}
+    # módulo e definição do parâmetro adotados pelas linhas seguintes (e o módulo já criado por outra lista): medido
+    for t, n in {"CDTPCONTRCAIXA": 2, "CONIRE": 2, "COSPEDSITEMP": 5, "COTIPOSOLICITACAOSENHA": 3, "COTPSUBSTECD": 3,
+                 "CTWTPREGRA": 2, "DMCADLEIAUTE": 2, "ESTPCODAJUSTE": 3}.items():
+        r5[t]["pendencias"]["adotado_existente"] = n
+    for t in ("FPFORMATRIBRENDEXT", "FPINFOBENEFRENDEXT"):
+        r5[t] = {"gravados": 3, "pendencias": {"valor_presumido": 1, "texto_resumido": 1,
+                                       "adotado_existente": 5}}
+    r5["FPTP_SERV_NF_TO"] = {"gravados": 2, "pendencias": {"valor_presumido": 1, "valor_fora_do_dominio": 1,
+                                                           "restricao_destino_1048": 1, "adotado_existente": 3}}
+    r5["GPCOEFICIENTE_DEPREC"] = {"gravados": 3, "pendencias": {"valor_presumido": 1, "adotado_existente": 4}}
+    return dict(r5, **{
         "COPERIODESCRIT": {"gravados": 2, "pendencias": {"restricao_destino_1048": 4, "valor_fora_do_dominio": 1,
                                                          "restricao_destino_4025": 1, "restricao_destino_1062": 1,
                                                          "data_sentinela": 1}},
         # sem par no de-para: valor_fora_do_dominio nas três colunas do mesmo de-para (módulo e os dois booleanos)
         "COTP_ORIGEM_LANCAMENTO": {"gravados": 4, "pendencias": {"restricao_destino_1048": 2,
                                                                  "valor_fora_do_dominio": 3}},
-        "COPARAM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "pai_inexistente": 1,
+        "COPARAM": {"gravados": 2, "pendencias": {"adotado_existente": 1, "mescla_conflito_origem_guardada": 1,
+                                                  "pai_inexistente": 1,
                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
         "CTPARAM": {"gravados": 1, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
                                                   "restricao_destino_1048": 2}},
         "CTCTARECEITANCI": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "valor_fora_do_dominio": 2}},
         "CTTIPODADO": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "FPPARAM_USUARIO": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
-                                                          "restricao_destino_1048": 2, "adotado_existente": 1}},
+                                                          "restricao_destino_1048": 2, "adotado_existente": 1,
+                                                          "mescla_conflito_origem_guardada": 1}},
         "CTWGRUPOEXPORTACAO": {"gravados": 3, "pendencias": {"valor_presumido": 4, "restricao_destino_1048": 1,
                                                              "valor_fora_do_dominio": 1}},
         "FCRECIBO": _ESP_FCRECIBO,
         "COSPEDHSTSEMP": _ESP_COSPEDHSTSEMP,
-    }
+    })

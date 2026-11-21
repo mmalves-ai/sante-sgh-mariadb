@@ -12,13 +12,16 @@ from sante_conector.sintetica_d import l8_03
 
 CARREGADAS = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC",
               "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED",
-              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI"]
-# descarte de produto (linha em sem_carga.tsv pedida no L8-03.json; TBIRREGCTRCTA já está lá)
-DESCARTE = ["TBIRREGCTRCTA", "TBCTRTAT"]
+              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM", "TBREFUNI",
+              # R5 (ADR 0006): listas de opções carregadas como opções de um parâmetro de lista
+              "TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC"]
+LISTAS_R5 = ["TBIRREGCTRCTA", "TBCTRTAT", "TBCONVPERCTAPAC"]
+# R5 (ADR 0006): nenhum descarte por julgamento
+DESCARTE = []
 # aguardam regra genérica do motor (pedidos em docs/obra/fatias/f4/saida/L8-03.json)
 # r4: TBMATMED, TBREFMEMTUSS e TBPERTHM carregam; TBPACTHM espera o componente encadeado na chave composta (pedido 3)
 # r4 (revisão): TBCONVPERCTAPAC volta a bloqueada (a escolha da fonte pagadora em TBCONVEN, L5-06, ainda não carrega)
-BLOQUEADAS = ["TBPACTHM", "TBCONVPERCTAPAC"]
+BLOQUEADAS = ["TBPACTHM"]
 DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_cooperativa"],
             "TBCREMED": ["credenciamento_cobranca"],
             "TBCREPRS": ["credenciamento_cobranca"], "TBCTRDTH": ["tabela_preco"], "TBCTRMEM": ["tabela_preco"],
@@ -29,6 +32,7 @@ DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_coope
             "TBPROCTO": ["item_faturavel", "grupo_faturamento"], "TBPORMED": ["valor_porte_medico", "porte_procedimento"],
             "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed"],
             "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"]}
+DESTINOS.update({t: ["parametro_opcao", "modulo_sistema", "parametro_definicao"] for t in LISTAS_R5})
 OBRIGATORIAS = {
     "funcao_equipe_cobranca": {"codigo", "descricao", "tipo_funcao"},
     "membro_cooperativa": {"cooperativa_medica_id", "profissional_id", "vigencia_inicio"},
@@ -50,7 +54,11 @@ OBRIGATORIAS = {
     "sequencia_negocio": {"tipo", "proximo_valor"},
     "item_referencia_matmed": {"fonte_referencia", "codigo_referencia", "descricao", "tipo_produto"},
     "equivalencia_matmed_tuss": {"item_referencia_matmed_id", "termo_terminologia_id", "vigencia_inicio"},
-    "regra_percentual_cobranca": {"fonte_pagadora_id", "tabela_preco_id", "componente", "vigencia_inicio"}}
+    "regra_percentual_cobranca": {"fonte_pagadora_id", "tabela_preco_id", "componente", "vigencia_inicio"},
+    "parametro_opcao": {"parametro_definicao_id", "sequencia", "valor", "rotulo"},
+    "equivalencia_matmed_fonte_pagadora": {"item_referencia_matmed_id", "codigo_na_fonte", "vigencia_inicio"},
+    "modulo_sistema": {"codigo", "descricao"},
+    "parametro_definicao": {"chave", "modulo_sistema_id", "descricao", "tipo"}}
 CADEIA_PROFISSIONAL = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 
 
@@ -304,7 +312,9 @@ class OrdemDasReferencias(unittest.TestCase):
 
 class Sintetica(unittest.TestCase):
     def test_so_tabelas_carregaveis_e_pais_lidos_no_ddl(self):
-        self.assertEqual(re.findall(r"CREATE TABLE (\w+)", l8_03.DDL), CARREGADAS + l8_03.PAIS_ORIGEM)
+        # R5: TBCTRTAT carrega e continua lida pelo TBITEATE (criada uma vez, entre os pais lidos)
+        self.assertEqual(re.findall(r"CREATE TABLE (\w+)", l8_03.DDL),
+                         [t for t in CARREGADAS if t not in l8_03.PAIS_ORIGEM] + l8_03.PAIS_ORIGEM)
 
     def test_esperado_coerente_com_as_linhas(self):
         ins = []

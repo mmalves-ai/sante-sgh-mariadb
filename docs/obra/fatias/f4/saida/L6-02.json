@@ -1,68 +1,74 @@
 {
- "pedidos": [
-  {
-   "arquivo": "conector/mapa/declarado/sem_carga.tsv",
-   "mudanca": "Acrescentar as 3 linhas abaixo (tabela, situacao, causa, motivo), exatamente:\nTBREFCANCMODTP\tdescarte\tmecanismo_do_produto\tmatriz fixa do sistema antigo (módulo de recepção x tipo de operação em que há motivo de cancelamento), sem motivo na linha: no produto o escopo é por motivo (motivo_cancelamento_operacao_escopo, operação no CHECK) e o cliente o configura no painel (fatia L6-02; decisão em F4-decisoes-destino.md)\nTBSTATUSGUICHE\tdescarte\tsem_valor\testado volátil de quem está no guichê agora, sem momento de início nem de fim: migrar abriria ocupações falsas; no produto a ocupação nasce quando o atendente abre o guichê (ocupacao_guiche com início e fim) (fatia L6-02; decisão em F4-decisoes-destino.md)\nREPARAM\tdescarte\tmecanismo_do_produto\tlinha única de parâmetros do sistema antigo (cerca de 220 colunas): os dados do hospital nela (inscrição municipal, endereço) vêm do cadastro do estabelecimento; o resto é comportamento do software antigo, que o produto define no catálogo tipado próprio (parametro_definicao, com padrão) e o cliente ajusta no painel; gravar coluna como chave poria nome da origem no produto (regra 1) (fatia L6-02; decisão em F4-decisoes-destino.md)\n",
-   "motivo": "Cobertura total da L6-02: as 3 tabelas deixam de ficar bloqueadas por decisão (registrada em F4-decisoes-destino.md, para o dono revisar). Arquivo compartilhado: a fatia não o edita (trabalho em paralelo). Sem as linhas, a cobertura acusa as 3 como BLOQUEADAS. ATCONTA saiu do pedido (revisão): não é descarte enquanto atendimento_conta não for carregada pela L8-06.",
-   "atendido": "sem_carga.tsv traz TBREFCANCMODTP e TBSTATUSGUICHE; revisão da rodada 3: REPARAM saiu (os contadores carregam em sequencia_negocio) e ATCONTA está como bloqueada (aguarda_fonte_atendimento_conta), editadas só nas linhas da fatia"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores antes da referência)",
-   "mudanca": "Quando a coluna tem depara=valores E referência (via ref:<TABELA>), aplicar os pares ANTES de resolver a referência; par com destino vazio = NULL sem pendência. Declaração que fica possível: TBSENHAATEND PRIORIDADE -> senha_emitida.grupo_prioridade_legal_id, regra chave_origem, depara valores, via ref:TBGRUPOPRIORIDADE, pares 0->0, 1->1, 2->'' (normal: nulo; o CHECK ck_senha_emitida_prioridade exige prioritaria=TRUE quando há grupo, o que os pares 0/1 garantem).",
-   "motivo": "Hoje PRIORIDADE 0 e 1 viram só prioritaria=TRUE e o grupo legal se perde (0 = acima de 80 anos, a confirmar no cadastro TBGRUPOPRIORIDADE da L6-01, que grava ID como código). Declarar a referência direta deixaria '2' como pai_inexistente em toda senha normal (ou recusa pelo CHECK, se houver grupo 2). Perda registrada no motivo do L6-02.tsv até o mecanismo existir."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "Coluna especial genérica de concatenação/coalesce, ex.: `#concat:<COL|=literal|ref:TABELA.COLUNA>,...` e `#coalesce:<COL>,<COL|=~literal>`.",
-   "motivo": "senha_emitida.codigo_exibicao deveria ser prefixo do gerador + número (hoje só o número, motivo no L6-02.tsv); gerador_senha.descricao deveria ser NOME_TIPO_DIVERSO quando houver, senão nome presumido (hoje '=~Gerador de senha' em toda linha); gerador_senha.agenda_servico_id deveria ser ID_REAGENDA ou ID_SIAGENDA (hoje só ID_REAGENDA; tipo 4 sem uso na origem)."
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (FCCTAEXT) e colunas.d/L8-06.tsv (RICONTAS); depois, sem_carga.tsv (ATCONTA)",
-   "mudanca": "Acrescentar atendimento_conta como destino secundário da carga das contas (a `via` com 'atendimento_conta' dispensa mexer em tabelas.tsv). Linhas prontas (tabela, coluna, destino, regra, depara, via, motivo):\nFCCTAEXT\t@id\tatendimento_conta.conta_hospitalar_id\t\t\tatendimento_conta;opcional\tL8-05: a conta gravada nesta linha liga-se ao seu atendimento (o produto consulta atendimento_conta)\nFCCTAEXT\tREG_ATE\tatendimento_conta.atendimento_id\tchave_origem\t\tref:RECADATE;atendimento_conta;opcional\tL8-05: o mesmo atendimento de conta_hospitalar.atendimento_id\nRICONTAS\t@id\tatendimento_conta.conta_hospitalar_id\t\t\tatendimento_conta;opcional\tL8-06: a conta de internação gravada nesta linha liga-se ao atendimento da internação\nRICONTAS\tREG\tatendimento_conta.atendimento_id\t\t\tref:RICADINT>ID_ATCABECATEND>ATCABECATEND;atendimento_conta;opcional\tL8-06: o mesmo atendimento de conta_hospitalar.atendimento_id\nCom as duas declaradas, trocar a linha de ATCONTA em sem_carga.tsv para 'ATCONTA\\tdescarte\\tduplicado\\t<motivo>' (o teste da L6-02 passa a aceitar o descarte) e mover ATCONTA de BLOQUEADAS para DESCARTADAS em sintetica_d/l6_02.py.",
-   "motivo": "Achado alto da revisão: sem fonte declarada atendimento_conta fica vazia e todo atendimento migrado com conta pode ser excluído ou alterado (apps/api/src/modulos/atendimento/porta-propria.ts consulta atendimento_conta). ATCONTA liga atendimento a REGISTRO (COD_CONTA = ficha externa ou registro da internação com várias contas parciais): não serve de fonte da ligação com a conta. A fatia não edita as fatias L8 (trabalho em paralelo); até o pedido ser atendido, ATCONTA fica BLOQUEADA (aguarda_fonte_atendimento_conta), nunca descarte, e o teste só aceita o descarte com a fonte declarada nas duas tabelas de conta. Rodada 3 (conferidor): ainda não atendido; FCCTAEXT e RICONTAS já CARREGAM, só falta acrescentar as 4 linhas prontas acima nas fatias L8-05 e L8-06 e trocar ATCONTA para descarte duplicado.",
-   "atendido": "rodada 4: as 4 linhas acrescentadas em colunas.d/L8-05.tsv (FCCTAEXT) e L8-06.tsv (RICONTAS); ATCONTA virou descarte duplicado em sem_carga.tsv e em sintetica_d/l6_02.py"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
-   "mudanca": "'#retrato:<COL1>,<COL2>,...' (ou '#retrato:*'): retrato JSON também das colunas listadas, lidas só para o retrato (entram em 'lidas' e no hash da linha), convertidas pela regra gerada, sem segredo.",
-   "motivo": "HTATENDIMENTO (1.908.921 na imagem de referência) carrega hoje em trilha_auditoria com retrato só de ID, ID_ATCABECATEND e DATA_HORA_HISTORICO, porque o retrato cobre só as colunas lidas por declaração. A versão anterior do atendimento (fonte pagadora, leito, profissionais, CID) fica fora do retrato: perda registrada no L6-02.tsv. Genérico: vale para todo HT* com destino trilha_auditoria.",
-   "atendido": "rodada 3, grupo 2: #retrato:*; HTATENDIMENTO declarada com o retrato completo"
-  },
-  {
-   "arquivo": "conector/sante_conector/mapa.py (passos_ref) + carga_mapa.py",
-   "mudanca": "Referência composta com parte encadeada: na chave composta `ref:T(C1,P>X)` cada parte é uma coluna desta linha ou um passo encadeado (coluna P desta linha leva à linha de P na origem e dela à coluna X). Declaração que fica possível: TBSENHAATEND GUICHE -> senha_emitida.guiche_recepcao_id, via ref:TBGUICHE(GUICHE,ID_TBGERASENHA>ID_TBRECEPCAO).",
-   "motivo": "A chave de TBGUICHE é (NUMERO_GUICHE, ID_TBRECEPCAO), e a senha só traz o número; a recepção vem do gerador. Decisão registrada em F4-decisoes-destino.md: destino decidido, guichê nulo até o mecanismo existir (perda registrada no L6-02.tsv)."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (opcoes_destino, verificador) + tabelas.tsv de TBLOCALHORA",
-   "mudanca": "(1) Item em PAR no desdobrar: 'desdobrar:SEGUNDA_INICIO+SEGUNDA_FINAL=2|0,TERCA_INICIO+TERCA_FINAL=3|0,...,DOMINGO_INICIO+DOMINGO_FINAL=1|0,FERIADO_INICIO+FERIADO_FINAL=|1' com '#item' (primeira coluna), '#item2' (segunda), '#rotulo' e '#rotulo2' (partes do rótulo separadas por '|'; parte vazia = NULL); item sem nenhuma das duas colunas não gera linha. (2) TBLOCALHORA com tabelas_destino 'local_atendimento;local_atendimento_horario': principal local_atendimento por 'complementa' (ID_TBLOCAL ref:TBLOCAL -> local_atendimento.id) e o desdobrar no secundário. Declaração pronta: '@id' -> local_atendimento_horario.local_atendimento_id; '#rotulo' -> dia_semana; '#rotulo2' -> dia_nao_util; '#item' -> hora_inicio e '#item2' -> hora_fim (regra hora).",
-   "motivo": "TBLOCALHORA (31) é a única tabela da L6-02 ainda BLOQUEADA (regra_faltante): o desdobrar de hoje leva um valor e um rótulo por item e só vale em destino secundário; o horário pede início e fim do mesmo dia e, no feriado, dia_semana NULL com dia_nao_util TRUE (CHECK ck_local_atendimento_horario_dia). Fim <= início é recusado pelo CHECK da faixa (pendência visível). Serve também a GEHORMED (L7-05) e TBUSUCPL (L5-03).",
-   "atendido": "rodada 3, grupo 1: desdobrar em pares no destino principal (#item/#item2, #rotulo/#rotulo2); TBLOCALHORA declarada sem complementa (o horário é o principal)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (@estabelecimento)",
-   "mudanca": "Nenhuma mudança se o cliente tiver um só estabelecimento. Com vários, as recepções, locais, painéis e senhas desta fatia são recusadas com estabelecimento_indefinido: a recepção deveria herdar o estabelecimento por configuração do cliente no painel (genérico, nunca fixo por cliente).",
-   "motivo": "TBRECEPCAO, TBLOCAL, PNCONFIG e TBSENHAATEND não trazem estabelecimento."
-  },
-  {
-   "arquivo": "tools/obra/fatiar_conector.py (integrador)",
-   "mudanca": "Regenerar as fatias depois de integrar colunas.d (já pedido nas L5).",
-   "motivo": "Mesmo caso das L5."
-  },
-  {
-   "arquivo": "decisão do dono",
-   "mudanca": "Confirmar o domínio de IMPRESSORA_MODO_GRAFICO, LOCAL_BASE_CALC_ESPERA_PEP, FLUXO_REAVALIACAO_MEDICA (declarados booleano_sn) e de TBGERASENHA.SITUACAO (booleano_ai): valor fora vira pendência visível, nunca silêncio. (SITUACAO 'S' da senha deixou de ser pergunta: vai para 'suspensa', que o modelo já tem.)",
-   "motivo": "Domínios não confirmados no perfil agregado."
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (chave de tabela sem chave e de linha única)",
-   "mudanca": "Tabela de linha única sem chave (REPARAM, FCPARAM, REPARATE...): chave constante ('unica') em vez do hash da linha, para o Sincronizar ATUALIZAR o destino quando um valor muda, em vez de gravar outra linha e esbarrar no UNIQUE (sequencia_negocio: estabelecimento e tipo).",
-   "motivo": "Hoje a chave de tabela sem chave é o hash da linha: o contador que anda na origem muda a chave, e a sequência migrada seria tratada como exclusão + inclusão (restricao_destino_1062 no tipo repetido). Genérico; a carga inicial não é afetada."
-  },
-  {
-   "arquivo": "integrador: mecanismo do pedido 1 de saida/L6-04.json (fim do horário = início + duração) e depois colunas.d/L6-04.tsv (REPACAGD, SIPACAGD)",
-   "mudanca": "Nenhuma declaração nova na L6-02: TBSENHAATEND_REPACAGD e TBSENHAATEND_SIPACAGD já estão declaradas (senha_emitida_id e marcacao_horario_id pelas referências geradas a TBSENHAATEND e ao pai). Ficam BLOQUEADAS (pai_nao_carregado) só porque REPACAGD e SIPACAGD (L6-04) estão BLOQUEADAS por regra_faltante; marcacao_horario_id é NOT NULL e a ligação sem a marcação não tem sentido. Destravam sozinhas quando a L6-04 carregar as marcações.",
-   "motivo": "Rodada 3: o conferidor acusa as duas como bloqueio da L6-02, mas a causa está fora da fatia. Descartar seria fugir de trabalho (a ligação senha x marcação é dado administrativo que o hospital usa: chegada do paciente agendado); fica BLOQUEADA, visível, até o pai carregar."
-  }
- ]
+  "pedidos": [
+    {
+      "arquivo": "conector/mapa/declarado/sem_carga.tsv",
+      "mudanca": "Acrescentar as 3 linhas abaixo (tabela, situacao, causa, motivo), exatamente:\nTBREFCANCMODTP\tdescarte\tmecanismo_do_produto\tmatriz fixa do sistema antigo (módulo de recepção x tipo de operação em que há motivo de cancelamento), sem motivo na linha: no produto o escopo é por motivo (motivo_cancelamento_operacao_escopo, operação no CHECK) e o cliente o configura no painel (fatia L6-02; decisão em F4-decisoes-destino.md)\nTBSTATUSGUICHE\tdescarte\tsem_valor\testado volátil de quem está no guichê agora, sem momento de início nem de fim: migrar abriria ocupações falsas; no produto a ocupação nasce quando o atendente abre o guichê (ocupacao_guiche com início e fim) (fatia L6-02; decisão em F4-decisoes-destino.md)\nREPARAM\tdescarte\tmecanismo_do_produto\tlinha única de parâmetros do sistema antigo (cerca de 220 colunas): os dados do hospital nela (inscrição municipal, endereço) vêm do cadastro do estabelecimento; o resto é comportamento do software antigo, que o produto define no catálogo tipado próprio (parametro_definicao, com padrão) e o cliente ajusta no painel; gravar coluna como chave poria nome da origem no produto (regra 1) (fatia L6-02; decisão em F4-decisoes-destino.md)\n",
+      "motivo": "Cobertura total da L6-02: as 3 tabelas deixam de ficar bloqueadas por decisão (registrada em F4-decisoes-destino.md, para o dono revisar). Arquivo compartilhado: a fatia não o edita (trabalho em paralelo). Sem as linhas, a cobertura acusa as 3 como BLOQUEADAS. ATCONTA saiu do pedido (revisão): não é descarte enquanto atendimento_conta não for carregada pela L8-06.",
+      "atendido": "sem_carga.tsv traz TBREFCANCMODTP e TBSTATUSGUICHE; revisão da rodada 3: REPARAM saiu (os contadores carregam em sequencia_negocio) e ATCONTA está como bloqueada (aguarda_fonte_atendimento_conta), editadas só nas linhas da fatia"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (de-para de valores antes da referência)",
+      "mudanca": "Quando a coluna tem depara=valores E referência (via ref:<TABELA>), aplicar os pares ANTES de resolver a referência; par com destino vazio = NULL sem pendência. Declaração que fica possível: TBSENHAATEND PRIORIDADE -> senha_emitida.grupo_prioridade_legal_id, regra chave_origem, depara valores, via ref:TBGRUPOPRIORIDADE, pares 0->0, 1->1, 2->'' (normal: nulo; o CHECK ck_senha_emitida_prioridade exige prioritaria=TRUE quando há grupo, o que os pares 0/1 garantem).",
+      "motivo": "Hoje PRIORIDADE 0 e 1 viram só prioritaria=TRUE e o grupo legal se perde (0 = acima de 80 anos, a confirmar no cadastro TBGRUPOPRIORIDADE da L6-01, que grava ID como código). Declarar a referência direta deixaria '2' como pai_inexistente em toda senha normal (ou recusa pelo CHECK, se houver grupo 2). Perda registrada no motivo do L6-02.tsv até o mecanismo existir."
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py",
+      "mudanca": "Coluna especial genérica de concatenação/coalesce, ex.: `#concat:<COL|=literal|ref:TABELA.COLUNA>,...` e `#coalesce:<COL>,<COL|=~literal>`.",
+      "motivo": "senha_emitida.codigo_exibicao deveria ser prefixo do gerador + número (hoje só o número, motivo no L6-02.tsv); gerador_senha.descricao deveria ser NOME_TIPO_DIVERSO quando houver, senão nome presumido (hoje '=~Gerador de senha' em toda linha); gerador_senha.agenda_servico_id deveria ser ID_REAGENDA ou ID_SIAGENDA (hoje só ID_REAGENDA; tipo 4 sem uso na origem)."
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (FCCTAEXT) e colunas.d/L8-06.tsv (RICONTAS); depois, sem_carga.tsv (ATCONTA)",
+      "mudanca": "Acrescentar atendimento_conta como destino secundário da carga das contas (a `via` com 'atendimento_conta' dispensa mexer em tabelas.tsv). Linhas prontas (tabela, coluna, destino, regra, depara, via, motivo):\nFCCTAEXT\t@id\tatendimento_conta.conta_hospitalar_id\t\t\tatendimento_conta;opcional\tL8-05: a conta gravada nesta linha liga-se ao seu atendimento (o produto consulta atendimento_conta)\nFCCTAEXT\tREG_ATE\tatendimento_conta.atendimento_id\tchave_origem\t\tref:RECADATE;atendimento_conta;opcional\tL8-05: o mesmo atendimento de conta_hospitalar.atendimento_id\nRICONTAS\t@id\tatendimento_conta.conta_hospitalar_id\t\t\tatendimento_conta;opcional\tL8-06: a conta de internação gravada nesta linha liga-se ao atendimento da internação\nRICONTAS\tREG\tatendimento_conta.atendimento_id\t\t\tref:RICADINT>ID_ATCABECATEND>ATCABECATEND;atendimento_conta;opcional\tL8-06: o mesmo atendimento de conta_hospitalar.atendimento_id\nCom as duas declaradas, trocar a linha de ATCONTA em sem_carga.tsv para 'ATCONTA\\tdescarte\\tduplicado\\t<motivo>' (o teste da L6-02 passa a aceitar o descarte) e mover ATCONTA de BLOQUEADAS para DESCARTADAS em sintetica_d/l6_02.py.",
+      "motivo": "Achado alto da revisão: sem fonte declarada atendimento_conta fica vazia e todo atendimento migrado com conta pode ser excluído ou alterado (apps/api/src/modulos/atendimento/porta-propria.ts consulta atendimento_conta). ATCONTA liga atendimento a REGISTRO (COD_CONTA = ficha externa ou registro da internação com várias contas parciais): não serve de fonte da ligação com a conta. A fatia não edita as fatias L8 (trabalho em paralelo); até o pedido ser atendido, ATCONTA fica BLOQUEADA (aguarda_fonte_atendimento_conta), nunca descarte, e o teste só aceita o descarte com a fonte declarada nas duas tabelas de conta. Rodada 3 (conferidor): ainda não atendido; FCCTAEXT e RICONTAS já CARREGAM, só falta acrescentar as 4 linhas prontas acima nas fatias L8-05 e L8-06 e trocar ATCONTA para descarte duplicado.",
+      "atendido": "rodada 4: as 4 linhas acrescentadas em colunas.d/L8-05.tsv (FCCTAEXT) e L8-06.tsv (RICONTAS); ATCONTA virou descarte duplicado em sem_carga.tsv e em sintetica_d/l6_02.py"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
+      "mudanca": "'#retrato:<COL1>,<COL2>,...' (ou '#retrato:*'): retrato JSON também das colunas listadas, lidas só para o retrato (entram em 'lidas' e no hash da linha), convertidas pela regra gerada, sem segredo.",
+      "motivo": "HTATENDIMENTO (1.908.921 na imagem de referência) carrega hoje em trilha_auditoria com retrato só de ID, ID_ATCABECATEND e DATA_HORA_HISTORICO, porque o retrato cobre só as colunas lidas por declaração. A versão anterior do atendimento (fonte pagadora, leito, profissionais, CID) fica fora do retrato: perda registrada no L6-02.tsv. Genérico: vale para todo HT* com destino trilha_auditoria.",
+      "atendido": "rodada 3, grupo 2: #retrato:*; HTATENDIMENTO declarada com o retrato completo"
+    },
+    {
+      "arquivo": "conector/sante_conector/mapa.py (passos_ref) + carga_mapa.py",
+      "mudanca": "Referência composta com parte encadeada: na chave composta `ref:T(C1,P>X)` cada parte é uma coluna desta linha ou um passo encadeado (coluna P desta linha leva à linha de P na origem e dela à coluna X). Declaração que fica possível: TBSENHAATEND GUICHE -> senha_emitida.guiche_recepcao_id, via ref:TBGUICHE(GUICHE,ID_TBGERASENHA>ID_TBRECEPCAO).",
+      "motivo": "A chave de TBGUICHE é (NUMERO_GUICHE, ID_TBRECEPCAO), e a senha só traz o número; a recepção vem do gerador. Decisão registrada em F4-decisoes-destino.md: destino decidido, guichê nulo até o mecanismo existir (perda registrada no L6-02.tsv)."
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (opcoes_destino, verificador) + tabelas.tsv de TBLOCALHORA",
+      "mudanca": "(1) Item em PAR no desdobrar: 'desdobrar:SEGUNDA_INICIO+SEGUNDA_FINAL=2|0,TERCA_INICIO+TERCA_FINAL=3|0,...,DOMINGO_INICIO+DOMINGO_FINAL=1|0,FERIADO_INICIO+FERIADO_FINAL=|1' com '#item' (primeira coluna), '#item2' (segunda), '#rotulo' e '#rotulo2' (partes do rótulo separadas por '|'; parte vazia = NULL); item sem nenhuma das duas colunas não gera linha. (2) TBLOCALHORA com tabelas_destino 'local_atendimento;local_atendimento_horario': principal local_atendimento por 'complementa' (ID_TBLOCAL ref:TBLOCAL -> local_atendimento.id) e o desdobrar no secundário. Declaração pronta: '@id' -> local_atendimento_horario.local_atendimento_id; '#rotulo' -> dia_semana; '#rotulo2' -> dia_nao_util; '#item' -> hora_inicio e '#item2' -> hora_fim (regra hora).",
+      "motivo": "TBLOCALHORA (31) é a única tabela da L6-02 ainda BLOQUEADA (regra_faltante): o desdobrar de hoje leva um valor e um rótulo por item e só vale em destino secundário; o horário pede início e fim do mesmo dia e, no feriado, dia_semana NULL com dia_nao_util TRUE (CHECK ck_local_atendimento_horario_dia). Fim <= início é recusado pelo CHECK da faixa (pendência visível). Serve também a GEHORMED (L7-05) e TBUSUCPL (L5-03).",
+      "atendido": "rodada 3, grupo 1: desdobrar em pares no destino principal (#item/#item2, #rotulo/#rotulo2); TBLOCALHORA declarada sem complementa (o horário é o principal)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (@estabelecimento)",
+      "mudanca": "Nenhuma mudança se o cliente tiver um só estabelecimento. Com vários, as recepções, locais, painéis e senhas desta fatia são recusadas com estabelecimento_indefinido: a recepção deveria herdar o estabelecimento por configuração do cliente no painel (genérico, nunca fixo por cliente).",
+      "motivo": "TBRECEPCAO, TBLOCAL, PNCONFIG e TBSENHAATEND não trazem estabelecimento."
+    },
+    {
+      "arquivo": "tools/obra/fatiar_conector.py (integrador)",
+      "mudanca": "Regenerar as fatias depois de integrar colunas.d (já pedido nas L5).",
+      "motivo": "Mesmo caso das L5."
+    },
+    {
+      "arquivo": "decisão do dono",
+      "mudanca": "Confirmar o domínio de IMPRESSORA_MODO_GRAFICO, LOCAL_BASE_CALC_ESPERA_PEP, FLUXO_REAVALIACAO_MEDICA (declarados booleano_sn) e de TBGERASENHA.SITUACAO (booleano_ai): valor fora vira pendência visível, nunca silêncio. (SITUACAO 'S' da senha deixou de ser pergunta: vai para 'suspensa', que o modelo já tem.)",
+      "motivo": "Domínios não confirmados no perfil agregado."
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (chave de tabela sem chave e de linha única)",
+      "mudanca": "Tabela de linha única sem chave (REPARAM, FCPARAM, REPARATE...): chave constante ('unica') em vez do hash da linha, para o Sincronizar ATUALIZAR o destino quando um valor muda, em vez de gravar outra linha e esbarrar no UNIQUE (sequencia_negocio: estabelecimento e tipo).",
+      "motivo": "Hoje a chave de tabela sem chave é o hash da linha: o contador que anda na origem muda a chave, e a sequência migrada seria tratada como exclusão + inclusão (restricao_destino_1062 no tipo repetido). Genérico; a carga inicial não é afetada."
+    },
+    {
+      "arquivo": "integrador: mecanismo do pedido 1 de saida/L6-04.json (fim do horário = início + duração) e depois colunas.d/L6-04.tsv (REPACAGD, SIPACAGD)",
+      "mudanca": "Nenhuma declaração nova na L6-02: TBSENHAATEND_REPACAGD e TBSENHAATEND_SIPACAGD já estão declaradas (senha_emitida_id e marcacao_horario_id pelas referências geradas a TBSENHAATEND e ao pai). Ficam BLOQUEADAS (pai_nao_carregado) só porque REPACAGD e SIPACAGD (L6-04) estão BLOQUEADAS por regra_faltante; marcacao_horario_id é NOT NULL e a ligação sem a marcação não tem sentido. Destravam sozinhas quando a L6-04 carregar as marcações.",
+      "motivo": "Rodada 3: o conferidor acusa as duas como bloqueio da L6-02, mas a causa está fora da fatia. Descartar seria fugir de trabalho (a ligação senha x marcação é dado administrativo que o hospital usa: chegada do paciente agendado); fica BLOQUEADA, visível, até o pai carregar."
+    },
+    {
+      "arquivo": "motor (carga_mapa.py)",
+      "rodada": 5,
+      "mudanca": "opção de linha cruzada `cruzar:<TABELA>` na via do principal: uma linha do destino por (linha desta tabela x linha carregada da outra tabela), com `ref:` à outra pela própria linha cruzada; conciliação por par",
+      "motivo": "TBREFCANCMODTP (matriz módulo x tipo de operação, sem motivo na linha): no produto o escopo é por motivo (motivo_cancelamento_operacao_escopo: motivo, módulo, operação). Continuar a operação = cada motivo de cancelamento carregado vale em cada (módulo, operação) da matriz; o módulo já carrega (TBMOTCANCMOD -> modulo_recepcao, código mc + número) e a operação pelo de-para do nome (atendimento, marcacao). Segue BLOQUEADA até o mecanismo"
+    }
+  ]
 }

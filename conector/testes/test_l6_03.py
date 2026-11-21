@@ -74,12 +74,16 @@ class FatiaL603(unittest.TestCase):
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]), t)
 
 
-    def test_descarte_de_produto_dos_dominios_de_retorno(self):
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        for t in l6_03.DESCARTADAS:
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", "mecanismo_do_produto"), t)
-            self.assertTrue(sc[t]["motivo"], t)
-            self.assertFalse([c for c in self.decl if c["tabela"] == t and c["destino"]], t)
+    def test_dominios_de_retorno_carregam_como_opcoes_de_parametro(self):
+        # rodada 5 (ADR 0006): nenhuma tabela da fatia fica em sem_carga; a lista do hospital vira opções do parâmetro
+        sc = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        self.assertFalse(sc & set(FATIA))
+        for t, chave in l6_03.PARAMETROS_LISTA.items():
+            self.assertEqual(self.plano[t]["destinos"], ["parametro_opcao"], t)
+            lit = {c["destino"]: c for c in self.decl if c["tabela"] == t}
+            self.assertEqual(lit["parametro_opcao.parametro_definicao_id"]["coluna"], "=" + chave)
+            self.assertEqual(lit["parametro_opcao.origem"]["coluna"], "=migracao")
+            self.assertIn(chave, l6_03.PREPARO_DESTINO)
 
     def test_exclusao_de_marcacao_e_da_l6_04(self):
         # REPACAGD_EXCLUSAO é da L6-04 (ordem 1016): nenhuma linha dela na declaração nem na imagem da L6-03

@@ -11,8 +11,9 @@ A unidade do cliente é gravada antes do analito e ligada a ele; o resultado pad
 (colunas concorrentes). Rodada 4 (DDL 10_SADT/09): interfaces de equipamento (inativas, sem alvo ou com o
 laboratório de apoio gravado antes e adotado pelo código) e a configuração do apoio por exame (o exame próprio vem da
 equivalência SITBEXEQ, da L8-16, que entra NESTA imagem com as mesmas linhas de lá e carrega pela declaração
-de lá: prova positiva do apoio, do exame copiado e do exige peso; equivalência ambígua e ausente visíveis). Descartes (3,
-`declarado/sem_carga.tsv`) entram na imagem para provar que não geram carga.
+de lá: prova positiva do apoio, do exame copiado e do exige peso; equivalência ambígua e ausente visíveis). Rodada 5 (ADR
+0006): os antigos descartes carregam: SIWEBPARDATA e SIWEBPARTPATU como opções das listas do portal
+(parametro_opcao) e SITPEQV_SITPEQVMODELO na trilha da interface (retrato; interface nunca vista: pai_inexistente).
 Anomalias: descrição vazia ou só espaços em destino NOT NULL, espaços repetidos, CP1252 acentuado, S/N e A/I fora do
 domínio, referência zero (ausência), pai inexistente (nulo com pendência; em NOT NULL recusa), pai recusado
 (pai_pendente; na autorreferência, na fase 2), código e sigla repetidos (chave única), CHECK do destino (casas
@@ -91,8 +92,9 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 CARREGADAS = ("SIPOSRES", "SIRECIPI", "SISTATUS_AMOSTRA", "SITABELE", "SITABPRO", "SIRESPAD", "SITBGRAN",
               "SITPEQVMODELO", "SIWEBCADPERFIL", "SIWEBCADPERFIL_SIPACSMODALID", "SIWEBCADPERFIL_TBUSERS",
-              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG", "SIVARFORMULA", "SITPEQV", "SITBEXHP", "SIFORMUL")
-DESCARTADAS = ("SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU")
+              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG", "SIVARFORMULA", "SITPEQV", "SITBEXHP", "SIFORMUL",
+              "SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU")
+DESCARTADAS = ()
 # pai de outra fatia (L8-16) carregado AQUI pela declaração de lá, só para a prova positiva de SITBEXHP (o exame
 # próprio copiado da equivalência): conferido só pela conciliação, sem esperado próprio
 PAIS_NA_IMAGEM = ("SITBEXEQ",)
@@ -216,11 +218,13 @@ def linhas(r, ins):
     linha("SITPEQV", CODIGO=1, NOME="Analisador exemplo", INTERFACE="S", SENHA_EXPORTACAO="falsa", SENHA_FTP="falsa",
           ID_SITPEQV_SITPEQVMODELO=1, PORTA_ABBOTT=4000, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo",
           USUARIO_FTP="usuario.falso", CRIPTOGRAFIA_AES="S")
-    linha("SITPEQV", CODIGO=2, NOME="  Interface   local ", ID_SITPEQV_SITPEQVMODELO=2, IMPORTAR_EXAME_COMO_LIBERADO="N")
-    linha("SITPEQV", CODIGO=3, NOME="Analisador dois", ID_SITPEQV_SITPEQVMODELO=1, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo")
+    linha("SITPEQV", CODIGO=2, NOME="  Interface   local ", ID_SITPEQV_SITPEQVMODELO=4, IMPORTAR_EXAME_COMO_LIBERADO="N")
+    linha("SITPEQV", CODIGO=3, NOME="Analisador dois", ID_SITPEQV_SITPEQVMODELO=5, COD_LABORATORIO=7, NOME_LABORATORIO="Apoio exemplo")
     linha("SITPEQV", CODIGO=4, NOME="   ", ID_SITPEQV_SITPEQVMODELO=1, COD_LABORATORIO=8, NOME_LABORATORIO="Apoio sem interface")
-    linha("SITPEQV", CODIGO=5, NOME="Porta errada", ID_SITPEQV_SITPEQVMODELO=2, PORTA_ABBOTT=70000, CRIPTOGRAFIA_AES="X")
-    for i, eqv, mod in [(1, 1, 1), (2, 1, 2)]:
+    linha("SITPEQV", CODIGO=5, NOME="Porta errada", ID_SITPEQV_SITPEQVMODELO=6, PORTA_ABBOTT=70000, CRIPTOGRAFIA_AES="X")
+    # r5 (achado): cada interface escolhe uma ligação SUA (o modelo escolhido pertence ao conjunto das ligações dela;
+    # a 1 tem duas: a escolhida e uma alternativa); a 3 aponta interface nunca vista (pai_inexistente)
+    for i, eqv, mod in [(1, 1, 1), (2, 1, 2), (3, 9, 1), (4, 2, 2), (5, 3, 1), (6, 5, 2)]:
         linha("SITPEQV_SITPEQVMODELO", ID=i, ID_SITPEQV=eqv, ID_SITPEQVMODELO=mod)
     # equivalências (as mesmas linhas da imagem da L8-16; aqui carregam pela declaração de lá)
     for x in [[1, 1, "HB", "HGB", "SG", "S"], [1, 1, "GL", "GLU", "SR", "N"], [1, 1, "HB", None, "PL", "N"],
@@ -265,6 +269,12 @@ def linhas(r, ins):
         "SIWEBCADPERFIL_SIPACSMODALID": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                        "restricao_destino_1048": 1}},
         "SIWEBCADPERFIL_TBUSERS": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
+        # r5 (ADR 0006): opções das listas do portal; ligação interface x modelo na trilha (interface 9 nunca
+        # vista: pai_inexistente, a linha grava sem a interface)
+        # módulo 'migracao' e definição criados pela 1ª linha e adotados pelas seguintes (padrão L8-14)
+        "SIWEBPARDATA": {"gravados": 2, "pendencias": {"adotado_existente": 2}},
+        "SIWEBPARTPATU": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+        "SITPEQV_SITPEQVMODELO": {"gravados": 6, "pendencias": {"pai_inexistente": 1, "vigencia_sem_fonte": 6}},
         "SIWEBPARLAUDO": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
                                                         "restricao_destino_1048": 1}},
         "SITBGRAN": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,

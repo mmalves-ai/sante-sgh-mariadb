@@ -35,6 +35,36 @@ CREATE TABLE TBDIGITAL_ESPECIALIDADE (ID INTEGER NOT NULL PRIMARY KEY, NOME VARC
   ID_DIGITAL VARCHAR(36) NOT NULL);
 CREATE TABLE TBESPEC (COD SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(40), CRED VARCHAR(1), REFEXP SMALLINT,
   SIGLA VARCHAR(6), IDADE_INICIAL SMALLINT, IDADE_FINAL SMALLINT, SEXO VARCHAR(1), ID_TBDIGITAL_ESPECIALIDADE INTEGER);
+CREATE TABLE FPESOCTPAMB ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(40), "ENDERECO_WS_PRODUCAO_ESOCIAL" VARCHAR(200),
+  "SOAPACTION" VARCHAR(130), "ENDERECO_WS_CONSULTA_ESOCIAL" VARCHAR(200), "ENDERECO_WS_PRODUCAO_EFDREINF" VARCHAR(200),
+  "SOAPACTION_EFDREINF" VARCHAR(130), "ENDERECO_WS_CONSULTA_EFDREINF" VARCHAR(200), PRIMARY KEY ("ID"));
+CREATE TABLE PRCABEARQINTEGRAQT ("ID" INTEGER NOT NULL, "ID_PRCABAUTORIZ" INTEGER, "CAMPOS_DEFAULT" VARCHAR(255),
+  "CAMPOS_SELECIONADOS" VARCHAR(255), PRIMARY KEY ("ID"));
+CREATE TABLE SIMODULO_SIWEBATOS ("ID" INTEGER NOT NULL, "ID_SIMODULO" SMALLINT NOT NULL, "ATIVO" VARCHAR(1),
+  PRIMARY KEY ("ID"));
+CREATE TABLE TBCID10 ("ID" INTEGER NOT NULL, "ID_TBVERSAOCID" SMALLINT NOT NULL, "COD" VARCHAR(6) NOT NULL,
+  "NOME" VARCHAR(270) NOT NULL, "CLASSIF" VARCHAR(1) NOT NULL, "CAT" VARCHAR(1) NOT NULL, "SUBCAT" VARCHAR(1) NOT NULL,
+  "SEXO" VARCHAR(1) NOT NULL, "COBRAR" VARCHAR(1) NOT NULL, "ONCO" VARCHAR(1) NOT NULL, "CRAD" SMALLINT,
+  "ESTADIO" VARCHAR(1), "VIG_SANITARIA" VARCHAR(1), "TP_AGRAVO" SMALLINT, "ID_TBTPNOTAGRAVO" SMALLINT NOT NULL,
+  "ID_TBTPAUTORIDADE_SMS" SMALLINT, "ID_TBTPAUTORIDADE_SES" SMALLINT, "ID_TBTPAUTORIDADE_MS" SMALLINT,
+  "ID_DIGITAL" VARCHAR(36), PRIMARY KEY ("ID"));
+CREATE TABLE TBDIGITAL_INTEG_TYPE ("ID" INTEGER NOT NULL, "INTEGRATION_TYPE" VARCHAR(50) NOT NULL,
+  "TABLE_NAME" VARCHAR(50) NOT NULL, "FIELDNAME_ID" VARCHAR(50) NOT NULL, "TABLE_NAME_SECONDARY" VARCHAR(50),
+  PRIMARY KEY ("ID"));
+CREATE TABLE TBDIGITAL_INTEG_FIELD ("ID" INTEGER NOT NULL, "ID_TBDIGITAL_INTEG_TYPE" INTEGER NOT NULL,
+  "FIELD_NAME" VARCHAR(50) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBFORMA_ASSINATURA_ICP ("ID" SMALLINT NOT NULL, "DESCRICAO" VARCHAR(40) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBIDENTIFICACAOENDPOINT ("ID" SMALLINT NOT NULL, "COD" SMALLINT NOT NULL, "DESCRICAO" VARCHAR(50) NOT NULL,
+  "PORTA_DOCKER_INTERNO" SMALLINT, PRIMARY KEY ("ID"));
+CREATE TABLE TBENDPOINT ("ID" SMALLINT NOT NULL, "IDENTIFICACAOENDPOINT" SMALLINT NOT NULL, "URL" VARCHAR(400) NOT NULL,
+  "STATUS" CHAR(1), PRIMARY KEY ("ID"));
+CREATE TABLE TBENDPOINTURI ("ID" SMALLINT NOT NULL, "ID_TBIDENTIFICACAOENDPOINT" SMALLINT NOT NULL,
+  "URI" VARCHAR(255) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBINFBANCO ("BANCO" SMALLINT NOT NULL, "CAMINHO" VARCHAR(120) NOT NULL, "SENHA" VARCHAR(20) NOT NULL,
+  PRIMARY KEY ("BANCO"));
+CREATE TABLE TBOPERSCHEMA ("ID" SMALLINT NOT NULL, "NOME" VARCHAR(40) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBREGUL_ENDPOINT ("ID" INTEGER NOT NULL, "ID_TBREGUL_SERVICO" INTEGER, "DESCRICAO" VARCHAR(50),
+  "ENDPOINT" VARCHAR(254), "METODO" VARCHAR(10), PRIMARY KEY ("ID"));
 """
 
 AUXILIARES = ["TBCONSPROF", "TBESPEC"]   # só origem (catálogo oficial pelo de-para; especialidade lida pela
@@ -44,6 +74,13 @@ PAIS_EXTERNOS = {"GECADPED": ["1", "2", "3"], "GEPORTALCOMPRAS": ["1", "2"], "SI
 PREPARO_DESTINO = (
     "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
     " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+    # r5c: termo oficial da CID-10 de exemplo (catálogo oficial: só o código usado), para a ligação pelo código
+    " INSERT INTO terminologia (id, codigo, nome, tipo, origem, criado_em) SELECT 9160, 'cid10', 'CID-10',"
+    " 'diagnostico', 'sistema', UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS"
+    " (SELECT 1 FROM terminologia WHERE codigo = 'cid10');"
+    " INSERT INTO termo_terminologia (id, terminologia_id, codigo_termo, descricao, criado_em)"
+    " SELECT 9161, (SELECT id FROM terminologia WHERE codigo = 'cid10'), 'A00', 'Termo de exemplo',"
+    " UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM termo_terminologia WHERE id = 9161);"
     " INSERT IGNORE INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
     " ('35', 'SP', 'Unidade exemplo SP', 1, UTC_TIMESTAMP(3)), ('33', 'RJ', 'Unidade exemplo RJ', 1, UTC_TIMESTAMP(3));"
     " INSERT IGNORE INTO conselho_classe (codigo_tiss, sigla, descricao, criado_em) VALUES"
@@ -121,6 +158,42 @@ DADOS = [
                                  [2, "Pediatria  exemplo", "00000000-falso-0002"],
                                  [3, "Sem uso exemplo", "00000000-falso-0003"]],
      {"gravados": 3, "pendencias": {"pai_inexistente": 1, "adotado_existente": 2, "valor_presumido": 2}}, 1),
+]
+
+A = "adotado_existente"  # lista/padrão/sistema já criado por linha anterior: adotado (baixa)
+# rodada 5 (ADR 0006): configuração de integração e listas do hospital passam a carregar (antes: descarte)
+DADOS += [
+    # serviço 3 só de espaços: o sistema externo recusa (1048)
+    ("TBIDENTIFICACAOENDPOINT", [[1, 10, "Serviço exemplo um", 8080], [2, 11, "Serviço  exemplo ação", None],
+                                 [3, 12, "   ", None]], {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, A: 1}}, 1),
+    # endereço 2 aponta serviço inexistente (pai_inexistente; sistema externo NOT NULL)
+    ("TBENDPOINT", [[1, 10, "https://um.exemplo.invalid/api", "A"], [2, 99, "https://orfa.exemplo.invalid/x", None]],
+     {"gravados": 1, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1, A: 1}}, 1),
+    # rotas 1 e 2 no serviço 1, 3 no 2; 4 em serviço inexistente
+    ("TBENDPOINTURI", [[1, 1, "/rota/um"], [2, 1, "/rota/dois"], [3, 2, "/rota/tres"], [4, 77, "/rota/orfa"]],
+     {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}, 1),
+    # 2: sem serviço nem descrição, verbo fora do domínio (operação sem verbo)
+    ("TBREGUL_ENDPOINT", [[1, 5, "Serviço regulação exemplo", "https://reg.exemplo.invalid/ws", "POST"],
+                          [2, None, None, "https://reg.exemplo.invalid/b", "get"]], {"gravados": 2, "pendencias": {A: 3}}, 0),
+    ("FPESOCTPAMB", [[1, "Produção exemplo", "https://gov.exemplo.invalid/env", "acao/enviar",
+                      "https://gov.exemplo.invalid/cons", "https://gov2.exemplo.invalid/env", "acao/dois", None],
+                     [2, "Restrita  exemplo", "https://gov.exemplo.invalid/r", None, None, None, None, None]],
+     {"gravados": 2, "pendencias": {A: 2}}, 0),
+    ("TBINFBANCO", [[1, "/dados/exemplo/banco.ex", "senha-falsa"], [2, "/dados/exemplo/outro.ex", "outra-falsa"]],
+     {"gravados": 2, "pendencias": {"segredo_aguarda_cofre": 2}}, 0),
+    # r5c (ADR 0006, 4): CID-10 do hospital na trilha com o retrato; A00 liga ao termo oficial, Z999 é código local
+    # (catalogo_codigo_inexistente, visível; a linha entra)
+    ("TBCID10", [[1, 1, "A00", "Termo exemplo", "A", "B", "C", "I", "S", "N", None, None, None, None, 1, None, None, None, None],
+                 [2, 1, "Z999", "Termo local exemplo", "A", "B", "C", "I", "N", "N", None, None, None, None, 1, None, None, None,
+                  "id-falso-ex"]], {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 1}}, 0),
+    ("TBDIGITAL_INTEG_TYPE", [[1, "TIPO_EXEMPLO_A", "ENTIDADE_EX", "ID", None],
+                              [2, "TIPO_EXEMPLO_B", "ENTIDADE_EX2", "ID", "ENTIDADE_EX3"]], {"gravados": 2, "pendencias": {}}, 0),
+    ("TBDIGITAL_INTEG_FIELD", [[1, 1, "CAMPO_EX_A"], [2, 1, "CAMPO_EX_B"], [3, 2, "CAMPO_EX_A"]],
+     {"gravados": 3, "pendencias": {A: 5}}, 0),
+    ("PRCABEARQINTEGRAQT", [[1, None, "CAMPO_EX_A;CAMPO_EX_B", "CAMPO_EX_A"]], {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 1}}, 0),
+    ("SIMODULO_SIWEBATOS", [[1, 3, "S"], [2, 4, "N"]], {"gravados": 2, "pendencias": {A: 2}}, 0),
+    ("TBFORMA_ASSINATURA_ICP", [[1, "Formato exemplo A"], [2, "Formato  exemplo B"]], {"gravados": 2, "pendencias": {A: 3}}, 0),
+    ("TBOPERSCHEMA", [[1, "OperacaoExemplo"], [2, "Outra  operação"]], {"gravados": 2, "pendencias": {A: 3}}, 0),
 ]
 # linhas lidas por tabela quando "gravados" conta itens (uma equivalência por especialidade ligada: `por_pai`)
 LIDAS_POR_ITEM = {"TBDIGITAL_ESPECIALIDADE": 2}  # linhas 1 e 2 geram 3 itens; a linha 3 é recusada

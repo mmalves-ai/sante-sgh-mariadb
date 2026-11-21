@@ -64,6 +64,9 @@ CREATE TABLE TBUNIDMEDIDA_PRINC_VALID (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBPR
 CREATE TABLE PRUNITPLAN (TPLAN VARCHAR(2) NOT NULL, UNI_PRESC VARCHAR(7) NOT NULL, PRIMARY KEY (TPLAN, UNI_PRESC));
 """
 REQUER = ["L6-08"]
+# o preparo da L6-08 (vias de uso com o identificador da prescrição digital, alvo do cod: de TBDIGITAL_VIAACESSO)
+# roda antes do desta fatia
+PREPARO_DOS_REQUERIDOS = True
 PAIS_EXTERNOS = {"PRINDICEAGRUPAMENTO": ["1", "2"],
                  "TBHORMED": ["1", "2", "3"], "RIBLOCOS": ["A", "B"], "PRPARVARUNIRESP": ["1", "2"],
                  "PRTPLAN": ["1", "2"], "TBPRINC_VALIDACAO": ["1", "2"], "TBUNICON": ["MG", "ML"],
@@ -110,9 +113,9 @@ CARREGADAS = ("TBTABENC", "TBTPALERGIA", "TBTPAUTORIDADE", "TBTPINTMED", "TBTPNO
               "TBTPNOTIFICACAOALERGIA", "TBALERGIA", "TBTPPARTO", "TBTPRN", "TBTPVALIDINTERACAO", "TBUNIDADEMEDIDA",
               "PRINDICEVARIAVEL", "PRGLASGOW", "PRINDICEPONTUACAO", "TBCBARANOTIFICACAO",
               "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN", "TBTPSITUACAOMP",
-              "PRPARAMSUMARIOALTA")
-# descarte duplicado em sem_carga.tsv (rodada 3); PRRESPOSTA passou à L6-11 (carrega lá)
-DESCARTADAS = ("PRPERGUNTA",)
+              "PRPARAMSUMARIOALTA", "PRPERGUNTA")
+# rodada 5 (ADR 0006): PRPERGUNTA carrega (banco de perguntas como campos do modelo BANCO_PERGUNTAS_MIGRACAO)
+DESCARTADAS = ()
 BLOQUEADAS = ()
 
 D = decimal.Decimal
@@ -178,9 +181,14 @@ def linhas(r, ins):
         (4, 4, D("3"), D("131"), D("999")), (5, 5, D("0"), D("36"), D("38")), (6, 5, D("1.5"), D("38.1"), D("39")),
         (7, 5, None, D("39.1"), D("42")), (8, 5, D("1"), D("40"), D("35")), (9, 7, D("1"), D("1"), D("2")),
         (10, 99, D("1"), D("1"), D("2"))])
-    # perguntas (descarte duplicado: entram como campo de cada modelo pela PRPADEVOL da L6-11): não geram carga aqui
-    varias("PRPERGUNTA", [(i, 100 + i, 1, "Pergunta exemplo %d" % i, "TX", None,
-                           ("texto da pergunta %d" % i).encode("cp1252"), "S", 0, 20, 200, None) for i in range(1, 4)])
+    # banco de perguntas (campos do modelo BANCO_PERGUNTAS_MIGRACAO): 1 decimal com unidade (criada), 2 inativa com
+    # reuso (a situação fica no retrato; nunca excluída na data da carga), 3 mesma unidade (adotada), 4 tipo sem par
+    # (texto presumido, visível), 5 sem título (título presumido, visível): todas carregam (ADR 0007, 18)
+    varias("PRPERGUNTA", [(1, 101, 1, "Pergunta exemplo 1", "6", "mmHg", b"texto da pergunta 1", "S", 0, 20, 200, None),
+                          (2, 102, 1, "Pergunta exemplo 2", "13", None, None, "N", 1, None, None, 3),
+                          (3, 103, 2, "Pergunta exemplo 3", "7", "mmHg", None, "S", None, 20, 200, None),
+                          (4, 104, 1, "Pergunta exemplo 4", "TX", None, None, "S", 0, None, None, None),
+                          (5, 105, 1, None, "1", None, None, "S", 0, None, None, None)])
     # seções do sumário de alta (ID, tipo de atendimento, período de procedimentos, de exames, pergunta da evolução,
     # do plano): 1 internação, 3 seções; 2 ambulatório, 3 seções (sem evolução); 3 tipo 4 'nenhum' (fora do domínio:
     # fica 'todos') e período 3 'últimas 48 h' (fora do domínio: NULL), exames com período 0 (a seção existe), 2 seções
@@ -191,6 +199,8 @@ def linhas(r, ins):
     # na 4a linha; X e ZZ códigos sem unidade de estoque (descrição NOT NULL: recusa); tipo 9 inexistente (recusa)
     varias("PRUNITPLAN", [("1", "MG"), ("2", "ML"), ("1", "X"), ("9", "MG"), ("2", "ZZ")])
     return {
+        "PRPERGUNTA": {"gravados": 5, "pendencias": {"adotado_existente": 13, "valor_presumido": 2,
+                                                    "valor_fora_do_dominio": 2}},
         "TBTABENC": {"gravados": 2, "pendencias": {"valor_presumido": 3, "restricao_destino_1048": 1}},
         "TBTPALERGIA": {"gravados": 4, "pendencias": {"valor_presumido": 5, "pai_inexistente": 1,
                                                       "restricao_destino_1048": 1}},

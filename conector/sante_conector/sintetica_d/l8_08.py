@@ -20,7 +20,8 @@ segundo lançamento do item ADOTA a já gravada, com o mesmo procedimento ou com
 conferência prova a unicidade pela contagem de adotadas); item ainda sem equivalência com código fora do catálogo,
 procedimento sem código, procedimento inexistente na origem ou lançamento inexistente: recusa (NOT NULL).
 NÃO CARREGADAS (forma e 2 linhas falsas): descartes de produto em sem_carga.tsv
-(FIPARAM, FAPARAM, FAPARAMA: mecanismo_do_produto; TBLOCSUS: catalogo_oficial; TBPRESSE: duplicado).
+(FIPARAM, FAPARAM, FAPARAMA: mecanismo_do_produto; TBLOCSUS: catalogo_oficial). TBPRESSE (versão antiga da lista de
+tipo de prestador) carrega na mesma lista por mescla não destrutiva (ADR 0006 e 0007, 20).
 """
 import datetime
 import decimal
@@ -169,9 +170,10 @@ FORMAS = {
 }
 
 CARREGADAS = ("TBALTSUS", "TBASSOCI", "TBCARATERATEND", "TBDRS", "TBFONTE_ORCAMENTARIA_SUS", "TBGRUATE", "TBTIPATE",
-              "TBTPAPAC", "TBLOCPRI", "TBNIVSUS", "TBNIVEL", "TBPRESUS", "FHLEITOUTI", "FCCTRLANCIHA")
-DESCARTADAS = {"FIPARAM": "mecanismo_do_produto", "FAPARAM": "mecanismo_do_produto", "FAPARAMA": "mecanismo_do_produto",
-               "TBLOCSUS": "catalogo_oficial", "TBPRESSE": "duplicado"}
+              "TBTPAPAC", "TBLOCPRI", "TBNIVSUS", "TBNIVEL", "TBPRESUS", "TBPRESSE", "FHLEITOUTI", "FCCTRLANCIHA",
+              # r5 (ADR 0006): opções e competência aberta do faturamento SUS -> parametro_valor JSON do estabelecimento
+              "FIPARAM", "FAPARAM", "FAPARAMA")
+DESCARTADAS = {"TBLOCSUS": "catalogo_oficial"}
 SEM_MECANISMO = ()
 BLOQUEADAS = tuple(DESCARTADAS) + SEM_MECANISMO  # não carregadas (nenhuma coluna com destino)
 
@@ -236,6 +238,14 @@ PREPARO_DESTINO = (
     "INSERT INTO procedimento_sigtap (codigo_sigtap, descricao, grupo_sigtap_id, vigencia_inicio, versao_fonte,"
     " criado_em) VALUES ('0301010072', 'Procedimento sigtap exemplo um', 1, '2020-01-01', 'exemplo', UTC_TIMESTAMP(3)),"
     " ('0202010503', 'Procedimento sigtap exemplo dois', 1, '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));\n"
+    # r5 (ADR 0006, 4): lista oficial de modalidade com os códigos da origem (TBLOCSUS 1 e 2): prova de conciliação
+    "CREATE TABLE IF NOT EXISTS dominio_sigtap (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, lista VARCHAR(30) NOT NULL,"
+    " codigo_sigtap VARCHAR(10) NOT NULL, descricao VARCHAR(250) NOT NULL, vigencia_inicio DATE NOT NULL,"
+    " vigencia_fim DATE NULL, versao_fonte VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);\n"
+    "INSERT INTO dominio_sigtap (lista, codigo_sigtap, descricao, vigencia_inicio, versao_fonte, criado_em)"
+    " SELECT 'modalidade', c, CONCAT('Modalidade exemplo ', c), '2020-01-01', 'exemplo', UTC_TIMESTAMP(3) FROM"
+    " (SELECT '01' AS c UNION ALL SELECT '02') x WHERE NOT EXISTS (SELECT 1 FROM dominio_sigtap d"
+    " WHERE d.lista = 'modalidade' AND d.codigo_sigtap = x.c);\n"
     "SET FOREIGN_KEY_CHECKS=1")
 
 
@@ -269,6 +279,7 @@ def linhas(r, ins):
         for i in (1, 2):
             ins(tab, [_falso(tp, i) for _, tp, _ in COLUNAS[tab]])
     # motivo de saída: 4 sem nome (1048); 2 e 5 com o mesmo código do leiaute (o 5 vira duplicidade 1062)
+    ok = lambda n: {"gravados": n, "pendencias": {}}
     for i, cod, nome in [(1, 11, "Alta curado"), (2, 12, "Alta   melhorado "), (3, 14, "Alta a pedido"),
                          (4, 15, None), (5, 12, "Alta melhorado bis")]:
         _ins(ins, "TBALTSUS", ID=i, COD=cod, NOME=nome)
@@ -312,10 +323,15 @@ def linhas(r, ins):
     for lan, pro in [(9101, 1), (9102, 1), (9103, 2), (9104, 3), (9105, 1), (9106, 77), (9107, 4), (9108, 2)]:
         _ins(ins, "FCCTRLANCIHA", ID_FCLANEXT=lan, ID_TBPROSUS=pro)
     ciha = {"gravados": 4, "pendencias": {"vigencia_sem_fonte": 8, "adotado_existente": 2, "catalogo_codigo_inexistente": 1,
-                                          "pai_inexistente": 2, R1048: 4}}
-    # tipo de prestador: 3 sem nome (1048); a versão antiga TBPRESSE é descarte duplicado (mesmos códigos)
+                                          "pai_inexistente": 2, R1048: 4,
+                                          "mescla_conflito_origem_guardada": 1}}
+    # tipo de prestador: 3 sem nome (1048). A versão antiga TBPRESSE (ordem anterior no mapa) carrega na mesma lista:
+    # cria 1, 2 e o 7 (só dela); o 5 sem nome recusa (1048). TBPRESUS ADOTA 1 e 2 (adotado_existente; a descrição
+    # diferente do 2 fica no histórico da mescla) e cria o 3
     for i, cod, nome in [(1, 1, "Prestador exemplo um"), (2, 2, "Prestador   exemplo dois"), (3, 3, None)]:
         _ins(ins, "TBPRESUS", ID=i, COD=cod, NOME=nome)
+    for cod, nome in [(1, "Prestador exemplo um"), (2, "Prestador antigo dois"), (5, None), (7, "Prestador so antigo")]:
+        _ins(ins, "TBPRESSE", COD=cod, NOME=nome)
     # nível: a versão com id (TBNIVSUS) carrega antes (dependencias.tsv: TBNIVEL depende de TBNIVSUS) e cria 1, 2 e 3
     # com a descrição dela; o 4 sem nome recusa (1048). A antiga sem id (TBNIVEL) adota 1 e 2 (adotado_existente) e
     # cria o 9, que só existe nela (por isso ela carrega)
@@ -324,12 +340,26 @@ def linhas(r, ins):
     for i, cod, nome in [(1, 1, "Nível exemplo um"), (2, 2, "Nível  exemplo dois"), (3, 3, "Nível exemplo três"),
                          (4, 4, " ")]:
         _ins(ins, "TBNIVSUS", ID=i, COD=cod, NOME=nome)
+    # r5: parâmetros do faturamento SUS (linha única): FIPARAM com uma 2ª linha sem competência (vigência pela
+    # evidência, vigencia_sem_fonte): outra versão; FAPARAM e FAPARAMA, uma linha cada
+    _ins(ins, "FIPARAM", EMPRESA="Hospital exemplo", ANOPRO=2025, MESPRO=3, AIHSEL="S", ID_TBIRREGCTRCTA=1,
+         CONS_LANC_HEMOTERAPIA="N", EMAIL_USER="usuario.exemplo")
+    _ins(ins, "FIPARAM", EMPRESA="Hospital exemplo dois", ANOPRO=None, MESPRO=None, ID_TBIRREGCTRCTA=1,
+         CONS_LANC_HEMOTERAPIA="S")
+    _ins(ins, "FAPARAM", ID_TBIRREGCTRCTA=1, DIGITAR_UNIDADE_PROF_LANC="N", ANOPRO=2025, MESPRO=4, DIG_CID="S", PERINI=datetime.datetime(2025, 4, 1),
+         PERFIN=datetime.datetime(2025, 4, 30, 23, 59))
+    _ins(ins, "FAPARAMA", ID_TBIRREGCTRCTA=1, DIGITAR_UNIDADE_PROF_LANC="N", ANOPRO=2025, MESPRO=4, SOMA_PROF="S", NOME_ORGAO="Gestor  exemplo")
+    # a 2ª linha do FIPARAM grava outra versão do parâmetro (vigência distinta); módulo e definição adotados
+    par = {"FIPARAM": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1, "adotado_existente": 2}},
+           "FAPARAM": {"gravados": 1, "pendencias": {"adotado_existente": 1}},
+           "FAPARAMA": {"gravados": 1, "pendencias": {"adotado_existente": 1}}}
     uti = {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, R4025: 1, "pai_inexistente": 1, R1048: 1}}
-    ok = lambda n: {"gravados": n, "pendencias": {}}
     rec = lambda n: {"gravados": n, "pendencias": {R1048: 1}}
-    return {"TBALTSUS": {"gravados": 3, "pendencias": {R1048: 1, R1062: 1}}, "TBASSOCI": ok(2),
+    return dict(par, **{"TBALTSUS": {"gravados": 3, "pendencias": {R1048: 1, R1062: 1}}, "TBASSOCI": ok(2),
             "TBCARATERATEND": rec(2), "TBDRS": ok(2),
             "TBFONTE_ORCAMENTARIA_SUS": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}, "TBGRUATE": ok(3),
             "TBTIPATE": ok(2), "TBTPAPAC": rec(2), "TBLOCPRI": loc, "FHLEITOUTI": uti, "FCCTRLANCIHA": ciha,
-            "TBPRESUS": rec(2), "TBNIVSUS": rec(3),
-            "TBNIVEL": {"gravados": 3, "pendencias": {"adotado_existente": 2}}}
+            "TBPRESUS": {"gravados": 2, "pendencias": {R1048: 1, "adotado_existente": 2,
+                                                       "mescla_conflito_origem_guardada": 1}},
+            "TBPRESSE": rec(3), "TBNIVSUS": rec(3),
+            "TBNIVEL": {"gravados": 3, "pendencias": {"adotado_existente": 2}}})

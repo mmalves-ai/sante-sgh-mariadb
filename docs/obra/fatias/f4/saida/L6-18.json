@@ -27,6 +27,18 @@
    "arquivo": "docs/obra/passagens/F4-plano.md e docs/ESTADO.md (orquestrador)",
    "mudanca": "Registrar o pedido 2 do L6-18.json (saida_setor_tramite_id/destino_setor_tramite_id em movimento_prontuario, trilha F2.2) como pré-requisito da virada do módulo de arquivo de prontuários, não como pendência média.",
    "motivo": "Achado da revisão da rodada 3: sem os setores o trâmite carregado não diz onde está o prontuário."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (destino secundário com #cofre)",
+   "rodada": "r5",
+   "mudanca": "opção de destino 'cofre_opcional' (ou regra genérica): secundário cuja coluna #cofre ficou NULL por falta de PLATAFORMA_CHAVE_MESTRA não grava (fica só a pendência segredo_aguarda_cofre), em vez de recusar a linha inteira pela NOT NULL de credencial_integracao.referencia_cofre",
+   "motivo": "sem a chave mestra (conferência, homologação) a linha de parâmetros com senha é recusada inteira (1048) e o parâmetro do hospital não entra; com a chave a carga já funciona. Afeta CVPARAM (L6-18), SHPARAM (L7-01) e SIPARLAB (L7-02)",
+   "atendido": false
+  },
+  {
+   "arquivo": "db/migracoes/09_HOT (DDL para a trilha F2.2)",
+   "mudanca": "via_dieta.tipo_dieta_opcao_id e modalidade_dieta.tipo_dieta_opcao_id BIGINT UNSIGNED NULL, FK parametro_opcao (a opção da lista do hospital migracao.tipo_dieta). Depois: PRVIAADMIN.ID_TBTPDIETA e TBDIETAS.TPDIETA também por ref:TBTPDIETA/parametro_opcao para essas colunas (a classe continua pelo de-para).",
+   "motivo": "Achado r5 (ADR 0006, 1): o tipo de dieta próprio do hospital fica na lista carregada (parametro_opcao), mas a via e a dieta só guardam a classe pelo de-para; tipo sem par aparece como valor_fora_do_dominio. Sem coluna no modelo não há como ligar a consumidora à opção."
   }
  ]
 }

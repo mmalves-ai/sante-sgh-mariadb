@@ -129,6 +129,16 @@
    "arquivo": "conector/mapa (L6-11: colunas.d/L6-11.tsv, PRPADEVOL)",
    "mudanca": "Levar também ao campo do modelo, pela encadeada, o que a pergunta tem de leiaute e unidade estruturada: COD_PERGUNTA, COLUNA, ALTURA_COMPONENTE e LARGURA_COMPONENTE de PRPERGUNTA nas propriedades (ex.: #retrato da pergunta ou propriedades por coluna) e ID_TBUNIDADEMEDIDA como unidade quando UNIDPERG vier vazia (concorrente depois de UNIDPERG).",
    "motivo": "PRPERGUNTA é descarte duplicado (rodada 3): o conteúdo entra pela PRPADEVOL; esses campos de apresentação ficam sem destino."
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (trilha F2.2) ou provas.d/PRPERGUNTA.sql",
+   "tabelas": [
+    "PRPERGUNTA"
+   ],
+   "mudanca": "banco de perguntas do hospital: tabela campo_modelo_biblioteca (codigo, titulo, tipo_campo_modelo_id, unidade, valor_padrao, ativo, reaproveita_valor) referenciável por modelo_campo.campo_biblioteca_id; ou, sem modelo novo, a L6-11 grava em modelo_campo a chave da pergunta (codigo_origem) para a prova derivado ler o destino",
+   "motivo": "ADR 0006, 1: hoje a pergunta só existe dentro de cada modelo (PRPADEVOL, L6-11); pergunta sem modelo some, e a prova linha a linha não acha a chave da pergunta no destino (a chave de modelo_campo é a de PRPADEVOL)",
+   "atendido": false,
+   "rodada5": true
   }
  ]
 }

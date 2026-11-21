@@ -1,7 +1,7 @@
 """Fatia L6-13 (prontuário, assinatura e assistência, módulo PEP): imagem SINTÉTICA, dados 100% falsos.
 
 Rodada de cobertura total: 22 das 23 tabelas carregam pelo mapa (PRASSINAT_DOC_PRCHKGERAL e HTPARAMORIGEMCABIMP na
-trilha de auditoria; PRLANCREGISTROTEMPO é descarte). Rodada 3: item prescritível pela linha de parâmetros do insumo
+trilha de auditoria; rodada 5, ADR 0006: PRLANCREGISTROTEMPO também, na trilha do envio). Rodada 3: item prescritível pela linha de parâmetros do insumo
 (faixa padronizada com dose > 0 grava), evento da situação atual do horário, evento derivado da situação, pressão em
 mmHg na observação e histórico da configuração do cabeçalho de impressão na trilha. O DDL sai do dicionário (`mapa/colunas.tsv`: todas as
 colunas, mesmos nomes e tipos; só a chave é NOT NULL). Pais de fora da fatia lidos pelas referências encadeadas
@@ -312,8 +312,14 @@ def linhas(r, ins):
     q(t, ID=3, ID_PRLANCAMENTOEXAME=5, ELEMENTO="Ureia", RESULTADO="30")
     e[t] = {"gravados": 1, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}}
 
-    # descarte (sem carga): fica na imagem para provar que não entra no plano
+    # rodada 5 (ADR 0006): horário de situação do envio à plataforma na trilha do envio (retrato completo); o envio
+    # (L8-17) não está na imagem: pai_inexistente, gravada com a chave original no retrato. 1 com horário; 2 sem
+    # horário (a gravação, concorrente); 3 sem nenhum (NOT NULL)
     q("PRLANCREGISTROTEMPO", ID=1, ID_TBCBOPRO=1, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=1, DATA_HORA=T(2, 8))
+    q("PRLANCREGISTROTEMPO", ID=2, ID_TBCBOPRO=2, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=1, DATA_HORA_GRAVACAO=T(2, 9),
+      JUSTIFICATIVA_SUSPENSAO="Reenvio exemplo")
+    q("PRLANCREGISTROTEMPO", ID=3, ID_TBCBOPRO=1, ID_PRSITDOCUMENTO=1, ID_PRCABNEXODATA=2)
+    e["PRLANCREGISTROTEMPO"] = {"gravados": 2, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 1}}
 
     # histórico da configuração do cabeçalho de impressão, na trilha da entidade: 2 tipo sem configuração vigente
     t = "HTPARAMORIGEMCABIMP"
@@ -334,7 +340,9 @@ def linhas(r, ins):
     q(t, ID_HTATENDIMENTO=2, DATA_HORA_PREVISTA=T(6, 10), TIPO_ALTERACAO="I")
     q(t, ID_HTATENDIMENTO=4, DATA_HORA_PREVISTA=T(6, 10), DATA_HORA_ALTA_MEDICA=T(6, 11), TIPO_ALTERACAO="E")
     q(t, ID_HTATENDIMENTO=5, DATA_HORA_PREVISTA=T(6, 11), TIPO_ALTERACAO="I")
-    e[t] = {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1}}
+    # rodada 5 (ADR 0007, 20): a alta adotada MESCLA; o conflito fica com o destino e guarda a origem no histórico
+    e[t] = {"gravados": 2, "pendencias": {"adotado_existente": 1, "restricao_destino_1048": 2, "restricao_destino_4025": 1,
+                                          "mescla_conflito_origem_guardada": 1}}
 
     # versão do formulário: 2 usuário sem par; 3 repete a versão (1062); componente da versão recusada
     t = "HTCABECFORMULCOMP"

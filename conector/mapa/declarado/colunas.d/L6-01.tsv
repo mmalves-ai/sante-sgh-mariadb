@@ -39,7 +39,6 @@ REGRPFIC	SELECAO	regra_impressao_ficha.selecionada_padrao	booleano_sn			L6-01: S
 REGRPFIC	=~0	regra_impressao_ficha.ativo				L6-01: o grupo de procedimento da origem não tem cadastro com destino no mapa (grupo_faturamento sem origem): a regra entra INATIVA (valor_presumido por linha, com a chave original COD|GRP|GRAFICA) para o cliente ligar o grupo e ativar; ativa sem o grupo valeria para todos
 REGRPFIC	GRP		inteiro			L6-01: não carregada em coluna: o grupo fica na chave original da regra (conector_origem e pendência) até o grupo ter destino (decisão em F4-decisoes-destino.md)
 TBMOTCANCTP	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (mecanismo_do_produto): domínio fixo da operação, usado só pela matriz TBREFCANCMODTP (descartada)
-TBPROCEDPADRAO	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (mecanismo_do_produto): lista fixa da classificação = domínio de procedencia.tipo_padrao (CHECK); o NOME é lido pela encadeada de TBPROCED.ID_TBPROCEDPADRAO e passa pelo de-para de valores
 RETPINDATEND	ID	tipo_indicacao.codigo	texto			L6-01: o número do tipo de indicação vira o código
 RETPINDATEND	NOME	tipo_indicacao.descricao	texto_nome			L6-01: nome; vazio recusa só a linha
 RETPINDATEND	=~outro	tipo_indicacao.categoria				L6-01: a origem não classifica quem indicou: 'outro' presumido (valor_presumido)
@@ -54,8 +53,6 @@ TBGRUPOPRIORIDADE	ID	grupo_prioridade_legal.codigo	texto			L6-01: o número do g
 TBGRUPOPRIORIDADE	DESCRICAO	grupo_prioridade_legal.descricao	texto			L6-01: descrição do grupo de prioridade
 TBMODULO_RECEPCAO	ID	modulo_recepcao.codigo	texto			L6-01: o número do módulo vira o código
 TBMODULO_RECEPCAO	DESCRICAO	modulo_recepcao.descricao	texto			L6-01: descrição do módulo de recepção
-TBMOTCANCMOD	ID		chave_origem			L6-01: descarte em declarado/sem_carga.tsv (sem_valor): módulo usado só pela matriz TBREFCANCMODTP, também descartada; nada prova que o código é o mesmo módulo de TBMODULO_RECEPCAO
-TBMOTEXC	COD		inteiro			L6-01: descarte em declarado/sem_carga.tsv (duplicado): motivo de cancelamento do RECIBO (único consumidor FCRECIBO), cujo texto entra em recibo.motivo_cancelamento (L8-09, ref:TBMOTEXC>NOME); não é motivo da recepção
 TBPROCED	COD	procedencia.codigo	texto			L6-01: o número da procedência vira o código
 TBPROCED	NOME	procedencia.descricao	texto_nome			L6-01: nome; nulo recusa só a linha (NOT NULL)
 TBPROCED	SITUACAO	procedencia.ativo	codigo_char	valores		L6-01: situação S/N ou A/I (valores.d/L6-01.tsv); outro valor: valor_fora_do_dominio e fica o padrão
@@ -80,3 +77,32 @@ REPARATE	POR_USUARIO		codigo_char			L6-01: não carregada: indica herança por u
 RETITFIC	COD	modelo_ficha_impressa.id			ref:REMODFIC(COD,GRAFICA);complementa	L6-01: COMPLETA o modelo da mesma chave (COD,GRAFICA): o título impresso tem hash e diferencial próprios, então o título alterado na origem fica alteracao_aguarda_sincronizar e o Sincronizar o regrava (a ORIGEM VENCE); modelo recusado: pai_pendente; inexistente: pai_inexistente e recusa
 RETITFIC	NOME	modelo_ficha_impressa.titulo	texto_nome			L6-01: título impresso (o mesmo valor que a carga do modelo grava pela encadeada: as duas tabelas concordam e a conciliação do modelo não diverge)
 RETITFIC	COD	modelo_ficha_impressa.titulo	texto_nome		ref:REMODFIC(COD,GRAFICA)>NOME	L6-01: concorrente: título impresso vazio vale o nome do modelo (o mesmo que a carga do modelo grava), sem regravar NULL nem recusar
+TBMOTEXC	#codigo_derivado:COD:30:rc	motivo_exclusao_registro.codigo	texto		motivo_exclusao_registro;principal	L6-01 r5 (ADR 0006): motivo de cancelamento do recibo vira motivo padronizado de exclusão (código rc + número da origem; o texto do recibo cancelado continua em recibo.motivo_cancelamento, L8-09)
+TBMOTEXC	NOME	motivo_exclusao_registro.descricao	texto_nome			L6-01 r5 (ADR 0006): nome vazio recusa a linha (NOT NULL)
+TBMOTEXC	=documento	motivo_exclusao_registro.escopo				L6-01 r5 (ADR 0006): o único consumidor é o recibo (documento financeiro): escopo documento
+TBPROCEDPADRAO	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBPROCEDPADRAO	ID	parametro_opcao.sequencia	inteiro			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBPROCEDPADRAO	NOME	parametro_opcao.rotulo	texto_nome			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBPROCEDPADRAO	ID	parametro_opcao.rotulo	texto			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBPROCEDPADRAO	=migracao	parametro_opcao.origem				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBPROCEDPADRAO	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBPROCEDPADRAO	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBPROCEDPADRAO	=Listas de valores trazidas da origem	modulo_sistema.descricao				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBPROCEDPADRAO	=0	modulo_sistema.ativo				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBPROCEDPADRAO	=migracao.classificacao_procedencia	parametro_definicao.chave			antes;adotar:chave	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBPROCEDPADRAO	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBPROCEDPADRAO	=Classificação padrão da procedência (rótulos da origem; valor do produto em procedencia.tipo_padrao pelo nome)	parametro_definicao.descricao				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBPROCEDPADRAO	=lista	parametro_definicao.tipo				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBMOTCANCMOD	ID	parametro_opcao.valor	texto		principal;parametro_opcao	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): valor = código da origem
+TBMOTCANCMOD	ID	parametro_opcao.sequencia	inteiro			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): ordem = código da origem
+TBMOTCANCMOD	NOME	parametro_opcao.rotulo	texto_nome			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): rótulo da origem
+TBMOTCANCMOD	ID	parametro_opcao.rotulo	texto			L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): sem rótulo na origem, o rótulo é o próprio código
+TBMOTCANCMOD	=migracao	parametro_opcao.origem				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBMOTCANCMOD	@id:parametro_definicao	parametro_opcao.parametro_definicao_id				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): a lista
+TBMOTCANCMOD	=migracao	modulo_sistema.codigo			antes;adotar:codigo	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): módulo das listas trazidas da origem (criado uma vez, adotado depois)
+TBMOTCANCMOD	=Listas de valores trazidas da origem	modulo_sistema.descricao				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBMOTCANCMOD	=0	modulo_sistema.ativo				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): nunca aparece no menu
+TBMOTCANCMOD	=migracao.modulo_escopo_cancelamento	parametro_definicao.chave			antes;adotar:chave	L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5): uma definição por lista
+TBMOTCANCMOD	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBMOTCANCMOD	=Módulo do escopo do motivo de cancelamento (rótulos da origem; o escopo do produto é motivo_cancelamento_operacao_escopo, por motivo)	parametro_definicao.descricao				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)
+TBMOTCANCMOD	=lista	parametro_definicao.tipo				L6-01 r5 (ADR 0006): lista de valores do hospital (F4-decisoes-destino.md, rodada 5)

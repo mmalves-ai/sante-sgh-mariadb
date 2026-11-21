@@ -61,6 +61,18 @@
    "arquivo": "modelo (F2.2) e dono: cuidado_enfermagem / TBPROENF.TIPO",
    "mudanca": "confirmar o significado da letra A/E/M (hipótese: quem pode prescrever, A ambos, E enfermagem, M médico; DEFAULT 'A') e, confirmado, coluna no modelo (ex.: cuidado_enfermagem.prescritor_permitido) com de-para pela letra",
    "motivo": "medido A 87, E 42, M 71; sem CHECK, descrição nem PSQL na origem. Até lá o tipo do produto entra presumido 'cuidado' com valor_presumido e a letra não tem destino"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (trilha F2.2) + conector/mapa/declarado/provas.tsv",
+   "mudanca": "tabela rotulo_dominio_hospital (dominio VARCHAR(64) = 'tabela.coluna' do produto, codigo_origem VARCHAR(30), rotulo VARCHAR(150) NOT NULL, valor_produto VARCHAR(30) NULL, ativo, origem CHECK sistema|migracao; UNIQUE (dominio, codigo_origem))",
+   "motivo": "ADR 0006, 1: listas fixas do hospital que no produto são domínio com CHECK (ação do alerta, modo da requisição, campo autopreenchido, situação e 'manter' do lançamento de diagnóstico) não têm tabela onde carregar, e a prova por item com os ids literais da origem (padrão L8-10/L8-13) exige conhecer os ids reais, que esta fatia não lê. Com a tabela, cada lista CARREGA (rótulo do hospital + valor do produto pelo de-para de valores) e a tela mostra o nome que o hospital usava",
+   "atendido": false,
+   "tabelas": [
+    "TBTABELA_CAMPO",
+    "TBLANC_DIAG_STATUS",
+    "TBLANC_DIAG_MANTER"
+   ],
+   "rodada5": true
   }
  ]
 }

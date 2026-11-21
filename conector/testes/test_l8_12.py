@@ -313,8 +313,63 @@ class Sintetica(unittest.TestCase):
                           or (t in compl and r == "pai_inexistente"))
             self.assertEqual(cont[t], e["gravados"] - itens_a_mais.get(t, 0) + recusas, t)
         for t in AGUARDAM + list(DESCARTES):
+            if t in PROVADAS_R5:  # rodada 5: lista provada entra na imagem para a prova rodar
+                self.assertIn("CREATE TABLE %s " % t, l8_12.DDL)
+                continue
             self.assertNotIn("CREATE TABLE %s " % t, l8_12.DDL)
 
+
+
+# ---- rodada 5 (ADR 0006, item 1): prova de "não copiar" das listas fixas ----
+PROVADAS_R5 = ['TBTIPOCARTAO', 'TBTIPOTAXACARTAO', 'TBTIPOPERMISSAO', 'TBTPNATOPENF']
+
+
+class ProvaListaFixaR5(unittest.TestCase):
+    """Cada lista fixa provada tem a linha em declarado/provas.tsv e o SQL em provas.d/<T>.sql; cada valor do produto
+    pareado com um item existe no domínio do modelo (CHECK da coluna, ou a coluna, quando não há CHECK)."""
+
+    @classmethod
+    def setUpClass(cls):
+        import re as _re
+        base = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado"
+        cls.provas = {p["tabela"]: p for p in mapa.ler_provas(base.parent)}
+        cls.sem_carga = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
+        ddl = ""
+        for r in (Path(mapa.__file__).resolve().parents[2], Path("/app")):
+            if (r / "db" / "migracoes").is_dir():
+                ddl = "\n".join(p.read_text(encoding="utf-8") for p in sorted((r / "db" / "migracoes").rglob("*.sql")))
+                break
+        cls.ddl, cls.re = ddl, _re
+
+    def _bloco(self, tabela):
+        m = self.re.search(r"CREATE TABLE %s \((.*?)\n\)" % tabela, self.ddl, self.re.S)
+        self.assertIsNotNone(m, tabela)
+        return m.group(1)
+
+    def test_prova_declarada_e_dominio_do_produto(self):
+        for t in PROVADAS_R5:
+            pv = self.provas.get(t)
+            self.assertIsNotNone(pv, t)
+            self.assertEqual((pv["tipo"], pv["chave"], [c for c, _ in pv["valores"]][:1], len(pv["valores"])),
+                             ("derivado", ["ID"], ["ID"], 2), t)
+            self.assertEqual(pv["valores"][1][1], "texto_nome", t)  # rodada 5 (revisão): código E rótulo
+            self.assertTrue(self.re.findall(r"AS valor_produto, '[^']+' AS rotulo", pv["sql"]), t)
+            self.assertEqual(self.sem_carga[t]["situacao"], "descarte", t)
+            m = self.re.search(r"domínio do produto \((\w+)\.(\w+),", pv["sql"])
+            self.assertIsNotNone(m, t)
+            tabela, coluna = m.groups()
+            pares = self.re.findall(r"SELECT (\d+) AS item, '([^']*)' AS valor_produto", pv["sql"])
+            self.assertTrue(pares, t)
+            self.assertEqual([int(k) for k, _ in pares], list(range(1, len(pares) + 1)), t)
+            bloco = self._bloco(tabela)
+            self.assertRegex(bloco, r"\n\s+%s\s" % coluna, (t, coluna))
+            checks = [c for c in self.re.findall(r"CONSTRAINT \w+ CHECK \((.*)\),?\n", bloco)
+                      if self.re.search(r"\b%s\b" % coluna, c) and "'" in c]
+            for _, v in pares:
+                if checks:
+                    self.assertTrue(any("'%s'" % v in c for c in checks), (t, v))
+                else:
+                    self.assertRegex(v, r"^\d+$", (t, v))  # coluna numérica ou booleana sem CHECK de lista
 
 if __name__ == "__main__":
     unittest.main()

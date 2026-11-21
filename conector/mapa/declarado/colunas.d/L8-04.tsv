@@ -140,3 +140,170 @@ TBEMIREFMATMED	=preco_fabrica	referencia_emissao_matmed_excecao.preco_base			se:
 TBEMIREFMATMED	=preco_maximo_consumidor	referencia_emissao_matmed_excecao.preco_base				L8-04 conferidor r4: senão: preço máximo ao consumidor (N no PFB, convenção de TBEMIREF)
 TBEMIREFMATMED	REF_VALOR_PFB		codigo_char			L8-04 conferidor r4: lida pela condição do preço base
 TBEMIREFMATMED	REF_VALOR_PMC		codigo_char			L8-04 conferidor r4: não carregada: duplicado: PMC é o complemento do PFB (preço base único na exceção)
+TBSTATUSPROCESSA	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBSTATUSPROCESSA	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBSTATUSPROCESSA	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBSTATUSPROCESSA	=faturamento.situacaoProcessamento	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBSTATUSPROCESSA	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBSTATUSPROCESSA	=Opções da situação de processamento do faturamento	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBSTATUSPROCESSA	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBSTATUSPROCESSA	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBSTATUSPROCESSA	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBSTATUSPROCESSA	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBSTATUSPROCESSA	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBSTATUSPROCESSA	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBSTATUSPROCESSA	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTIPCOPART	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTIPCOPART	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTIPCOPART	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTIPCOPART	=faturamento.formaCalculoCoparticipacao	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTIPCOPART	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTIPCOPART	=Opções da forma de cálculo da coparticipação	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTIPCOPART	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTIPCOPART	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTIPCOPART	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTIPCOPART	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTIPCOPART	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTIPCOPART	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTIPCOPART	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSEMIEXP	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTISSEMIEXP	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTISSEMIEXP	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTISSEMIEXP	=faturamento.tissEmissaoExportacao	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTISSEMIEXP	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTISSEMIEXP	=Opções de emissão e exportação da TISS	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTISSEMIEXP	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTISSEMIEXP	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTISSEMIEXP	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTISSEMIEXP	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTISSEMIEXP	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTISSEMIEXP	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTISSEMIEXP	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSFORMAENVPAD	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTISSFORMAENVPAD	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTISSFORMAENVPAD	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTISSFORMAENVPAD	=faturamento.tissFormaEnvio	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTISSFORMAENVPAD	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTISSFORMAENVPAD	=Opções da forma de envio da TISS	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTISSFORMAENVPAD	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTISSFORMAENVPAD	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTISSFORMAENVPAD	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTISSFORMAENVPAD	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTISSFORMAENVPAD	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTISSFORMAENVPAD	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTISSFORMAENVPAD	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSFORMAENVPAD	=0	parametro_opcao.ativo			se:DATA_VIGENCIA_FINAL	L8-04 R5 (ADR 0006): opção com fim de vigência na origem entra inativa
+TBTISSFORMAENVPAD	DATA_VIGENCIA_FINAL		data			L8-04 R5 (ADR 0006): fim da vigência: só decide a opção inativa (a opção não guarda datas)
+TBTISSFORMAENVPAD	DATA_VIGENCIA_INICIAL		data			L8-04 R5 (ADR 0006): início da vigência: a opção não guarda datas; a opção sem fim fica ativa
+TBTISSGERSPSADTPS	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTISSGERSPSADTPS	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTISSGERSPSADTPS	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTISSGERSPSADTPS	=faturamento.tissGeracaoSpSadt	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTISSGERSPSADTPS	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTISSGERSPSADTPS	=Opções da geração da guia SP/SADT	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTISSGERSPSADTPS	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTISSGERSPSADTPS	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTISSGERSPSADTPS	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTISSGERSPSADTPS	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTISSGERSPSADTPS	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTISSGERSPSADTPS	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTISSGERSPSADTPS	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSPARDEF	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTISSPARDEF	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTISSPARDEF	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTISSPARDEF	=faturamento.tissCamposConfiguraveis	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTISSPARDEF	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTISSPARDEF	=Campos TISS configuráveis por fonte pagadora	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTISSPARDEF	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTISSPARDEF	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTISSPARDEF	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTISSPARDEF	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTISSPARDEF	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTISSPARDEF	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTISSPARDEF	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSPARDEF	ID_TBTISSEMIEXP		inteiro			L8-04 R5 (ADR 0006): opção de emissão do campo: a lista TBTISSEMIEXP é carregada como parametro_opcao (faturamento.tissEmissaoExportacao); a opção não tem coluna de dependência (pedido R5-3 no saida/L8-04.json)
+TBTPFASEUNIBH	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTPFASEUNIBH	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTPFASEUNIBH	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTPFASEUNIBH	=faturamento.guiaAdicionalFase	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTPFASEUNIBH	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTPFASEUNIBH	=Opções da fase do campo adicional de guia de operadora	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTPFASEUNIBH	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTPFASEUNIBH	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTPFASEUNIBH	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTPFASEUNIBH	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTPFASEUNIBH	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTPFASEUNIBH	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTPFASEUNIBH	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSTPGUIA		inteiro			L8-04 R5 (ADR 0006): parte da chave da origem
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSPARDEF		chave_origem			L8-04 R5 (ADR 0006): parte da chave da origem
+TBTISSTPGUIA_TBTISSPARDEF	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro (adotado)
+TBTISSTPGUIA_TBTISSPARDEF	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTISSTPGUIA_TBTISSPARDEF	#codigo_derivado:ID_TBTISSPARDEF:100:fat_tipos_guia_tiss_	parametro_definicao.chave	inteiro		parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): um parâmetro de lista por campo TISS configurável (chave com o código do campo), criado na 1ª linha dele e adotado nas seguintes
+TBTISSTPGUIA_TBTISSPARDEF	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSPARDEF	parametro_definicao.descricao	texto		ref:TBTISSPARDEF>NOME	L8-04 R5 (ADR 0006): descrição = nome do campo TISS (lido do pai na origem); campo inexistente: pai_inexistente e recusa (NOT NULL)
+TBTISSTPGUIA_TBTISSPARDEF	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTISSTPGUIA_TBTISSPARDEF	=tipos de guia em que o campo TISS vale no sistema anterior (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista
+TBTISSTPGUIA_TBTISSPARDEF	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): uma linha da origem = um tipo de guia do campo
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSTPGUIA	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem = número do tipo de guia
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSTPGUIA	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor = número do tipo de guia da origem (a lista de tipos de guia está fora do mapa)
+TBTISSTPGUIA_TBTISSPARDEF	ID_TBTISSTPGUIA	parametro_opcao.rotulo	texto			L8-04 R5 (ADR 0006): rótulo = número do tipo de guia (sem nome no mapa; o cliente renomeia na tela de parâmetros)
+TBTISSTPGUIA_TBTISSPARDEF	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+#--- L8-04 R5 (ADR 0006): listas do campo adicional de guia e da obrigatoriedade de material (a L8-05 tirou as linhas dela)
+TBTPTRATUNIBH	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTPTRATUNIBH	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTPTRATUNIBH	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTPTRATUNIBH	=faturamento.guiaAdicionalTratamento	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTPTRATUNIBH	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTPTRATUNIBH	=Opções do tratamento do campo adicional de guia de operadora	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTPTRATUNIBH	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTPTRATUNIBH	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTPTRATUNIBH	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTPTRATUNIBH	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTPTRATUNIBH	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTPTRATUNIBH	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTPTRATUNIBH	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTPPERFILUNIBH	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTPPERFILUNIBH	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTPPERFILUNIBH	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTPPERFILUNIBH	=faturamento.guiaAdicionalPerfil	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTPPERFILUNIBH	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTPPERFILUNIBH	=Opções do perfil do campo adicional de guia de operadora	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTPPERFILUNIBH	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTPPERFILUNIBH	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTPPERFILUNIBH	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTPPERFILUNIBH	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTPPERFILUNIBH	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTPPERFILUNIBH	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTPPERFILUNIBH	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTPCLASSIFUNIBH	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTPCLASSIFUNIBH	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTPCLASSIFUNIBH	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTPCLASSIFUNIBH	=faturamento.guiaAdicionalClassificacao	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTPCLASSIFUNIBH	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTPCLASSIFUNIBH	=Opções da classificação do campo adicional de guia de operadora	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTPCLASSIFUNIBH	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTPCLASSIFUNIBH	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTPCLASSIFUNIBH	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTPCLASSIFUNIBH	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTPCLASSIFUNIBH	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTPCLASSIFUNIBH	NOME	parametro_opcao.rotulo	texto_nome			L8-04 R5 (ADR 0006): rótulo da opção; vazio recusa (NOT NULL)
+TBTPCLASSIFUNIBH	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração
+TBTPCLASSIFUNIBH	CLASSIFICACAO		texto			L8-04 R5 (ADR 0006): sem coluna na opção do parâmetro de lista (classificação e dependência de tratamento, perfil e fase): pedido R5-3 do saida/L8-04.json
+TBTPCLASSIFUNIBH	ID_TBTPTRATUNIBH		chave_origem			L8-04 R5 (ADR 0006): sem coluna na opção do parâmetro de lista (classificação e dependência de tratamento, perfil e fase): pedido R5-3 do saida/L8-04.json
+TBTPCLASSIFUNIBH	ID_TBTPPERFILUNIBH		chave_origem			L8-04 R5 (ADR 0006): sem coluna na opção do parâmetro de lista (classificação e dependência de tratamento, perfil e fase): pedido R5-3 do saida/L8-04.json
+TBTPCLASSIFUNIBH	ID_TBTPFASEUNIBH		chave_origem			L8-04 R5 (ADR 0006): sem coluna na opção do parâmetro de lista (classificação e dependência de tratamento, perfil e fase): pedido R5-3 do saida/L8-04.json
+TBTPOBRIGAMAT	ID		chave_origem			L8-04 R5 (ADR 0006): chave da origem (conector_origem)
+TBTPOBRIGAMAT	=faturamento	modulo_sistema.codigo			modulo_sistema;antes;adotar:codigo	L8-04 R5 (ADR 0006): módulo do parâmetro: o faturamento do cliente, criado na 1ª linha e adotado nas seguintes (mescla não destrutiva)
+TBTPOBRIGAMAT	=Faturamento	modulo_sistema.descricao				L8-04 R5 (ADR 0006): nome do módulo quando criado pela migração
+TBTPOBRIGAMAT	=faturamento.obrigatoriedadeMaterial	parametro_definicao.chave			parametro_definicao;antes;adotar:chave	L8-04 R5 (ADR 0006): a lista de opções do hospital vira um parâmetro de lista do produto (criado na 1ª linha, adotado nas seguintes): nada da origem se perde e a escolha por fonte pagadora continua na coluna consumidora pelo de-para
+TBTPOBRIGAMAT	@id:modulo_sistema	parametro_definicao.modulo_sistema_id				L8-04 R5 (ADR 0006): módulo gravado ou adotado acima
+TBTPOBRIGAMAT	=Opções da obrigatoriedade de material no lançamento	parametro_definicao.descricao				L8-04 R5 (ADR 0006): descrição do parâmetro
+TBTPOBRIGAMAT	=lista	parametro_definicao.tipo				L8-04 R5 (ADR 0006): parâmetro de lista
+TBTPOBRIGAMAT	=lista de opções do sistema anterior, preservada na migração (ADR 0006)	parametro_definicao.fundamento				L8-04 R5 (ADR 0006): origem da lista, visível na tela de parâmetros
+TBTPOBRIGAMAT	@id:parametro_definicao	parametro_opcao.parametro_definicao_id			parametro_opcao;principal	L8-04 R5 (ADR 0006): opção da lista (destino principal: uma linha da origem = uma opção)
+TBTPOBRIGAMAT	ID	parametro_opcao.sequencia	inteiro			L8-04 R5 (ADR 0006): ordem da opção = código da origem
+TBTPOBRIGAMAT	ID	parametro_opcao.valor	texto			L8-04 R5 (ADR 0006): valor da opção = código da origem (o que as colunas consumidoras guardavam)
+TBTPOBRIGAMAT	DESCRICAO	parametro_opcao.rotulo	texto			L8-04 R5 (ADR 0006): rótulo da opção (a origem aceita vazio: o presumido abaixo)
+TBTPOBRIGAMAT	=~opção sem nome no sistema anterior	parametro_opcao.rotulo				L8-04 R5 (ADR 0006): nome vazio na origem: rótulo presumido (valor_presumido), o código fica no valor
+TBTPOBRIGAMAT	=migracao	parametro_opcao.origem				L8-04 R5 (ADR 0006): opção trazida pela migração

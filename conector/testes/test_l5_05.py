@@ -10,9 +10,9 @@ from sante_conector.sintetica_d import l5_05
 # na ordem do mapa
 CARREGADAS = ["TBGENERO_SOCIAL", "TBGERSEQ", "TBGRAU_INST", "TBGRUCONVEN", "TBMEDSOL", "TBMUIBGE", "TBORGAOEMIS", "TBPARENTE",
               "TBPESQUIPLANO", "TBRELIG", "TBSEXO", "TBTIPOATEUNIDADE", "TBTIPOTELEFONE", "TBTPDOCUMENTO", "TBUNIDAD",
-              "TBUNID_IDADE", "TBVULNERABILIDADE_SOCIAL", "TBEMPHOS", "TBCBOPRO_TBUNIDAD"]  # lotação depois de TBPROFIS
+              "TBUNID_IDADE", "TBVULNERABILIDADE_SOCIAL", "TBEMPHOS", "TBEMPHOSLOGO", "TBCBOPRO_TBUNIDAD"]  # lotação depois de TBPROFIS
 # descarte com motivo de produto (declarado/sem_carga.tsv)
-DESCARTE = {"TBPESSOA": "duplicado", "TBEMPHOSLOGO": "mecanismo_do_produto"}
+DESCARTE = {"TBPESSOA": "duplicado"}
 # declaradas e comentadas até o motor ter o mecanismo: nenhuma desde a rodada 3 (conselho_classe em depara.CATALOGOS)
 AGUARDAM = []
 
@@ -237,6 +237,15 @@ class Sintetica(unittest.TestCase):
             self.assertIn(x, l5_05.DESTINO_L3)
         self.assertIn(l5_05.DESTINO_L3, l5_05.PREPARO_DESTINO)
 
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0006: o logotipo vai ao armazenamento de arquivos (#arquivo), nunca ao banco."""
+    def test_logotipo_por_arquivo(self):
+        m = mapa.carregar_execucao()
+        d = [c["coluna"] for c in m["colunas_decl"]
+             if c["tabela"] == "TBEMPHOSLOGO" and c["destino"] == "logotipo_estabelecimento.arquivo_id"]
+        self.assertEqual(d, ["#arquivo:LOGO_EMPRESA:logotipo", "#arquivo:LOGO_PREFEITURA:logotipo"])
 
 if __name__ == "__main__":
     unittest.main()

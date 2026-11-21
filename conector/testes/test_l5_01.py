@@ -1,14 +1,15 @@
 """Fatia L5-01 (cadastros e administração): declarações sobre o mapa real e carga na imagem SINTÉTICA (dados 100%
 falsos, sintetica_d/l5_01.py). Só contagens e regras; nenhum dado real."""
+import re
 import unittest
 
 from sante_conector import carga_mapa, mapa, sentinela
 
-CARREGADAS = ["TBGRUUSU", "PREMAILCFG", "PREMAILMODULO", "PRLOCPACDEFAULT", "PRTERMOCAD", "PRTERMOACEITE",
+CARREGADAS = ["FPCON", "TBGRUUSU", "PREMAILCFG", "PREMAILMODULO", "PRLOCPACDEFAULT", "PRTERMOCAD", "PRTERMOACEITE",
               "PRTIPO_JUSTIF_EXPORTACAO", "PRTPNOTIFEMAIL", "RPMATRIZ_GUT_TIPO", "RPMATRIZ_GUT_DESCRICAO", "TBCENARIO",
               "TBCFGLOGIN", "TBDICIONARIO_TBUSERS", "DIPERMPS", "TBCTRPRTUSU", "TBAGEUSE"]
 # descarte de produto em declarado/sem_carga.tsv (decisões em docs/obra/passagens/F4-decisoes-destino.md)
-DESCARTADAS = ["FPCON", "TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO"]
+DESCARTADAS = ["TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO"]
 # rodada 3: nenhuma tabela bloqueada (DIPERMPS e TBCTRPRTUSU carregam pelos mecanismos da rodada 2)
 AGUARDAM = []
 # colunas da origem das tabelas carregadas que ficam fora da declaração (nenhuma: toda coluna sem destino é declarada
@@ -219,6 +220,52 @@ class ConferenciaL501(unittest.TestCase):
         self.assertEqual(r["erros"], [])
         self.assertEqual(r["entidades"]["usuario_escopo"]["recusados"], 7)
 
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0006: a conexão do sistema antigo entra como evento de sessão; as listas de exigência têm prova."""
+    def test_fpcon_evento_sessao_e_provas_das_listas(self):
+        m = mapa.carregar_execucao()
+        d = {(c["coluna"], c["destino"]) for c in m["colunas_decl"] if c["tabela"] == "FPCON"}
+        self.assertIn(("=entrada", "evento_sessao.tipo_evento"), d)
+        self.assertIn(("DATA_HORA", "evento_sessao.ocorrido_em"), d)
+        provadas = {p["tabela"]: p for p in m["provas"]}
+        for t in ("TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO"):
+            self.assertEqual(provadas[t]["tipo"], "derivado", t)
+            self.assertTrue(provadas[t]["sql"].upper().startswith("SELECT"), t)
+
+
+class ProvasComRotulo(unittest.TestCase):
+    """Revisão r5 (ADR 0006): a prova das listas liga código E rótulo (rótulo trocado no mesmo código derruba)."""
+    def test_valores_com_rotulo(self):
+        m = mapa.carregar_execucao()
+        pv = {p["tabela"]: p for p in m["provas"]}
+        for t, col in [("TBDIGITAR", "DESCRICAO"), ("TBDIGITAR_CNSCADPAC", "DESCRICAO"),
+                       ("TBDIGITAR_FILIACAO", "DESCRICAO"), ("TBTIPOREPRE", "DESCRICAO"), ("TBTIPOOID", "NOME"),
+                       ("TBPROCBACKUP", "DESCRICAO"), ("TBSITBACKUP", "DESCRICAO"), ("TBTPPERM_RICADPAC", "DESCRICAO")]:
+            self.assertEqual(pv[t]["valores"], [("ID", "inteiro"), (col, "texto_nome")], t)
+            self.assertIn("'", pv[t]["sql"], t)  # o SQL traz o rótulo esperado de cada código
+        self.assertIn("'Mãe'", pv["TBDIGITAR_FILIACAO"]["sql"])
+        self.assertIn("'Obrig.atend.SUS'", pv["TBDIGITAR_CNSCADPAC"]["sql"])
+        # revisão 2: o equivalente vem do CHECK VIVO do destino; Titular = paciente (ck_consentimento_titular)
+        for t in ("TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO", "TBTIPOREPRE", "TBTIPOOID",
+                  "TBTPPERM_RICADPAC"):
+            self.assertIn("information_schema.CHECK_CONSTRAINTS", pv[t]["sql"], t)
+            self.assertNotIn("%", pv[t]["sql"], t)  # pymysql formata com args=()
+        self.assertIn("'Titular' AS rotulo, 'paciente'", pv["TBTIPOREPRE"]["sql"])
+        # filiação e CNS 4: com o parâmetro reduzido a uma regra única do campo, a prova falha (visível)
+        self.assertIn("r.campo = 'filiacao'", pv["TBDIGITAR_FILIACAO"]["sql"])
+        self.assertIn("r.campo = 'cns'", pv["TBDIGITAR_CNSCADPAC"]["sql"])
+
+    def test_prova_da_identidade(self):
+        m = mapa.carregar_execucao()
+        pv = {p["tabela"]: p for p in m["provas"]}["TBPESSOA"]
+        self.assertEqual((pv["tipo"], pv["chave"]), ("derivado", ["CPF_CNPJ"]))
+        self.assertIn("{ctl}.conector_origem", pv["sql"])
+        self.assertNotIn("%", pv["sql"])
+        for x in ("entidade_destino = 'pessoa_fisica'", "entidade_destino = 'pessoa_juridica'", "beneficiario_plano",
+                  "mantenedora", "profissional", "empresa_fornecedora"):
+            self.assertIn(x, pv["sql"], x)
 
 if __name__ == "__main__":
     unittest.main()

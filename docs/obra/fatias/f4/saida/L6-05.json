@@ -90,6 +90,11 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L8-18.tsv e sem_carga.tsv (fatia L8-18)",
    "mudanca": "rever o descarte de TBEDITQRP (e TBEDITREL_PRMODELOREL): mesmo formato de PRFICHAREL, carga como leiaute inativo pelo mecanismo do pedido 15",
    "motivo": "o motivo do descarte cita PRFICHAREL como precedente; esse descarte foi revogado (custo de trabalho não é causa de produto)"
+  },
+  {
+   "arquivo": "db/migracoes (semente do catálogo de parâmetros, como 14_FIN/14)",
+   "mudanca": "Rodada 5 (ADR 0006): semear em parametro_definicao as definições pep.formulario.respostaPadrao, pep.email.opcaoEnvio, pep.impressaoPrescricao.leiaute (tipo lista; opções em parametro_opcao), com módulo, descrição, nível rede e tela",
+   "motivo": "A fatia carrega a lista e os parâmetros do hospital (opções com origem migracao e valores em parametro_valor) pela chave do catálogo do produto (cod:parametro_definicao.chave), que a migração nunca cria; sem a semente cada linha é recusada com codigo_inexistente_destino (visível no relatório de conciliação), nunca perdida em silêncio. A conferência da fatia semeia as mesmas chaves no PREPARO_DESTINO."
   }
  ]
 }

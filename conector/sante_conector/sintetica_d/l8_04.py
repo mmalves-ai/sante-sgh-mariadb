@@ -115,8 +115,16 @@ CREATE TABLE TBCBOSUS (ID INTEGER NOT NULL, COD VARCHAR(6), PRIMARY KEY (ID));
 
 CARREGADAS = ('TBEMIREFMATMED', 'TBGRAUPARTPROC', 'TBRPATPREPASSE', 'TBSRVCON', 'TBTABATO', 'TBTIPO_PROCEDIMENTO', 'TBTPLANC',
               'TBPRESER', 'TBSUBDES', 'TBTABTHM', 'TBFORMULAPAGTO') + R3
-DESCARTADAS = ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP', 'TBTISSFORMAENVPAD',
-               'TBTISSGERSPSADTPS', 'TBTISSPARDEF', 'TBTISSTPGUIA_TBTISSPARDEF', 'TBTISSPOSPROF')
+# R5 (ADR 0006): as listas de opções CARREGAM como opções de um parâmetro de lista (parametro_opcao); os tipos de
+# guia de cada campo TISS, como um parâmetro de lista por campo
+LISTAS_R5 = ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP', 'TBTISSFORMAENVPAD',
+             'TBTISSGERSPSADTPS', 'TBTISSPARDEF', 'TBTISSTPGUIA_TBTISSPARDEF')
+# R5: listas do campo adicional de guia e da obrigatoriedade de material (as linhas da L8-05 saíram)
+LISTAS_R5_B = ('TBTPTRATUNIBH', 'TBTPPERFILUNIBH', 'TBTPCLASSIFUNIBH', 'TBTPOBRIGAMAT')
+DDL += "\n".join(_create(t) for t in LISTAS_R5_B) + "\n"
+LISTAS_R5 = LISTAS_R5 + LISTAS_R5_B
+CARREGADAS = CARREGADAS + LISTAS_R5
+DESCARTADAS = ('TBTISSPOSPROF',)  # terminologia oficial TISS (grau de participação): de-para tiss:35
 # TBREFMEMTUSS, TBREFUNI e TBTIPPRO saíram da fatia (rodada 3): a L8-03, dona pelo índice, as declara
 SEM_MECANISMO = ()  # TBPERTHM saiu da fatia: a L8-03 (dona pelo índice) a declara desdobrada no principal
 # acordo do cliente (NÃO é descarte): declaração pronta e comentada (colunas.d/L8-05.tsv) com o item faturável do
@@ -244,9 +252,36 @@ def _linha(cols, **v):
 def linhas(r, ins):
     # --- fora da carga: duas linhas por tabela (só presença)
     for t, formas in FORMAS_FORA.items():
+        if t in LISTAS_R5:
+            continue
         for i in (1, 2):
             ins(t, [_valor(f, i, k) for k, f in enumerate(formas)])
 
+    # --- R5 (ADR 0006): listas de opções -> parametro_opcao; a 3 só espaços (1048, recusada)
+    for t in ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP', 'TBTISSGERSPSADTPS'):
+        for x in [(1, "Exemplo A"), (2, "Exemplo  B"), (3, "   ")]:
+            ins(t, list(x))
+    for t in ('TBTPTRATUNIBH', 'TBTPPERFILUNIBH'):
+        for x in [(1, "Exemplo A"), (2, "Exemplo  B"), (3, "   ")]:
+            ins(t, list(x))
+    # classificação: tratamento, perfil e fase lidos (sem coluna na opção, pedido R5-3); 3 só espaços (1048)
+    for i, n in ((1, "Classe A"), (2, "Classe B"), (3, "   ")):
+        ins("TBTPCLASSIFUNIBH", _linha_d("TBTPCLASSIFUNIBH", ID=i, NOME=n, CLASSIFICACAO="C%d" % i,
+                                         ID_TBTPTRATUNIBH=1, ID_TBTPPERFILUNIBH=1, ID_TBTPFASEUNIBH=1))
+    # obrigatoriedade de material: 3 sem descrição (rótulo presumido)
+    for x in [(1, "Obrig A"), (2, "Obrig B"), (3, None)]:
+        ins("TBTPOBRIGAMAT", list(x))
+    # forma de envio: a 2 tem fim de vigência (entra inativa)
+    for x in [(1, "Envio A", datetime.date(2020, 1, 1), None), (2, "Envio B", datetime.date(2020, 1, 1),
+                                                                  datetime.date(2024, 12, 31))]:
+        ins("TBTISSFORMAENVPAD", list(x))
+    # campos TISS configuráveis: 3 só espaços (1048)
+    for x in [(1, "Campo exemplo um", 1), (2, "Campo exemplo dois", 2), (3, "  ", 1)]:
+        ins("TBTISSPARDEF", list(x))
+    # tipos de guia por campo: o campo 1 em dois tipos (parâmetro criado e adotado), o 2 em um; o campo 9 não existe
+    # (pai_inexistente e descrição NOT NULL: 1048)
+    for x in [(1, 1), (2, 1), (1, 2), (1, 9)]:
+        ins("TBTISSTPGUIA_TBTISSPARDEF", list(x))
     # --- tipo de prestador do repasse: 3 sem nome (1048); categoria presumida em toda linha lida
     for x in [(1, "Médico"), (2, "Pessoa  PJ"), (3, None)]:
         ins("TBRPATPREPASSE", list(x))
@@ -335,7 +370,21 @@ def linhas(r, ins):
     for x in [(10, 1, "N", "S"), (10, 2, "S", "N"), (11, 1, "N", "N"), (99, 2, "N", "S"), (11, 77, "N", "S")]:
         ins("TBEMIREFMATMED", list(x))
 
-    return {
+    # módulo faturamento e definição do parâmetro: a 1ª lista na ordem do mapa (TBSTATUSPROCESSA) cria os dois e a
+    # 2ª linha adota (2); nas outras o módulo já existe (adotado_existente 3 com duas opções gravadas)
+    r5 = {t: {"gravados": 2, "pendencias": {"restricao_destino_1048": 1,
+                                            "adotado_existente": 2 if t == "TBSTATUSPROCESSA" else 3}}
+          for t in ('TBSTATUSPROCESSA', 'TBTPFASEUNIBH', 'TBTIPCOPART', 'TBTISSEMIEXP', 'TBTISSGERSPSADTPS',
+                    'TBTISSPARDEF')}
+    r5["TBTISSFORMAENVPAD"] = {"gravados": 2, "pendencias": {"adotado_existente": 3}}
+    for t in ('TBTPTRATUNIBH', 'TBTPPERFILUNIBH', 'TBTPCLASSIFUNIBH'):
+        r5[t] = {"gravados": 2, "pendencias": {"restricao_destino_1048": 1, "adotado_existente": 3}}
+    r5["TBTPOBRIGAMAT"] = {"gravados": 3, "pendencias": {"valor_presumido": 1, "adotado_existente": 5}}
+    # campo 9 inexistente: descrição do parâmetro NOT NULL (pai_inexistente e 1048); o campo 1 cria o parâmetro dele
+    # e a 2ª linha adota (módulo adotado em toda linha gravada)
+    r5["TBTISSTPGUIA_TBTISSPARDEF"] = {"gravados": 3, "pendencias": {"pai_inexistente": 1, "adotado_existente": 4,
+                                                                     "restricao_destino_1048": 1}}
+    return dict(r5, **{
         "TBEMIREFMATMED": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 1,
                                                          "restricao_destino_4025": 1}},
         "FCCRECUN": {"gravados": 6, "pendencias": {"catalogo_codigo_inexistente": 2, "valor_fora_do_dominio": 1,
@@ -369,4 +418,4 @@ def linhas(r, ins):
                                                          "codigo_inexistente_destino": 1, "restricao_destino_1048": 2,
                                                          "valor_fora_do_dominio": 2, "valor_elevado_ao_minimo": 1,
                                                          "pai_pendente": 1}},
-    }
+    })

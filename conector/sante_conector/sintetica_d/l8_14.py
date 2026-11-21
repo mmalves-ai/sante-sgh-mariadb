@@ -94,7 +94,8 @@ CREATE TABLE PSPLNASS ("EMP" INTEGER NOT NULL, "BEN" INTEGER NOT NULL, "DEP" INT
   SMALLINT, "TERMINO_CAR_ACOMOD" DATE, "USUARIO" VARCHAR(31), PRIMARY KEY ("EMP","BEN","DEP","DATA","PLANO"));
 """
 
-NAO_CARREGADAS = ("CDTPDESCACR", "PSEMPEMITEOBS")
+NAO_CARREGADAS = ()  # rodada 5 (ADR 0006): toda tabela da fatia carrega
+LISTAS = ("CDTPDESCACR", "PSEMPEMITEOBS")  # lista de valores do hospital (parametro_opcao)
 MOVIMENTOS = {"PSATVASS": "movimento_cadastral_beneficiario", "PSPLNASS": "movimento_cadastral_beneficiario"}
 # pai de outra fatia (L8-15): só a chave e a chave natural; 503 e 504 repetem 7+7+0 (pai_ambiguo)
 _VAZIAS = [None] * 190  # demais colunas do dicionário do pai (L8-15), sem valor: a referência só usa a chave natural
@@ -132,7 +133,8 @@ def _n(*nomes):
 
 R1048, R1062, VP, VFD = "restricao_destino_1048", "restricao_destino_1062", "valor_presumido", "valor_fora_do_dominio"
 DADOS = [
-    ("CDTPDESCACR", _n("Desc ex", "Acres ex"), None),
+    # lista: a 1.ª linha cria o módulo e a definição, as seguintes adotam (adotado_existente, baixa, por destino)
+    ("CDTPDESCACR", _n("Desc ex", "Acres ex"), {"gravados": 2, "pendencias": {"adotado_existente": 2}}),
     ("CDTPDESPCTAPGCM", _n("Despesa  exemplo   médica", None, "Despesa exemplo ação"),
      {"gravados": 2, "pendencias": {R1048: 1}}),
     ("CDTPEMISSAO", _n("Boleto exemplo", "  Cartão   exemplo ", "E-mail exemplo", "   "),
@@ -173,7 +175,8 @@ DADOS = [
      {"gravados": 4, "pendencias": {VFD: 1, VP: 4}}),
     ("PSDOCIMPNOMESOCIAL", _n("Cartão exemplo", "Guia exemplo", None, "Carta  exemplo"),
      {"gravados": 3, "pendencias": {R1048: 1, VP: 8}}),
-    ("PSEMPEMITEOBS", _n("Todos exemplo", "Titulares exemplo"), None),
+    # sem rótulo na origem (3): o rótulo é o próprio código
+    ("PSEMPEMITEOBS", _n("Todos exemplo", "Titulares  exemplo", None), {"gravados": 3, "pendencias": {"adotado_existente": 5}}),
     ("PSFORNEMEMSIT", _n("Solicitado exemplo", None, "Entregue exemplo", "Cancelado  exemplo"),
      {"gravados": 3, "pendencias": {R1048: 1}}),
     ("PSMOTIVO", _n("Óbito exemplo", None, "Pedido  do titular"), {"gravados": 2, "pendencias": {R1048: 1, VP: 3}}),

@@ -24,7 +24,7 @@ class PlanoL502(unittest.TestCase):
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(set(self.plano), set(l5_02.CARREGADAS))
         self.assertEqual(len(FATIA), 20)
-        self.assertEqual(len(l5_02.CARREGADAS), 15)
+        self.assertEqual(len(l5_02.CARREGADAS), 16)
 
     def test_ultimo_acesso_carrega(self):
         # TBSGHCONEXAO é do sistema de origem (último acesso por usuário e módulo): carrega, nunca é descarte
@@ -218,6 +218,16 @@ class ImagemL502(unittest.TestCase):
                           if k.startswith("restricao_destino_") or k == "pai_pendente")
             self.assertEqual(e["gravados"] + recusas, cont[t], t)
 
+
+
+class ContinuidadeR5(unittest.TestCase):
+    """ADR 0006: a situação do termo carrega como item do cliente; as listas de domínio fixo têm prova."""
+    def test_situacao_termo_e_provas(self):
+        m = mapa.carregar_execucao()
+        d = {c["destino"] for c in m["colunas_decl"] if c["tabela"] == "TBMOVTERMSTATUS"}
+        self.assertIn("situacao_termo_consentimento.etapa", d)
+        provadas = {p["tabela"] for p in m["provas"]}
+        self.assertLessEqual({"TBTIPOREPRE", "TBTIPOOID", "TBPROCBACKUP", "TBSITBACKUP"}, provadas)
 
 if __name__ == "__main__":
     unittest.main()

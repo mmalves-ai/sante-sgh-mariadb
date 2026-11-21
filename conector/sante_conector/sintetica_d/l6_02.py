@@ -33,6 +33,12 @@ Situação 'S' (suspensa) vira 'suspensa': o esperado supõe o CHECK do modelo c
 import datetime
 
 DDL = """
+CREATE TABLE TBREFCANCMODTP (ID_TBMOTCANCMOD SMALLINT NOT NULL, ID_TBMOTCANCTP SMALLINT NOT NULL,
+  PRIMARY KEY (ID_TBMOTCANCMOD, ID_TBMOTCANCTP));
+CREATE TABLE TBSTATUSGUICHE (NUMERO_GUICHE SMALLINT NOT NULL, ID_TBRECEPCAO SMALLINT NOT NULL, ID_TBUSERS VARCHAR(31),
+  ID_TBLOCAL SMALLINT NOT NULL, CONSTRAINT PK_TBSTATUSGUICHE PRIMARY KEY (NUMERO_GUICHE, ID_TBRECEPCAO, ID_TBLOCAL));
+CREATE TABLE TBTIPO_ATENDIMENTO (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(20) NOT NULL);
+CREATE TABLE ATCONTA (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL, COD_CONTA BIGINT NOT NULL);
 CREATE TABLE TBRECEPCAO (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(40) NOT NULL, TEXTOIMP BLOB SUB_TYPE 1,
   IMPRESSORA_MODO_GRAFICO CHAR(1), QTDE_CHAM_SUGES_CANC_SENHA SMALLINT);
 CREATE TABLE TBLOCALHORA (ID_TBLOCAL SMALLINT NOT NULL PRIMARY KEY, SEGUNDA_INICIO TIME, SEGUNDA_FINAL TIME,
@@ -74,12 +80,50 @@ PAIS_EXTERNOS = {"TBUSERS": ["RECEP01", "RECEP02"], "ATCABECATEND": [str(i) for 
                  "TBESPEC": ["1"], "TBPROFIS": ["1"], "TBUNIDAD": ["1"], "REAGENDA": ["1"],
                  "REPACAGD": ["1", "2"], "SIPACAGD": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
+                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+                   # rodada 5 (correção): conta_hospitalar e atendimento_conta como a carga das contas de internação
+                   # (RICONTAS, L8-06) os deixa: conta por (registro, conta parcial), registrada como pai externo
+                   " CREATE TABLE IF NOT EXISTS conta_hospitalar (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " atendimento_id BIGINT UNSIGNED NULL);"
+                   " CREATE TABLE IF NOT EXISTS atendimento_conta (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " atendimento_id BIGINT UNSIGNED NOT NULL, conta_hospitalar_id BIGINT UNSIGNED NOT NULL,"
+                   " excluido_em DATETIME(3) NULL);")
+
+
+def _ids_externos():
+    """Id que a conferência dá a cada pai externo: ordem das tabelas e das chaves, juntando os da fatia requerida."""
+    import importlib
+    ext = {}
+    for mod in [importlib.import_module("sante_conector.sintetica_d.l6_01")]:
+        for t, ks in getattr(mod, "PAIS_EXTERNOS", {}).items():
+            ext.setdefault(t, []).extend(k for k in ks if k not in ext[t])
+    for t, ks in PAIS_EXTERNOS.items():
+        ext.setdefault(t, []).extend(k for k in ks if k not in ext[t])
+    ids, i = {}, 0
+    for t, ks in sorted(ext.items()):
+        for k in ks:
+            i += 1
+            ids[(t, k)] = i
+    return ids
+
+
+# ATCONTA (atendimento, registro da conta): 1 -> 900 com duas contas parciais; 2 -> 901 e 902; 3 -> 903; 4 sem conta
+# no destino (a origem também não a liga); o par é conferido linha a linha pela prova (provas.d/ATCONTA.sql)
+CONTAS = [("1", "900|1"), ("1", "900|2"), ("2", "901|1"), ("2", "902|1"), ("3", "903|1")]
+PAIS_EXTERNOS["RICONTAS"] = [c for _, c in CONTAS]
+_IDS = _ids_externos()
+PREPARO_DESTINO += "".join(" INSERT INTO conta_hospitalar (id, atendimento_id) SELECT %d, %d FROM DUAL WHERE NOT EXISTS"
+                           " (SELECT 1 FROM conta_hospitalar WHERE id = %d);" % (_IDS[("RICONTAS", c)],
+                           _IDS[("ATCABECATEND", a)], _IDS[("RICONTAS", c)]) for a, c in CONTAS)
+PREPARO_DESTINO += (" INSERT INTO atendimento_conta (atendimento_id, conta_hospitalar_id) SELECT a, c FROM (%s) x"
+                    " WHERE NOT EXISTS (SELECT 1 FROM atendimento_conta)" % " UNION ALL ".join(
+                        "SELECT %d a, %d c" % (_IDS[("ATCABECATEND", a)], _IDS[("RICONTAS", c)]) for a, c in CONTAS))
 CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALHORA", "TBLOCALPESATE",
               "TBGERASENHA", "TBSENHAATEND", "ATCABECATEND_TBSENHAATEND", "TBSENHAATEND_REPACAGD",
-              "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO", "REPARAM")
-DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO", "ATCONTA")
-BLOQUEADAS = ()   # ATCONTA: descarte duplicado, atendimento_conta nasce da carga das contas (L8-05, L8-06)
+              "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO", "REPARAM", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO",
+              "TBREFCANCMODTP")
+DESCARTADAS = ("ATCONTA",)
+BLOQUEADAS = ()   # ATCONTA: descarte duplicado COM PROVA (provas.tsv): atendimento_conta nasce da carga das contas
 DESDOBRADAS = {"TBLOCALHORA": 2, "REPARAM": 1}   # linhas da origem que gravam itens (o esperado "gravados" conta itens)
 
 
@@ -92,6 +136,16 @@ def linhas(r, ins):
     # guichês: (0, 2) CHECK numero > 0; (1, 4) pai recusado
     for g in [(1, 1), (2, 1), (1, 2), (0, 2), (1, 4), (3, 5)]:
         ins("TBGUICHE", list(g))
+    # rodada 5: estado do guichê: (1, 1) já carregado por TBGUICHE é adotado; (7, 1) só citado aqui é criado;
+    # (2, 4) recepção recusada (pai_pendente, recusa: NOT NULL)
+    for g in [(1, 1, "RECEP01", 1), (7, 1, None, 1), (2, 4, "RECEP02", 4)]:
+        ins("TBSTATUSGUICHE", list(g))
+    for i, d in [(1, "Pré-atendimento um"), (2, "Pré  atendimento 2")]:
+        ins("TBTIPO_ATENDIMENTO", [i, d])
+    # ligação atendimento x registro da conta (ficha externa ou registro da internação): o atendimento 2 com dois
+    # registros; o registro 900 tem duas contas parciais no destino (um par só); a prova confere cada par
+    for i, (at, conta) in enumerate([(1, 900), (2, 901), (2, 902), (3, 903)], 1):
+        ins("ATCONTA", [i, at, conta])
     # locais: 4 pai recusado; 5 pai nunca visto (NOT NULL recusa); 6 código repetido; 7 ATIVO fora; 8 sem descrição
     loc = [(1, 1, 10, "Consultório um"), (2, 1, 11, "Consultório dois"), (3, 2, 12, "Sala de exame"),
            (4, 4, 13, "Sala quatro"), (5, 99, 14, "Sala cinco"), (6, 2, 10, "Código repetido"),
@@ -180,6 +234,9 @@ def linhas(r, ins):
                               "Alta registrada depois" if i == 2 else None])
     # parâmetros (linha única): ULTPRONT, ULTREG, PRTANT (zero) e CTR_PAG_REG com valor; ULTPRTFAM, PRT_OTMU e
     # PRTA_OTMU vazios (sem item); inscrição e competência lidas só pelo DDL (não carregam)
+    # rodada 5 (ADR 0006): pares módulo x operação com motivo de cancelamento: lista do hospital, valor = módulo_operação
+    for par in [(1, 1), (1, 2), (2, 1), (3, 2), (4, 1)]:
+        ins("TBREFCANCMODTP", list(par))
     ins("REPARAM", ["0001234", 10, 2026, 1500, 3200, None, None, 12, None, 0])
     return {
         "TBRECEPCAO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
@@ -209,4 +266,7 @@ def linhas(r, ins):
         "HTATENDIMENTO": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "data_sentinela": 1,
                                                         "restricao_destino_1048": 1}},
         "REPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 1}},
+        "TBSTATUSGUICHE": {"gravados": 2, "pendencias": {"pai_pendente": 1, "adotado_existente": 1}},
+        "TBTIPO_ATENDIMENTO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
+        "TBREFCANCMODTP": {"gravados": 5, "pendencias": {"adotado_existente": 9}},
     }

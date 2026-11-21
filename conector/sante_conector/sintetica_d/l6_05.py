@@ -1,6 +1,7 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
-As 21 tabelas carregadas pela carga dirigida pelo mapa (3 da fatia são descarte de produto em declarado/sem_carga.tsv).
+As 24 tabelas carregadas pela carga dirigida pelo mapa (rodada 5, ADR 0006: respostas padrão, opções de e-mail e
+leiautes da prescrição, antes descarte, carregam como opções dos parâmetros de lista do produto, parametro_opcao).
 GECADANTIMI grava a ficha do antimicrobiano migrada (origem 'migracao', 06_PEP/18): atendimento pelo registro, paciente
 pela encadeada RECADATE > PRONT > RICADPAC (pais de L3 na imagem só com as colunas da referência), prescritor pela
 inscrição no conselho (TBCBOPRO > profissional), convênio e finalidade nativa pela inicial do tipo; anomalias: convênio e
@@ -19,7 +20,12 @@ código da via na prescrição digital.
 """
 import datetime
 
+from .l6_06 import preparo_parametros
+
 DDL = """
+CREATE TABLE PRCADRESP (COD INTEGER NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(255));
+CREATE TABLE PREMAILOPCAO (ID SMALLINT NOT NULL PRIMARY KEY, NOME_OPCAO VARCHAR(45) NOT NULL, ID_PREMAILMODULO SMALLINT);
+CREATE TABLE PRLAYIMPPRESC (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 CREATE TABLE GETABVIA (COD VARCHAR(2) NOT NULL PRIMARY KEY, NOME VARCHAR(35), ATIVO CHAR(1), ID_TBTISSVIAADMIN SMALLINT,
   ID_DIGITAL VARCHAR(36));
 CREATE TABLE PRAGRAVOTPARQUETIPO (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT NULL);
@@ -67,6 +73,9 @@ CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL, "ID_TBCBOSUS" INTEGER NOT NULL, "U
   "AXREG_ID_ANESTHESIOLOGISTS" BIGINT, "ID_DIGITAL" VARCHAR(36), CONSTRAINT PK_L605_TBCBOPRO PRIMARY KEY ("ID"));
 """
 
+# rodada 5: listas do hospital como opções de parâmetro do produto (definição semeada pelo produto, pedido)
+PARAMETROS_LISTA = {"PRCADRESP": "pep.formulario.respostaPadrao", "PREMAILOPCAO": "pep.email.opcaoEnvio",
+                    "PRLAYIMPPRESC": "pep.impressaoPrescricao.leiaute"}
 # logins inventados de usuários já carregados (L3)
 PAIS_EXTERNOS = {"TBUSERS": ["usuario.exemplo.um", "usuario.exemplo.dois"],
                  # atendimentos e pacientes (L3), convênio e profissional (L3/L5) já carregados; 5002 nunca carregado
@@ -80,7 +89,8 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " CREATE TABLE IF NOT EXISTS finalidade_terapeutica (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(30) NOT NULL UNIQUE, descricao VARCHAR(150) NOT NULL);"
                    " INSERT INTO finalidade_terapeutica (codigo, descricao) VALUES ('profilatica', 'Profilática'),"
-                   " ('empirica', 'Empírica'), ('terapeutica', 'Terapêutica')")
+                   " ('empirica', 'Empírica'), ('terapeutica', 'Terapêutica'); "
+                   + preparo_parametros())
 
 
 U1, U2 = PAIS_EXTERNOS["TBUSERS"]
@@ -93,6 +103,12 @@ def _pref(i, login):
 
 # (tabela, linhas, esperado)
 DADOS = [
+    # rodada 5: resposta sem descrição usa o código como rótulo; código acima de SMALLINT na sequência (1264)
+    ("PRCADRESP", [[1, "Sim"], [2, "Não  sei €"], [3, None], [70000, "Resposta fora da faixa"]],
+     {"gravados": 3, "pendencias": {"restricao_destino_1264": 1}}),
+    ("PREMAILOPCAO", [[1, "Enviar resumo de alta", 1], [2, "Enviar laudo", None]], {"gravados": 2, "pendencias": {}}),
+    ("PRLAYIMPPRESC", [[1, "Horários em colunas"], [2, "Compacto"], [3, "   "]],
+     {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}),
     ("GETABVIA", [["VO", "Via oral", "S", 1, None], ["IV", "Intravenosa", "S", 2, None],
                   ["SC", " Subcutânea  ", "N", None, "00000000-0000-0000-0000-000000000001"],
                   ["Ab", "Via exemplo caixa mista", "S", None, None], ["AB", "Via exemplo caixa alta", "S", None, None],

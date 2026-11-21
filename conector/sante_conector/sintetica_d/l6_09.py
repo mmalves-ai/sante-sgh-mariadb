@@ -58,6 +58,9 @@ CREATE TABLE TBSTATUSPROCEDIMENTO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHA
 CREATE TABLE TBTABELA_CAMPO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 """
 REQUER = ["L6-08"]
+# o preparo da L6-08 (vias de uso com o identificador da prescrição digital, alvo do cod: de TBDIGITAL_VIAACESSO)
+# roda antes do desta fatia
+PREPARO_DOS_REQUERIDOS = True
 PAIS_EXTERNOS = {"TBSEXO": ["1", "2"], "TBUNID_IDADE": ["1", "2"], "TBUNIDAD": ["1", "2", "3", "4"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL);\nINSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');\n"
@@ -69,13 +72,14 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    " estabelecimento) FROM (WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE"
                    " n < 200) SELECT n FROM s) x;")
 
-NAO_CARREGADAS = ["TBLANC_DIAG_STATUS", "TBLANC_DIAG_MANTER", "TBNUMDOSE", "TBTABELA_CAMPO"]
+NAO_CARREGADAS = []  # rodada 5 (revisão 2): todas carregam; o número de doses vira frequência (ADR 0006)
 
 
 def linhas(r, ins):
     for i in range(1, 5):
-        ins("TBTABELA_CAMPO", [i, "Campo exemplo %d" % i])      # descarte: domínio do produto
-    ins("TBLANC_DIAG_MANTER", [1, "Sim", "Mantém no próximo atendimento"])
+        ins("TBTABELA_CAMPO", [i, "Campo exemplo %d" % i])      # lista do hospital (parâmetro de lista)
+    for m in [(1, "Sim", "Mantém no próximo atendimento"), (2, "Não", "Encerra no atendimento"), (3, "   ", "Sem nome")]:
+        ins("TBLANC_DIAG_MANTER", list(m))  # 3: valor = código
     # gravidade: nível pelo NOME (Grave = 3, nunca pela chave); ação pela ref. encadeada ao nome da ação (L6-08:
     # 1 Avisar, 2 Bloquear), destino opcional; 4: ação inexistente e S/N fora; 5: nome sem par (1048); 6: só
     # espaços (1048); 7: nível repetido (1062)
@@ -92,14 +96,19 @@ def linhas(r, ins):
     # conta uma por coluna: 9 nas duas da unidade, 8 nas quatro da grade e nas duas da unidade
     for u in [(1, 1), (2, 2), (3, 3), (9, 4), (8, 77), (4, 1)]:
         ins("TBHORMED_TBUNIDAD", list(u))
-    # doses (descarte como linha): 4 é da grade recusada 3; 5 tem 50 doses (CHECK)
-    for n in [(1, 1, 1), (2, 1, 2), (3, 2, 3), (4, 3, 2), (5, 1, 50), (6, 4, 2)]:
+    # números de doses (frequência 'N vezes ao dia' nos horários padrão, uma por número, adotada pelo código):
+    # 7 da grade recusada 3 (o número de doses carrega; o horário dele fica pai_pendente pela grade); 8 com menos
+    # horários que doses (carrega); 9 com 50 doses (CHECK 1..48 recusa: pendência visível; o horário dele fica
+    # pai_pendente); 10 SEM horário nenhum (carrega: o número de doses chega ao destino)
+    doses = [(1, 1, 1), (2, 1, 2), (3, 2, 3), (4, 2, 2), (5, 4, 1), (6, 4, 3), (7, 3, 1), (8, 1, 3), (9, 2, 50),
+             (10, 4, 4)]
+    for n in doses:
         ins("TBNUMDOSE", list(n))
     for h in [(1, 1, "0800"), (1, 2, "2000"), (2, 1, "0800"), (2, 2, "2000"), (3, 1, "0600"), (3, 2, "1400"),
-              (3, 3, "2200"), (4, 1, "0800"), (4, 2, "2000"), (5, 1, "0800"), (6, 1, "0700"), (6, 2, "2575"),
-              (99, 1, "0800")]:
+              (3, 3, "2200"), (4, 1, "0800"), (4, 2, "2000"), (5, 1, "0800"), (6, 1, "0700"), (6, 2, "1500"), (6, 3, "2300"), (6, 4, "2575"),
+              (99, 1, "0800")] + [(7, 1, "0800"), (8, 1, "0600"), (8, 2, "1400"), (9, 1, "0800")]:
         ins("TBHORARIODOSE", list(h))
-    # não carregada (sem_valor: lista sem consumidora); 7 situações, só 1 com o nome de uma da lista de problemas
+    # lista do hospital (parâmetro de lista); 7 situações, só 1 com o nome de uma da lista de problemas
     for s in [(1, "Ativo"), (2, "Em acompanhamento"), (3, "Aguardando exame"), (4, "Excluído"), (5, "Revisado"),
               (6, "Pendente de alta"), (7, "Arquivado")]:
         ins("TBLANC_DIAG_STATUS", list(s))
@@ -171,9 +180,14 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 3}},
         "TBHORMED_TBUNIDAD": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 8,
                                                             "restricao_destino_1048": 2}},
-        "TBHORARIODOSE": {"gravados": 7, "pendencias": {"restricao_destino_4025": 2, "pai_pendente": 2,
-                                                        "hora_invalida": 1, "pai_inexistente": 2,
-                                                        "restricao_destino_1048": 2}},
+        "TBNUMDOSE": {"gravados": 9, "pendencias": {"adotado_existente": 5, "restricao_destino_4025": 1}},
+        "TBHORARIODOSE": {"gravados": 14, "pendencias": {"restricao_destino_4025": 1, "hora_invalida": 1,
+                                                         "pai_pendente": 2, "pai_inexistente": 2,
+                                                         "restricao_destino_1048": 2}},
+        "TBTABELA_CAMPO": {"gravados": 4, "pendencias": {"adotado_existente": 7}},
+        "TBLANC_DIAG_STATUS": {"gravados": 7, "pendencias": {"adotado_existente": 13}},
+        "TBLANC_DIAG_MANTER": {"gravados": 3, "pendencias": {"adotado_existente": 5}},
+
         "TBLISTADIAGNOSTICOSITUACAO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 3,
                                                                      "restricao_destino_1048": 1}},
         "TBLANC_DIAG_SUJ_CUID": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},

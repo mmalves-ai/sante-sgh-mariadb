@@ -1,145 +1,164 @@
 {
- "fatia": "L8-04",
- "pedidos": [
-  {
-   "arquivo": "conector/sante_conector/sentinela.py (_digitos e regras de documento)",
-   "mudanca": "1) _digitos aceita float de valor inteiro (DOUBLE da origem: str(int(v))); hoje 11222333000181.0 vira 15 dígitos e documento_invalido. 2) regras genéricas para documento num campo só: tipo_pessoa_documento (até 11 dígitos 'fisica', 12 a 14 'juridica', inválido NULL com documento_invalido), cpf_de_documento e cnpj_de_documento (gravam só quando o tamanho casa; no outro caso NULL sem pendência). Depois: TBPRESER CGC_CPF -> prestador_terceiro.tipo_pessoa/cpf/cnpj com essas regras, no lugar de =~juridica e cnpj",
-   "motivo": "pedido 1: TBPRESER (prestador_terceiro) é planejada, mas hoje 100% das linhas caem no CHECK do documento (na imagem sintética: 3 de 3, documento_invalido 2 e 4025 3)",
-   "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro e regras tipo_pessoa_documento, cpf_de_documento, cnpj_de_documento"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador: desdobrar no destino principal)",
-   "mudanca": "regra genérica faltante: aceitar desdobrar:<COL>=<rótulo>,... no destino PRINCIPAL (uma linha do principal por coluna com valor; chave da entidade <chave>/<rótulo>; nenhuma coluna com valor: linha lida sem gravação, contada). Declaração pronta para TBPERTHM -> regra_percentual_cobranca: CONV fonte_pagadora_id ref:TBCONVEN; TAB tabela_preco_id ref:TBCTRTHM; PROCTO item_faturavel_id ref:TBTABTHM(TAB,PROCTO)>ID_TBPROCTO>TBPROCTO; DATA vigencia_inicio data; TIPO_PAC tipo_paciente codigo_char valores (domínio a medir); #rotulo componente; #item percentual decimal_nao_negativo com via desdobrar:PERC_CH=honorario,PERC_COPE=custo_operacional,PERC_ANEST=anestesia,PERC_FILME=filme,PERC_N_CRED=nao_credenciado,PERC_APOS_HORARIO=horario_especial; CH_VALOR_CRED sem destino",
-   "motivo": "pedido 5 (regra faltante): TBPERTHM (89015 linhas) traz seis percentuais por linha; o verificador recusa desdobrar no principal e acrescimo_horario_especial não serve de principal. Única tabela da fatia sem carga nem descarte",
-   "atendido": "rodada 3, grupo 1: desdobrar no destino principal existe; TBPERTHM saiu do L8-04.tsv (rodada 3) e a L8-03, dona pelo índice, descomenta a declaração pronta"
-  },
-  {
-   "arquivo": "tools/obra/cobertura_conector.py (avaliar: colunas obrigatórias)",
-   "mudanca": "pular o destino com complementa (como o opcional): for dt in p['destinos']: if dt in opcionais.get(t, ()) or (p.get('opcoes') or {}).get(dt, {}).get('complementa'): continue",
-   "motivo": "TBTABTHM completa o item_faturavel por UPDATE (ref:TBPROCTO;complementa): NOT NULL do item não se aplica, mas a ferramenta a dá como coluna_obrigatoria_sem_fonte:item_faturavel.*; a conferência na imagem sintética passa (3 gravadas, complemento aplicado)",
-   "atendido": "a cobertura já pula complementa (brief, rodada 2)"
-  },
-  {
-   "arquivo": "semente do cliente (comando 'criar novo cliente'): via_acesso_cirurgico",
-   "mudanca": "semear via_acesso_cirurgico com as 3 vias da terminologia TISS (codigo_tiss 1 única, 2 mesma via, 3 diferentes vias; percentual_remuneracao a definir pelo cliente) na criação do cliente. A L8-04 já acha a via pelo código TISS (ID_TBTISSVIAACES regra inteiro, via cod:via_acesso_cirurgico.codigo_tiss; a chave da origem É o código: agregado da imagem 3 linhas, 1 a 3)",
-   "motivo": "pedido 4 revisto: TBTISSVIAACES é terminologia oficial (nunca gravada); sem a semente as 16 fórmulas de cirurgia múltipla caem em codigo_inexistente_destino + 1048 (visível). A cobertura não enxerga essa dependência (cod: não é pai do mapa) e conta a tabela como CARREGA"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBPROCTO, TBCTRTHM)",
-   "mudanca": "TBPROCTO -> item_faturavel (principal pela via; código derivado com prefixo, descrição NOME); TBCTRTHM -> tabela_preco com a chave COD (TBTABTHM usa ref:TBCTRTHM pela TAB). item_faturavel exige grupo_faturamento_id: nenhuma origem alimenta grupo_faturamento (ver pedido 6)",
-   "motivo": "decisão TBPROCTO/TBTABTHM em F4-decisoes-destino.md: o preço (TBTABTHM, aqui) referencia o item pela ID_TBPROCTO e o completa; sem os pais, as linhas caem em pai_inexistente + 1048 (visível)"
-  },
-  {
-   "arquivo": "produto (criar novo cliente) + conector/sante_conector/depara.py",
-   "mudanca": "grupo_faturamento sem origem no mapa: semear os grupos padrão por tipo_grupo no 'criar novo cliente' (ou implantação) e dar ao conector o de-para de catálogo do produto 'grupo_faturamento' (por codigo) para o item faturável (TBPROCTO na L8-03, TBTABDTH na L8-05) e TIPO_DESP de TBTABTHM",
-   "motivo": "item_faturavel.grupo_faturamento_id é NOT NULL e nenhum lote cria grupo_faturamento"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
-   "mudanca": "de-para oficial 'tuss' (termo_versao_tiss ou termo_terminologia pelo código TUSS) para TBTABTHM TAB_REF_TUSS/PROC_REF_TUSS -> preco_procedimento.termo_versao_tiss_id; porte (PMEDICO/PPORTE) quando porte_procedimento tiver origem",
-   "motivo": "melhoria sem bloqueio: hoje a equivalência TUSS do preço fica NULL (colunas declaradas sem destino, com motivo)"
-  },
-  {
-   "arquivo": "docs/obra/fatias/f4 (tools/obra/fatiar_conector.py)",
-   "mudanca": "regerar as fatias e o indice.tsv depois de regerar o mapa (conferir-fatia acusa 'arquivo diferente do gerado' em quase todas as fatias: dependências novas de várias fatias, aqui TBSUBDES -> TBGRUDES em declarado/dependencias.tsv, e o mapa regerado nesta rodada)",
-   "motivo": "mapa regerado de novo nesta rodada (TBPRESER depende agora de TBCENCUS e TBPROFIS: ordem 684 -> 871); fatias e indice.tsv a regerar pelo integrador"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBCOSPPROF ID)",
-   "mudanca": "TBCOSPPROF: funcao_equipe_cobranca.codigo por #codigo_derivado:ID:30:cosp_ (ID sem destino, chave_origem)",
-   "motivo": "pedido 9b: colisão em uq_funcao_equipe_cobranca_codigo entre TBCOSPPROF (L8-03, sem prefixo), TBGRAUPARTPROC (agora grau_part_) e TBTPPROFPROC (tipo_prof_); a fatia que carregar depois seria recusada com 1062"
-  },
-  {
-   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
-   "mudanca": "de-para oficial 'ibge_municipio_nome_uf': município IBGE pelo nome normalizado (sem acento, caixa) + sigla da UF; ambíguo: pai_ambiguo; ausente: catalogo_codigo_*. Uso: TBPRESER CIDADE+UF -> prestador_terceiro.municipio_ibge_id",
-   "motivo": "pedido 9: a origem só tem nome e UF do município; hoje a coluna fica sem destino"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador)",
-   "mudanca": "aceitar adotar:<colunas> no destino PRINCIPAL (a linha que já tem o mesmo documento é adotada: conector_origem da chave aponta para ela, sem sobrescrever, pendência adotado_existente)",
-   "motivo": "pedido 10: TBPRESER repete o prestador entre linhas ATO/MODULO; com o pedido 1, o mesmo CPF/CNPJ em duas linhas cai em uq_prestador_terceiro_estabelecimento_cpf/cnpj (1062)"
-  },
-  {
-   "arquivo": "db/migracoes/12_FAT (modelo) + colunas.d/L8-04.tsv",
-   "mudanca": "tabela associativa item_faturavel_tipo_servico (item_faturavel_id, tipo_servico_faturavel_id, UNIQUE do par) e carga de TBTIPPRO por ref:TBPROCTO (PROCTO) + tipo pelo código TIPO (tipo_servico_faturavel semeado ou criado com código = TIPO e descrição presumida)",
-   "motivo": "pedido 11: TBTIPPRO (431 linhas) é a classificação de cada procedimento; o modelo não tem onde guardá-la e TIPO não tem cadastro na origem (decisão a revisar com o dono)",
-   "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: TBTIPPRO pela tabela nova"
-  },
-  {
-   "arquivo": "tools/obra/conferir-fatia-f4.sh + conector/sante_conector/conferencia.py",
-   "mudanca": "1) rodar cobertura_conector.py --fatia F --falhar-se-bloqueada; 2) conciliação falha quando registros_origem > 0 e registros_destino = 0 sem a tabela esperar isso explicitamente; 3) verificador global de colisão entre origens que gravam a mesma coluna UNIQUE sem prefixo",
-   "motivo": "pedido 12: a autoconferência dava ok com tabela BLOQUEADA, com destino vazio (TBPRESER) e não pegava a colisão de código entre fatias"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (linha de TBTISSTERMO_TBTPLANC) + conector/sante_conector/sintetica_d/l8_05.py + conector/testes/test_l8_05.py",
-   "mudanca": "rodada 3: TBTISSTERMO_TBTPLANC passou para a L8-04 pelo índice novo e CARREGA (colunas.d/L8-04.tsv: terminologia por depara=terminologia sobre ID_TBTISSTERMO, tipo por ref:TBTPLANC). Remover a linha 'TBTISSTERMO_TBTPLANC\\tID_TBTISSTERMO' (sem destino) do L8-05.tsv; tirar a tabela de FORMAS/SEM_MECANISMO do l8_05.py; em test_l8_05 (test_tabelas_e_destinos, test_nao_carregadas_sem_destino) deixar de tratá-la como bloqueada",
-   "motivo": "o verificador do mapa acusa 'tabela declarada em mais de um arquivo: TBTISSTERMO_TBTPLANC (L8-04.tsv e L8-05.tsv)' e test_l8_05 falha 2 testes; a L8-04 não edita arquivo de outra fatia"
-  },
-  {
-   "arquivo": "conector/testes/test_l8_01.py + conector/sante_conector/sintetica_d/l8_01.py",
-   "mudanca": "rodada 3: FCCRECUN passou para a L8-04 pelo índice novo e CARREGA (colunas.d/L8-04.tsv: profissional e ocupação CBO pela inscrição, convênio por ref:TBCONVEN, CONTAS por cod:tipo_conta.codigo com pares em valores.d/L8-04.tsv). Tirar FCCRECUN de BLOQUEADAS e de test_bloqueadas_nao_entram_no_plano/test_so_as_carregaveis_entram_com_o_destino_certo; tirar as 2 linhas de FCCRECUN da imagem do l8_01.py (ou dar o esperado), e a linha comentada '#--- FCCRECUN' do L8-01.tsv",
-   "motivo": "test_l8_01 falha em test_bloqueadas_nao_entram_no_plano e test_so_as_carregaveis_entram_com_o_destino_certo por causa de FCCRECUN (as outras 2 falhas de test_l8_01, FCDIAINT e FCHORATE, não são da L8-04)"
-  },
-  {
-   "arquivo": "semente do cliente (comando 'criar novo cliente'): tipo_conta",
-   "mudanca": "reforça o pedido da L8-06: semear tipo_conta com os códigos canônicos internacao, externa, ambulatorial e urgencia (e natureza igual) na criação do cliente",
-   "motivo": "FCCRECUN (e FCCTAEXT, RICONTAS, TBCREMED, TBCREPRS) acham o tipo de conta por cod:tipo_conta.codigo; sem a semente toda regra com tipo vira NULL (= todos os tipos) com codigo_inexistente_destino, visível mas ampliando o escopo do crédito"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBPROCTO)",
-   "mudanca": "nenhuma na L8-04: TBTABTHM fica BLOQUEADA só por pai_nao_carregado:TBPROCTO (item_faturavel_id NOT NULL); sai sozinha quando a L8-03 carregar TBPROCTO em item_faturavel (grupo_faturamento_id por cod:, mecanismo da rodada 2)",
-   "motivo": "dependência fora da fatia: a declaração de TBTABTHM está pronta e a conferência na imagem sintética passa (3 gravadas, complemento aplicado)",
-   "atendido": "TBPROCTO carrega na L8-03 (cobertura: TBTABTHM CARREGA)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (cod: e de-para de valores em coluna anulável)",
-   "mudanca": "opção genérica de via 'exigir' (ou regra equivalente): quando a origem TEM valor e ele não resolve (valor_fora_do_dominio, codigo_inexistente_destino, pai_ambiguo), a linha é recusada em vez de gravar NULL. Uso: FCCRECUN CONTAS -> regra_credito_producao.tipo_conta_id (NULL = vale para todos os tipos; T e vazio continuam NULL sem pendência)",
-   "motivo": "pedido 18 (achado da revisão): hoje a letra que não resolve grava NULL e AMPLIA a regra de crédito a todos os tipos de conta; sem a semente de tipo_conta (pedido 16) isso acontece em toda linha com tipo"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (coluna concorrente com literal presumido)",
-   "mudanca": "em colunas concorrentes, o literal presumido de reserva (=~x) só deixa valor_presumido quando é o valor usado (hoje a pendência entra antes de saber se a coluna anterior teve valor). Uso: TBGRAUPARTPROC tipo_funcao (grau TISS, reserva =~outro)",
-   "motivo": "pedido 19: a função com grau TISS derivado aparece como presumida no painel (ruído); a conferência sintética espera hoje valor_presumido em toda linha lida (6) e precisa ser ajustada junto"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (gravidade do valor_presumido)",
-   "mudanca": "gravidade média para o presumido em coluna que decide cobrança ou repasse (lista declarável, ex.: tipo_lancamento.natureza e tipo_lancamento.gera_repasse), baixa nas demais",
-   "motivo": "pedido 20 (achado da revisão): TBTPLANC (5 tipos) tem natureza e repasse só presumidos; a terminologia ligada não serve de evidência (24 ligações para 5 tipos, vários termos por tipo) e o nome é texto livre"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (TBTABDTH) + sem_carga.tsv (TBTPFASEUNIBH, TBTPPERFILUNIBH, TBTPTRATUNIBH, TBTPCLASSIFUNIBH) + sintetica_d/l8_05.py e test_l8_05.py",
-   "mudanca": "decisão do dono pendente. Para carregar: um atributo por lista em atributo_guia_fonte_pagadora (fase, perfil, tratamento, classificação; tipo_dado opcao) para a fonte pagadora indicada pelo cliente (sem ela: pendência visível 'operadora a indicar'), opções em atributo_guia_opcao com opcao_pai_id pela hierarquia de TBTPCLASSIFUNIBH, e a marcação TBTABDTH.ID_TBTPCLASSIFUNIBH no valor do atributo do item. Exige mecanismo de cabeçalho único por tabela (agrupar por constante) ou semente da fonte; as quatro tabelas estão nas DESCARTES do l8_05 e a consumidora no L8-05.tsv",
-   "motivo": "pedido 21 (achado da revisão): os motivos diziam que o código entrava pelo de-para na coluna consumidora, mas TBTABDTH.ID_TBTPCLASSIFUNIBH está sem destino: a marcação por item (24 opções) não migra. Motivo de TBTPFASEUNIBH corrigido; os das outras três são da L8-05"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (TBCONVEN) + valores.d/L5-06.tsv + sem_carga.tsv (TBTPOBRIGAMAT)",
-   "mudanca": "declarar TBCONVEN.ID_TBTPOBRIGAMAT como destino secundário regra_consistencia_lancamento (fonte_pagadora_id pelo @id do principal, tipo_regra material_obrigatorio, opção pelo de-para de valores do ID 1 a 4; opcional: sem valor não grava) e corrigir o motivo do descarte de TBTPOBRIGAMAT, que hoje afirma um vínculo que não existe",
-   "motivo": "pedido 22 (achado da revisão): nenhuma declaração aproveita TBCONVEN.ID_TBTPOBRIGAMAT; a regra de material obrigatório por operadora, usada no lançamento, se perde em silêncio"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (TBEMIREFMATMED) + modelo",
-   "mudanca": "nenhuma na L8-04: a L8-05 já declarou TBEMIREFMATMED (fonte, item, preço base por REF_VALOR_PFB/PMC). Fica BLOQUEADA por pai_nao_carregado:TBMATMED, e mat/med não tem item_faturavel no mapa (TBMATMED -> item_referencia_matmed; item_faturavel de mat/med exige insumo_id): o item precisa de caminho próprio",
-   "motivo": "achado da revisão: o descarte 'licenciado' não se sustentava (configuração de emissão por operadora e item do hospital)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBMATMED) + conector/mapa/declarado/colunas.d/L8-05.tsv (linhas comentadas de TBEMIREFMATMED)",
-   "mudanca": "1) L8-03: ao carregar TBMATMED (filtro de linha por licença, pedido 2/11 da L8-03), dar ao item de tabela própria o destino secundário item_faturavel (ref:TBMATMED/item_faturavel). 2) L8-05: as 4 linhas comentadas '#TBEMIREFMATMED' passam para colunas.d/L8-04.tsv (dona pelo índice), descomentadas quando TBMATMED carregar: ID_TBCONVEN -> fonte_pagadora_id ref:TBCONVEN; ID_TBMATMED -> item_faturavel_id ref:TBMATMED/item_faturavel; REF_VALOR_PFB -> preco_base (pares S/N das duas colunas para preco_fabrica/preco_maximo_consumidor); REF_VALOR_PMC sem destino próprio",
-   "motivo": "rodada 3: TBEMIREFMATMED (1 linha na referência) é configuração do hospital por fonte pagadora e item de mat/med (NÃO é descarte nem licenciado). item_faturavel_id é NOT NULL e só existe quando TBMATMED carregar: segue BLOQUEADA (pai_nao_carregado:TBMATMED), único bloqueio da fatia, sem nada que a L8-04 possa fazer sozinha. Na imagem sintética da L8-04 a tabela está presente (2 linhas) e fora do plano (AGUARDA_PAI)"
-  },
-  {
-   "n": 25,
-   "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
-   "mudanca": "referencia_emissao_matmed_excecao: item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), item_faturavel_id anulável e CHECK de exatamente um dos dois; UNIQUE (fonte_pagadora_id, item_referencia_matmed_id)",
-   "motivo": "TBEMIREFMATMED (1 na referência): o preço base PMC/PF é atributo do item de referência; o item faturável de mat/med exige insumo (ck_item_faturavel_insumo) e TBMATMED (L8-03 r4) carrega em item_referencia_matmed sem insumo na origem. Com o modelo: ID_TBMATMED -> item_referencia_matmed_id por ref:TBMATMED, ID_TBCONVEN por ref:TBCONVEN, REF_VALOR_PFB por de-para de valores; segue BLOQUEADA (aguarda_modelo)",
-   "atendido": "conferidor r4 (tentativa 2)"
-  },
-  {
-   "rodada": 4,
-   "revisao": true,
-   "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
-   "mudanca": "DDL decidido (F4-decisoes-destino.md, L8-02/03/04 r4 revisão): ALTER TABLE referencia_emissao_matmed_excecao ADD item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), MODIFY item_faturavel_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_referencia_emissao_matmed_excecao_alvo CHECK (item_faturavel_id IS NOT NULL OR item_referencia_matmed_id IS NOT NULL), UNIQUE (fonte_pagadora_id, item_referencia_matmed_id); depois a L8-04 declara TBEMIREFMATMED com ref:TBMATMED e o mesmo filtro de licença",
-   "motivo": "revisão adversarial r4: TBEMIREFMATMED segue BLOQUEADA só pelo modelo (o item faturável de mat/med exige insumo); a decisão de destino está tomada e registrada",
-   "atendido": "conferidor r4 (tentativa 2)"
-  }
- ]
+  "fatia": "L8-04",
+  "pedidos": [
+    {
+      "arquivo": "conector/sante_conector/sentinela.py (_digitos e regras de documento)",
+      "mudanca": "1) _digitos aceita float de valor inteiro (DOUBLE da origem: str(int(v))); hoje 11222333000181.0 vira 15 dígitos e documento_invalido. 2) regras genéricas para documento num campo só: tipo_pessoa_documento (até 11 dígitos 'fisica', 12 a 14 'juridica', inválido NULL com documento_invalido), cpf_de_documento e cnpj_de_documento (gravam só quando o tamanho casa; no outro caso NULL sem pendência). Depois: TBPRESER CGC_CPF -> prestador_terceiro.tipo_pessoa/cpf/cnpj com essas regras, no lugar de =~juridica e cnpj",
+      "motivo": "pedido 1: TBPRESER (prestador_terceiro) é planejada, mas hoje 100% das linhas caem no CHECK do documento (na imagem sintética: 3 de 3, documento_invalido 2 e 4025 3)",
+      "atendido": "rodada 4 (integrador): _digitos de DOUBLE inteiro e regras tipo_pessoa_documento, cpf_de_documento, cnpj_de_documento"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador: desdobrar no destino principal)",
+      "mudanca": "regra genérica faltante: aceitar desdobrar:<COL>=<rótulo>,... no destino PRINCIPAL (uma linha do principal por coluna com valor; chave da entidade <chave>/<rótulo>; nenhuma coluna com valor: linha lida sem gravação, contada). Declaração pronta para TBPERTHM -> regra_percentual_cobranca: CONV fonte_pagadora_id ref:TBCONVEN; TAB tabela_preco_id ref:TBCTRTHM; PROCTO item_faturavel_id ref:TBTABTHM(TAB,PROCTO)>ID_TBPROCTO>TBPROCTO; DATA vigencia_inicio data; TIPO_PAC tipo_paciente codigo_char valores (domínio a medir); #rotulo componente; #item percentual decimal_nao_negativo com via desdobrar:PERC_CH=honorario,PERC_COPE=custo_operacional,PERC_ANEST=anestesia,PERC_FILME=filme,PERC_N_CRED=nao_credenciado,PERC_APOS_HORARIO=horario_especial; CH_VALOR_CRED sem destino",
+      "motivo": "pedido 5 (regra faltante): TBPERTHM (89015 linhas) traz seis percentuais por linha; o verificador recusa desdobrar no principal e acrescimo_horario_especial não serve de principal. Única tabela da fatia sem carga nem descarte",
+      "atendido": "rodada 3, grupo 1: desdobrar no destino principal existe; TBPERTHM saiu do L8-04.tsv (rodada 3) e a L8-03, dona pelo índice, descomenta a declaração pronta"
+    },
+    {
+      "arquivo": "tools/obra/cobertura_conector.py (avaliar: colunas obrigatórias)",
+      "mudanca": "pular o destino com complementa (como o opcional): for dt in p['destinos']: if dt in opcionais.get(t, ()) or (p.get('opcoes') or {}).get(dt, {}).get('complementa'): continue",
+      "motivo": "TBTABTHM completa o item_faturavel por UPDATE (ref:TBPROCTO;complementa): NOT NULL do item não se aplica, mas a ferramenta a dá como coluna_obrigatoria_sem_fonte:item_faturavel.*; a conferência na imagem sintética passa (3 gravadas, complemento aplicado)",
+      "atendido": "a cobertura já pula complementa (brief, rodada 2)"
+    },
+    {
+      "arquivo": "semente do cliente (comando 'criar novo cliente'): via_acesso_cirurgico",
+      "mudanca": "semear via_acesso_cirurgico com as 3 vias da terminologia TISS (codigo_tiss 1 única, 2 mesma via, 3 diferentes vias; percentual_remuneracao a definir pelo cliente) na criação do cliente. A L8-04 já acha a via pelo código TISS (ID_TBTISSVIAACES regra inteiro, via cod:via_acesso_cirurgico.codigo_tiss; a chave da origem É o código: agregado da imagem 3 linhas, 1 a 3)",
+      "motivo": "pedido 4 revisto: TBTISSVIAACES é terminologia oficial (nunca gravada); sem a semente as 16 fórmulas de cirurgia múltipla caem em codigo_inexistente_destino + 1048 (visível). A cobertura não enxerga essa dependência (cod: não é pai do mapa) e conta a tabela como CARREGA"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBPROCTO, TBCTRTHM)",
+      "mudanca": "TBPROCTO -> item_faturavel (principal pela via; código derivado com prefixo, descrição NOME); TBCTRTHM -> tabela_preco com a chave COD (TBTABTHM usa ref:TBCTRTHM pela TAB). item_faturavel exige grupo_faturamento_id: nenhuma origem alimenta grupo_faturamento (ver pedido 6)",
+      "motivo": "decisão TBPROCTO/TBTABTHM em F4-decisoes-destino.md: o preço (TBTABTHM, aqui) referencia o item pela ID_TBPROCTO e o completa; sem os pais, as linhas caem em pai_inexistente + 1048 (visível)"
+    },
+    {
+      "arquivo": "produto (criar novo cliente) + conector/sante_conector/depara.py",
+      "mudanca": "grupo_faturamento sem origem no mapa: semear os grupos padrão por tipo_grupo no 'criar novo cliente' (ou implantação) e dar ao conector o de-para de catálogo do produto 'grupo_faturamento' (por codigo) para o item faturável (TBPROCTO na L8-03, TBTABDTH na L8-05) e TIPO_DESP de TBTABTHM",
+      "motivo": "item_faturavel.grupo_faturamento_id é NOT NULL e nenhum lote cria grupo_faturamento"
+    },
+    {
+      "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+      "mudanca": "de-para oficial 'tuss' (termo_versao_tiss ou termo_terminologia pelo código TUSS) para TBTABTHM TAB_REF_TUSS/PROC_REF_TUSS -> preco_procedimento.termo_versao_tiss_id; porte (PMEDICO/PPORTE) quando porte_procedimento tiver origem",
+      "motivo": "melhoria sem bloqueio: hoje a equivalência TUSS do preço fica NULL (colunas declaradas sem destino, com motivo)"
+    },
+    {
+      "arquivo": "docs/obra/fatias/f4 (tools/obra/fatiar_conector.py)",
+      "mudanca": "regerar as fatias e o indice.tsv depois de regerar o mapa (conferir-fatia acusa 'arquivo diferente do gerado' em quase todas as fatias: dependências novas de várias fatias, aqui TBSUBDES -> TBGRUDES em declarado/dependencias.tsv, e o mapa regerado nesta rodada)",
+      "motivo": "mapa regerado de novo nesta rodada (TBPRESER depende agora de TBCENCUS e TBPROFIS: ordem 684 -> 871); fatias e indice.tsv a regerar pelo integrador"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBCOSPPROF ID)",
+      "mudanca": "TBCOSPPROF: funcao_equipe_cobranca.codigo por #codigo_derivado:ID:30:cosp_ (ID sem destino, chave_origem)",
+      "motivo": "pedido 9b: colisão em uq_funcao_equipe_cobranca_codigo entre TBCOSPPROF (L8-03, sem prefixo), TBGRAUPARTPROC (agora grau_part_) e TBTPPROFPROC (tipo_prof_); a fatia que carregar depois seria recusada com 1062"
+    },
+    {
+      "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+      "mudanca": "de-para oficial 'ibge_municipio_nome_uf': município IBGE pelo nome normalizado (sem acento, caixa) + sigla da UF; ambíguo: pai_ambiguo; ausente: catalogo_codigo_*. Uso: TBPRESER CIDADE+UF -> prestador_terceiro.municipio_ibge_id",
+      "motivo": "pedido 9: a origem só tem nome e UF do município; hoje a coluna fica sem destino"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador)",
+      "mudanca": "aceitar adotar:<colunas> no destino PRINCIPAL (a linha que já tem o mesmo documento é adotada: conector_origem da chave aponta para ela, sem sobrescrever, pendência adotado_existente)",
+      "motivo": "pedido 10: TBPRESER repete o prestador entre linhas ATO/MODULO; com o pedido 1, o mesmo CPF/CNPJ em duas linhas cai em uq_prestador_terceiro_estabelecimento_cpf/cnpj (1062)"
+    },
+    {
+      "arquivo": "db/migracoes/12_FAT (modelo) + colunas.d/L8-04.tsv",
+      "mudanca": "tabela associativa item_faturavel_tipo_servico (item_faturavel_id, tipo_servico_faturavel_id, UNIQUE do par) e carga de TBTIPPRO por ref:TBPROCTO (PROCTO) + tipo pelo código TIPO (tipo_servico_faturavel semeado ou criado com código = TIPO e descrição presumida)",
+      "motivo": "pedido 11: TBTIPPRO (431 linhas) é a classificação de cada procedimento; o modelo não tem onde guardá-la e TIPO não tem cadastro na origem (decisão a revisar com o dono)",
+      "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12; falta na fatia: TBTIPPRO pela tabela nova"
+    },
+    {
+      "arquivo": "tools/obra/conferir-fatia-f4.sh + conector/sante_conector/conferencia.py",
+      "mudanca": "1) rodar cobertura_conector.py --fatia F --falhar-se-bloqueada; 2) conciliação falha quando registros_origem > 0 e registros_destino = 0 sem a tabela esperar isso explicitamente; 3) verificador global de colisão entre origens que gravam a mesma coluna UNIQUE sem prefixo",
+      "motivo": "pedido 12: a autoconferência dava ok com tabela BLOQUEADA, com destino vazio (TBPRESER) e não pegava a colisão de código entre fatias"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (linha de TBTISSTERMO_TBTPLANC) + conector/sante_conector/sintetica_d/l8_05.py + conector/testes/test_l8_05.py",
+      "mudanca": "rodada 3: TBTISSTERMO_TBTPLANC passou para a L8-04 pelo índice novo e CARREGA (colunas.d/L8-04.tsv: terminologia por depara=terminologia sobre ID_TBTISSTERMO, tipo por ref:TBTPLANC). Remover a linha 'TBTISSTERMO_TBTPLANC\\tID_TBTISSTERMO' (sem destino) do L8-05.tsv; tirar a tabela de FORMAS/SEM_MECANISMO do l8_05.py; em test_l8_05 (test_tabelas_e_destinos, test_nao_carregadas_sem_destino) deixar de tratá-la como bloqueada",
+      "motivo": "o verificador do mapa acusa 'tabela declarada em mais de um arquivo: TBTISSTERMO_TBTPLANC (L8-04.tsv e L8-05.tsv)' e test_l8_05 falha 2 testes; a L8-04 não edita arquivo de outra fatia"
+    },
+    {
+      "arquivo": "conector/testes/test_l8_01.py + conector/sante_conector/sintetica_d/l8_01.py",
+      "mudanca": "rodada 3: FCCRECUN passou para a L8-04 pelo índice novo e CARREGA (colunas.d/L8-04.tsv: profissional e ocupação CBO pela inscrição, convênio por ref:TBCONVEN, CONTAS por cod:tipo_conta.codigo com pares em valores.d/L8-04.tsv). Tirar FCCRECUN de BLOQUEADAS e de test_bloqueadas_nao_entram_no_plano/test_so_as_carregaveis_entram_com_o_destino_certo; tirar as 2 linhas de FCCRECUN da imagem do l8_01.py (ou dar o esperado), e a linha comentada '#--- FCCRECUN' do L8-01.tsv",
+      "motivo": "test_l8_01 falha em test_bloqueadas_nao_entram_no_plano e test_so_as_carregaveis_entram_com_o_destino_certo por causa de FCCRECUN (as outras 2 falhas de test_l8_01, FCDIAINT e FCHORATE, não são da L8-04)"
+    },
+    {
+      "arquivo": "semente do cliente (comando 'criar novo cliente'): tipo_conta",
+      "mudanca": "reforça o pedido da L8-06: semear tipo_conta com os códigos canônicos internacao, externa, ambulatorial e urgencia (e natureza igual) na criação do cliente",
+      "motivo": "FCCRECUN (e FCCTAEXT, RICONTAS, TBCREMED, TBCREPRS) acham o tipo de conta por cod:tipo_conta.codigo; sem a semente toda regra com tipo vira NULL (= todos os tipos) com codigo_inexistente_destino, visível mas ampliando o escopo do crédito"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBPROCTO)",
+      "mudanca": "nenhuma na L8-04: TBTABTHM fica BLOQUEADA só por pai_nao_carregado:TBPROCTO (item_faturavel_id NOT NULL); sai sozinha quando a L8-03 carregar TBPROCTO em item_faturavel (grupo_faturamento_id por cod:, mecanismo da rodada 2)",
+      "motivo": "dependência fora da fatia: a declaração de TBTABTHM está pronta e a conferência na imagem sintética passa (3 gravadas, complemento aplicado)",
+      "atendido": "TBPROCTO carrega na L8-03 (cobertura: TBTABTHM CARREGA)"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (cod: e de-para de valores em coluna anulável)",
+      "mudanca": "opção genérica de via 'exigir' (ou regra equivalente): quando a origem TEM valor e ele não resolve (valor_fora_do_dominio, codigo_inexistente_destino, pai_ambiguo), a linha é recusada em vez de gravar NULL. Uso: FCCRECUN CONTAS -> regra_credito_producao.tipo_conta_id (NULL = vale para todos os tipos; T e vazio continuam NULL sem pendência)",
+      "motivo": "pedido 18 (achado da revisão): hoje a letra que não resolve grava NULL e AMPLIA a regra de crédito a todos os tipos de conta; sem a semente de tipo_conta (pedido 16) isso acontece em toda linha com tipo"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (coluna concorrente com literal presumido)",
+      "mudanca": "em colunas concorrentes, o literal presumido de reserva (=~x) só deixa valor_presumido quando é o valor usado (hoje a pendência entra antes de saber se a coluna anterior teve valor). Uso: TBGRAUPARTPROC tipo_funcao (grau TISS, reserva =~outro)",
+      "motivo": "pedido 19: a função com grau TISS derivado aparece como presumida no painel (ruído); a conferência sintética espera hoje valor_presumido em toda linha lida (6) e precisa ser ajustada junto"
+    },
+    {
+      "arquivo": "conector/sante_conector/carga_mapa.py (gravidade do valor_presumido)",
+      "mudanca": "gravidade média para o presumido em coluna que decide cobrança ou repasse (lista declarável, ex.: tipo_lancamento.natureza e tipo_lancamento.gera_repasse), baixa nas demais",
+      "motivo": "pedido 20 (achado da revisão): TBTPLANC (5 tipos) tem natureza e repasse só presumidos; a terminologia ligada não serve de evidência (24 ligações para 5 tipos, vários termos por tipo) e o nome é texto livre"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (TBTABDTH) + sem_carga.tsv (TBTPFASEUNIBH, TBTPPERFILUNIBH, TBTPTRATUNIBH, TBTPCLASSIFUNIBH) + sintetica_d/l8_05.py e test_l8_05.py",
+      "mudanca": "decisão do dono pendente. Para carregar: um atributo por lista em atributo_guia_fonte_pagadora (fase, perfil, tratamento, classificação; tipo_dado opcao) para a fonte pagadora indicada pelo cliente (sem ela: pendência visível 'operadora a indicar'), opções em atributo_guia_opcao com opcao_pai_id pela hierarquia de TBTPCLASSIFUNIBH, e a marcação TBTABDTH.ID_TBTPCLASSIFUNIBH no valor do atributo do item. Exige mecanismo de cabeçalho único por tabela (agrupar por constante) ou semente da fonte; as quatro tabelas estão nas DESCARTES do l8_05 e a consumidora no L8-05.tsv",
+      "motivo": "pedido 21 (achado da revisão): os motivos diziam que o código entrava pelo de-para na coluna consumidora, mas TBTABDTH.ID_TBTPCLASSIFUNIBH está sem destino: a marcação por item (24 opções) não migra. Motivo de TBTPFASEUNIBH corrigido; os das outras três são da L8-05"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (TBCONVEN) + valores.d/L5-06.tsv + sem_carga.tsv (TBTPOBRIGAMAT)",
+      "mudanca": "declarar TBCONVEN.ID_TBTPOBRIGAMAT como destino secundário regra_consistencia_lancamento (fonte_pagadora_id pelo @id do principal, tipo_regra material_obrigatorio, opção pelo de-para de valores do ID 1 a 4; opcional: sem valor não grava) e corrigir o motivo do descarte de TBTPOBRIGAMAT, que hoje afirma um vínculo que não existe",
+      "motivo": "pedido 22 (achado da revisão): nenhuma declaração aproveita TBCONVEN.ID_TBTPOBRIGAMAT; a regra de material obrigatório por operadora, usada no lançamento, se perde em silêncio"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv (TBEMIREFMATMED) + modelo",
+      "mudanca": "nenhuma na L8-04: a L8-05 já declarou TBEMIREFMATMED (fonte, item, preço base por REF_VALOR_PFB/PMC). Fica BLOQUEADA por pai_nao_carregado:TBMATMED, e mat/med não tem item_faturavel no mapa (TBMATMED -> item_referencia_matmed; item_faturavel de mat/med exige insumo_id): o item precisa de caminho próprio",
+      "motivo": "achado da revisão: o descarte 'licenciado' não se sustentava (configuração de emissão por operadora e item do hospital)"
+    },
+    {
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBMATMED) + conector/mapa/declarado/colunas.d/L8-05.tsv (linhas comentadas de TBEMIREFMATMED)",
+      "mudanca": "1) L8-03: ao carregar TBMATMED (filtro de linha por licença, pedido 2/11 da L8-03), dar ao item de tabela própria o destino secundário item_faturavel (ref:TBMATMED/item_faturavel). 2) L8-05: as 4 linhas comentadas '#TBEMIREFMATMED' passam para colunas.d/L8-04.tsv (dona pelo índice), descomentadas quando TBMATMED carregar: ID_TBCONVEN -> fonte_pagadora_id ref:TBCONVEN; ID_TBMATMED -> item_faturavel_id ref:TBMATMED/item_faturavel; REF_VALOR_PFB -> preco_base (pares S/N das duas colunas para preco_fabrica/preco_maximo_consumidor); REF_VALOR_PMC sem destino próprio",
+      "motivo": "rodada 3: TBEMIREFMATMED (1 linha na referência) é configuração do hospital por fonte pagadora e item de mat/med (NÃO é descarte nem licenciado). item_faturavel_id é NOT NULL e só existe quando TBMATMED carregar: segue BLOQUEADA (pai_nao_carregado:TBMATMED), único bloqueio da fatia, sem nada que a L8-04 possa fazer sozinha. Na imagem sintética da L8-04 a tabela está presente (2 linhas) e fora do plano (AGUARDA_PAI)"
+    },
+    {
+      "n": 25,
+      "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
+      "mudanca": "referencia_emissao_matmed_excecao: item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), item_faturavel_id anulável e CHECK de exatamente um dos dois; UNIQUE (fonte_pagadora_id, item_referencia_matmed_id)",
+      "motivo": "TBEMIREFMATMED (1 na referência): o preço base PMC/PF é atributo do item de referência; o item faturável de mat/med exige insumo (ck_item_faturavel_insumo) e TBMATMED (L8-03 r4) carrega em item_referencia_matmed sem insumo na origem. Com o modelo: ID_TBMATMED -> item_referencia_matmed_id por ref:TBMATMED, ID_TBCONVEN por ref:TBCONVEN, REF_VALOR_PFB por de-para de valores; segue BLOQUEADA (aguarda_modelo)",
+      "atendido": "conferidor r4 (tentativa 2)"
+    },
+    {
+      "rodada": 4,
+      "revisao": true,
+      "arquivo": "db/migracoes/12_FAT/05_tabelas.sql (trilha F2.2)",
+      "mudanca": "DDL decidido (F4-decisoes-destino.md, L8-02/03/04 r4 revisão): ALTER TABLE referencia_emissao_matmed_excecao ADD item_referencia_matmed_id BIGINT UNSIGNED NULL (FK item_referencia_matmed), MODIFY item_faturavel_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_referencia_emissao_matmed_excecao_alvo CHECK (item_faturavel_id IS NOT NULL OR item_referencia_matmed_id IS NOT NULL), UNIQUE (fonte_pagadora_id, item_referencia_matmed_id); depois a L8-04 declara TBEMIREFMATMED com ref:TBMATMED e o mesmo filtro de licença",
+      "motivo": "revisão adversarial r4: TBEMIREFMATMED segue BLOQUEADA só pelo modelo (o item faturável de mat/med exige insumo); a decisão de destino está tomada e registrada",
+      "atendido": "conferidor r4 (tentativa 2)"
+    },
+    {
+      "n": "R5-1",
+      "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv",
+      "mudanca": "tirar as linhas (sem destino) de TBTPCLASSIFUNIBH, TBTPOBRIGAMAT, TBTPPERFILUNIBH e TBTPTRATUNIBH; a L8-04 (dona pelo índice) descomenta a declaração pronta do fim do L8-04.tsv (parametro_opcao, como TBTPFASEUNIBH)",
+      "motivo": "uma tabela, um arquivo: com as linhas da L8-05 o verificador acusaria tabela em dois arquivos; até lá as 4 seguem BLOQUEADAS (descarte_sem_prova)",
+      "atendido": "rodada 5: as linhas da L8-05 saíram; a L8-04 declarou as 4 listas (parametro_opcao)"
+    },
+    {
+      "n": "R5-2",
+      "arquivo": "conector/sante_conector/mapa.py",
+      "mudanca": "aceitar '.' no prefixo de `#codigo_derivado` (regex [a-z0-9_.]), para a chave do parâmetro por campo TISS seguir o padrão modulo.nome (hoje fat_tipos_guia_tiss_<n>)",
+      "motivo": "TBTISSTPGUIA_TBTISSPARDEF: um parâmetro de lista por campo TISS configurável"
+    },
+    {
+      "n": "R5-3",
+      "arquivo": "db/migracoes/02_ADM (F2.2)",
+      "mudanca": "parametro_opcao.opcao_pai_id e parametro_opcao.dados (JSON), ou operadora indicada no painel para atributo_guia_fonte_pagadora: guardar a dependência e a classificação da opção (TBTISSPARDEF.ID_TBTISSEMIEXP; TBTPCLASSIFUNIBH.CLASSIFICACAO e tratamento/perfil/fase)",
+      "motivo": "R5: as listas carregam como opções de parâmetro de lista; a dependência entre opções fica só no conector_origem"
+    }
+  ]
 }

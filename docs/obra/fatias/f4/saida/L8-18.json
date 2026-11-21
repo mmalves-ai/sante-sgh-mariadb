@@ -18,7 +18,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "'#seq:<GRUPO>:<ORDEM>': numerar 1..n dentro do grupo ordenando por (ORDEM, chave), com a chave como desempate quando ORDEM for nula ou repetida; no diferencial, linha nova recebe o número seguinte ao maior já gravado do grupo no destino (ou o número da linha já gravada, guardado em conector_origem), e nunca a contagem das linhas lidas",
-   "motivo": "L8-18: TBEDITPARAM.ORDEM (ordem das perguntas ao usuário) está perdida porque o '#seq' numera pela chave; e no diferencial, um parâmetro apagado seguido de outro incluído pode receber um número já gravado e ser recusado por restricao_destino_1062 em uq_relatorio_parametro_sequencia. Ao aplicar, a fatia troca '#seq:ID_TBEDITREL' por '#seq:ID_TBEDITREL:ORDEM' e o ORDEM sai das perdas"
+   "motivo": "L8-18: TBEDITPARAM.ORDEM (ordem das perguntas ao usuário) está perdida porque o '#seq' numera pela chave; e no diferencial, um parâmetro apagado seguido de outro incluído pode receber um número já gravado e ser recusado por restricao_destino_1062 em uq_relatorio_parametro_sequencia. Ao aplicar, a fatia troca '#seq:ID_TBEDITREL' por '#seq:ID_TBEDITREL:ORDEM' e o ORDEM sai das perdas",
+   "bloqueante": true
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -34,7 +35,7 @@
    "arquivo": "db/migracoes/19_REL (modelo) e colunas.d/L8-18.tsv",
    "mudanca": "atributo de parâmetro oculto em relatorio_parametro (ex.: visivel BOOLEAN NOT NULL DEFAULT TRUE, ou modo_exibicao 'oculto' no CHECK) para receber TBEDITPARAM.VISIVEL por booleano_sn",
    "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)",
-   "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04; falta na fatia: TBEDITPARAM.VISIVEL"
+   "atendido": "rodada 4 (DDL): db/migracoes/19_REL/04; aplicado na fatia na r5 (VISIVEL -> relatorio_parametro.visivel, booleano_sn)"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
@@ -86,6 +87,31 @@
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
    "mudanca": "opção `opcional:<COLUNA>` (o destino secundário só grava quando a coluna da origem tem valor resolvido), para poder preencher o rótulo do vínculo pela coluna NOME sem marcar o destino como preenchido",
    "motivo": "L8-18: relatorio_tela vindo de TBEDITREL usa rótulo fixo 'Relatório' porque qualquer coluna lida marcaria o destino opcional e a falta da tela recusaria o relatório pelo NOT NULL"
+  },
+  {
+   "arquivo": "db/migracoes/16_*/modelo_impressao_clinica (trilha F2.2)",
+   "mudanca": "coluna relatorio_id (FK relatorio, NULL) em modelo_impressao_clinica",
+   "motivo": "r5 achado: hoje o vínculo modelo -> relatório fica em trilha_auditoria (entidade relatorio, entidade_id = id do relatório por ref:TBEDITREL, correlacao = código do modelo, retrato sempre); com a coluna, declarar TBEDITREL_PRMODELOREL.ID_TBEDITREL -> modelo_impressao_clinica.relatorio_id por ref:TBEDITREL"
+  },
+  {
+   "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+   "mudanca": "relatorio_parametro.ordem_exibicao (SMALLINT NULL), se o motor não ganhar '#seq:<GRUPO>:<ORDEM>'",
+   "motivo": "r5 achado: VISIVEL já vai a relatorio_parametro.visivel; a ORDEM segue só no retrato da trilha e a sequência pela chave"
+  },
+  {
+   "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+   "mudanca": "agendamento_relatorio: periodicidade 'a_confirmar' (permitida só com ativo = FALSE) ou dias_semana JSON",
+   "motivo": "r5 achado: com DIAS_ESPECIFICOS preenchido a periodicidade é presumida diária (valor_presumido, agendamento desligado, texto no retrato), porque o CHECK exige diaria/semanal/mensal; o valor neutro evita o presumido"
+  },
+  {
+   "arquivo": "integrador (imagem real, só agregados)",
+   "mudanca": "censo de frequência dos códigos TBEDITPARAM.TIPO, TIPO_DEFAULT, TBEDITPESQ.TIPO_RETORNO, TBEDITREL.TIPO e do formato de TBEDITREL_AGENDA.DIAS_ESPECIFICOS (classe de caracteres e separador, nunca valor)",
+   "motivo": "ADR 0007/18: estimar o domínio pelo uso; a fatia não abre a imagem real. Com o censo, declarar o de-para em valores.d/L8-18.tsv (tipo_dado, retorno, periodicidade)"
+  },
+  {
+   "arquivo": "db/migracoes/19_REL (trilha F2.2)",
+   "mudanca": "painel_tv.painel_chamada_id (FK painel_chamada, NULL)",
+   "motivo": "r5 achado (ADR 0007/19): o portal (PNCONFIGPORTAL) liga-se hoje ao painel de chamada por trilha_auditoria (entidade painel_chamada, entidade_id por ref:PNCONFIG, correlacao = código do painel_tv); com a coluna, declarar ID_PNCONFIG -> painel_tv.painel_chamada_id por ref:PNCONFIG"
   }
  ]
 }

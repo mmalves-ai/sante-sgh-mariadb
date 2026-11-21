@@ -56,11 +56,34 @@ CREATE TABLE HTCIAP ("ID" INTEGER NOT NULL, "ID_TBCIAP" INTEGER NOT NULL, "CODIG
   "NOME_ORIGINAL" VARCHAR(100) NOT NULL, "NOME_LEIGO" VARCHAR(100) NOT NULL, "COMPETENCIA_INICIAL" VARCHAR(6) NOT NULL,
   "ID_TBUSERS" VARCHAR(31) NOT NULL, "DATA_HORA_GRAVACAO" TIMESTAMP NOT NULL, "ID_TBVERSAOCIAP" SMALLINT NOT NULL,
   "ATIVO" CHAR(1) NOT NULL, "SEXO" VARCHAR(1) NOT NULL, PRIMARY KEY ("ID"));
+CREATE TABLE TBCID10 ("ID" INTEGER NOT NULL, "COD" VARCHAR(6), PRIMARY KEY ("ID"));
 """
 
 CARREGADAS = ("TBSMSTPERRO", "TBSMSTPRETMSG", "TBTISSSCHEMA", "TBTPWEBSERV", "TBTISSURLWSSGH")
+# rodada 5 (ADR 0006): listas do hospital (parametro_opcao), envio de receita digital e etiqueta do apoio
+LISTAS = ("TBSAFEWEB_FORMA_ASSIN_ICP", "TBSAFEWEB_SITAUTORIZA", "TBSAFEWEB_TIPOATENDIMENTO", "TBSGHINTEGRADOR_PARAM",
+          "TBSGHINTEGRADOR_TABELA", "TBSMSTPAGENDA", "TBTPEXPIPERGS", "TBVIDAAS_FORMA_ASSIN_ICP")
+# r5c (ADR 0006, 1 e 4): históricos e listas de catálogo usadas pelo hospital entram na trilha com o retrato
+TRILHA = ("HTCID", "HTCIAP", "TBSIPANSPROC", "TBSEXO_PIXPDQ", "TBTISSREMUNERAOPERPS")
+NOVAS = LISTAS + ("PRCABNEXODATA", "PRLANCNEXODATA", "SIWSLANCETQTA") + TRILHA
+# linhas recusadas por tabela nova (uma linha recusada pode levar várias pendências): gravados + recusadas = linhas
+RECUSADAS = {"PRCABNEXODATA": 3, "PRLANCNEXODATA": 1, "SIWSLANCETQTA": 1}
+# sem nenhuma linha gravada até o DDL pedido (r5b-1 em saida/L8-17.json) e os pais de outras fatias
+AGUARDAM_DDL = ("PRCABNEXODATA", "PRLANCNEXODATA", "SIWSLANCETQTA")
+PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+                   # r5b: termo oficial da CID-10 usado pelo histórico HTCID (catálogo oficial: só o código de exemplo)
+                   " INSERT INTO terminologia (id, codigo, nome, tipo, origem, criado_em) SELECT 9170, 'cid10', 'CID-10',"
+                   " 'diagnostico', 'sistema', UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS"
+                   " (SELECT 1 FROM terminologia WHERE codigo = 'cid10');"
+                   " INSERT INTO termo_terminologia (id, terminologia_id, codigo_termo, descricao, criado_em)"
+                   " SELECT 9171, (SELECT id FROM terminologia WHERE codigo = 'cid10'), 'A00', 'Termo de exemplo',"
+                   " UTC_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM termo_terminologia WHERE id = 9171)")
+# r5b: o CID do histórico vem da origem (pai de L8-16, descarte catalogo_oficial: lido pela encadeada até o código)
+PAIS_EXTERNOS = {"TBCID10": ["1", "2"]}
 R1048, R1062, VP, VFD = "restricao_destino_1048", "restricao_destino_1062", "valor_presumido", "valor_fora_do_dominio"
 PP, PI = "pai_pendente", "pai_inexistente"
+A = "adotado_existente"  # lista: módulo e definição criados pela 1.ª linha, adotados depois (baixa)
 D = datetime.date(2025, 1, 2)
 T = datetime.datetime(2025, 1, 2, 8, 30)
 
@@ -91,22 +114,31 @@ DADOS = [
                         [77, "https://servico.exemplo.invalid/orfa"]],
      {"gravados": 3, "pendencias": {PP: 1, PI: 1}}),
     # fora da carga (descarte de produto em declarado/sem_carga.tsv): só a forma
-    ("TBSAFEWEB_FORMA_ASSIN_ICP", [[1, 10, "Formato ex A", 1], [2, 11, "Formato ex B", None]], None),
-    ("TBSAFEWEB_SITAUTORIZA", [[1, "Situação ex"], [2, None]], None),
-    ("TBSAFEWEB_TIPOATENDIMENTO", [[1, "Atendimento ex"]], None),
-    ("TBSEXO_PIXPDQ", [["X", "Sexo ex", None], ["Y", "Outro ex", "id-falso-ex"]], None),
-    ("TBSGHINTEGRADOR_PARAM", [[1, "S"]], None),
-    ("TBSGHINTEGRADOR_TABELA", [[1, "ENTIDADE_EXEMPLO"]], None),
-    ("TBSIPANSPROC", [[99990001, 1, D, datetime.date(2099, 12, 31)]], None),
-    ("TBSMSTPAGENDA", [[1, "Diária ex"]], None),
-    ("TBTISSREMUNERAOPERPS", [[1, "Modelo ex", D, None]], None),
-    ("TBTPEXPIPERGS", [[1, "Prestador ex"]], None),
-    ("TBVIDAAS_FORMA_ASSIN_ICP", [[1, "Formato ex C", 1]], None),
-    ("PRCABNEXODATA", [[1, 1, 1, "ref-ex", b"{}", 1, 1, "S", None, T, 1, 1]], None),
-    ("PRLANCNEXODATA", [[1, 1, "hash-ex", 1]], None),
-    ("SIWSLANCETQTA", [[1, 1.0, T, "LIS-EX-1", 1]], None),
-    ("HTCID", [[1, 1, T, "Termo exemplo", "A", "B", "C", 1, "N", 1, 1]], None),
-    ("HTCIAP", [[1, 1, "X99", "Termo ex", "Termo leigo ex", "202501", "USR_L817_A", T, 1, "S", "A"]], None),
+    ("TBSAFEWEB_FORMA_ASSIN_ICP", [[1, 10, "Formato ex A", 1], [2, 11, "Formato ex B", None]], {"gravados": 2, "pendencias": {A: 2}}),
+    ("TBSAFEWEB_SITAUTORIZA", [[1, "Situação ex"], [2, None]], {"gravados": 2, "pendencias": {A: 3}}),
+    ("TBSAFEWEB_TIPOATENDIMENTO", [[1, "Atendimento ex"]], {"gravados": 1, "pendencias": {A: 1}}),
+    ("TBSEXO_PIXPDQ", [["X", "Sexo ex", None], ["Y", "Outro ex", "id-falso-ex"]], {"gravados": 2, "pendencias": {}}),
+    ("TBSGHINTEGRADOR_PARAM", [[1, "S"]], {"gravados": 1, "pendencias": {A: 1}}),
+    ("TBSGHINTEGRADOR_TABELA", [[1, "ENTIDADE_EXEMPLO"]], {"gravados": 1, "pendencias": {A: 1}}),
+    ("TBSIPANSPROC", [[99990001, 1, D, datetime.date(2099, 12, 31)]], {"gravados": 1, "pendencias": {}}),
+    ("TBSMSTPAGENDA", [[1, "Diária ex"], [2, None]], {"gravados": 2, "pendencias": {A: 3}}),
+    ("TBTISSREMUNERAOPERPS", [[1, "Modelo ex", D, None]], {"gravados": 1, "pendencias": {}}),
+    ("TBTPEXPIPERGS", [[1, "Prestador ex"]], {"gravados": 1, "pendencias": {A: 1}}),
+    ("TBVIDAAS_FORMA_ASSIN_ICP", [[1, "Formato ex C", 1]], {"gravados": 1, "pendencias": {A: 1}}),
+    # envio de receita digital: atendimento, paciente e prescritor de outras fatias, ausentes aqui (pai_inexistente)
+    # r5b: a situação sai da origem (excluído = cancelada, inválido = rejeitada, senão enviada); recusadas pelo CHECK
+    # do documento até o DDL pedido (r5b-1 em saida/L8-17.json): pendência visível, nenhuma some
+    ("PRCABNEXODATA", [[1, 1, 1, "ref-ex", b"{}", 1, 1, "S", None, T, 1, 1],
+                       [2, 1, 1, "ref-ex2", b"{}", 2, 2, "N", None, T, 1, 1],
+                       [3, 1, 1, "ref-ex3", b"{}", 3, 3, "S", T, T, 1, 1]],
+     {"gravados": 0, "pendencias": {PI: 9, R1048: 3, VP: 3}}),
+    ("PRLANCNEXODATA", [[1, 1, "hash-ex", 1]], {"gravados": 0, "pendencias": {PP: 1}}),
+    ("SIWSLANCETQTA", [[1, 1.0, T, "LIS-EX-1", 1]], {"gravados": 0, "pendencias": {PI: 3, R1048: 1}}),
+    ("TBCID10", [[1, "A00"], [2, "Z999"]], None),
+    # r5b (ADR 0007 21): histórico do termo vira versão com retrato; 2 aponta código fora do catálogo (visível, recusado)
+    ("HTCID", [[1, 1, T, "Termo exemplo", "A", "B", "C", 1, "N", 1, 1], [2, 2, T, "Termo local ex", "A", "B", "C", 1, "N", 1, 1]],
+     {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 1}}),
+    ("HTCIAP", [[1, 1, "X99", "Termo ex", "Termo leigo ex", "202501", "USR_L817_A", T, 1, "S", "A"]], {"gravados": 1, "pendencias": {}}),
 ]
 
 

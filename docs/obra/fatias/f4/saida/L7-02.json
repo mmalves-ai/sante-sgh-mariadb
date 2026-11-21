@@ -46,6 +46,13 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes) ou decisão do dono",
    "mudanca": "medir na referência (comando agregado do pedido 7) quantas modalidades têm SIGLA nula; se houver, decidir entre manter a recusa visível (decisão atual) e um de-para do cliente ID -> sigla do padrão (valores.d)",
    "motivo": "SIPACSMODALID com sigla nula é recusada (1048): modalidade sem sigla do padrão não entra na lista de trabalho; inventar sigla poria código falso no padrão de imagem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (destino secundário com #cofre)",
+   "rodada": "r5",
+   "mudanca": "opção de destino 'cofre_opcional' (ou regra genérica): secundário cuja coluna #cofre ficou NULL por falta de PLATAFORMA_CHAVE_MESTRA não grava (fica só a pendência segredo_aguarda_cofre), em vez de recusar a linha inteira pela NOT NULL de credencial_integracao.referencia_cofre",
+   "motivo": "sem a chave mestra (conferência, homologação) a linha de parâmetros com senha é recusada inteira (1048) e o parâmetro do hospital não entra; com a chave a carga já funciona. Afeta CVPARAM (L6-18), SHPARAM (L7-01) e SIPARLAB (L7-02)",
+   "atendido": false
   }
  ]
 }

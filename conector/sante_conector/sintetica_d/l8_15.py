@@ -112,7 +112,23 @@ CREATE TABLE PSVENDAS ("ID_PSBENEFI" BIGINT NOT NULL, "CONCESSIONARIA" INTEGER, 
 CARREGADAS = ("PSREEMBOLSOTP", "PSTIPMEN", "PSTIPOGUIA", "PSTPACUMULPOR", "PSTPPERIODO", "SPMOTLIG", "SPORIGEM_ATEND",
               "SPVINCULOTITULAR", "TBENVCOBEMAIL", "TBREGIMEATEND", "TBSTATUSCREPLS", "TBTIPOCOBRANCASGO",
               "TBTPCONTRATOCREPLS", "TBTPEMAILPLS", "TBTPPRESTADOR", "TBTPUNIDTEMPO", "PSBENEFI", "PSVENDAS")
-NAO_CARREGADAS = ("TBTPFAVORECIDO", "TBTPFORMAREAJ", "TBTPVIGCONTRATO", "PSTPSVIGENCIA", "PSBENCPL")
+NAO_CARREGADAS = ()  # r5c: PSTPSVIGENCIA passa a carregar na trilha (retrato) até o carregador da ANS
+# rodada 5 (ADR 0006): listas do hospital (parametro_opcao) e complemento do beneficiário (mescla não destrutiva)
+# lista: a 1.ª linha da fatia cria o módulo e a definição; as seguintes adotam (adotado_existente, baixa)
+NOVAS = {"TBTPFAVORECIDO": {"gravados": 2, "pendencias": {"adotado_existente": 2}}, "TBTPFORMAREAJ": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+         "TBTPVIGCONTRATO": {"gravados": 2, "pendencias": {"adotado_existente": 3}},
+         # r5c: valores da taxa por vigência guardados na trilha com o retrato (a placeholder de 1899 fica com a data sentinela)
+         "PSTPSVIGENCIA": {"gravados": 2, "pendencias": {}}}
+# complemento do beneficiário 101 (mãe igual: adotado sem mudança nas colunas que PSBENEFI concilia); 999 sem
+# beneficiário (pai_inexistente em cada referência; recusado). Preencher pela mescla uma coluna que PSBENEFI também
+# concilia muda a soma de controle dele (pedido 14 em saida/L8-15.json: a conciliação descontar o que a mescla preencheu)
+PSBENCPL_LINHAS = (101, None, "Mae exemplo", None), (999, "Nome ex", None, None)
+# r5b: o complemento também grava o e-mail próprio (101) e o retrato da linha inteira no histórico do beneficiário;
+# 999 leva mais duas pai_inexistente (data do movimento pela adesão do beneficiário ausente)
+PSBENCPL_ESPERADO = {"gravados": 1, "pendencias": {"adotado_existente": 2, "pai_inexistente": 12,
+                                                   "restricao_destino_1048": 1}}
+# rodada 5: adotar passou a MESCLAR (ADR 0007, 20): o conflito da linha adotada fica guardado (baixa)
+MESCLA_R5 = {"PSBENEFI": 1, "PSTIPMEN": 1, "TBTIPOCOBRANCASGO": 1, "TBTPPRESTADOR": 1, "TBTPUNIDTEMPO": 1}
 # contrato 7 e plano 3 já carregados (cadastros fora do mapa na referência: pedido 11)
 PAIS_EXTERNOS = {"PSEMPBEN": ["7"], "PSPLANOS": ["3"]}
 # um estabelecimento só no cliente de exemplo (@estabelecimento da proposta)
@@ -129,6 +145,9 @@ CPF_NOVO, CPF_JA_CADASTRADO = cpf_falso(123450001), cpf_falso(123450002)
 # sexo e estado civil como o destino fica depois do L3 e do L5-04; a pessoa já cadastrada (paciente, por exemplo) prova
 # a adoção pelo CPF, sem sobrescrever
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   # r5c: a operadora única do cliente (@unico da conta do portal do beneficiário)
+                   "CREATE TABLE IF NOT EXISTS operadora_saude (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+                   "INSERT INTO operadora_saude () VALUES ();"
                    "INSERT INTO estabelecimento () VALUES ();"
                    # sexo e estado civil só são lidos (cod:): a conferência cria apenas os destinos da fatia
                    "CREATE TABLE IF NOT EXISTS sexo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, sigla CHAR(1));"
@@ -242,9 +261,10 @@ BENEFICIARIOS = [
     _benef(1, ID=101, EMP=7, BEN=1, DEP=0, PLANO=3, CPF=CPF_NOVO, NOME="Titular  exemplo", SEXO="M", NASC=D25,
            MAE="Mae exemplo", CNS="700000000000005", ECIV=1, ADESAO=D25, APARTIR=D25, COD_ANT="ANT-EX-1", CCO=900001,
            ESTUDANTE="N", STATUS="A", COB_TEMP="N", COD_UNIDADE="U-EX", DATA_HORA_INCLUSAO=datetime.datetime(2025, 2, 1, 9, 30),
-           IDENT="RG-EX-1", EXPEDICAO=D25, EMAIL="titular@exemplo.test"),
+           IDENT="RG-EX-1", EXPEDICAO=D25, EMAIL="titular@exemplo.test", SENHA_WEB="senha-falsa-ex1"),
     _benef(2, ID=102, EMP=7, BEN=1, DEP=1, PLANO=3, CPF=None, NOME="Dependente exemplo", SEXO="F", ADESAO=D25,
-           APARTIR=D25, ESTUDANTE="S", ID_PSBENEFI_VINCULO=101, PARENTE=2, EMAIL="sem-arroba-exemplo"),
+           APARTIR=D25, ESTUDANTE="S", ID_PSBENEFI_VINCULO=101, PARENTE=2, EMAIL="sem-arroba-exemplo",
+           SENHA_WEB="senha-falsa-ex2"),
     _benef(4, ID=103, EMP=7, BEN=1, DEP=2, PLANO=3, CPF=None, NOME="Outro dependente exemplo", ADESAO=D25,
            APARTIR=D25, ID_PSBENEFI_VINCULO=101, PARENTE=2, STATUS="C", NUM_DECLARACAO_OBITO="99999999"),
     _benef(5, ID=104, EMP=7, BEN=2, DEP=0, PLANO=3, CPF=CPF_JA_CADASTRADO, NOME="Titular ja cadastrado", ADESAO=D25,
@@ -292,7 +312,19 @@ def linhas(r, ins):
         for v in ls:
             ins(tab, list(v))
         esperado[tab] = {"gravados": esp["gravados"], "pendencias": dict(esp["pendencias"])}
-    for tab in NAO_CARREGADAS:
+    for tab in NAO_CARREGADAS + tuple(NOVAS):
         ins(tab, _forma(tab, 1, True))
         ins(tab, _forma(tab, 2, False))
+    for tab, e in NOVAS.items():
+        esperado[tab] = {"gravados": e["gravados"], "pendencias": dict(e["pendencias"])}
+    nomes = [n for n, _, _ in colunas("PSBENCPL")]
+    for chave, cart, mae, pai in PSBENCPL_LINHAS:
+        v = _forma("PSBENCPL", 1, False)
+        for n, x in (("ID_PSBENEFI", chave), ("NOME_CARTEIRINHA", cart), ("MAE", mae), ("PAI", pai),
+                     ("EMAIL", "complemento@exemplo.test" if chave == 101 else None), ("EMPRESA", "Empresa exemplo")):
+            v[nomes.index(n)] = x
+        ins("PSBENCPL", v)
+    esperado["PSBENCPL"] = {"gravados": PSBENCPL_ESPERADO["gravados"], "pendencias": dict(PSBENCPL_ESPERADO["pendencias"])}
+    for tab, n in MESCLA_R5.items():
+        esperado[tab]["pendencias"]["mescla_conflito_origem_guardada"] = n
     return esperado

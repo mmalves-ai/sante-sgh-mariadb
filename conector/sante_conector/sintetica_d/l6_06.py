@@ -6,9 +6,12 @@ declarada na via), tipos de acuidade, períodos do sumário de alta (atendimento
 receita padrão (texto livre; abrangência pelo GERAL; dono profissional pelo login -> TBPROFIS.ID_TBUSERS), protocolos de
 prescrição (sexo pelo de-para A/F/M), motivos de reavaliação, classificação de metas, escala Likert (ponto e rótulo
 pelo de-para), condições se necessário e situações de aprazamento (categoria pelo nome).
-Descartadas com motivo de produto (`declarado/sem_carga.tsv`; entram na imagem para provar que nada é gravado):
-gabarito e graduação da acuidade, extensões de arquivo, os três parâmetros de linha única, tamanhos de fonte da
-prescrição, processos do prontuário e as situações de checagem antigas (duplicado de PRSITUACAOCHECAGEM, L6-07).
+Rodada 5 (ADR 0006, continuidade): as 9 antes descartadas CARREGAM. Gabarito da acuidade em
+gabarito_acuidade_visual, com a tabela de optotipos agrupada pela FORMA (tipo_acuidade_visual criado uma vez por
+forma); graduações, extensões de arquivo, tamanhos de fonte, processos do prontuário e situações de checagem antigas
+como opções dos parâmetros de lista do produto (parametro_opcao, origem migracao); os três parâmetros de linha única
+em parametro_valor (desdobrar, uma linha por coluna com valor; vigência pela evidência). As definições dos parâmetros
+são do catálogo do produto: aqui vêm do PREPARO_DESTINO (semente pedida em saida/L6-06.json).
 Intermediária: TBPROFIS (forma completa do dicionário), carregada pela declaração da L5-06 e lida pela chave
 alternativa do login (ID_TBUSERS); a pessoa do profissional é pai externo.
 Anomalias: nome vazio em destino NOT NULL (1048), S/N e A/I fora do domínio, pai recusado e pai nunca visto, login
@@ -21,6 +24,7 @@ import csv
 import datetime
 import decimal
 import os
+import re
 
 DDL = """
 CREATE TABLE PRLOCALINVASIVO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(45) NOT NULL, SIGLA VARCHAR(12) NOT NULL,
@@ -87,11 +91,106 @@ PAIS_EXTERNOS = {"TBUSERS": ["medico.exemplo", "enf.exemplo", "dup.exemplo", "re
                  "TBPESSOA": [1, 2, 3, 4]}
 INTERMEDIARIAS = ("TBPROFIS",)
 
-CARREGADAS = ("PRLOCALINVASIVO", "PRMODELOREL", "PROFTGRUPEXAME", "PROFTEXAME", "PROFTTPACUID",
-              "PROPCAOPERIODO", "PROXIGENOTERAPIA", "PRPADRECEITA", "PRPROTGERAL", "PRREAV_MEDICA",
-              "PRSAE_CLASSIF_META", "PRSAE_LIKERT", "PRSENECESSARIO", "PRSITAPRAZAM")
-DESCARTADAS = ("PROFTGABARITO", "PROFTGRADUACAO", "PROFTTPARQUIV", "PRPARAM_CHECAGEM", "PRPARAM_PRESCFUTURA",
-               "PRPAROFTALMO", "PRPARTAMPADPRESC", "PRPROCESSOPEP", "PRSITCHECAGEM")
+CARREGADAS = ("PRLOCALINVASIVO", "PRMODELOREL", "PROFTGABARITO", "PROFTGRADUACAO", "PROFTGRUPEXAME", "PROFTEXAME",
+              "PROFTTPACUID", "PROFTTPARQUIV", "PROPCAOPERIODO", "PROXIGENOTERAPIA", "PRPADRECEITA",
+              "PRPARAM_CHECAGEM", "PRPARAM_PRESCFUTURA", "PRPAROFTALMO", "PRPARTAMPADPRESC", "PRPROCESSOPEP",
+              "PRPROTGERAL", "PRREAV_MEDICA", "PRSAE_CLASSIF_META", "PRSAE_LIKERT", "PRSENECESSARIO", "PRSITAPRAZAM",
+              "PRSITCHECAGEM")
+DESCARTADAS = ()
+# rodada 5: parâmetros de lista (opções) e de valor da fatia; a definição é do catálogo do produto (semente pedida)
+PARAMETROS_LISTA = {"PROFTGRADUACAO": "oftalmologia.acuidade.graduacao",
+                    "PROFTTPARQUIV": "oftalmologia.anexo.extensaoArquivo",
+                    "PRPARTAMPADPRESC": "pep.impressaoPrescricao.tamanhoFonte",
+                    "PRPROCESSOPEP": "pep.documento.processo", "PRSITCHECAGEM": "pep.checagem.situacaoAnterior"}
+PARAMETROS_VALOR = ("prescricao.checagem.loteValidadeObrigatorioMedicamento",
+                    "prescricao.checagem.loteValidadeObrigatorioSolucao",
+                    "prescricao.checagem.loteValidadeObrigatorioHemocomponente", "prescricao.futura.tempoAvaliacao",
+                    "prescricao.futura.antecedenciaAvaliacao", "oftalmologia.lancarAdicao",
+                    "oftalmologia.relatorioPrescricaoOcularAnterior")
+
+
+# semente do catálogo de parâmetros do produto pedida pelas fatias L6-03 a L6-06 (rodada 5): o MESMO texto proposto à
+# migração em docs/obra/fatias/f4/saida/L6-parametros-semente.sql (a conferência roda no container só com conector/)
+SEMENTE_PARAMETROS = """-- Semente do catálogo de parâmetros do produto (parametro_definicao) pedida pelas fatias L6-03 a L6-06 (rodada 5,
+-- ADR 0006). Idempotente, no mesmo formato de 14_FIN/14_chaves.sql. PROPOSTA para o integrador mover para
+-- db/migracoes (02_ADM ou o módulo dono) e levar a todo cliente pelo criar_cliente. A conferência das fatias roda
+-- exatamente este arquivo no PREPARO_DESTINO (sintetica_d/l6_06.py: preparo_parametros).
+-- Tipos pelo formato que a carga grava hoje: lista (opções em parametro_opcao, origem migracao), booleano ('sim'/'nao'),
+-- inteiro (minutos nas durações), texto (código como na origem). Os itens de AGPARAM e PRPAROFTALMO marcados
+-- 'aguarda regra por item' mudam de tipo quando o motor aceitar regra e de-para por item no desdobrar (pedido L6-06).
+INSERT INTO modulo_sistema (codigo, descricao, ativo, ordem, criado_em)
+  SELECT 'agenda', 'Agenda', TRUE, 0, CURRENT_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM modulo_sistema WHERE codigo = 'agenda');
+INSERT INTO modulo_sistema (codigo, descricao, ativo, ordem, criado_em)
+  SELECT 'prontuario', 'Prontuário', TRUE, 0, CURRENT_TIMESTAMP(3) FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM modulo_sistema WHERE codigo = 'prontuario');
+INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, permite_rede, permite_estabelecimento, minimo, maximo, area_dona, fundamento, ativo, criado_em)
+  SELECT x.chave, (SELECT MIN(m.id) FROM modulo_sistema m WHERE m.codigo = x.modulo), x.descricao, x.tipo, TRUE, TRUE, x.minimo, x.maximo, x.modulo, 'Continuidade do hospital migrado (ADR 0006)', TRUE, CURRENT_TIMESTAMP(3)
+  FROM (
+    SELECT 'agenda.retorno.tipoRetorno' AS chave, 'agenda' AS modulo, 'Tipo de retorno da consulta' AS descricao, 'lista' AS tipo, NULL AS minimo, NULL AS maximo
+    UNION ALL SELECT 'agenda.retorno.criterioRetorno', 'agenda', 'Critério de contagem do retorno', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.alergia.estadoConfirmacao', 'prontuario', 'Estado de confirmação da alergia', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.formulario.respostaPadrao', 'prontuario', 'Respostas padrão dos formulários', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.email.opcaoEnvio', 'prontuario', 'Opções de envio de documento por e-mail', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.impressaoPrescricao.leiaute', 'prontuario', 'Leiaute de impressão da prescrição', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.impressaoPrescricao.tamanhoFonte', 'prontuario', 'Tamanho da fonte na impressão da prescrição', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.documento.processo', 'prontuario', 'Processos do prontuário a que o documento pertence', 'lista', NULL, NULL
+    UNION ALL SELECT 'pep.checagem.situacaoAnterior', 'prontuario', 'Situações da checagem do cadastro anterior', 'lista', NULL, NULL
+    UNION ALL SELECT 'oftalmologia.acuidade.graduacao', 'prontuario', 'Graduações da acuidade visual', 'lista', NULL, NULL
+    UNION ALL SELECT 'oftalmologia.anexo.extensaoArquivo', 'prontuario', 'Extensões de arquivo aceitas no anexo da oftalmologia', 'lista', NULL, NULL
+    UNION ALL SELECT 'prescricao.checagem.loteValidadeObrigatorioMedicamento', 'prontuario', 'Lote e validade obrigatórios na checagem de medicamento', 'booleano', NULL, NULL
+    UNION ALL SELECT 'prescricao.checagem.loteValidadeObrigatorioSolucao', 'prontuario', 'Lote e validade obrigatórios na checagem de solução', 'booleano', NULL, NULL
+    UNION ALL SELECT 'prescricao.checagem.loteValidadeObrigatorioHemocomponente', 'prontuario', 'Lote e validade obrigatórios na checagem de hemocomponente', 'booleano', NULL, NULL
+    UNION ALL SELECT 'prescricao.futura.tempoAvaliacao', 'prontuario', 'Tempo de avaliação da prescrição futura (minutos)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'prescricao.futura.antecedenciaAvaliacao', 'prontuario', 'Antecedência da avaliação da prescrição futura (minutos)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'oftalmologia.lancarAdicao', 'prontuario', 'Lança a adição na prescrição ocular (1 sim, 0 não) - aguarda regra por item para booleano', 'inteiro', 0, 1
+    UNION ALL SELECT 'oftalmologia.relatorioPrescricaoOcularAnterior', 'prontuario', 'Relatório da prescrição ocular do sistema anterior (id guardado como referência)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.quantidadeAgendas', 'agenda', 'Quantidade de agendas da agenda de cadeiras', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.situacaoDesmarcada', 'agenda', 'Situação da marcação desmarcada (código)', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.agendamentoPendenteAnterior', 'agenda', 'Agendamento pendente do cadastro anterior (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.duracaoMedia', 'agenda', 'Duração da sessão média (hora da origem) - aguarda regra por item para minutos', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.duracaoLonga', 'agenda', 'Duração da sessão longa (hora da origem) - aguarda regra por item para minutos', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.duracaoCurta', 'agenda', 'Duração da sessão curta (hora da origem) - aguarda regra por item para minutos', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.motivoFeriado', 'agenda', 'Motivo de bloqueio no feriado (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.motivoIndisponibilidade', 'agenda', 'Motivo de bloqueio na indisponibilidade (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.motivoOcupada', 'agenda', 'Motivo de bloqueio da cadeira ocupada (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.motivoForaExpediente', 'agenda', 'Motivo de bloqueio fora do expediente (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.situacaoRealizada', 'agenda', 'Situação da marcação realizada (código)', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.exibirEspecialidadeCbo', 'agenda', 'Exibe a especialidade pelo CBO (S ou N da origem) - aguarda regra por item para booleano', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.preferenciaAgenda', 'agenda', 'Preferência pela agenda de cadeiras (S ou N da origem) - aguarda regra por item para booleano', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.canalGeracaoPlanejamento', 'agenda', 'Canal da marcação gerada pelo planejamento (id)', 'inteiro', 0, NULL
+    UNION ALL SELECT 'agenda.cadeira.situacaoGeracaoPlanejamento', 'agenda', 'Situação da marcação gerada pelo planejamento (código)', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.agendamentoAutomaticoPlanejamento', 'agenda', 'Agendamento automático pelo planejamento (S ou N da origem) - aguarda regra por item para booleano', 'texto', NULL, NULL
+    UNION ALL SELECT 'agenda.cadeira.digitarEnfermeiroResponsavel', 'agenda', 'Digitar o enfermeiro responsável (S ou N da origem) - aguarda regra por item para booleano', 'texto', NULL, NULL
+  ) x
+  WHERE NOT EXISTS (SELECT 1 FROM parametro_definicao d WHERE d.chave = x.chave);
+"""
+
+
+def semente_parametros():
+    """Texto da semente do catálogo de parâmetros do produto (saida/L6-*.json, pedido da rodada 5)."""
+    return SEMENTE_PARAMETROS
+
+
+def tipos_semente():
+    """{chave: tipo} da semente (o teste confere que toda chave usada pelas fatias existe com o tipo certo)."""
+    return dict(re.findall(r"SELECT '([a-zA-Z.]+)'(?: AS chave)?, '[a-z]+'(?: AS modulo)?, '[^']*'(?: AS descricao)?,"
+                           r" '([a-z]+)'", semente_parametros()))
+
+
+def preparo_parametros():
+    """SQL do PREPARO_DESTINO: a SEMENTE do produto (a mesma proposta à migração; a migração nunca cria definição),
+    precedida das formas mínimas das tabelas do catálogo quando o banco descartável não as tem."""
+    return ("CREATE TABLE IF NOT EXISTS modulo_sistema (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+            " codigo VARCHAR(30) NOT NULL, descricao VARCHAR(150) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE,"
+            " ordem INT NOT NULL DEFAULT 0, criado_em DATETIME(3) NOT NULL);"
+            " CREATE TABLE IF NOT EXISTS parametro_definicao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+            " chave VARCHAR(100) NOT NULL, modulo_sistema_id BIGINT UNSIGNED NOT NULL, descricao VARCHAR(500) NOT NULL,"
+            " tipo VARCHAR(30) NOT NULL, permite_rede BOOLEAN NOT NULL DEFAULT TRUE,"
+            " permite_estabelecimento BOOLEAN NOT NULL DEFAULT FALSE, minimo DECIMAL(20,4) NULL,"
+            " maximo DECIMAL(20,4) NULL, area_dona VARCHAR(100) NULL, fundamento VARCHAR(300) NULL,"
+            " ativo BOOLEAN NOT NULL DEFAULT TRUE, criado_em DATETIME(3) NOT NULL);\n" + semente_parametros())
+
+
+PREPARO_DESTINO = preparo_parametros()
 
 D = decimal.Decimal
 TS = datetime.datetime
@@ -104,12 +203,13 @@ def linhas(r, ins):
              "ID_TBUSERS": login, "SITUACAO": "A", "DATA_INICIO": datetime.date(2020, 1, i)}
         ins("TBPROFIS", [v.get(c) for c, _ in COLS_TBPROFIS])
 
-    # --- descartadas (mecanismo do produto): só presença na imagem; parâmetro nulo e tamanho fora da faixa do produto
+    # --- rodada 5 (carregam): gabarito em duas formas (2 tabelas de optotipos); parâmetro nulo não gera linha;
+    # tamanho 24 fora da faixa da impressão do produto continua opção oferecida (a escolha do setor é outra coluna)
     for i in range(1, 6):
         ins("PROFTGABARITO", [i, 1 + i % 2, "EFPTO"[i - 1], i, 1, D("0.%d0" % i)])
         ins("PROFTGRADUACAO", [i, "G%d" % i, "Graduação exemplo %d" % i])
     ins("PRPARAM_CHECAGEM", [1, "S", "N", None])
-    ins("PRPARAM_PRESCFUTURA", [1, None, None])
+    ins("PRPARAM_PRESCFUTURA", [1, "00:30:00", "02:00:00"])
     ins("PRPAROFTALMO", [1, 1, None])
     for i, t in [(1, 8), (2, 10), (3, 24)]:
         ins("PRPARTAMPADPRESC", [i, t])
@@ -214,4 +314,16 @@ def linhas(r, ins):
                                                        "restricao_destino_1062": 1}},
         "PRSENECESSARIO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
         "PRSITAPRAZAM": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 2}},
+        # rodada 5: gabarito (5 posições em 2 formas); opções de lista (extensão e situação só com espaços: rótulo
+        # NULL, 1048); parâmetros de valor (um item por coluna com valor, o N também; vigência estimada pela origem, uma
+        # pendência por linha da origem)
+        "PROFTGABARITO": {"gravados": 5, "pendencias": {}},
+        "PROFTGRADUACAO": {"gravados": 5, "pendencias": {}},
+        "PROFTTPARQUIV": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
+        "PRPARTAMPADPRESC": {"gravados": 3, "pendencias": {}},
+        "PRPROCESSOPEP": {"gravados": 3, "pendencias": {}},
+        "PRSITCHECAGEM": {"gravados": 7, "pendencias": {"restricao_destino_1048": 1}},
+        "PRPARAM_CHECAGEM": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1}},
+        "PRPARAM_PRESCFUTURA": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 1}},
+        "PRPAROFTALMO": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 1}},
     }

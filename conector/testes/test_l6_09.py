@@ -34,10 +34,10 @@ class L609(unittest.TestCase):
         self.assertNotIn("TBHORMED_TBUNIDAD", sc)  # dado do cliente: carrega (unidade na grade, 06_PEP/16)
         for t in l6_09.NAO_CARREGADAS:  # o que não carrega é descarte com causa de produto
             self.assertEqual(sc[t]["situacao"], "descarte", t)
-            self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto"}, t)
+            self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto", "derivado"}, t)
             self.assertNotIn(t, {d["tabela"] for d in self.decl})
         for d in self.decl:
-            self.assertTrue(d["motivo"].startswith("L6-09: "))
+            self.assertTrue(d["motivo"].startswith("L6-09"))
 
     def test_um_destino_por_tabela(self):
         # princípio de validação = tipo de validação (a L6-10 liga as unidades a ele); referência = base da dose
@@ -47,7 +47,8 @@ class L609(unittest.TestCase):
         self.assertEqual(self.plano["PRSINAIS"]["destinos"], ["parametro_vital"])
 
     def test_situacao_do_lancamento_nao_vira_situacao_do_problema(self):
-        self.assertNotIn("TBLANC_DIAG_STATUS", self.plano)
+        # rodada 5: a situação do lançamento carrega como lista do hospital (parâmetro de lista), nunca no problema
+        self.assertEqual(self.plano["TBLANC_DIAG_STATUS"]["destinos"][0], "parametro_opcao")
         alim = [t for t, p in self.plano.items() if "situacao_problema" in p["destinos"]]
         self.assertEqual(alim, ["TBLISTADIAGNOSTICOSITUACAO"])
         c = self.cols("TBLISTADIAGNOSTICOSITUACAO", "situacao_problema")["clinicamente_ativo"]
@@ -135,7 +136,7 @@ class L609(unittest.TestCase):
         via = {d["destino"]: d["via"] for d in self.decl if d["tabela"] == "TBHORARIODOSE"}
         self.assertEqual(via["horario_padrao_dose.grade_horario_unidade_id"], "ref:TBNUMDOSE>ID_TBHORMED>TBHORMED")
         self.assertEqual(via["horario_padrao_dose.doses_por_dia"], "ref:TBNUMDOSE>NUM_DOSE")
-        self.assertNotIn("TBNUMDOSE", self.plano)
+        self.assertEqual(self.plano["TBNUMDOSE"]["destinos"], ["frequencia_administracao"])
         # grade da unidade = cópia da grade por linha de TBHORMED_TBUNIDAD (nunca UPDATE da grade: a grade com várias
         # unidades perderia as ligações e a conciliação derrubaria a importação)
         via = {d["destino"]: d["via"] for d in self.decl if d["tabela"] == "TBHORMED_TBUNIDAD"}
@@ -197,5 +198,21 @@ class L609(unittest.TestCase):
                              + sum(v for k, v in e["pendencias"].items() if k.startswith(recusa)), len(vistos[t]), t)
 
 
-if __name__ == "__main__":
-    unittest.main()
+class NumeroDoses(unittest.TestCase):  # revisão 2 (ADR 0006, 1): o número de doses CARREGA (nunca derivado)
+    def test_numero_de_doses_vira_frequencia(self):
+        m = mapa.carregar_execucao()
+        p = {x["tabela"]: x for x in carga_mapa.planejar(m, {"TBNUMDOSE"})}["TBNUMDOSE"]
+        self.assertEqual(p["destinos"], ["frequencia_administracao"])
+        c = {x["destino"]: x for x in p["colunas"]["frequencia_administracao"]}
+        self.assertEqual(c["tipo"]["coluna"], "=vezes_ao_dia")
+        self.assertEqual(c["doses_por_dia"]["coluna"], "NUM_DOSE")
+        self.assertEqual(c["horario_fixo"]["coluna"], "=1")
+        self.assertTrue(c["codigo"]["coluna"].startswith("#codigo_derivado:NUM_DOSE:"))
+        d = mapa.DIR_PACOTE / "declarado"
+        with open(d / "provas.tsv", encoding="utf-8") as f:
+            self.assertNotIn("TBNUMDOSE", {r["tabela"] for r in csv.DictReader(f, delimiter="\t")})
+        self.assertFalse((d / "provas.d" / "TBNUMDOSE.sql").exists())
+        vistos = {}
+        l6_09.linhas(random.Random(1), lambda t, v: vistos.setdefault(t, []).append(v))
+        com_horario = {h[0] for h in vistos["TBHORARIODOSE"]}
+        self.assertTrue([n for n in vistos["TBNUMDOSE"] if n[0] not in com_horario])  # número de doses sem horário
