@@ -62,3 +62,4 @@ catalogos/cache/
 
 # Certificado de dev do web em https (cópia de obra-sgh/certs; chave privada local)
 /certs/
+tools/obra/.medicao-fb/
