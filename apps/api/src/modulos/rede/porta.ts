@@ -1,23 +1,12 @@
-// Porta do MPI da Rede (M57, etapa 1; ficha, seções 4 a 8): o que a fila, a decisão, o desfazer, o pareamento e o
-// relatório de divergência leem e gravam, banco a banco (a API não escreve SQL; fronteira Nx). Cada chamada recebe o
-// contexto de UM estabelecimento (rede + código, ARQ-1 e ARQ-2): a porta abre a leitura ou a transação SGH_ só naquele
-// banco, e nenhuma transação cruza os bancos (regra 4). O cruzamento entre estabelecimentos é do serviço, em memória.
-//   - `legado`: leituras READ ONLY de @sgh/legado e gravações numa transação SGH_ por banco, com a SGH_TRILHA junto
-//     (só as tabelas do índice; regra 1);
-//   - `memoria`: a sessão sintética de dev/ci (E2E): dois ou mais bancos SINTÉTICOS em memória, com as mesmas regras;
+// Porta do índice de pacientes da Rede (M57, etapa 1): o que a fila, a decisão, o desfazer, o pareamento e o
+// relatório de divergência leem e gravam, por estabelecimento (a API não escreve SQL; fronteira). Cada chamada recebe o
+// contexto de UM estabelecimento; o cruzamento entre estabelecimentos é do serviço, em memória.
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo;
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com estabelecimentos SINTÉTICOS em memória;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-import type {
-  CadastroRedeLido,
-  CandidatoParaGravarRede,
-  CandidatoRedeLido,
-  ChavesProcuraRede,
-  EscritaIndiceRede,
-  FiltroFilaRede,
-  LinhaTrilha,
-  ParNovo,
-  ResultadoEscritasIndice,
-  VinculoRedeLido,
-} from '@sgh/legado';
+// Melhoria: tipos próprios (tipos-indice.ts), sem nome de tabela do sistema de origem.
+import type { LinhaTrilha } from '@sgh/nucleo';
+import type { CadastroRedeLido, CandidatoParaGravarRede, CandidatoRedeLido, ChavesProcuraRede, EscritaIndiceRede, FiltroFilaRede, ParNovo, ResultadoEscritasIndice, VinculoRedeLido } from './tipos-indice.js';
 
 export const PORTA_REDE = Symbol('PORTA_REDE');
 
@@ -52,7 +41,7 @@ export type RecorteFilaRede = Pick<
   'estabelecimentoRemoto' | 'estabelecimentosRemotos' | 'prontuarioLocal'
 >;
 
-/** As gravações de UM banco, na transação SGH_ que a porta abre (com a trilha junto). */
+/** As gravações de UM banco, na transação que a porta abre (com a trilha junto). */
 export interface GravadorRede {
   escritas(ws: readonly EscritaIndiceRede[]): Promise<ResultadoEscritasIndice>;
   candidatos(
@@ -64,7 +53,7 @@ export interface GravadorRede {
 }
 
 export interface PortaRede {
-  readonly destino: 'legado' | 'memoria' | 'indisponivel';
+  readonly destino: 'proprio' | 'memoria' | 'indisponivel';
   /** A rede desta hospedagem (a sessão tem de ser dela; regra 12). */
   redeConfigurada(): string | null;
   /** Os estabelecimentos configurados (ARQ-1), com o nome de exibição. */
@@ -115,7 +104,7 @@ export interface PortaRede {
    * inexistente ou sem CPF lá. Nunca sai da API (só a comparação).
    */
   cpfDoLogin(c: ContextoRede, login: string): Promise<string | null>;
-  /** Uma transação SGH_ no banco do contexto, com a linha da trilha gravada junto (null: sem trilha). */
+  /** Uma transação no banco do contexto, com a linha da trilha gravada junto (null: sem trilha). */
   gravar<T>(c: ContextoRede, fn: (g: GravadorRede) => Promise<T>, trilha: LinhaTrilha | null): Promise<T>;
 }
 

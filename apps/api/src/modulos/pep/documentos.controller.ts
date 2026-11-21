@@ -92,7 +92,7 @@ import {
 } from '@sgh/contratos';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { camposDoDocumentoPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
-import { type ContextoSgh, ErroPepSgh } from '@sgh/legado';
+import { type ContextoGravacaoPep, ErroProntuario } from './tipos-pep.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -168,7 +168,7 @@ function validar<T>(
 
 /** Erro da gravação → Problem Details (recusa da transação SGH_ com o código; o resto, como o cadastro). */
 function traduzir(e: unknown): never {
-  if (e instanceof ErroPepSgh)
+  if (e instanceof ErroProntuario)
     throw new ErroProblema(
       e.status === 404
         ? 'nao-encontrado'
@@ -224,14 +224,13 @@ export class DocumentosPepController {
   // ── Comuns ───────────────────────────────────────────────────────────────────────────────────────
 
   private c(s: SessaoCadastro): ContextoDocs {
-    return { rede: s.rede, hospital: s.hospital };
+    return s.porta;
   }
 
-  private sgh(s: SessaoCadastro, rotulo: string): ContextoSgh {
+  private sgh(s: SessaoCadastro, rotulo: string): ContextoGravacaoPep {
     return {
-      rede: s.rede,
-      hospital: s.hospital,
-      usuarioLegado: s.login,
+      ...s.porta,
+      usuarioLogin: s.login,
       traceId: correlacaoDaRequisicao(s.req, rotulo).slice(0, 64),
       estacao: estacaoDaRequisicao(s.req).slice(0, 80),
     };

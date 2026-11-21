@@ -1,89 +1,80 @@
-// Porta da agenda de consultas (M17): o que as telas da agenda leem e gravam, independente de onde (a API não
-// escreve SQL; fronteira Nx):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do
-//     M04, com a trilha na mesma transação; as gravações só do novo, por transação SGH_ com a SGH_TRILHA junto);
+// Porta da agenda de consultas: o que as telas da agenda leem e gravam, independente de onde (a API não escreve SQL
+// fora das portas próprias):
+//   - `propria`: o banco do cliente (MariaDB) pelo @sgh/nucleo — leituras pelo Leitor; cada gravação é uma operação
+//     do Executor, com a trilha, o outbox e a idempotência na mesma transação (porta-propria.ts);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): agendas, horários e marcações SINTÉTICOS em memória, com as
-//     mesmas validações (Zod dos contratos) e as mesmas recusas das receitas; nada vai à cópia;
-//   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+//     mesmas validações (Zod dos contratos) e as mesmas recusas; nada vai a banco.
+// Vocabulário neutro (tipos.ts): ids, datas ISO, HH:MM, minutos e booleanos.
 import type {
-  AgendaLida,
-  BloqueioLido,
-  CancelamentoLido,
-  ConfirmacaoLida,
+  Agenda,
+  BloqueioAgenda,
+  Cancelamento,
+  ComplementoMarcacao,
+  ConfirmacaoRegistrada,
   ContagensIndicadores,
   ContatoMarcacao,
-  ContextoOperacao,
   ConvenioDaAgenda,
-  EscalaPlanejadaLida,
-  EsperaLida,
-  FeriadoLido,
-  GeracaoLida,
-  GeracaoNovaLida,
-  HorarioLido,
-  LiberacaoConsultada,
-  LigacaoLida,
-  LinhaEscalaLida,
-  LinhaEscalaSgh,
-  LinhaTrilha,
-  MarcacaoExtLida,
-  MarcacaoLida,
-  OpcoesAgendaLidas,
-  PreCadastroLido,
-  RelogioLido,
-  ResultadoOperacao,
-  VagaLida,
-} from '@sgh/legado';
-
+  EscalaPlanejada,
+  FaixaEscala,
+  Feriado,
+  GeracaoGrade,
+  Horario,
+  ItemListaEspera,
+  LiberacaoGravacao,
+  Marcacao,
+  OpcoesDaAgenda,
+  PacienteDaAgenda,
+  PreCadastroMarcado,
+  Relogio,
+  ResultadoGravacao,
+  Vaga,
+  VinculoAgenda,
+} from './tipos.js';
 import type { EscopoAgenda } from './escopo.js';
+
+export type { PacienteDaAgenda } from './tipos.js';
 
 export const PORTA_AGENDA = Symbol('PORTA_AGENDA');
 
 export interface ContextoAgenda {
   readonly rede: string;
+  /** Código do estabelecimento da sessão. */
   readonly hospital: string;
-  /** Escopo da sessão (unidade e tipo de agenda, M06); ausente = sem restrição. As portas não o usam. */
+  /** Escopo da sessão (unidade e tipo de agenda); ausente = sem restrição. As portas não o usam. */
   readonly escopo?: EscopoAgenda;
 }
 
+/** Contexto de uma gravação: quem grava, a correlação e a chave de idempotência do pedido. */
+export interface ContextoGravacao extends ContextoAgenda {
+  readonly login: string;
+  readonly correlacao: string;
+  readonly chaveIdempotencia: string;
+  readonly enderecoIp?: string;
+}
+
 export interface GravacaoAgendaFeita {
-  readonly resultado: ResultadoOperacao;
+  readonly resultado: ResultadoGravacao;
   readonly repetida: boolean;
   readonly trilha: string | null;
 }
 
-/** Paciente do cadastro único como a agenda o mostra (nome e prontuário; o contato vem da marcação). */
-export interface PacienteDaAgenda {
-  readonly id: number;
-  readonly nome: string;
-  readonly prontuario: number;
-}
-
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
-export interface GravadorSghAgenda {
+/** Gravações de apoio da agenda (escala planejada, confirmação, bloqueio de período, fila, vínculos). */
+export interface GravadorAgenda {
   planejarEscala(r: {
     agenda: number;
-    nome: string;
-    crm: number;
     vigenteDesde: string;
-    linhas: readonly LinhaEscalaSgh[];
-    usuario: string;
+    faixas: readonly FaixaEscala[];
   }): Promise<number>;
-  cancelarEscalaPlanejada(r: { agenda: number; versao: number; usuario: string }): Promise<void>;
+  cancelarEscalaPlanejada(r: { agenda: number; id: number }): Promise<void>;
   gravarConfirmacao(r: {
     marcacao: number;
-    nome: string;
-    crm: number;
-    data: string;
-    hora: string;
-    resultado: number;
+    /** Código do resultado (RESULTADOS_CONFIRMACAO). */
+    resultado: string;
     canal: string;
     observacao: string | null;
-    usuario: string;
   }): Promise<number>;
   gravarBloqueioPeriodo(r: {
     agenda: number;
-    nome: string;
-    crm: number;
     inicio: string;
     fim: string;
     horaInicio: string | null;
@@ -91,148 +82,105 @@ export interface GravadorSghAgenda {
     motivo: string;
     complemento: string | null;
     previsaoRetorno: string | null;
-    usuario: string;
   }): Promise<number>;
-  encerrarBloqueio(r: { agenda: number; id: number; usuario: string }): Promise<void>;
+  encerrarBloqueio(r: { agenda: number; id: number }): Promise<void>;
   incluirEspera(r: {
     paciente: number;
-    prontuario: number;
     agenda: number | null;
     especialidade: number | null;
     prioridade: string;
     observacao: string | null;
-    usuario: string;
   }): Promise<number>;
-  ofertarEspera(r: {
-    id: number;
-    agenda: number;
-    data: string;
-    hora: string;
-    usuario: string;
-  }): Promise<void>;
+  ofertarEspera(r: { id: number; agenda: number; data: string; hora: string }): Promise<void>;
   encerrarEspera(r: {
     id: number;
     situacao: 'atendido' | 'cancelado' | 'aguardando';
     marcacao: number | null;
-    usuario: string;
   }): Promise<void>;
-  gravarLigacao(r: {
+  gravarVinculo(r: {
     agenda: number;
-    nome: string;
-    crm: number;
     profissional: number | null;
     especialidade: number | null;
     local: number | null;
     unidade: number | null;
-    usuario: string;
   }): Promise<void>;
 }
 
 export interface PortaAgenda {
-  readonly destino: 'legado' | 'memoria';
-  /** A operação grava agora para este login? (passo 0 do executor, sem gravar). */
-  podeGravar(c: ContextoAgenda, operacao: string, usuarioLegado: string): Promise<LiberacaoConsultada>;
-  executar(
-    c: ContextoAgenda,
-    operacao: string,
-    entrada: unknown,
-    ctx: ContextoOperacao,
-  ): Promise<GravacaoAgendaFeita>;
-  /** Grava só do novo; a trilha pode depender do resultado (ex.: o ID do registro criado). */
-  gravarSgh<T>(
-    c: ContextoAgenda,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorSghAgenda) => Promise<T>,
-  ): Promise<T>;
+  readonly destino: 'propria' | 'memoria';
+  /** A operação grava agora para este login? (liberação, sem gravar). */
+  podeGravar(c: ContextoAgenda, operacao: string, login: string): Promise<LiberacaoGravacao>;
+  /** Operação da agenda (OPERACOES_AGENDA) com a entrada do contrato. */
+  executar(c: ContextoGravacao, operacao: string, entrada: unknown): Promise<GravacaoAgendaFeita>;
+  /** Gravações de apoio; cada chamada do gravador é uma transação com a trilha. */
+  gravar<T>(c: ContextoGravacao, fn: (g: GravadorAgenda) => Promise<T>): Promise<T>;
 
-  relogio(c: ContextoAgenda): Promise<RelogioLido>;
-  agendas(c: ContextoAgenda): Promise<AgendaLida[]>;
-  agenda(c: ContextoAgenda, id: number): Promise<AgendaLida | null>;
+  relogio(c: ContextoAgenda): Promise<Relogio>;
+  agendas(c: ContextoAgenda): Promise<Agenda[]>;
+  agenda(c: ContextoAgenda, id: number): Promise<Agenda | null>;
   conveniosDaAgenda(c: ContextoAgenda, id: number): Promise<ConvenioDaAgenda[]>;
+  /** Convênios aceitos por agenda (agenda sem linha aceita todos e fica fora do mapa). */
   cobertura(c: ContextoAgenda, ids: readonly number[]): Promise<Map<number, number[]>>;
   especialidadesDaAgenda(c: ContextoAgenda, id: number): Promise<{ codigo: number; nome: string }[]>;
-  opcoes(c: ContextoAgenda): Promise<OpcoesAgendaLidas>;
-  escala(c: ContextoAgenda, nome: string, crm: number): Promise<LinhaEscalaLida[]>;
-  geracoes(
-    c: ContextoAgenda,
-    nome: string,
-    crm: number,
-  ): Promise<{ itens: GeracaoLida[]; truncado: boolean }>;
-  feriados(c: ContextoAgenda, de: string, ate: string): Promise<FeriadoLido[]>;
+  opcoes(c: ContextoAgenda): Promise<OpcoesDaAgenda>;
+  /** Escala vigente hoje. */
+  escala(c: ContextoAgenda, agenda: number): Promise<FaixaEscala[]>;
+  geracoes(c: ContextoAgenda, agenda: number): Promise<GeracaoGrade[]>;
+  /** A agenda de uma geração; null se não existe. */
+  agendaDaGeracao(c: ContextoAgenda, id: number): Promise<number | null>;
+  feriados(c: ContextoAgenda, de: string, ate: string): Promise<Feriado[]>;
   horarios(
     c: ContextoAgenda,
-    nome: string,
-    crm: number,
+    agenda: number,
     de: string,
     ate: string,
-  ): Promise<{ itens: HorarioLido[]; truncado: boolean }>;
-  horasMarcadas(c: ContextoAgenda, nome: string, crm: number, data: string): Promise<string[]>;
+  ): Promise<{ itens: Horario[]; truncado: boolean }>;
+  horasMarcadas(c: ContextoAgenda, agenda: number, data: string): Promise<string[]>;
   marcacoesDaJanela(
     c: ContextoAgenda,
-    nome: string,
-    crm: number,
+    agenda: number,
     de: string,
     ate: string,
-  ): Promise<{ itens: MarcacaoLida[]; truncado: boolean }>;
-  marcacoesDoDia(c: ContextoAgenda, data: string): Promise<{ itens: MarcacaoLida[]; truncado: boolean }>;
-  marcacao(
-    c: ContextoAgenda,
-    id: number,
-  ): Promise<{ marcacao: MarcacaoLida; contato: ContatoMarcacao } | null>;
-  /** As do cadastro e, à parte, as possíveis a confirmar (sem vínculo, mesmo nome) e os pré-cadastros. */
+  ): Promise<{ itens: Marcacao[]; truncado: boolean }>;
+  marcacoesDoDia(c: ContextoAgenda, data: string): Promise<{ itens: Marcacao[]; truncado: boolean }>;
+  marcacao(c: ContextoAgenda, id: number): Promise<{ marcacao: Marcacao; contato: ContatoMarcacao } | null>;
+  /** As do paciente e os pré-cadastros dele que têm marcação. */
   marcacoesDoPaciente(
     c: ContextoAgenda,
     id: number,
-  ): Promise<{
-    itens: MarcacaoLida[];
-    truncado: boolean;
-    possiveis: MarcacaoLida[];
-    preCadastros: PreCadastroLido[];
-  }>;
+  ): Promise<{ itens: Marcacao[]; truncado: boolean; preCadastros: PreCadastroMarcado[] }>;
   vagas(
     c: ContextoAgenda,
     f: { agendas: readonly number[] | null; de: string; ate: string; limite?: number },
-  ): Promise<{ itens: VagaLida[]; truncado: boolean }>;
-  proximasVagas(
-    c: ContextoAgenda,
-    agendas: readonly number[],
-    depoisDe: string,
-    ate: string,
-  ): Promise<VagaLida[]>;
+  ): Promise<{ itens: Vaga[]; truncado: boolean }>;
+  /** A primeira vaga de cada agenda depois da data. */
+  proximasVagas(c: ContextoAgenda, agendas: readonly number[], depoisDe: string, ate: string): Promise<Vaga[]>;
   cancelamentos(
     c: ContextoAgenda,
     f: {
       de: string;
       ate: string;
-      agendas: readonly string[] | null;
-      motivo?: { codigo: string; texto: string } | null;
+      agendas: readonly number[] | null;
+      motivo?: string | null;
       pagina: number;
       porPagina: number;
     },
-  ): Promise<{ itens: CancelamentoLido[]; total: number }>;
+  ): Promise<{ itens: Cancelamento[]; total: number }>;
   indicadores(c: ContextoAgenda, de: string, ate: string): Promise<ContagensIndicadores>;
   pacientes(c: ContextoAgenda, ids: readonly number[]): Promise<PacienteDaAgenda[]>;
-
-  marcacoesExt(c: ContextoAgenda, ids: readonly number[]): Promise<Map<number, MarcacaoExtLida>>;
-  geracoesDoNovo(c: ContextoAgenda, agenda: number): Promise<GeracaoNovaLida[]>;
-  /** A agenda (REAGENDA.ID) de uma geração do novo; null se não existe. */
-  agendaDaGeracao(c: ContextoAgenda, id: number): Promise<number | null>;
+  complementos(c: ContextoAgenda, ids: readonly number[]): Promise<Map<number, ComplementoMarcacao>>;
   bloqueios(
     c: ContextoAgenda,
     f: { agenda?: number | null; ativos?: boolean; de?: string | null; ate?: string | null },
-  ): Promise<BloqueioLido[]>;
+  ): Promise<BloqueioAgenda[]>;
   horariosDoBloqueio(c: ContextoAgenda, id: number): Promise<{ data: string; hora: string }[]>;
-  confirmacoes(c: ContextoAgenda, marcacao: number): Promise<ConfirmacaoLida[]>;
-  escalasPlanejadas(c: ContextoAgenda, agenda: number): Promise<EscalaPlanejadaLida[]>;
+  confirmacoes(c: ContextoAgenda, marcacao: number): Promise<ConfirmacaoRegistrada[]>;
+  escalasPlanejadas(c: ContextoAgenda, agenda: number): Promise<EscalaPlanejada[]>;
   espera(
     c: ContextoAgenda,
     f: { situacoes: readonly string[]; agenda?: number | null; especialidade?: number | null },
-  ): Promise<EsperaLida[]>;
-  ligacoes(c: ContextoAgenda): Promise<Map<number, LigacaoLida>>;
+  ): Promise<ItemListaEspera[]>;
+  vinculos(c: ContextoAgenda): Promise<Map<number, VinculoAgenda>>;
   profissionais(c: ContextoAgenda): Promise<{ id: number; nome: string }[]>;
-  cancelamentosPorMotivo(
-    c: ContextoAgenda,
-    de: string,
-    ate: string,
-  ): Promise<{ motivo: string; total: number }[]>;
+  cancelamentosPorMotivo(c: ContextoAgenda, de: string, ate: string): Promise<{ motivo: string; total: number }[]>;
 }

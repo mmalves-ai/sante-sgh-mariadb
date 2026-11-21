@@ -19,6 +19,8 @@ import {
 } from '@sgh/contratos';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
 import type { PortaRede } from '../rede/porta.js';
 import type { ContextoDocs, ProfissionalPep } from './documentos-porta.js';
 import type { ServicoDocumentos } from './documentos-servico.js';
@@ -27,6 +29,8 @@ import type { ServicoDocumentos } from './documentos-servico.js';
 export interface SessaoAcessoRede {
   readonly rede: string;
   readonly hospital: string;
+  /** Contexto do núcleo da sessão (cliente, estabelecimento e usuário por id). */
+  readonly porta: ContextoPorta;
   readonly login: string;
   readonly estacao: string;
   readonly correlacao: string;
@@ -114,7 +118,7 @@ export class AcessoProntuarioRede {
         `Este cadastro não está ligado a um cadastro de ${nome} no MPI da Rede.`,
         { codigo: 'sem-vinculo-rede' },
       );
-    const remoto: ContextoDocs = { rede: s.rede, hospital: est };
+    const remoto: ContextoDocs = { ...s.porta, ...contextoDoEstabelecimento(est), hospital: est };
     await this.d.documentos.exigirPaciente(remoto, v.idRemoto);
     // Regra 7: a trilha no banco onde o registro está, antes de qualquer dado (sem trilha, sem dado). Em nome do login
     // só quando ele é provadamente a mesma pessoa lá; senão, só a trilha própria de lá, como "(desconhecido)", com o

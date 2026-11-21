@@ -1,19 +1,16 @@
-// Escopo da agenda (cap-08 §8.4; catálogo do M06: as permissões agenda.* aceitam os escopos `unidade` e `tipoAgenda`):
-// o servidor decide sobre a AGENDA alvo de cada leitura e gravação, nunca só pelo tipo da permissão.
-//   - unidade da agenda: REAGENDA.UNID quando informada (> 0); senão a unidade da ligação revisada
-//     (SGH_AGE_AGENDA_LIGACAO.UNIDADE); sem nenhuma das duas, a agenda é "sem unidade" e vale para todas as
-//     unidades, como no legado (as 138 agendas do pc têm UNID 0 e 277 usuários têm unidade em TBUNIUSE: o filtro
-//     estrito esconderia a agenda inteira do call center). D-ESC-17.
-//   - tipo da agenda: REAGENDA.TIPO (0 nas 138) contra TBAGEUSE.TPAGE (0 nos 29 usuários que o têm): comparação
-//     estrita (falha fechada).
-//   - o que não tem agenda resolvida (marcação órfã, pedido da fila sem agenda) fica fora para quem tem escopo
-//     restrito (falha fechada).
+// Escopo da agenda (cap-08 §8.4; as permissões agenda.* aceitam os escopos `unidade` e `tipoAgenda`): o servidor
+// decide sobre a AGENDA alvo de cada leitura e gravação, nunca só pelo tipo da permissão.
+//   - unidade da agenda: agenda_servico.unidade_assistencial_id; senão a unidade do vínculo revisado; sem nenhuma,
+//     a agenda é "sem unidade" e vale para todas as unidades (D-ESC-17).
+//   - tipo da agenda: a categoria (agenda_servico.categoria_agenda_id) contra os tipos do escopo: comparação estrita
+//     (falha fechada; agenda sem categoria não entra em escopo restrito por tipo).
+//   - o que não tem agenda resolvida (pedido da fila sem agenda) fica fora para quem tem escopo restrito (falha
+//     fechada).
 import { filtroDeEscopo } from '@sgh/dominio-acesso';
-import type { AgendaLida, LigacaoLida } from '@sgh/legado';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 
 export interface EscopoAgenda {
-  /** Unidades aceitas (texto, como vêm do legado); null = sem restrição. */
+  /** Unidades aceitas (ids em texto, como vêm do escopo da sessão); null = sem restrição. */
   readonly unidades: readonly string[] | null;
   /** Tipos de agenda aceitos; null = sem restrição. */
   readonly tipos: readonly string[] | null;
@@ -34,11 +31,11 @@ export const restrito = (e: EscopoAgenda | undefined): boolean =>
 
 /** Unidade efetiva da agenda (null = não informada). */
 export function unidadeDaAgenda(
-  a: Pick<AgendaLida, 'unidade'>,
-  ligacao: Pick<LigacaoLida, 'unidade'> | undefined,
+  a: { readonly unidade: number | null },
+  vinculo: { readonly unidade: number | null } | undefined,
 ): number | null {
-  if (a.unidade > 0) return a.unidade;
-  const u = ligacao?.unidade ?? null;
+  if (a.unidade !== null && a.unidade > 0) return a.unidade;
+  const u = vinculo?.unidade ?? null;
   return u !== null && u > 0 ? u : null;
 }
 
@@ -49,6 +46,6 @@ export function agendaNoEscopo(
 ): boolean {
   if (!e) return true;
   if (e.unidades !== null && a.unidade !== null && !e.unidades.includes(String(a.unidade))) return false;
-  if (e.tipos !== null && !e.tipos.includes(String(a.tipo ?? 0))) return false;
+  if (e.tipos !== null && (a.tipo === null || !e.tipos.includes(String(a.tipo)))) return false;
   return true;
 }

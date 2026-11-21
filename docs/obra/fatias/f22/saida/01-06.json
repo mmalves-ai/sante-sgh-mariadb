@@ -1,0 +1,101 @@
+{
+  "lote": "01-06",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pep/acesso-paciente.ts",
+    "src/modulos/pep/acesso-rede.controller.ts",
+    "src/modulos/pep/acesso-rede.ts",
+    "src/modulos/pep/acessos.controller.ts",
+    "src/modulos/pep/documentos-porta-memoria.ts",
+    "src/modulos/pep/documentos-porta.ts",
+    "src/modulos/pep/documentos-servico.ts",
+    "src/modulos/pep/documentos.controller.ts",
+    "src/modulos/pep/formulario-novo-porta-memoria.ts",
+    "src/modulos/pep/formulario-novo-porta.ts",
+    "src/modulos/pep/formulario-novo-servico.ts",
+    "src/modulos/pep/formulario-novo.controller.ts",
+    "src/modulos/pep/liberacao-pep.ts",
+    "src/modulos/pep/porta-memoria.ts",
+    "src/modulos/pep/porta.ts",
+    "src/modulos/pep/prescricao-porta-memoria.ts",
+    "src/modulos/pep/prescricao-porta.ts",
+    "src/modulos/pep/prescricao-servico.ts",
+    "src/modulos/pep/prescricao.controller.ts",
+    "src/modulos/pep/prontuario.controller.ts",
+    "src/modulos/pep/public-api.ts",
+    "src/modulos/pep/registro-porta-memoria.ts",
+    "src/modulos/pep/registro-porta.ts",
+    "src/modulos/pep/registro-servico.ts",
+    "src/modulos/pep/registro.controller.ts",
+    "src/modulos/pep/servico.ts",
+    "src/modulos/pep/sessao-prontuario.ts",
+    "src/modulos/rede/porta.ts",
+    "src/modulos/suporte/repositorio.ts",
+    "src/modulos/pep/tipos-pep.ts",
+    "src/modulos/pep/portas-indisponiveis.ts",
+    "src/modulos/pep/registro-porta-propria.ts",
+    "src/modulos/pep/registro-porta-propria.spec.ts",
+    "src/modulos/pep/registro-porta-propria.int.spec.ts",
+    "src/modulos/rede/tipos-indice.ts",
+    "src/modulos/suporte/tipos.ts",
+    "src/globais.d.ts"
+  ],
+  "apagados": [
+    "apps/api/src/modulos/pep/porta-legado.ts",
+    "apps/api/src/modulos/pep/documentos-porta-legado.ts",
+    "apps/api/src/modulos/pep/formulario-novo-porta-legado.ts",
+    "apps/api/src/modulos/pep/prescricao-porta-legado.ts",
+    "apps/api/src/modulos/pep/registro-porta-legado.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "alvo": "usuario_profissional (02_ADM)",
+      "motivo": "O modelo não liga a conta de acesso ao profissional: o registro clínico, a prescrição e os documentos precisam do profissional (e do CBO) de quem assina. Sem a ligação, PortaRegistroPropria.profissional recusa 501.",
+      "ddl": "CREATE TABLE usuario_profissional (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  profissional_id BIGINT UNSIGNED NOT NULL,\n  vigencia_inicio DATE NOT NULL,\n  vigencia_fim DATE NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  usuario_vigente_id BIGINT UNSIGNED AS (IF(vigencia_fim IS NULL AND excluido_em IS NULL, usuario_id, NULL)) STORED,\n  UNIQUE KEY uq_usuario_profissional_vigente (usuario_vigente_id),\n  KEY ix_usuario_profissional_profissional (profissional_id),\n  CONSTRAINT ck_usuario_profissional_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  CONSTRAINT fk_usuario_profissional_usuario_id FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_usuario_profissional_profissional_id FOREIGN KEY (profissional_id) REFERENCES profissional (id) ON DELETE RESTRICT\n) COMMENT='Profissional que a conta de acesso representa ao assinar atos clínicos, com vigência';"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "profissional_ocupacao (03_CAD)",
+      "motivo": "O profissional não tem as ocupações (CBO) com que atua; o registro clínico grava ocupacao_cbo_id e a escolha do CBO de quem assina depende disso.",
+      "ddl": "CREATE TABLE profissional_ocupacao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  profissional_id BIGINT UNSIGNED NOT NULL,\n  ocupacao_cbo_id BIGINT UNSIGNED NOT NULL,\n  principal BOOLEAN NOT NULL DEFAULT FALSE,\n  ativo BOOLEAN NOT NULL DEFAULT TRUE,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  principal_profissional_id BIGINT UNSIGNED AS (IF(principal AND ativo AND excluido_em IS NULL, profissional_id, NULL)) STORED,\n  UNIQUE KEY uq_profissional_ocupacao (profissional_id, ocupacao_cbo_id),\n  UNIQUE KEY uq_profissional_ocupacao_principal (principal_profissional_id),\n  KEY ix_profissional_ocupacao_cbo (ocupacao_cbo_id),\n  CONSTRAINT fk_profissional_ocupacao_profissional_id FOREIGN KEY (profissional_id) REFERENCES profissional (id) ON DELETE RESTRICT,\n  CONSTRAINT fk_profissional_ocupacao_ocupacao_cbo_id FOREIGN KEY (ocupacao_cbo_id) REFERENCES ocupacao_cbo (id) ON DELETE RESTRICT\n) COMMENT='Ocupações (CBO) com que o profissional atua, com a principal';"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "registro_assistencial_rascunho.ocupacao_cbo_id (06_PEP)",
+      "motivo": "O rascunho não guarda o CBO com que foi aberto (o registro final guarda); a lista de rascunhos do profissional filtra por CBO.",
+      "ddl": "ALTER TABLE registro_assistencial_rascunho ADD COLUMN ocupacao_cbo_id BIGINT UNSIGNED NULL COMMENT 'Ocupação com que o autor abriu o rascunho' AFTER autor_usuario_id, ADD KEY ix_registro_assistencial_rascunho_ocupacao_cbo (ocupacao_cbo_id), ADD CONSTRAINT fk_registro_assistencial_rascunho_ocupacao_cbo_id FOREIGN KEY (ocupacao_cbo_id) REFERENCES ocupacao_cbo (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "sessao_suporte_acao e sessao_suporte_leitura (02_ADM)",
+      "motivo": "O 'login como' audita cada ação (método, caminho, situação, ato clínico) e soma as leituras por caminho; sessao_suporte só tem o JSON 'dados'. Sem as tabelas, RepositorioPlataforma fica só em memória.",
+      "ddl": "CREATE TABLE sessao_suporte_acao (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, sessao_suporte_id BIGINT UNSIGNED NOT NULL, metodo VARCHAR(10) NOT NULL, caminho VARCHAR(500) NOT NULL, situacao VARCHAR(20) NOT NULL, status_http SMALLINT UNSIGNED NULL, ato_clinico BOOLEAN NOT NULL DEFAULT FALSE, motivo_nao_reversivel VARCHAR(255) NULL, ocorrido_em DATETIME(3) NOT NULL, criado_em DATETIME(3) NOT NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, CONSTRAINT ck_sessao_suporte_acao_situacao CHECK (situacao IN ('ok','erro','bloqueada','abortada')), KEY ix_sessao_suporte_acao_sessao (sessao_suporte_id, ocorrido_em), CONSTRAINT fk_sessao_suporte_acao_sessao_suporte_id FOREIGN KEY (sessao_suporte_id) REFERENCES sessao_suporte (id) ON DELETE RESTRICT) COMMENT='Ação feita numa sessão de suporte como o usuário';\nCREATE TABLE sessao_suporte_leitura (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, sessao_suporte_id BIGINT UNSIGNED NOT NULL, caminho VARCHAR(500) NOT NULL, quantidade INT UNSIGNED NOT NULL DEFAULT 0, primeira_em DATETIME(3) NOT NULL, ultima_em DATETIME(3) NOT NULL, criado_em DATETIME(3) NOT NULL, alterado_em DATETIME(3) NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, UNIQUE KEY uq_sessao_suporte_leitura (sessao_suporte_id, caminho(255)), CONSTRAINT ck_sessao_suporte_leitura_periodo CHECK (ultima_em >= primeira_em), CONSTRAINT fk_sessao_suporte_leitura_sessao_suporte_id FOREIGN KEY (sessao_suporte_id) REFERENCES sessao_suporte (id) ON DELETE RESTRICT) COMMENT='Leituras agregadas por caminho numa sessão de suporte como o usuário';"
+    },
+    {
+      "tipo": "decisao",
+      "alvo": "contas de suporte da plataforma",
+      "motivo": "RepositorioPlataforma guardava cifra, segundo fator e convite das contas de suporte no banco do hospital. No modelo novo, conta_plataforma (cliente) não tem credencial e o administrador entra pelo banco plataforma (F2-L, decisão b). Decidir onde ficam credencial/TOTP/convite das contas de suporte antes do adaptador próprio do suporte (lote 02 suporte)."
+    },
+    {
+      "tipo": "redesenho",
+      "alvo": "PEP onda 4 (pep resto)",
+      "motivo": "Os tipos de gravação do PEP (GravacaoEvolucao, LinhaGravacao, DefinicaoFormularioLida, RepresentacaoGravada, prescrição) ainda têm a forma antiga: texto formatado e XML, ordem em códigos, hora HHMM, textoCp1252, retratos (htAtendimento/htPaciente). Foram movidos como estão para tipos-pep.ts. O adaptador próprio das portas PortaProntuario, PortaDocumentos, PortaPrescricao, PortaFormularioNovo e o resto da PortaRegistro depende do redesenho sobre registro_assistencial/_resposta, modelo_campo, documento_prontuario e prescricao_* (com dominio-pep e contratos)."
+    },
+    {
+      "tipo": "aviso_outros_lotes",
+      "alvo": "rede (onda 2), suporte (onda 2), pep resto (onda 4)",
+      "motivo": "rede/tipos-indice.ts discrimina a escrita do índice por alvo de negócio ('pessoa' | 'vinculo' | 'suspeita'), com pacienteId/porUsuarioId numéricos e data ISO (sem nome de tabela); rede/porta-memoria.ts, rede/porta-legado.ts e rede/servicos ajustam no lote da rede. AtendimentoLido (pep/tipos-pep.ts) ganhou 'aberto' e o tipo completo (TipoAtendimento); ModeloDoRegistro ganhou 'aposentado': specs fora da lista que montam esses tipos (registro-regras.spec) ajustam no lote do pep resto. suporte/seguranca.spec.ts e fonte-copia.int.spec.ts usam RepositorioPlataformaLegado/FonteComoLegado (removidos). pep/infra/acesso-entre-hospitais.int.spec.ts e pep/aplicacao/worklist-medico.autorizacao.int.spec.ts importam as portas de convivência apagadas. Specs de unidade do pep fora da lista (registro.spec, prescricao.spec, documentos.spec...) usam o contexto antigo {rede, hospital} e usuarioLegado."
+    },
+    {
+      "tipo": "redesenho",
+      "alvo": "índice de pacientes da rede (MPI), lote da rede (onda 2)",
+      "motivo": "Com um banco por cliente (ADR 0001/0003), o paciente é do cliente inteiro (numero_prontuario único no cliente) e a suspeita de duplicata fica em suspeita_duplicidade (03_CAD), com a unificação em unificacao_cadastro. A forma 'banco a banco' do índice (CadastroRedeLido/VinculoRedeLido/CandidatoRedeLido com estabelecimento remoto, cruzamento em memória e pessoa/por/em em texto) deixa de fazer sentido. Decidir: (a) o MPI vira a fila de suspeitas do próprio cliente sobre suspeita_duplicidade + unificacao_cadastro (recomendado, sem tabela nova); ou (b) se houver índice entre clientes distintos, DDL próprio no banco plataforma. Nenhuma tabela pessoa_rede/vinculo_rede/candidato_rede é proposta: a escrita usa só o alvo de negócio até a decisão."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/pep/registro-clinico.ts (esquemaAtendimentoRegistro.tipo)",
+      "motivo": "A porta agora devolve o tipo completo do atendimento (ambulatorio, pronto_atendimento, externo, internacao, telessaude) e 'aberto' pela situação; o contrato da tela ainda aceita só 'internacao' | 'externo', e o serviço reduz para ele. Pedido: ampliar o enum do contrato para os cinco tipos (a tela mostra o rótulo) e passar o tipo sem reduzir."
+    }
+  ]
+}

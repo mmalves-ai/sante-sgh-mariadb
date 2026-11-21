@@ -128,6 +128,8 @@ export const esquemaGerarGradeExame = z
     horarios: z.array(esquemaHorario).min(1).max(TETO_HORARIOS_POR_GRAVACAO),
     escala: z.array(esquemaLinhaEscala).min(1).max(21),
     semanas: z.array(z.enum(['T', 'F'])).length(7),
+    /** A prévia incluiu os feriados (a geração grava o pedido como foi feito). */
+    incluirFeriados: z.boolean().optional(),
   })
   .strict()
   .refine((e) => e.ate >= e.de, { message: 'O fim vem antes do início.', path: ['ate'] })

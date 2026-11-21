@@ -1,6 +1,5 @@
-// Cache de configuração (ficha do M08, seção 4 e regra 10): parâmetros do legado por 5 minutos (mudam no
-// SPDATA: o prazo é o atraso máximo), e o painel de parâmetros novos e de chaves de liberação, invalidados
-// POR EVENTO depois do commit (a gravação do novo apaga as chaves do estabelecimento; vale para todos os
+// Cache de configuração (ficha do M08, seção 4 e regra 10): o painel de parâmetros e de chaves de liberação,
+// invalidados POR EVENTO depois do commit (a gravação apaga as chaves do estabelecimento; vale para todos os
 // processos, porque o armazém é o Valkey compartilhado). Chave com a rede e o estabelecimento (ARQ-2).
 // O atraso entre o commit e a invalidação é medido (último e maior) para a tela e o teste. Uma carga que
 // começou ANTES de uma invalidação não é gravada no cache (marca de geração por chave, no mesmo armazém):
@@ -11,17 +10,15 @@ import type { ArmazemSessao } from '../../sessao/armazem.js';
 
 export const CACHE_CONFIG = Symbol('CACHE_CONFIG');
 
-export const TTL_PARAMETROS_LEGADO_S = 300;
 export const TTL_CONFIG_NOVO_S = 300;
 
-/** M12: a lista de convênios do estabelecimento (TBCONVEN, busca por palavra), invalidada pela situação e pelo contrato. */
+/** M12: a lista de convênios do estabelecimento (busca por palavra), invalidada pela situação e pelo contrato. */
 export const TTL_CONVENIOS_S = 60;
 
 /** M24: o índice de busca do item prescritível (sem acento), recarregado do banco a cada 5 minutos. */
 export const TTL_BUSCA_PRESCRICAO_S = 300;
 
 export type TipoCache =
-  | 'parametros-legado'
   | 'parametros-novos'
   | 'liberacao'
   | 'convenios'

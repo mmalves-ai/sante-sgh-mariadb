@@ -1,0 +1,91 @@
+{
+  "lote": "01-04",
+  "registrar": [
+    "agenda: () => import('./agenda/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/agenda/agenda.spec.ts",
+    "src/modulos/agenda/agendas.controller.ts",
+    "src/modulos/agenda/apoio.controller.ts",
+    "src/modulos/agenda/apoio.ts",
+    "src/modulos/agenda/escopo.ts",
+    "src/modulos/agenda/marcacoes.controller.ts",
+    "src/modulos/agenda/porta-memoria.ts",
+    "src/modulos/agenda/porta.ts",
+    "src/modulos/agenda/public-api.ts",
+    "src/modulos/agenda/servico.ts",
+    "src/modulos/agenda/tipos.ts",
+    "src/modulos/agenda/visao.ts",
+    "src/modulos/agenda/operacoes.ts",
+    "src/modulos/agenda/porta-propria.ts",
+    "src/modulos/agenda/modulo.ts",
+    "src/modulos/agenda/porta-propria.int.spec.ts",
+    "src/modulos/acesso/alerta.ts",
+    "src/modulos/acesso/aplicacao/copia.spec-util.ts",
+    "src/modulos/acesso/emergencia.controller.ts",
+    "src/modulos/documento/aplicacao/emissao.service.ts",
+    "src/modulos/documento/documento.controller.ts",
+    "src/modulos/documento/fonte.ts",
+    "src/modulos/documento/infra/gotenberg.ts",
+    "src/modulos/documento/infra/registro.ts",
+    "src/modulos/documento/infra/s3.ts",
+    "src/modulos/documento/infra/valkey.ts",
+    "src/modulos/documento/public-api.ts",
+    "src/modulos/agenda/regra-encaixe.ts",
+    "src/modulos/acesso/emergencia-propria.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "alvo": "feriado",
+      "motivo": "Não há cadastro de feriados locais/estaduais no modelo; a porta própria usa só os nacionais (fixos + móveis do domínio) na geração de grade.",
+      "ddl": "CREATE TABLE feriado (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NULL COMMENT 'Nulo: vale para todos os estabelecimentos do cliente',\n  municipio_ibge_id BIGINT UNSIGNED NULL,\n  data DATE NOT NULL,\n  nome VARCHAR(150) NOT NULL,\n  abrangencia VARCHAR(20) NOT NULL DEFAULT 'local',\n  ponto_facultativo BOOLEAN NOT NULL DEFAULT FALSE,\n  ativo BOOLEAN NOT NULL DEFAULT TRUE,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_feriado_abrangencia CHECK (abrangencia IN ('nacional','estadual','municipal','local')),\n  UNIQUE KEY uq_feriado_estabelecimento_data (estabelecimento_id, data),\n  KEY ix_feriado_data (data)\n) COMMENT='Feriado ou ponto facultativo que fecha a agenda (os nacionais vêm do domínio da agenda)';\nALTER TABLE feriado ADD CONSTRAINT fk_feriado_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "bloqueio_agenda",
+      "motivo": "O bloqueio de período com recorte diário (ex.: todo dia 08:00-12:00 de 01 a 05) não cabe em inicio_em/fim_em; hoje a porta grava o intervalo contínuo (primeiro dia hora inicial, último dia hora final).",
+      "ddl": "ALTER TABLE bloqueio_agenda\n  ADD COLUMN hora_inicio_diaria TIME NULL COMMENT 'Recorte diário do bloqueio (hora local)',\n  ADD COLUMN hora_fim_diaria TIME NULL,\n  ADD CONSTRAINT ck_bloqueio_agenda_recorte CHECK ((hora_inicio_diaria IS NULL AND hora_fim_diaria IS NULL) OR (hora_inicio_diaria IS NOT NULL AND hora_fim_diaria IS NOT NULL AND hora_fim_diaria > hora_inicio_diaria));"
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py",
+      "motivo": "Domínios da agenda vazios num cliente novo: a porta recusa com 422 configuracao-incompleta. Semear: situacao_marcacao (significados aguardando, confirmada, chegou, em_atendimento, realizada, cancelada, falta), tipo_marcacao (naturezas primeira_vez, retorno, encaixe), canal_marcacao (códigos de CANAIS_MARCACAO), motivo_cancelamento_operacao (códigos de MOTIVOS_CANCELAMENTO), motivo_bloqueio_agenda (códigos de MOTIVOS_BLOQUEIO), situacao_confirmacao (significados confirmada, sem_resposta, recusada) e categoria_agenda 'consulta'."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/agenda/entradas.ts esquemaIncluirAgenda",
+      "motivo": "O modelo exige o dono da agenda (profissional, recurso ou setor) e a categoria; o pedido da tela não os traz, então agenda.incluirAgenda na porta própria recusa com 'agenda-sem-dono'. Incluir profissional|recurso|setor e categoria no esquema."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/agenda (respostas.destino, horas HHMM, S/N em alterarAgenda, tpAge) e packages/dominio-agenda (sinais de texto da grade)",
+      "motivo": "A porta e o banco já são neutros; a ponte apps/api/src/modulos/agenda/visao.ts converte para o vocabulário antigo que o domínio e os contratos ainda usam ('legado' em destino, HHMM, S/N, letras de situação). Migrar contratos e domínio da agenda e apagar visao.ts."
+    },
+    {
+      "tipo": "modulo",
+      "alvo": "config (lote 01-03)",
+      "motivo": "A agenda injeta FONTE_CONFIGURACAO e CACHE_CONFIG (@Optional) para a liberação agenda.consulta e os parâmetros; na porta própria o módulo da agenda não os cria. O módulo de configuração registrado precisa exportá-los como globais; sem isso a agenda fica só em consulta (falha fechada)."
+    },
+    {
+      "tipo": "modulo",
+      "alvo": "acesso",
+      "motivo": "RegistroEmergenciaPropria (acesso_emergencial + trilha + outbox 'acesso.emergencia.aberta' no formato do alerta) está pronto em emergencia.controller.ts; ligar no modulo.ts do acesso quando o módulo for registrado (RegistroEmergenciaLegado foi removido)."
+    },
+    {
+      "tipo": "desmontagem",
+      "alvo": "apps/api/src/app.module.ts",
+      "motivo": "Ainda importa portaAgendaLegado/portaAgendaIndisponivel da agenda e RegistroEmergenciaLegado do acesso (removidos/movidos); fora do fecho migrado, sai na última onda."
+    },
+    {
+      "tipo": "dominio",
+      "alvo": "packages/dominio-agenda (encaixe.ts)",
+      "motivo": "A regra do encaixe diante de bloqueio (vetoDeBloqueioNoEncaixe: horário da grade bloqueado ou bloqueio de período ativo cobrindo o instante) está pura em apps/api/src/modulos/agenda/regra-encaixe.ts, usada pelas duas portas; o lote não edita o pacote de domínio. Mover para packages/dominio-agenda/src/encaixe.ts e exportar no index."
+    },
+    {
+      "tipo": "worker",
+      "alvo": "apps/worker/src/relay-outbox.ts",
+      "motivo": "O registro próprio da quebra de vidro grava no outbox o ponto 'acesso.emergencia.aberta' (o FORMATO_PONTO do núcleo não aceita hífen) com conteudo já no formato do job 'alerta-emergencia' do EmailService: {rede, hospital, idEmergencia, idUsuario, motivo, inicio, fim} (+ cliente). O relay migrado deve mapear esse ponto para o job 'alerta-emergencia' na fila email-<rede>; no mesmo commit, trocar RELAY_ENTREGA_ALERTA_EMERGENCIA para true em apps/api/src/modulos/acesso/emergencia.controller.ts (até lá o controlador enfileira o alerta direto; ligar um sem o outro duplica ou perde o alerta)."
+    }
+  ]
+}

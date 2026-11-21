@@ -56,7 +56,7 @@ import {
   type VinculoDefinicao,
 } from '@sgh/dominio-pep';
 import type { CategoriaAssistencial } from '@sgh/contratos';
-import type { FontesLidas, RegistroProntuarioLido } from '@sgh/legado';
+import type { FontesLidas, RegistroProntuarioLido } from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { PortaCadastro } from '../cadastro/porta.js';
 import type { ContextoProntuario, PortaProntuario } from './porta.js';

@@ -1,12 +1,12 @@
 // "Parâmetros hierárquicos por módulo" (M08; ficha, seção 7; regras 7, 8 e 10):
-//   GET /api/administracao/parametros          painel: parâmetros NOVOS com "explicar valor" para a sessão e os
-//                                              do LEGADO como o legado os vê (só leitura; 5 min de cache)
-//   GET /api/administracao/parametros/:chave    um parâmetro novo, com a explicação e as versões
+//   GET /api/administracao/parametros          painel: parâmetros do produto com "explicar valor" para a sessão
+//   GET /api/administracao/parametros/:chave    um parâmetro, com a explicação e as versões
 //   PUT /api/administracao/parametros/:chave    definir (versão nova; justificativa; crítico pede a senha)
 //   POST /api/administracao/parametros/:chave/retirada   retirar a sobreposição do nível e do alvo (W0-09): a
 //                                              vigente é fechada (quem, motivo) e o nível volta a herdar
-// Os parâmetros do legado são sempre os do banco do estabelecimento da sessão. A gravação vai à
-// SGH_CFG_PARAMETRO pela transação SGH_ do núcleo com a SGH_TRILHA junta; o cache é invalidado depois do commit.
+// A gravação vai a parametro_valor e parametro_valor_historico pelo Executor (trilha na mesma transação); o cache é
+// invalidado depois do commit.
+// Melhoria: o painel não mostra mais os parâmetros do sistema de origem (a lista "legado" do contrato vai vazia).
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Req } from '@nestjs/common';
 import {
   definicaoParametro,
@@ -37,9 +37,13 @@ import {
   CACHE_CONFIG,
   type CacheConfig,
   TTL_CONFIG_NOVO_S,
-  TTL_PARAMETROS_LEGADO_S,
 } from './cache-config.js';
-import { FONTE_CONFIGURACAO, type FonteConfiguracao } from './configuracao-fonte.js';
+import {
+  destinoNoContrato,
+  FONTE_CONFIGURACAO,
+  type FonteConfiguracao,
+  type TrilhaConfig,
+} from './configuracao-fonte.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
 
 @Controller('administracao/parametros')
@@ -75,6 +79,25 @@ export class ParametrosController {
     return { a, hospital, rede: a.sessao.rede ?? '', login, sujeito };
   }
 
+  private trilha(req: RequisicaoAutorizada, evento: string, operacao: string, alvo: string): TrilhaConfig {
+    const { a, rede, hospital, login } = this.sessao(req);
+    const chave = req.headers?.['idempotency-key'];
+    return {
+      rede,
+      hospital,
+      usuario: login,
+      usuarioId: a.sessao.usuario.id,
+      evento,
+      recurso: 'config.parametro',
+      operacao,
+      chaveNaturalAlvo: alvo.slice(0, 120),
+      resultado: 'sucesso',
+      estacao: estacaoDaRequisicao(req).slice(0, 80),
+      correlacao: correlacaoDaRequisicao(req, 'parametro').slice(0, 64),
+      chaveIdempotencia: typeof chave === 'string' ? chave : null,
+    };
+  }
+
   private valores(rede: string, hospital: string): Promise<ValorParametro[]> {
     return this.cache.lerOuCarregar(
       this.cache.chave(rede, hospital, 'parametros-novos'),
@@ -107,27 +130,16 @@ export class ParametrosController {
   @Get()
   @Permissao('config.parametro.ler')
   async painel(@Req() req: RequisicaoAutorizada): Promise<PainelParametros> {
-    const { rede, hospital, login, sujeito } = this.sessao(req);
-    const [valores, agora, legado] = await Promise.all([
+    const { rede, hospital, sujeito } = this.sessao(req);
+    const [valores, agora] = await Promise.all([
       this.valores(rede, hospital),
       this.fonte.relogio(rede, hospital),
-      this.cache.lerOuCarregar(
-        this.cache.chave(rede, hospital, 'parametros-legado', login),
-        TTL_PARAMETROS_LEGADO_S,
-        () => this.fonte.parametrosLegado(rede, hospital, login),
-      ),
     ]);
     return {
       estabelecimento: hospital,
       novos: this.descrever(valores, sujeito, agora),
-      legado,
-      resumoLegado: {
-        interpretadas: legado.filter(
-          (p) => p.situacao === 'interpretada' || p.situacao === 'fora-do-declarado',
-        ).length,
-        naoInterpretadas: legado.filter((p) => p.situacao === 'nao-interpretada').length,
-        ocultas: legado.filter((p) => p.situacao === 'oculta').length,
-      },
+      legado: [],
+      resumoLegado: { interpretadas: 0, naoInterpretadas: 0, ocultas: 0 },
     };
   }
 
@@ -145,7 +157,7 @@ export class ParametrosController {
 
   @Put(':chave')
   @Permissao('config.parametro.editar')
-  @AuditadoNoHandler('SGH_CFG_PARAMETRO e SGH_TRILHA na mesma transação SGH_ (definirParametro)')
+  @AuditadoNoHandler('parametro_valor e trilha na mesma transação do Executor (definirParametro)')
   async definir(@Param('chave') chave: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const def = definicaoParametro(chave);
     if (!def) throw new ErroProblema('nao-encontrado', 404, 'Parâmetro não registrado');
@@ -181,26 +193,20 @@ export class ParametrosController {
           hospital,
           fechar: plano.fechar,
           nova: plano.nova,
-          // Alvo de unidade e de empresa já conferido como código (planejarDefinicao: 422 alvo-invalido).
+          // Alvo de unidade já conferido como código (planejarDefinicao: 422 alvo-invalido).
           ...(p.data.nivel === 'unidade' ? { unidade: Number(p.data.alvo) } : {}),
-          ...(p.data.nivel === 'empresa' ? { empresa: Number(p.data.alvo) } : {}),
           ...(p.data.nivel === 'perfil' ? { perfil: p.data.alvo } : {}),
+          reautenticado: def.critico === true,
         },
-        {
-          rede,
-          hospital,
-          usuario: login,
-          evento: EVENTOS_AUDITAVEIS.parametroDefinido.codigo,
-          recurso: 'config.parametro',
-          operacao: 'config.definirParametro',
-          chaveNaturalAlvo: `${chave}:${p.data.nivel}:${p.data.alvo}`.slice(0, 120),
-          resultado: 'sucesso',
-          estacao: estacaoDaRequisicao(req).slice(0, 80),
-          correlacao: correlacaoDaRequisicao(req, 'parametro').slice(0, 64),
-        },
+        this.trilha(
+          req,
+          EVENTOS_AUDITAVEIS.parametroDefinido.codigo,
+          'config.definirParametro',
+          `${chave}:${p.data.nivel}:${p.data.alvo}`,
+        ),
       )
       .catch((e: unknown) => {
-        // Definição concorrente no mesmo nível e alvo (estado relido com trava ou índice único do 0016): 409.
+        // Definição concorrente no mesmo nível e alvo (estado relido com trava ou índice único): 409.
         throw falhaDaConfiguracao(
           e,
           'config.definirParametro',
@@ -208,13 +214,13 @@ export class ParametrosController {
         );
       });
     const atraso = await this.cache.invalidar(rede, hospital, ['parametros-novos'], Date.now());
-    return { id: ok.id, destino: this.fonte.destino, atrasoInvalidacaoMs: atraso, avisos: plano.avisos };
+    return { id: ok.id, destino: destinoNoContrato(this.fonte.destino), atrasoInvalidacaoMs: atraso, avisos: plano.avisos };
   }
 
   @Post(':chave/retirada')
   @HttpCode(200)
   @Permissao('config.parametro.editar')
-  @AuditadoNoHandler('SGH_CFG_PARAMETRO e SGH_TRILHA na mesma transação SGH_ (retirarSobreposicaoParametro)')
+  @AuditadoNoHandler('parametro_valor e trilha na mesma transação do Executor (retirarParametro)')
   async retirar(@Param('chave') chave: string, @Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const def = definicaoParametro(chave);
     if (!def) throw new ErroProblema('nao-encontrado', 404, 'Parâmetro não registrado');
@@ -254,18 +260,12 @@ export class ParametrosController {
           motivo: p.data.justificativa,
           por: login,
         },
-        {
-          rede,
-          hospital,
-          usuario: login,
-          evento: EVENTOS_AUDITAVEIS.parametroRetirado.codigo,
-          recurso: 'config.parametro',
-          operacao: 'config.retirarParametro',
-          chaveNaturalAlvo: `${chave}:${p.data.nivel}:${p.data.alvo}`.slice(0, 120),
-          resultado: 'sucesso',
-          estacao: estacaoDaRequisicao(req).slice(0, 80),
-          correlacao: correlacaoDaRequisicao(req, 'parametro').slice(0, 64),
-        },
+        this.trilha(
+          req,
+          EVENTOS_AUDITAVEIS.parametroRetirado.codigo,
+          'config.retirarParametro',
+          `${chave}:${p.data.nivel}:${p.data.alvo}`,
+        ),
       )
       .catch((e: unknown) => {
         throw falhaDaConfiguracao(
@@ -283,7 +283,7 @@ export class ParametrosController {
       fechadas: plano.fechar,
       valorAnterior: plano.valorAnterior,
       parametro: d,
-      destino: this.fonte.destino,
+      destino: destinoNoContrato(this.fonte.destino),
       atrasoInvalidacaoMs: atraso,
     };
   }

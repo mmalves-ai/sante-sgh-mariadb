@@ -1,4 +1,4 @@
-// W1-04 (mercado): termos de consentimento e LGPD do balcão. Gravação só do novo (SGH_REC_TERMO_*) com a SGH_TRILHA
+// W1-04 (mercado): termos de consentimento e LGPD do balcão. Gravação dos termos com a trilha
 // na mesma transação; o hash da assinatura fica no registro, nunca na trilha.
 //   GET  /api/recepcao/termos/modelos                         recepcao.senha.ler (versões, situação, assinaturas)
 //   POST /api/recepcao/termos/modelos                         recepcao.termo.editar (versão 1)
@@ -48,7 +48,7 @@ function codigoDaRota(v: string): string {
 }
 
 const EV_MODELO = EVENTOS_AUDITAVEIS.recepcaoTermoModeloAlterado.codigo;
-const ALVO_MODELO = (codigo: string) => ({ tabela: 'SGH_REC_TERMO_MODELO', id: codigo });
+const ALVO_MODELO = (codigo: string) => ({ tabela: 'termo_consentimento_modelo', id: codigo });
 
 @Controller('recepcao/termos')
 export class TermosRecepcaoController {
@@ -99,11 +99,11 @@ export class TermosRecepcaoController {
   @Post('modelos')
   @HttpCode(201)
   @Permissao('recepcao.termo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_TERMO_MODELO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('termo de consentimento com a trilha na mesma transação')
   async incluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaIncluirModeloTermo, b);
-    const id = await this.apoio.sgh(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(e.codigo), (g) =>
+    const id = await this.apoio.gravar(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(e.codigo), (g) =>
       g.incluirModeloTermo({ ...e, usuario: s.login }),
     );
     return { ok: true as const, id, versao: 1, mensagem: 'Termo incluído (versão 1).' };
@@ -112,12 +112,12 @@ export class TermosRecepcaoController {
   @Post('modelos/:codigo/versoes')
   @HttpCode(201)
   @Permissao('recepcao.termo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_TERMO_MODELO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('termo de consentimento com a trilha na mesma transação')
   async novaVersao(@Param('codigo') c: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const codigo = codigoDaRota(c);
     const e = corpo(esquemaNovaVersaoTermo, b);
-    const r = await this.apoio.sgh(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
+    const r = await this.apoio.gravar(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
       g.novaVersaoModeloTermo({ ...e, codigo, usuario: s.login }),
     );
     return { ok: true as const, ...r, mensagem: `Versão ${r.versao} gravada; a anterior fica no histórico.` };
@@ -126,12 +126,12 @@ export class TermosRecepcaoController {
   @Post('modelos/:codigo/situacao')
   @HttpCode(200)
   @Permissao('recepcao.termo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_TERMO_SITUACAO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('termo de consentimento com a trilha na mesma transação')
   async situacao(@Param('codigo') c: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const codigo = codigoDaRota(c);
     const e = corpo(esquemaSituacaoTermo, b);
-    await this.apoio.sgh(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
+    await this.apoio.gravar(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
       g.situacaoModeloTermo({ ...e, codigo, usuario: s.login }),
     );
     return { ok: true as const, mensagem: e.ativo ? 'Termo reativado.' : 'Termo inativado.' };
@@ -140,14 +140,12 @@ export class TermosRecepcaoController {
   @Post('modelos/:codigo/excluir')
   @HttpCode(200)
   @Permissao('recepcao.termo.editar')
-  @AuditadoNoHandler(
-    'exclusão só do novo (SGH_REC_TERMO_MODELO, retrato em SGH_HIST_EXCLUSAO) com a SGH_TRILHA junto',
-  )
+  @AuditadoNoHandler('exclusão do modelo de termo com a trilha junto')
   async excluir(@Param('codigo') c: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const codigo = codigoDaRota(c);
     const e = corpo(esquemaExcluirTermo, b);
-    await this.apoio.sgh(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
+    await this.apoio.gravar(s, EV_MODELO, 'recepcao.termo', ALVO_MODELO(codigo), (g) =>
       g.excluirModeloTermo({ codigo, motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true as const, mensagem: 'Termo excluído.' };
@@ -181,15 +179,15 @@ export class TermosRecepcaoController {
   @Post('assinaturas')
   @HttpCode(201)
   @Permissao('recepcao.termo.assinar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_TERMO_ASSINATURA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('termo de consentimento com a trilha na mesma transação')
   async assinar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAssinarTermo, b);
-    const r = await this.apoio.sgh(
+    const r = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoTermoAssinado.codigo,
       'recepcao.termo',
-      (x: { id: number }) => ({ tabela: 'SGH_REC_TERMO_ASSINATURA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'termo_consentimento_recepcao', id: String(x.id) }),
       (g) => g.assinarTermo({ ...e, usuario: s.login }),
     );
     return { ok: true as const, ...r, mensagem: 'Termo assinado e guardado no prontuário.' };
@@ -198,16 +196,16 @@ export class TermosRecepcaoController {
   @Post('assinaturas/:id/revogar')
   @HttpCode(200)
   @Permissao('recepcao.termo.assinar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_TERMO_REVOGACAO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('termo de consentimento com a trilha na mesma transação')
   async revogar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const assinatura = idDaRota(id);
     const e = corpo(esquemaRevogarTermo, b);
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoTermoRevogado.codigo,
       'recepcao.termo',
-      { tabela: 'SGH_REC_TERMO_REVOGACAO', id: String(assinatura) },
+      { tabela: 'termo_consentimento_recepcao', id: String(assinatura) },
       (g) => g.revogarTermo({ assinatura, motivo: e.motivo, usuario: s.login }),
     );
     return { ok: true as const, mensagem: 'Termo revogado; a assinatura continua visível no histórico.' };

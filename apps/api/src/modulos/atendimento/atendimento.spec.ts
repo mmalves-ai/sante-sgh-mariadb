@@ -10,14 +10,20 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { contextoDeTeste, moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAtendimento } from './modulo.js';
 import type { SessaoCadastro } from '../cadastro/comum.js';
 import { PortaRecepcaoMemoria } from '../recepcao/porta-memoria.js';
 import { ApoiosAtendimento } from './atendimento.controller.js';
 import { AvisosAtendimento } from './avisos.js';
-import { portaAtendimentoIndisponivel } from './porta-legado.js';
+import { portaAtendimentoIndisponivel } from './porta.js';
 import { PortaAtendimentoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,atendimento',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const recepcao = new PortaRecepcaoMemoria({ estado: () => 'verde' });
@@ -31,10 +37,13 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    recepcao,
-    atendimento,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        atendimento: (ctx) => moduloAtendimento(ctx, { porta: atendimento }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -640,17 +649,19 @@ describe('avisos de mudança da fila e do quadro', () => {
     const ligados: string[] = [];
     let avisoDoVigia: (() => void) | null = null;
     const vigia = {
-      assinar: (h: string, canal: string, o: () => void) => {
-        ligados.push(`${h}:${canal}`);
+      // O vigia escuta pelo cliente e pelo estabelecimento (id); sem o mapa da API (memória), estabelecimento nulo.
+      assinar: (alvo: { cliente: string; estabelecimento: number | null }, canal: string, o: () => void) => {
+        const k = `${alvo.cliente}/${alvo.estabelecimento}:${canal}`;
+        ligados.push(k);
         avisoDoVigia = o;
-        return () => ligados.splice(ligados.indexOf(`${h}:${canal}`), 1);
+        return () => ligados.splice(ligados.indexOf(k), 1);
       },
     };
     const a = new AvisosAtendimento(vigia as never);
     const vistos: number[] = [];
     const um = a.assinar('pc', (v) => vistos.push(v));
     const dois = a.assinar('pc', (v) => vistos.push(v * 10));
-    expect(ligados).toEqual(['pc:senhas']);
+    expect(ligados).toEqual(['/null:senhas']);
     a.avisar('pc');
     (avisoDoVigia as unknown as () => void)();
     expect(vistos).toEqual([1, 10, 2, 20]);
@@ -686,9 +697,8 @@ describe('avisos de mudança da fila e do quadro', () => {
 describe('falha fechada', () => {
   it('a porta indisponível responde 503 em toda leitura e nunca grava', async () => {
     const p = portaAtendimentoIndisponivel();
-    await expect(p.relogio({ rede: 'r', hospital: 'h' })).rejects.toMatchObject({ status: 503 });
-    expect((await p.podeGravar({ rede: 'r', hospital: 'h' }, 'atendimento.abrirAtendimento', 'U')).pode).toBe(
-      false,
-    );
+    const c = contextoDeTeste('h', 'r');
+    await expect(p.relogio(c)).rejects.toMatchObject({ status: 503 });
+    expect((await p.podeGravar(c, 'atendimento.abrirAtendimento')).pode).toBe(false);
   });
 });

@@ -32,7 +32,7 @@ import {
   relogioDoProtocolo,
   sugestoesDaClassificacao,
 } from '@sgh/dominio-recepcao';
-import type { AtendimentoPaLegado, ProtocoloPacienteLido, VersaoGerenciadoLida } from '@sgh/legado';
+import type { AtendimentoPa, ProtocoloPaciente, VersaoGerenciado } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
   ContextoClassificacao,
@@ -65,7 +65,7 @@ export function impressaoGerenciado(c: ConteudoGerenciado): string {
     .digest('hex');
 }
 
-const eventosDe = (p: ProtocoloPacienteLido): EventoDoProtocolo[] =>
+const eventosDe = (p: ProtocoloPaciente): EventoDoProtocolo[] =>
   p.eventos.map((e) => ({
     tipo: e.tipo,
     codigo: e.codigo,
@@ -89,11 +89,9 @@ export class ServicoProtocoloGerenciado {
   ) {}
 
   /** As versões publicadas, cada uma com o conteúdo conferido pelo esquema e pela impressão. */
-  async versoes(
-    c: ContextoClassificacao,
-  ): Promise<{ v: VersaoGerenciadoLida; conteudo: ConteudoGerenciado }[]> {
+  async versoes(c: ContextoClassificacao): Promise<{ v: VersaoGerenciado; conteudo: ConteudoGerenciado }[]> {
     const vs = await this.porta.versoesGerenciadas(c);
-    const r: { v: VersaoGerenciadoLida; conteudo: ConteudoGerenciado }[] = [];
+    const r: { v: VersaoGerenciado; conteudo: ConteudoGerenciado }[] = [];
     for (const v of vs) {
       const conteudo = esquemaConteudoGerenciado.safeParse(v.conteudo);
       if (!conteudo.success || impressaoGerenciado(conteudo.data) !== v.impressao) continue;
@@ -103,13 +101,13 @@ export class ServicoProtocoloGerenciado {
   }
 
   /** A vigente de cada tipo (a de maior versão). */
-  vigentesDe(vs: readonly { v: VersaoGerenciadoLida; conteudo: ConteudoGerenciado }[]) {
-    const m = new Map<string, { v: VersaoGerenciadoLida; conteudo: ConteudoGerenciado }>();
+  vigentesDe(vs: readonly { v: VersaoGerenciado; conteudo: ConteudoGerenciado }[]) {
+    const m = new Map<string, { v: VersaoGerenciado; conteudo: ConteudoGerenciado }>();
     for (const x of vs) if (!m.has(x.v.tipo) || m.get(x.v.tipo)!.v.versao < x.v.versao) m.set(x.v.tipo, x);
     return m;
   }
 
-  resumo(v: VersaoGerenciadoLida, vigente: boolean): VersaoGerenciadoResumo {
+  resumo(v: VersaoGerenciado, vigente: boolean): VersaoGerenciadoResumo {
     return {
       id: v.id,
       tipo: v.tipo as TipoProtocoloGerenciado,
@@ -135,7 +133,7 @@ export class ServicoProtocoloGerenciado {
 
   /** O protocolo do paciente pronto para a tela (o relógio pelo motor). */
   doPaciente(
-    p: ProtocoloPacienteLido,
+    p: ProtocoloPaciente,
     conteudo: ConteudoGerenciado | undefined,
     versao: number,
     at: { paciente: string; senha: string | null } | undefined,
@@ -231,7 +229,7 @@ export class ServicoProtocoloGerenciado {
     const desde = truncado
       ? periodo.reduce((m, p) => (p.incluidoEm < m ? p.incluidoEm : m), periodo[0]!.incluidoEm)
       : inicioPeriodo;
-    const montar = (p: ProtocoloPacienteLido) => {
+    const montar = (p: ProtocoloPaciente) => {
       const d = porId.get(p.gerenciado);
       return this.doPaciente(p, d?.conteudo, d?.v.versao ?? 0, porCab.get(p.cabecalho), agora);
     };
@@ -306,7 +304,7 @@ export class ServicoProtocoloGerenciado {
   /** O chip do quadro do PA: os protocolos abertos de cada atendimento com a próxima meta. */
   async noQuadro(
     c: ContextoClassificacao,
-    itens: readonly Pick<AtendimentoPaLegado, 'cabecalho' | 'reg'>[],
+    itens: readonly Pick<AtendimentoPa, 'cabecalho' | 'reg'>[],
   ): Promise<Map<number, ProtocoloNoQuadro[]>> {
     const r = new Map<number, ProtocoloNoQuadro[]>();
     if (itens.length === 0) return r;

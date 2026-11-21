@@ -3,13 +3,7 @@
 // nunca repetido, versão vista, rascunho só no lugar, publicado imutável, quatro olhos, aposentar só o publicado). O
 // modelo do prontuário não é criado aqui (a ponte é do executor, desligada): `executar` recusa.
 import { randomUUID } from 'node:crypto';
-import type {
-  EspecialidadeLida,
-  EventoFormNovoLido,
-  EstadoFormNovoSgh,
-  FormNovoLido,
-  PerguntaDoBancoLegado,
-} from '@sgh/legado';
+import type { EspecialidadeLida, EventoFormularioNovoLido, EstadoFormularioNovo, FormularioNovoLido, PerguntaDoBancoLida } from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
   ContextoFormularioNovo,
@@ -23,7 +17,7 @@ const recusa = (codigo: string, detalhe: string) =>
 /** Códigos de modelo do prontuário sintéticos (os mais usados da cópia, só os códigos). */
 const CODIGOS_SINTETICOS = ['ENF021', 'MORSE', 'ENF02', 'ENF091', 'NUT01', 'EVAM', 'E08', 'M12'];
 
-const BANCO_SINTETICO: PerguntaDoBancoLegado[] = [
+const BANCO_SINTETICO: PerguntaDoBancoLida[] = [
   {
     id: 9001,
     descricao: 'Peso',
@@ -62,8 +56,8 @@ const ESPECIALIDADES_SINTETICAS: EspecialidadeLida[] = [
 
 interface Estado {
   seq: number;
-  versoes: FormNovoLido[];
-  eventos: Map<number, EventoFormNovoLido[]>;
+  versoes: FormularioNovoLido[];
+  eventos: Map<number, EventoFormularioNovoLido[]>;
 }
 
 const p2 = (x: number) => String(x).padStart(2, '0');
@@ -77,10 +71,11 @@ export class PortaFormularioNovoMemoria implements PortaFormularioNovo {
   private readonly estados = new Map<string, Estado>();
 
   private e(c: ContextoFormularioNovo): Estado {
-    let s = this.estados.get(c.hospital);
+    const chave = `${c.cliente}:${c.estabelecimento ?? 0}`;
+    let s = this.estados.get(chave);
     if (!s) {
       s = { seq: 0, versoes: [], eventos: new Map() };
-      this.estados.set(c.hospital, s);
+      this.estados.set(chave, s);
     }
     return s;
   }
@@ -105,13 +100,13 @@ export class PortaFormularioNovoMemoria implements PortaFormularioNovo {
     const antes = { seq: s.seq, versoes: structuredClone(s.versoes), eventos: structuredClone(s.eventos) };
     const evento = (
       id: number,
-      tipo: EventoFormNovoLido['tipo'],
+      tipo: EventoFormularioNovoLido['tipo'],
       por: string,
       hash: string | null,
       texto: string | null,
     ) =>
       s.eventos.set(id, [...(s.eventos.get(id) ?? []), { tipo, por, em: agora(), contentHash: hash, texto }]);
-    const trocar = (id: number, f: (v: FormNovoLido) => FormNovoLido) => {
+    const trocar = (id: number, f: (v: FormularioNovoLido) => FormularioNovoLido) => {
       s.versoes = s.versoes.map((v) => (v.id === id ? f(v) : v));
     };
     const g: GravadorFormularioNovo = {
@@ -195,7 +190,7 @@ export class PortaFormularioNovoMemoria implements PortaFormularioNovo {
       mudar: async (m) => {
         const v = s.versoes.find((x) => x.id === m.id);
         if (!v) throw recusa('nao-encontrado', 'Formulário novo não encontrado neste estabelecimento.');
-        const de: Record<string, EstadoFormNovoSgh> = {
+        const de: Record<string, EstadoFormularioNovo> = {
           revisao: 'rascunho',
           aprovado: 'revisao',
           devolvido: 'revisao',

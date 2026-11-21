@@ -1,4 +1,4 @@
-// M47 (etapa 2): a chave de recurso (SGH_CFG_LIBERACAO) vale para quem pergunta (pessoa, grupo do legado, setor ativo),
+// M47 (etapa 2): a chave de recurso (liberação por estabelecimento) vale para quem pergunta (pessoa, grupo do legado, setor ativo),
 // com os pré-requisitos declarados cumpridos? É a mesma conta das telas de trabalho (ApoioGravacao) para quem não tem
 // a porta de gravação delas (o CRUD genérico dos cadastros da agência, ligado pela `agencia.completa`). Falha fechada:
 // sem a configuração, desligada.

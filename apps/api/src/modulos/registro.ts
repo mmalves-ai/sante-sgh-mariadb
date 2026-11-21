@@ -36,7 +36,13 @@ export type CarregadorModulo = () => Promise<ModuloApi>;
  * Módulos migrados: nome → carregador. Vazio na F2-L; a F2.2/F2.3 inclui cada módulo migrado, por exemplo
  * `cadastro: () => import('./cadastro/modulo.js')`.
  */
-export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({});
+export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({
+  agenda: () => import('./agenda/modulo.js'),
+  atendimento: () => import('./atendimento/modulo.js'),
+  cadastro: () => import('./cadastro/modulo.js'),
+  config: () => import('./config/modulo.js'),
+  recepcao: () => import('./recepcao/modulo.js'),
+});
 
 export class ErroModulos extends Error {
   override readonly name = 'ErroModulos';

@@ -1,31 +1,42 @@
 // Porta da agenda de exames EM MEMÓRIA (M18): a sessão sintética de dev/ci (E2E) lê e grava agendas, horários,
-// marcações, cancelamentos e a cobertura SINTÉTICOS, sem tocar a cópia. As gravações aplicam o mesmo Zod das receitas
-// (operacao(op).entrada) e as mesmas recusas (agenda inativa, horário inexistente, ocupado ou passado, convênio
+// marcações, cancelamentos e a cobertura SINTÉTICOS, sem tocar banco nenhum. As gravações aplicam o mesmo Zod do
+// contrato (esquemas.ts, o mesmo da porta do banco) e as mesmas recusas (agenda inativa, horário inexistente, ocupado ou passado, convênio
 // inativo ou não aceito, paciente sem prontuário, check-in, a última linha da cobertura, prévia desatualizada); o
 // relógio é o do estabelecimento (America/Sao_Paulo). Os pacientes são os do cadastro em memória (marca
 // "SINTETICO"). Nenhum nome aqui é de pessoa real; os nomes de exame são do vocabulário clínico.
 import { type EstadoOperacao, textoCurtoDoMotivo } from '@sgh/contratos';
-import { tpAgeDaMarcacao } from '@sgh/dominio-agenda';
-import {
-  type AgendaExameLida,
-  type CancelamentoExameLido,
-  type CoberturaExameLida,
-  type ContextoOperacao,
-  ErroOperacao,
-  type ExtensaoExameLida,
-  type FonteCatalogo,
-  type GeracaoLida,
-  type LiberacaoConsultada,
-  type LinhaEscalaExameLida,
-  type MarcacaoExameLida,
-  operacao,
-  recusa,
-  type RelogioLido,
-  type ResultadoOperacao,
-} from '@sgh/legado';
-import { relogioLocal } from '../agenda/public-api.js';
-import type { ContextoPortaM18 } from './apoio-gravacao.js';
-import type { GravadorSghExame, PortaExame } from './porta.js';
+import { estadoDoHorarioExame } from '@sgh/dominio-agenda';
+import { type ContextoOperacao, ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import { relogioNoFuso } from './relogio.js';
+import type { ContextoPortaM18, LiberacaoGravacao } from './apoio-gravacao.js';
+import { ESQUEMAS_OPERACAO_EXAME, OPERACOES_EXAME_DESLIGADAS } from './esquemas.js';
+import type { GravadorCoberturaExame, PortaExame } from './porta.js';
+import type {
+  AgendaExame,
+  CancelamentoExame,
+  CoberturaExame,
+  ExtensaoExame,
+  GeracaoGrade,
+  LinhaEscalaExame,
+  MarcacaoExame,
+  RelogioEstabelecimento,
+} from './tipos.js';
+
+/** Faixa sintética sem pausa, uma vaga, sem feriado e vigente desde sempre. */
+const FAIXA_SEM_EXTRAS = {
+  intervaloInicio: null,
+  intervaloFim: null,
+  vagas: 1,
+  atendeFeriado: false,
+  vigenciaInicio: '2000-01-01',
+  vigenciaFim: null,
+} as const;
+
+
+/** Estado de cada operação no catálogo de operações do estabelecimento (null = operação desconhecida). */
+export interface CatalogoOperacoesExame {
+  estado(operacao: string, estabelecimento: string): EstadoOperacao | null;
+}
 
 const M = 'SINTETICO';
 
@@ -38,7 +49,7 @@ const semana = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() + 1;
 const min = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(2, 4));
 const hhmm = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}`;
-const passou = (h: { data: string; hora: string }, r: RelogioLido) =>
+const passou = (h: { data: string; hora: string }, r: RelogioEstabelecimento) =>
   h.data < r.hoje || (h.data === r.hoje && h.hora <= r.hhmm);
 
 interface AgendaM {
@@ -48,7 +59,7 @@ interface AgendaM {
   exame: string;
   categoria: number;
   duracao: string;
-  ativa: string;
+  ativa: boolean;
   unidade: number;
   convenios: number[];
 }
@@ -72,8 +83,7 @@ interface MarcacaoM {
   pront: number;
   paciente: string;
   conv: number;
-  tpAge: number;
-  atendido: string;
+  atendido: boolean;
   usuario: string;
   dtAge: string;
   hrAge: string;
@@ -86,11 +96,11 @@ interface Estado {
   agendas: AgendaM[];
   horarios: HorarioM[];
   marcacoes: MarcacaoM[];
-  cancelamentos: CancelamentoExameLido[];
-  escala: Map<number, LinhaEscalaExameLida[]>;
-  geracoes: Map<number, GeracaoLida[]>;
-  ext: Map<number, ExtensaoExameLida>;
-  cobertura: (CoberturaExameLida & { ativo: boolean })[];
+  cancelamentos: (CancelamentoExame & { agenda: number })[];
+  escala: Map<number, LinhaEscalaExame[]>;
+  geracoes: Map<number, GeracaoGrade[]>;
+  ext: Map<number, ExtensaoExame>;
+  cobertura: (CoberturaExame & { ativo: boolean })[];
   seq: number;
   idem: Map<string, { hash: string; resultado: ResultadoOperacao }>;
 }
@@ -110,7 +120,7 @@ export const EXAMES_SINTETICOS = [
 ];
 const FERIADOS = ['01-01', '04-21', '09-07', '11-02', '11-15', '12-25'];
 
-function semear(r: RelogioLido): Estado {
+function semear(r: RelogioEstabelecimento): Estado {
   const agendas: AgendaM[] = [
     {
       id: 951,
@@ -119,7 +129,7 @@ function semear(r: RelogioLido): Estado {
       exame: 'U',
       categoria: 24,
       duracao: '0020',
-      ativa: 'S',
+      ativa: true,
       unidade: 2,
       convenios: [],
     },
@@ -130,7 +140,7 @@ function semear(r: RelogioLido): Estado {
       exame: 'E',
       categoria: 21,
       duracao: '0030',
-      ativa: 'S',
+      ativa: true,
       unidade: 2,
       convenios: [10, 306],
     },
@@ -141,7 +151,7 @@ function semear(r: RelogioLido): Estado {
       exame: 'O',
       categoria: 42,
       duracao: '0015',
-      ativa: 'S',
+      ativa: true,
       unidade: 2,
       convenios: [],
     },
@@ -152,7 +162,7 @@ function semear(r: RelogioLido): Estado {
       exame: 'U',
       categoria: 24,
       duracao: '0020',
-      ativa: 'N',
+      ativa: false,
       unidade: 2,
       convenios: [],
     },
@@ -204,17 +214,18 @@ function semear(r: RelogioLido): Estado {
         horaInicio: f.ini,
         horaFim: f.fim,
         exame: a.exame,
+        ...FAIXA_SEM_EXTRAS,
       })),
     );
     e.geracoes.set(a.id, [
       {
-        status: 'C',
+        situacao: 'gerada',
         inicio: somar(r.hoje, -3),
         fim: somar(r.hoje, 21),
         em: somar(r.hoje, -3),
         hora: '0900',
         duracao: a.duracao,
-        semanas: 'FTTTTTF',
+        dias: [2, 3, 4, 5, 6],
         usuario: `COORDENACAO.${M}`,
       },
     ]);
@@ -247,7 +258,7 @@ export class PortaExameMemoria implements PortaExame {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
   constructor(
-    private readonly catalogo: FonteCatalogo | null = null,
+    private readonly catalogo: CatalogoOperacoesExame | null = null,
     private readonly lerPacientes: (
       c: ContextoPortaM18,
       ids: readonly number[],
@@ -261,12 +272,13 @@ export class PortaExameMemoria implements PortaExame {
         ativo: boolean;
       }[]
     > = async () => [],
-    private readonly relogioFn: () => RelogioLido = () => relogioLocal(),
+    private readonly relogioFn: () => RelogioEstabelecimento = () => relogioNoFuso(),
   ) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
-    if (!s) this.porHospital.set(c.hospital, (s = semear(this.relogioFn())));
+    const chave = estabelecimentoDe(c);
+    let s = this.porHospital.get(chave);
+    if (!s) this.porHospital.set(chave, (s = semear(this.relogioFn())));
     return s;
   }
 
@@ -274,17 +286,17 @@ export class PortaExameMemoria implements PortaExame {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoConsultada> {
-    const e = this.estado(op, c.hospital);
+  async podeGravar(c: ContextoPortaM18, op: string): Promise<LiberacaoGravacao> {
+    const e = this.estado(op, estabelecimentoDe(c));
     if (e === null || e === 'bloqueada')
       return {
         pode: false,
         codigo: 'operacao-bloqueada',
         motivo: 'A gravação está bloqueada neste estabelecimento (catálogo de operações).',
       };
-    const r = operacao(op).receita;
-    if (r.pendente)
-      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Falta provar: ${r.pendente}.` };
+    const desligada = OPERACOES_EXAME_DESLIGADAS[op];
+    if (desligada)
+      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Operação desligada: ${desligada}.` };
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -301,14 +313,15 @@ export class PortaExameMemoria implements PortaExame {
   }
 
   async executar(c: ContextoPortaM18, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
-    const analise = o.entrada.safeParse(entradaBruta);
+    const esquema = ESQUEMAS_OPERACAO_EXAME[op];
+    if (!esquema) throw recusa('operacao-especificada', 'Operação desconhecida na agenda de exames.');
+    const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -321,8 +334,10 @@ export class PortaExameMemoria implements PortaExame {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    if (o.receita.pendente) throw recusa('operacao-especificada', `Falta provar: ${o.receita.pendente}.`);
-    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.usuarioLegado); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const desligada = OPERACOES_EXAME_DESLIGADAS[op];
+    if (desligada) throw recusa('operacao-especificada', `Operação desligada: ${desligada}.`);
+    const login = `USUARIO.${ctx.usuario ?? 0}`;
+    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, login); // eslint-disable-line @typescript-eslint/no-explicit-any
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -361,8 +376,8 @@ export class PortaExameMemoria implements PortaExame {
     return p;
   }
 
-  private vaga(s: Estado, a: AgendaM, data: string, hora: string, r: RelogioLido): HorarioM {
-    if (a.ativa !== 'S')
+  private vaga(s: Estado, a: AgendaM, data: string, hora: string, r: RelogioEstabelecimento): HorarioM {
+    if (!a.ativa)
       throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita marcação nem geração.');
     if (passou({ data, hora }, r))
       throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
@@ -383,7 +398,7 @@ export class PortaExameMemoria implements PortaExame {
     p: { id: number; nome: string; prontuario: number; telefone: string | null; celular: string | null },
     conv: number,
     obs: string | null,
-    r: RelogioLido,
+    r: RelogioEstabelecimento,
     login: string,
   ): MarcacaoM {
     h.paciente = p.nome;
@@ -397,8 +412,7 @@ export class PortaExameMemoria implements PortaExame {
       pront: p.prontuario,
       paciente: p.nome,
       conv,
-      tpAge: tpAgeDaMarcacao(a.categoria, h.exame),
-      atendido: 'F',
+      atendido: false,
       usuario: login,
       dtAge: r.hoje,
       hrAge: r.hhmm,
@@ -420,7 +434,7 @@ export class PortaExameMemoria implements PortaExame {
         'Marcação não encontrada',
         'A marcação não existe mais.',
       );
-    if (m.atendido === 'T')
+    if (m.atendido)
       throw recusa('ja-atendido', 'O exame já foi atendido: a marcação não pode mais ser desfeita.');
     if (m.senha)
       throw recusa(
@@ -430,9 +444,10 @@ export class PortaExameMemoria implements PortaExame {
     return m;
   }
 
-  private desfazer(s: Estado, m: MarcacaoM, motivo: string, r: RelogioLido, login: string) {
+  private desfazer(s: Estado, m: MarcacaoM, motivo: string, r: RelogioEstabelecimento, login: string) {
     const a = this.agendaM(s, m.agenda);
     s.cancelamentos.unshift({
+      agenda: a.id,
       nomeAgenda: a.nome,
       data: m.data,
       hora: m.hora,
@@ -478,14 +493,7 @@ export class PortaExameMemoria implements PortaExame {
       case 'agenda.cancelarExame': {
         const m = this.marcacaoM(s, e['marcacao']);
         this.desfazer(s, m, textoCurtoDoMotivo(e['motivo'], e['complemento']), r, login);
-        return {
-          marcacao: m.id,
-          nome: this.agendaM(s, m.agenda).nome,
-          crm: 0,
-          data: m.data,
-          hora: m.hora,
-          hrCan: r.hhmm,
-        };
+        return { marcacao: m.id, agenda: m.agenda, data: m.data, hora: m.hora };
       }
       case 'agenda.remarcarExame': {
         const m = this.marcacaoM(s, e['marcacao']);
@@ -521,7 +529,7 @@ export class PortaExameMemoria implements PortaExame {
       }
       case 'agenda.gerarGradeExame': {
         const a = this.agendaM(s, e['agenda']);
-        if (a.ativa !== 'S')
+        if (!a.ativa)
           throw recusa('agenda-inativa', 'A agenda de exames está inativa: não aceita marcação nem geração.');
         const horarios = e['horarios'] as { data: string; hora: string }[];
         if (
@@ -561,22 +569,23 @@ export class PortaExameMemoria implements PortaExame {
             horaInicio: l.horaInicio,
             horaFim: l.horaFim,
             exame: a.exame,
+            ...FAIXA_SEM_EXTRAS,
           })),
         );
         s.geracoes.set(a.id, [
           {
-            status: 'C',
+            situacao: 'gerada',
             inicio: e['de'],
             fim: e['ate'],
             em: r.hoje,
             hora: r.hhmm,
             duracao: e['duracao'],
-            semanas: (e['semanas'] as string[]).join(''),
+            dias: (e['semanas'] as string[]).flatMap((x, i) => (x === 'T' ? [i + 1] : [])),
             usuario: login,
           },
           ...(s.geracoes.get(a.id) ?? []),
         ]);
-        return { agenda: a.id, horarios: horarios.length, dtCriacao: r.hoje, hrCriacao: r.hhmm };
+        return { agenda: a.id, horarios: horarios.length };
       }
       case 'agenda.definirCoberturaExame': {
         const a = this.agendaM(s, e['agenda']);
@@ -605,14 +614,14 @@ export class PortaExameMemoria implements PortaExame {
   async gravarSgh<T>(
     c: ContextoPortaM18,
     _trilha: unknown,
-    fn: (g: GravadorSghExame) => Promise<T>,
+    fn: (g: GravadorCoberturaExame) => Promise<T>,
   ): Promise<T> {
     const s = this.e(c);
     return fn({
       incluirCobertura: async (r) => {
         if (
           s.cobertura.some(
-            (x) => x.ativo && x.agenda === r.agenda && x.exame === r.idExame && x.convenio === r.convenio,
+            (x) => x.ativo && x.agenda === r.agenda && x.exame === r.exame && x.convenio === r.convenio,
           )
         )
           throw recusa('ja-coberto', 'Esta cobertura já está na agenda.');
@@ -620,8 +629,8 @@ export class PortaExameMemoria implements PortaExame {
         s.cobertura.push({
           id,
           agenda: r.agenda,
-          exame: r.idExame,
-          exameNome: EXAMES_SINTETICOS.find((x) => x.id === r.idExame)?.nome ?? `Exame ${r.idExame}`,
+          exame: r.exame,
+          exameNome: EXAMES_SINTETICOS.find((x) => x.id === r.exame)?.nome ?? `Exame ${r.exame}`,
           convenio: r.convenio,
           convenioNome: CONVENIOS_EXAME_SINTETICOS.find((x) => x.codigo === r.convenio)?.nome ?? null,
           ativo: true,
@@ -631,7 +640,7 @@ export class PortaExameMemoria implements PortaExame {
       encerrarCobertura: async (r) => {
         let k = 0;
         for (const x of s.cobertura)
-          if (x.ativo && x.agenda === r.agenda && x.exame === r.idExame && x.convenio === r.convenio) {
+          if (x.ativo && x.agenda === r.agenda && x.exame === r.exame && x.convenio === r.convenio) {
             x.ativo = false;
             k++;
           }
@@ -640,11 +649,11 @@ export class PortaExameMemoria implements PortaExame {
     });
   }
 
-  async relogio(): Promise<RelogioLido> {
+  async relogio(): Promise<RelogioEstabelecimento> {
     return this.relogioFn();
   }
 
-  private lida(s: Estado, a: AgendaM): AgendaExameLida {
+  private lida(s: Estado, a: AgendaM): AgendaExame {
     const datas = s.horarios
       .filter((h) => h.agenda === a.id)
       .map((h) => h.data)
@@ -683,41 +692,45 @@ export class PortaExameMemoria implements PortaExame {
     }));
   }
 
-  async escala(c: ContextoPortaM18, nome: string) {
-    const s = this.e(c);
-    const a = s.agendas.find((x) => x.nome === nome);
-    return a ? (s.escala.get(a.id) ?? []) : [];
+  async escala(c: ContextoPortaM18, agenda: number, periodo?: { de: string; ate: string }) {
+    const linhas = this.e(c).escala.get(agenda) ?? [];
+    return periodo
+      ? linhas.filter((l) => l.vigenciaInicio <= periodo.ate && (l.vigenciaFim === null || l.vigenciaFim >= periodo.de))
+      : linhas;
   }
 
-  async geracoes(c: ContextoPortaM18, nome: string) {
-    const s = this.e(c);
-    const a = s.agendas.find((x) => x.nome === nome);
-    return a ? (s.geracoes.get(a.id) ?? []) : [];
+  async horariosExistentes(c: ContextoPortaM18, agenda: number, de: string, ate: string) {
+    return this.e(c)
+      .horarios.filter((h) => h.agenda === agenda && h.data >= de && h.data <= ate)
+      .map((h) => `${h.data} ${h.hora}`);
+  }
+
+  async geracoes(c: ContextoPortaM18, agenda: number) {
+    return this.e(c).geracoes.get(agenda) ?? [];
   }
 
   async feriados() {
     return FERIADOS.map((md) => ({ data: `9999-${md}`, nome: 'Feriado' }));
   }
 
-  async horarios(c: ContextoPortaM18, nome: string, _crm: number, de: string, ate: string) {
+  async horarios(c: ContextoPortaM18, agenda: number, de: string, ate: string) {
     const s = this.e(c);
-    const a = s.agendas.find((x) => x.nome === nome);
     const itens = s.horarios
-      .filter((h) => a && h.agenda === a.id && h.data >= de && h.data <= ate)
+      .filter((h) => h.agenda === agenda && h.data >= de && h.data <= ate)
       .sort((x, y) => (x.data + x.hora).localeCompare(y.data + y.hora))
-      .map((h) => ({
-        data: h.data,
-        hora: h.hora,
-        exame: h.exame,
-        paciente: h.paciente,
-        livre: h.livre,
-        situacao: h.situacao,
-        tipo: h.tipo,
-        convenio: h.conv || null,
-        marcacao:
-          s.marcacoes.find((m) => m.agenda === h.agenda && m.data === h.data && m.hora === h.hora)?.id ??
-          null,
-      }));
+      .map((h) => {
+        const marcacao =
+          s.marcacoes.find((m) => m.agenda === h.agenda && m.data === h.data && m.hora === h.hora)?.id ?? null;
+        return {
+          data: h.data,
+          hora: h.hora,
+          exame: h.exame,
+          estado: estadoDoHorarioExame({ ...h, temMarcacao: marcacao !== null }),
+          paciente: h.paciente || null,
+          convenio: h.conv || null,
+          marcacao,
+        };
+      });
     return { itens, truncado: false };
   }
 
@@ -732,7 +745,7 @@ export class PortaExameMemoria implements PortaExame {
       .filter((h) => {
         const a = s.agendas.find((x) => x.id === h.agenda);
         return (
-          a?.ativa === 'S' &&
+          a?.ativa === true &&
           (!f.agendas || f.agendas.includes(h.agenda)) &&
           h.data >= f.de &&
           h.data <= f.ate &&
@@ -760,14 +773,14 @@ export class PortaExameMemoria implements PortaExame {
     };
   }
 
-  private marcacaoLida(s: Estado, m: MarcacaoM): MarcacaoExameLida {
+  private marcacaoDe(s: Estado, m: MarcacaoM): MarcacaoExame {
     const a = s.agendas.find((x) => x.id === m.agenda);
     const h = s.horarios.find((x) => x.agenda === m.agenda && x.data === m.data && x.hora === m.hora);
+    const estado = h ? estadoDoHorarioExame({ ...h, livre: 'N', tipo: 'N', temMarcacao: true }) : 'outro';
     return {
       id: m.id,
       agenda: m.agenda,
       nomeAgenda: a?.nome ?? '',
-      crm: 0,
       categoriaAgenda: a?.categoria ?? 0,
       data: m.data,
       hora: m.hora,
@@ -775,26 +788,21 @@ export class PortaExameMemoria implements PortaExame {
       idPaciente: m.idPaciente,
       prontuario: m.pront,
       convenio: m.conv,
-      tpAge: m.tpAge,
+      estado,
+      situacao: SITUACAO_DO_ESTADO[estado],
       atendido: m.atendido,
-      situacaoHorario: h?.situacao ?? '',
-      pacienteHorario: h?.paciente ?? '',
-      exameHorario: h?.exame ?? '',
-      temHorario: !!h,
       usuario: m.usuario,
       marcadaEm: m.dtAge,
-      horaMarcacao: m.hrAge,
       temSenha: m.senha,
     };
   }
 
-  async marcacoesDoDia(c: ContextoPortaM18, data: string, agenda: { nome: string; crm: number } | null) {
+  async marcacoesDoDia(c: ContextoPortaM18, data: string, agenda: number | null) {
     const s = this.e(c);
-    const ag = agenda ? s.agendas.find((x) => x.nome === agenda.nome) : null;
     const itens = s.marcacoes
-      .filter((m) => m.data === data && (!agenda || m.agenda === ag?.id))
+      .filter((m) => m.data === data && (agenda === null || m.agenda === agenda))
       .sort((x, y) => x.hora.localeCompare(y.hora))
-      .map((m) => this.marcacaoLida(s, m));
+      .map((m) => this.marcacaoDe(s, m));
     return { itens, truncado: false };
   }
 
@@ -803,7 +811,7 @@ export class PortaExameMemoria implements PortaExame {
     const itens = s.marcacoes
       .filter((m) => m.idPaciente === id)
       .sort((x, y) => (y.data + y.hora).localeCompare(x.data + x.hora))
-      .map((m) => this.marcacaoLida(s, m));
+      .map((m) => this.marcacaoDe(s, m));
     return { itens, truncado: false };
   }
 
@@ -812,21 +820,27 @@ export class PortaExameMemoria implements PortaExame {
     const m = s.marcacoes.find((x) => x.id === id);
     if (!m) return null;
     return {
-      marcacao: this.marcacaoLida(s, m),
+      marcacao: this.marcacaoDe(s, m),
       contato: { telefone: m.fone, celular: m.celular, email: '', observacao: m.obs },
     };
   }
 
   async cancelamentos(
     c: ContextoPortaM18,
-    f: { de: string; ate: string; agendas: readonly string[] | null; pagina: number; porPagina: number },
+    f: { de: string; ate: string; agendas: readonly number[] | null; pagina: number; porPagina: number },
   ) {
     const todos = this.e(c).cancelamentos.filter(
-      (x) =>
-        x.canceladoEm >= f.de && x.canceladoEm <= f.ate && (!f.agendas || f.agendas.includes(x.nomeAgenda)),
+      (x) => x.canceladoEm >= f.de && x.canceladoEm <= f.ate && (!f.agendas || f.agendas.includes(x.agenda)),
     );
     const ini = (f.pagina - 1) * f.porPagina;
-    return { itens: todos.slice(ini, ini + f.porPagina), total: todos.length };
+    return {
+      itens: todos.slice(ini, ini + f.porPagina).map((linha) => {
+        const { agenda, ...x } = linha;
+        void agenda;
+        return x;
+      }),
+      total: todos.length,
+    };
   }
 
   async residuo(c: ContextoPortaM18, de: string, ate: string) {
@@ -874,7 +888,7 @@ export class PortaExameMemoria implements PortaExame {
   async extensoes(c: ContextoPortaM18, ids: readonly number[]) {
     const s = this.e(c);
     return new Map(
-      ids.flatMap((id) => (s.ext.has(id) ? [[id, s.ext.get(id) as ExtensaoExameLida] as const] : [])),
+      ids.flatMap((id) => (s.ext.has(id) ? [[id, s.ext.get(id) as ExtensaoExame] as const] : [])),
     );
   }
 
@@ -891,3 +905,21 @@ export class PortaExameMemoria implements PortaExame {
       }));
   }
 }
+
+/** Chave do estado sintético: o cliente e o estabelecimento da sessão. */
+function estabelecimentoDe(c: ContextoPortaM18): string {
+  return `${c.cliente}:${c.estabelecimento ?? 0}`;
+}
+
+/** Situação da marcação (vocabulário do cadastro: situacao_marcacao.significado) a partir do estado do horário. */
+const SITUACAO_DO_ESTADO: Readonly<Record<MarcacaoExame['estado'], string>> = {
+  vago: 'aguardando',
+  bloqueado: 'bloqueada',
+  marcado: 'aguardando',
+  confirmado: 'confirmada',
+  realizado: 'realizada',
+  transferido: 'cancelada',
+  'marcacao-incompleta': 'aguardando',
+  'residuo-confirmado-sem-paciente': 'confirmada',
+  outro: 'aguardando',
+};

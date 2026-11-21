@@ -35,7 +35,7 @@ import {
 } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
 import { prioridadeDoGrupo } from '@sgh/dominio-recepcao';
-import type { DispositivoLidoLegado } from '@sgh/legado';
+import type { DispositivoRecepcao } from './tipos.js';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { Publica } from '../../autorizacao/decoradores.js';
@@ -142,7 +142,7 @@ export class DispositivoController implements OnModuleDestroy {
   private async dispositivo(
     token: string | undefined,
     tipos: readonly string[],
-  ): Promise<DispositivoLidoLegado> {
+  ): Promise<DispositivoRecepcao> {
     if (!token || !TOKEN.test(token))
       throw new ErroProblema(
         'nao-autenticado',
@@ -166,12 +166,12 @@ export class DispositivoController implements OnModuleDestroy {
           evento: EVENTOS_AUDITAVEIS.recepcaoDispositivoRecusado.codigo,
           rede: this.redeDaApi,
           hospital: d.hospital,
-          usuario: d.usuarioLegado ?? `DISPOSITIVO.${d.id}`,
+          usuario: d.usuarioTecnico ?? `DISPOSITIVO.${d.id}`,
           estacao: `dispositivo:${d.id}`,
           correlacao: `dispositivo-${d.id}`,
           recurso: 'recepcao.dispositivo',
           resultado: 'falha',
-          tabelaAlvo: 'SGH_ACESSO_DISPOSITIVO',
+          tabelaAlvo: 'dispositivo_recepcao',
           idAlvo: String(d.id),
         })
         .catch(() => undefined);
@@ -199,11 +199,11 @@ export class DispositivoController implements OnModuleDestroy {
     return d;
   }
 
-  private ctx(d: DispositivoLidoLegado) {
+  private ctx(d: DispositivoRecepcao) {
     return { rede: this.redeDaApi, hospital: d.hospital };
   }
 
-  private async mostrarIniciais(d: DispositivoLidoLegado): Promise<boolean> {
+  private async mostrarIniciais(d: DispositivoRecepcao): Promise<boolean> {
     const def = definicaoParametro('recepcao.painelMostraIniciais');
     if (!def || !this.configuracao) return false;
     try {
@@ -251,7 +251,7 @@ export class DispositivoController implements OnModuleDestroy {
     return chave;
   }
 
-  private async exigirServico(d: DispositivoLidoLegado, gerador: number, soRecepcao = false): Promise<void> {
+  private async exigirServico(d: DispositivoRecepcao, gerador: number, soRecepcao = false): Promise<void> {
     const cfg = await this.servico.totemConfig(this.ctx(d), d);
     if (!cfg.servicos.some((s) => s.gerador === gerador && (!soRecepcao || s.recepcao)))
       throw new ErroProblema(
@@ -291,7 +291,7 @@ export class DispositivoController implements OnModuleDestroy {
   }
 
   /** O aparelho bloqueado por tentativas recusadas responde 429 até o fim da espera. */
-  private exigirSemBloqueio(d: DispositivoLidoLegado): void {
+  private exigirSemBloqueio(d: DispositivoRecepcao): void {
     const t = this.tentativasCheckin.get(d.id);
     if (!t || t.bloqueadoAte <= Date.now()) return;
     throw new ErroProblema(
@@ -304,7 +304,7 @@ export class DispositivoController implements OnModuleDestroy {
   }
 
   /** Conta o check-in recusado (sem agendamento para os dados); passou do limite na janela, bloqueia e vai à trilha. */
-  private async registrarRecusaCheckin(d: DispositivoLidoLegado): Promise<void> {
+  private async registrarRecusaCheckin(d: DispositivoRecepcao): Promise<void> {
     const agora = Date.now();
     const t = this.tentativasCheckin.get(d.id) ?? { inicio: agora, n: 0, bloqueadoAte: 0 };
     if (agora - t.inicio > CHECKIN_JANELA_MS) {
@@ -321,12 +321,12 @@ export class DispositivoController implements OnModuleDestroy {
         evento: EVENTOS_AUDITAVEIS.recepcaoDispositivoRecusado.codigo,
         rede: this.redeDaApi,
         hospital: d.hospital,
-        usuario: d.usuarioLegado ?? `DISPOSITIVO.${d.id}`,
+        usuario: d.usuarioTecnico ?? `DISPOSITIVO.${d.id}`,
         estacao: `dispositivo:${d.id}`,
         correlacao: `dispositivo-${d.id}-checkin`,
         recurso: 'recepcao.dispositivo',
         resultado: 'falha',
-        tabelaAlvo: 'SGH_ACESSO_DISPOSITIVO',
+        tabelaAlvo: 'dispositivo_recepcao',
         idAlvo: String(d.id),
       })
       .catch(() => undefined);

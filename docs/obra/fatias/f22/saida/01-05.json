@@ -1,0 +1,91 @@
+{
+  "lote": "01-05",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/exames/apoio-gravacao.ts",
+    "src/modulos/exames/esquemas.ts",
+    "src/modulos/exames/exames.controller.ts",
+    "src/modulos/exames/operacoes.ts",
+    "src/modulos/exames/porta-memoria.ts",
+    "src/modulos/exames/porta-propria.ts",
+    "src/modulos/exames/porta.ts",
+    "src/modulos/exames/public-api.ts",
+    "src/modulos/exames/relogio.ts",
+    "src/modulos/exames/servico.ts",
+    "src/modulos/exames/tipos.ts",
+    "src/modulos/exames/porta-memoria.spec.ts",
+    "src/modulos/exames/porta-propria.int.spec.ts",
+    "src/modulos/internacao/configuracao.ts",
+    "src/modulos/internacao/fonte-memoria.ts",
+    "src/modulos/internacao/fonte.ts",
+    "src/modulos/internacao/fonte-propria.ts",
+    "src/modulos/internacao/leitos.controller.ts",
+    "src/modulos/internacao/public-api.ts",
+    "src/modulos/internacao/relatorio.controller.ts",
+    "src/modulos/internacao/servico.ts",
+    "src/modulos/internacao/simbolos.ts",
+    "src/modulos/internacao/vigia.ts",
+    "src/modulos/internacao/fonte-propria.int.spec.ts",
+    "src/modulos/internacao/vigia.spec.ts",
+    "src/modulos/internacao/servico.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "agenda_servico_exame",
+      "motivo": "cobertura por exame da agenda (a agenda faz o exame; a fonte pagadora cobre o exame nesta agenda). Hoje a porta lê vazia e recusa a gravação com 'modelo-pendente'.",
+      "ddl": "CREATE TABLE agenda_servico_exame (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  agenda_servico_id BIGINT UNSIGNED NOT NULL,\n  exame_id BIGINT UNSIGNED NOT NULL,\n  fonte_pagadora_id BIGINT UNSIGNED NULL COMMENT 'Nulo: a agenda faz o exame para todas as fontes pagadoras aceitas',\n  fonte_pagadora_chave BIGINT UNSIGNED AS (COALESCE(fonte_pagadora_id, 0)) STORED,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_agenda_servico_exame (agenda_servico_id, exame_id, fonte_pagadora_chave),\n  KEY ix_agenda_servico_exame_exame (exame_id), KEY ix_agenda_servico_exame_fonte_pagadora (fonte_pagadora_id)\n) COMMENT='Exames feitos por agenda de serviço e a fonte pagadora que cobre cada um';\nALTER TABLE agenda_servico_exame\n  ADD CONSTRAINT fk_agenda_servico_exame_agenda_servico_id FOREIGN KEY (agenda_servico_id) REFERENCES agenda_servico (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_agenda_servico_exame_exame_id FOREIGN KEY (exame_id) REFERENCES exame (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_agenda_servico_exame_fonte_pagadora_id FOREIGN KEY (fonte_pagadora_id) REFERENCES fonte_pagadora (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "feriado",
+      "motivo": "calendário de feriados (nacional, estadual, municipal e do estabelecimento) para a prévia da grade; hoje a porta devolve lista vazia.",
+      "ddl": "CREATE TABLE feriado (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  data DATE NOT NULL,\n  nome VARCHAR(150) NOT NULL,\n  abrangencia VARCHAR(20) NOT NULL,\n  uf CHAR(2) NULL, municipio_ibge_id BIGINT UNSIGNED NULL, estabelecimento_id BIGINT UNSIGNED NULL,\n  ponto_facultativo BOOLEAN NOT NULL DEFAULT FALSE,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_feriado_abrangencia CHECK (abrangencia IN ('nacional','estadual','municipal','estabelecimento')),\n  CONSTRAINT ck_feriado_alvo CHECK ((abrangencia = 'nacional' AND uf IS NULL AND municipio_ibge_id IS NULL AND estabelecimento_id IS NULL) OR (abrangencia = 'estadual' AND uf IS NOT NULL) OR (abrangencia = 'municipal' AND municipio_ibge_id IS NOT NULL) OR (abrangencia = 'estabelecimento' AND estabelecimento_id IS NOT NULL)),\n  KEY ix_feriado_data (data), KEY ix_feriado_municipio_ibge (municipio_ibge_id), KEY ix_feriado_estabelecimento (estabelecimento_id)\n) COMMENT='Feriados e pontos facultativos por abrangência';\nALTER TABLE feriado\n  ADD CONSTRAINT fk_feriado_municipio_ibge_id FOREIGN KEY (municipio_ibge_id) REFERENCES municipio_ibge (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_feriado_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "exames/operacoes.ts (agendarExame)",
+      "motivo": "o solicitante externo da tela (CRM, UF e nome) ainda não é gravado: ligar a marcacao_horario.solicitante_externo_id ao cadastro solicitante_externo (achar ou incluir pelo conselho, número e UF) na onda 2 (exames); hoje extensoes devolve solicitante null."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (agenda/exame.ts e internacao/leitos.ts)",
+      "motivo": "o enum `destino` ainda é ['legado','memoria']: trocar para ['banco','memoria'] (as portas já usam 'banco'; destinoDoContrato/destinoNoContrato fazem a ponte até lá). Os campos crm, exame (E/U/O) e categoria por código do sistema antigo e as horas HHMM do contrato de exames e do movimento/painel de internação (status 'A'/'I', reg 0 = livre, carater '1'/'2') seguem a forma do contrato e do domínio; neutralizar com @sgh/dominio-agenda e @sgh/dominio-internacao na onda 2."
+    },
+    {
+      "tipo": "remocao",
+      "alvo": "GET divergencias do M16 (leitos.controller + servico.divergencias + conferirLeitos)",
+      "motivo": "comparava o cadastro com o espelho do sistema antigo (convivência); no banco próprio o cadastro e o retrato são o mesmo, nenhuma divergência. Remover na onda 2 (internação)."
+    },
+    {
+      "tipo": "pendencia",
+      "alvo": "internacao/fonte-propria",
+      "motivo": "censoFechado devolve null até o worker do fechamento do censo gravar o retrato (onda 8); operacional e financeiro mensais devolvem [] até o módulo relatório (onda 4) apurar; internações abertas e movimento com internação não têm teste de integração (o atendimento completo é de outro lote): cobrir no portão da onda 1."
+    },
+    {
+      "tipo": "fiacao",
+      "alvo": "apps/api/src/app.module.ts (ou internacao/modulo.ts na onda 2)",
+      "motivo": "o contrato do vigia mudou (achado 01-05): DependenciasVigia sem `rede`; lerCanal(ctx: ContextoNucleo, canal, marca) e FonteInternacao.canal(alvo: ContextoNucleo, canal, marca). Fiação: `new MotorVigia({ lerCanal: (ctx, canal, marca) => internacao.canal(ctx, canal, marca), armazem, tipoArmazem, ... })` (o canal 'senhas' da recepção em memória recebe o mesmo ctx). Chave do armazém: sgh:<cliente>:vigia:<estabelecimento>:<canal>."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "chamadores de MotorVigia.assinar/versao/ultimoCiclo/cicloAgora: recepcao/chamadas.ts (01-01), atendimento/avisos.ts (01-02), carga/carga.controller.ts (05-05), cirurgia/bloco-seguro* (06-01), adt (03-01)",
+      "motivo": "o primeiro argumento deixou de ser o código do hospital (texto) e passou a ser AlvoVigia = { cliente, estabelecimento } (o ContextoNucleo da sessão serve: passe s.porta). Um banco por cliente: o código do hospital sozinho não identifica o canal."
+    },
+    {
+      "tipo": "nucleo",
+      "alvo": "packages/nucleo (executor.ts, gravarTrilha)",
+      "motivo": "o selo do vigia lê dados_depois.escritas[*].tabela por JSON_OVERLAPS (sem índice; só as linhas acima da marca) e, para escrita por comando livre (tx.executar, fora de escritas), depende do alvo estar em TABELAS_DO_CANAL. Proposta: gravar as tabelas declaradas da operação (op.tabelas) numa tabela indexada trilha_auditoria_tabela (trilha_auditoria_id, tabela, PK composta, KEY (tabela, trilha_auditoria_id)) na mesma transação, e o vigia filtrar por ela."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos e packages/dominio-internacao (alterações aditivas feitas por este lote)",
+      "motivo": "contratos/internacao/movimento.ts: InternacaoMovimento.grupoSaida?: GrupoMotivoAlta | null (prevalece sobre `motivo`); contratos/agenda/exame.ts: esquemaGerarGradeExame.incluirFeriados?: boolean; dominio-internacao/adt.ts: TIPOS_SAIDA_HOSPITALAR e grupoDoTipoSaida(tipo); trajetoria.ts usa grupoSaida antes do código. ehReinternacao/motivoCoerente (adt.ts) ainda classificam por código: o lote do ADT (onda 3) deve passar o grupo (tipo de saída) em vez do id."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "specs de outros lotes",
+      "motivo": "vigia.spec.ts e servico.spec.ts da internação e o import/porta indisponível de exames/exames.spec.ts já foram atualizados por este lote (sem @sgh/legado; tsc 0 nos dois primeiros, vitest verde). A parte HTTP de exames/exames.spec.ts (criarApp com opções antigas, sessão rede/hospital) e leitos.spec.ts/vigia.int.spec.ts seguem para os lotes 02-06/02-11, que dependem da fiação do app."
+    }
+  ]
+}

@@ -1,6 +1,5 @@
-// D-PROF-39: o corpo clínico SINTÉTICO da sessão de dev/ci (E2E) com as MESMAS regras das receitas do executor
-// (packages/legado/src/cadastro/gravacao/profissional.ts): Zod dos contratos, CPF e registro repetidos, sombra e
-// sentinela recusadas, versão do controle otimista (mesmas colunas e mesmo formato do núcleo), nada mudado. Nada vai à
+// D-PROF-39: o corpo clínico SINTÉTICO da sessão de dev/ci (E2E) com as regras de negócio da gravação do profissional:
+// Zod dos contratos, CPF e registro repetidos, sombra recusada, versão do controle otimista, nada mudado. Nada vai à
 // cópia; nenhum nome aqui é de pessoa real (marca "SINTETICO"). Nenhum dado bancário nem de repasse (regra 11).
 import {
   esquemaAlterarProfissional,
@@ -21,24 +20,36 @@ import {
   RECUSA_OUTRO_LOGIN_NO_PROFISSIONAL,
   type RegistroNovoProfissional,
 } from '@sgh/contratos';
-import {
-  COLUNAS_VERSAO_PROFISSIONAL,
-  COLUNAS_VERSAO_REGISTRO,
-  type DadosProfissionalLidos,
-  type EventoProfissionalLido,
-  type LoginCandidatoLido,
-  erroConflitoVersao,
-  erroEntradaInvalida,
-  type FichaProfissionalLida,
-  lerVersaoColunas,
-  type OpcoesProfissionalLidas,
-  type ProfissionalLido,
-  recusa,
-  versaoDaLinhaProfissional,
-} from '@sgh/legado';
+import { erroConflitoVersao, erroEntradaInvalida, recusa } from '@sgh/nucleo';
+import { lerVersaoColunas, versaoDasColunas } from './memoria-versao.js';
+import type {
+  DadosProfissional,
+  EventoVinculoProfissional,
+  FichaProfissionalCadastro,
+  LoginCandidato,
+  OpcoesEdicaoProfissional,
+  ProfissionalCadastro,
+} from './tipos.js';
 import type { z } from 'zod';
 
 const M = 'SINTETICO';
+
+/** Colunas da versão opaca da linha sintética do profissional e do registro (só a memória de dev/ci). */
+const COLUNAS_VERSAO_PROFISSIONAL = ['NOME', 'APELIDO', 'SEXO', 'NASC', 'NOME_MAE', 'EMAIL', 'CELULAR'] as const;
+const COLUNAS_VERSAO_REGISTRO = ['ATIVO', 'CONSELHO', 'SIGLA'] as const;
+/** Coluna da linha sintética → campo da tela (o aviso de colisão cita o campo). */
+const CAMPO_DA_COLUNA_PROFISSIONAL: Readonly<Record<string, string>> = {
+  NOME: 'nome',
+  APELIDO: 'nomeSocial',
+  SEXO: 'sexo',
+  NASC: 'nascimento',
+  NOME_MAE: 'nomeMae',
+  EMAIL: 'email',
+  CELULAR: 'celular',
+  ATIVO: 'ativo',
+  CONSELHO: 'conselho',
+  SIGLA: 'sigla',
+};
 
 export const OPERACOES_PROFISSIONAL_TELA = [
   'cadastro.cadastrarProfissional',
@@ -211,7 +222,7 @@ export class ProfissionaisMemoria {
   readonly profissionais: ProfissionalMem[] = iniciais();
   private gerador = 9000;
   /**
-   * Registro → login ligado (o papel Operador de sistema), como TBUSERS_TBPAPEL.ID_TBCBOPRO. X-01: o profissional 3
+   * Registro → login ligado (o papel Operador de sistema), o vínculo da conta com o registro. X-01: o profissional 3
    * (ANA) é o SINT.MEDICO, conta da sessão sintética; a ficha do usuário em memória lê ESTE mapa (profissionalDoLogin).
    */
   private readonly loginDoRegistro = new Map<number, string>([
@@ -243,12 +254,12 @@ export class ProfissionaisMemoria {
     [11, 3],
     [14, 2],
   ]);
-  private readonly eventos = new Map<number, EventoProfissionalLido[]>();
+  private readonly eventos = new Map<number, EventoVinculoProfissional[]>();
   /** Retratos das exclusões (SGH_HIST_EXCLUSAO). */
   readonly retratos: { tabela: string; chave: string; motivo: string }[] = [];
   private agora = () => new Date().toISOString();
 
-  logins(): LoginCandidatoLido[] {
+  logins(): LoginCandidato[] {
     return this.candidatos.map(([login, nome]) => {
       const reg = [...this.loginDoRegistro.entries()].find(([, l]) => l === login)?.[0];
       const p =
@@ -272,7 +283,7 @@ export class ProfissionaisMemoria {
       .map((r) => ({ registro: r.id, login: this.loginDoRegistro.get(r.id)! }));
   }
 
-  historico(id: number): EventoProfissionalLido[] {
+  historico(id: number): EventoVinculoProfissional[] {
     return [...(this.eventos.get(id) ?? [])];
   }
 
@@ -295,7 +306,7 @@ export class ProfissionaisMemoria {
 
   private evento(
     profissional: number,
-    e: Omit<EventoProfissionalLido, 'usuario' | 'em'>,
+    e: Omit<EventoVinculoProfissional, 'usuario' | 'em'>,
     usuario: string,
   ): void {
     const l = this.eventos.get(profissional) ?? [];
@@ -303,7 +314,7 @@ export class ProfissionaisMemoria {
     this.eventos.set(profissional, l);
   }
 
-  lidos(ids?: readonly number[]): ProfissionalLido[] {
+  lidos(ids?: readonly number[]): ProfissionalCadastro[] {
     return this.profissionais
       .filter((p) => !ids || ids.includes(p.id))
       .map((p) => ({
@@ -329,15 +340,15 @@ export class ProfissionaisMemoria {
       cboDescricao: cbo?.descricao ?? null,
       ativo: r.ativo,
       siglaId: r.siglaId,
-      versao: versaoDaLinhaProfissional(COLUNAS_VERSAO_REGISTRO, this.linhaRegistro(r)),
+      versao: versaoDasColunas(COLUNAS_VERSAO_REGISTRO, this.linhaRegistro(r)),
     };
   }
 
   private linhaRegistro(r: RegistroMem): Record<string, unknown> {
-    return { ATIVO: r.ativo ? 'T' : 'F', CONS_PROF: r.conselho, ID_TBSIGLACONSPROF: r.siglaId };
+    return { ATIVO: r.ativo, CONSELHO: r.conselho, SIGLA: r.siglaId };
   }
 
-  ficha(id: number): FichaProfissionalLida | null {
+  ficha(id: number): FichaProfissionalCadastro | null {
     const [l] = this.lidos([id]);
     const p = this.profissionais.find((x) => x.id === id);
     if (!l || !p) return null;
@@ -353,7 +364,7 @@ export class ProfissionaisMemoria {
     };
   }
 
-  dados(id: number): DadosProfissionalLidos | null {
+  dados(id: number): DadosProfissional | null {
     const p = this.profissionais.find((x) => x.id === id);
     if (!p) return null;
     const l = p.linha;
@@ -365,11 +376,11 @@ export class ProfissionaisMemoria {
       nomeMae: t(l['NOME_MAE']),
       email: t(l['EMAIL']),
       celular: t(l['CELULAR']),
-      versao: versaoDaLinhaProfissional(COLUNAS_VERSAO_PROFISSIONAL, l),
+      versao: versaoDasColunas(COLUNAS_VERSAO_PROFISSIONAL, l),
     };
   }
 
-  opcoes(): OpcoesProfissionalLidas {
+  opcoes(): OpcoesEdicaoProfissional {
     return {
       conselhos: CONSELHOS.map((c) => ({ valor: c, rotulo: c })),
       siglas: [...SIGLAS],
@@ -680,7 +691,7 @@ export class ProfissionaisMemoria {
         const lida = lerVersaoColunas(e.versao, COLUNAS_VERSAO_PROFISSIONAL);
         if (!lida) throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.');
         const mudou = Object.keys(lida).filter((c) => comparavel(p.linha[c]) !== lida[c]);
-        if (mudou.length > 0) throw erroConflitoVersao(mudou);
+        if (mudou.length > 0) throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
         const a = e.alteracoes;
         const novos: Record<string, unknown> = {};
         if (a.nome !== undefined) novos['NOME'] = a.nome;
@@ -710,7 +721,7 @@ export class ProfissionaisMemoria {
         if (!lida) throw recusa('versao-invalida', 'A versão lida pela tela é inválida. Releia o cadastro.');
         const atual = this.linhaRegistro(r);
         const mudou = Object.keys(lida).filter((c) => comparavel(atual[c]) !== lida[c]);
-        if (mudou.length > 0) throw erroConflitoVersao(mudou);
+        if (mudou.length > 0) throw erroConflitoVersao(mudou.map((c) => CAMPO_DA_COLUNA_PROFISSIONAL[c] ?? c));
         const a = e.alteracoes;
         const conselho = a.conselho ?? r.conselho;
         if (!CONSELHOS.includes(conselho))

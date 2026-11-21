@@ -79,6 +79,41 @@ export function ehReinternacao(
 
 export { grupoMotivoAlta };
 
+/** Tipos de saída do cadastro de motivos de saída hospitalar (o CHECK do banco). */
+export const TIPOS_SAIDA_HOSPITALAR = [
+  'alta',
+  'transferencia',
+  'obito',
+  'evasao',
+  'a_pedido',
+  'administrativa',
+  'permanencia',
+] as const;
+export type TipoSaidaHospitalar = (typeof TIPOS_SAIDA_HOSPITALAR)[number];
+
+/**
+ * Grupo do indicador pelo tipo de saída do cadastro (o modelo próprio): nada de faixa de código do sistema de origem.
+ * A permanência (mudança de procedimento) não encerra a internação; se vier, conta como alta domiciliar.
+ */
+export function grupoDoTipoSaida(tipo: string | null): GrupoMotivoAlta | null {
+  switch (tipo) {
+    case 'obito':
+      return 'obito';
+    case 'transferencia':
+      return 'transferencia-externa';
+    case 'evasao':
+    case 'a_pedido':
+      return 'evasao-ou-a-pedido';
+    case 'administrativa':
+      return 'encerramento-administrativo';
+    case 'alta':
+    case 'permanencia':
+      return 'alta-domiciliar';
+    default:
+      return null;
+  }
+}
+
 /** O destino codificado da alta médica que corresponde ao grupo do motivo de alta. */
 export function destinoDoGrupo(g: GrupoMotivoAlta): DestinoAlta {
   switch (g) {

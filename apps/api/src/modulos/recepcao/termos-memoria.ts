@@ -8,7 +8,8 @@ import {
   type ModeloTermo,
   type VersaoModeloTermo,
 } from '@sgh/contratos';
-import { recusa } from '@sgh/legado';
+import { recusa } from '@sgh/nucleo';
+import { ErroProblema } from '../../problema.filter.js';
 import { createHash } from 'node:crypto';
 import type { GravadorTermos } from './porta.js';
 
@@ -116,11 +117,15 @@ export class TermosMemoria {
         const ids = new Set(c.versoes.map((v) => v.id));
         const n = s.assinaturas.filter((a) => ids.has(a.modelo)).length;
         if (n > 0)
-          throw recusa(
-            'com-dependentes',
+          throw new ErroProblema(
+            'recusa-de-negocio',
+            409,
+            'Não gravado',
             `O termo tem ${n} assinatura(s) de pacientes: não pode ser excluído. Inative-o.`,
             {
+              codigo: 'com-dependentes',
               dependentes: [{ rotulo: 'Termos assinados', quantidade: n, amostra: [], origem: 'fk' }],
+              total: n,
               podeInativar: true,
             },
           );

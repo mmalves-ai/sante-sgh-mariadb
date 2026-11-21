@@ -8,9 +8,9 @@
 //   POST /api/agenda/consultas/agendas/:id/convenios        agenda.definirCobertura (a última pede confirmação)
 //   GET  /api/agenda/consultas/agendas/:id/convenios/:c/marcados   marcações futuras com o convênio (mascaradas)
 //   POST /api/agenda/consultas/agendas/:id/especialidades   agenda.definirEspecialidade
-//   POST /api/agenda/consultas/agendas/:id/ligacao          ligação revisada (SGH_AGE_AGENDA_LIGACAO)
+//   POST /api/agenda/consultas/agendas/:id/ligacao          vínculos revisados (profissional, especialidade, local, unidade)
 //   GET  /api/agenda/consultas/escalas/:id                  escala atual, planejadas e gerações
-//   POST /api/agenda/consultas/escalas/:id                  escala planejada com vigência (SGH_AGE_ESCALA_VIGENCIA)
+//   POST /api/agenda/consultas/escalas/:id                  escala planejada com vigência (agenda_escala)
 //   POST /api/agenda/consultas/escalas/:id/planejadas/:versao/cancelar
 //   POST /api/agenda/consultas/grade/previa                 prévia da geração (nada é gravado)
 //   POST /api/agenda/consultas/grade/gerar                  agenda.gerarGrade (a prévia aprovada, pela impressão)
@@ -47,7 +47,7 @@ import {
   type PreviaGrade,
   type ResultadoAgenda,
 } from '@sgh/contratos';
-import { duracaoHHMM, segundaDaSemana } from '@sgh/dominio-agenda';
+import { segundaDaSemana } from '@sgh/dominio-agenda';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -63,6 +63,7 @@ import {
 import { ApoioAgenda, ctxAgenda } from './apoio.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { ServicoAgenda } from './servico.js';
+import { horaIso, horaIsoOuNull, LeituraAgenda } from './visao.js';
 
 export function corpo<T>(
   esquema: {
@@ -96,14 +97,16 @@ export const dataDaConsulta = (v: string | undefined): string | null => {
 export class AgendasController {
   private readonly apoio: ApoioAgenda;
   private readonly servico: ServicoAgenda;
+  private readonly leitura: LeituraAgenda;
   constructor(
-    @Inject(PORTA_AGENDA) private readonly porta: PortaAgenda,
+    @Inject(PORTA_AGENDA) porta: PortaAgenda,
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
   ) {
     this.apoio = new ApoioAgenda(porta, trilha, configuracao, cache);
     this.servico = new ServicoAgenda(porta);
+    this.leitura = new LeituraAgenda(porta);
   }
 
   @Get('opcoes')
@@ -214,7 +217,7 @@ export class AgendasController {
   @Post('agendas/:id/ligacao')
   @HttpCode(200)
   @Permissao('agenda.agenda.editar')
-  @AuditadoNoHandler('ligação SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('vínculos da agenda com a trilha na mesma transação')
   async ligacao(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -223,21 +226,18 @@ export class AgendasController {
     const s = sessaoDe(req);
     const p = corpo(esquemaPedidoLigacao, b);
     const a = await this.servico.exigirAgenda(ctxAgenda(s), idDaRota(id));
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaLigacaoRevisada.codigo,
       'agenda.agenda',
-      { tabela: 'SGH_AGE_AGENDA_LIGACAO', id: String(a.id) },
+      { tabela: 'agenda_servico', id: String(a.id) },
       (g) =>
-        g.gravarLigacao({
+        g.gravarVinculo({
           agenda: a.id,
-          nome: a.nome,
-          crm: a.crm,
           profissional: p.profissional,
           especialidade: p.especialidade,
           local: p.local,
           unidade: p.unidade,
-          usuario: s.login,
         }),
     );
     return {
@@ -257,7 +257,7 @@ export class AgendasController {
   @Post('escalas/:id')
   @HttpCode(201)
   @Permissao('agenda.escala.editar')
-  @AuditadoNoHandler('escala planejada SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('escala planejada com a trilha na mesma transação')
   async planejar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -266,7 +266,7 @@ export class AgendasController {
     const s = sessaoDe(req);
     const p = corpo(esquemaPedidoEscala, b);
     const a = await this.servico.exigirAgenda(ctxAgenda(s), idDaRota(id));
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     if (p.vigenteDesde < r.hoje)
       throw new ErroProblema(
         'entrada-invalida',
@@ -274,26 +274,22 @@ export class AgendasController {
         'Data inválida',
         'A escala passa a valer a partir de hoje ou depois.',
       );
-    const dur = duracaoHHMM(p.duracaoMinutos);
-    const versao = await this.apoio.sgh(
+    const versao = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEscalaPlanejada.codigo,
       'agenda.escala',
-      { tabela: 'SGH_AGE_ESCALA_VIGENCIA', id: String(a.id) },
+      { tabela: 'agenda_escala', id: String(a.id) },
       (g) =>
         g.planejarEscala({
           agenda: a.id,
-          nome: a.nome,
-          crm: a.crm,
           vigenteDesde: p.vigenteDesde,
-          usuario: s.login,
-          linhas: p.faixas.map((f) => ({
-            semana: f.semana,
-            duracao: dur,
-            horaInicio: f.inicio,
-            horaFim: f.fim,
-            intervaloInicio: f.intervaloInicio ?? '0000',
-            intervaloFim: f.intervaloFim ?? '0000',
+          faixas: p.faixas.map((f) => ({
+            diaSemana: f.semana,
+            duracaoMinutos: p.duracaoMinutos,
+            inicio: horaIso(f.inicio),
+            fim: horaIso(f.fim),
+            intervaloInicio: horaIsoOuNull(f.intervaloInicio),
+            intervaloFim: horaIsoOuNull(f.intervaloFim),
           })),
         }),
     );
@@ -303,7 +299,7 @@ export class AgendasController {
   @Post('escalas/:id/planejadas/:versao/cancelar')
   @HttpCode(200)
   @Permissao('agenda.escala.editar')
-  @AuditadoNoHandler('escala planejada SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('escala planejada com a trilha na mesma transação')
   async cancelarPlanejada(
     @Param('id') id: string,
     @Param('versao') versao: string,
@@ -312,12 +308,12 @@ export class AgendasController {
     const s = sessaoDe(req);
     const agenda = (await this.servico.exigirAgenda(ctxAgenda(s), idDaRota(id))).id;
     const v = idDaRota(versao);
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEscalaPlanejada.codigo,
       'agenda.escala',
-      { tabela: 'SGH_AGE_ESCALA_VIGENCIA', id: String(v) },
-      (g) => g.cancelarEscalaPlanejada({ agenda, versao: v, usuario: s.login }),
+      { tabela: 'agenda_escala', id: String(v) },
+      (g) => g.cancelarEscalaPlanejada({ agenda, id: v }),
     );
     return { ok: true, resultado: { versao: v }, repetida: false, mensagem: 'Escala planejada cancelada.' };
   }
@@ -411,7 +407,7 @@ export class AgendasController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<GradeSemana> {
     const s = sessaoDe(req);
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const d = dataDaConsulta(inicio) ?? r.hoje;
     return this.servico.gradeSemana(ctxAgenda(s), idDaRota(agenda ?? ''), segundaDaSemana(d));
   }

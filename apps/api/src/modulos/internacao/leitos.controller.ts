@@ -14,7 +14,7 @@
 //   GET /api/internacao/censo/marcadas[/exportar]          internações marcadas no cálculo, para o arquivo médico
 //                                                          corrigir (regra 5): número e marca; trilha
 //   GET /api/integracao/vigia/saude                        saúde do vigia (cartão da tela de conexões)
-// Só leitura: nada grava em tabela do legado. Cada sessão lê o banco do seu estabelecimento (regra 18).
+// Só leitura: nada é gravado por estas rotas. Cada sessão lê o banco do seu estabelecimento (regra 18).
 import {
   Controller,
   Get,
@@ -110,6 +110,7 @@ export const ctxM16 = (s: SessaoCadastro, origem: string) => ({
   rede: s.rede,
   hospital: s.hospital,
   traceId: correlacaoDaRequisicao(s.req, origem),
+  porta: s.porta,
 });
 
 @Controller()
@@ -228,6 +229,8 @@ export class LeitosController implements OnModuleDestroy {
     const s = sessaoDe(req);
     await this.cfg.exigir(sujeitoDe(s), 'painel');
     if (!this.vigia) throw new ErroProblema('indisponivel', 503, 'Avisos de mudança indisponíveis');
+    if (s.porta.estabelecimento === null)
+      throw new ErroProblema('nao-autenticado', 401, 'Escolha o estabelecimento', 'A sessão não tem estabelecimento.');
     res.hijack();
     res.raw.writeHead(200, {
       'content-type': 'text/event-stream; charset=utf-8',
@@ -236,7 +239,7 @@ export class LeitosController implements OnModuleDestroy {
       connection: 'keep-alive',
     });
     res.raw.write('retry: 3000\n\n');
-    const cancelar = this.vigia.assinar(s.hospital, 'leitos', (e) =>
+    const cancelar = this.vigia.assinar(s.porta, 'leitos', (e) =>
       res.raw.write(`event: mudanca\ndata: ${JSON.stringify(e)}\n\n`),
     );
     let fechado = false;

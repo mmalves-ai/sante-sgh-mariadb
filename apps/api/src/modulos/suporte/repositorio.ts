@@ -1,54 +1,30 @@
-// Onde ficam as contas da plataforma, as atribuições e a auditoria do "login como" (ADR 0021). Duas
-// implementações: o banco da PLATAFORMA (tabelas SGH_ do script 0017, pelo núcleo do legado; padrão fora de
-// dev/ci e em dev com ACESSO_FONTE_DEV=copia) e a memória (testes e dev/ci com a fonte sintética, com as
-// contas SINTÉTICAS da plataforma, que nunca existem fora de dev/ci). A cifra da senha e o segredo TOTP
-// cifrado só circulam entre o repositório e o serviço que os confere.
+// Onde ficam as contas da plataforma, as atribuições e a auditoria do "login como" (ADR 0021). A interface é a do
+// produto; a implementação em memória serve aos testes e ao dev/ci com a fonte sintética (contas SINTÉTICAS da
+// plataforma, que nunca existem fora de dev/ci). A implementação sobre o banco próprio depende da decisão de onde
+// ficam a credencial, o segundo fator e o convite das contas de suporte (banco plataforma × conta_plataforma do
+// cliente) e das tabelas de ações e leituras da sessão "como" (pedidos do lote 01-06). A cifra da senha e o segredo
+// TOTP cifrado só circulam entre o repositório e o serviço que os confere.
+// Melhoria: tipos próprios (tipos.ts) e trilha do @sgh/nucleo; nenhum código de convivência.
+import type { LinhaTrilha } from '@sgh/nucleo';
 import type {
   AcaoLida,
   AcaoNova,
+  AtorCorrecao,
   AtribuicaoLida,
   ContaLida,
   ContaNova,
-  ContextoLegado,
   CorrecaoFeita,
-  Escritor,
   EventoConta,
   EventoContaLido,
   GrupoAlvo,
   LeituraLida,
-  Leitor,
   LinhaCruzamento,
-  LinhaTrilha,
   MudancaConta,
   PassoCorrecao,
   SessaoComoLida,
   SessaoComoNova,
   UsuarioAlvo,
-  AtorCorrecao,
-} from '@sgh/legado';
-import {
-  alterarConta,
-  contarImagensPorAcao,
-  definirAtribuicoes,
-  encerrarSessaoComo,
-  finalizarAcao,
-  gravarEventoConta,
-  inserirAcao,
-  inserirConta,
-  inserirSessaoComo,
-  lerAtribuicoes,
-  lerContaPorConvite,
-  lerContaPorEmail,
-  lerContaPorId,
-  lerCruzamento,
-  lerSessaoComo,
-  listarAcoes,
-  listarContas,
-  listarEventosConta,
-  listarLeituras,
-  listarSessoesComo,
-  somarLeituras,
-} from '@sgh/legado';
+} from './tipos.js';
 
 export interface AvisoOutbox {
   readonly tipo: string;
@@ -76,7 +52,7 @@ export interface RepositorioPlataforma {
   registrarEventoConta(evento: EventoConta): Promise<void>;
   abrirSessaoComo(s: SessaoComoNova): Promise<{ id: string; inicio: Date; expiraEm: Date }>;
   /**
-   * Aviso ao Auditor da sessão "como" já aberta (a carga completa). true: gravado na SGH_OUTBOX (o relay
+   * Aviso ao Auditor da sessão "como" já aberta (a carga completa). true: gravado no outbox (o relay
    * entrega); false: sem outbox (memória), quem chama manda pela fila.
    */
   registrarAvisoComo(aviso: AvisoOutbox): Promise<boolean>;
@@ -112,177 +88,16 @@ export interface FonteComoEstabelecimento {
   cruzamento(hospital: string, janela: { alvo: string; inicio: Date; fim: Date }): Promise<LinhaCruzamento[]>;
 }
 
-type Ctx = Pick<ContextoLegado, 'rede' | 'hospital' | 'traceId'>;
-
-/** O núcleo do legado visto pelo suporte (NucleoLegado implementa). */
-export interface NucleoSuporte {
-  readonly rede: string;
-  lerSomente<T>(ctx: Ctx, fn: (l: Leitor) => Promise<T>): Promise<T>;
-  gravarSgh<T>(ctx: Ctx, fn: (e: Escritor) => Promise<T>): Promise<T>;
-  gravarSghComOutbox<T>(
-    ctx: Ctx,
-    fn: (e: Escritor, outbox: (ev: AvisoOutbox) => Promise<string>) => Promise<T>,
-  ): Promise<T>;
-  gruposAlvo(codigo: string): Promise<GrupoAlvo[]>;
-  usuariosAlvo(codigo: string, grupo: string): Promise<UsuarioAlvo[]>;
-  previaCorrecaoComo(
-    hospital: string,
-    sessao: string,
-    acao?: string,
-  ): Promise<{ passos: PassoCorrecao[]; tabelas: string[] }>;
-  corrigirComo: FonteComoEstabelecimento['corrigir'];
-}
-
-export class RepositorioPlataformaLegado implements RepositorioPlataforma {
-  readonly persistente = true;
-  constructor(
-    private readonly nucleo: NucleoSuporte,
-    /** Estabelecimento cujo banco guarda as contas (PLATAFORMA_ESTABELECIMENTO). */
-    private readonly hospital: string,
-  ) {}
-
-  private get ctx(): Ctx {
-    return { rede: this.nucleo.rede, hospital: this.hospital, traceId: 'plataforma' };
-  }
-  private ler<T>(fn: (l: Leitor) => Promise<T>): Promise<T> {
-    return this.nucleo.lerSomente(this.ctx, fn);
-  }
-  private gravar<T>(fn: (e: Escritor) => Promise<T>): Promise<T> {
-    return this.nucleo.gravarSgh(this.ctx, fn);
-  }
-
-  contaPorEmail(email: string) {
-    return this.ler((l) => lerContaPorEmail(l, email));
-  }
-  contaPorId(id: string) {
-    return this.ler((l) => lerContaPorId(l, id));
-  }
-  contaPorConvite(hash: string) {
-    return this.ler((l) => lerContaPorConvite(l, hash));
-  }
-  contas() {
-    return this.ler((l) => listarContas(l));
-  }
-  atribuicoes(idConta?: string) {
-    return this.ler((l) => lerAtribuicoes(l, idConta));
-  }
-  criarConta(c: ContaNova, evento: Omit<EventoConta, 'contaAlvo'>) {
-    return this.gravar(async (e) => {
-      const id = await inserirConta(e, c);
-      await gravarEventoConta(e, { ...evento, contaAlvo: id });
-      return id;
-    });
-  }
-  alterarConta(id: string, m: MudancaConta, evento: EventoConta | null) {
-    return this.gravar(async (e) => {
-      await alterarConta(e, id, m);
-      if (evento) await gravarEventoConta(e, evento);
-    });
-  }
-  definirAtribuicoes(
-    id: string,
-    rede: string,
-    hospitais: readonly string[],
-    evento: Omit<EventoConta, 'detalhe'>,
-  ) {
-    return this.gravar(async (e) => {
-      const r = await definirAtribuicoes(e, id, rede, hospitais, evento.ator ?? id);
-      await gravarEventoConta(e, {
-        ...evento,
-        detalhe: JSON.stringify({ rede, ligados: r.ligados, desligados: r.desligados }),
-      });
-      return r;
-    });
-  }
-  eventosConta(limite?: number) {
-    return this.ler((l) => listarEventosConta(l, limite));
-  }
-  registrarEventoConta(evento: EventoConta) {
-    return this.gravar(async (e) => {
-      await gravarEventoConta(e, evento);
-    });
-  }
-  abrirSessaoComo(s: SessaoComoNova) {
-    return this.gravar((e) => inserirSessaoComo(e, s));
-  }
-  async registrarAvisoComo(aviso: AvisoOutbox) {
-    await this.nucleo.gravarSghComOutbox(this.ctx, (_e, outbox) => outbox(aviso));
-    return true;
-  }
-  encerrarSessaoComo(id: string, motivo: string, por: string | null) {
-    return this.gravar((e) => encerrarSessaoComo(e, id, motivo, por));
-  }
-  sessaoComo(id: string) {
-    return this.ler((l) => lerSessaoComo(l, id));
-  }
-  sessoesComo(filtro: { hospital?: string; idConta?: string; limite?: number }) {
-    return this.ler((l) => listarSessoesComo(l, filtro));
-  }
-  registrarAcao(a: AcaoNova) {
-    return this.gravar((e) => inserirAcao(e, a));
-  }
-  finalizarAcao(id: string, status: AcaoNova['status'], http: number | null) {
-    return this.gravar((e) => finalizarAcao(e, id, status, http));
-  }
-  acoes(sessao: string) {
-    return this.ler((l) => listarAcoes(l, sessao));
-  }
-  somarLeituras(sessao: string, caminho: string, n: number, primeira: Date, ultima: Date) {
-    return this.gravar((e) => somarLeituras(e, sessao, caminho, n, primeira, ultima));
-  }
-  leituras(sessao: string) {
-    return this.ler((l) => listarLeituras(l, sessao));
-  }
-}
-
-/** O Corrigir recusado (dev sobre a cópia compartilhada: as escritas do legado ficam em memória em dev). */
+/** O Corrigir recusado (fora do ambiente que permite a correção). */
 export class ErroCorrigirIndisponivel extends Error {
   override readonly name = 'ErroCorrigirIndisponivel';
-}
-
-export class FonteComoLegado implements FonteComoEstabelecimento {
-  constructor(
-    private readonly nucleo: NucleoSuporte,
-    /**
-     * false em dev/ci com ACESSO_FONTE_DEV=copia: o Corrigir faria COMMIT nas tabelas do SPDATA da cópia
-     * compartilhada, fora da trava da cópia (ADR 0021, decisão 20: em dev, só SGH_). A prévia continua.
-     */
-    private readonly corrigirLiberado = true,
-  ) {}
-  private ctx(hospital: string): Ctx {
-    return { rede: this.nucleo.rede, hospital, traceId: 'suporte' };
-  }
-  grupos(hospital: string) {
-    return this.nucleo.gruposAlvo(hospital);
-  }
-  usuarios(hospital: string, grupo: string) {
-    return this.nucleo.usuariosAlvo(hospital, grupo);
-  }
-  imagensPorAcao(hospital: string, sessao: string) {
-    return this.nucleo.lerSomente(this.ctx(hospital), (l) => contarImagensPorAcao(l, sessao));
-  }
-  previa(hospital: string, sessao: string, acao?: string) {
-    return this.nucleo.previaCorrecaoComo(hospital, sessao, acao);
-  }
-  corrigir(...a: Parameters<FonteComoEstabelecimento['corrigir']>) {
-    if (!this.corrigirLiberado)
-      return Promise.reject(
-        new ErroCorrigirIndisponivel(
-          'Corrigir só em homolog, treino ou produção: em dev, as escritas no banco ficam em memória.',
-        ),
-      );
-    return this.nucleo.corrigirComo(...a);
-  }
-  cruzamento(hospital: string, janela: { alvo: string; inicio: Date; fim: Date }) {
-    return this.nucleo.lerSomente(this.ctx(hospital), (l) => lerCruzamento(l, janela));
-  }
 }
 
 // ── Memória (testes e dev/ci com a fonte sintética) ────────────────────────────────────────────
 
 /**
  * Contas SINTÉTICAS da plataforma (dev/ci com a fonte sintética e E2E): nomes e e-mails claramente fictícios
- * (domínio .invalid), senha no repositório como a dos usuários sintéticos do SPDATA. Nunca existem fora de
+ * (domínio .invalid), senha sintética no repositório. Nunca existem fora de
  * dev/ci nem com ACESSO_FONTE_DEV=copia (aí a conta é criada por `pnpm plataforma:criar-admin`).
  */
 export const CONTAS_PLATAFORMA_SINTETICAS = {
@@ -393,7 +208,7 @@ export class RepositorioPlataformaMemoria implements RepositorioPlataforma {
 
   private criarSemEsperar(c: ContaNova, evento: Omit<EventoConta, 'contaAlvo'>): string {
     if ([...this.contasMem.values()].some((x) => x.email === c.email))
-      throw new Error('SGH_UQ_PLAT_CONTA_EMAIL');
+      throw new Error('uq_conta_plataforma_email');
     const id = this.novo();
     this.contasMem.set(id, {
       id,
@@ -417,7 +232,7 @@ export class RepositorioPlataformaMemoria implements RepositorioPlataforma {
   async alterarConta(id: string, m: MudancaConta, evento: EventoConta | null) {
     await this.ok(null);
     const c = this.contasMem.get(id);
-    if (!c) throw new Error('SGH_PLAT_CONTA: conta não alterada.');
+    if (!c) throw new Error('conta_plataforma: conta não alterada.');
     this.contasMem.set(id, {
       ...c,
       ...(m.ativo !== undefined ? { ativo: m.ativo } : {}),

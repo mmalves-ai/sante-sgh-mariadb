@@ -10,8 +10,8 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
-import { portaExameIndisponivel } from './porta-legado.js';
 import { PortaExameMemoria } from './porta-memoria.js';
+import { portaExameIndisponivel } from './porta-propria.js';
 import { ServicoExame } from './servico.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
@@ -367,9 +367,10 @@ describe('cobertura, grade e resíduo', () => {
 describe('porta indisponível', () => {
   it('fora de dev/ci sem o núcleo: 503 em tudo e a gravação recusada', async () => {
     const p = portaExameIndisponivel();
-    expect(p.destino).toBe('legado');
-    await expect(p.agendas({ rede: 'r', hospital: 'h' })).rejects.toThrow(/indispon/i);
-    expect((await p.podeGravar({ rede: 'r', hospital: 'h' }, 'agenda.agendarExame', 'X')).pode).toBe(false);
+    const c = { cliente: 'sintetico', estabelecimento: 1, usuario: 1, correlacao: 't' };
+    expect(p.destino).toBe('banco');
+    await expect(p.agendas(c)).rejects.toThrow(/indispon/i);
+    expect((await p.podeGravar(c, 'agenda.agendarExame')).pode).toBe(false);
     expect((p as unknown as Record<string, unknown>)['then']).toBeUndefined();
   });
 });

@@ -1,21 +1,25 @@
 // Regra 15: vigia sem trigger e com carga fixa. Uma consulta por canal e estabelecimento por ciclo, qualquer que seja
 // o número de telas (50 ouvintes = as mesmas consultas que 1); evento só quando o selo muda; a marca d'água no
-// armazém e, perdida, a releitura com aviso; armazém fora não é perda; erro do banco não derruba o laço.
+// armazém e, perdida, a releitura com aviso; armazém fora não é perda; erro do banco não derruba o laço. O canal é
+// do estabelecimento de um cliente (chave `sgh:<cliente>:vigia:<estabelecimento>:<canal>`).
 import type { CanalVigia } from '@sgh/contratos';
-import type { LeituraCanal, MarcaVigia } from '@sgh/legado';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import { describe, expect, it, vi } from 'vitest';
 import { ArmazemMemoria, type ArmazemSessao } from '../../sessao/armazem.js';
-import { intervaloDoAmbiente, MotorVigia } from './vigia.js';
+import { type AlvoVigia, intervaloDoAmbiente, type LeituraCanal, type MarcaVigia, MotorVigia } from './vigia.js';
+
+const PC: AlvoVigia = { cliente: 'c1', estabelecimento: 11 };
+const HS: AlvoVigia = { cliente: 'c1', estabelecimento: 12 };
 
 function fonte() {
   let selo = 'a';
-  const chamadas: { hospital: string; canal: CanalVigia; marca: MarcaVigia }[] = [];
+  const chamadas: { ctx: ContextoNucleo; canal: CanalVigia; marca: MarcaVigia }[] = [];
   return {
     chamadas,
     mudar: (s: string) => (selo = s),
     falhar: false,
-    ler(hospital: string, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal> {
-      chamadas.push({ hospital, canal, marca });
+    ler(ctx: ContextoNucleo, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal> {
+      chamadas.push({ ctx, canal, marca });
       if (this.falhar) return Promise.reject(new Error('banco fora'));
       return Promise.resolve({
         selo,
@@ -28,8 +32,7 @@ function fonte() {
 
 function motor(f: ReturnType<typeof fonte>, armazem: ArmazemSessao = new ArmazemMemoria()) {
   return new MotorVigia({
-    rede: 'r',
-    lerCanal: (h, c, m) => f.ler(h, c, m),
+    lerCanal: (x, c, m) => f.ler(x, c, m),
     armazem,
     tipoArmazem: 'memoria',
     intervaloMs: 1_000,
@@ -43,7 +46,7 @@ describe('vigia de mudanças', () => {
       const contar = async (n: number) => {
         const f = fonte();
         const m = motor(f);
-        const cancelar = Array.from({ length: n }, () => m.assinar('pc', 'leitos', () => undefined));
+        const cancelar = Array.from({ length: n }, () => m.assinar(PC, 'leitos', () => undefined));
         for (let k = 0; k < 5; k++) await vi.advanceTimersByTimeAsync(1_000);
         m.parar();
         for (const c of cancelar) c();
@@ -64,10 +67,10 @@ describe('vigia de mudanças', () => {
       const m = motor(f);
       const a: number[] = [];
       const b: number[] = [];
-      const sa = m.assinar('pc', 'leitos', (e) => a.push(e.versao));
-      const sb = m.assinar('pc', 'leitos', (e) => b.push(e.versao));
+      const sa = m.assinar(PC, 'leitos', (e) => a.push(e.versao));
+      const sb = m.assinar(PC, 'leitos', (e) => b.push(e.versao));
       // Um ouvinte com defeito não derruba os outros.
-      const sc = m.assinar('pc', 'leitos', () => {
+      const sc = m.assinar(PC, 'leitos', () => {
         throw new Error('x');
       });
       await vi.advanceTimersByTimeAsync(10);
@@ -77,10 +80,10 @@ describe('vigia de mudanças', () => {
       await vi.advanceTimersByTimeAsync(1_000);
       expect(a).toEqual([1]);
       expect(b).toEqual([1]);
-      expect(m.versao('pc', 'leitos')).toBe(1);
-      expect(m.ultimoCiclo('pc', 'leitos')).not.toBeNull();
-      expect(m.versao('hs', 'leitos')).toBe(0);
-      expect(m.ultimoCiclo('hs', 'leitos')).toBeNull();
+      expect(m.versao(PC, 'leitos')).toBe(1);
+      expect(m.ultimoCiclo(PC, 'leitos')).not.toBeNull();
+      expect(m.versao(HS, 'leitos')).toBe(0);
+      expect(m.ultimoCiclo(HS, 'leitos')).toBeNull();
       sa();
       sb();
       sc();
@@ -90,7 +93,7 @@ describe('vigia de mudanças', () => {
       const s = m.saude().canais[0]!;
       expect(s).toMatchObject({
         canal: 'leitos',
-        estabelecimento: 'pc',
+        estabelecimento: '11',
         ligado: false,
         mudancas: 1,
         consultasUltimoCiclo: 1,
@@ -105,22 +108,24 @@ describe('vigia de mudanças', () => {
     const armazem = new ArmazemMemoria();
     const m = motor(f, armazem);
     const eventos: number[] = [];
-    m.assinar('pc', 'senhas', (e) => eventos.push(e.versao));
+    m.assinar(PC, 'senhas', (e) => eventos.push(e.versao));
     m.parar(); // os ciclos à mão
-    await m.cicloAgora('pc', 'senhas');
-    await m.cicloAgora('pc', 'senhas');
+    await m.cicloAgora(PC, 'senhas');
+    await m.cicloAgora(PC, 'senhas');
     expect(f.chamadas.map((c) => c.marca.maiorId)).toEqual([0, 1]);
-    expect(await armazem.obter('sgh:r:vigia:pc:senhas')).toBe(
+    // A leitura recebe o contexto do núcleo do canal, sem sessão (processo).
+    expect(f.chamadas[0]?.ctx).toEqual({ cliente: 'c1', estabelecimento: 11, usuario: null, correlacao: 'vigia-senhas' });
+    expect(await armazem.obter('sgh:c1:vigia:11:senhas')).toBe(
       JSON.stringify({ maiorId: 2, maiorId2: 0, janela: 0 }),
     );
-    await armazem.apagar('sgh:r:vigia:pc:senhas');
-    await m.cicloAgora('pc', 'senhas');
+    await armazem.apagar('sgh:c1:vigia:11:senhas');
+    await m.cicloAgora(PC, 'senhas');
     expect(f.chamadas.at(-1)?.marca.maiorId).toBe(0);
     expect(eventos).toEqual([1]);
     expect(m.saude().canais[0]?.releituras).toBe(1);
     // Marca ilegível no armazém: recomeça do zero.
-    await armazem.gravar('sgh:r:vigia:pc:senhas', '{x', 60);
-    await m.cicloAgora('pc', 'senhas');
+    await armazem.gravar('sgh:c1:vigia:11:senhas', '{x', 60);
+    await m.cicloAgora(PC, 'senhas');
     expect(f.chamadas.at(-1)?.marca.maiorId).toBe(0);
   });
 
@@ -136,24 +141,34 @@ describe('vigia de mudanças', () => {
     };
     const avisos: string[] = [];
     const m = new MotorVigia({
-      rede: 'r',
-      lerCanal: (h, c, mm) => f.ler(h, c, mm),
+      lerCanal: (x, c, mm) => f.ler(x, c, mm),
       armazem: fora,
       tipoArmazem: 'valkey',
       intervaloMs: 5,
       aviso: (msg) => avisos.push(msg),
     });
     const ev: number[] = [];
-    m.assinar('pc', 'dispensacao', (e) => ev.push(e.versao));
+    m.assinar(PC, 'dispensacao', (e) => ev.push(e.versao));
     m.parar();
-    await m.cicloAgora('pc', 'dispensacao');
-    await m.cicloAgora('pc', 'dispensacao');
+    await m.cicloAgora(PC, 'dispensacao');
+    await m.cicloAgora(PC, 'dispensacao');
     expect(f.chamadas.map((c) => c.marca.maiorId)).toEqual([0, 1]);
     expect(ev).toEqual([]);
     f.falhar = true;
-    await m.cicloAgora('pc', 'dispensacao');
+    await m.cicloAgora(PC, 'dispensacao');
     expect(m.saude()).toMatchObject({ marcaDagua: 'valkey', canais: [{ erros: 1, intervaloMs: 1_000 }] });
     expect(avisos).toEqual(['vigia: ciclo falhou']);
+  });
+
+  it('o mesmo estabelecimento em outro cliente é outro canal; sem estabelecimento não assina', async () => {
+    const f = fonte();
+    const m = motor(f);
+    m.parar();
+    await m.cicloAgora(PC, 'leitos');
+    await m.cicloAgora({ cliente: 'c2', estabelecimento: 11 }, 'leitos');
+    expect(f.chamadas.map((c) => c.ctx.cliente)).toEqual(['c1', 'c2']);
+    expect(m.saude().canais).toHaveLength(2);
+    expect(() => m.assinar({ cliente: 'c1', estabelecimento: null }, 'leitos', () => undefined)).toThrow();
   });
 
   it('intervalo de 1 a 2 s pelo ambiente', () => {

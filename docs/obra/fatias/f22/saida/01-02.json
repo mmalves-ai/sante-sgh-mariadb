@@ -1,0 +1,114 @@
+{
+  "lote": "01-02",
+  "registrar": [
+    "atendimento",
+    "cadastro"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/atendimento/atendimento.controller.ts",
+    "src/modulos/atendimento/atendimento.spec.ts",
+    "src/modulos/atendimento/avisos.ts",
+    "src/modulos/atendimento/escore-pa.ts",
+    "src/modulos/atendimento/modulo.ts",
+    "src/modulos/atendimento/operacoes.ts",
+    "src/modulos/atendimento/pa.controller.ts",
+    "src/modulos/atendimento/pa-escore.spec.ts",
+    "src/modulos/atendimento/pa-transferencia.spec.ts",
+    "src/modulos/atendimento/porta-memoria.ts",
+    "src/modulos/atendimento/porta-propria.int.spec.ts",
+    "src/modulos/atendimento/porta-propria.ts",
+    "src/modulos/atendimento/porta.ts",
+    "src/modulos/atendimento/public-api.ts",
+    "src/modulos/atendimento/servico.ts",
+    "src/modulos/atendimento/tipos.ts",
+    "src/modulos/cadastro/cadastro.spec.ts",
+    "src/modulos/cadastro/comum.ts",
+    "src/modulos/cadastro/contexto-nucleo.ts",
+    "src/modulos/cadastro/massa.spec-util.ts",
+    "src/modulos/cadastro/memoria-versao.ts",
+    "src/modulos/cadastro/modulo.ts",
+    "src/modulos/cadastro/pacientes.controller.ts",
+    "src/modulos/cadastro/porta-memoria.ts",
+    "src/modulos/cadastro/porta-propria.int.spec.ts",
+    "src/modulos/cadastro/porta-propria.ts",
+    "src/modulos/cadastro/porta.ts",
+    "src/modulos/cadastro/profissionais.controller.ts",
+    "src/modulos/cadastro/profissionais-edicao.spec.ts",
+    "src/modulos/cadastro/profissionais-memoria.ts",
+    "src/modulos/cadastro/public-api.ts",
+    "src/modulos/cadastro/servico.ts",
+    "src/modulos/cadastro/teste.spec-util.ts",
+    "src/modulos/cadastro/tipos.ts",
+    "src/modulos/cadastro/unificacao-como.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "chave_busca_nome",
+      "motivo": "busca fonética e por palavra do nome (paciente, profissional): hoje a palavra usa LIKE no começo da palavra e a fonética não acha nada (idsPorFonetica devolve vazio). A tabela é mantida pela gravação do cadastro (regra no domínio, @sgh/dominio-cadastro.palavrasDoCadastro/chaveFonetica).",
+      "ddl": "CREATE TABLE chave_busca_nome (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  entidade VARCHAR(20) NOT NULL,\n  registro_id BIGINT UNSIGNED NOT NULL,\n  campo VARCHAR(20) NOT NULL,\n  palavra VARCHAR(40) NOT NULL,\n  fonetica VARCHAR(40) NOT NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_chave_busca_nome_entidade CHECK (entidade IN ('paciente','profissional','solicitante')),\n  CONSTRAINT ck_chave_busca_nome_campo CHECK (campo IN ('nome','social','mae')),\n  UNIQUE KEY uq_chave_busca_nome (entidade, registro_id, campo, palavra),\n  KEY ix_chave_busca_nome_palavra (entidade, palavra),\n  KEY ix_chave_busca_nome_fonetica (entidade, fonetica)\n) COMMENT='Palavras e chaves fonéticas dos nomes para a busca única do cadastro';"
+    },
+    {
+      "tipo": "carga",
+      "alvo": "tools/db/criar_cliente.py",
+      "motivo": "domínios básicos do cadastro e do atendimento que as portas próprias usam por código e que o cliente novo não traz: sexo (siglas F, M), tipo_telefone (fixo, celular, recado), tipo_endereco (residencial), tipo_documento_identificacao (rg), categoria_atendimento (consulta, pa, exame, requisicaoLab), carater_atendimento_tiss (1, 2), terminologia 'cid10' (carregador de catálogo) e as sequencias 'prontuario' (cliente) e 'atendimento' (por estabelecimento). Sem eles a gravação responde 503 'dominio-nao-configurado' ou recusa com o campo."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/cadastro/telas.ts",
+      "motivo": "SITUACOES_DUPLICIDADE: trocar 'unificado_no_legado' por 'unificado' (o banco já usa 'unificado'; a porta própria traduz enquanto isso)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/atendimento/respostas.ts",
+      "motivo": "esquemaAtendimentoResumo.tipoLegado e o profissional por 'crm' numérico: trocar por o id do profissional e o registro no conselho em texto (a porta própria devolve tipoLegado 0 e o número da inscrição principal quando é só dígitos)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/atendimento/entradas.ts",
+      "motivo": "esquemaAbrirAtendimento: 'clinica' M/C/O, 'tipoGuia' H/E/S e a especialidade 0 como 'sem especialidade' são códigos do sistema de origem; trocar por id da clinica_assistencial, tipo de guia nomeado e especialidade opcional."
+    },
+    {
+      "tipo": "regra",
+      "alvo": "atendimento",
+      "motivo": "operações ainda 501 na porta própria (a regra do sistema antigo não foi trazida ao domínio): alterarAtendimento, alterarHeranca, alterarSegurado, lancar/estornar/corrigirProcedimentoExtra; etapas do PA, impresso, paciente não identificado, escore do PA (sem tabela de escore: propor sobre aplicacao_escala), indicadores; marcacao (agenda), fichasConfiguradas (modelo_ficha_impressa e regra_impressao_ficha), escoresPa e sinaisPa respondem vazio."
+    },
+    {
+      "tipo": "regra",
+      "alvo": "cadastro",
+      "motivo": "ainda 501 na porta própria: consentimentos (consentimento_titular exige tipo_termo_lgpd e numeração), as sete gravações da edição do profissional, procedimentos da especialidade; lotação e credenciamento da ficha do profissional voltam vazios."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "registro.ts",
+      "motivo": "cadastro/modulo.ts liga o mapa código→id dos estabelecimentos (cadastro/contexto-nucleo.ts, ligarMapaEstabelecimentos), que dá o ContextoNucleo da sessão (sessaoDe) a todos os módulos que usam cadastro/comum.ts; outros módulos migrados devem chamar ligarMapaEstabelecimentos no seu modulo.ts, ou o cadastro tem de estar em API_MODULOS (a porta própria resolve pelo código quando o id falta)."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "memória de dev/ci",
+      "motivo": "cadastro/porta-memoria.ts e profissionais-memoria.ts ainda guardam a linha sintética em colunas curtas (forma antiga); sem sentinela nem S/N, mas a reescrita para o tipo PacienteFicha direto fica pedida."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "atendimento_etapa_pa",
+      "motivo": "etapas do pronto atendimento (chegada, classificação, atendimento médico, decisão, saída): hoje só a etapa 'observacao' grava (é a própria ocupacao_leito_observacao); as demais respondem 501 na rota de etapa.",
+      "ddl": "CREATE TABLE atendimento_etapa_pa (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  atendimento_id BIGINT UNSIGNED NOT NULL,\n  etapa VARCHAR(30) NOT NULL,\n  ocorrida_em DATETIME(3) NOT NULL,\n  usuario_id BIGINT UNSIGNED NULL,\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  excluido_em DATETIME(3) NULL,\n  excluido_por BIGINT UNSIGNED NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  CONSTRAINT ck_atendimento_etapa_pa_etapa CHECK (etapa IN ('chegada','classificacao','chamada','atendimento_medico','reavaliacao','observacao','decisao','saida')),\n  CONSTRAINT ck_atendimento_etapa_pa_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  KEY ix_atendimento_etapa_pa_atendimento (atendimento_id, ocorrida_em),\n  KEY ix_atendimento_etapa_pa_usuario (usuario_id)\n) COMMENT='Etapas do paciente no pronto atendimento, com momento e responsável';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ocupacao_leito_observacao",
+      "motivo": "opcional (defesa no banco): uma ocupação vigente por atendimento; hoje a recusa 'ja-em-observacao' é feita na transação com a linha do atendimento travada.",
+      "ddl": "ALTER TABLE ocupacao_leito_observacao ADD COLUMN atendimento_vigente_id BIGINT UNSIGNED AS (IF(situacao = 'ativa' AND data_hora_saida IS NULL, atendimento_id, NULL)) PERSISTENT COMMENT 'Garante uma única ocupação aberta por atendimento', ADD UNIQUE KEY uq_ocupacao_leito_observacao_atendimento_vigente (atendimento_vigente_id);"
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/atendimento/entradas.ts",
+      "motivo": "esquemaAbrirAtendimento: 'plano' vem como nome (a porta procura pelo código ou descrição do plano_fonte_pagadora) e responsavel.parentesco como número 0..8 (a porta procura grau_parentesco_dependente.codigo); trocar pelos ids."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "packages/dominio-atendimento e packages/dominio-cadastro",
+      "motivo": "arquivos novos do lote (fluxo-atendimento.ts e unificacao/referencias-paciente.ts, com specs) e uma linha de export em cada index.ts. A lista REFERENCIAS_PACIENTE foi gerada das chaves estrangeiras para paciente(id) do DDL: migração nova com FK para paciente precisa de linha nova nela (a unificação recusa enquanto faltar)."
+    }
+  ]
+}

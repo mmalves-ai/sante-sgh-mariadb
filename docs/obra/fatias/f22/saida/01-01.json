@@ -1,0 +1,203 @@
+{
+  "lote": "01-01",
+  "registrar": [
+    "recepcao: () => import('./recepcao/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/recepcao/aplicacao/fonte-classificacao.spec.ts",
+    "src/modulos/recepcao/aplicacao/worklist-recepcao.ts",
+    "src/modulos/recepcao/apoio.ts",
+    "src/modulos/recepcao/chamadas.spec.ts",
+    "src/modulos/recepcao/chamadas.ts",
+    "src/modulos/recepcao/classificacao-formulario.spec.ts",
+    "src/modulos/recepcao/classificacao-formulario.ts",
+    "src/modulos/recepcao/classificacao-porta-memoria.ts",
+    "src/modulos/recepcao/classificacao-porta.ts",
+    "src/modulos/recepcao/classificacao-servico.ts",
+    "src/modulos/recepcao/classificacao.controller.ts",
+    "src/modulos/recepcao/classificacao.spec.ts",
+    "src/modulos/recepcao/dispositivo.controller.ts",
+    "src/modulos/recepcao/gestao.controller.ts",
+    "src/modulos/recepcao/porta-memoria.ts",
+    "src/modulos/recepcao/porta.ts",
+    "src/modulos/recepcao/protocolo-gerenciado-servico.ts",
+    "src/modulos/recepcao/protocolo-gerenciado.controller.ts",
+    "src/modulos/recepcao/protocolo-gerenciado.spec.ts",
+    "src/modulos/recepcao/public-api.ts",
+    "src/modulos/recepcao/recepcao.controller.ts",
+    "src/modulos/recepcao/recepcao.spec.ts",
+    "src/modulos/recepcao/servico.spec.ts",
+    "src/modulos/recepcao/servico.ts",
+    "src/modulos/recepcao/simbolos.ts",
+    "src/modulos/recepcao/termos-memoria.ts",
+    "src/modulos/recepcao/termos.controller.ts",
+    "src/modulos/recepcao/termos.spec.ts",
+    "src/modulos/recepcao/worklist.controller.ts",
+    "src/modulos/recepcao/app-recepcao.spec-util.ts",
+    "src/modulos/recepcao/banco.ts",
+    "src/modulos/recepcao/classificacao-porta-propria.int.spec.ts",
+    "src/modulos/recepcao/classificacao-porta-propria.ts",
+    "src/modulos/recepcao/indisponivel.ts",
+    "src/modulos/recepcao/massa-recepcao.spec-util.ts",
+    "src/modulos/recepcao/modulo.ts",
+    "src/modulos/recepcao/operacoes.ts",
+    "src/modulos/recepcao/porta-propria.int.spec.ts",
+    "src/modulos/recepcao/porta-propria.ts",
+    "src/modulos/recepcao/tipos.ts",
+    "src/modulos/recepcao/classificacao-operacoes.ts",
+    "src/modulos/recepcao/regra-fila.ts",
+    "src/modulos/recepcao/regra-fila.spec.ts",
+    "src/modulos/recepcao/tela-senha.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "gerador_senha",
+      "motivo": "Configuração da fila por serviço (ordem intercalada, quantas prioritárias antes de uma normal, tempo-alvo de espera, rótulo e exibição no totem). Hoje a leitura usa os padrões e a gravação (PUT /recepcao/filas/:gerador) responde 'modelo-pendente'.",
+      "ddl": "ALTER TABLE gerador_senha\n  ADD COLUMN intercalar_prioritarias TINYINT UNSIGNED NOT NULL DEFAULT 2 COMMENT 'Na ordem intercalada: prioritárias antes de uma normal',\n  ADD COLUMN tempo_alvo_espera_minutos SMALLINT UNSIGNED NULL COMMENT 'Meta de espera da emissão à chamada; nulo sem meta',\n  ADD COLUMN rotulo_totem VARCHAR(40) NULL COMMENT 'Rótulo do botão no totem; nulo: a descrição',\n  ADD COLUMN exibe_no_totem BOOLEAN NOT NULL DEFAULT TRUE,\n  DROP CONSTRAINT ck_gerador_senha_ordem_lista,\n  ADD CONSTRAINT ck_gerador_senha_ordem_lista CHECK (ordem_lista IN ('chegada','prioridade','intercalada','horario_marcacao')),\n  ADD CONSTRAINT ck_gerador_senha_intercalar CHECK (intercalar_prioritarias BETWEEN 1 AND 9);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "senha_emitida",
+      "motivo": "A senha suspensa (aguardando documento, autorização, não localizada) volta à fila ('retomar'); não é 'nao_compareceu' nem 'cancelada'. Sem a situação, suspender e não localizado são recusados pelo CHECK (o teste de integração não cobre esse caminho até a migração).",
+      "ddl": "ALTER TABLE senha_emitida\n  DROP CONSTRAINT ck_senha_emitida_situacao,\n  ADD CONSTRAINT ck_senha_emitida_situacao CHECK (situacao IN ('aguardando','chamada','em_atendimento','encaminhada','atendida','suspensa','nao_compareceu','cancelada'));"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "dispositivo_recepcao",
+      "motivo": "Dispositivos do perfil Painel/Totem (token só por resumo, validade, revogação, usuário técnico, conferência no setor). Hoje a lista é vazia, o token não abre nada e as gravações respondem 'modelo-pendente'.",
+      "ddl": "CREATE TABLE dispositivo_recepcao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  tipo VARCHAR(20) NOT NULL,\n  nome VARCHAR(60) NOT NULL,\n  ponto_recepcao_id BIGINT UNSIGNED NULL,\n  conteudo VARCHAR(20) NULL COMMENT 'Painel de TV de setor: leitos, higienizacao, bloco, pa',\n  tecnico_usuario_id BIGINT UNSIGNED NULL COMMENT 'Conta de serviço com que o totem grava',\n  voz BOOLEAN NOT NULL DEFAULT FALSE,\n  resumo_token CHAR(64) NOT NULL COMMENT 'SHA-256 do token; o token nunca é guardado',\n  prefixo_token CHAR(8) NOT NULL,\n  valido_ate DATETIME(3) NOT NULL,\n  revogado_em DATETIME(3) NULL, revogado_por BIGINT UNSIGNED NULL,\n  ultimo_uso_em DATETIME(3) NULL,\n  login_substituido VARCHAR(60) NULL, conferido_em DATETIME(3) NULL, conferido_por BIGINT UNSIGNED NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_dispositivo_recepcao_resumo_token (resumo_token),\n  CONSTRAINT ck_dispositivo_recepcao_tipo CHECK (tipo IN ('totem','painel','paineltv')),\n  CONSTRAINT ck_dispositivo_recepcao_totem CHECK (tipo <> 'totem' OR tecnico_usuario_id IS NOT NULL),\n  KEY ix_dispositivo_recepcao_estabelecimento (estabelecimento_id), KEY ix_dispositivo_recepcao_ponto (ponto_recepcao_id), KEY ix_dispositivo_recepcao_tecnico (tecnico_usuario_id)\n) COMMENT='Dispositivo do perfil Painel/Totem da recepção (token por resumo)';\nCREATE TABLE dispositivo_recepcao_local (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, dispositivo_recepcao_id BIGINT UNSIGNED NOT NULL, local_atendimento_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_dispositivo_recepcao_local_par (dispositivo_recepcao_id, local_atendimento_id), KEY ix_dispositivo_recepcao_local_local (local_atendimento_id)) COMMENT='Locais que o painel mostra';\nCREATE TABLE dispositivo_recepcao_gerador (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, dispositivo_recepcao_id BIGINT UNSIGNED NOT NULL, gerador_senha_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_dispositivo_recepcao_gerador_par (dispositivo_recepcao_id, gerador_senha_id), KEY ix_dispositivo_recepcao_gerador_gerador (gerador_senha_id)) COMMENT='Serviços que o totem oferece';\n-- FKs: estabelecimento, ponto_recepcao, usuario (tecnico/revogado/conferido), dispositivo_recepcao, local_atendimento, gerador_senha (ON DELETE RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "termo_consentimento_recepcao",
+      "motivo": "Termos de consentimento e LGPD do balcão (assinatura por prontuário, sem atendimento nem profissional; hash imutável; meio tela/portal; signatário; revogação como fato novo). termo_consentimento_paciente exige atendimento e profissional (consentimento de procedimento): não serve. Hoje a lista é vazia e as gravações respondem 'modelo-pendente'.",
+      "ddl": "ALTER TABLE termo_consentimento_modelo\n  ADD COLUMN tipos_atendimento JSON NULL COMMENT 'Tipos de atendimento em que o termo é pedido na recepção',\n  ADD COLUMN exigido_recepcao BOOLEAN NOT NULL DEFAULT FALSE,\n  ADD COLUMN resumo_texto CHAR(64) NULL COMMENT 'SHA-256 do texto da versão',\n  ADD CONSTRAINT ck_termo_consentimento_modelo_tipos CHECK (tipos_atendimento IS NULL OR JSON_TYPE(tipos_atendimento) = 'ARRAY');\n-- e incluir na ck de finalidade as finalidades do contrato (FINALIDADES_CONSENTIMENTO: lgpd, uso de imagem, etc.).\nCREATE TABLE termo_consentimento_recepcao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  termo_consentimento_modelo_id BIGINT UNSIGNED NOT NULL,\n  paciente_id BIGINT UNSIGNED NOT NULL,\n  senha_emitida_id BIGINT UNSIGNED NULL,\n  tipo_atendimento VARCHAR(30) NULL,\n  meio VARCHAR(10) NOT NULL,\n  tipo_assinante_id BIGINT UNSIGNED NOT NULL,\n  nome_signatario VARCHAR(150) NOT NULL,\n  resumo_assinatura CHAR(64) NOT NULL COMMENT 'SHA-256 do conteúdo canônico assinado',\n  arquivo_id BIGINT UNSIGNED NULL COMMENT 'Imagem da assinatura',\n  assinado_em DATETIME(3) NOT NULL,\n  revogado_em DATETIME(3) NULL, revogado_por BIGINT UNSIGNED NULL, motivo_revogacao VARCHAR(500) NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_termo_consentimento_recepcao_meio CHECK (meio IN ('tela','portal')),\n  CONSTRAINT ck_termo_consentimento_recepcao_revogacao CHECK (revogado_em IS NULL OR CHAR_LENGTH(TRIM(motivo_revogacao)) >= 10),\n  KEY ix_termo_consentimento_recepcao_paciente (paciente_id), KEY ix_termo_consentimento_recepcao_modelo (termo_consentimento_modelo_id)\n) COMMENT='Termo de consentimento assinado no balcão (imutável; revogação é fato novo)';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "protocolo_classificacao_risco_versao",
+      "motivo": "A impressão digital gravada (hoje recalculada na leitura: a conferência de integridade do serviço fica sem efeito) e a licença do protocolo licenciado (Manchester; hoje publicar com licença responde 'modelo-pendente').",
+      "ddl": "ALTER TABLE protocolo_classificacao_risco_versao\n  ADD COLUMN impressao CHAR(64) NULL COMMENT 'SHA-256 do JSON canônico do conteúdo publicado',\n  ADD COLUMN licenca_registro VARCHAR(60) NULL,\n  ADD COLUMN licenca_titular VARCHAR(150) NULL,\n  ADD COLUMN licenca_valida_ate DATE NULL,\n  ADD CONSTRAINT ck_protocolo_classificacao_risco_versao_licenca CHECK ((licenca_registro IS NULL) = (licenca_valida_ate IS NULL));\nALTER TABLE protocolo_gerenciado_versao ADD COLUMN impressao CHAR(64) NULL COMMENT 'SHA-256 do JSON canônico do conteúdo publicado';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "aviso_estouro_classificacao",
+      "motivo": "O aviso de estouro do tempo-alvo, uma vez por chave (o worker de estouro). Hoje avisarEstouro responde 'modelo-pendente' e avisosGravados lê vazio.",
+      "ddl": "CREATE TABLE aviso_estouro_classificacao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  classificacao_risco_id BIGINT UNSIGNED NOT NULL,\n  chave VARCHAR(80) NOT NULL,\n  prazo_em DATETIME(3) NOT NULL,\n  avisado_em DATETIME(3) NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_aviso_estouro_classificacao_chave (chave), KEY ix_aviso_estouro_classificacao_classificacao (classificacao_risco_id)\n) COMMENT='Aviso de estouro do tempo-alvo da classificação, uma vez por chave';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "inclusao_protocolo_registro",
+      "motivo": "Metas, itens de checklist e encerramento do protocolo gerenciado do paciente (uma vez cada; nada depois do encerramento). inclusao_protocolo_etapa exige etapa normalizada; inclusao_protocolo_evento não tem meta/checklist. Hoje registrarEventoProtocolo responde 'modelo-pendente' e os eventos lidos vêm vazios.",
+      "ddl": "CREATE TABLE inclusao_protocolo_registro (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  inclusao_protocolo_paciente_id BIGINT UNSIGNED NOT NULL,\n  tipo VARCHAR(20) NOT NULL,\n  codigo VARCHAR(40) NOT NULL,\n  situacao VARCHAR(30) NOT NULL,\n  ocorrido_em DATETIME(3) NULL, prazo_em DATETIME(3) NULL, motivo VARCHAR(500) NULL,\n  usuario_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_inclusao_protocolo_registro_codigo (inclusao_protocolo_paciente_id, tipo, codigo),\n  CONSTRAINT ck_inclusao_protocolo_registro_tipo CHECK (tipo IN ('meta','checklist','encerramento'))\n) COMMENT='Metas, checklist e encerramento do protocolo gerenciado do paciente';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "local_atendimento_encaminhamento",
+      "motivo": "Para onde cada local encaminha. Hoje: local com permite_encaminhamento encaminha a todos os locais ativos da mesma recepção.",
+      "ddl": "CREATE TABLE local_atendimento_encaminhamento (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, origem_local_atendimento_id BIGINT UNSIGNED NOT NULL, destino_local_atendimento_id BIGINT UNSIGNED NOT NULL,\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  UNIQUE KEY uq_local_atendimento_encaminhamento_par (origem_local_atendimento_id, destino_local_atendimento_id),\n  CONSTRAINT ck_local_atendimento_encaminhamento_distintos CHECK (origem_local_atendimento_id <> destino_local_atendimento_id)) COMMENT='Destinos de encaminhamento de cada local';"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "paciente / usuario",
+      "motivo": "Prontuário sigiloso (mascarar nome e foto em painel, chamada e listas; hoje nenhum é sigiloso) e o vínculo explícito da conta com a pessoa (hoje o profissional da sessão sai pelo CPF da conta = CPF da pessoa).",
+      "ddl": "ALTER TABLE paciente ADD COLUMN sigiloso BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Prontuário sigiloso: nome e foto mascarados em painel, chamada e listas';\nALTER TABLE usuario ADD COLUMN pessoa_fisica_id BIGINT UNSIGNED NULL COMMENT 'Pessoa da conta (profissional, colaborador)', ADD KEY ix_usuario_pessoa_fisica (pessoa_fisica_id);"
+    },
+    {
+      "tipo": "catalogo",
+      "tabela": "acao_fluxo_senha, grupo_prioridade_legal, nivel_prioridade, parametro_vital, motivo_reclassificacao",
+      "motivo": "Catálogos do produto que a recepção e a classificação usam por código estável; o criar_cliente deve semeá-los (o teste semeia os seus na massa).",
+      "codigos": {
+        "acao_fluxo_senha": [
+          "chamar",
+          "liberar",
+          "suspender",
+          "nao_localizado",
+          "cancelar_chamada",
+          "encaminhar"
+        ],
+        "grupo_prioridade_legal": [
+          "idoso_80",
+          "prioridade_legal",
+          "idoso_60",
+          "gestante",
+          "lactante",
+          "pessoa_deficiencia",
+          "crianca_colo",
+          "autismo",
+          "obesidade"
+        ],
+        "nivel_prioridade (contexto classificacao_risco)": [
+          "vermelho",
+          "laranja",
+          "amarelo",
+          "verde",
+          "azul"
+        ],
+        "parametro_vital": [
+          "pressao_sistolica",
+          "pressao_diastolica",
+          "frequencia_cardiaca",
+          "frequencia_respiratoria",
+          "temperatura",
+          "saturacao_oxigenio",
+          "glicemia_capilar",
+          "escala_dor",
+          "escala_glasgow"
+        ],
+        "motivo_reclassificacao (tipo)": [
+          "tempo_alvo_vencido",
+          "piora_clinica"
+        ]
+      }
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "apps/api/src/modulos/atendimento/modulo.ts e app-base",
+      "motivo": "O módulo da recepção é global (exporta FONTE_RISCO_PA, PAINEL_PA_TV, PORTA_RECEPCAO, PORTA_CLASSIFICACAO) e usa PORTA_ATENDIMENTO e AVISOS_ATENDIMENTO como opcionais. Para a classificação ver o atendimento em produção, o módulo do atendimento precisa ser global (ou o registro marcar os módulos como globais); sem isso, as telas da classificação respondem 503 nas leituras do PA."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (recepcao)",
+      "motivo": "Nomes do contrato da tela ainda com 'legado': esquemaDispositivo.usuarioLegado, DispositivoLido.usuarioLegado, CorProtocolo.corLegado, CorLegadoConsulta e a rota GET /api/pa/cores-legado. A porta usa 'usuarioTecnico' e 'coresAnteriores'; a troca no contrato e na tela fica para o lote do contrato/web."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "fluxograma_classificacao_risco",
+      "motivo": "O contrato aceita código de fluxograma de até 60 caracteres e a coluna tem 30. Hoje a publicação recusa o código acima de 30 ('codigo-fluxograma-longo'); com o DDL, subir MAX_CODIGO_FLUXOGRAMA (classificacao-operacoes.ts) para 60.",
+      "ddl": "ALTER TABLE fluxograma_classificacao_risco MODIFY codigo VARCHAR(60) NULL;"
+    },
+    {
+      "tipo": "dominio",
+      "alvo": "packages/dominio-recepcao",
+      "motivo": "Mover apps/api/src/modulos/recepcao/regra-fila.ts (ordem da fila pelo cadastro do serviço, peso do grupo legal, grupo do botão na emissão) e o spec para o pacote de domínio; o lote só edita o próprio módulo."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (recepcao: SITUACOES_SENHA, TIPOS_GERADOR, PRIORIDADES_SENHA, GRUPOS_PRIORIDADE, ORDENS_FILA, decidirEvento, ordenarFila, chamavel)",
+      "motivo": "A porta da recepção já fala o vocabulário neutro (situação nominal, guichê nulo, tipo 'atendimento'/'diverso', grupo legal por código, limite e tempo-alvo nulos). O contrato da tela e as regras dele ainda usam letras (G/C/A/S/L), guichê 0, '0'/'5' e '0'/'1'/'2'; a tradução está isolada em recepcao/tela-senha.ts. Trocar o contrato e apagar a tradução; incluir 'horario_marcacao' em ORDENS_FILA (a porta já devolve a ordem do cadastro)."
+    },
+    {
+      "tipo": "catalogo",
+      "tabela": "situacao_marcacao",
+      "motivo": "A chegada do agendado usa a situação de significado 'chegou' (e desfazer, na falta do histórico, a de 'aguardando'). O criar_cliente deve semear ao menos uma situação ativa por significado.",
+      "codigos": {
+        "situacao_marcacao (significado)": [
+          "aguardando",
+          "confirmada",
+          "chegou",
+          "em_atendimento",
+          "realizada",
+          "cancelada",
+          "falta"
+        ]
+      }
+    },
+    {
+      "tipo": "catalogo",
+      "tabela": "sequencia_negocio",
+      "motivo": "As operações classificacao.publicar_protocolo e protocolo_gerenciado.publicar garantem as sequências 'protocolo_classificacao' (PCR-) e 'protocolo_gerenciado' (PG-) por cliente; o criar_cliente pode semeá-las."
+    }
+  ]
+}

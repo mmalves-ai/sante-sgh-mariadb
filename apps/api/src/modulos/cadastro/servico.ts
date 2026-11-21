@@ -1,7 +1,7 @@
 // Regras das telas do cadastro na API (M11): a busca única (termo → índice ou busca direta, casamento por
 // palavra, sugestão fonética), o mascaramento por permissão (cap-08 §8.13; regra 9), a ficha, a linha do
-// tempo e a fila de duplicidades. As regras puras vêm de @sgh/dominio-cadastro; os dados, da porta (legado
-// ou memória). Nada aqui conhece tabela do legado.
+// tempo e a fila de duplicidades. As regras puras vêm de @sgh/dominio-cadastro; os dados, da porta (banco do
+// cliente ou memória). Nada aqui conhece tabela.
 import {
   type CampoBusca,
   type CandidatosCpf,
@@ -35,26 +35,21 @@ import {
   type PermissoesFicha,
   sugerirFoneticos,
 } from '@sgh/dominio-cadastro';
-import {
-  type LinhaTrilha,
-  type PacienteLido,
-  type ParLido,
-  type ParNovo,
-  versaoSemDocumentos,
-} from '@sgh/legado';
+
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPorta, PortaCadastro } from './porta.js';
+import type { PacienteFicha, ParCandidato, ParFila, RegistroTrilhaTela } from './tipos.js';
 
 const NOME: readonly CampoBusca[] = ['nome', 'social'];
 const MAE: readonly CampoBusca[] = ['mae'];
 
-/** Situação do cadastro: inativo e absorvido numa unificação do legado. */
-function situacao(p: PacienteLido): PacienteResumo['situacao'] {
+/** Situação do cadastro: ativo, inativo ou absorvido numa unificação. */
+function situacao(p: PacienteFicha): PacienteResumo['situacao'] {
   if (p.unificadoEm !== null) return 'unificado';
   return p.ativo ? 'ativo' : 'inativo';
 }
 
-export function resumoDoPaciente(p: PacienteLido, homonimos: ReadonlySet<number>): PacienteResumo {
+export function resumoDoPaciente(p: PacienteFicha, homonimos: ReadonlySet<number>): PacienteResumo {
   return {
     id: p.id,
     prontuario: p.prontuario,
@@ -94,8 +89,8 @@ export async function buscarPacientes(
   const inicio = performance.now();
   const t = termoOuErro(q);
   const inativos = q.inativos === 'sim';
-  let pacientes: PacienteLido[];
-  let sugestoes: PacienteLido[] = [];
+  let pacientes: PacienteFicha[];
+  let sugestoes: PacienteFicha[] = [];
   let truncado: boolean;
   if (t.tipo === 'cpf' || t.tipo === 'prontuario' || t.tipo === 'cns' || t.tipo === 'nascimento') {
     const r = await porta.buscarDireto(c, t, inativos);
@@ -182,7 +177,7 @@ export async function montarFicha(
     situacao: situacao(p),
     unificadoEm: p.unificadoEm,
     // Sem verDocumento, a versão opaca não leva CPF nem identidade (o carimbo do trigger segue detectando a colisão).
-    versao: perm.verDocumento ? p.versao : versaoSemDocumentos(p.versao),
+    versao: porta.versaoParaTela(p.versao, perm.verDocumento),
     identificacao: {
       nome: p.nome,
       nomeSocial: p.nomeSocial,
@@ -240,32 +235,32 @@ export async function montarFicha(
   };
 }
 
-/** Campos da linha do tempo (retrato HTPACIENTE) com o rótulo e a restrição. */
+/** Campos da linha do tempo (retrato do cadastro, pelo nome do campo) com o rótulo e a restrição. */
 export const CAMPOS_HISTORICO_PACIENTE: readonly CampoHistorico[] = [
-  { coluna: 'NOME', campo: 'nome', rotulo: 'Nome' },
-  { coluna: 'NOME_SOCIAL_APELIDO', campo: 'nomeSocial', rotulo: 'Nome social' },
-  { coluna: 'DATA_NASCIMENTO', campo: 'nascimento', rotulo: 'Nascimento' },
-  { coluna: 'ID_TBSEXO', campo: 'sexo', rotulo: 'Sexo' },
-  { coluna: 'NOME_MAE', campo: 'nomeMae', rotulo: 'Nome da mãe' },
-  { coluna: 'NOME_PAI', campo: 'nomePai', rotulo: 'Nome do pai' },
-  { coluna: 'MAE_DESCONHECIDA', campo: 'maeDesconhecida', rotulo: 'Mãe desconhecida' },
-  { coluna: 'CPF', campo: 'cpf', rotulo: 'CPF', restricao: 'documento' },
-  { coluna: 'CNS', campo: 'cns', rotulo: 'CNS', restricao: 'documento' },
-  { coluna: 'IDENTIDADE', campo: 'identidade', rotulo: 'Identidade', restricao: 'documento' },
-  { coluna: 'ID_TBECIV', campo: 'estadoCivil', rotulo: 'Estado civil' },
-  { coluna: 'NATURALIDADE', campo: 'naturalidade', rotulo: 'Naturalidade' },
-  { coluna: 'ID_TBUF_NATURALIDADE', campo: 'ufNaturalidade', rotulo: 'UF de naturalidade' },
-  { coluna: 'ID_TBCEP', campo: 'cep', rotulo: 'CEP' },
-  { coluna: 'LOGRADOURO', campo: 'logradouro', rotulo: 'Logradouro' },
-  { coluna: 'NUM_LOGRADOURO', campo: 'numero', rotulo: 'Número' },
-  { coluna: 'COMPL_LOGRADOURO', campo: 'complemento', rotulo: 'Complemento' },
-  { coluna: 'BAIRRO_LOGRADOURO', campo: 'bairro', rotulo: 'Bairro' },
-  { coluna: 'E_MAIL', campo: 'email', rotulo: 'E-mail' },
-  { coluna: 'ID_TBCOR', campo: 'racaCor', rotulo: 'Raça/cor', restricao: 'sensivel' },
-  { coluna: 'ID_TBRELIG', campo: 'religiao', rotulo: 'Religião', restricao: 'sensivel' },
-  { coluna: 'ID_TBETNIA', campo: 'etnia', rotulo: 'Etnia', restricao: 'sensivel' },
-  { coluna: 'NOME_GUARDIAO', campo: 'responsavelLegal', rotulo: 'Responsável legal', restricao: 'sensivel' },
-  { coluna: 'DATA_HORA_OBITO', campo: 'obito', rotulo: 'Óbito' },
+  { coluna: 'nome', campo: 'nome', rotulo: 'Nome' },
+  { coluna: 'nomeSocial', campo: 'nomeSocial', rotulo: 'Nome social' },
+  { coluna: 'nascimento', campo: 'nascimento', rotulo: 'Nascimento' },
+  { coluna: 'sexo', campo: 'sexo', rotulo: 'Sexo' },
+  { coluna: 'nomeMae', campo: 'nomeMae', rotulo: 'Nome da mãe' },
+  { coluna: 'nomePai', campo: 'nomePai', rotulo: 'Nome do pai' },
+  { coluna: 'maeDesconhecida', campo: 'maeDesconhecida', rotulo: 'Mãe desconhecida' },
+  { coluna: 'cpf', campo: 'cpf', rotulo: 'CPF', restricao: 'documento' },
+  { coluna: 'cns', campo: 'cns', rotulo: 'CNS', restricao: 'documento' },
+  { coluna: 'identidade', campo: 'identidade', rotulo: 'Identidade', restricao: 'documento' },
+  { coluna: 'estadoCivil', campo: 'estadoCivil', rotulo: 'Estado civil' },
+  { coluna: 'naturalidade', campo: 'naturalidade', rotulo: 'Naturalidade' },
+  { coluna: 'ufNaturalidade', campo: 'ufNaturalidade', rotulo: 'UF de naturalidade' },
+  { coluna: 'cep', campo: 'cep', rotulo: 'CEP' },
+  { coluna: 'logradouro', campo: 'logradouro', rotulo: 'Logradouro' },
+  { coluna: 'numero', campo: 'numero', rotulo: 'Número' },
+  { coluna: 'complemento', campo: 'complemento', rotulo: 'Complemento' },
+  { coluna: 'bairro', campo: 'bairro', rotulo: 'Bairro' },
+  { coluna: 'email', campo: 'email', rotulo: 'E-mail' },
+  { coluna: 'racaCor', campo: 'racaCor', rotulo: 'Raça/cor', restricao: 'sensivel' },
+  { coluna: 'religiao', campo: 'religiao', rotulo: 'Religião', restricao: 'sensivel' },
+  { coluna: 'etnia', campo: 'etnia', rotulo: 'Etnia', restricao: 'sensivel' },
+  { coluna: 'responsavelLegal', campo: 'responsavelLegal', rotulo: 'Responsável legal', restricao: 'sensivel' },
+  { coluna: 'obito', campo: 'obito', rotulo: 'Óbito' },
 ];
 
 const TIPOS_TELEFONE: Readonly<Record<number, string>> = { 1: 'fixo', 3: 'celular', 5: 'contato' };
@@ -311,7 +306,7 @@ export async function montarHistorico(
   };
 }
 
-function ladoDuplicidade(p: PacienteLido | undefined, id: number): ParDuplicidade['a'] {
+function ladoDuplicidade(p: PacienteFicha | undefined, id: number): ParDuplicidade['a'] {
   return {
     id,
     prontuario: p?.prontuario ?? 0,
@@ -329,7 +324,7 @@ function ladoDuplicidade(p: PacienteLido | undefined, id: number): ParDuplicidad
 export async function montarPares(
   porta: PortaCadastro,
   c: ContextoPorta,
-  pares: readonly ParLido[],
+  pares: readonly ParFila[],
 ): Promise<ParDuplicidade[]> {
   const pacientes = new Map(
     (
@@ -356,7 +351,7 @@ export async function montarPares(
 export async function montarFila(
   porta: PortaCadastro,
   c: ContextoPorta,
-  situacaoPedida: ParLido['situacao'],
+  situacaoPedida: ParFila['situacao'],
   pagina: number,
   porPagina: number,
 ): Promise<FilaDuplicidades> {
@@ -380,14 +375,14 @@ export async function montarFila(
 export async function atualizarFila(
   porta: PortaCadastro,
   c: ContextoPorta,
-  trilha: LinhaTrilha,
+  trilha: RegistroTrilhaTela,
 ): Promise<{ novos: number; total: number }> {
   const g = await porta.gruposCandidatos(c);
   const ids = [...new Set([...g.cpf.flat(), ...g.fonetica.flat()])];
-  const pacientes = new Map<number, PacienteLido>();
+  const pacientes = new Map<number, PacienteFicha>();
   for (let i = 0; i < ids.length; i += 500)
     for (const p of await porta.lerPacientes(c, ids.slice(i, i + 500))) pacientes.set(p.id, p);
-  const pares: ParNovo[] = [];
+  const pares: ParCandidato[] = [];
   const vistos = new Set<string>();
   for (const grupo of [...g.cpf, ...g.fonetica]) {
     for (let i = 0; i < grupo.length; i++)

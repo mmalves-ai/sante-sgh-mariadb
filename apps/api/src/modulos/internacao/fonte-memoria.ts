@@ -4,6 +4,7 @@
 // um arquivo JSON (LEITOS_SINTETICOS_POR_FORA, só dev/ci): a internação do arquivo ocupa o leito pedido e o canal
 // `leitos` do vigia muda de selo quando o arquivo muda, como mudaria no banco.
 import { createHash } from 'node:crypto';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import { readFileSync } from 'node:fs';
 import type {
   CanalVigia,
@@ -13,17 +14,18 @@ import type {
   TrechoMovimento,
   TransferenciaMovimento,
 } from '@sgh/contratos';
-import type {
-  EspelhoLegado,
-  FinanceiroMensalLido,
-  LeituraCanal,
-  LeitosLegado,
-  MarcaVigia,
-  OperacionalMensalLido,
-  PacienteDaInternacaoLido,
-} from '@sgh/legado';
 import { relogioDeParede } from '@sgh/dominio-internacao';
-import type { CensoFechadoLido, CtxInternacao, FonteInternacao } from './fonte.js';
+import type {
+  CadastroLeitos,
+  CensoFechadoLido,
+  CtxInternacao,
+  FinanceiroDoMes,
+  FonteInternacao,
+  OperacionalDoMes,
+  PacienteDaInternacao,
+  RetratoLeitos,
+} from './fonte.js';
+import type { LeituraCanal, MarcaVigia } from './vigia.js';
 
 const DIA = 86_400_000;
 
@@ -290,7 +292,7 @@ export class FonteInternacaoMemoria implements FonteInternacao {
     };
   }
 
-  async pacienteDaInternacao(_c: CtxInternacao, reg: number): Promise<PacienteDaInternacaoLido | null> {
+  async pacienteDaInternacao(_c: CtxInternacao, reg: number): Promise<PacienteDaInternacao | null> {
     const fora = this.porFora();
     if (fora?.reg === reg)
       return {
@@ -375,26 +377,25 @@ export class FonteInternacaoMemoria implements FonteInternacao {
     };
   }
 
-  async conferencia(): Promise<{ cadastro: LeitosLegado; espelho: EspelhoLegado }> {
+  async conferencia(): Promise<{ cadastro: CadastroLeitos; espelho: RetratoLeitos }> {
     const p = await this.leiturasPainel();
-    const cadastro: LeitosLegado = {
+    const cadastro: CadastroLeitos = {
       blocos: BLOCOS.map((b) => ({ ...b, andares: 1 })),
-      acomodacoes: ACOMODACOES.map((a) => ({ BLOCO: a.bloco, ACOMOD: a.acomodacao, NOME: a.nome })),
+      acomodacoes: ACOMODACOES.map((a) => ({ bloco: a.bloco, acomodacao: a.acomodacao, nome: a.nome })),
       leitos: p.leitos.map((l) => ({
         id: l.id,
         bloco: l.bloco,
         acomodacao: l.acomodacao,
         leito: l.leito,
-        status: l.status,
+        ativo: l.status !== 'I',
         ocupado: l.reg > 0,
         ramal: l.ramal,
         andar: 1,
         reg: l.reg,
       })),
-      opcoes: { tipos: [], centrosCusto: [], locaisConta: [], tiposTiss: [] },
     };
     // O registro de conferência sintético: um leito sem par e um ramal diferente (divergências de exemplo).
-    const espelho: EspelhoLegado = {
+    const espelho: RetratoLeitos = {
       acomodacoes: ACOMODACOES.map((a) => ({
         bloco: a.bloco,
         acomodacao: a.acomodacao,
@@ -434,7 +435,7 @@ export class FonteInternacaoMemoria implements FonteInternacao {
     return [];
   }
 
-  async operacional(c: CtxInternacao, de: string, ate: string): Promise<OperacionalMensalLido[]> {
+  async operacional(c: CtxInternacao, de: string, ate: string): Promise<OperacionalDoMes[]> {
     const f = this.variante(c).fator;
     const q = (v: number) => Math.round(v * f);
     return this.meses(de, ate).map((m, i) => ({
@@ -447,7 +448,7 @@ export class FonteInternacaoMemoria implements FonteInternacao {
     }));
   }
 
-  async financeiro(c: CtxInternacao, de: string, ate: string): Promise<FinanceiroMensalLido[]> {
+  async financeiro(c: CtxInternacao, de: string, ate: string): Promise<FinanceiroDoMes[]> {
     const f = this.variante(c).fator;
     return this.meses(de, ate).flatMap((m, i) => {
       const cobrado = (6_500_000 + ((i * 173_000) % 900_000)) * f;
@@ -481,7 +482,7 @@ export class FonteInternacaoMemoria implements FonteInternacao {
     return new Date(this.agora());
   }
 
-  async canal(_c: CtxInternacao, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal> {
+  async canal(_alvo: ContextoNucleo, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal> {
     if (canal !== 'leitos') return { selo: 'sintetico', marca, consultas: 1 };
     const fora = this.opcoes.arquivoPorFora ? JSON.stringify(this.porFora()) : '';
     const selo = createHash('sha256').update(`${this.gerar().length}:${fora}`).digest('hex').slice(0, 16);

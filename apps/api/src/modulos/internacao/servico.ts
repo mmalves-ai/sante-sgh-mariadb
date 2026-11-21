@@ -1,5 +1,5 @@
 // Serviço do M16: monta o painel de leitos, o censo, a série, os indicadores e os painéis gerenciais a partir da
-// fonte (legado ou memória) e dos motores puros (@sgh/dominio-internacao e @sgh/dominio-relatorio). Caches por
+// fonte (banco do cliente ou memória) e dos motores puros (@sgh/dominio-internacao e @sgh/dominio-relatorio). Caches por
 // estabelecimento (ADR 0011: a chave leva a rede):
 //   - painel: a leitura ao vivo é reaproveitada enquanto o vigia não viu mudança (50 telas que releem depois de um
 //     evento fazem UMA leitura), no máximo 30 s;
@@ -38,7 +38,7 @@ import {
   relogioDeParede,
   VERSAO_CALCULO_CENSO,
 } from '@sgh/dominio-internacao';
-import { conferirLeitos, leitoAtivo } from '@sgh/dominio-organizacao';
+import { conferirLeitos } from '@sgh/dominio-organizacao';
 import {
   fichaDe,
   FICHAS,
@@ -52,7 +52,7 @@ import {
 } from '@sgh/dominio-relatorio';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ParametrosM16 } from './configuracao.js';
-import type { CtxInternacao, FonteInternacao } from './fonte.js';
+import { type CtxInternacao, destinoNoContrato, type FonteInternacao } from './fonte.js';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
 import type { MotorVigia } from './vigia.js';
 
@@ -66,6 +66,11 @@ interface EntradaCache<T> {
   readonly em: number;
   readonly versao: number;
   readonly valor: Promise<T>;
+}
+
+/** Chave de cache do estabelecimento: o cliente (um banco por cliente) e o id do estabelecimento da sessão. */
+function chaveDoCtx(c: CtxInternacao): string {
+  return c.porta ? `${c.porta.cliente}:${c.porta.estabelecimento ?? 0}` : `${c.rede}:${c.hospital}`;
 }
 
 export class ServicoInternacao {
@@ -82,11 +87,11 @@ export class ServicoInternacao {
   ) {}
 
   get destino(): 'legado' | 'memoria' {
-    return this.fonte.destino;
+    return destinoNoContrato(this.fonte.destino);
   }
 
   private versao(c: CtxInternacao): number {
-    return this.vigia?.versao(c.hospital, 'leitos') ?? 0;
+    return c.porta && this.vigia ? this.vigia.versao(c.porta, 'leitos') : 0;
   }
 
   private emCache<T>(
@@ -115,7 +120,7 @@ export class ServicoInternacao {
   painel(c: CtxInternacao, p: ParametrosM16): Promise<PainelLeitos> {
     return this.emCache(
       this.paineis,
-      `${c.rede}:${c.hospital}:${p.intensivas.join(',')}`,
+      `${chaveDoCtx(c)}:${p.intensivas.join(',')}`,
       this.versao(c),
       TTL_PAINEL_MS,
       async () => {
@@ -125,8 +130,8 @@ export class ServicoInternacao {
           intensivas: p.intensivas,
           agora: this.agoraParede(),
           lidoEm,
-          dadosAte: this.vigia?.ultimoCiclo(c.hospital, 'leitos') ?? lidoEm,
-          destino: this.fonte.destino,
+          dadosAte: (c.porta && this.vigia?.ultimoCiclo(c.porta, 'leitos')) || lidoEm,
+          destino: this.destino,
         });
       },
     );
@@ -139,19 +144,18 @@ export class ServicoInternacao {
 
   async divergencias(c: CtxInternacao): Promise<DivergenciasLeitos> {
     const { cadastro, espelho } = await this.fonte.conferencia(c);
-    const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v)).trimEnd();
     const r = conferirLeitos(
       {
         acomodacoes: cadastro.acomodacoes.map((a) => ({
-          bloco: txt(a['BLOCO']),
-          acomodacao: txt(a['ACOMOD']),
-          nome: txt(a['NOME']),
+          bloco: a.bloco.trimEnd(),
+          acomodacao: a.acomodacao.trimEnd(),
+          nome: a.nome.trimEnd(),
         })),
         leitos: cadastro.leitos.map((l) => ({
           bloco: l.bloco,
           acomodacao: l.acomodacao,
           leito: l.leito,
-          ativo: leitoAtivo(l.status),
+          ativo: l.ativo,
           ramal: l.ramal,
         })),
       },
@@ -159,7 +163,7 @@ export class ServicoInternacao {
     );
     return {
       lidoEm: new Date(this.relogio()).toISOString(),
-      destino: this.fonte.destino,
+      destino: this.destino,
       divergencias: [...r.divergencias],
       contagens: r.contagens,
       porTipo: r.porTipo,
@@ -172,7 +176,7 @@ export class ServicoInternacao {
   motor(c: CtxInternacao, p: ParametrosM16): Promise<{ motor: MotorInternacao; lidoEm: number }> {
     return this.emCache(
       this.motores,
-      `${c.rede}:${c.hospital}:${p.horaFechamento}:${p.intensivas.join(',')}`,
+      `${chaveDoCtx(c)}:${p.horaFechamento}:${p.intensivas.join(',')}`,
       this.versao(c),
       TTL_MOTOR_MS,
       async () => {
@@ -367,11 +371,11 @@ export class ServicoInternacao {
     ler: () => Promise<T>,
     reviver: (bruto: unknown) => T = (x) => x as T,
   ): Promise<T> {
-    const k = `${c.rede}:${c.hospital}:${tipo}:${de}:${ate}`;
+    const k = `${chaveDoCtx(c)}:${tipo}:${de}:${ate}`;
     const x = this.copia.get(k);
     if (x && this.relogio() - x.em < TTL_COPIA_DIARIA_MS) return x.valor as Promise<T>;
     const valor = this.daCopiaCompartilhada(
-      `sgh:${c.rede}:m16:copia:${c.hospital}:${tipo}:${de}:${ate}`,
+      `sgh:${c.porta?.cliente ?? c.rede}:m16:copia:${c.porta?.estabelecimento ?? c.hospital}:${tipo}:${de}:${ate}`,
       ler,
       reviver,
     );

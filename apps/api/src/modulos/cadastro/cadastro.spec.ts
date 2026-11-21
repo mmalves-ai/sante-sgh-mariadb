@@ -10,18 +10,18 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import { Executor, operacao } from '@sgh/legado';
 import { PortaCadastroMemoria } from './porta-memoria.js';
 import { montarFicha } from './servico.js';
+import { contextoDeTeste, moduloConfiguracaoDeTeste, registroDeTeste } from './teste.spec-util.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro' };
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaCadastroMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, cadastro: porta });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro: registroDeTeste({ cadastro: porta }, { configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx) }) });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -291,8 +291,8 @@ describe('unificação de prontuários (M57.2, cadastro.unificarPaciente)', () =
 
   it('a porta em memória segue as regras da receita: destino inativo e absorvido já unificado recusados', async () => {
     const p = new PortaCadastroMemoria();
-    const c = { rede: 'sante', hospital: 'aa' };
-    const ctx = { usuarioLegado: 'SINT.SAME' } as never;
+    const c = contextoDeTeste('aa', 'sante');
+    const ctx = { login: 'SINT.SAME' } as never;
     await p.unificar(c, { idAbsorvido: 1002, idSobrevivente: 1001 }, ctx);
     await expect(p.unificar(c, { idAbsorvido: 1003, idSobrevivente: 1002 }, ctx)).rejects.toThrow(/inativo/);
     await expect(p.unificar(c, { idAbsorvido: 1002, idSobrevivente: 1003 }, ctx)).rejects.toThrow(
@@ -371,7 +371,7 @@ describe('profissionais, solicitantes, pessoas e especialidades (consulta)', () 
 });
 
 describe('correções da verificação do M11', () => {
-  const c = { rede: 'rede-teste', hospital: 'aa' };
+  const c = contextoDeTeste('aa', 'rede-teste');
   const perm = (verDocumento: boolean) => ({
     editar: true,
     verDocumento,
@@ -401,16 +401,13 @@ describe('correções da verificação do M11', () => {
   });
 
   it('em produção com a operação só verde, a ficha não oferece Editar e mostra o motivo do executor', async () => {
-    const executor = new Executor({
-      ambiente: 'producao',
-      catalogo: { estado: () => 'verde' },
-      schema: { bloqueada: () => false },
-      ler: () => Promise.reject(new Error('não lê')),
-      escrever: () => Promise.reject(new Error('não grava')),
-    });
+    // O passo 0 do executor recusa (operação não liberada neste estabelecimento): a ficha esconde "Editar" com o motivo.
     const prod = new PortaCadastroMemoria();
-    prod.podeGravar = (cc: { rede: string; hospital: string }, op: string, u?: string) =>
-      executor.liberacao(operacao(op), { rede: cc.rede, hospital: cc.hospital, usuarioLegado: u ?? '' });
+    prod.podeGravar = async () => ({
+      pode: false,
+      codigo: 'operacao-nao-liberada',
+      motivo: 'Esta operação não está liberada para gravar.',
+    });
     const f = await montarFicha(prod, c, 1001, perm(true) as never, 'SINT.RECEPCAO');
     expect(f?.gravacao).toMatchObject({ cadastrar: false, alterar: false });
     expect(f?.gravacao.motivo).toBeTruthy();

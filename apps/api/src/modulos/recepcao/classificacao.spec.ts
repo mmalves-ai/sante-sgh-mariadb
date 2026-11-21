@@ -8,11 +8,10 @@
 import { PROTOCOLO_SINTETICO } from '@sgh/dominio-recepcao';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaAtendimentoMemoria } from '../atendimento/porta-memoria.js';
+import { criarAppRecepcao } from './app-recepcao.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import { PortaClassificacaoMemoria } from './classificacao-porta-memoria.js';
 import {
@@ -41,16 +40,12 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppRecepcao(env, {
     trilha,
-    cadastro,
     recepcao,
-    atendimento,
     classificacao,
-    vigia: null,
+    atendimento,
   });
-  await app.init();
-  await app.getHttpAdapter().getInstance().ready();
 });
 afterAll(async () => {
   await app.close();
@@ -283,7 +278,7 @@ describe('classificação de risco no PA (M44, etapa 1)', () => {
     expect(k.risco).toMatchObject({ cor: 'laranja', nomeCor: 'Muito urgente', estourado: false });
     expect(q.porCor.find((x: { cor: string }) => x.cor === 'laranja').total).toBe(1);
     const sv = new ServicoClassificacao(classificacao, {
-      paAbertos: (c) => atendimento.paAbertos(c),
+      paAbertos: (c) => atendimento.paAbertos(c as Parameters<typeof atendimento.paAbertos>[0]),
       pacienteDoAtendimento: async () => ({ id: 1005, nascimento: null }),
     });
     const p = await sv.painel({ rede: 'rede-sintetica', hospital: 'aa' });
@@ -347,15 +342,15 @@ describe('classificação de risco no PA (M44, etapa 1)', () => {
     const fila = (await get(enf, '/pa/classificacao/fila')).json();
     expect(fila.reclassificarAgora.map((x: { reg: number }) => x.reg)).toContain(novo);
     const sv = new ServicoClassificacao(classificacao, {
-      paAbertos: (c) => atendimento.paAbertos(c),
+      paAbertos: (c) => atendimento.paAbertos(c as Parameters<typeof atendimento.paAbertos>[0]),
       pacienteDoAtendimento: async () => null,
     });
     const c = { rede: 'rede-sintetica', hospital: 'aa' };
     const est = await sv.estourados(c);
     expect(est.some((e) => e.reg === novo)).toBe(true);
     const alvo = est.find((e) => e.reg === novo)!;
-    const a1 = await classificacao.gravarSgh(c, null, (g) => g.avisarEstouro(alvo));
-    const a2 = await classificacao.gravarSgh(c, null, (g) => g.avisarEstouro(alvo));
+    const a1 = await classificacao.gravar(c, null, (g) => g.avisarEstouro(alvo));
+    const a2 = await classificacao.gravar(c, null, (g) => g.avisarEstouro(alvo));
     expect([a1, a2]).toEqual([true, false]);
     expect((await sv.estourados(c)).some((e) => e.reg === novo)).toBe(false);
     const t = (await get(enf, `/pa/classificacao/${novo}`)).json();
@@ -412,9 +407,10 @@ describe('indicadores do período pelo motor do domínio (regra 5)', () => {
     anterior: number | null,
   ) {
     relogio = em;
-    return porta.gravarSgh(c, null, (g) =>
+    return porta.gravar(c, null, (g) =>
       g.classificar({
         cabecalho: cab,
+        queixa: 'Mal-estar (SINTETICO)',
         reg: Number(cab),
         paciente: 900 + Number(cab),
         versaoProtocolo: 1,

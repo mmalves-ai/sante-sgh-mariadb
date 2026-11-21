@@ -93,13 +93,14 @@ export class AcessoRedePepController {
       );
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_MPI_REDE);
     await this.liberacao.exigir(s, CHAVE_LIBERACAO_ACESSO_CRUZADO_REDE);
-    const c = { rede: s.rede, hospital: s.hospital };
+    const c = s.porta;
     await this.servico.exigirPaciente(c, paciente);
     await this.acesso.exigirVinculo(s, paciente, 'pep.prontuario.lerRede', 'pep.prontuario');
     const r = await this.acessoRede.abrir(
       {
         rede: s.rede,
         hospital: s.hospital,
+        porta: s.porta,
         login: s.login,
         estacao: estacaoDaRequisicao(req),
         correlacao: correlacaoDaRequisicao(req, 'prontuario-rede'),

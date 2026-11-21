@@ -1,38 +1,19 @@
-// Fonte das telas de parâmetros e de funcionalidades por estabelecimento (M08): o núcleo do legado (SGH_CFG_*
-// pela transação SGH_ do núcleo, com a SGH_TRILHA na mesma transação; parâmetros do legado em READ ONLY) ou a
-// memória (sessão sintética, dev/ci: nada vai à cópia; a trilha vai ao registrador da API). Com cache
-// (CacheConfig) e invalidação por evento depois do commit (regra 10).
+// Fonte das telas de parâmetros e de funcionalidades por estabelecimento (M08): o banco próprio do cliente
+// (`FonteConfiguracaoPropria`, em configuracao-propria.ts: parametro_valor e as chaves de liberação pelo Executor do
+// @sgh/nucleo, com trilha, outbox e idempotência na mesma transação) ou a memória (sessão sintética, dev/ci: a trilha
+// vai ao registrador da API). Com cache (CacheConfig) e invalidação por evento depois do commit (regra 10).
+// Melhoria: tipos de negócio próprios (ChaveLiberacao, PrerequisitoRecurso), sem nomes de colunas antigas.
+// Melhoria: o painel não lê mais parâmetros do sistema de origem; só os parâmetros tipados do produto.
 import {
   CHAVES_TELA_ONDA_0,
   chaveLiberacaoRelatorio,
-  type ParametroLegadoDescrito,
+  type EscopoLiberacao,
+  type NivelParametro,
   RELATORIOS_CATALOGO,
+  type SituacaoPrerequisito,
+  type TipoPrerequisito,
   type ValorParametro,
 } from '@sgh/contratos';
-import {
-  aplicarLoteLiberacao,
-  type ChaveGravada,
-  type DefinicaoGravada,
-  ErroConfiguracaoSgh,
-  type EstadoDoLote,
-  gravarDefinicaoParametro,
-  type RetiradaGravada,
-  retirarSobreposicaoParametro,
-  gravarPrerequisito,
-  lerChavesLiberacao,
-  type Leitor,
-  lerLote,
-  lerParametrosLegado,
-  lerPrerequisitos,
-  lerValoresParametro,
-  type LinhaTrilha,
-  type MudancaChave,
-  type NucleoLegado,
-  painelParametrosLegado,
-  PARAMETROS_LEGADO,
-  type PrerequisitoGravado,
-  relogioDoBanco,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroFonteIndisponivel } from './dominios-fonte.js';
 
@@ -137,7 +118,113 @@ const M55_E5_CHAVES = [['contratualizacao', 'aprovacao']] as const;
 const M55_E4_CHAVES = [['licitacao', 'aprovacao']] as const;
 export const FONTE_CONFIGURACAO = Symbol('FONTE_CONFIGURACAO');
 
-export type TrilhaConfig = Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo'>;
+/** Chave de liberação (operação ou recurso) gravada num escopo do estabelecimento. */
+export interface ChaveLiberacao {
+  readonly id: string;
+  readonly tipo: 'operacao' | 'recurso';
+  readonly chave: string;
+  readonly escopo: EscopoLiberacao;
+  /** Valor do escopo: '*' (estabelecimento inteiro), código do setor, do grupo ou login da pessoa. */
+  readonly valor: string;
+  /** null: a linha não decide e o nível acima vale (linha devolvida ao estado herdado pela reversão do lote). */
+  readonly ligada: boolean | null;
+  readonly ligadaAntes: boolean | null;
+  /** Número do lote que gravou a linha por último. */
+  readonly lote: string | null;
+  readonly justificativa: string | null;
+  readonly alteradoPor: string;
+  readonly alteradoEm: string;
+}
+
+/** Pré-requisito externo de um recurso (POL-3) registrado no estabelecimento. */
+export interface PrerequisitoRecurso {
+  readonly recurso: string;
+  readonly tipo: TipoPrerequisito;
+  readonly situacao: SituacaoPrerequisito;
+  /** Data ISO (AAAA-MM-DD) ou null. */
+  readonly validade: string | null;
+  readonly evidencia: string | null;
+  readonly alteradoPor: string;
+  readonly alteradoEm: string;
+}
+
+export interface MudancaChave {
+  readonly escopo: EscopoLiberacao;
+  readonly valor: string;
+  /** null: herda. */
+  readonly ligada: boolean | null;
+  readonly antes: boolean | null;
+}
+
+/** Estado relido NA transação do lote, com trava: a decisão de gravar é tomada sobre ele, nunca sobre cache. */
+export interface EstadoDoLote {
+  /** Chaves do mesmo nome no estabelecimento (travadas). */
+  readonly chaves: readonly ChaveLiberacao[];
+  /** Pré-requisitos do recurso no estabelecimento (travados; vazio para operação). */
+  readonly prerequisitos: readonly PrerequisitoRecurso[];
+}
+
+/** Nova versão de um parâmetro num nível e alvo, fechando as vigentes do plano (planejarDefinicao). */
+export interface DefinicaoValorParametro {
+  readonly rede: string;
+  readonly hospital: string;
+  readonly fechar: readonly string[];
+  readonly nova: Omit<ValorParametro, 'id'>;
+  /** Unidade assistencial (id) do nível unidade. */
+  readonly unidade?: number | null;
+  /** Código do perfil de acesso do nível perfil. */
+  readonly perfil?: string | null;
+  /** O parâmetro é crítico e a senha foi conferida de novo (vai ao histórico). */
+  readonly reautenticado?: boolean;
+}
+
+/** W0-09: retirada da sobreposição de um nível e alvo (o nível volta a herdar). */
+export interface RetiradaParametro {
+  readonly rede: string;
+  readonly hospital: string;
+  readonly chave: string;
+  readonly nivel: NivelParametro;
+  readonly alvo: string;
+  /** As vigentes do nível e do alvo que o plano fecha (planejarRetirada). */
+  readonly fechar: readonly string[];
+  readonly motivo: string;
+  readonly por: string;
+}
+
+/** Quem grava e por qual requisição (a trilha própria é gravada pelo Executor na mesma transação). */
+export interface TrilhaConfig {
+  readonly rede: string;
+  readonly hospital: string;
+  /** Login de quem opera (exibição e trilha da memória). */
+  readonly usuario: string;
+  /** Id do usuário da sessão (usuario.id), quando a sessão o tem. */
+  readonly usuarioId?: string | null;
+  readonly evento: string;
+  readonly recurso: string;
+  readonly operacao: string;
+  readonly chaveNaturalAlvo: string | null;
+  readonly resultado: string;
+  readonly estacao: string | null;
+  readonly correlacao: string;
+  /** Chave de idempotência da requisição (cabeçalho Idempotency-Key); sem ela, uma nova por gravação. */
+  readonly chaveIdempotencia?: string | null;
+  readonly enderecoIp?: string | null;
+}
+
+/** Recusa de configuração decidida DENTRO da transação (estado relido com trava): a API devolve 409. */
+export class ErroRecusaConfiguracao extends Error {
+  override readonly name = 'ErroRecusaConfiguracao';
+  constructor(
+    readonly codigo:
+      | 'conflito-concorrente'
+      | 'chave-de-outro-tipo'
+      | 'parametro-nao-carregado'
+      | 'alvo-inexistente',
+    mensagem: string,
+  ) {
+    super(mensagem);
+  }
+}
 
 export interface PedidoLote {
   readonly hospital: string;
@@ -156,29 +243,31 @@ export interface PedidoLote {
 export interface PedidoPrerequisito {
   readonly hospital: string;
   readonly recurso: string;
-  readonly tipo: PrerequisitoGravado['tipo'];
-  readonly situacao: PrerequisitoGravado['situacao'];
+  readonly tipo: TipoPrerequisito;
+  readonly situacao: SituacaoPrerequisito;
   readonly validade: string | null;
   readonly evidencia: string | null;
   readonly autor: string;
 }
 
+/** Onde a fonte grava: o banco próprio do cliente ou a memória (dev/ci). */
+export type DestinoConfiguracao = 'banco' | 'memoria';
+
 export interface FonteConfiguracao {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: DestinoConfiguracao;
   relogio(rede: string, hospital: string): Promise<Date>;
   valoresParametro(rede: string, hospital: string): Promise<ValorParametro[]>;
-  definirParametro(d: DefinicaoGravada, trilha: TrilhaConfig): Promise<{ id: string }>;
+  definirParametro(d: DefinicaoValorParametro, trilha: TrilhaConfig): Promise<{ id: string }>;
   /** W0-09: fecha a vigente do nível e do alvo (volta a herdar), com quem e o motivo; trilha junta. */
-  retirarParametro(d: RetiradaGravada, trilha: TrilhaConfig): Promise<{ fechadas: readonly string[] }>;
-  parametrosLegado(rede: string, hospital: string, login: string): Promise<ParametroLegadoDescrito[]>;
-  chaves(rede: string, hospital: string): Promise<ChaveGravada[]>;
+  retirarParametro(d: RetiradaParametro, trilha: TrilhaConfig): Promise<{ fechadas: readonly string[] }>;
+  chaves(rede: string, hospital: string): Promise<ChaveLiberacao[]>;
   aplicarLote(
     rede: string,
     p: PedidoLote,
     trilha: TrilhaConfig,
   ): Promise<{ lote: string; alteradas: number }>;
   /**
-   * Vários lotes (um por chave) numa transação SGH_ só, na ordem dada: a falha de qualquer um desfaz todos (M44,
+   * Vários lotes (um por chave) numa transação só, na ordem dada: a falha de qualquer um desfaz todos (M44,
    * regra 6: desligar a classificação externa e ligar a própria são a mesma mudança de configuração).
    */
   aplicarLotes(
@@ -186,43 +275,14 @@ export interface FonteConfiguracao {
     pedidos: readonly PedidoLote[],
     trilha: TrilhaConfig,
   ): Promise<{ lote: string; alteradas: number }[]>;
-  lote(rede: string, hospital: string, lote: string): Promise<ChaveGravada[]>;
-  prerequisitos(rede: string, hospital: string): Promise<PrerequisitoGravado[]>;
+  lote(rede: string, hospital: string, lote: string): Promise<ChaveLiberacao[]>;
+  prerequisitos(rede: string, hospital: string): Promise<PrerequisitoRecurso[]>;
   gravarPrerequisito(rede: string, p: PedidoPrerequisito, trilha: TrilhaConfig): Promise<void>;
 }
 
-export function fonteConfiguracaoLegado(nucleo: NucleoLegado): FonteConfiguracao {
-  const ctx = (rede: string, hospital: string, traceId: string) => ({
-    rede,
-    hospital,
-    traceId: traceId.slice(0, 64),
-  });
-  return {
-    destino: 'legado',
-    relogio: (rede, h) => nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => relogioDoBanco(l)),
-    valoresParametro: (rede, h) => nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => lerValoresParametro(l, h)),
-    definirParametro: (d, t) =>
-      nucleo.gravarSgh(ctx(d.rede, d.hospital, t.correlacao), (e) => gravarDefinicaoParametro(e, d, t)),
-    retirarParametro: (d, t) =>
-      nucleo.gravarSgh(ctx(d.rede, d.hospital, t.correlacao), (e) => retirarSobreposicaoParametro(e, d, t)),
-    parametrosLegado: (rede, h, login) =>
-      nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => painelParametrosLegado(l, login)),
-    chaves: (rede, h) => nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => lerChavesLiberacao(l, h)),
-    aplicarLote: (rede, p, t) =>
-      nucleo.gravarSgh(ctx(rede, p.hospital, t.correlacao), (e) => aplicarLoteLiberacao(e, p, t)),
-    aplicarLotes: (rede, ps, t) =>
-      nucleo.gravarSgh(ctx(rede, ps[0]?.hospital ?? t.hospital, t.correlacao), async (e) => {
-        if (ps.some((p) => p.hospital !== (ps[0]?.hospital ?? '')))
-          throw new Error('Lotes de estabelecimentos diferentes na mesma transação.');
-        const r: { lote: string; alteradas: number }[] = [];
-        for (const p of ps) r.push(await aplicarLoteLiberacao(e, p, t));
-        return r;
-      }),
-    lote: (rede, h, lote) => nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => lerLote(l, h, lote)),
-    prerequisitos: (rede, h) => nucleo.lerSomente(ctx(rede, h, 'cfg'), (l) => lerPrerequisitos(l, h)),
-    gravarPrerequisito: (rede, p, t) =>
-      nucleo.gravarSgh(ctx(rede, p.hospital, t.correlacao), (e) => gravarPrerequisito(e, p, t)),
-  };
+/** O valor de `destino` nos contratos das respostas (o contrato ainda chama o banco de "legado"; pedido registrado). */
+export function destinoNoContrato(d: DestinoConfiguracao): 'legado' | 'memoria' {
+  return d === 'memoria' ? 'memoria' : 'legado';
 }
 
 /** Fora de dev/ci sem o núcleo: falha fechada (503 em toda chamada; nunca a memória). */
@@ -231,12 +291,11 @@ export function fonteConfiguracaoIndisponivel(): FonteConfiguracao {
     throw new ErroFonteIndisponivel();
   };
   return {
-    destino: 'legado',
+    destino: 'banco',
     relogio: recusar,
     valoresParametro: recusar,
     definirParametro: recusar,
     retirarParametro: recusar,
-    parametrosLegado: recusar,
     chaves: recusar,
     aplicarLote: recusar,
     aplicarLotes: recusar,
@@ -246,29 +305,11 @@ export function fonteConfiguracaoIndisponivel(): FonteConfiguracao {
   };
 }
 
-/** Linha sintética dos parâmetros do legado (sessão sintética): só as colunas declaradas têm valor. */
-function leitorSintetico(): Leitor {
-  return {
-    hospital: 'sintetico',
-    async consultar<T>(sql: string): Promise<T[]> {
-      const tabela = PARAMETROS_LEGADO.find((t) => sql.includes(` FROM ${t.tabela}`));
-      if (!tabela) return [];
-      const linha: Record<string, unknown> = {};
-      for (const [c, tipo] of Object.entries(tabela.declaradas))
-        linha[c] = tipo.tipo === 'letra' ? tipo.verdadeiro : tipo.tipo === 'hora' ? '0800' : 1;
-      return [linha as T];
-    },
-    async lerBlob() {
-      return Buffer.alloc(0);
-    },
-  } as unknown as Leitor;
-}
-
 /**
  * Chaves que a sessão sintética (dev/ci) já encontra ligadas no estabelecimento: as dos recursos que os testes
  * de ponta a ponta percorrem (o prontuário ao vivo, M15). Desligar pela tela continua valendo (recolher).
  */
-export function chavesIniciaisSinteticas(): ChaveGravada[] {
+export function chavesIniciaisSinteticas(): ChaveLiberacao[] {
   return [
     {
       id: 'sintetica-1',
@@ -558,7 +599,7 @@ export function chavesIniciaisSinteticas(): ChaveGravada[] {
       alteradoEm: '2026-10-25T00:00:00.000Z',
     },
     // M45 (etapa 6; DP-32): as especialidades sob demanda e o lactário, desligados fora daqui; a sessão sintética liga
-    // para o E2E @M45.6 percorrer (sem linha em SGH_CFG_LIBERACAO o estabelecimento fica com tudo desligado).
+    // para o E2E @M45.6 percorrer (sem chave de liberação o estabelecimento fica com tudo desligado).
     ...[
       'pep.especialidade.oftalmologia',
       'pep.especialidade.oncologia',
@@ -1159,7 +1200,7 @@ const RECURSOS_SINTETICOS_M23 = [
  * Pré-requisitos que a sessão sintética já encontra registrados (dispensados, com a evidência de que é a sessão
  * sintética): o da conferência modelo a modelo do registro clínico (M22), o da conferência da agenda (M17) e o do turno simulado da recepção (M19). Fora de dev/ci, nada é pré-registrado.
  */
-export function prerequisitosIniciaisSinteticos(): PrerequisitoGravado[] {
+export function prerequisitosIniciaisSinteticos(): PrerequisitoRecurso[] {
   return [
     {
       recurso: 'pep.evolucao.registro',
@@ -1182,7 +1223,7 @@ export function prerequisitosIniciaisSinteticos(): PrerequisitoGravado[] {
     // M34: a conferência do número de cada relatório contra o de origem e a troca combinada da interface do
     // laboratório de apoio (dispensadas na sintética).
     ...[...RELATORIOS_CATALOGO.map((r) => chaveLiberacaoRelatorio(r.codigo)), 'integracao.apoio'].map(
-      (recurso): PrerequisitoGravado => ({
+      (recurso): PrerequisitoRecurso => ({
         recurso,
         tipo: recurso === 'integracao.apoio' ? 'contrato' : 'aprovacao',
         situacao: 'dispensado',
@@ -1268,7 +1309,7 @@ export function prerequisitosIniciaisSinteticos(): PrerequisitoGravado[] {
       alteradoEm: '2026-10-24T00:00:00.000Z',
     },
     // M49, etapa 2: o contrato do provedor e a aprovação da política (dispensados na sintética: só o simulador).
-    ...(['contrato', 'aprovacao'] as const).map((tipo): PrerequisitoGravado => ({
+    ...(['contrato', 'aprovacao'] as const).map((tipo): PrerequisitoRecurso => ({
       recurso: 'assinatura.icp',
       tipo,
       situacao: 'dispensado',
@@ -1757,8 +1798,8 @@ export function parametrosIniciaisSinteticos(hospital: string): ValorParametro[]
 export function fonteConfiguracaoMemoria(
   trilha: RegistradorTrilha,
   opcoes: {
-    readonly chavesIniciais?: () => ChaveGravada[];
-    readonly prerequisitosIniciais?: () => PrerequisitoGravado[];
+    readonly chavesIniciais?: () => ChaveLiberacao[];
+    readonly prerequisitosIniciais?: () => PrerequisitoRecurso[];
     readonly parametrosIniciais?: (hospital: string) => ValorParametro[];
   } = {},
 ): FonteConfiguracao {
@@ -1770,16 +1811,16 @@ export function fonteConfiguracaoMemoria(
     },
     set: (h: string, l: ValorParametro[]) => void valoresDe.set(h, l),
   };
-  const chavesGravadas = new Map<string, ChaveGravada[]>();
+  const chavesGravadas = new Map<string, ChaveLiberacao[]>();
   const chaves = {
-    get: (h: string): ChaveGravada[] => {
+    get: (h: string): ChaveLiberacao[] => {
       if (!chavesGravadas.has(h)) chavesGravadas.set(h, opcoes.chavesIniciais?.() ?? []);
       return chavesGravadas.get(h)!;
     },
-    set: (h: string, l: ChaveGravada[]) => void chavesGravadas.set(h, l),
+    set: (h: string, l: ChaveLiberacao[]) => void chavesGravadas.set(h, l),
   };
-  const prereqs = new Map<string, PrerequisitoGravado[]>();
-  const prereqsDe = (h: string): PrerequisitoGravado[] => {
+  const prereqs = new Map<string, PrerequisitoRecurso[]>();
+  const prereqsDe = (h: string): PrerequisitoRecurso[] => {
     if (!prereqs.has(h)) prereqs.set(h, opcoes.prerequisitosIniciais?.() ?? []);
     return prereqs.get(h)!;
   };
@@ -1799,10 +1840,10 @@ export function fonteConfiguracaoMemoria(
       idAlvo,
     });
   /** Aplica o pedido sobre a lista (cópia de trabalho), sem registrar nem gravar. */
-  const aplicarNaLista = (lista: ChaveGravada[], p: PedidoLote): { lote: string; alteradas: number } => {
+  const aplicarNaLista = (lista: ChaveLiberacao[], p: PedidoLote): { lote: string; alteradas: number } => {
     const doNome = lista.filter((c) => c.chave === p.chave);
     if (doNome.some((c) => c.tipo !== p.tipo))
-      throw new ErroConfiguracaoSgh(
+      throw new ErroRecusaConfiguracao(
         'chave-de-outro-tipo',
         'Já existe uma chave com este nome de outro tipo (operação × recurso). Use outro nome.',
       );
@@ -1816,7 +1857,7 @@ export function fonteConfiguracaoMemoria(
       const i = lista.findIndex(
         (c) => c.chave === p.chave && c.tipo === p.tipo && c.escopo === m.escopo && c.valor === m.valor,
       );
-      const linha: ChaveGravada = {
+      const linha: ChaveLiberacao = {
         id: i >= 0 ? (lista[i]?.id ?? String(++id)) : String(++id),
         tipo: p.tipo,
         chave: p.chave,
@@ -1840,7 +1881,7 @@ export function fonteConfiguracaoMemoria(
     valoresParametro: async (_r, h) => [...parametros.get(h)],
     async definirParametro(d, t) {
       const lista = parametros.get(d.hospital);
-      // Mesma conferência da transação SGH_: as vigentes do nível e alvo têm de ser as que o plano fecha.
+      // Mesma conferência da transação do banco: as vigentes do nível e alvo têm de ser as que o plano fecha.
       const vigentes = lista.filter(
         (v) =>
           v.chave === d.nova.chave &&
@@ -1849,7 +1890,7 @@ export function fonteConfiguracaoMemoria(
           v.vigenteAte === null,
       );
       if (vigentes.length !== d.fechar.length || vigentes.some((v) => !d.fechar.includes(v.id)))
-        throw new ErroConfiguracaoSgh(
+        throw new ErroRecusaConfiguracao(
           'conflito-concorrente',
           'O parâmetro foi definido por outra pessoa neste nível e alvo enquanto você editava. Releia e defina de novo.',
         );
@@ -1872,7 +1913,7 @@ export function fonteConfiguracaoMemoria(
         vigentes.length !== d.fechar.length ||
         vigentes.some((v) => !d.fechar.includes(v.id))
       )
-        throw new ErroConfiguracaoSgh(
+        throw new ErroRecusaConfiguracao(
           'conflito-concorrente',
           'O parâmetro foi alterado por outra pessoa neste nível e alvo enquanto você editava. Releia e tente de novo.',
         );
@@ -1887,12 +1928,6 @@ export function fonteConfiguracaoMemoria(
       );
       await registrar(t, 'MEMORIA', d.fechar[0] ?? '', t.evento);
       return { fechadas: [...d.fechar] };
-    },
-    parametrosLegado: async (_r, _h, login) => {
-      const l = leitorSintetico();
-      const r: ParametroLegadoDescrito[] = [];
-      for (const t of PARAMETROS_LEGADO) r.push(...(await lerParametrosLegado(l, t, login)));
-      return r;
     },
     chaves: async (_r, h) => [...(chaves.get(h) ?? [])],
     async aplicarLote(_r, p, t) {

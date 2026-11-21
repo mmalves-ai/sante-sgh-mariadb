@@ -3,34 +3,8 @@
 // 16:01, como a medida; o externo, no minuto da prescrição). O que se grava é o que o executor gravaria (os itens
 // montados pelo domínio, os horários previstos e o evento da prova), guardado em memória por estabelecimento; nada vai
 // à cópia. As recusas são as mesmas da receita (uma ativa por período, origem alterada, item já suspenso).
-import {
-  type AlergiaLida,
-  type DadosClinicosLidos,
-  type AtendimentoDaPrescricao,
-  type AtendimentoLido,
-  type CabecalhoDocumentoLido,
-  type ConsultaCadastroLida,
-  type DecisaoLida,
-  ErroOperacao,
-  type FichaNovaLida,
-  type FuturaLidaSgh,
-  type GradeClasseLida,
-  type GravacaoPrescricao,
-  type HorarioLidoLegado,
-  type InclusaoItem,
-  type ItemGravacao,
-  type ItemPrescricaoLido,
-  type KitMedicamentoLido,
-  type OpcaoDominio,
-  type PrescricaoCabecalhoLida,
-  type ProdutoLido,
-  type ProtocoloLido,
-  type ReconciliacaoLidaSgh,
-  type RegraAlertaLida,
-  type RegraHorarioLida,
-  type SuspensaoItem,
-  type SuspensaoPrescricao,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { type AlergiaLida, type DadosClinicosLidos, type AtendimentoDaPrescricao, type AtendimentoLido, type CabecalhoDocumentoLido, type ConsultaCadastroLida, type DecisaoLida, type FichaNovaLida, type FuturaGravadaLida, type GradeClasseLida, type GravacaoPrescricao, type HorarioPadraoLido, type InclusaoItem, type ItemGravacao, type ItemPrescricaoLido, type KitMedicamentoLido, type OpcaoDominio, type PrescricaoCabecalhoLida, type ProdutoLido, type ProtocoloLido, type ReconciliacaoGravadaLida, type RegraAlertaLida, type RegraHorarioLida, type SuspensaoItem, type SuspensaoPrescricao, loginDaOperacao } from './tipos-pep.js';
 import { ROTULOS_TIPO_ITEM, type SecaoCadastroPrescricao, tipoDoPlano } from '@sgh/contratos';
 import { frequencia as frequenciaDe } from '@sgh/dominio-pep';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
@@ -38,11 +12,8 @@ import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js'
 
 const M = 'SINTETICO';
 
-interface CtxMemoria {
-  readonly usuarioLegado: string;
-  readonly traceId?: string;
-  readonly estacao?: string;
-}
+/** Contexto da gravação em memória: o mesmo da operação do núcleo. */
+type CtxMemoria = ContextoOperacao;
 
 const PACIENTES: Readonly<Record<number, string>> = {
   1001: `JOSÉ DA SILVA ${M}`,
@@ -235,7 +206,7 @@ interface PrescricaoMemoria {
     item: number | null;
     em: string;
     usuario: string;
-    hashLegado: string;
+    hashAnterior: string;
     comoSuporte: boolean;
   }[];
   decisoes: DecisaoLida[];
@@ -250,9 +221,9 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
   private readonly regrasSgh = new Map<string, RegraAlertaLida[]>();
   private readonly futurasSgh = new Map<
     string,
-    (FuturaLidaSgh & { atendimento: number; paciente: number })[]
+    (FuturaGravadaLida & { atendimento: number; paciente: number })[]
   >();
-  private readonly reconSgh = new Map<string, (ReconciliacaoLidaSgh & { atendimento: number })[]>();
+  private readonly reconSgh = new Map<string, (ReconciliacaoGravadaLida & { atendimento: number })[]>();
   private readonly fichasSgh = new Map<string, FichaNovaLida[]>();
   private readonly gradesSgh = new Map<string, GradeClasseLida[]>();
   private proximo = 880_000;
@@ -275,7 +246,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       const inicio = somarMin(ini, -1440);
       const fim = somarMin(inicio, 1439);
       const id = this.proximo++;
-      const hs = (base: string, passos: number[]): HorarioLidoLegado[] =>
+      const hs = (base: string, passos: number[]): HorarioPadraoLido[] =>
         passos.map((m) => ({
           id: this.proximo++,
           dataHora: `${somarMin(base, m)}:00`,
@@ -390,9 +361,9 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       evento,
       rede: c.rede,
       hospital: c.hospital,
-      usuario: ctx.usuarioLegado,
-      estacao: (ctx.estacao ?? '').slice(0, 80),
-      correlacao: (ctx.traceId ?? evento).slice(0, 64),
+      usuario: loginDaOperacao(ctx),
+      estacao: '',
+      correlacao: (ctx.correlacao || evento).slice(0, 64),
       recurso: 'pep.prescricao',
       resultado: 'sucesso',
       tabelaAlvo: 'PRPRESC',
@@ -423,7 +394,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     const nomeProd = (p: number) => PRODUTOS.find((x) => x.produto === p)?.nome ?? `Produto ${p}`;
     const nomeDom = (k: string, id: string) => DOMINIOS[k]?.find((o) => o.id === id)?.nome ?? null;
     const id = this.proximo++;
-    const horarios: HorarioLidoLegado[] = [];
+    const horarios: HorarioPadraoLido[] = [];
     const principais = d.tipo === 'solucao' ? d.etapas.map((e) => ({ dataHora: e.inicio })) : it.horarios;
     for (const h of principais) {
       horarios.push({ id: this.proximo++, dataHora: h.dataHora, situacao: 'P', acessoria: false });
@@ -555,6 +526,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
         id: paciente * 10 + 1,
         numero: 31337,
         tipo: 'internacao',
+        aberto: true,
         entrada: `${hoje}T07:00:00.000`,
         unidade: `UNIDADE ${M}`,
         leito: '101A',
@@ -564,7 +536,8 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       {
         id: paciente * 10 + 2,
         numero: 31336,
-        tipo: 'externo',
+        tipo: 'pronto_atendimento',
+        aberto: true,
         entrada: `${hoje}T06:00:00.000`,
         unidade: `PRONTO ATENDIMENTO ${M}`,
         leito: null,
@@ -870,7 +843,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     return null;
   }
 
-  async parametrosLegado() {
+  async parametrosPrescricao() {
     return {
       consistirDuplicidade: true,
       porMedicamento: true,
@@ -1009,7 +982,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     e: GravacaoPrescricao,
     ctx: CtxMemoria,
   ) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     const l = this.presc(c.hospital);
     const ini = e.vigencia.inicio.slice(0, 16);
     const fim = e.vigencia.fim.slice(0, 16);
@@ -1081,7 +1054,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       })),
       hash: '',
     };
-    this.selar(p, 'prescrito', null, ctx.usuarioLegado, e.sgh.comoSuporte);
+    this.selar(p, 'prescrito', null, loginDaOperacao(ctx), e.sgh.comoSuporte);
     l.push(p);
     await this.auditar(c, ctx, 'pep.prescricao.assinada', id, e.paciente);
     return { prescricao: id, horarios: itens.reduce((s, i) => s + i.horarios.length, 0) };
@@ -1097,7 +1070,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     p.hash = JSON.stringify(p.itens.map((i) => [i.id, i.horarios.map((h) => h.situacao).join('')]))
       .length.toString(16)
       .padStart(64, '0');
-    p.eventos.push({ tipo, item, em: agoraLocal(), usuario, hashLegado: p.hash, comoSuporte });
+    p.eventos.push({ tipo, item, em: agoraLocal(), usuario, hashAnterior: p.hash, comoSuporte });
   }
 
   private vigente(p: PrescricaoMemoria): void {
@@ -1112,18 +1085,18 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
   }
 
   async incluirItem(c: ContextoPrescricao, e: InclusaoItem, ctx: CtxMemoria) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     const p = this.achar(c.hospital, e.prescricao);
     this.vigente(p);
     const it = this.lido(p.cab.id, e.item, e.cbo, agoraLocal());
     p.itens.push(it);
-    this.selar(p, 'item-incluido', it.id, ctx.usuarioLegado, e.sgh.comoSuporte);
+    this.selar(p, 'item-incluido', it.id, loginDaOperacao(ctx), e.sgh.comoSuporte);
     await this.auditar(c, ctx, 'pep.item.incluido', p.cab.id, e.paciente);
     return { item: it.id };
   }
 
   async suspenderItem(c: ContextoPrescricao, e: SuspensaoItem, ctx: CtxMemoria) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     const p = this.achar(c.hospital, e.prescricao);
     this.vigente(p);
     const i = p.itens.findIndex((x) => x.id === e.item);
@@ -1140,13 +1113,13 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     );
     p.itens[i] = { ...it, horarios, corrigidoEm: e.correcao ? agoraLocal() : null };
     if (e.correcao) p.itens.push(this.lido(p.cab.id, e.correcao, e.cbo, agoraLocal()));
-    this.selar(p, e.correcao ? 'item-corrigido' : 'item-suspenso', it.id, ctx.usuarioLegado, e.comoSuporte);
+    this.selar(p, e.correcao ? 'item-corrigido' : 'item-suspenso', it.id, loginDaOperacao(ctx), e.comoSuporte);
     await this.auditar(c, ctx, 'pep.item.suspenso', p.cab.id, e.paciente);
     return { horarios: n };
   }
 
   async suspenderPrescricao(c: ContextoPrescricao, e: SuspensaoPrescricao, ctx: CtxMemoria) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     const p = this.achar(c.hospital, e.prescricao);
     if (p.cab.suspensaoEm !== null)
       throw new ErroOperacao(
@@ -1165,10 +1138,10 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
     p.cab = {
       ...p.cab,
       suspensaoEm: agoraLocal(),
-      suspensaoPor: ctx.usuarioLegado,
+      suspensaoPor: loginDaOperacao(ctx),
       suspensaoJustificativa: e.justificativa,
     };
-    this.selar(p, 'suspensa', null, ctx.usuarioLegado, e.comoSuporte);
+    this.selar(p, 'suspensa', null, loginDaOperacao(ctx), e.comoSuporte);
     await this.auditar(c, ctx, 'pep.prescricao.suspensa', p.cab.id, e.paciente);
     return { horarios: n };
   }
@@ -1183,7 +1156,7 @@ export class PortaPrescricaoMemoria implements PortaPrescricao {
       item: null,
       em: agoraLocal(),
       usuario,
-      hashLegado: p.hash,
+      hashAnterior: p.hash,
       comoSuporte: false,
     });
   }

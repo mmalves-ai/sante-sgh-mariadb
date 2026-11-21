@@ -1,16 +1,23 @@
 // Central de chamadas do painel (M19; ficha, regras 6 e 7; cap-09 §9.9): por estabelecimento, a lista das chamadas
 // recentes que os painéis de TV mostram e falam. Duas entradas:
-//   - a chamada do NOVO entra na hora, depois do COMMIT (o controlador avisa: menos de 1 s até a voz);
-//   - a chamada do OUTRO SISTEMA (o guichê que passou de 0 a um número; a linha C nova no fluxo) entra pelo vigia de
-//     mudanças do M16 (canal "senhas", um ciclo a cada 1 a 2 s): o selo mudou → um retrato das senhas do dia → a
-//     diferença com o retrato anterior (@sgh/dominio-recepcao, chamadasEntreRetratos) → as chamadas novas; a
-//     primeira chamada no guichê do outro sistema vai à extensão da senha (os tempos por etapa dos dois sistemas).
+//   - a chamada feita por esta instância da API entra na hora, depois do COMMIT (o controlador avisa: menos de 1 s
+//     até a voz);
+//   - a chamada feita em outra instância (outro processo da API, outro terminal) entra pelo vigia de mudanças (canal
+//     "senhas"), ou pela releitura periódica sem vigia: um retrato das senhas do dia → a diferença com o retrato
+//     anterior (@sgh/dominio-recepcao, chamadasEntreRetratos) → as chamadas novas.
 // Os painéis só recebem o aviso de que mudou (a versão) e releem a lista; nada de pessoa sai daqui: só a senha, o
 // destino e, se o parâmetro pedir, as iniciais (calculadas no serviço, nunca o nome).
-import type { SenhaLidaLegado } from '@sgh/legado';
+// Melhoria: sem gravação de "chamada de fora" (convivência com o sistema de origem removida, ADR 0003): toda chamada
+// já nasce gravada pela operação recepcao.chamarSenha, com a hora e o guichê.
 import { chamadasEntreRetratos, type EstadoChamadaSenha, juntarChamadas } from '@sgh/dominio-recepcao';
-import type { MotorVigia } from '../internacao/public-api.js';
 import type { PortaRecepcao } from './porta.js';
+import type { SenhaRecepcao } from './tipos.js';
+import { guicheDaTela, letraDaSenha, prioridadeDaTela } from './tela-senha.js';
+
+/** Aviso de mudança nas senhas do estabelecimento (um vigia de mudanças, ou nenhum: a releitura periódica vale). */
+export interface AvisoMudancaSenhas {
+  assinar(hospital: string, canal: 'senhas', ouvinte: () => void): () => void;
+}
 
 /** Chamadas guardadas por estabelecimento (as mais recentes; o painel mostra as últimas). */
 export const TETO_CHAMADAS = 30;
@@ -40,16 +47,16 @@ interface EstadoHospital {
   lendo: Promise<void> | null;
 }
 
-const estadoDe = (s: SenhaLidaLegado): EstadoChamadaSenha => ({
+const estadoDe = (s: SenhaRecepcao): EstadoChamadaSenha => ({
   id: s.id,
-  guiche: s.guiche,
-  situacao: s.situacao,
+  guiche: guicheDaTela(s.guiche),
+  situacao: letraDaSenha(s),
   chamadasNoFluxo: s.chamadasNoFluxo,
 });
 
 /** A chave da chamada: a senha e a contagem de chamadas (muda a cada nova chamada da mesma senha). */
-export const chaveDaChamada = (s: Pick<SenhaLidaLegado, 'id' | 'chamadasNoFluxo' | 'guiche'>): string =>
-  `${s.id}:${s.chamadasNoFluxo + (s.guiche > 0 ? 1 : 0)}`;
+export const chaveDaChamada = (s: Pick<SenhaRecepcao, 'id' | 'chamadasNoFluxo' | 'guiche'>): string =>
+  `${s.id}:${s.chamadasNoFluxo + (s.guiche !== null && s.guiche > 0 ? 1 : 0)}`;
 
 export class CentralChamadas {
   private readonly estados = new Map<string, EstadoHospital>();
@@ -57,7 +64,7 @@ export class CentralChamadas {
   constructor(
     private readonly porta: PortaRecepcao,
     private readonly rede: string,
-    private readonly vigia: MotorVigia | null,
+    private readonly vigia: AvisoMudancaSenhas | null,
     private readonly agora: () => number = Date.now,
   ) {}
 
@@ -140,17 +147,6 @@ export class CentralChamadas {
         const antes = new Set(x.chamadas.map((c) => c.chave));
         x.chamadas = juntarChamadas(x.chamadas, itens, TETO_CHAMADAS);
         if (itens.some((i) => !antes.has(i.chave))) this.avisar(x);
-        // A primeira chamada no guichê feita no outro sistema entra nos tempos por etapa (o outro sistema não
-        // guarda a hora da chamada): gravada na extensão da senha, com a trilha; a falha não atrasa o painel.
-        const deFora = itens
-          .filter(
-            (i) => i.guiche > 0 && !porId.get(i.senha)?.atendida && !porId.get(i.senha)?.primeiraChamadaEm,
-          )
-          .map((i) => ({ senha: i.senha, guiche: i.guiche, local: i.local }));
-        if (deFora.length > 0)
-          void this.porta
-            .registrarChamadasDeFora({ rede: this.rede, hospital }, deFora)
-            .catch(() => undefined);
       } catch {
         // Banco fora do ar: o painel mostra a hora da última atualização; o próximo ciclo tenta de novo.
       } finally {
@@ -160,30 +156,28 @@ export class CentralChamadas {
     return x.lendo;
   }
 
-  private chamadaDe(
-    s: SenhaLidaLegado,
-    locais: Map<string, number>,
-    origem: 'novo' | 'outro',
-  ): ChamadaInterna {
+  private chamadaDe(s: SenhaRecepcao, locais: Map<string, number>, origem: 'novo' | 'outro'): ChamadaInterna {
     const doFluxo = s.ultimoLocalChamada;
     // A chamada no local (linha C nova) vale pelo local da linha; a do guichê, pelo local do guichê.
     const local =
-      s.localChamada ?? (s.guiche > 0 ? (locais.get(`${s.recepcao}:${s.guiche}`) ?? null) : null) ?? doFluxo;
+      s.localChamada ??
+      (s.guiche !== null ? (locais.get(`${s.recepcao}:${s.guiche}`) ?? null) : null) ??
+      doFluxo;
     return {
       chave: chaveDaChamada(s),
       senha: s.id,
       texto: s.texto,
       recepcao: s.recepcao,
-      guiche: s.guiche,
+      guiche: guicheDaTela(s.guiche),
       local,
-      prioridade: s.prioridade,
+      prioridade: prioridadeDaTela(s),
       em: new Date(this.agora()).toISOString(),
       origem,
     };
   }
 
   /** A chamada do novo, logo depois do COMMIT (a senha relida): entra na hora e avisa os painéis. */
-  async registrarDoNovo(hospital: string, s: SenhaLidaLegado): Promise<void> {
+  async registrarDoNovo(hospital: string, s: SenhaRecepcao): Promise<void> {
     const x = this.e(hospital);
     const c = this.chamadaDe(s, new Map(), 'novo');
     x.chamadas = juntarChamadas(x.chamadas, [c], TETO_CHAMADAS);

@@ -10,6 +10,7 @@ import type { CanalVigia } from '@sgh/contratos';
 import { criarAbility, pode, regrasDeAcesso } from '@sgh/dominio-acesso';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
+import { contextoDoEstabelecimento } from '../cadastro/contexto-nucleo.js';
 import type { MotorVigia } from '../internacao/public-api.js';
 
 export const AVISOS_ATENDIMENTO = Symbol('AVISOS_ATENDIMENTO');
@@ -55,7 +56,8 @@ export class AvisosAtendimento {
     if (this.vigia && !this.vigias.has(hospital))
       this.vigias.set(
         hospital,
-        this.vigia.assinar(hospital, this.canal, () => this.avisar(hospital)),
+        // O vigia escuta pelo cliente e pelo estabelecimento (id) da sessão.
+        this.vigia.assinar(contextoDoEstabelecimento(hospital), this.canal, () => this.avisar(hospital)),
       );
     return () => {
       lista.delete(ouvinte);

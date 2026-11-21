@@ -4,6 +4,8 @@
 // como o legado grava; a data sentinela (30/12/1899) já chega como null. O paciente (prontuário) só serve à
 // reinternação calculada (regra 9) e nunca sai do motor.
 
+import type { GrupoMotivoAlta } from '../legendas/legendas.js';
+
 /** Chave natural de uma unidade (bloco + acomodação) ou de um leito (… + leito). */
 export interface PosicaoLeito {
   readonly bloco: string;
@@ -21,6 +23,11 @@ export interface InternacaoMovimento extends PosicaoLeito {
   readonly alta: Date | null;
   readonly horaAlta: string | null;
   readonly motivo: number | null;
+  /**
+   * Grupo do motivo de saída quando a fonte já o conhece pelo tipo de saída do cadastro (banco próprio); prevalece
+   * sobre o código em `motivo`, que só a fonte em memória ainda entrega (a classificação por código fica no conector).
+   */
+  readonly grupoSaida?: GrupoMotivoAlta | null;
   /** Caráter: '1' eletiva, '2' urgência (como o legado grava). */
   readonly carater: string | null;
   /** Clínica: 'M' médica, 'C' cirúrgica (e outras letras do legado). */

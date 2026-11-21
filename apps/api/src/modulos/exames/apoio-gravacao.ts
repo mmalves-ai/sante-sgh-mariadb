@@ -1,8 +1,10 @@
 // Apoio comum das telas de gravação do M18 (agenda de exames e centro cirúrgico): a liberação da funcionalidade por
-// chave (POL-3: construída completa e DESLIGADA até a conferência na cópia; o administrador liga por estabelecimento,
-// setor ou pessoa), o estado de cada ação para a tela (permissão + passo 0 do executor), a gravação pelo executor
-// (Idempotency-Key, trilha na mesma transação; na memória, pelo registrador da API), as gravações só do novo (SGH_
-// com a SGH_TRILHA junto) e os parâmetros do estabelecimento resolvidos para a sessão.
+// chave (o administrador liga por estabelecimento, setor ou pessoa), o estado de cada ação para a tela (permissão +
+// passo 0 do executor), a gravação pelo executor do @sgh/nucleo (Idempotency-Key; trilha, outbox e idempotência na
+// mesma transação; na memória, pelo registrador da API), as gravações diretas da porta (`gravarSgh`, com a linha da
+// trilha na mesma transação) e os parâmetros do estabelecimento resolvidos para a sessão.
+// Melhoria: o contexto da porta é o ContextoNucleo (cliente, estabelecimento, usuário e correlação por id), sem
+// rede/hospital em texto nem login do sistema de origem; a trilha da memória leva o nome da operação.
 import {
   definicaoParametro,
   type GravacaoAgenda,
@@ -10,13 +12,7 @@ import {
   type ResultadoAgenda,
 } from '@sgh/contratos';
 import { recursoLigado, resolverParametro, valorTipado } from '@sgh/dominio-config';
-import {
-  type ContextoOperacao,
-  type LiberacaoConsultada,
-  type LinhaTrilha,
-  operacao,
-  type ResultadoOperacao,
-} from '@sgh/legado';
+import type { ContextoNucleo, ContextoOperacao, LinhaTrilha, ResultadoOperacao } from '@sgh/nucleo';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -30,21 +26,33 @@ import {
 import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
 import { TTL_CONFIG_NOVO_S } from '../config/public-api.js';
 
-export interface ContextoPortaM18 {
-  readonly rede: string;
-  readonly hospital: string;
+/** Contexto da porta: cliente (o banco), estabelecimento, usuário e correlação da sessão. */
+export type ContextoPortaM18 = ContextoNucleo;
+
+/** Onde a porta lê e grava: o banco do cliente (MariaDB, pelo núcleo) ou a memória sintética de dev/ci. */
+export type DestinoPorta = 'banco' | 'memoria';
+
+/** Liberação da gravação (passo 0 do executor): pode gravar agora, com o código e o motivo. */
+export interface LiberacaoGravacao {
+  readonly pode: boolean;
+  readonly codigo: string | null;
+  readonly motivo: string | null;
 }
 
 export interface GravacaoFeita {
   readonly resultado: ResultadoOperacao;
   readonly repetida: boolean;
-  readonly trilha: string | null;
+  /** Id da linha da trilha (null na memória). */
+  readonly trilha: number | null;
 }
+
+/** Linha da trilha de uma gravação direta da porta (o estabelecimento, o usuário e a correlação vêm do contexto). */
+export type TrilhaDaGravacao = Omit<LinhaTrilha, 'ocorridoEm'> & { readonly ocorridoEm?: Date };
 
 /** O que o apoio precisa da porta (as duas portas do M18 têm estes métodos). */
 export interface PortaGravacaoM18<G> {
-  readonly destino: 'legado' | 'memoria';
-  podeGravar(c: ContextoPortaM18, operacao: string, usuarioLegado: string): Promise<LiberacaoConsultada>;
+  readonly destino: DestinoPorta;
+  podeGravar(c: ContextoPortaM18, operacao: string): Promise<LiberacaoGravacao>;
   executar(
     c: ContextoPortaM18,
     operacao: string,
@@ -53,12 +61,15 @@ export interface PortaGravacaoM18<G> {
   ): Promise<GravacaoFeita>;
   gravarSgh<T>(
     c: ContextoPortaM18,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: G) => Promise<T>,
   ): Promise<T>;
 }
 
-/** Alvo da linha da SGH_TRILHA de uma gravação só do novo (tabela real, ID do registro e paciente). */
+/** Valor de `destino` no contrato das telas (o enum do contrato ainda chama o banco de 'legado'; pedido da onda). */
+export const destinoDoContrato = (d: DestinoPorta): 'legado' | 'memoria' => (d === 'memoria' ? 'memoria' : 'legado');
+
+/** Alvo da linha da trilha de uma gravação direta da porta (tabela, id do registro e paciente). */
 export interface AlvoSgh {
   readonly tabela: string;
   readonly id?: string | null;
@@ -167,14 +178,14 @@ export class ApoioGravacao<G> {
         operacoes[op] = { pode: false, motivo: l.motivo };
         continue;
       }
-      const p = await this.porta.podeGravar(s.porta, op, s.login).catch(() => ({
+      const p = await this.porta.podeGravar(s.porta, op).catch(() => ({
         pode: false,
         codigo: 'indisponivel',
         motivo: 'O banco do estabelecimento está indisponível.',
       }));
       operacoes[op] = { pode: p.pode, motivo: p.motivo };
     }
-    // Ações só do novo (SGH_): valem a permissão e a liberação.
+    // Ações diretas da porta (sem operação do executor): valem a permissão e a liberação.
     for (const [acao, permissao] of Object.entries(extras))
       operacoes[acao] = !s.pode(permissao)
         ? { pode: false, motivo: 'Seu perfil não permite esta ação.' }
@@ -189,7 +200,7 @@ export class ApoioGravacao<G> {
     entrada: unknown,
     mensagem: string,
     // M25: a sincronização do tablet leva a chave de cada ato (Idempotency-Key do ato, não a do lote).
-    extras: Pick<Partial<ContextoOperacao>, 'reautenticadoEm' | 'idempotencyKey'> = {},
+    extras: Pick<Partial<ContextoOperacao>, 'reautenticadoEm' | 'chaveIdempotencia'> = {},
   ): Promise<ResultadoAgenda> {
     // A permissão de agir da operação nesta funcionalidade (o mapa da tela vale também no servidor): a rota confere a
     // dela, e a funcionalidade a sua (ex.: o desfecho de uma ficha de pronto atendimento exige a do PA).
@@ -200,19 +211,12 @@ export class ApoioGravacao<G> {
       });
     await this.exigirLiberacao(s);
     // M20: a receita crítica (a exclusão do atendimento) leva a reautenticação recente ao executor.
-    const ctx = { ...contextoOperacao(s, op), ...extras };
+    const ctx: ContextoOperacao = { ...contextoOperacao(s, op), ...extras };
     const r = await this.porta.executar(s.porta, op, entrada, ctx).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
-    if (this.porta.destino === 'memoria' && !r.repetida) {
-      const receita = operacao(op).receita;
-      await this.registrarMemoria(
-        s,
-        receita.evento,
-        receita.recurso,
-        String(Object.values(r.resultado)[0] ?? ''),
-      );
-    }
+    if (this.porta.destino === 'memoria' && !r.repetida)
+      await this.registrarMemoria(s, op, this.cfg.chave, String(Object.values(r.resultado)[0] ?? ''));
     return { ok: true, resultado: r.resultado, repetida: r.repetida, mensagem };
   }
 
@@ -231,7 +235,7 @@ export class ApoioGravacao<G> {
     });
   }
 
-  /** Gravação só do novo (SGH_), com a SGH_TRILHA na mesma transação. */
+  /** Gravação direta da porta, com a linha da trilha na mesma transação. */
   async sgh<T>(
     s: SessaoCadastro,
     evento: string,
@@ -242,7 +246,11 @@ export class ApoioGravacao<G> {
     await this.exigirLiberacao(s);
     const alvoDe = (r: T) => (typeof alvoOuFn === 'function' ? alvoOuFn(r) : alvoOuFn);
     const r = await this.porta
-      .gravarSgh(s.porta, (x: T) => linhaTrilha(s, evento, recurso, evento, alvoDe(x)), fn)
+      .gravarSgh(
+        s.porta,
+        (x: T): TrilhaDaGravacao => linhaTrilha(s, evento, recurso, evento, alvoDe(x)),
+        fn,
+      )
       .catch((e: unknown) => {
         throw problemaDoCadastro(e);
       });
@@ -321,7 +329,7 @@ export function portaIndisponivel<P extends object>(metodos: ReadonlySet<string>
     {},
     {
       get: (_t, chave) => {
-        if (chave === 'destino') return 'legado';
+        if (chave === 'destino') return 'banco';
         if (chave === 'podeGravar')
           return async () => ({
             pode: false,

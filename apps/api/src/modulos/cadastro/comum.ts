@@ -1,16 +1,20 @@
-// Comuns dos controladores do cadastro (M11): a sessão (rede, estabelecimento, login do legado), a permissão
-// pelas mesmas regras CASL da tela (a negação vai à trilha), o contexto do executor (Idempotency-Key) e a
-// tradução dos erros do executor e das recusas em Problem Details em português (sem coluna do legado: a
-// coluna do aviso de colisão vira o campo da ficha).
+// Comuns dos controladores do cadastro (M11): a sessão (rede, estabelecimento, login e o contexto do núcleo por id), a
+// permissão pelas mesmas regras CASL da tela (a negação vai à trilha), o contexto do executor (Idempotency-Key) e a
+// tradução dos erros do executor e das recusas em Problem Details em português (sem nome de coluna: o aviso de colisão
+// cita o campo da ficha).
+// Melhoria: o contexto da porta e da gravação é o do @sgh/nucleo (cliente, estabelecimento e usuário por id), e a
+// linha da trilha é a trilha_auditoria do cliente, gravada pela porta na mesma transação.
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { pode } from '@sgh/dominio-acesso';
-import { CAMPO_DA_COLUNA, type ContextoOperacao, ErroOperacao, type LinhaTrilha } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
+import { contextoDoEstabelecimento, idUsuarioDaSessao } from './contexto-nucleo.js';
 import type { ContextoPorta } from './porta.js';
 import { ROTULOS_CAMPOS_PACIENTE } from './servico.js';
+import type { ContextoGravacao, RegistroTrilhaTela } from './tipos.js';
 
 const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 
@@ -34,7 +38,13 @@ export function sessaoDe(req: RequisicaoAutorizada): SessaoCadastro {
     hospital,
     rede,
     login: a.sessao.usuario.login ?? a.sessao.usuario.id,
-    porta: { rede, hospital },
+    porta: {
+      ...contextoDoEstabelecimento(hospital),
+      usuario: idUsuarioDaSessao(a.sessao.usuario.id),
+      correlacao: correlacaoDaRequisicao(req, 'leitura').slice(0, 64),
+      rede,
+      hospital,
+    },
     pode: (codigo) => pode(a.ability, codigo),
   };
 }
@@ -62,7 +72,7 @@ export async function exigir(s: SessaoCadastro, codigo: string, trilha: Registra
   );
 }
 
-export function contextoOperacao(s: SessaoCadastro, rotulo: string): ContextoOperacao {
+export function contextoOperacao(s: SessaoCadastro, rotulo: string): ContextoGravacao {
   const bruto = s.req.headers['idempotency-key'];
   const chave = Array.isArray(bruto) ? bruto[0] : bruto;
   if (typeof chave !== 'string' || !IDEMPOTENCIA.test(chave))
@@ -73,45 +83,51 @@ export function contextoOperacao(s: SessaoCadastro, rotulo: string): ContextoOpe
       'Falta a Idempotency-Key do pedido de gravação.',
     );
   return {
+    cliente: s.porta.cliente,
+    estabelecimento: s.porta.estabelecimento,
+    usuario: s.porta.usuario,
+    correlacao: correlacaoDaRequisicao(s.req, rotulo).slice(0, 64),
+    chaveIdempotencia: chave,
     rede: s.rede,
     hospital: s.hospital,
-    traceId: correlacaoDaRequisicao(s.req, rotulo),
-    usuarioLegado: s.login,
-    idempotencyKey: chave,
+    login: s.login,
     estacao: estacaoDaRequisicao(s.req).slice(0, 80),
   };
 }
 
-/** Linha da SGH_TRILHA de uma gravação SGH_ do cadastro (o núcleo a grava na mesma transação). */
+/**
+ * Linha da trilha de uma gravação direta da porta (a porta própria a grava na trilha_auditoria, na mesma transação). O
+ * evento e o recurso da tela vão nos dados; nunca nome nem documento.
+ */
 export function linhaTrilha(
   s: SessaoCadastro,
   evento: string,
   recurso: string,
   operacaoDaTrilha: string,
   alvo: { tabela: string; id?: string | null; paciente?: number | null; chave?: string | null },
-): LinhaTrilha {
+): RegistroTrilhaTela {
+  const id = alvo.id && /^\d{1,15}$/.test(alvo.id) ? Number(alvo.id) : null;
   return {
-    rede: s.rede,
-    hospital: s.hospital,
-    usuario: s.login,
-    evento,
-    recurso,
-    operacao: operacaoDaTrilha,
-    tabelaAlvo: alvo.tabela,
-    idAlvo: alvo.id ?? null,
-    chaveNaturalAlvo: alvo.chave ?? null,
-    resultado: 'sucesso',
-    estacao: estacaoDaRequisicao(s.req).slice(0, 80),
+    estabelecimento: s.porta.estabelecimento,
+    usuario: s.porta.usuario,
+    acao: 'operacao',
+    entidade: alvo.tabela,
+    entidadeId: id,
+    dadosDepois: {
+      evento,
+      recurso,
+      operacao: operacaoDaTrilha,
+      ...(alvo.chave ? { chave: alvo.chave } : {}),
+      ...(alvo.paciente ? { paciente: alvo.paciente } : {}),
+      estacao: estacaoDaRequisicao(s.req).slice(0, 80),
+    },
     correlacao: correlacaoDaRequisicao(s.req, operacaoDaTrilha).slice(0, 64),
-    idPaciente: alvo.paciente ?? null,
   };
 }
 
-/** Coluna do legado (ou campo) → campo da ficha. */
+/** Coluna do modelo (ou campo) → campo da ficha (as portas já citam o campo; a coluna da versão vira "versao"). */
 function campoDe(x: string): string {
-  return (
-    CAMPO_DA_COLUNA[x] ?? (x === 'DATA_HORA_ULTIMA_ATUALIZACAO' ? 'versao' : x === 'ATIVO' ? 'situacao' : x)
-  );
+  return x === 'alterado_em' ? 'versao' : x;
 }
 
 /** Erro do executor ou da porta → Problem Details em português (sem nome de tabela nem valor de coluna). */
@@ -122,6 +138,9 @@ export function problemaDoCadastro(e: unknown): ErroProblema {
   const codigo = p.codigo ?? 'erro-interno';
   const rotulo = (campo: string) =>
     ROTULOS_CAMPOS_PACIENTE[campo as keyof typeof ROTULOS_CAMPOS_PACIENTE] ?? campo;
+  // Recurso ainda sem modelo ou cadastro básico incompleto no cliente: 501/503 com a mensagem (nada gravado).
+  if (p.status === 501 || p.status === 503)
+    return new ErroProblema('indisponivel', p.status, p.title, p.detail, { codigo });
   // A recusa por escopo dentro da gravação (ex.: a conta bancária fora do escopo, M32 regra 15) sai como 403.
   if (p.status === 403) return new ErroProblema('sem-permissao', 403, p.title, p.detail, { codigo });
   switch (codigo) {

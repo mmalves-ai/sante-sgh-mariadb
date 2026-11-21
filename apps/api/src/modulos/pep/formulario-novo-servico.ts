@@ -33,7 +33,7 @@ import {
   tipoDoTipoperg,
   type VersaoNoCiclo,
 } from '@sgh/dominio-pep';
-import type { EventoFormNovoLido, FormNovoLido } from '@sgh/legado';
+import type { EventoFormularioNovoLido, FormularioNovoLido } from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoFormularioNovo, PortaFormularioNovo } from './formulario-novo-porta.js';
 
@@ -76,14 +76,14 @@ const naoEncontrado = () =>
   );
 
 /** A definição e os casos guardados, conferidos pelo contrato (o que não confere não segue). */
-function doLido(v: FormNovoLido) {
+function doLido(v: FormularioNovoLido) {
   const definicao = esquemaDefinicaoFormularioNovo.parse(v.definicao);
   const casos = v.casos.map((c) => esquemaCasoFormularioNovo.parse(c.caso));
   return { definicao, casos };
 }
 
 /** A versão no ciclo do domínio; os autores são todos os que a salvaram (eventos `salvo` da história). */
-export function noCiclo(v: FormNovoLido, eventos: readonly EventoFormNovoLido[] = []): VersaoNoCiclo {
+export function noCiclo(v: FormularioNovoLido, eventos: readonly EventoFormularioNovoLido[] = []): VersaoNoCiclo {
   const { definicao, casos } = doLido(v);
   return {
     estado: v.estado,
@@ -99,13 +99,13 @@ export function noCiclo(v: FormNovoLido, eventos: readonly EventoFormNovoLido[] 
 export class ServicoFormularioNovo {
   constructor(private readonly porta: PortaFormularioNovo) {}
 
-  async lerVersao(c: ContextoFormularioNovo, id: number): Promise<FormNovoLido> {
+  async lerVersao(c: ContextoFormularioNovo, id: number): Promise<FormularioNovoLido> {
     const v = await this.porta.versao(c, id);
     if (!v) throw naoEncontrado();
     return v;
   }
 
-  private resumo(v: FormNovoLido, hoje: string): VersaoFormularioNovoResumo {
+  private resumo(v: FormularioNovoLido, hoje: string): VersaoFormularioNovoResumo {
     let verdes: number | null;
     try {
       const { definicao, casos } = doLido(v);
@@ -175,7 +175,7 @@ export class ServicoFormularioNovo {
       );
   }
 
-  async conferirEnvio(c: ContextoFormularioNovo, id: number): Promise<FormNovoLido> {
+  async conferirEnvio(c: ContextoFormularioNovo, id: number): Promise<FormularioNovoLido> {
     const v = await this.lerVersao(c, id);
     try {
       conferirEnvioRevisao(noCiclo(v), await this.porta.hoje(c));
@@ -185,7 +185,7 @@ export class ServicoFormularioNovo {
     return v;
   }
 
-  async conferirDecisao(c: ContextoFormularioNovo, id: number, quem: string): Promise<FormNovoLido> {
+  async conferirDecisao(c: ContextoFormularioNovo, id: number, quem: string): Promise<FormularioNovoLido> {
     const [v, eventos] = await Promise.all([this.lerVersao(c, id), this.porta.eventos(c, id)]);
     try {
       conferirDecisaoRevisao(noCiclo(v, eventos), quem);
@@ -200,7 +200,7 @@ export class ServicoFormularioNovo {
     id: number,
     hashEsperado: string,
     quemPublica: string,
-  ): Promise<{ v: FormNovoLido; hash: string; definicao: DefinicaoFormularioNovo }> {
+  ): Promise<{ v: FormularioNovoLido; hash: string; definicao: DefinicaoFormularioNovo }> {
     const [v, eventos] = await Promise.all([this.lerVersao(c, id), this.porta.eventos(c, id)]);
     const ciclo = noCiclo(v, eventos);
     try {
@@ -219,7 +219,7 @@ export class ServicoFormularioNovo {
    */
   async entradaDaPublicacao(
     c: ContextoFormularioNovo,
-    v: FormNovoLido,
+    v: FormularioNovoLido,
     definicao: DefinicaoFormularioNovo,
     contentHash: string,
     versaoEsperada: string,
@@ -252,7 +252,7 @@ export class ServicoFormularioNovo {
     }
   }
 
-  async conferirAposentadoria(c: ContextoFormularioNovo, id: number): Promise<FormNovoLido> {
+  async conferirAposentadoria(c: ContextoFormularioNovo, id: number): Promise<FormularioNovoLido> {
     const v = await this.lerVersao(c, id);
     try {
       conferirAposentadoria(v);

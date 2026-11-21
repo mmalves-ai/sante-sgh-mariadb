@@ -1,6 +1,6 @@
 // Porta do atendimento externo EM MEMÓRIA (M20): a sessão sintética de dev/ci (E2E) lê e grava fichas, contas, fila do
-// consultório, quadro e observação do PA SINTÉTICOS, sem tocar a cópia. As gravações aplicam o mesmo Zod das receitas
-// (operacao(op).entrada) e as mesmas recusas (paciente inativo ou unificado, convênio inativo, senha já atendida ou de
+// consultório, quadro e observação do PA SINTÉTICOS, sem banco. As gravações aplicam o mesmo Zod das receitas
+// (o Zod da operação) e as mesmas recusas (paciente inativo ou unificado, convênio inativo, senha já atendida ou de
 // outro dia, conta fechada/apresentada/emitida no procedimento extra, colisão de versão, atendimento encerrado, ato
 // médico sem médico, exclusão com conta fechada ou procedimento extra). A senha é a da recepção em memória (M19): a
 // abertura a liga e põe em A; o consultório chama (C), atende (A) e libera (L) no mesmo fluxo. O relógio é o do
@@ -19,26 +19,22 @@ import {
   tipoAtendimento,
   type TipoAtendimento,
 } from '@sgh/contratos';
+import { ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import type { ContextoGravacao, LiberacaoOperacao, PacienteFicha } from '../cadastro/tipos.js';
+import type { EstadoCatalogo } from '../cadastro/porta.js';
+import { ENTRADAS_OPERACOES_ATENDIMENTO } from './operacoes.js';
 import {
-  type ApoioAtendimentoLegado,
-  type AtendimentoPaLegado,
-  type ContextoOperacao,
-  type EscorePaLido,
-  type SinaisSgh,
-  ErroOperacao,
-  type FonteCatalogo,
-  type IndicadoresLegado,
-  type ItemFilaLegado,
-  type LeitoObservacaoLegado,
-  type LiberacaoConsultada,
-  type MarcacaoAberturaLegado,
-  operacao,
-  type PacienteLido,
-  type PreviaCancelamentoLegado,
-  recusa,
-  type ResultadoOperacao,
+  type ApoioAtendimentoDados,
+  type AtendimentoPa,
+  type EscorePaRegistrado,
+  type IndicadoresDados,
+  type ItemFila,
+  type LeitoObservacao,
+  type MarcacaoParaAbertura,
+  type PreviaCancelamentoDados,
+  type SinaisRecentes,
   termoDoDia,
-} from '@sgh/legado';
+} from './tipos.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { PortaRecepcaoMemoria } from '../recepcao/porta-memoria.js';
 import type {
@@ -144,7 +140,7 @@ interface Estado {
   fichas: FichaM[];
   observacoes: ObservacaoM[];
   /** W0-07 (M1): os escores do PA (só inclusão; o estorno marca, nunca apaga). */
-  escoresPa: EscorePaLido[];
+  escoresPa: EscorePaRegistrado[];
   impressos: { reg: number; impresso: string; formato: string }[];
   naoIdentificados: {
     paciente: number;
@@ -232,9 +228,9 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
   private readonly estados = new Map<string, Estado>();
 
   constructor(
-    private readonly catalogo: FonteCatalogo,
+    private readonly catalogo: EstadoCatalogo,
     private readonly deps: {
-      readonly lerPacientes?: (c: ContextoAtendimento, ids: readonly number[]) => Promise<PacienteLido[]>;
+      readonly lerPacientes?: (c: ContextoAtendimento, ids: readonly number[]) => Promise<PacienteFicha[]>;
       readonly recepcao?: PortaRecepcaoMemoria | null;
       readonly agora?: () => Date;
     } = {},
@@ -245,10 +241,15 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
   }
 
   private e(c: ContextoAtendimento): Estado {
-    let s = this.estados.get(c.hospital);
+    return this.porHospitalDe(c.hospital);
+  }
+
+  /** Os dados sintéticos do estabelecimento (pelo código da sessão), semeados na primeira leitura. */
+  private porHospitalDe(hospital: string): Estado {
+    let s = this.estados.get(hospital);
     if (!s) {
       s = this.semente();
-      this.estados.set(c.hospital, s);
+      this.estados.set(hospital, s);
     }
     return s;
   }
@@ -407,7 +408,12 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     return s;
   }
 
-  async podeGravar(_c: ContextoAtendimento, op: string): Promise<LiberacaoConsultada> {
+  /** A sessão sintética não tem configuração de fichas: vale a ficha padrão. */
+  async fichasConfiguradas(): Promise<null> {
+    return null;
+  }
+
+  async podeGravar(_c: ContextoAtendimento, op: string): Promise<LiberacaoOperacao> {
     const estado = this.catalogo.estado(op, _c.hospital);
     if (estado === null || estado === 'bloqueada')
       return { pode: false, codigo: 'operacao-bloqueada', motivo: 'A operação está bloqueada.' };
@@ -431,18 +437,20 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     return `${a.slice(0, 10)} ${a.slice(11, 19)}.${String(Date.now() % 10_000).padStart(4, '0')}`;
   }
 
-  async executar(c: ContextoAtendimento, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
+  async executar(c: ContextoAtendimento, op: string, entradaBruta: unknown, ctx: ContextoGravacao) {
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const ja = s.idem.get(chave);
     if (ja) return { resultado: ja, repetida: true, trilha: null };
-    const analise = operacao(op).entrada.safeParse(entradaBruta);
+    const esquema = ENTRADAS_OPERACOES_ATENDIMENTO[op];
+    if (!esquema) throw new ErroOperacao(400, 'operacao-desconhecida', 'Operação desconhecida', `A operação ${op} não existe.`);
+    const analise = esquema.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a entrada já validada pelo Zod da receita
-    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.usuarioLegado);
+    const resultado = await this.aplicar(c, s, op, analise.data as Record<string, any>, ctx.login ?? String(ctx.usuario ?? ''));
     s.idem.set(chave, resultado);
     return { resultado, repetida: false, trilha: null };
   }
@@ -866,7 +874,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     }
   }
 
-  private previaDe(f: FichaM): PreviaCancelamentoLegado {
+  private previaDe(f: FichaM): PreviaCancelamentoDados {
     const atos = f.atos ?? [];
     const total = atos.reduce((t, a) => t + a.quantidade, 0);
     const s = f.conta && f.convenio > 1 ? situacaoDaConta(f.conta) : 'semConta';
@@ -1150,7 +1158,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
       procedimento: number;
     },
   ): void {
-    const s = this.e({ rede: '', hospital });
+    const s = this.porHospitalDe(hospital);
     if (s.marcacoes.some((x) => x.id === m.id)) return;
     s.marcacoes.push({
       ...m,
@@ -1160,7 +1168,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     });
   }
 
-  async marcacao(c: ContextoAtendimento, id: number): Promise<MarcacaoAberturaLegado | null> {
+  async marcacao(c: ContextoAtendimento, id: number): Promise<MarcacaoParaAbertura | null> {
     const s = this.e(c);
     const m = s.marcacoes.find((x) => x.id === id);
     if (!m) return null;
@@ -1231,10 +1239,10 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
   async fila(
     c: ContextoAtendimento,
     o: { local: number; hoje: string; crm?: number },
-  ): Promise<{ itens: ItemFilaLegado[]; cortada: boolean }> {
+  ): Promise<{ itens: ItemFila[]; cortada: boolean }> {
     const s = this.e(c);
     const loc = LOCAIS.find((l) => l.id === o.local);
-    const itens: ItemFilaLegado[] = [];
+    const itens: ItemFila[] = [];
     for (const f of s.fichas) {
       if (!f.ativo || f.lab || f.data !== o.hoje) continue;
       if (o.crm && f.crm !== o.crm) continue;
@@ -1275,7 +1283,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     return LOCAIS;
   }
 
-  async paAbertos(c: ContextoAtendimento): Promise<{ itens: AtendimentoPaLegado[]; cortada: boolean }> {
+  async paAbertos(c: ContextoAtendimento): Promise<{ itens: AtendimentoPa[]; cortada: boolean }> {
     const s = this.e(c);
     const itens = s.fichas
       .filter((f) => f.ativo && f.tipo === 'pa' && !f.desfecho)
@@ -1304,7 +1312,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     return { itens, cortada: false };
   }
 
-  async observacao(c: ContextoAtendimento): Promise<{ leitos: LeitoObservacaoLegado[]; historico: number }> {
+  async observacao(c: ContextoAtendimento): Promise<{ leitos: LeitoObservacao[]; historico: number }> {
     const s = this.e(c);
     const r = this.relogioAtual();
     return {
@@ -1336,13 +1344,13 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
   async indicadores(
     c: ContextoAtendimento,
     o: { inicio: string; fim: string; unidade?: number },
-  ): Promise<IndicadoresLegado> {
+  ): Promise<IndicadoresDados> {
     const s = this.e(c);
     const r = this.relogioAtual();
     const doPeriodo = s.fichas.filter(
       (f) => f.ativo && f.data >= o.inicio && f.data <= o.fim && (!o.unidade || f.unidade === o.unidade),
     );
-    const grupos = new Map<string, IndicadoresLegado['porTipo'][number]>();
+    const grupos = new Map<string, IndicadoresDados['porTipo'][number]>();
     for (const f of doPeriodo) {
       const k = `${f.tipoAte}:${f.lab}:${f.especialidade === 0}:${f.carater}`;
       const g = grupos.get(k) ?? {
@@ -1354,7 +1362,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
       };
       grupos.set(k, { ...g, total: g.total + 1 });
     }
-    const des = new Map<string, IndicadoresLegado['desfechos'][number]>();
+    const des = new Map<string, IndicadoresDados['desfechos'][number]>();
     for (const f of doPeriodo)
       if (f.desfecho) {
         const k = `${f.desfecho.codigo}:${f.tipoAte}`;
@@ -1388,7 +1396,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     };
   }
 
-  async apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoLegado> {
+  async apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoDados> {
     const s = this.e(c);
     return {
       convenios: CONVENIOS,
@@ -1467,7 +1475,7 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     };
   }
 
-  async previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoLegado | null> {
+  async previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoDados | null> {
     const f = this.e(c).fichas.find((x) => x.reg === reg && x.ativo);
     return f ? this.previaDe(f) : null;
   }
@@ -1516,13 +1524,13 @@ export class PortaAtendimentoMemoria implements PortaAtendimento {
     return { vinculo: 7101, crm: 52001, nome: `ANA MEDICA ${M}`, codigoCbo: '225125', conselhoAtivo: true };
   }
 
-  async escoresPa(c: ContextoAtendimento, cabecalhos: readonly string[]): Promise<EscorePaLido[]> {
+  async escoresPa(c: ContextoAtendimento, cabecalhos: readonly string[]): Promise<EscorePaRegistrado[]> {
     const k = new Set(cabecalhos);
     return this.e(c).escoresPa.filter((x) => k.has(x.cabecalho));
   }
 
   /** Sem os sinais vitais do prontuário em memória: o alerta nasce só dos escores registrados no PA. */
-  async sinaisPa(): Promise<Map<string, SinaisSgh>> {
+  async sinaisPa(): Promise<Map<string, SinaisRecentes>> {
     return new Map();
   }
 

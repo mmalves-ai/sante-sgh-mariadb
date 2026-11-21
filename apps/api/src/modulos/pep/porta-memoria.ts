@@ -6,18 +6,7 @@
 // cópia. Cada estabelecimento tem os seus registros (IDs próprios): não há prontuário cruzado (regra 14). O
 // registro de acesso lê a trilha em memória da API.
 import { deflateSync } from 'node:zlib';
-import {
-  type AcessoLido,
-  codificarCp1252,
-  decodificarDocumentoEmitido,
-  type DefinicaoFormularioLegado,
-  EVENTO_ALERTA_LEITURA,
-  EVENTOS_LEITURA_PRONTUARIO,
-  type ExcecaoAgregadaLida,
-  type FontesLidas,
-  type RegistroProntuarioLido,
-  type RespostaLida,
-} from '@sgh/legado';
+import { type AcessoLido, codificarCp1252, decodificarDocumentoEmitido, type DefinicaoFormularioLida, EVENTO_ALERTA_LEITURA, EVENTOS_LEITURA_PRONTUARIO, type ExcecaoAgregadaLida, type FontesLidas, type RegistroProntuarioLido, type RespostaLida } from './tipos-pep.js';
 import type { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import type { ContextoProntuario, PortaProntuario } from './porta.js';
 
@@ -482,7 +471,7 @@ export class PortaProntuarioMemoria implements PortaProntuario {
     return null;
   }
 
-  async definicaoModelo(_c: ContextoProntuario, modelo: number): Promise<DefinicaoFormularioLegado | null> {
+  async definicaoModelo(_c: ContextoProntuario, modelo: number): Promise<DefinicaoFormularioLida | null> {
     const campos = CAMPOS[modelo];
     if (!campos) return null;
     const nome = NOMES_MODELO[modelo];

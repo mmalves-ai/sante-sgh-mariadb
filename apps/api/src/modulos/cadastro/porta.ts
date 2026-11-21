@@ -1,10 +1,10 @@
 // Porta do cadastro (M11): o que as telas de pacientes, profissionais, solicitantes, pessoas e especialidades
-// leem e gravam, independente de onde (a API não escreve SQL; fronteira):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; cadastro e alteração
-//     pelo EXECUTOR do M04, com a trilha dupla na mesma transação; fila e consentimento por transação SGH_);
+// leem e gravam, independente de onde (a API não escreve SQL fora das portas próprias):
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-propria.ts), pelo @sgh/nucleo: leituras somente
+//     leitura; gravações pelo Executor, com trilha, outbox e idempotência na mesma transação;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): pacientes, profissionais e domínios SINTÉTICOS em memória,
-//     com as mesmas validações (Zod dos contratos) e as mesmas recusas; nada vai à cópia;
-//   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
+//     com as mesmas validações (Zod dos contratos) e as mesmas recusas;
+//   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type {
   AlterarPacienteEntrada,
   CadastrarPacienteEntrada,
@@ -15,72 +15,86 @@ import type {
   EstadoOperacao,
   UnificarPacienteEntrada,
 } from '@sgh/contratos';
-import type {
-  ConsentimentoLido,
-  ContextoOperacao,
-  CriterioDireto,
-  DadosProfissionalLidos,
-  EventoProfissionalLido,
-  LoginCandidatoLido,
-  ExtrasFicha,
-  FichaProfissionalLida,
-  LinhaTrilha,
-  IdsLidos,
-  LiberacaoConsultada,
-  OpcaoLida,
-  OpcoesProfissionalLidas,
-  PacienteLido,
-  ParLido,
-  ParNovo,
-  PessoaLida,
-  ProfissionalLido,
-  SolicitanteLido,
-  VersaoCadastroLida,
-} from '@sgh/legado';
-
+import type { ContextoNucleo } from '@sgh/nucleo';
+import { ErroProblema } from '../../problema.filter.js';
 import type { OperacaoProfissionalTela } from './profissionais-memoria.js';
+import type {
+  ConsentimentoPaciente,
+  ContextoGravacao,
+  CriterioBuscaDireta,
+  DadosProfissional,
+  DestinoPorta,
+  EventoVinculoProfissional,
+  ExtrasFicha,
+  FichaProfissionalCadastro,
+  IdsEncontrados,
+  LiberacaoOperacao,
+  LoginCandidato,
+  OpcaoDominio,
+  OpcoesEdicaoProfissional,
+  PacienteFicha,
+  ParCandidato,
+  ParFila,
+  PessoaEncontrada,
+  ProfissionalCadastro,
+  RegistroTrilhaTela,
+  SolicitanteCadastro,
+  VersaoCadastro,
+} from './tipos.js';
 
 export const PORTA_CADASTRO = Symbol('PORTA_CADASTRO');
 
-export interface ContextoPorta {
+/**
+ * Contexto da porta: o do núcleo (cliente, estabelecimento e usuário por id, correlação) mais a rede e o código do
+ * estabelecimento da sessão (a memória separa os dados sintéticos por estabelecimento pelo código).
+ */
+export interface ContextoPorta extends ContextoNucleo {
   readonly rede: string;
   readonly hospital: string;
 }
 
+/** O estado de cada operação no catálogo do estabelecimento (memória de dev/ci). */
+export interface EstadoCatalogo {
+  estado(operacao: string, hospital: string): EstadoOperacao | null;
+}
+
 export interface GravacaoFeita<T> {
   readonly resultado: T;
-  readonly trilha: string | null;
+  /** Id da linha da trilha (null na memória). */
+  readonly trilha: number | null;
 }
 
 export interface PortaCadastro {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: DestinoPorta;
   /** Estado da operação no catálogo neste estabelecimento. */
   estado(operacao: string, hospital: string): EstadoOperacao | null;
   /**
    * A operação grava agora para este login? O passo 0 do executor sem gravar (ambiente, estado, chave de
    * liberação da operação por estabelecimento, setor, grupo e pessoa; a sessão de dev sobre a cópia só lê).
    */
-  podeGravar(c: ContextoPorta, operacao: string, usuarioLegado: string): Promise<LiberacaoConsultada>;
+  podeGravar(c: ContextoPorta, operacao: string, login?: string): Promise<LiberacaoOperacao>;
+  /** A versão opaca que vai à tela (sem verDocumento, sem documento dentro dela). */
+  versaoParaTela(versao: string, verDocumento: boolean): string;
 
   // Pacientes: leituras.
   buscarDireto(
     c: ContextoPorta,
-    criterio: CriterioDireto,
+    criterio: CriterioBuscaDireta,
     inativos: boolean,
-  ): Promise<{ pacientes: PacienteLido[]; truncado: boolean }>;
+  ): Promise<{ pacientes: PacienteFicha[]; truncado: boolean }>;
   idsPorPalavra(
     c: ContextoPorta,
     entidade: EntidadeBusca,
     campos: readonly CampoBusca[],
     palavra: string,
-  ): Promise<IdsLidos>;
+  ): Promise<IdsEncontrados>;
   idsPorFonetica(
     c: ContextoPorta,
     entidade: EntidadeBusca,
     campos: readonly CampoBusca[],
     fonetica: string,
     teto?: number,
-  ): Promise<IdsLidos>;
+  ): Promise<IdsEncontrados>;
   /** IDs com TODAS as palavras (consulta única no índice; até `teto`, acima disso `truncado`). */
   idsPorPalavras(
     c: ContextoPorta,
@@ -90,20 +104,20 @@ export interface PortaCadastro {
     teto: number,
   ): Promise<{ ids: number[]; truncado: boolean }>;
   indiceTemLinhas(c: ContextoPorta, entidade: EntidadeBusca): Promise<boolean>;
-  lerPacientes(c: ContextoPorta, ids: readonly number[]): Promise<PacienteLido[]>;
-  extrasDaFicha(c: ContextoPorta, p: PacienteLido): Promise<ExtrasFicha>;
+  lerPacientes(c: ContextoPorta, ids: readonly number[]): Promise<PacienteFicha[]>;
+  extrasDaFicha(c: ContextoPorta, p: PacienteFicha): Promise<ExtrasFicha>;
   historico(
     c: ContextoPorta,
     id: number,
     pagina: number,
     porPagina: number,
-  ): Promise<{ versoes: VersaoCadastroLida[]; total: number; anterior: VersaoCadastroLida | null }>;
+  ): Promise<{ versoes: VersaoCadastro[]; total: number; anterior: VersaoCadastro | null }>;
   unificacoes(
     c: ContextoPorta,
     id: number,
   ): Promise<{ absorvido: number; sobrevivente: number; em: string | null }[]>;
   homonimos(c: ContextoPorta, ids: readonly number[]): Promise<Set<number>>;
-  candidatosPorCpf(c: ContextoPorta, cpf: number): Promise<PacienteLido[]>;
+  candidatosPorCpf(c: ContextoPorta, cpf: number): Promise<PacienteFicha[]>;
   cepExiste(c: ContextoPorta, cep: string): Promise<boolean>;
   /** Endereço do CEP (cadastro de CEPs do estabelecimento), ou null. */
   lerCep(c: ContextoPorta, cep: string): Promise<EnderecoCep | null>;
@@ -112,12 +126,12 @@ export interface PortaCadastro {
   cadastrar(
     c: ContextoPorta,
     entrada: CadastrarPacienteEntrada,
-    ctx: ContextoOperacao,
+    ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idPaciente: number; prontuario: number }>>;
   alterar(
     c: ContextoPorta,
     entrada: AlterarPacienteEntrada,
-    ctx: ContextoOperacao,
+    ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idPaciente: number }>>;
   /**
    * M57.2: unificação de prontuários duplicados do mesmo estabelecimento (executor: cadastro.unificarPaciente; a fila de
@@ -126,38 +140,38 @@ export interface PortaCadastro {
   unificar(
     c: ContextoPorta,
     entrada: UnificarPacienteEntrada,
-    ctx: ContextoOperacao,
+    ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ idAbsorvido: number; idSobrevivente: number }>>;
 
-  // Fila de duplicidades (SGH_CAD_DUPLICIDADE).
+  // Fila de duplicidades.
   gruposCandidatos(c: ContextoPorta): Promise<{ cpf: number[][]; fonetica: number[][] }>;
   lerFila(
     c: ContextoPorta,
-    situacao: ParLido['situacao'],
+    situacao: ParFila['situacao'],
     pagina: number,
     porPagina: number,
-  ): Promise<{ itens: ParLido[]; total: number }>;
-  lerPar(c: ContextoPorta, id: number): Promise<ParLido | null>;
-  /** As gravações SGH_ levam a linha da SGH_TRILHA (no núcleo, na MESMA transação; na memória, ignorada). */
+  ): Promise<{ itens: ParFila[]; total: number }>;
+  lerPar(c: ContextoPorta, id: number): Promise<ParFila | null>;
+  /** As gravações diretas levam a linha da trilha (no banco, na MESMA transação; na memória, ignorada). */
   gravarPares(
     c: ContextoPorta,
-    pares: readonly ParNovo[],
+    pares: readonly ParCandidato[],
     inativos: readonly number[],
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<number>;
   decidirOutraPessoa(
     c: ContextoPorta,
     id: number,
     usuario: string,
     justificativa: string,
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<{ a: number; b: number }>;
 
-  // Consentimentos (SGH_CAD_CONSENTIMENTO e domínios do legado).
+  // Consentimentos.
   opcoesConsentimento(
     c: ContextoPorta,
-  ): Promise<{ situacoes: OpcaoLida[]; signatarios: OpcaoLida[]; revogacoes: OpcaoLida[] }>;
-  consentimentos(c: ContextoPorta, id: number): Promise<ConsentimentoLido[]>;
+  ): Promise<{ situacoes: OpcaoDominio[]; signatarios: OpcaoDominio[]; revogacoes: OpcaoDominio[] }>;
+  consentimentos(c: ContextoPorta, id: number): Promise<ConsentimentoPaciente[]>;
   registrarConsentimento(
     c: ContextoPorta,
     r: {
@@ -169,39 +183,39 @@ export interface PortaCadastro {
       signatario: number;
       usuario: string;
     },
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<number>;
   revogarConsentimento(
     c: ContextoPorta,
     r: { idPaciente: number; id: number; motivo: number; usuario: string },
-    trilha: LinhaTrilha,
+    trilha: RegistroTrilhaTela,
   ): Promise<void>;
 
   // Profissionais, solicitantes, pessoas, especialidades.
-  listarProfissionais(c: ContextoPorta, ids?: readonly number[]): Promise<ProfissionalLido[]>;
-  fichaProfissional(c: ContextoPorta, id: number): Promise<FichaProfissionalLida | null>;
+  listarProfissionais(c: ContextoPorta, ids?: readonly number[]): Promise<ProfissionalCadastro[]>;
+  fichaProfissional(c: ContextoPorta, id: number): Promise<FichaProfissionalCadastro | null>;
   historicoProfissional(
     c: ContextoPorta,
     id: number,
     pagina: number,
     porPagina: number,
   ): Promise<{
-    versoes: VersaoCadastroLida[];
+    versoes: VersaoCadastro[];
     total: number;
-    anterior: VersaoCadastroLida | null;
+    anterior: VersaoCadastro | null;
     nome: string | null;
   }>;
   listarSolicitantes(
     c: ContextoPorta,
     ids?: readonly number[],
-  ): Promise<{ itens: SolicitanteLido[]; truncado: boolean }>;
+  ): Promise<{ itens: SolicitanteCadastro[]; truncado: boolean }>;
   /** Solicitantes pelo registro: número do conselho e, quando informados, a sigla do conselho e a UF. */
   solicitantesPorRegistro(
     c: ContextoPorta,
     r: { numero: number; conselho?: string | null; uf?: string | null },
-  ): Promise<{ itens: SolicitanteLido[]; truncado: boolean }>;
+  ): Promise<{ itens: SolicitanteCadastro[]; truncado: boolean }>;
   chavesRepetidasSolicitante(c: ContextoPorta): Promise<Set<string>>;
-  buscarPessoas(c: ContextoPorta, documento: string): Promise<PessoaLida[]>;
+  buscarPessoas(c: ContextoPorta, documento: string): Promise<PessoaEncontrada[]>;
   siglasDosConselhos(c: ContextoPorta): Promise<{ conselho: number; sigla: string; nome: string | null }[]>;
   /** Revisão do M39: o conselho (ID do cadastro de conselhos) pela sigla, ou null. */
   conselhoPorSigla(c: ContextoPorta, sigla: string): Promise<number | null>;
@@ -209,25 +223,25 @@ export interface PortaCadastro {
   cadastrarSolicitante(
     c: ContextoPorta,
     entrada: CadastrarSolicitanteEntrada,
-    ctx: ContextoOperacao,
+    ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<{ solicitante: number }>>;
   /** D-PROF-39: os dados editáveis do profissional e a versão (sem documento nem dado bancário). */
-  dadosProfissional(c: ContextoPorta, id: number): Promise<DadosProfissionalLidos | null>;
+  dadosProfissional(c: ContextoPorta, id: number): Promise<DadosProfissional | null>;
   /** D-PROF-39: as listas dos combos da edição do profissional. */
-  opcoesProfissional(c: ContextoPorta): Promise<OpcoesProfissionalLidas>;
+  opcoesProfissional(c: ContextoPorta): Promise<OpcoesEdicaoProfissional>;
   /** D-PROF-39: uma das sete gravações do profissional pelo executor (na memória, as mesmas regras). */
   gravarProfissional(
     c: ContextoPorta,
     operacao: OperacaoProfissionalTela,
     entrada: unknown,
-    ctx: ContextoOperacao,
+    ctx: ContextoGravacao,
   ): Promise<GravacaoFeita<Record<string, number>>>;
   /** D-PROF-39: os logins ativos com o papel Operador de sistema e o profissional a que cada um está ligado. */
-  loginsProfissional(c: ContextoPorta): Promise<readonly LoginCandidatoLido[]>;
+  loginsProfissional(c: ContextoPorta): Promise<readonly LoginCandidato[]>;
   /** D-PROF-39: o login ligado a cada registro do profissional. */
   loginsDosRegistros(c: ContextoPorta, id: number): Promise<readonly { registro: number; login: string }[]>;
   /** D-PROF-39: o histórico do vínculo com o login e da situação. */
-  eventosProfissional(c: ContextoPorta, id: number): Promise<readonly EventoProfissionalLido[]>;
+  eventosProfissional(c: ContextoPorta, id: number): Promise<readonly EventoVinculoProfissional[]>;
   /** D-PROF-39: os vínculos (grupo de produto e quantidade) que impedem a exclusão do profissional ou do registro. */
   vinculosProfissional(
     c: ContextoPorta,
@@ -240,4 +254,40 @@ export interface PortaCadastro {
     pagina: number,
     porPagina: number,
   ): Promise<{ itens: { procedimento: number; descricao: string | null }[]; total: number }>;
+}
+
+/** Os métodos da porta (a indisponível recusa todos). */
+const METODOS_PORTA_CADASTRO = [
+  'buscarDireto', 'idsPorPalavra', 'idsPorFonetica', 'idsPorPalavras', 'indiceTemLinhas', 'lerPacientes',
+  'extrasDaFicha', 'historico', 'unificacoes', 'homonimos', 'candidatosPorCpf', 'cepExiste', 'lerCep', 'cadastrar',
+  'alterar', 'unificar', 'gruposCandidatos', 'lerFila', 'lerPar', 'gravarPares', 'decidirOutraPessoa',
+  'opcoesConsentimento', 'consentimentos', 'registrarConsentimento', 'revogarConsentimento', 'listarProfissionais',
+  'fichaProfissional', 'historicoProfissional', 'listarSolicitantes', 'solicitantesPorRegistro',
+  'chavesRepetidasSolicitante', 'buscarPessoas', 'siglasDosConselhos', 'conselhoPorSigla', 'cadastrarSolicitante',
+  'dadosProfissional', 'opcoesProfissional', 'gravarProfissional', 'loginsProfissional', 'loginsDosRegistros',
+  'eventosProfissional', 'vinculosProfissional', 'procedimentosDaEspecialidade',
+] as const;
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaCadastroIndisponivel(): PortaCadastro {
+  const recusa = (): Promise<never> =>
+    Promise.reject(
+      new ErroProblema(
+        'indisponivel',
+        503,
+        'Banco do estabelecimento indisponível',
+        'O banco do estabelecimento não está configurado: nada foi lido nem gravado.',
+      ),
+    );
+  const base = {
+    destino: 'banco' as const,
+    estado: (): EstadoOperacao | null => null,
+    versaoParaTela: (v: string) => v,
+    podeGravar: async (): Promise<LiberacaoOperacao> => ({
+      pode: false,
+      codigo: 'indisponivel',
+      motivo: 'O banco do estabelecimento não está configurado: nada é gravado.',
+    }),
+  };
+  return Object.assign(base, Object.fromEntries(METODOS_PORTA_CADASTRO.map((m) => [m, recusa]))) as unknown as PortaCadastro;
 }

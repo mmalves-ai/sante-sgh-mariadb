@@ -3,43 +3,8 @@
 // encerrado), com catálogo de exames, kits, resultados (um potássio crítico), modelos de impressão e alergias
 // sintéticos. As gravações conferem a entrada pelos MESMOS esquemas das receitas do executor e guardam o que o
 // adaptador gravaria, por estabelecimento; nada vai à cópia. Marca "SINTETICO".
-import {
-  type CompletudePainelLida,
-  type EpisodioLido,
-  type RecortePainel,
-  type SupervisaoLida,
-  type AlergiaLegadaLida,
-  type AnexoLido,
-  type AtendimentoPepLido,
-  type CabecalhoDocumentoLido,
-  type CienciaLida,
-  type ContextoOperacao,
-  type ContextoSgh,
-  type DocumentoLegadoLido,
-  type DocumentoResumoLido,
-  type DocumentoSghLido,
-  ErroOperacao,
-  ErroPepSgh,
-  MOTIVO_COASSINATURA_DESLIGADA,
-  esquemaAnexo,
-  esquemaEmissaoDocumento,
-  esquemaExameExternoLegado,
-  esquemaFinalizacaoSumario,
-  esquemaGravacaoAlergia,
-  esquemaInativacaoAlergia,
-  esquemaPedidoExames,
-  esquemaSuspensaoDocumento,
-  type EventoLido,
-  type ExameCatalogoLido,
-  type FichaImpressao,
-  type FluxoLido,
-  type PedidoLido,
-  type ProblemaLido,
-  type ProblemaNovo,
-  type ResultadoLido,
-  type SumarioLido,
-  type TcleLido,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { type CompletudePainelLida, type EpisodioLido, type RecortePainel, type SupervisaoLida, type AlergiaDoProntuarioLida, type AnexoLido, type AtendimentoPepLido, type CabecalhoDocumentoLido, type CienciaLida, type ContextoGravacaoPep, type DocumentoHistoricoLido, type DocumentoResumoLido, type DocumentoProprioLido, ErroProntuario, MOTIVO_COASSINATURA_DESLIGADA, esquemaAnexo, esquemaEmissaoDocumento, esquemaExameExterno, esquemaFinalizacaoSumario, esquemaGravacaoAlergia, esquemaInativacaoAlergia, esquemaPedidoExames, esquemaSuspensaoDocumento, type EventoLido, type ExameCatalogoLido, type FichaImpressao, type FluxoLido, type PedidoLido, type ProblemaLido, type ProblemaNovo, type ResultadoLido, type SumarioLido, type TcleLido, loginDaOperacao } from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { ContextoDocs, PortaDocumentos, ProfissionalPep } from './documentos-porta.js';
 import { cboDe, type PortaRegistroMemoria, type RegistroOuvido } from './registro-porta-memoria.js';
@@ -174,9 +139,9 @@ const PRINCIPIOS = [
 ];
 
 interface Estado {
-  alergias: (AlergiaLegadaLida & { paciente: number })[];
-  documentos: (DocumentoSghLido & { eventos: { tipo: string; em: string }[] })[];
-  legados: (DocumentoLegadoLido & { familia: 'receita' | 'atestado' | 'externo'; tpPadrao: number | null })[];
+  alergias: (AlergiaDoProntuarioLida & { paciente: number })[];
+  documentos: (DocumentoProprioLido & { eventos: { tipo: string; em: string }[] })[];
+  legados: (DocumentoHistoricoLido & { familia: 'receita' | 'atestado' | 'externo'; tpPadrao: number | null })[];
   pedidos: (PedidoLido & { paciente: number })[];
   resultados: (ResultadoLido & { paciente: number })[];
   ciencias: (CienciaLida & { paciente: number })[];
@@ -328,7 +293,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   // ── M49, etapa 2: a ponte com a assinatura ICP em memória (os mesmos documentos da sessão sintética) ──────────
 
   /** Os documentos do novo do estabelecimento (a fila de assinatura ICP do autor lê daqui). */
-  documentosParaIcp(hospital: string): readonly DocumentoSghLido[] {
+  documentosParaIcp(hospital: string): readonly DocumentoProprioLido[] {
     return this.est(hospital).documentos;
   }
 
@@ -467,7 +432,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
 
   private novoDocumento(
     h: string,
-    d: Omit<DocumentoSghLido, 'id' | 'criadoEm' | 'assinadoEm' | 'suspenso' | 'nivel'> & { nivel?: string },
+    d: Omit<DocumentoProprioLido, 'id' | 'criadoEm' | 'assinadoEm' | 'suspenso' | 'nivel'> & { nivel?: string },
   ): number {
     const e = this.est(h);
     const id = e.proximo++;
@@ -677,7 +642,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     return [{ id: 1, nome: `UNIDADE ${M}` }];
   }
 
-  async preferenciasLegado() {
+  async preferenciasPainel() {
     return { unidade: null, campos: [] };
   }
 
@@ -1039,21 +1004,21 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     return this.est(c.hospital).supervisoes.find((x) => x.id === id) ?? null;
   }
   async coassinarNoNovo(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     x: { id: number; decisao: 'coassinado' | 'recusado'; motivo?: string | null },
   ) {
     const e = this.est(c.hospital);
     const i = e.supervisoes.findIndex((y) => y.id === x.id);
     const s = e.supervisoes[i];
-    if (!s) throw new ErroPepSgh('nao-encontrado', 'Pedido de coassinatura não encontrado.', 404);
-    if (s.preceptor !== c.usuarioLegado)
-      throw new ErroPepSgh('sem-permissao', 'Só o preceptor indicado coassina este registro.', 403);
+    if (!s) throw new ErroProntuario('nao-encontrado', 'Pedido de coassinatura não encontrado.', 404);
+    if (s.preceptor !== c.usuarioLogin)
+      throw new ErroProntuario('sem-permissao', 'Só o preceptor indicado coassina este registro.', 403);
     if (s.situacao !== 'pendente')
-      throw new ErroPepSgh('coassinatura-encerrada', 'O registro já foi coassinado ou recusado.');
+      throw new ErroProntuario('coassinatura-encerrada', 'O registro já foi coassinado ou recusado.');
     e.supervisoes[i] = { ...s, situacao: x.decisao };
     await this.auditar(
       c,
-      c.usuarioLegado,
+      c.usuarioLogin,
       x.decisao === 'coassinado' ? 'pep.evolucao.coassinada' : 'pep.evolucao.coassinaturaRecusada',
       { tabela: 'SGH_PEP_SUPERVISAO', id: s.id, paciente: s.paciente },
     );
@@ -1108,7 +1073,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   // ── Gravações pelo executor (os mesmos esquemas das receitas) ──────────────────────────────────
 
   async executar(c: ContextoDocs, operacao: string, entrada: unknown, ctx: ContextoOperacao) {
-    const login = ctx.usuarioLegado;
+    const login = loginDaOperacao(ctx);
     const e = this.est(c.hospital);
     const invalida = (campos: readonly PropertyKey[][]) =>
       new ErroOperacao(400, 'entrada-invalida', 'Entrada inválida', 'Confira os campos indicados.', {
@@ -1432,7 +1397,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
         return { anexo: id, origem: id, documento, trilha: null };
       }
       case 'pep.lancarExameExterno': {
-        const x = parse(esquemaExameExternoLegado);
+        const x = parse(esquemaExameExterno);
         this.conferirCbo(x.cbo, login);
         if (x.realizadoEm > x.dataHoraClinica)
           throw new ErroOperacao(
@@ -1542,10 +1507,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
 
   // ── Gravações só do novo ───────────────────────────────────────────────────────────────────────
 
-  async gravarProblema(c: ContextoSgh, p: ProblemaNovo) {
+  async gravarProblema(c: ContextoGravacaoPep, p: ProblemaNovo) {
     const e = this.est(c.hospital);
     if (p.anterior !== null && e.problemas.some((x) => x.anterior === p.anterior))
-      throw new ErroPepSgh('conflito-versao', 'O problema mudou desde a leitura.');
+      throw new ErroProntuario('conflito-versao', 'O problema mudou desde a leitura.');
     const id = e.proximo++;
     e.problemas.push({
       id,
@@ -1557,10 +1522,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       inicio: p.inicio,
       fim: p.fim,
       situacao: p.situacao,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       em: new Date().toISOString(),
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.problema.gravado', {
+    await this.auditar(c, c.usuarioLogin, 'pep.problema.gravado', {
       tabela: 'SGH_PEP_PROBLEMA',
       id,
       paciente: p.paciente,
@@ -1569,7 +1534,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async registrarCiencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     x: {
       paciente: number;
       exame: number;
@@ -1582,17 +1547,17 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   ) {
     const e = this.est(c.hospital);
     if (e.ciencias.some((y) => y.exame === x.exame && y.paciente === x.paciente))
-      throw new ErroPepSgh('ja-ciente', 'A ciência deste resultado já foi registrada.');
+      throw new ErroProntuario('ja-ciente', 'A ciência deste resultado já foi registrada.');
     const id = e.proximo++;
     e.ciencias.push({
       paciente: x.paciente,
       exame: x.exame,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       em: new Date().toISOString(),
       conduta: x.conduta,
       elemento: x.elemento,
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.resultado.ciente', {
+    await this.auditar(c, c.usuarioLogin, 'pep.resultado.ciente', {
       tabela: 'SGH_PEP_RESULT_CIENCIA',
       id,
       paciente: x.paciente,
@@ -1600,15 +1565,15 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     return id;
   }
 
-  async aceitarParecer(c: ContextoSgh, parecer: number) {
+  async aceitarParecer(c: ContextoGravacaoPep, parecer: number) {
     const e = this.est(c.hospital);
     const i = e.fila.findIndex((x) => x.id === parecer);
     const f = e.fila[i];
-    if (!f) throw new ErroPepSgh('registro-inexistente', 'Parecer não encontrado.', 404);
+    if (!f) throw new ErroProntuario('registro-inexistente', 'Parecer não encontrado.', 404);
     if (f.situacao !== 'solicitado')
-      throw new ErroPepSgh('situacao-invalida', 'O parecer não está aguardando aceite.');
-    e.fila[i] = { ...f, situacao: 'aceito', aceitoPor: c.usuarioLegado };
-    await this.auditar(c, c.usuarioLegado, 'pep.parecer.aceito', {
+      throw new ErroProntuario('situacao-invalida', 'O parecer não está aguardando aceite.');
+    e.fila[i] = { ...f, situacao: 'aceito', aceitoPor: c.usuarioLogin };
+    await this.auditar(c, c.usuarioLogin, 'pep.parecer.aceito', {
       tabela: 'SGH_PEP_FLUXO',
       id: parecer,
       paciente: f.paciente,
@@ -1616,16 +1581,16 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     return { paciente: f.paciente };
   }
 
-  async cancelarParecer(c: ContextoSgh, parecer: number, motivo: string) {
+  async cancelarParecer(c: ContextoGravacaoPep, parecer: number, motivo: string) {
     const e = this.est(c.hospital);
     const i = e.fila.findIndex((x) => x.id === parecer);
     const f = e.fila[i];
-    if (!f) throw new ErroPepSgh('registro-inexistente', 'Parecer não encontrado.', 404);
+    if (!f) throw new ErroProntuario('registro-inexistente', 'Parecer não encontrado.', 404);
     if (f.situacao === 'respondido' || f.situacao === 'cancelado')
-      throw new ErroPepSgh('situacao-invalida', 'O parecer já foi encerrado.');
+      throw new ErroProntuario('situacao-invalida', 'O parecer já foi encerrado.');
     e.fila[i] = { ...f, situacao: 'cancelado' };
     void motivo; // o motivo vai à trilha da gravação real (SGH_PEP_FLUXO); na memória, só a situação
-    await this.auditar(c, c.usuarioLegado, 'pep.parecer.cancelado', {
+    await this.auditar(c, c.usuarioLogin, 'pep.parecer.cancelado', {
       tabela: 'SGH_PEP_FLUXO',
       id: parecer,
       paciente: f.paciente,
@@ -1633,7 +1598,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async emitirTcle(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     t: {
       paciente: number;
       atendimento: number;
@@ -1652,7 +1617,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       origemId: id,
       paciente: t.paciente,
       atendimento: t.atendimento,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       hash: t.hashConteudo,
       comoSuporte: t.comoSuporte === true,
     });
@@ -1666,10 +1631,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       situacao: 'pendente',
       motivo: null,
       documento,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       em: `${agoraLocal()}.000`,
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.tcle.gravado', {
+    await this.auditar(c, c.usuarioLogin, 'pep.tcle.gravado', {
       tabela: 'SGH_PEP_TCLE',
       id,
       paciente: t.paciente,
@@ -1678,15 +1643,15 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async mudarSituacaoTcle(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     m: { paciente: number; versao: number; situacao: 'assinado' | 'revogado'; motivo: string | null },
   ) {
     const e = this.est(c.hospital);
     const t = e.tcles.find((x) => x.id === m.versao && x.paciente === m.paciente);
-    if (!t) throw new ErroPepSgh('registro-inexistente', 'Termo não encontrado.', 404);
+    if (!t) throw new ErroProntuario('registro-inexistente', 'Termo não encontrado.', 404);
     if (e.tcles.some((x) => x.anterior === t.id))
-      throw new ErroPepSgh('conflito-versao', 'O termo mudou desde a leitura.');
-    if (t.situacao === 'revogado') throw new ErroPepSgh('situacao-invalida', 'O termo já foi revogado.');
+      throw new ErroProntuario('conflito-versao', 'O termo mudou desde a leitura.');
+    if (t.situacao === 'revogado') throw new ErroProntuario('situacao-invalida', 'O termo já foi revogado.');
     const id = e.proximo++;
     e.tcles.push({
       ...t,
@@ -1694,10 +1659,10 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       anterior: t.id,
       situacao: m.situacao,
       motivo: m.motivo,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       em: `${agoraLocal()}.000`,
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.tcle.gravado', {
+    await this.auditar(c, c.usuarioLogin, 'pep.tcle.gravado', {
       tabela: 'SGH_PEP_TCLE',
       id,
       paciente: m.paciente,
@@ -1706,22 +1671,22 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async salvarRascunhoSumario(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     s: { paciente: number; atendimento: number; versao: number; conteudo: string; hashConteudo: string },
   ) {
     const e = this.est(c.hospital);
     if (e.sumarios.some((x) => x.atendimento === s.atendimento && x.versao >= s.versao))
-      throw new ErroPepSgh('conflito-versao', 'Outra versão do sumário foi salva.');
+      throw new ErroProntuario('conflito-versao', 'Outra versão do sumário foi salva.');
     e.sumarios.push({
       atendimento: s.atendimento,
       versao: s.versao,
       situacao: 'rascunho',
       conteudo: s.conteudo,
       documento: null,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       em: new Date().toISOString(),
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.sumarioAlta.salvo', {
+    await this.auditar(c, c.usuarioLogin, 'pep.sumarioAlta.salvo', {
       tabela: 'SGH_PEP_SUMARIO_ALTA',
       id: s.versao,
       paciente: s.paciente,
@@ -1730,7 +1695,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async registrarTransferencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     t: {
       paciente: number;
       atendimento: number;
@@ -1750,7 +1715,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       origemId: id,
       paciente: t.paciente,
       atendimento: t.atendimento,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       hash: t.hashConteudo,
       comoSuporte: t.comoSuporte === true,
     });
@@ -1761,7 +1726,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       em: new Date().toISOString(),
       documento,
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.transferencia.registrada', {
+    await this.auditar(c, c.usuarioLogin, 'pep.transferencia.registrada', {
       tabela: 'SGH_PEP_REL_TRANSF',
       id,
       paciente: t.paciente,
@@ -1770,7 +1735,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async registrarObito(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     o: {
       paciente: number;
       atendimento: number;
@@ -1784,7 +1749,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   ) {
     const e = this.est(c.hospital);
     if (e.obitos.some((x) => x.paciente === o.paciente))
-      throw new ErroPepSgh('ja-registrado', 'O óbito do paciente já foi registrado.');
+      throw new ErroProntuario('ja-registrado', 'O óbito do paciente já foi registrado.');
     const id = e.proximo++;
     const documento = this.novoDocumento(c.hospital, {
       tipo: 'declaracao-obito',
@@ -1792,7 +1757,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       origemId: id,
       paciente: o.paciente,
       atendimento: o.atendimento,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       hash: o.hashConteudo,
       comoSuporte: o.comoSuporte === true,
     });
@@ -1803,7 +1768,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       documento,
       atendimento: o.atendimento,
     });
-    await this.auditar(c, c.usuarioLegado, 'pep.obito.registrado', {
+    await this.auditar(c, c.usuarioLogin, 'pep.obito.registrado', {
       tabela: 'SGH_PEP_OBITO',
       id,
       paciente: o.paciente,
@@ -1812,7 +1777,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async assinar(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     itens: readonly { documento: number; hash: string }[],
     comoSuporte?: boolean,
   ) {
@@ -1821,7 +1786,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     const recusados: { documento: number; motivo: string }[] = [];
     for (const it of itens) {
       const d = e.documentos.find((x) => x.id === it.documento);
-      if (!d || d.usuario !== c.usuarioLegado)
+      if (!d || d.usuario !== c.usuarioLogin)
         recusados.push({
           documento: it.documento,
           motivo: 'Documento não encontrado entre as suas pendências.',
@@ -1839,7 +1804,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       }
     }
     if (assinados.length)
-      await this.auditar(c, c.usuarioLegado, 'documento.documento.assinado', {
+      await this.auditar(c, c.usuarioLogin, 'documento.documento.assinado', {
         tabela: 'SGH_PEP_DOCUMENTO',
         id: assinados[0]!,
       });
@@ -1847,7 +1812,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
   }
 
   async documentoDoRegistroClinico(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     r: { registro: number; paciente: number; atendimento: number | null; hash: string },
   ) {
     const existente = await this.documentoSghDaOrigem(c, 'PRCABEVOL', r.registro);
@@ -1858,14 +1823,14 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
       origemId: r.registro,
       paciente: r.paciente,
       atendimento: r.atendimento,
-      usuario: c.usuarioLegado,
+      usuario: c.usuarioLogin,
       hash: r.hash,
       comoSuporte: false,
     });
   }
 
   async registrarEventoDocumento(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     ev: {
       documento: number;
       tipo: 'visualizado' | 'impresso' | 'segunda-via' | 'exportado';
@@ -1876,7 +1841,7 @@ export class PortaDocumentosMemoria implements PortaDocumentos {
     if (d) d.eventos.push({ tipo: ev.tipo, em: new Date().toISOString() });
   }
 
-  async trazerPedidosDoLegado() {
+  async trazerPedidosAnteriores() {
     return 0;
   }
 }

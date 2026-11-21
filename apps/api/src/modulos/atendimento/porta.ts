@@ -1,31 +1,42 @@
 // Porta do atendimento externo (M20): o que as telas da recepção, do consultório e do pronto atendimento leem e gravam,
-// independente de onde (a API não escreve SQL; fronteira Nx):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; gravações pelo EXECUTOR do M04,
-//     com a trilha na mesma transação; as gravações só do novo — etapa do PA, observação, impresso, paciente não
-//     identificado, fila sem senha — por transação SGH_ com a SGH_TRILHA junto);
+// independente de onde (a API não escreve SQL fora das portas próprias):
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-propria.ts), pelo @sgh/nucleo; gravações pelo Executor,
+//     com trilha, outbox e idempotência na mesma transação; as gravações diretas (etapa do PA, observação, impresso,
+//     paciente não identificado, escore) também, com a linha da trilha da tela;
 //   - `memoria`: a sessão sintética de dev/ci (E2E): fichas, contas, fila, quadro e observação SINTÉTICOS em memória,
-//     com as mesmas validações (Zod dos contratos) e as mesmas recusas das receitas; nada vai à cópia;
+//     com as mesmas validações (Zod dos contratos) e as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
 import type { AtendimentoDetalhe, AtendimentoResumo } from '@sgh/contratos';
+import type { DimensaoSelecao, ModeloFicha, SelecaoFicha } from '@sgh/dominio-atendimento';
+import { ErroProblema } from '../../problema.filter.js';
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { PortaGravacaoM18 } from '../exames/public-api.js';
 import type {
-  ApoioAtendimentoLegado,
-  AtendimentoPaLegado,
-  EscorePaLido,
-  EscorePaSgh,
-  SinaisSgh,
-  IndicadoresLegado,
-  ItemFilaLegado,
-  LeitoObservacaoLegado,
-  MarcacaoAberturaLegado,
-  PreviaCancelamentoLegado,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+  ApoioAtendimentoDados,
+  AtendimentoPa,
+  EscorePaRegistrado,
+  IndicadoresDados,
+  ItemFila,
+  LeitoObservacao,
+  MarcacaoParaAbertura,
+  NovoEscorePa,
+  PreviaCancelamentoDados,
+  SinaisRecentes,
+} from './tipos.js';
 
 export const PORTA_ATENDIMENTO = Symbol('PORTA_ATENDIMENTO');
 
-export type ContextoAtendimento = ContextoPortaM18;
+/** Contexto da porta: o do núcleo mais a rede e o código do estabelecimento da sessão. */
+export type ContextoAtendimento = ContextoPorta;
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** A configuração das fichas a imprimir (modelos e seleções por convênio, especialidade, unidade e grupo). */
+export interface FichasConfiguradas {
+  readonly modelos: readonly ModeloFicha[];
+  readonly selecoes: readonly SelecaoFicha[];
+}
+export type { DimensaoSelecao };
+
+/** Gravações diretas da porta (sem operação de tela), numa transação com a linha da trilha junto. */
 export interface GravadorSghAtendimento {
   registrarEtapa(r: {
     cabecalho: string;
@@ -67,9 +78,9 @@ export interface GravadorSghAtendimento {
   }): Promise<void>;
   /** Encerra a marca do não identificado com o cadastro de destino (a unificação segue pelo cadastro único). */
   identificarPaciente(r: { paciente: number; destino: number; usuario: string }): Promise<void>;
-  /** W0-07 (M1): o escore de deterioração e de sepse calculado pelo servidor (SGH_PA_ESCORE; só inclusão). */
-  registrarEscorePa(r: Omit<EscorePaSgh, 'hospital'>): Promise<number>;
-  /** W0-07 (M1): o estorno do escore errado, com o motivo (SGH_PA_ESCORE_ESTORNO; um por escore). */
+  /** W0-07 (M1): o escore de deterioração e de sepse calculado pelo servidor (só inclusão). */
+  registrarEscorePa(r: NovoEscorePa): Promise<number>;
+  /** W0-07 (M1): o estorno do escore errado, com o motivo (um por escore). */
   estornarEscorePa(r: { cabecalho: string; id: number; motivo: string; usuario: string }): Promise<number>;
 }
 
@@ -114,23 +125,23 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     f: { data: string; unidade?: number; requisicoes?: boolean; local?: number; termo?: string },
   ): Promise<{ itens: AtendimentoResumo[]; cortada: boolean; requisicoes: number }>;
   /** O agendamento que a abertura preenche (null: não existe). */
-  marcacao(c: ContextoAtendimento, id: number): Promise<MarcacaoAberturaLegado | null>;
+  marcacao(c: ContextoAtendimento, id: number): Promise<MarcacaoParaAbertura | null>;
   detalhe(c: ContextoAtendimento, reg: number): Promise<AtendimentoDetalhe | null>;
   fila(
     c: ContextoAtendimento,
     o: { local: number; hoje: string; crm?: number },
-  ): Promise<{ itens: ItemFilaLegado[]; cortada: boolean }>;
+  ): Promise<{ itens: ItemFila[]; cortada: boolean }>;
   locais(c: ContextoAtendimento): Promise<{ id: number; descricao: string; recepcao: number }[]>;
   paAbertos(
     c: ContextoAtendimento,
     o: { hoje: string; unidade?: number },
-  ): Promise<{ itens: AtendimentoPaLegado[]; cortada: boolean }>;
-  observacao(c: ContextoAtendimento): Promise<{ leitos: LeitoObservacaoLegado[]; historico: number }>;
+  ): Promise<{ itens: AtendimentoPa[]; cortada: boolean }>;
+  observacao(c: ContextoAtendimento): Promise<{ leitos: LeitoObservacao[]; historico: number }>;
   indicadores(
     c: ContextoAtendimento,
     o: { inicio: string; fim: string; unidade?: number },
-  ): Promise<IndicadoresLegado>;
-  apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoLegado>;
+  ): Promise<IndicadoresDados>;
+  apoio(c: ContextoAtendimento): Promise<ApoioAtendimentoDados>;
   cid(c: ContextoAtendimento, termo: string): Promise<{ id: number; codigo: string; nome: string }[]>;
   solicitantes(
     c: ContextoAtendimento,
@@ -148,11 +159,11 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
     anterior: { reg: number; data: string; valores: Record<string, string | number | null> } | null;
     historico: { reg: number; data: string; tipo: string; convenio: string; profissional: string }[];
   }>;
-  previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoLegado | null>;
+  previaCancelamento(c: ContextoAtendimento, reg: number): Promise<PreviaCancelamentoDados | null>;
   dadosImpresso(c: ContextoAtendimento, reg: number): Promise<DadosImpresso | null>;
   profissional(c: ContextoAtendimento, login: string): Promise<ProfissionalDaSessao | null>;
   /** W0-07 (M1): os escores do PA dos atendimentos (os estornados também, marcados), do mais novo ao mais antigo. */
-  escoresPa(c: ContextoAtendimento, cabecalhos: readonly string[]): Promise<EscorePaLido[]>;
+  escoresPa(c: ContextoAtendimento, cabecalhos: readonly string[]): Promise<EscorePaRegistrado[]>;
   /**
    * W0-07 (M1): os sinais mais recentes de cada atendimento desde a chegada (os da classificação e das outras telas
    * dos sinais vitais), um por tipo; ausente do mapa: nenhum sinal.
@@ -160,7 +171,9 @@ export interface PortaAtendimento extends PortaGravacaoM18<GravadorSghAtendiment
   sinaisPa(
     c: ContextoAtendimento,
     itens: readonly { cabecalho: string; desde: string }[],
-  ): Promise<Map<string, SinaisSgh>>;
+  ): Promise<Map<string, SinaisRecentes>>;
+  /** A configuração das fichas a imprimir do estabelecimento (null: sem configuração, vale a ficha padrão). */
+  fichasConfiguradas(c: ContextoAtendimento): Promise<FichasConfiguradas | null>;
   naoIdentificados(c: ContextoAtendimento): Promise<
     {
       paciente: number;
@@ -195,6 +208,7 @@ export const METODOS_PORTA_ATENDIMENTO: ReadonlySet<string> = new Set([
   'naoIdentificados',
   'escoresPa',
   'sinaisPa',
+  'fichasConfiguradas',
 ]);
 
 /**
@@ -210,7 +224,7 @@ export interface FonteRiscoPa {
    */
   riscos(
     c: ContextoAtendimento,
-    itens: readonly Pick<AtendimentoPaLegado, 'cabecalho' | 'reg' | 'marcas'>[],
+    itens: readonly Pick<AtendimentoPa, 'cabecalho' | 'reg' | 'marcas'>[],
     opcoes?: { readonly protocolos: boolean },
   ): Promise<{
     porReg: Map<number, import('@sgh/contratos').RiscoNoQuadro | null>;
@@ -222,4 +236,27 @@ export interface FonteRiscoPa {
     /** M44 (etapa 3): os protocolos gerenciados abertos de cada atendimento (o relógio no cartão). */
     protocolos?: Map<number, import('@sgh/contratos').ProtocoloNoQuadro[]>;
   }>;
+}
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaAtendimentoIndisponivel(): PortaAtendimento {
+  const recusa = (): Promise<never> =>
+    Promise.reject(
+      new ErroProblema(
+        'indisponivel',
+        503,
+        'Banco do estabelecimento indisponível',
+        'O banco do estabelecimento não está configurado: nada foi lido nem gravado.',
+      ),
+    );
+  const base = {
+    destino: 'banco' as const,
+    podeGravar: async () => ({
+      pode: false,
+      codigo: 'indisponivel',
+      motivo: 'O banco do estabelecimento não está configurado: nada é gravado.',
+    }),
+  };
+  const metodos = [...METODOS_PORTA_ATENDIMENTO].filter((m) => m !== 'podeGravar');
+  return Object.assign(base, Object.fromEntries(metodos.map((m) => [m, recusa]))) as unknown as PortaAtendimento;
 }

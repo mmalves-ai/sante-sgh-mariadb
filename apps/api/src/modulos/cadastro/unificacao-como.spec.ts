@@ -15,29 +15,41 @@ import {
   RepositorioPlataformaMemoria,
   SENHA_PLATAFORMA_SINTETICA,
 } from '../suporte/repositorio.js';
+import { REGISTRO_MODULOS } from '../registro.js';
 import { PortaCadastroMemoria } from './porta-memoria.js';
+import { registroDeTeste } from './teste.spec-util.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', SUPORTE_SESSAO_MINUTOS: '60' };
+/** A sessão "como" é do módulo suporte: o teste roda quando ele estiver migrado e registrado (F2.2). */
+const SUPORTE = REGISTRO_MODULOS['suporte'];
+
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  SUPORTE_SESSAO_MINUTOS: '60',
+  API_MODULOS: 'cadastro,suporte',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaCadastroMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
+  if (!SUPORTE) return;
   const repo = RepositorioPlataformaMemoria.sintetico(REDE, ['aa', 'bb'], (s) =>
     cifrarSenha(s, { memoria: 8_192, passes: 1, paralelismo: 1 }),
   );
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
     armazem: new ArmazemMemoria(),
-    plataforma: repo,
-    cadastro: porta,
+    // O repositório sintético da plataforma é do módulo suporte (o tipo da fonte é dele).
+    plataforma: repo as never,
+    registro: { ...registroDeTeste({ cadastro: porta }), suporte: SUPORTE },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
 afterAll(async () => {
-  await app.close();
+  await app?.close();
 });
 
 type Navegador = Map<string, string>;
@@ -91,7 +103,7 @@ async function entrarDireto(login: string): Promise<Navegador> {
   return n;
 }
 
-describe('unificação numa sessão "como" (correção do M57.2, ADR 0021)', () => {
+describe.skipIf(!SUPORTE)('unificação numa sessão "como" (correção do M57.2, ADR 0021)', () => {
   it('a fila mostra a unificação indisponível com o motivo; o POST responde 403 como-sem-correcao, nada gravado', async () => {
     const direto = await entrarDireto('SINT.SAME');
     const at = await app.inject({

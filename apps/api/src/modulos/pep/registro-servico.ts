@@ -46,22 +46,8 @@ import {
   taxaIgualdade,
   TEXTO_SIGILO,
 } from '@sgh/dominio-pep';
-import {
-  type CabecalhoDocumentoLido,
-  type ContextoOperacao,
-  type DescarteRascunho,
-  type GravacaoEvolucao,
-  type GravacaoRascunho,
-  type LinhaGravacao,
-  MARCADOR_REGISTRO,
-  type ModeloDoRegistro,
-  modeloPermitido,
-  type ProfissionalDoRegistro,
-  type RascunhoLido,
-  SITUACAO_LANCADO,
-  SITUACAO_SUSPENSO,
-  type SuspensaoEvolucao,
-} from '@sgh/legado';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import { type CabecalhoDocumentoLido, type DescarteRascunho, type GravacaoEvolucao, type GravacaoRascunho, type LinhaGravacao, MARCADOR_REGISTRO, type ModeloDoRegistro, modeloPermitido, type ProfissionalDoRegistro, type RascunhoLido, SITUACAO_LANCADO, SITUACAO_SUSPENSO, type SuspensaoEvolucao } from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoRegistro, PortaRegistro } from './registro-porta.js';
 
@@ -108,7 +94,7 @@ const MOTIVOS_SITUACAO: Readonly<Record<Exclude<SituacaoModelo, 'liberado'>, str
     'Este modelo ainda não está liberado para registro neste estabelecimento; a liberação é feita modelo a modelo pela administração do PEP, depois da conferência dos chave-usuários.',
   'nao-permitido': 'Este modelo não está liberado para a sua especialidade.',
   descontinuado:
-    'Modelo sem uso recente: os registros antigos continuam no prontuário, mas não se registra mais nele.',
+    'Modelo aposentado: os registros antigos continuam no prontuário, mas não se registra mais nele.',
   ambiguo:
     'Este modelo tem pergunta com a lista de escolhas a confirmar pela comissão de prontuário (DP-28): fica só em consulta.',
 };
@@ -135,7 +121,7 @@ export class ServicoRegistro {
 
   constructor(private readonly porta: PortaRegistro) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'proprio' | 'memoria' {
     return this.porta.destino;
   }
 
@@ -209,7 +195,7 @@ export class ServicoRegistro {
     fora: string | null = modeloForaDaLiberacao(m.codigo),
   ): { situacao: SituacaoModelo; motivo: string | null } {
     let s: SituacaoModelo = 'liberado';
-    if (m.usoRecente === 0) s = 'descontinuado';
+    if (m.aposentado) s = 'descontinuado';
     else if (!prof || !modeloPermitido(m, prof)) s = 'nao-permitido';
     // POL-3: o modelo fora da liberação (conferência abaixo da meta ou componente que o novo não grava) fica
     // desligado com o motivo, mesmo que o parâmetro o liste.
@@ -295,19 +281,16 @@ export class ServicoRegistro {
   }
 
   async atendimentos(c: ContextoRegistro, paciente: number): Promise<AtendimentoRegistro[]> {
-    const dois = 2 * 86_400_000;
-    const agora = Date.now();
+    // A porta devolve se o atendimento está em curso (situação, saída e alta): sem janela de dias desde a entrada.
+    // O contrato da tela ainda distingue só internação × externo (pedido do lote 01-06 para levar o tipo completo).
     return (await this.porta.atendimentos(c, paciente)).map((a) => ({
       id: a.id,
       numero: a.numero,
-      tipo: a.tipo,
+      tipo: a.tipo === 'internacao' ? ('internacao' as const) : ('externo' as const),
       entrada: a.entrada,
       unidade: a.unidade,
       leito: a.leito,
-      aberto:
-        a.tipo === 'internacao'
-          ? a.altaMedica === null && a.saida === null
-          : a.entrada !== null && agora - Date.parse(`${a.entrada}Z`) < dois,
+      aberto: a.aberto,
     }));
   }
 
@@ -897,12 +880,13 @@ export function motivoDoFormulario(m: ModeloDoRegistro, campos: readonly CampoRe
     : null;
 }
 
-function situacaoAdmin(
+/** Situação do modelo na administração: o aposentado fica descontinuado; o sem uso recente, não. */
+export function situacaoAdmin(
   m: ModeloDoRegistro,
   campos: readonly CampoRegistro[],
   ambiguas: number,
 ): { situacao: SituacaoModelo; motivo: string | null } {
-  if (m.usoRecente === 0) return { situacao: 'descontinuado', motivo: MOTIVOS_SITUACAO.descontinuado };
+  if (m.aposentado) return { situacao: 'descontinuado', motivo: MOTIVOS_SITUACAO.descontinuado };
   const fora = campos.length ? motivoDoFormulario(m, campos) : modeloForaDaLiberacao(m.codigo);
   if (fora) return { situacao: 'desligado', motivo: fora };
   if (ambiguas > 0) return { situacao: 'ambiguo', motivo: MOTIVOS_SITUACAO.ambiguo };

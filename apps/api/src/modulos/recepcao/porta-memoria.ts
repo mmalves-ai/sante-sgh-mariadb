@@ -1,12 +1,10 @@
 // Porta da recepção EM MEMÓRIA (M19): a sessão sintética de dev/ci (E2E) lê e grava recepções, geradores, senhas,
-// guichês, eventos e chegadas SINTÉTICOS, sem tocar a cópia. As gravações aplicam o mesmo Zod das receitas
-// (operacao(op).entrada) e as mesmas regras (o contador do dia por gerador, a máquina de estados sobre as letras, a
-// ordem da fila, o guichê de uma pessoa, o encaminhamento só aos locais permitidos, as recusas com os mesmos códigos).
-// O relógio é o do estabelecimento (America/Sao_Paulo). A "chamada pelo outro sistema" do E2E chega pelo arquivo
-// RECEPCAO_SINTETICA_POR_FORA (só dev/ci), aplicado na leitura do canal "senhas" do vigia. Nenhum nome aqui é de
-// pessoa real (marca "SINTETICO").
+// guichês, eventos e chegadas SINTÉTICOS, sem banco. As gravações aplicam o mesmo Zod das operações da porta própria
+// (OPERACOES_RECEPCAO[op].entrada) e as mesmas regras (o contador do dia por gerador, a máquina de estados sobre as
+// letras, a ordem da fila, o guichê de uma pessoa, o encaminhamento só aos locais permitidos, as recusas com os mesmos
+// códigos). O relógio é o do estabelecimento (America/Sao_Paulo). Nenhum nome aqui é de pessoa real (marca
+// "SINTETICO").
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
 import {
   CONFIG_FILA_PADRAO,
   decidirEvento,
@@ -17,26 +15,28 @@ import {
   textoDoMotivoSuspensao,
   textoSenha,
 } from '@sgh/contratos';
-import {
-  type AgendadoLidoLegado,
-  type ContextoOperacao,
-  type DispositivoLidoLegado,
-  ErroOperacao,
-  type FonteCatalogo,
-  type GuicheEmUsoLegado,
-  type IndicadoresRecepcaoLegado,
-  type LeituraCanal,
-  type LiberacaoConsultada,
-  type MarcaVigia,
-  operacao,
-  type PacienteDaSenha,
-  type PainelTvLegado,
-  type RecepcaoLidaLegado,
-  recusa,
-  type ResultadoOperacao,
-  type SenhaLidaLegado,
-} from '@sgh/legado';
-import type { ContextoRecepcao, GravadorSghRecepcao, PortaRecepcao } from './porta.js';
+import { ErroOperacao, recusa, type ResultadoOperacao } from '@sgh/nucleo';
+import { OPERACOES_RECEPCAO } from './operacoes.js';
+import type {
+  AgendadoRecepcao,
+  ContextoGravacao,
+  DispositivoRecepcao,
+  GuicheEmUso,
+  IndicadoresRecepcao,
+  LiberacaoConsultada,
+  PacienteDaSenha,
+  PainelTv,
+  Recepcao,
+  SenhaRecepcao,
+  SituacaoSenha,
+} from './tipos.js';
+import { CODIGO_DO_GRUPO, situacaoDaLetra, tipoGeradorDaTela } from './tela-senha.js';
+import type { ContextoRecepcao, GravadorRecepcao, PortaRecepcao } from './porta.js';
+
+/** Estado das operações no catálogo do estabelecimento (dev/ci: 'verde' libera; 'bloqueada' ou null recusa). */
+export interface CatalogoOperacoes {
+  estado(operacao: string, hospital: string): string | null;
+}
 import { TermosMemoria } from './termos-memoria.js';
 
 /** Foto sintética (silhueta em SVG): nenhuma imagem de paciente real no banco em memória. */
@@ -104,11 +104,17 @@ interface EventoM {
   guiche: number | null;
   local: number | null;
 }
-interface DispositivoM extends DispositivoLidoLegado {
+interface DispositivoM extends DispositivoRecepcao {
   resumo: string;
 }
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
+
+/** Situação nominal a partir da letra guardada na sessão sintética (G no guichê é a chamada). */
+function situacaoDaLetraNaMemoria(letra: string, guiche: number): SituacaoSenha {
+  if (letra === 'G') return guiche > 0 ? 'chamada' : 'aguardando';
+  return situacaoDaLetra(letra);
+}
 
 /** A cópia sem o campo (o CPF do agendado e o resumo do token não saem da porta). */
 function semCampo<T extends object, K extends keyof T>(x: T, campo: K): Omit<T, K> {
@@ -118,21 +124,20 @@ function semCampo<T extends object, K extends keyof T>(x: T, campo: K): Omit<T, 
 }
 
 interface Estado {
-  recepcoes: RecepcaoLidaLegado[];
-  guiches: GuicheEmUsoLegado[];
+  recepcoes: Recepcao[];
+  guiches: GuicheEmUso[];
   senhas: SenhaM[];
   fluxo: FluxoM[];
   eventos: EventoM[];
   contador: Map<string, number>;
-  agendados: (Mut<AgendadoLidoLegado> & { cpf: string })[];
+  agendados: (Mut<AgendadoRecepcao> & { cpf: string })[];
   dispositivos: DispositivoM[];
   seq: number;
   idem: Map<string, { hash: string; resultado: ResultadoOperacao }>;
-  aplicadosPorFora: Set<string>;
 }
 
 /** Recepções, locais e geradores sintéticos (os mesmos identificadores de estrutura da cópia, nomes de produto). */
-function estrutura(): RecepcaoLidaLegado[] {
+function estrutura(): Recepcao[] {
   const g = (
     id: number,
     recepcao: number,
@@ -146,10 +151,10 @@ function estrutura(): RecepcaoLidaLegado[] {
     recepcao,
     letra,
     nome,
-    tipo,
+    tipo: tipo === '5' ? ('diverso' as const) : ('atendimento' as const),
     ativo,
     prioritaria,
-    limiteDia: 0,
+    limiteDia: null,
     ordem: 'prioridade',
     intercalar: 2,
     tempoAlvoMinutos: 20,
@@ -192,8 +197,8 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
   readonly termos = new TermosMemoria();
 
   constructor(
-    private readonly catalogo: FonteCatalogo,
-    private readonly opcoes: { readonly agora?: () => Date; readonly arquivoPorFora?: string | null } = {},
+    private readonly catalogo: CatalogoOperacoes,
+    private readonly opcoes: { readonly agora?: () => Date } = {},
   ) {}
 
   private relogioAtual() {
@@ -259,7 +264,6 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
       dispositivos: [],
       seq: 100,
       idem: new Map(),
-      aplicadosPorFora: new Set(),
     };
     const minutos = (m: number) => {
       const d = new Date(`${r.agora}Z`);
@@ -332,7 +336,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     return null;
   }
 
-  private ler(s: Estado, x: SenhaM): SenhaLidaLegado {
+  private ler(s: Estado, x: SenhaM): SenhaRecepcao {
     const g = this.gerador(s, x.gerador);
     const cs = s.fluxo.filter((f) => f.senha === x.id && f.acao === 'C');
     const todos = s.fluxo.filter((f) => f.senha === x.id);
@@ -343,11 +347,22 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
       gerador: x.gerador,
       recepcao: g?.recepcao ?? 0,
       servico: g?.nome ?? '',
-      tipoGerador: g?.tipo ?? '5',
-      prioridade: x.prioridade,
-      grupo: x.grupo,
-      situacao: x.situacao,
-      guiche: x.guiche,
+      // A sessão sintética guarda o vocabulário do contrato da tela; a porta devolve o neutro.
+      tipoServico: g?.tipo ?? 'diverso',
+      prioritaria: x.prioridade !== '2',
+      grupo:
+        x.prioridade === '2'
+          ? null
+          : x.grupo !== null
+            ? (CODIGO_DO_GRUPO[x.grupo] ?? null)
+            : x.prioridade === '0'
+              ? CODIGO_DO_GRUPO[0]!
+              : null,
+      pesoGrupo: null,
+      horarioMarcacao: null,
+      situacao: situacaoDaLetraNaMemoria(x.situacao, x.guiche),
+      guiche: x.guiche > 0 ? x.guiche : null,
+      local: x.situacao === 'C' ? x.localChamada : null,
       usuario: x.usuario,
       emitidaEm: x.emitidaEm,
       origem: x.origem,
@@ -364,54 +379,6 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     };
   }
 
-  // ── "Por fora": o outro sistema chama (E2E) ─────────────────────────────────────────────────────
-
-  private aplicarPorFora(c: ContextoRecepcao): string {
-    const arq = this.opcoes.arquivoPorFora;
-    if (!arq || !existsSync(arq)) return '';
-    try {
-      const bruto = readFileSync(arq, 'utf8');
-      const j = JSON.parse(bruto) as { chamadas?: { id: string; guiche: number; recepcao?: number }[] };
-      const s = this.e(c);
-      for (const ch of j.chamadas ?? []) {
-        if (s.aplicadosPorFora.has(ch.id)) continue;
-        s.aplicadosPorFora.add(ch.id);
-        const r = ch.recepcao ?? 2;
-        // Só a senha de hoje (a fila só mostra as do dia): logo depois da meia-noite, a semente mais antiga é de ontem.
-        const hoje = this.relogioAtual().hoje;
-        const candidata = s.senhas
-          .filter(
-            (x) =>
-              x.data === hoje &&
-              x.situacao === 'G' &&
-              x.guiche === 0 &&
-              !x.atendida &&
-              this.gerador(s, x.gerador)?.recepcao === r,
-          )
-          .sort((a, b) => a.emitidaEm.localeCompare(b.emitidaEm))[0];
-        if (candidata) {
-          candidata.guiche = ch.guiche;
-          candidata.usuario = 'GUICHE.OUTRO.SISTEMA';
-        }
-      }
-      return bruto;
-    } catch {
-      return '';
-    }
-  }
-
-  async canalSenhas(c: ContextoRecepcao, marca: MarcaVigia): Promise<LeituraCanal> {
-    const fora = this.aplicarPorFora(c);
-    const s = this.e(c);
-    const selo = createHash('sha256')
-      .update(
-        `${fora}|${s.senhas.map((x) => `${x.id}:${x.situacao}:${x.guiche}`).join(',')}|${s.fluxo.length}`,
-      )
-      .digest('hex')
-      .slice(0, 16);
-    return { selo, marca: { maiorId: marca.maiorId || 1, maiorId2: 0, janela: 1 }, consultas: 1 };
-  }
-
   // ── Gravações ───────────────────────────────────────────────────────────────────────────────────
 
   async podeGravar(_c: ContextoRecepcao, op: string): Promise<LiberacaoConsultada> {
@@ -421,15 +388,16 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     return { pode: true, codigo: null, motivo: null };
   }
 
-  async executar(c: ContextoRecepcao, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
+  async executar(c: ContextoRecepcao, op: string, entradaBruta: unknown, ctx: ContextoGravacao) {
+    const o = OPERACOES_RECEPCAO[op];
+    if (!o) throw recusa('operacao-especificada', `Operação ${op} sem simulação na sessão sintética.`);
     const analise = o.entrada.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -442,7 +410,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    const resultado = this.aplicar(s, op, analise.data as Record<string, any>, ctx.usuarioLegado); // eslint-disable-line @typescript-eslint/no-explicit-any
+    const resultado = this.aplicar(s, op, analise.data as Record<string, any>, ctx.login); // eslint-disable-line @typescript-eslint/no-explicit-any
     s.idem.set(chave, { hash, resultado });
     return { resultado, repetida: false, trilha: null };
   }
@@ -488,15 +456,13 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
             'O gerador de senha não existe mais.',
           );
         if (!g.ativo) throw recusa('gerador-inativo', 'O serviço está inativo: escolha outro.');
-        if (g.tipo !== '0' && g.tipo !== '5')
-          throw recusa('gerador-nao-usado', 'Este tipo de serviço não é usado nas filas do estabelecimento.');
         if (e['prioridade'] !== '2' && !g.prioritaria)
           throw recusa(
             'prioridade-nao-oferecida',
             'Este serviço não emite senha prioritária: escolha o serviço de prioridade da recepção.',
           );
         const proximo = (s.contador.get(`${r.hoje}:${g.id}`) ?? 0) + 1;
-        if (g.limiteDia > 0 && proximo > g.limiteDia && !e['forcarLimite'])
+        if (g.limiteDia !== null && proximo > g.limiteDia && !e['forcarLimite'])
           throw recusa('limite-do-dia', `O serviço chegou ao limite de ${g.limiteDia} senhas do dia.`);
         const x = this.novaSenha(s, g.id, e['prioridade'], login, r.agora, e['origem'], e['grupo'] ?? null);
         s.eventos.push({ senha: x.id, evento: 'emitir', guiche: null, local: null });
@@ -567,7 +533,12 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
             login,
           );
         const d = decidirEvento(
-          { situacao: x.situacao, guiche: x.guiche, atendida: x.atendida, tipoGerador: g?.tipo ?? '5' },
+          {
+            situacao: x.situacao,
+            guiche: x.guiche,
+            atendida: x.atendida,
+            tipoGerador: tipoGeradorDaTela(g?.tipo ?? 'diverso'),
+          },
           e['evento'],
           noGuiche ? e['guiche'] : 0,
         );
@@ -614,7 +585,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         if (x.atendida) throw recusa('senha-em-atendimento', 'A senha já tem atendimento aberto.');
         if (x.agendamento) throw recusa('senha-ja-ligada', 'A senha já está ligada a um agendamento.');
         if (x.situacao === 'L') throw recusa('senha-concluida', 'A senha já foi concluída.');
-        if (this.gerador(s, x.gerador)?.tipo !== '0')
+        if (this.gerador(s, x.gerador)?.tipo !== 'atendimento')
           throw recusa(
             'senha-de-servico-diverso',
             'A chegada do agendado é registrada numa senha de recepção, não de serviços diversos: emita a senha da recepção.',
@@ -680,10 +651,10 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     }
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     c: ContextoRecepcao,
     _trilha: unknown,
-    fn: (g: GravadorSghRecepcao) => Promise<T>,
+    fn: (g: GravadorRecepcao) => Promise<T>,
   ): Promise<T> {
     const s = this.e(c);
     const r = this.relogioAtual();
@@ -695,7 +666,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         const m = g as Mut<typeof g>;
         m.ordem = x.ordem;
         m.intercalar = x.intercalar;
-        m.tempoAlvoMinutos = x.tempoAlvoMinutos;
+        m.tempoAlvoMinutos = x.tempoAlvoMinutos > 0 ? x.tempoAlvoMinutos : null;
         m.rotuloTotem = x.rotuloTotem;
         m.noTotem = x.noTotem;
       },
@@ -715,7 +686,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
           geradores: [...x.geradores],
           conteudo: x.conteudo,
           portalOrdem: x.portalOrdem,
-          usuarioLegado: x.usuarioLegado,
+          usuarioTecnico: x.usuarioTecnico,
           voz: x.voz,
           criadoEm: r.agora,
           criadoPor: x.usuario,
@@ -788,22 +759,6 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
         m.conferidoPor = x.usuario;
       },
     });
-  }
-
-  async registrarChamadasDeFora(
-    c: ContextoRecepcao,
-    chamadas: readonly { senha: number; guiche: number; local: number | null }[],
-  ): Promise<number> {
-    const agora = this.relogioAtual().agora;
-    let n = 0;
-    for (const x of chamadas) {
-      const s = this.e(c).senhas.find((y) => y.id === x.senha);
-      if (!s || s.primeiraChamadaEm) continue;
-      s.primeiraChamadaEm = agora;
-      s.guichePrimeira = x.guiche;
-      n++;
-    }
-    return n;
   }
 
   async marcarUsoDispositivo(c: ContextoRecepcao, id: number): Promise<void> {
@@ -918,18 +873,18 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     return this.relogioAtual();
   }
 
-  async recepcoes(c: ContextoRecepcao): Promise<RecepcaoLidaLegado[]> {
+  async recepcoes(c: ContextoRecepcao): Promise<Recepcao[]> {
     return this.e(c).recepcoes;
   }
 
-  async guichesEmUso(c: ContextoRecepcao): Promise<GuicheEmUsoLegado[]> {
+  async guichesEmUso(c: ContextoRecepcao): Promise<GuicheEmUso[]> {
     return [...this.e(c).guiches];
   }
 
   async senhasDoDia(
     c: ContextoRecepcao,
     f: { recepcao?: number | null; geradores?: readonly number[] },
-  ): Promise<{ senhas: SenhaLidaLegado[]; cortada: boolean }> {
+  ): Promise<{ senhas: SenhaRecepcao[]; cortada: boolean }> {
     const s = this.e(c);
     const hoje = this.relogioAtual().hoje;
     const senhas = s.senhas
@@ -944,7 +899,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     return { senhas, cortada: false };
   }
 
-  async senha(c: ContextoRecepcao, id: number): Promise<SenhaLidaLegado | null> {
+  async senha(c: ContextoRecepcao, id: number): Promise<SenhaRecepcao | null> {
     const s = this.e(c);
     const x = s.senhas.find((y) => y.id === id);
     return x ? this.ler(s, x) : null;
@@ -973,7 +928,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
       prontuario?: number | null;
       agenda?: string | null;
     },
-  ): Promise<{ itens: AgendadoLidoLegado[]; cortada: boolean }> {
+  ): Promise<{ itens: AgendadoRecepcao[]; cortada: boolean }> {
     const itens = this.e(c)
       .agendados.filter(
         (a) =>
@@ -1020,19 +975,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     return r;
   }
 
-  async parametros(): Promise<Record<string, string | number | null>> {
-    return {
-      DIG_SEG: 'T',
-      DIG_CRM: 'T',
-      DIG_CDC: 'T',
-      DIG_ATE: 'T',
-      ['DIG_SENHA']: 'F',
-      PAINEL: 'F',
-      PAINELTCPIP: '',
-    };
-  }
-
-  async paineisTv(): Promise<PainelTvLegado[]> {
+  async paineisTv(): Promise<PainelTv[]> {
     return [
       { config: 1, ordem: 3, nome: `PAINEL 2 ANDAR ${M}` },
       { config: 1, ordem: 10, nome: `HIGIENIZACAO ${M}` },
@@ -1050,7 +993,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     de: string,
     ate: string,
     recepcao: number | null,
-  ): Promise<IndicadoresRecepcaoLegado> {
+  ): Promise<IndicadoresRecepcao> {
     const s = this.e(c);
     const xs = s.senhas
       .filter((x) => x.data >= de && x.data <= ate)
@@ -1101,7 +1044,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     };
   }
 
-  async dispositivos(c: ContextoRecepcao): Promise<DispositivoLidoLegado[]> {
+  async dispositivos(c: ContextoRecepcao): Promise<DispositivoRecepcao[]> {
     return this.e(c).dispositivos.map((d) => ({
       ...semCampo(d, 'resumo'),
       valido: !d.revogadoEm && d.validoAte > this.relogioAtual().agora,
@@ -1124,7 +1067,7 @@ export class PortaRecepcaoMemoria implements PortaRecepcao {
     ];
   }
 
-  async dispositivoDoToken(token: string): Promise<DispositivoLidoLegado | null> {
+  async dispositivoDoToken(token: string): Promise<DispositivoRecepcao | null> {
     const resumo = createHash('sha256').update(token).digest('hex');
     for (const s of this.estados.values()) {
       const d = s.dispositivos.find((y) => y.resumo === resumo);

@@ -1,35 +1,51 @@
 // Porta da agenda EM MEMÓRIA (M17): a sessão sintética de dev/ci (E2E) lê e grava agendas, horários, marcações e
-// cancelamentos SINTÉTICOS, sem tocar a cópia. As gravações aplicam o mesmo Zod das receitas (operacao(op).entrada)
-// e as mesmas recusas (horário ocupado, passado, convênio não aceito, check-in, prévia desatualizada, última linha
-// da cobertura, colisão); o relógio é o do estabelecimento (America/Sao_Paulo). Os pacientes são os do cadastro em
-// memória (marca "SINTETICO"). Nenhum nome aqui é de pessoa real.
+// cancelamentos SINTÉTICOS, sem banco. As gravações aplicam o mesmo Zod das operações (OPERACOES_AGENDA) e as mesmas
+// recusas da porta própria (horário ocupado, passado, convênio não aceito, check-in, prévia desatualizada, última
+// linha da cobertura, colisão); o relógio é o do estabelecimento (America/Sao_Paulo). Nenhum nome aqui é de pessoa
+// real. O estado interno é privado e sintético; tudo o que sai pela porta está nos tipos neutros (tipos.ts).
 import { existsSync, readFileSync } from 'node:fs';
-import { canalMarcacao, type EstadoOperacao, textoDoMotivo } from '@sgh/contratos';
-import {
-  type AgendaLida,
-  type BloqueioLido,
-  type CancelamentoLido,
-  type ConfirmacaoLida,
-  type ContagensIndicadores,
-  type ContextoOperacao,
-  ErroOperacao,
-  type EscalaPlanejadaLida,
-  type EsperaLida,
-  type FonteCatalogo,
-  type GeracaoLida,
-  type GeracaoNovaLida,
-  type HorarioLido,
-  type LiberacaoConsultada,
-  type LigacaoLida,
-  type LinhaEscalaLida,
-  type MarcacaoExtLida,
-  type MarcacaoLida,
-  operacao,
-  recusa,
-  type RelogioLido,
-  type ResultadoOperacao,
-} from '@sgh/legado';
-import type { ContextoAgenda, GravadorSghAgenda, PacienteDaAgenda, PortaAgenda } from './porta.js';
+import { type EstadoOperacao, textoDoMotivo } from '@sgh/contratos';
+import { ErroOperacao, recusa } from '@sgh/nucleo';
+import { OPERACOES_AGENDA as OPERACOES_CONHECIDAS, operacaoAgenda } from './operacoes.js';
+import type { ContextoAgenda, ContextoGravacao, GravadorAgenda, PortaAgenda } from './porta.js';
+import type {
+  Agenda,
+  BloqueioAgenda,
+  Cancelamento,
+  ComplementoMarcacao,
+  ConfirmacaoRegistrada,
+  ContagensIndicadores,
+  EscalaPlanejada,
+  FaixaEscala,
+  GeracaoGrade,
+  Horario,
+  ItemListaEspera,
+  LiberacaoGravacao,
+  Marcacao,
+  PacienteDaAgenda,
+  Relogio,
+  ResultadoGravacao,
+  SituacaoMarcacao,
+  VinculoAgenda,
+} from './tipos.js';
+import { TEXTO_HORARIO_BLOQUEADO, vetoDeBloqueioNoEncaixe } from './regra-encaixe.js';
+
+type ResultadoOperacao = ResultadoGravacao;
+
+/** O que a memória usa do catálogo de operações por estabelecimento (dev/ci). */
+export interface CatalogoOperacoesAgenda {
+  estado(operacao: string, hospital: string): EstadoOperacao | null;
+}
+
+/** Paciente como a memória o recebe do cadastro sintético. */
+export interface PacienteSintetico {
+  readonly id: number;
+  readonly nome: string;
+  readonly prontuario: number;
+  readonly telefone: string | null;
+  readonly celular: string | null;
+  readonly ativo: boolean;
+}
 
 const M = 'SINTETICO';
 
@@ -47,8 +63,13 @@ export interface OpcoesAgendaMemoria {
   };
 }
 
-/** Relógio civil do estabelecimento (o banco do legado roda na hora local). */
-export function relogioLocal(agora = new Date()): RelogioLido {
+interface RelogioM {
+  readonly hoje: string;
+  readonly hhmm: string;
+}
+
+/** Relógio civil do estabelecimento em 4 dígitos (o formato que outros módulos ainda consomem). */
+export function relogioLocal(agora = new Date()): RelogioM {
   const p = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Sao_Paulo',
     year: 'numeric',
@@ -71,7 +92,15 @@ const semana = (d: string) => new Date(`${d}T00:00:00Z`).getUTCDay() + 1;
 const min = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(2, 4));
 const hhmm = (m: number) =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}${String(m % 60).padStart(2, '0')}`;
-const passou = (h: { data: string; hora: string }, r: RelogioLido) =>
+/** Relógio civil do estabelecimento (HH:MM). */
+export function relogioCivil(agora = new Date()): Relogio {
+  const r = relogioLocal(agora);
+  return { hoje: r.hoje, hora: iso(r.hhmm) };
+}
+const iso = (h: string) => `${h.padStart(4, '0').slice(0, 2)}:${h.padStart(4, '0').slice(2, 4)}`;
+const digitos = (h: string) => h.replace(':', '').padStart(4, '0');
+const minutosOuNull = (h: string | null | undefined) => (h && min(h) > 0 ? min(h) : null);
+const passou = (h: { data: string; hora: string }, r: RelogioM) =>
   h.data < r.hoje || (h.data === r.hoje && h.hora <= r.hhmm);
 
 interface AgendaM {
@@ -108,7 +137,7 @@ interface MarcacaoM {
   conv: number;
   retorno: string;
   atendido: string;
-  tpAge: number;
+  canal: string;
   dtAge: string;
   usuario: string;
   fone: string;
@@ -116,26 +145,68 @@ interface MarcacaoM {
   obs: string | null;
   senha: boolean;
 }
-interface CancelamentoM extends CancelamentoLido {
+interface CancelamentoM {
+  protocolo: number;
   agendaId: number;
+  agenda: string;
+  data: string;
+  hora: string;
+  paciente: string;
+  canceladoEm: string;
+  horaCancelamento: string;
+  canceladoPor: string | null;
+  motivo: string;
+  motivoCodigo: string | null;
+  solicitante: string | null;
+}
+interface LinhaEscalaM {
+  semana: number;
+  duracao: string;
+  horaInicio: string;
+  horaFim: string;
+  intervaloInicio: string;
+  intervaloFim: string;
+}
+interface GeracaoM {
+  id: number;
+  agenda: number;
+  inicio: string;
+  fim: string;
+  em: string;
+  duracao: string;
+  semanas: string;
+  autor: string;
+  revertidaEm: string | null;
+  lista: { data: string; hora: string }[];
+}
+interface BloqueioM extends Omit<BloqueioAgenda, 'nomeAgenda'> {
+  ativo: boolean;
+  lista: { data: string; hora: string }[];
+}
+interface PlanejadaM {
+  id: number;
+  vigenteDesde: string;
+  autor: string;
+  em: string;
+  linhas: LinhaEscalaM[];
 }
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
+type EsperaM = Mut<Omit<ItemListaEspera, 'prontuario'>> & { prontuario: number };
 
 interface Estado {
   agendas: AgendaM[];
   horarios: HorarioM[];
   marcacoes: MarcacaoM[];
   cancelamentos: CancelamentoM[];
-  escala: Map<number, LinhaEscalaLida[]>;
-  geracoes: Map<number, GeracaoLida[]>;
-  ext: Map<number, MarcacaoExtLida>;
-  geracoesNovo: (Mut<GeracaoNovaLida> & { lista: { data: string; hora: string }[] })[];
-  bloqueios: (Mut<BloqueioLido> & { lista: { data: string; hora: string }[] })[];
-  confirmacoes: Map<number, ConfirmacaoLida[]>;
-  planejadas: Map<number, EscalaPlanejadaLida[]>;
-  espera: EsperaLida[];
-  ligacoes: Map<number, LigacaoLida>;
+  escala: Map<number, LinhaEscalaM[]>;
+  ext: Map<number, ComplementoMarcacao>;
+  geracoes: GeracaoM[];
+  bloqueios: BloqueioM[];
+  confirmacoes: Map<number, ConfirmacaoRegistrada[]>;
+  planejadas: Map<number, PlanejadaM[]>;
+  espera: EsperaM[];
+  ligacoes: Map<number, VinculoAgenda>;
   seq: number;
   idem: Map<string, { hash: string; resultado: ResultadoOperacao }>;
   /** M39: os pedidos "por fora" já aplicados (E2E). */
@@ -164,7 +235,7 @@ const FERIADOS = [
 ];
 const ehFeriado = (d: string) => FERIADOS.some((f) => f.data.slice(5) === d.slice(5));
 
-function semear(r: RelogioLido): Estado {
+function semear(r: RelogioM): Estado {
   const agendas: AgendaM[] = [
     {
       id: 901,
@@ -195,7 +266,7 @@ function semear(r: RelogioLido): Estado {
       tele: 'N',
       convenios: [10],
       especialidades: [21],
-      // Agenda com unidade informada (as do legado têm 0): exercita o escopo por unidade.
+      // Agenda com unidade informada: exercita o escopo por unidade.
       unidade: 1,
     },
     {
@@ -215,9 +286,8 @@ function semear(r: RelogioLido): Estado {
     marcacoes: [],
     cancelamentos: [],
     escala: new Map(),
-    geracoes: new Map(),
     ext: new Map(),
-    geracoesNovo: [],
+    geracoes: [],
     bloqueios: [],
     confirmacoes: new Map(),
     planejadas: new Map(),
@@ -247,22 +317,24 @@ function semear(r: RelogioLido): Estado {
         intervaloFim: '0000',
       })),
     );
-    e.geracoes.set(a.id, [
-      {
-        status: 'C',
-        inicio: somar(r.hoje, -3),
-        fim: somar(r.hoje, 21),
-        em: somar(r.hoje, -3),
-        hora: '0900',
-        duracao: a.duracao,
-        semanas: 'FTTTTTF',
-        usuario: `COORDENACAO.${M}`,
-      },
-    ]);
+    const geracao: GeracaoM = {
+      id: ++e.seq,
+      agenda: a.id,
+      inicio: somar(r.hoje, -3),
+      fim: somar(r.hoje, 21),
+      em: `${somar(r.hoje, -3)}T09:00`,
+      duracao: a.duracao,
+      semanas: 'FTTTTTF',
+      autor: `COORDENACAO.${M}`,
+      revertidaEm: null,
+      lista: [],
+    };
+    e.geracoes.push(geracao);
     for (let i = -3; i <= 21; i++) {
       const d = somar(r.hoje, i);
       if (semana(d) === 1 || semana(d) === 7 || ehFeriado(d)) continue;
-      for (let m = min(f.ini); m + dur <= min(f.fim); m += dur)
+      for (let m = min(f.ini); m + dur <= min(f.fim); m += dur) {
+        geracao.lista.push({ data: d, hora: hhmm(m) });
         e.horarios.push({
           agenda: a.id,
           data: d,
@@ -275,6 +347,7 @@ function semear(r: RelogioLido): Estado {
           conv: 0,
           retorno: 'N',
         });
+      }
     }
   }
   // Duas marcações SINTÉTICAS no último dia útil passado, sem chegada: os candidatos do fechamento do dia.
@@ -298,7 +371,7 @@ function semear(r: RelogioLido): Estado {
         conv: 10,
         retorno: 'N',
         atendido: 'N',
-        tpAge: 20,
+        canal: 'telefone',
         dtAge: somar(ultimo, -10),
         usuario: `COORDENACAO.${M}`,
         fone: '',
@@ -328,7 +401,7 @@ function semear(r: RelogioLido): Estado {
       conv: 10,
       retorno: 'N',
       atendido: 'S',
-      tpAge: 20,
+      canal: 'telefone',
       dtAge: somar(ultimo903, -7),
       usuario: `COORDENACAO.${M}`,
       fone: '',
@@ -344,23 +417,20 @@ export class PortaAgendaMemoria implements PortaAgenda {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
   constructor(
-    private readonly catalogo: FonteCatalogo | null = null,
+    private readonly catalogo: CatalogoOperacoesAgenda | null = null,
     private readonly lerPacientes: (
       c: ContextoAgenda,
       ids: readonly number[],
-    ) => Promise<
-      {
-        id: number;
-        nome: string;
-        prontuario: number;
-        telefone: string | null;
-        celular: string | null;
-        ativo: boolean;
-      }[]
-    > = async () => [],
-    private readonly relogioFn: () => RelogioLido = () => relogioLocal(),
+    ) => Promise<readonly PacienteSintetico[]> = async () => [],
+    private readonly relogioFn: () => Relogio = () => relogioCivil(),
     private readonly memoria: OpcoesAgendaMemoria = {},
   ) {}
+
+  /** O relógio em 4 dígitos (o estado sintético guarda as horas assim). */
+  private rel(): RelogioM {
+    const r = this.relogioFn();
+    return { hoje: r.hoje, hhmm: digitos(r.hora) };
+  }
 
   /**
    * M39 (regra 2): o "outro sistema" marca por fora (E2E): cada pedido do arquivo ocupa o horário (agenda, data e hora)
@@ -400,7 +470,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
 
   private e(c: ContextoAgenda): Estado {
     let s = this.porHospital.get(c.hospital);
-    if (!s) this.porHospital.set(c.hospital, (s = semear(this.relogioFn())));
+    if (!s) this.porHospital.set(c.hospital, (s = semear(this.rel())));
     return s;
   }
 
@@ -408,7 +478,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
     return this.catalogo?.estado(op, hospital) ?? 'verde';
   }
 
-  async podeGravar(c: ContextoAgenda, op: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoAgenda, op: string): Promise<LiberacaoGravacao> {
     const e = this.estado(op, c.hospital);
     if (e === null || e === 'bloqueada')
       return {
@@ -416,9 +486,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
         codigo: 'operacao-bloqueada',
         motivo: 'A gravação está bloqueada neste estabelecimento (catálogo de operações).',
       };
-    const r = operacao(op).receita;
-    if (r.pendente)
-      return { pode: false, codigo: 'operacao-nao-liberada', motivo: `Falta provar: ${r.pendente}.` };
+    if (!Object.hasOwn(OPERACOES_CONHECIDAS, op))
+      return { pode: false, codigo: 'operacao-desconhecida', motivo: 'Operação da agenda desconhecida.' };
     return { pode: true, codigo: null, motivo: null };
   }
 
@@ -505,8 +574,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
       conv: e.convenio,
       retorno: e.retorno ? 'S' : 'N',
       atendido: 'N',
-      tpAge: canalMarcacao(e.canal)?.tpAge ?? 0,
-      dtAge: this.relogioFn().hoje,
+      canal: e.canal,
+      dtAge: this.rel().hoje,
       usuario: login,
       fone: p.telefone ?? '',
       celular: p.celular ?? '',
@@ -541,7 +610,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
 
   private cancelar(s: Estado, m: MarcacaoM, motivo: string, login: string, liberar: boolean): number {
     const a = this.agendaM(s, m.agenda);
-    const r = this.relogioFn();
+    const r = this.rel();
     const protocolo = ++s.seq;
     s.cancelamentos.push({
       protocolo,
@@ -565,15 +634,15 @@ export class PortaAgendaMemoria implements PortaAgenda {
     return protocolo;
   }
 
-  async executar(c: ContextoAgenda, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
-    const o = operacao(op);
+  async executar(c: ContextoGravacao, op: string, entradaBruta: unknown) {
+    const o = operacaoAgenda(op);
     const analise = o.entrada.safeParse(entradaBruta);
     if (!analise.success)
       throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.', {
         campos: [...new Set(analise.error.issues.map((i) => i.path.join('.') || '(entrada)'))],
       });
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${c.chaveIdempotencia}`;
     const hash = JSON.stringify(analise.data);
     const anterior = s.idem.get(chave);
     if (anterior) {
@@ -586,11 +655,10 @@ export class PortaAgendaMemoria implements PortaAgenda {
         );
       return { resultado: anterior.resultado, repetida: true, trilha: null };
     }
-    if (o.receita.pendente) throw recusa('operacao-especificada', `Falta provar: ${o.receita.pendente}.`);
     this.aplicarPorFora(s);
     let resultado: ResultadoOperacao;
     try {
-      resultado = await this.aplicar(c, s, op, analise.data as Record<string, unknown>, ctx.usuarioLegado);
+      resultado = await this.aplicar(c, s, op, analise.data as Record<string, unknown>, c.login);
     } catch (erro) {
       // M39: as recusas contam nos indicadores de disputa como no executor do banco (desfecho e código).
       if (erro instanceof ErroOperacao)
@@ -609,7 +677,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
     e: Record<string, any>, // eslint-disable-line @typescript-eslint/no-explicit-any
     login: string,
   ): Promise<ResultadoOperacao> {
-    const r = this.relogioFn();
+    const r = this.rel();
     switch (op) {
       case 'agenda.gerarGrade': {
         const a = this.agendaM(s, e['agenda']);
@@ -640,49 +708,26 @@ export class PortaAgendaMemoria implements PortaAgenda {
             retorno: 'N',
           });
         const anterior = s.escala.get(a.id) ?? [];
-        const nova = e['escala'] as LinhaEscalaLida[];
-        const chaveE = (x: LinhaEscalaLida) => `${x.semana}|${x.duracao}|${x.horaInicio}`;
+        const nova = e['escala'] as LinhaEscalaM[];
+        const chaveE = (x: LinhaEscalaM) => `${x.semana}|${x.duracao}|${x.horaInicio}`;
         s.escala.set(a.id, [...anterior.filter((x) => !nova.some((n) => chaveE(n) === chaveE(x))), ...nova]);
-        (s.geracoes.get(a.id) ?? s.geracoes.set(a.id, []).get(a.id))?.unshift({
-          status: 'C',
-          inicio: e['de'],
-          fim: e['ate'],
-          em: r.hoje,
-          hora: r.hhmm,
-          duracao: e['duracao'],
-          semanas: (e['semanas'] as string[]).join(''),
-          usuario: login,
-        });
         const id = ++s.seq;
-        s.geracoesNovo.unshift({
+        s.geracoes.unshift({
           id,
           agenda: a.id,
-          nome: a.nome,
-          crm: a.crm,
           inicio: e['de'],
           fim: e['ate'],
-          dtCriacao: r.hoje,
-          hrCriacao: r.hhmm,
+          em: `${r.hoje}T${iso(r.hhmm)}`,
           duracao: e['duracao'],
           semanas: (e['semanas'] as string[]).join(''),
-          horarios: horarios.length,
-          escalaAnterior: JSON.stringify(anterior.filter((x) => nova.some((n) => chaveE(n) === chaveE(x)))),
-          escalaNova: JSON.stringify(nova),
           autor: login,
-          criadoEm: new Date().toISOString(),
           revertidaEm: null,
           lista: horarios,
         });
-        return {
-          agenda: a.id,
-          horarios: horarios.length,
-          dtCriacao: r.hoje,
-          hrCriacao: r.hhmm,
-          escalaAnterior: '[]',
-        };
+        return { agenda: a.id, geracao: id, horarios: horarios.length };
       }
       case 'agenda.reverterGrade': {
-        const g = s.geracoesNovo.find((x) => x.id === e['geracao']);
+        const g = s.geracoes.find((x) => x.id === e['geracao']);
         if (!g)
           throw new ErroOperacao(
             404,
@@ -718,6 +763,18 @@ export class PortaAgendaMemoria implements PortaAgenda {
           throw recusa('horario-passado', 'O horário já passou pelo relógio do servidor: escolha outro.');
         let h: HorarioM;
         if (op === 'agenda.encaixar') {
+          // O encaixe não passa por cima de bloqueio de período ativo (instante local como relógio de parede).
+          const parede = (data: string, hhmm: string) => Date.parse(`${data}T${hhmm.replace(':', '').replace(/^(\d\d)(\d\d)$/, '$1:$2')}:00Z`);
+          const veto = vetoDeBloqueioNoEncaixe(parede(e['data'], e['hora']), {
+            horarioBloqueado: false,
+            bloqueios: s.bloqueios
+              .filter((b) => b.agenda === a.id && b.ativo)
+              .map((b) => ({
+                inicio: parede(b.inicio, b.horaInicio ?? '00:00'),
+                fim: b.horaFim ? parede(b.fim, b.horaFim) : parede(b.fim, '00:00') + 86_400_000,
+              })),
+          });
+          if (veto) throw recusa(veto, TEXTO_HORARIO_BLOQUEADO);
           if (
             s.horarios.some((x) => x.agenda === a.id && x.data === e['data'] && x.hora === e['hora']) ||
             this.marcacaoNoHorario(s, a.id, e['data'], e['hora'])
@@ -822,7 +879,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
           if (passou(m, r)) throw recusa('horario-passado', 'A consulta já passou.');
           h.situacao = 'C';
           const lista = s.confirmacoes.get(m.id) ?? [];
-          lista.unshift({ resultado: 2, canal: 'telefone', em: new Date().toISOString(), por: login });
+          lista.unshift({ resultado: 'confirmado', canal: 'telefone', em: new Date().toISOString(), por: login });
           s.confirmacoes.set(m.id, lista);
         } else {
           if (h.situacao && h.situacao !== 'C')
@@ -864,8 +921,6 @@ export class PortaAgendaMemoria implements PortaAgenda {
           s.bloqueios.unshift({
             id: ++s.seq,
             agenda: a.id,
-            nome: a.nome,
-            crm: a.crm,
             inicio: datas[0] as string,
             fim: datas.at(-1) as string,
             horaInicio: null,
@@ -980,43 +1035,42 @@ export class PortaAgendaMemoria implements PortaAgenda {
     }
   }
 
-  async gravarSgh<T>(
-    c: ContextoAgenda,
-    _trilha: unknown,
-    fn: (g: GravadorSghAgenda) => Promise<T>,
-  ): Promise<T> {
+  async gravar<T>(c: ContextoGravacao, fn: (g: GravadorAgenda) => Promise<T>): Promise<T> {
     const s = this.e(c);
-    const g: GravadorSghAgenda = {
+    const login = c.login;
+    const g: GravadorAgenda = {
       planejarEscala: async (r) => {
-        const versao = ++s.seq;
+        const id = ++s.seq;
         const lista = s.planejadas.get(r.agenda) ?? [];
         lista.unshift({
-          versao,
+          id,
           vigenteDesde: r.vigenteDesde,
-          autor: r.usuario,
+          autor: login,
           em: new Date().toISOString(),
-          linhas: [...r.linhas],
+          linhas: r.faixas.map((f) => ({
+            semana: f.diaSemana,
+            duracao: f.duracaoMinutos ? hhmm(f.duracaoMinutos) : '',
+            horaInicio: digitos(f.inicio),
+            horaFim: digitos(f.fim),
+            intervaloInicio: f.intervaloInicio ? digitos(f.intervaloInicio) : '',
+            intervaloFim: f.intervaloFim ? digitos(f.intervaloFim) : '',
+          })),
         });
         s.planejadas.set(r.agenda, lista);
-        return versao;
+        return id;
       },
       cancelarEscalaPlanejada: async (r) => {
         const lista = s.planejadas.get(r.agenda) ?? [];
-        if (!lista.some((x) => x.versao === r.versao))
+        if (!lista.some((x) => x.id === r.id))
           throw recusa('escala-inexistente', 'A escala planejada não existe ou já foi cancelada.');
         s.planejadas.set(
           r.agenda,
-          lista.filter((x) => x.versao !== r.versao),
+          lista.filter((x) => x.id !== r.id),
         );
       },
       gravarConfirmacao: async (r) => {
         const lista = s.confirmacoes.get(r.marcacao) ?? [];
-        lista.unshift({
-          resultado: r.resultado,
-          canal: r.canal,
-          em: new Date().toISOString(),
-          por: r.usuario,
-        });
+        lista.unshift({ resultado: r.resultado, canal: r.canal, em: new Date().toISOString(), por: login });
         s.confirmacoes.set(r.marcacao, lista);
         return ++s.seq;
       },
@@ -1026,7 +1080,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
           id,
           ...r,
           horarios: 0,
-          autor: r.usuario,
+          autor: login,
           criadoEm: new Date().toISOString(),
           ativo: true,
           lista: [],
@@ -1039,20 +1093,19 @@ export class PortaAgendaMemoria implements PortaAgenda {
         b.ativo = false;
       },
       incluirEspera: async (r) => {
+        const [p] = await this.lerPacientes(c, [r.paciente]);
         const id = ++s.seq;
         s.espera.push({
           id,
           paciente: r.paciente,
-          prontuario: r.prontuario,
+          prontuario: p?.prontuario ?? 0,
           agenda: r.agenda,
           especialidade: r.especialidade,
           prioridade: r.prioridade,
           situacao: 'aguardando',
           observacao: r.observacao,
           desde: new Date().toISOString(),
-          ofertaAgenda: null,
-          ofertaData: null,
-          ofertaHora: null,
+          oferta: null,
           marcacao: null,
         });
         return id;
@@ -1060,19 +1113,14 @@ export class PortaAgendaMemoria implements PortaAgenda {
       ofertarEspera: async (r) => {
         const x = s.espera.find((y) => y.id === r.id && ['aguardando', 'ofertado'].includes(y.situacao));
         if (!x) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
-        Object.assign(x, {
-          situacao: 'ofertado',
-          ofertaAgenda: r.agenda,
-          ofertaData: r.data,
-          ofertaHora: r.hora,
-        });
+        Object.assign(x, { situacao: 'ofertado', oferta: { agenda: r.agenda, data: r.data, hora: r.hora } });
       },
       encerrarEspera: async (r) => {
         const x = s.espera.find((y) => y.id === r.id && ['aguardando', 'ofertado'].includes(y.situacao));
         if (!x) throw recusa('espera-encerrada', 'O pedido da lista de espera já foi encerrado.');
         Object.assign(x, { situacao: r.situacao, marcacao: r.marcacao });
       },
-      gravarLigacao: async (r) => {
+      gravarVinculo: async (r) => {
         s.ligacoes.set(r.agenda, {
           agenda: r.agenda,
           profissional: r.profissional,
@@ -1086,14 +1134,14 @@ export class PortaAgendaMemoria implements PortaAgenda {
     return fn(g);
   }
 
-  // ── Leituras ───────────────────────────────────────────────────────────────────────────────────
+  // ── Leituras (tipos neutros) ─────────────────────────────────────────────────────────────────────
 
-  async relogio(): Promise<RelogioLido> {
+  async relogio(): Promise<Relogio> {
     return this.relogioFn();
   }
 
-  private lida(s: Estado, a: AgendaM): AgendaLida {
-    const r = this.relogioFn();
+  private agendaNeutra(s: Estado, a: AgendaM): Agenda {
+    const r = this.rel();
     const futuras = s.horarios
       .filter((h) => h.agenda === a.id && !passou(h, r))
       .map((h) => h.data)
@@ -1101,32 +1149,34 @@ export class PortaAgendaMemoria implements PortaAgenda {
     return {
       id: a.id,
       nome: a.nome,
-      crm: a.crm,
-      ativa: a.ativa,
-      duracao: a.duracao,
-      teleatendimento: a.tele,
+      profissional: null,
+      registroProfissional: a.crm || null,
+      ativa: a.ativa === 'S',
+      duracaoMinutos: minutosOuNull(a.duracao),
+      teleatendimento: a.tele === 'S',
       gradeInicio: futuras[0] ?? null,
       gradeFim: futuras.at(-1) ?? null,
       convenios: a.convenios.length,
       especialidades: a.especialidades.length,
-      unidade: a.unidade ?? 0,
-      tipo: 0,
+      unidade: a.unidade ?? null,
+      categoria: null,
+      versao: 1,
     };
   }
 
   async agendas(c: ContextoAgenda) {
     const s = this.e(c);
-    return s.agendas.map((a) => this.lida(s, a)).sort((x, y) => x.nome.localeCompare(y.nome));
+    return s.agendas.map((a) => this.agendaNeutra(s, a)).sort((x, y) => x.nome.localeCompare(y.nome));
   }
   async agenda(c: ContextoAgenda, id: number) {
     const s = this.e(c);
     const a = s.agendas.find((x) => x.id === id);
-    return a ? this.lida(s, a) : null;
+    return a ? this.agendaNeutra(s, a) : null;
   }
   async conveniosDaAgenda(c: ContextoAgenda, id: number) {
     const s = this.e(c);
     const a = s.agendas.find((x) => x.id === id);
-    const r = this.relogioFn();
+    const r = this.rel();
     return (a?.convenios ?? []).map((cod) => {
       const cv = CONVENIOS_SINTETICOS.find((x) => x.codigo === cod);
       return {
@@ -1167,85 +1217,111 @@ export class PortaAgendaMemoria implements PortaAgenda {
       ],
     };
   }
-  private porNome(s: Estado, nome: string): AgendaM | undefined {
-    return s.agendas.find((a) => a.nome === nome);
+  private faixa(l: LinhaEscalaM): FaixaEscala {
+    const intervalo = !!l.intervaloInicio && l.intervaloInicio !== '0000';
+    return {
+      diaSemana: l.semana,
+      duracaoMinutos: minutosOuNull(l.duracao),
+      inicio: iso(l.horaInicio),
+      fim: iso(l.horaFim),
+      intervaloInicio: intervalo ? iso(l.intervaloInicio) : null,
+      intervaloFim: intervalo ? iso(l.intervaloFim) : null,
+    };
   }
-  async escala(c: ContextoAgenda, nome: string) {
-    const s = this.e(c);
-    const a = this.porNome(s, nome);
-    return a
-      ? [...(s.escala.get(a.id) ?? [])].sort(
-          (x, y) => x.semana - y.semana || x.horaInicio.localeCompare(y.horaInicio),
-        )
-      : [];
+  async escala(c: ContextoAgenda, agenda: number) {
+    return [...(this.e(c).escala.get(agenda) ?? [])]
+      .sort((x, y) => x.semana - y.semana || x.horaInicio.localeCompare(y.horaInicio))
+      .map((l) => this.faixa(l));
   }
-  async geracoes(c: ContextoAgenda, nome: string) {
-    const s = this.e(c);
-    const a = this.porNome(s, nome);
-    return { itens: a ? [...(s.geracoes.get(a.id) ?? [])] : [], truncado: false };
+  async geracoes(c: ContextoAgenda, agenda: number): Promise<GeracaoGrade[]> {
+    return this.e(c)
+      .geracoes.filter((g) => g.agenda === agenda)
+      .map((g) => ({
+        id: g.id,
+        agenda: g.agenda,
+        inicio: g.inicio,
+        fim: g.fim,
+        em: g.em,
+        autor: g.autor,
+        duracaoMinutos: minutosOuNull(g.duracao),
+        diasSemana: [...g.semanas].flatMap((x, i) => (x === 'T' ? [i + 1] : [])),
+        horarios: g.lista.length,
+        revertidaEm: g.revertidaEm,
+      }));
+  }
+  async agendaDaGeracao(c: ContextoAgenda, id: number) {
+    return this.e(c).geracoes.find((g) => g.id === id)?.agenda ?? null;
   }
   async feriados(_c: ContextoAgenda, de: string, ate: string) {
-    const r: { data: string; nome: string }[] = [...FERIADOS];
-    for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++) void a;
-    return r;
+    const r: { data: string; nome: string }[] = [];
+    for (let a = Number(de.slice(0, 4)); a <= Number(ate.slice(0, 4)); a++)
+      for (const f of FERIADOS) r.push({ data: `${a}${f.data.slice(4)}`, nome: f.nome });
+    return r.filter((f) => f.data >= de && f.data <= ate);
   }
-  async horarios(c: ContextoAgenda, nome: string, _crm: number, de: string, ate: string) {
+  private situacaoNoHorario(h: HorarioM, m: MarcacaoM | null): SituacaoMarcacao | null {
+    if (!m && !h.paciente) return null;
+    if (m?.atendido === 'S') return 'realizada';
+    if (h.situacao === 'F') return 'falta';
+    if (h.situacao === 'T') return 'transferida';
+    if (h.situacao === 'A' || m?.senha) return 'chegou';
+    if (h.situacao === 'C') return 'confirmada';
+    return 'marcada';
+  }
+  async horarios(c: ContextoAgenda, agenda: number, de: string, ate: string) {
     const s = this.e(c);
-    const a = this.porNome(s, nome);
-    const itens: HorarioLido[] = s.horarios
-      .filter((h) => h.agenda === a?.id && h.data >= de && h.data <= ate)
+    const itens: Horario[] = s.horarios
+      .filter((h) => h.agenda === agenda && h.data >= de && h.data <= ate)
       .sort((x, y) => `${x.data}${x.hora}`.localeCompare(`${y.data}${y.hora}`))
-      .map((h) => ({
-        data: h.data,
-        hora: h.hora,
-        paciente: h.paciente,
-        livre: h.livre,
-        situacao: h.situacao,
-        tipo: h.tipo,
-        duracao: h.duracao,
-        convenio: h.conv,
-        marcacao: this.marcacaoNoHorario(s, h.agenda, h.data, h.hora)?.id ?? null,
-      }));
+      .map((h) => {
+        const m = this.marcacaoNoHorario(s, h.agenda, h.data, h.hora);
+        return {
+          data: h.data,
+          hora: iso(h.hora),
+          encaixe: h.tipo === 'E',
+          bloqueado: h.livre === 'N',
+          duracaoMinutos: minutosOuNull(h.duracao),
+          marcacao: m?.id ?? null,
+          paciente: h.paciente || null,
+          situacao: this.situacaoNoHorario(h, m),
+          convenio: h.paciente ? h.conv : null,
+        };
+      });
     return { itens, truncado: false };
   }
-  async horasMarcadas(c: ContextoAgenda, nome: string, _crm: number, data: string) {
-    const s = this.e(c);
-    const a = this.porNome(s, nome);
-    return s.marcacoes.filter((m) => m.agenda === a?.id && m.data === data).map((m) => m.hora);
+  async horasMarcadas(c: ContextoAgenda, agenda: number, data: string) {
+    return this.e(c)
+      .marcacoes.filter((m) => m.agenda === agenda && m.data === data)
+      .map((m) => iso(m.hora));
   }
-  private marcacaoLida(s: Estado, m: MarcacaoM): MarcacaoLida {
+  private marcacaoNeutra(s: Estado, m: MarcacaoM): Marcacao {
     const a = s.agendas.find((x) => x.id === m.agenda);
     const h = s.horarios.find((x) => x.agenda === m.agenda && x.data === m.data && x.hora === m.hora);
     return {
       id: m.id,
       agenda: m.agenda,
       nomeAgenda: a?.nome ?? '',
-      crm: a?.crm ?? 0,
       data: m.data,
-      hora: m.hora,
+      hora: iso(m.hora),
       paciente: m.paciente,
       idPaciente: m.idPaciente,
       prontuario: m.pront,
       convenio: m.conv,
       nomeConvenio: CONVENIOS_SINTETICOS.find((x) => x.codigo === m.conv)?.nome ?? null,
       retorno: m.retorno === 'S',
-      atendido: m.atendido,
-      situacaoHorario: h?.situacao ?? '',
       encaixe: h?.tipo === 'E',
-      tpAge: m.tpAge,
-      dataMarcacao: m.dtAge,
-      usuario: m.usuario,
-      temSenha: m.senha,
+      situacao: h ? (this.situacaoNoHorario(h, m) ?? 'marcada') : m.atendido === 'S' ? 'realizada' : 'marcada',
+      canal: m.canal,
+      marcadaEm: m.dtAge,
+      marcadaPor: m.usuario,
     };
   }
-  async marcacoesDaJanela(c: ContextoAgenda, nome: string, _crm: number, de: string, ate: string) {
+  async marcacoesDaJanela(c: ContextoAgenda, agenda: number, de: string, ate: string) {
     const s = this.e(c);
-    const a = this.porNome(s, nome);
     return {
       itens: s.marcacoes
-        .filter((m) => m.agenda === a?.id && m.data >= de && m.data <= ate)
+        .filter((m) => m.agenda === agenda && m.data >= de && m.data <= ate)
         .sort((x, y) => `${x.data}${x.hora}`.localeCompare(`${y.data}${y.hora}`))
-        .map((m) => this.marcacaoLida(s, m)),
+        .map((m) => this.marcacaoNeutra(s, m)),
       truncado: false,
     };
   }
@@ -1255,7 +1331,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
       itens: s.marcacoes
         .filter((m) => m.data === data)
         .sort((x, y) => x.hora.localeCompare(y.hora))
-        .map((m) => this.marcacaoLida(s, m)),
+        .map((m) => this.marcacaoNeutra(s, m)),
       truncado: false,
     };
   }
@@ -1264,8 +1340,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
     const m = s.marcacoes.find((x) => x.id === id);
     return m
       ? {
-          marcacao: this.marcacaoLida(s, m),
-          contato: { telefone: m.fone, celular: m.celular, observacao: m.obs },
+          marcacao: this.marcacaoNeutra(s, m),
+          contato: { telefone: m.fone || null, celular: m.celular || null, observacao: m.obs },
         }
       : null;
   }
@@ -1277,9 +1353,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
       itens: s.marcacoes
         .filter((m) => m.idPaciente === id)
         .sort((x, y) => `${y.data}${y.hora}`.localeCompare(`${x.data}${x.hora}`))
-        .map((m) => this.marcacaoLida(s, m)),
+        .map((m) => this.marcacaoNeutra(s, m)),
       truncado: false,
-      possiveis: [],
       preCadastros: [],
     };
   }
@@ -1288,7 +1363,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
     f: { agendas: readonly number[] | null; de: string; ate: string; limite?: number },
   ) {
     const s = this.e(c);
-    const r = this.relogioFn();
+    const r = this.rel();
     const limite = f.limite ?? 500;
     const todas = s.horarios
       .filter((h) => {
@@ -1312,7 +1387,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
         agenda: h.agenda,
         nomeAgenda: s.agendas.find((x) => x.id === h.agenda)?.nome ?? '',
         data: h.data,
-        hora: h.hora,
+        hora: iso(h.hora),
       })),
     };
   }
@@ -1327,8 +1402,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
     f: {
       de: string;
       ate: string;
-      agendas: readonly string[] | null;
-      motivo?: { codigo: string; texto: string } | null;
+      agendas: readonly number[] | null;
+      motivo?: string | null;
       pagina: number;
       porPagina: number;
     },
@@ -1339,13 +1414,27 @@ export class PortaAgendaMemoria implements PortaAgenda {
         (x) =>
           x.canceladoEm >= f.de &&
           x.canceladoEm <= f.ate &&
-          (!f.agendas || f.agendas.includes(x.agenda)) &&
-          (!f.motivo ||
-            x.motivoCodigo === f.motivo.codigo ||
-            (x.motivoCodigo === null && x.motivo.startsWith(f.motivo.texto))),
+          (!f.agendas || f.agendas.includes(x.agendaId)) &&
+          (!f.motivo || x.motivoCodigo === f.motivo),
       )
       .sort((x, y) => y.protocolo - x.protocolo);
-    return { total: todos.length, itens: todos.slice((f.pagina - 1) * f.porPagina, f.pagina * f.porPagina) };
+    const itens: Cancelamento[] = todos
+      .slice((f.pagina - 1) * f.porPagina, f.pagina * f.porPagina)
+      .map((x) => ({
+        protocolo: x.protocolo,
+        agenda: x.agendaId,
+        nomeAgenda: x.agenda,
+        data: x.data,
+        hora: iso(x.hora),
+        paciente: x.paciente,
+        canceladoEm: x.canceladoEm,
+        horaCancelamento: iso(x.horaCancelamento),
+        canceladoPor: x.canceladoPor,
+        motivo: x.motivo,
+        motivoCodigo: x.motivoCodigo,
+        solicitante: x.solicitante,
+      }));
+    return { total: todos.length, itens };
   }
   async indicadores(c: ContextoAgenda, de: string, ate: string): Promise<ContagensIndicadores> {
     const s = this.e(c);
@@ -1380,8 +1469,8 @@ export class PortaAgendaMemoria implements PortaAgenda {
       if (m.atendido === 'S') x.c++;
       ant.set(k, x);
     }
-    const canal = new Map<number, number>();
-    for (const m of ms) canal.set(m.tpAge, (canal.get(m.tpAge) ?? 0) + 1);
+    const canal = new Map<string, number>();
+    for (const m of ms) canal.set(m.canal, (canal.get(m.canal) ?? 0) + 1);
     return {
       ocupacao: [...porAgenda.entries()]
         .filter(([, v]) => v.h > 0)
@@ -1398,7 +1487,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
         cancelados: s.cancelamentos.filter((x) => x.data >= de && x.data <= ate).length,
         encaixes: hs.filter((h) => h.tipo === 'E').length,
       },
-      porCanal: [...canal.entries()].map(([tpAge, marcados]) => ({ tpAge, marcados })),
+      porCanal: [...canal.entries()].map(([k, marcados]) => ({ canal: k, marcados })),
     };
   }
   async pacientes(c: ContextoAgenda, ids: readonly number[]): Promise<PacienteDaAgenda[]> {
@@ -1408,40 +1497,50 @@ export class PortaAgendaMemoria implements PortaAgenda {
       prontuario: p.prontuario,
     }));
   }
-  async marcacoesExt(c: ContextoAgenda, ids: readonly number[]) {
+  async complementos(c: ContextoAgenda, ids: readonly number[]) {
     const s = this.e(c);
     return new Map([...s.ext.entries()].filter(([k]) => ids.includes(k)));
-  }
-  async agendaDaGeracao(c: ContextoAgenda, id: number) {
-    return this.e(c).geracoesNovo.find((g) => g.id === id)?.agenda ?? null;
-  }
-  async geracoesDoNovo(c: ContextoAgenda, agenda: number) {
-    return this.e(c).geracoesNovo.filter((g) => g.agenda === agenda);
   }
   async bloqueios(
     c: ContextoAgenda,
     f: { agenda?: number | null; ativos?: boolean; de?: string | null; ate?: string | null },
-  ) {
-    return this.e(c).bloqueios.filter(
-      (b) =>
-        (!f.agenda || b.agenda === f.agenda) &&
-        (!f.ativos || b.ativo) &&
-        (!f.de || !f.ate || (b.inicio <= f.ate && b.fim >= f.de)),
-    );
+  ): Promise<BloqueioAgenda[]> {
+    const s = this.e(c);
+    return s.bloqueios
+      .filter(
+        (b) =>
+          (!f.agenda || b.agenda === f.agenda) &&
+          (!f.ativos || b.ativo) &&
+          (!f.de || !f.ate || (b.inicio <= f.ate && b.fim >= f.de)),
+      )
+      .map((linha) => {
+        const { lista, ...b } = linha;
+        void lista;
+        return { ...b, nomeAgenda: s.agendas.find((a) => a.id === b.agenda)?.nome ?? '' };
+      });
   }
   async horariosDoBloqueio(c: ContextoAgenda, id: number) {
-    return [...(this.e(c).bloqueios.find((b) => b.id === id)?.lista ?? [])];
+    return (this.e(c).bloqueios.find((b) => b.id === id)?.lista ?? []).map((h) => ({
+      data: h.data,
+      hora: iso(h.hora),
+    }));
   }
   async confirmacoes(c: ContextoAgenda, marcacao: number) {
     return this.e(c).confirmacoes.get(marcacao) ?? [];
   }
-  async escalasPlanejadas(c: ContextoAgenda, agenda: number) {
-    return this.e(c).planejadas.get(agenda) ?? [];
+  async escalasPlanejadas(c: ContextoAgenda, agenda: number): Promise<EscalaPlanejada[]> {
+    return (this.e(c).planejadas.get(agenda) ?? []).map((p) => ({
+      id: p.id,
+      vigenteDesde: p.vigenteDesde,
+      autor: p.autor,
+      em: p.em,
+      faixas: p.linhas.map((l) => this.faixa(l)),
+    }));
   }
   async espera(
     c: ContextoAgenda,
     f: { situacoes: readonly string[]; agenda?: number | null; especialidade?: number | null },
-  ) {
+  ): Promise<ItemListaEspera[]> {
     return this.e(c).espera.filter(
       (x) =>
         f.situacoes.includes(x.situacao) &&
@@ -1449,7 +1548,7 @@ export class PortaAgendaMemoria implements PortaAgenda {
         (f.especialidade === null || f.especialidade === undefined || x.especialidade === f.especialidade),
     );
   }
-  async ligacoes(c: ContextoAgenda) {
+  async vinculos(c: ContextoAgenda) {
     return new Map(this.e(c).ligacoes);
   }
   async profissionais() {

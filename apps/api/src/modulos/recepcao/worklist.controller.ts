@@ -3,7 +3,7 @@
 //                                         aguardando autorização (auditado: lista com nomes de pacientes)
 //   GET /api/recepcao/worklist/eventos    canal de eventos (text/event-stream): a senha emitida ou chamada aqui ou na
 //                                         outra ponta (o vigia de 1 a 2 s do M19); só diz "mudou", a tela relê
-// A chave `inicio.worklistRecepcao` (SGH_CFG_LIBERACAO): desligada, 403 `recurso-desligado`. Só leitura: chamar,
+// A chave `inicio.worklistRecepcao` (liberação das funcionalidades): desligada, 403 `recurso-desligado`. Só leitura: chamar,
 // registrar a chegada e abrir o atendimento são as telas do M19 e do M20.
 import { Controller, Get, Inject, Optional, Query, Req, Res } from '@nestjs/common';
 import { CHAVES_INICIO, EVENTOS_AUDITAVEIS, PERMISSOES_INICIO, type WorklistRecepcao } from '@sgh/contratos';

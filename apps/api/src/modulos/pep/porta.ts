@@ -1,31 +1,16 @@
 // Porta do prontuário ao vivo (M15): o que as telas do prontuário leem, independente de onde (a API não escreve
 // SQL; fronteira):
-//   - `legado`: o núcleo do legado (leituras READ ONLY dos repositórios de @sgh/legado; os BLOB materializados
-//     na transação curta de cada leitura; nada é gravado em tabela clínica nem de cadastro);
-//   - `memoria`: a sessão sintética de dev/ci (E2E): registros SINTÉTICOS dos pacientes sintéticos do cadastro
-//     em memória, com o mesmo formato (texto formatado, formulário e documento comprimido); nada vai à cópia;
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo (porta-propria.ts), só leitura;
+//   - `memoria`: a sessão sintética de dev/ci (E2E): registros SINTÉTICOS dos pacientes sintéticos do cadastro;
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-import type {
-  AcessoLido,
-  ConteudoLido,
-  ContextoLido,
-  DefinicaoFormularioLegado,
-  EventoDocumentoLido,
-  ExcecaoAgregadaLida,
-  FiltroAcessos,
-  FiltroRegistrosLegado,
-  FontesLidas,
-  RegistroProntuarioLido,
-  RepresentacaoGravada,
-  RespostaLida,
-} from '@sgh/legado';
+// Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { AcessoLido, ConteudoLido, ContextoLido, DefinicaoFormularioLida, EventoDocumentoLido, ExcecaoAgregadaLida, FiltroAcessos, FiltroRegistros, FontesLidas, RegistroProntuarioLido, RepresentacaoGravada, RespostaLida } from './tipos-pep.js';
 
 export const PORTA_PRONTUARIO = Symbol('PORTA_PRONTUARIO');
 
-export interface ContextoProntuario {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** Contexto da sessão: cliente, estabelecimento e usuário por id, correlação, rede e código do estabelecimento. */
+export type ContextoProntuario = ContextoPorta;
 
 export interface ResumoProntuarioLido {
   readonly modelos: { id: number; codigo: string | null; nome: string | null }[];
@@ -35,11 +20,11 @@ export interface ResumoProntuarioLido {
 }
 
 export interface PortaProntuario {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'proprio' | 'memoria';
   listar(
     c: ContextoProntuario,
     paciente: number,
-    filtro: FiltroRegistrosLegado,
+    filtro: FiltroRegistros,
     pagina: number,
     porPagina: number,
   ): Promise<{ registros: RegistroProntuarioLido[]; haMais: boolean; fontes: Map<number, FontesLidas> }>;
@@ -68,12 +53,12 @@ export interface PortaProntuario {
     modelo: number,
     selo: string,
   ): Promise<RepresentacaoGravada | null>;
-  definicaoModelo(c: ContextoProntuario, modelo: number): Promise<DefinicaoFormularioLegado | null>;
+  definicaoModelo(c: ContextoProntuario, modelo: number): Promise<DefinicaoFormularioLida | null>;
   contexto(c: ContextoProntuario, registro: number): Promise<ContextoLido | null>;
   textos(
     c: ContextoProntuario,
     paciente: number,
-    filtro: Pick<FiltroRegistrosLegado, 'de' | 'ate'>,
+    filtro: Pick<FiltroRegistros, 'de' | 'ate'>,
     teto: number,
   ): Promise<{
     registros: {

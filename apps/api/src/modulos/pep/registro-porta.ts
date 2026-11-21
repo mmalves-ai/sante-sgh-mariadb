@@ -1,39 +1,20 @@
 // Porta dos registros clínicos (M22): o que as telas de registro, rascunho, visualização e administração do PEP
 // leem e gravam, independente de onde (a API não escreve SQL; fronteira):
-//   - `legado`: leituras READ ONLY pelos repositórios de @sgh/legado e as gravações pelo EXECUTOR (receitas
-//     pep.registrarEvolucao, pep.salvarRascunho, pep.descartarRascunho e pep.suspenderEvolucao, com a trilha dupla
-//     e as tabelas SGH_ da prova na mesma transação); em dev sobre a cópia compartilhada, as gravações ficam
-//     recusadas pelo executor só de leitura (como o cadastro do M11);
-//   - `memoria`: a sessão sintética de dev/ci (E2E): modelos, atendimentos, rascunhos e registros SINTÉTICOS em
-//     memória, gravados pelo mesmo gravador de @sgh/dominio-pep (as linhas, o RTF e o XML no formato do banco);
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo (leitura pelo Leitor, gravação pelo Executor);
+//   - `memoria`: a sessão sintética de dev/ci (E2E): modelos, atendimentos, rascunhos e registros SINTÉTICOS;
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 (falha fechada).
-import type {
-  AtendimentoLido,
-  CabecalhoDocumentoLido,
-  CabecalhoRegistroLido,
-  ContextoOperacao,
-  DefinicaoFormularioLegado,
-  DescarteRascunho,
-  GravacaoEvolucao,
-  GravacaoRascunho,
-  LiberacaoConsultada,
-  LinhaRespostaLida,
-  ModeloDoRegistro,
-  ProfissionalDoRegistro,
-  RascunhoLido,
-  RetratosAtuais,
-  SuspensaoEvolucao,
-} from '@sgh/legado';
+// Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import type { AtendimentoLido, CabecalhoDocumentoLido, CabecalhoRegistroLido, DefinicaoFormularioLida, DescarteRascunho, GravacaoEvolucao, GravacaoRascunho, LiberacaoConsultada, LinhaRespostaLida, ModeloDoRegistro, ProfissionalDoRegistro, RascunhoLido, RetratosAtuais, SuspensaoEvolucao } from './tipos-pep.js';
 
 export const PORTA_REGISTRO = Symbol('PORTA_REGISTRO');
 
-export interface ContextoRegistro {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** Contexto da sessão: cliente, estabelecimento e usuário por id, correlação, rede e código do estabelecimento. */
+export type ContextoRegistro = ContextoPorta;
 
 export interface ProvaLida {
-  /** Hash das linhas do legado guardado na gravação (null: registro não gravado pelo novo). */
+  /** Hash do conteúdo guardado na gravação (prova de integridade; null: sem prova). */
   readonly guardado: string | null;
   readonly hashConteudo: string | null;
   /** O mesmo hash recalculado agora. */
@@ -43,10 +24,10 @@ export interface ProvaLida {
 }
 
 export interface PortaRegistro {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'proprio' | 'memoria';
   profissional(c: ContextoRegistro, login: string): Promise<ProfissionalDoRegistro | null>;
   modelos(c: ContextoRegistro): Promise<ModeloDoRegistro[]>;
-  definicao(c: ContextoRegistro, modelo: number): Promise<DefinicaoFormularioLegado | null>;
+  definicao(c: ContextoRegistro, modelo: number): Promise<DefinicaoFormularioLida | null>;
   selo(c: ContextoRegistro, modelo: number): Promise<string>;
   atendimentos(c: ContextoRegistro, paciente: number): Promise<AtendimentoLido[]>;
   retratos(c: ContextoRegistro, atendimento: number, paciente: number): Promise<RetratosAtuais | null>;

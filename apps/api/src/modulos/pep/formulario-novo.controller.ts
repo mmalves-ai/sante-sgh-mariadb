@@ -362,7 +362,7 @@ export class FormularioNovoController {
     if (ponte.ligada) {
       // A ponte ligada exige o executor: a recusa dele (ou o erro ao consultá-lo) não vira publicação só no Sante SGH.
       exigirExecucaoDaPonte(
-        await this.porta.podeGravar(s.porta, operacao, s.login).catch((x: unknown) => {
+        await this.porta.podeGravar(s.porta, operacao).catch((x: unknown) => {
           throw problemaDoCadastro(x);
         }),
       );

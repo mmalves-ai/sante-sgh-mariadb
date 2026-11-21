@@ -1,4 +1,4 @@
-// Serviço da recepção (M19; ficha, seções 4 e 7): monta as telas a partir da porta (legado ou memória) com as regras
+// Serviço da recepção (M19; ficha, seções 4 e 7): monta as telas a partir da porta (própria ou memória) com as regras
 // puras de @sgh/dominio-recepcao: a fila do guichê na ordem de chamada, os eventos possíveis, o painel de chamada sem
 // nome (iniciais no máximo, por parâmetro), o totem, o painel do supervisor (esperas, guichês, mais antigas) e os
 // indicadores (agregados do banco e as esperas que o novo mede). Nenhum SQL aqui (fronteira Nx).
@@ -20,7 +20,6 @@ import {
   ULTIMAS_CHAMADAS_PAINEL,
 } from '@sgh/contratos';
 import {
-  CONFIG_FILA_PADRAO,
   esperaAte,
   esperasPorGuiche,
   esperasPorHora,
@@ -29,32 +28,34 @@ import {
   maisAntigas,
   nomeNaLista,
   usaNomeSocial,
-  ordenarFila,
   resumirEsperas,
   resumirFila,
 } from '@sgh/dominio-recepcao';
 import type {
-  AgendadoLidoLegado,
+  AgendadoRecepcao,
+  DispositivoRecepcao,
   PacienteDaSenha,
-  DispositivoLidoLegado,
-  RecepcaoLidaLegado,
-  SenhaLidaLegado,
-} from '@sgh/legado';
+  Recepcao,
+  SenhaRecepcao,
+} from './tipos.js';
 import type { CentralChamadas, ChamadaInterna } from './chamadas.js';
+import { ordemDosServicos, ordenarCandidatas } from './regra-fila.js';
+import { geradorParaTela, letraDaSenha, prioridadeDaTela, senhaNaTela } from './tela-senha.js';
 import type { ContextoRecepcao, PortaRecepcao } from './porta.js';
 
-export function senhaParaTela(s: SenhaLidaLegado, agora: string, comUsuario: boolean): SenhaLida {
+export function senhaParaTela(s: SenhaRecepcao, agora: string, comUsuario: boolean): SenhaLida {
+  const t = senhaNaTela(s);
   return {
     id: s.id,
     numero: s.numero,
     texto: s.texto,
     gerador: s.gerador,
     servico: s.servico,
-    tipoGerador: s.tipoGerador,
-    prioridade: s.prioridade,
-    grupo: s.grupo,
-    situacao: s.situacao,
-    guiche: s.guiche,
+    tipoGerador: t.tipoGerador,
+    prioridade: t.prioridade,
+    grupo: t.grupo,
+    situacao: t.situacao,
+    guiche: t.guiche,
     usuario: comUsuario ? s.usuario || null : null,
     emitidaEm: s.emitidaEm,
     esperaMinutos: esperaAte(s.emitidaEm, agora),
@@ -69,9 +70,9 @@ export function senhaParaTela(s: SenhaLidaLegado, agora: string, comUsuario: boo
 
 /**
  * As senhas no guichê, a chamada mais recente primeiro: pelo instante da última chamada que o novo mediu
- * (SGH_REC_SENHA_EXT.ULTIMA_CHAMADA_EM); sem medida (chamada pelo outro sistema), a emitida depois vem antes.
+ * (evento de chamada da senha); sem medida (chamada pelo outro sistema), a emitida depois vem antes.
  */
-export function ordenarNoGuiche<T extends Pick<SenhaLidaLegado, 'id' | 'chamadaEm' | 'emitidaEm'>>(
+export function ordenarNoGuiche<T extends Pick<SenhaRecepcao, 'id' | 'chamadaEm' | 'emitidaEm'>>(
   xs: readonly T[],
 ): T[] {
   const chave = (s: T) => s.chamadaEm ?? s.emitidaEm;
@@ -102,7 +103,7 @@ export class ServicoRecepcao {
           ativo: l.ativo,
           encaminha: l.encaminha,
         })),
-        geradores: x.geradores.map((g) => ({ ...g })),
+        geradores: x.geradores.map((g) => geradorParaTela(g)),
         guiches: x.guiches,
       })),
       guichesEmUso: guiches.map((g) => ({
@@ -134,15 +135,16 @@ export class ServicoRecepcao {
     const geradores =
       p.geradores.length > 0 ? p.geradores : (rec?.geradores.filter((g) => g.ativo).map((g) => g.id) ?? []);
     const dos = todas.senhas.filter((s) => geradores.includes(s.gerador));
-    const primeiro = rec?.geradores.find((g) => g.id === geradores[0]);
-    const cfg = primeiro
-      ? { ordem: primeiro.ordem as typeof CONFIG_FILA_PADRAO.ordem, intercalar: primeiro.intercalar }
-      : CONFIG_FILA_PADRAO;
-    const aguardando = ordenarFila(
-      dos.filter((s) => s.situacao === 'G' && s.guiche === 0 && !s.atendida),
-      cfg,
+    // A ordem de chamada é a do cadastro dos serviços (a mesma da operação de chamar); serviços com ordens diferentes
+    // são listados pela chegada (a chamada da próxima, nesse caso, é recusada e a senha é escolhida na lista).
+    const ordem = ordemDosServicos(
+      (rec?.geradores ?? []).filter((g) => geradores.includes(g.id)).map((g) => g.ordem),
     );
-    const tela = (s: SenhaLidaLegado) => senhaParaTela(s, r.agora, false);
+    const aguardando = ordenarCandidatas(
+      dos.filter((s) => s.situacao === 'aguardando' && !s.atendida),
+      ordem.ok ? ordem.ordem : 'chegada',
+    );
+    const tela = (s: SenhaRecepcao) => senhaParaTela(s, r.agora, false);
     const aberto = guiches.some(
       (g) =>
         g.recepcao === p.recepcao && g.local === p.local && g.guiche === p.guiche && g.usuario === p.login,
@@ -159,16 +161,12 @@ export class ServicoRecepcao {
       // ficou no guichê (a do tipo recepção só sai dele com a abertura do atendimento).
       noGuiche: ordenarNoGuiche(
         dos.filter(
-          (s) =>
-            s.guiche === p.guiche &&
-            s.guiche > 0 &&
-            !s.atendida &&
-            (s.situacao === 'G' || s.situacao === 'S'),
+          (s) => s.guiche === p.guiche && !s.atendida && (letraDaSenha(s) === 'G' || letraDaSenha(s) === 'S'),
         ),
       ).map(tela),
-      suspensas: dos.filter((s) => s.situacao === 'S' && !s.atendida && s.guiche !== p.guiche).map(tela),
+      suspensas: dos.filter((s) => letraDaSenha(s) === 'S' && !s.atendida && s.guiche !== p.guiche).map(tela),
       emAtendimento: todas.senhas
-        .filter((s) => s.atendida && (s.situacao === 'A' || s.situacao === 'C'))
+        .filter((s) => s.atendida && (letraDaSenha(s) === 'A' || letraDaSenha(s) === 'C'))
         .map(tela),
       total: dos.length,
       cortada: todas.cortada || aguardando.length > TETO_FILA,
@@ -201,7 +199,7 @@ export class ServicoRecepcao {
   }
 
   /** Nome de tratamento mascarado (nome social quando houver; o sigiloso não mostra nem as letras). */
-  private agendadoParaTela(a: AgendadoLidoLegado, sigiloso: boolean, foto: string | null): AgendadoDoDia {
+  private agendadoParaTela(a: AgendadoRecepcao, sigiloso: boolean, foto: string | null): AgendadoDoDia {
     const ident = { nome: a.paciente, nomeSocial: a.nomeSocial, sigiloso };
     return {
       tipo: a.tipo,
@@ -220,18 +218,18 @@ export class ServicoRecepcao {
 
   // ── Totem ───────────────────────────────────────────────────────────────────────────────────────
 
-  async totemConfig(c: ContextoRecepcao, d: DispositivoLidoLegado): Promise<TotemConfig> {
+  async totemConfig(c: ContextoRecepcao, d: DispositivoRecepcao): Promise<TotemConfig> {
     const recepcoes = await this.porta.recepcoes(c);
     const rec = recepcoes.find((x) => x.id === d.recepcao);
     const servicos = (rec?.geradores ?? [])
-      .filter((g) => g.ativo && (g.tipo === '0' || g.tipo === '5') && g.noTotem)
+      .filter((g) => g.ativo && g.noTotem)
       .filter((g) => d.geradores.length === 0 || d.geradores.includes(g.id))
       .map((g) => ({
         gerador: g.id,
         rotulo: g.rotuloTotem || g.nome,
         letra: g.letra,
         prioritaria: g.prioritaria,
-        recepcao: g.tipo === '0',
+        recepcao: g.tipo === 'atendimento',
       }));
     return {
       nome: d.nome,
@@ -260,14 +258,14 @@ export class ServicoRecepcao {
       servico: s.servico,
       emitidaEm: s.emitidaEm,
       aFrente,
-      prioridade: s.prioridade,
+      prioridade: prioridadeDaTela(s),
       agendamento,
     };
   }
 
   // ── Painel de chamada ───────────────────────────────────────────────────────────────────────────
 
-  private destino(recepcoes: RecepcaoLidaLegado[], c: ChamadaInterna): string {
+  private destino(recepcoes: Recepcao[], c: ChamadaInterna): string {
     const local = recepcoes.flatMap((r) => r.locais).find((l) => l.id === c.local);
     if (c.guiche > 0 && (!local || local.recepcao === c.recepcao)) return `Guichê ${c.guiche}`;
     return local?.descricao ?? 'Recepção';
@@ -275,7 +273,7 @@ export class ServicoRecepcao {
 
   async painel(
     c: ContextoRecepcao,
-    d: DispositivoLidoLegado,
+    d: DispositivoRecepcao,
     mostrarIniciais: boolean,
   ): Promise<PainelChamadas> {
     if (!this.central) throw new Error('Central de chamadas ausente.');
@@ -344,9 +342,11 @@ export class ServicoRecepcao {
     const geradores = recepcoes
       .filter((x) => recepcao === null || x.id === recepcao)
       .flatMap((x) => x.geradores.filter((g) => g.ativo || todas.senhas.some((s) => s.gerador === g.id)));
-    const aguardando = todas.senhas.filter((s) => s.situacao === 'G' && s.guiche === 0 && !s.atendida);
+    const aguardando = todas.senhas
+      .filter((s) => s.situacao === 'aguardando' && !s.atendida)
+      .map((s) => ({ ...s, prioridade: prioridadeDaTela(s) }));
     const filas = geradores.map((g) => {
-      const alvo = g.tempoAlvoMinutos > 0 ? g.tempoAlvoMinutos : tempoAlvoPadrao;
+      const alvo = g.tempoAlvoMinutos ?? tempoAlvoPadrao;
       const f = resumirFila(
         aguardando.filter((s) => s.gerador === g.id),
         r.agora,
@@ -360,7 +360,7 @@ export class ServicoRecepcao {
         ...f,
       };
     });
-    const contar = (f: (s: SenhaLidaLegado) => boolean) => todas.senhas.filter(f).length;
+    const contar = (f: (s: SenhaRecepcao) => boolean) => todas.senhas.filter(f).length;
     return {
       hoje: r.hoje,
       agora: r.agora,
@@ -379,9 +379,9 @@ export class ServicoRecepcao {
       totais: {
         emitidas: todas.senhas.length,
         aguardando: aguardando.length,
-        chamadas: contar((s) => s.guiche > 0 || s.chamadas > 0),
-        liberadas: contar((s) => s.situacao === 'L'),
-        suspensas: contar((s) => s.situacao === 'S'),
+        chamadas: contar((s) => s.guiche !== null || s.chamadas > 0),
+        liberadas: contar((s) => letraDaSenha(s) === 'L'),
+        suspensas: contar((s) => letraDaSenha(s) === 'S'),
         atendidas: contar((s) => s.atendida),
       },
     };

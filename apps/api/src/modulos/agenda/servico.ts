@@ -1,4 +1,4 @@
-// Serviço da agenda de consultas (M17): monta as respostas das telas sobre a porta (legado ou memória) com as regras
+// Serviço da agenda de consultas (M17): monta as respostas das telas sobre a porta (própria ou memória) com as regras
 // puras de @sgh/dominio-agenda — prévia da geração (planejarGrade), grade da semana, busca de vaga com cobertura e
 // alternativas, próximo livre, painel do dia com risco de falta e candidatos, indicadores. Nenhum SQL aqui.
 import { createHash } from 'node:crypto';
@@ -6,7 +6,6 @@ import {
   type AgendaResumo,
   type BuscaVagas,
   CANAIS_MARCACAO,
-  canalDoTpAge,
   type DetalheAgenda,
   type EscalaAgenda,
   type GerarGradeEntrada,
@@ -54,7 +53,17 @@ import {
   turnoDaHora,
   podeDesfazerEncaixe,
 } from '@sgh/dominio-agenda';
-import type { AgendaLida, LigacaoLida, LinhaEscalaLida, MarcacaoExtLida, MarcacaoLida } from '@sgh/legado';
+import type { ComplementoMarcacao, VinculoAgenda } from './tipos.js';
+import {
+  type AgendaVista,
+  canalDoCodigo,
+  LeituraAgenda,
+  type LinhaEscalaVista,
+  duracaoDigitos,
+  linhaEscalaVista,
+  type MarcacaoVista,
+  quatroDigitos,
+} from './visao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { agendaNoEscopo, restrito, unidadeDaAgenda } from './escopo.js';
 import type { ContextoAgenda, PortaAgenda } from './porta.js';
@@ -91,8 +100,8 @@ const normal = (s: string) =>
 
 /** Ligação proposta pelo casamento do nome (a parte depois do hífen) com os profissionais (só quando é única). */
 export function ligacaoDaAgenda(
-  a: Pick<AgendaLida, 'id' | 'nome'> & Partial<Pick<AgendaLida, 'unidade'>>,
-  revisadas: ReadonlyMap<number, LigacaoLida>,
+  a: Pick<AgendaVista, 'id' | 'nome'> & Partial<Pick<AgendaVista, 'unidade'>>,
+  revisadas: ReadonlyMap<number, VinculoAgenda>,
   profissionais: readonly { id: number; nome: string }[],
   especialidades: readonly { codigo: number; nome: string }[],
   lugares: Lugares = SEM_LUGARES,
@@ -100,7 +109,7 @@ export function ligacaoDaAgenda(
   const r = revisadas.get(a.id);
   const { procedimento, profissional } = partesDoNome(a.nome);
   const esp = especialidades.find((e) => normal(e.nome) === normal(procedimento)) ?? null;
-  const cod = unidadeDaAgenda({ unidade: a.unidade ?? 0 }, r);
+  const cod = unidadeDaAgenda({ unidade: a.unidade ?? null }, r);
   const unidade =
     cod === null
       ? null
@@ -137,7 +146,7 @@ export function ligacaoDaAgenda(
   };
 }
 
-export function resumoAgenda(a: AgendaLida, ligacao: LigacaoAgenda): AgendaResumo {
+export function resumoAgenda(a: AgendaVista, ligacao: LigacaoAgenda): AgendaResumo {
   const { procedimento, profissional } = partesDoNome(a.nome);
   return {
     id: a.id,
@@ -157,7 +166,7 @@ export function resumoAgenda(a: AgendaLida, ligacao: LigacaoAgenda): AgendaResum
   };
 }
 
-export function linhaEscala(l: LinhaEscalaLida): LinhaEscalaResposta {
+export function linhaEscala(l: LinhaEscalaVista): LinhaEscalaResposta {
   const sem = l.intervaloInicio === '0000' || l.intervaloInicio === '';
   return {
     semana: l.semana,
@@ -170,12 +179,21 @@ export function linhaEscala(l: LinhaEscalaLida): LinhaEscalaResposta {
   };
 }
 
+/**
+ * Origem dos dados como o contrato da tela ainda a nomeia ('memoria' = sessão sintética; o outro valor = banco do
+ * cliente). Pedido de contrato registrado para o valor neutro.
+ */
+const destinoDaTela = (p: PortaAgenda): 'memoria' | 'legado' => (p.destino === 'memoria' ? 'memoria' : 'legado');
+
 export class ServicoAgenda {
-  constructor(private readonly porta: PortaAgenda) {}
+  private readonly leitura: LeituraAgenda;
+  constructor(private readonly porta: PortaAgenda) {
+    this.leitura = new LeituraAgenda(porta);
+  }
 
   private async contexto(c: ContextoAgenda) {
     const [revisadas, profissionais, opcoes] = await Promise.all([
-      this.porta.ligacoes(c),
+      this.porta.vinculos(c),
       this.porta.profissionais(c),
       this.porta.opcoes(c),
     ]);
@@ -188,22 +206,22 @@ export class ServicoAgenda {
   }
 
   /** A agenda está no escopo da sessão (unidade pela agenda ou pela ligação revisada; tipo pela agenda)? */
-  private noEscopo(c: ContextoAgenda, a: AgendaLida, ligacoes: ReadonlyMap<number, LigacaoLida>): boolean {
+  private noEscopo(c: ContextoAgenda, a: AgendaVista, ligacoes: ReadonlyMap<number, VinculoAgenda>): boolean {
     return agendaNoEscopo(c.escopo, { unidade: unidadeDaAgenda(a, ligacoes.get(a.id)), tipo: a.tipo });
   }
 
   /** IDs das agendas do escopo; null = sem restrição (nada a filtrar). */
   async agendasDoEscopo(c: ContextoAgenda): Promise<Set<number> | null> {
     if (!restrito(c.escopo)) return null;
-    const [todas, ligacoes] = await Promise.all([this.porta.agendas(c), this.porta.ligacoes(c)]);
+    const [todas, ligacoes] = await Promise.all([this.leitura.agendas(c), this.porta.vinculos(c)]);
     return new Set(todas.filter((a) => this.noEscopo(c, a, ligacoes)).map((a) => a.id));
   }
 
   /** A agenda (404 se não existe; 403 se está fora do escopo da sessão). */
-  async exigirAgenda(c: ContextoAgenda, id: number): Promise<AgendaLida> {
-    const a = await this.porta.agenda(c, id);
+  async exigirAgenda(c: ContextoAgenda, id: number): Promise<AgendaVista> {
+    const a = await this.leitura.agenda(c, id);
     if (!a) throw new ErroProblema('nao-encontrado', 404, 'Agenda não encontrada');
-    if (restrito(c.escopo) && !this.noEscopo(c, a, await this.porta.ligacoes(c))) throw foraDoEscopo();
+    if (restrito(c.escopo) && !this.noEscopo(c, a, await this.porta.vinculos(c))) throw foraDoEscopo();
     return a;
   }
 
@@ -216,7 +234,7 @@ export class ServicoAgenda {
 
   /** A marcação, com a agenda dela conferida no escopo (404 se não existe). */
   async exigirMarcacao(c: ContextoAgenda, id: number) {
-    const x = await this.porta.marcacao(c, id);
+    const x = await this.leitura.marcacao(c, id);
     if (!x) throw new ErroProblema('nao-encontrado', 404, 'Marcação não encontrada');
     await this.exigirAgendaDoEscopo(c, x.marcacao.agenda);
     return x;
@@ -224,14 +242,14 @@ export class ServicoAgenda {
 
   /**
    * Escopo das gravações pelo executor: a agenda, o destino ou a marcação da entrada (a geração é resolvida pela
-   * porta). A agenda nova nasce com UNID 0 e TIPO 0 (receita incluirAgenda).
+   * porta). A agenda nova ainda não tem unidade nem categoria: só quem não tem escopo restrito a inclui.
    */
   async exigirEscopoDaEntrada(c: ContextoAgenda, op: string, entrada: unknown): Promise<void> {
     if (!restrito(c.escopo)) return;
     const e = (entrada ?? {}) as Record<string, unknown>;
     const num = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) ? v : null);
     if (op === 'agenda.incluirAgenda') {
-      if (!agendaNoEscopo(c.escopo, { unidade: null, tipo: 0 })) throw foraDoEscopo();
+      if (!agendaNoEscopo(c.escopo, { unidade: null, tipo: null })) throw foraDoEscopo();
       return;
     }
     const agenda = num(e['agenda']);
@@ -245,7 +263,7 @@ export class ServicoAgenda {
     if (agenda === null && destino === null && marcacao === null && geracao === null) throw foraDoEscopo();
   }
 
-  async resumo(c: ContextoAgenda, a: AgendaLida): Promise<AgendaResumo> {
+  async resumo(c: ContextoAgenda, a: AgendaVista): Promise<AgendaResumo> {
     const x = await this.contexto(c);
     return resumoAgenda(a, ligacaoDaAgenda(a, x.revisadas, x.profissionais, x.especialidades, x.lugares));
   }
@@ -260,7 +278,7 @@ export class ServicoAgenda {
       local?: number | null;
     },
   ): Promise<ListaAgendas> {
-    const [todas, x] = await Promise.all([this.porta.agendas(c), this.contexto(c)]);
+    const [todas, x] = await Promise.all([this.leitura.agendas(c), this.contexto(c)]);
     const termo = f.termo ? normal(f.termo) : '';
     const itens = todas
       .filter((a) => this.noEscopo(c, a, x.revisadas))
@@ -280,7 +298,7 @@ export class ServicoAgenda {
       .filter((a) => (f.especialidade ? a.ligacao.especialidade?.codigo === f.especialidade : true))
       .filter((a) => (f.unidade ? a.ligacao.unidade?.codigo === f.unidade : true))
       .filter((a) => (f.local ? a.ligacao.local?.codigo === f.local : true));
-    return { itens, total: itens.length, destino: this.porta.destino };
+    return { itens, total: itens.length, destino: destinoDaTela(this.porta) };
   }
 
   async detalhe(c: ContextoAgenda, id: number): Promise<DetalheAgenda> {
@@ -288,7 +306,7 @@ export class ServicoAgenda {
     const [conv, esp, escala, resumo, profissionais] = await Promise.all([
       this.porta.conveniosDaAgenda(c, id),
       this.porta.especialidadesDaAgenda(c, id),
-      this.porta.escala(c, a.nome, a.crm),
+      this.leitura.escala(c, a),
       this.resumo(c, a),
       this.porta.profissionais(c),
     ]);
@@ -300,17 +318,17 @@ export class ServicoAgenda {
       especialidades: esp,
       escala: escala.map(linhaEscala),
       profissionais: [...profissionais].sort((x, y) => x.nome.localeCompare(y.nome)),
-      destino: this.porta.destino,
+      destino: destinoDaTela(this.porta),
     };
   }
 
   async opcoes(c: ContextoAgenda): Promise<OpcoesAgenda> {
-    const [o, r] = await Promise.all([this.porta.opcoes(c), this.porta.relogio(c)]);
+    const [o, r] = await Promise.all([this.porta.opcoes(c), this.leitura.relogio(c)]);
     return {
-      convenios: o.convenios,
-      especialidades: o.especialidades,
-      locais: o.locais,
-      unidades: o.unidades,
+      convenios: [...o.convenios],
+      especialidades: [...o.especialidades],
+      locais: [...o.locais],
+      unidades: [...o.unidades],
       motivosCancelamento: MOTIVOS_CANCELAMENTO.map((m) => ({ ...m })),
       canais: CANAIS_MARCACAO.map((x) => ({ codigo: x.codigo, rotulo: x.rotulo, aConfirmar: x.aConfirmar })),
       motivosBloqueio: MOTIVOS_BLOQUEIO.map((m) => ({ ...m })),
@@ -322,51 +340,44 @@ export class ServicoAgenda {
 
   async escala(c: ContextoAgenda, id: number): Promise<EscalaAgenda> {
     const a = await this.exigirAgenda(c, id);
-    const [linhas, geracoes, novas, planejadas, resumo] = await Promise.all([
-      this.porta.escala(c, a.nome, a.crm),
-      this.porta.geracoes(c, a.nome, a.crm),
-      this.porta.geracoesDoNovo(c, id),
+    const [linhas, geracoes, planejadas, resumo] = await Promise.all([
+      this.leitura.escala(c, a),
+      this.porta.geracoes(c, id),
       this.porta.escalasPlanejadas(c, id),
       this.resumo(c, a),
     ]);
-    const doNovo = (g: { em: string; hora: string; inicio: string; fim: string }) =>
-      novas.find(
-        (n) => n.dtCriacao === g.em && n.hrCriacao === g.hora && n.inicio === g.inicio && n.fim === g.fim,
-      );
+    const duracaoAgenda = duracaoMinutos(a.duracao);
     return {
       agenda: resumo,
       escala: linhas.map(linhaEscala),
       planejadas: planejadas.map((p) => ({
-        id: p.versao,
+        id: p.id,
         vigenteDesde: p.vigenteDesde,
-        linhas: p.linhas.map(linhaEscala),
+        linhas: p.faixas.map((f) => linhaEscala(linhaEscalaVista(f, duracaoAgenda))),
         autor: p.autor,
         em: p.em,
       })),
-      geracoes: geracoes.itens.map((g) => {
-        const n = g.status === 'C' ? doNovo(g) : undefined;
-        return {
-          id: n?.id ?? null,
-          inicio: g.inicio,
-          fim: g.fim,
-          em: `${g.em} ${formatarHora(g.hora)}`,
-          autor: g.usuario,
-          situacao: g.status === 'E' ? ('exclusao' as const) : ('criacao' as const),
-          duracao: formatarHora(g.duracao) || null,
-          dias: [...g.semanas].flatMap((x, i) => (x === 'T' ? [NOME_DO_DIA[i + 1] ?? ''] : [])),
-          horarios: n?.horarios ?? null,
-          reversivel: n !== undefined && n.revertidaEm === null,
-          revertida: n?.revertidaEm !== null && n?.revertidaEm !== undefined,
-        };
-      }),
-      truncado: geracoes.truncado,
+      geracoes: geracoes.map((g) => ({
+        id: g.id,
+        inicio: g.inicio,
+        fim: g.fim,
+        em: g.em.replace('T', ' ').slice(0, 16),
+        autor: g.autor,
+        situacao: 'criacao' as const,
+        duracao: g.duracaoMinutos ? formatarHora(duracaoDigitos(g.duracaoMinutos)) : null,
+        dias: g.diasSemana.map((d) => NOME_DO_DIA[d] ?? ''),
+        horarios: g.horarios,
+        reversivel: g.revertidaEm === null,
+        revertida: g.revertidaEm !== null,
+      })),
+      truncado: false,
     };
   }
 
   /** Faixas pedidas: as informadas, ou a escala planejada vigente no início, ou o modelo atual da agenda. */
   private async faixasPara(
     c: ContextoAgenda,
-    a: AgendaLida,
+    a: AgendaVista,
     de: string,
     faixas: readonly FaixaEscala[] | null,
   ): Promise<FaixaEscala[]> {
@@ -374,13 +385,15 @@ export class ServicoAgenda {
     const planejadas = (await this.porta.escalasPlanejadas(c, a.id))
       .filter((p) => p.vigenteDesde <= de)
       .sort((x, y) => y.vigenteDesde.localeCompare(x.vigenteDesde));
-    const linhas = planejadas[0]?.linhas ?? (await this.porta.escala(c, a.nome, a.crm));
+    const linhas = planejadas[0]
+      ? planejadas[0].faixas.map((f) => linhaEscalaVista(f))
+      : await this.leitura.escala(c, a);
     return linhas.map((l) => ({
       semana: l.semana,
       inicio: l.horaInicio,
       fim: l.horaFim,
-      intervaloInicio: l.intervaloInicio === '0000' ? null : l.intervaloInicio,
-      intervaloFim: l.intervaloFim === '0000' ? null : l.intervaloFim,
+      intervaloInicio: l.intervaloInicio && l.intervaloInicio !== '0000' ? l.intervaloInicio : null,
+      intervaloFim: l.intervaloFim && l.intervaloFim !== '0000' ? l.intervaloFim : null,
     }));
   }
 
@@ -397,9 +410,9 @@ export class ServicoAgenda {
   ): Promise<{ previa: PreviaGrade; entrada: GerarGradeEntrada }> {
     const a = await this.exigirAgenda(c, p.agenda);
     const [r, feriados, horarios, bloqueios] = await Promise.all([
-      this.porta.relogio(c),
+      this.leitura.relogio(c),
       this.porta.feriados(c, p.de, p.ate),
-      this.porta.horarios(c, a.nome, a.crm, p.de, p.ate),
+      this.leitura.horarios(c, a.id, p.de, p.ate),
       this.porta.bloqueios(c, { agenda: a.id, ativos: true, de: p.de, ate: p.ate }),
     ]);
     const faixas = await this.faixasPara(c, a, p.de, p.faixas);
@@ -429,8 +442,8 @@ export class ServicoAgenda {
           bloqueios: bloqueios.map((b) => ({
             inicio: b.inicio,
             fim: b.fim,
-            horaInicio: b.horaInicio,
-            horaFim: b.horaFim,
+            horaInicio: b.horaInicio ? quatroDigitos(b.horaInicio) : null,
+            horaFim: b.horaFim ? quatroDigitos(b.horaFim) : null,
           })),
           existentes: new Set(horarios.itens.map((h) => `${h.data} ${h.hora}`)),
         },
@@ -482,8 +495,8 @@ export class ServicoAgenda {
     const a = await this.exigirAgenda(c, id);
     const fim = somarDias(inicio, 6);
     const [r, h, resumo] = await Promise.all([
-      this.porta.relogio(c),
-      this.porta.horarios(c, a.nome, a.crm, inicio, fim),
+      this.leitura.relogio(c),
+      this.leitura.horarios(c, a.id, inicio, fim),
       this.resumo(c, a),
     ]);
     const dias = Array.from({ length: 7 }, (_, i) => somarDias(inicio, i)).map((data) => ({
@@ -535,7 +548,7 @@ export class ServicoAgenda {
       local?: number | null;
     },
   ): Promise<BuscaVagas> {
-    const r = await this.porta.relogio(c);
+    const r = await this.leitura.relogio(c);
     const de = f.de && f.de > r.hoje ? f.de : r.hoje;
     const jan = recortarJanela(de, f.ate && f.ate >= de ? f.ate : somarDias(de, 13), JANELA_VAGAS_DIAS);
     const lista = await this.listar(c, { situacao: 'ativas' });
@@ -598,7 +611,7 @@ export class ServicoAgenda {
         truncado: false,
         recusasCobertura: recusas,
       };
-    const v = await this.porta.vagas(c, { agendas: alvo.map((a) => a.id), de: jan.de, ate: jan.ate });
+    const v = await this.leitura.vagas(c, { agendas: alvo.map((a) => a.id), de: jan.de, ate: jan.ate });
     const porId = new Map(alvo.map((a) => [a.id, a]));
     const vagas = v.itens
       .map((x) => {
@@ -617,7 +630,7 @@ export class ServicoAgenda {
       .filter((x) => (f.turno ? x.turno === f.turno : true));
     const semVaga = alvo.filter((a) => !vagas.some((x) => x.agenda === a.id)).map((a) => a.id);
     const proximas = (
-      await this.porta.proximasVagas(c, semVaga, jan.ate, somarDias(r.hoje, HORIZONTE_PROXIMA_DIAS))
+      await this.leitura.proximasVagas(c, semVaga, jan.ate, somarDias(r.hoje, HORIZONTE_PROXIMA_DIAS))
     ).map((x) => ({
       agenda: x.agenda,
       nomeAgenda: x.nomeAgenda,
@@ -636,17 +649,15 @@ export class ServicoAgenda {
   }
 
   resumoMarcacao(
-    m: MarcacaoLida,
-    ext: MarcacaoExtLida | undefined,
+    m: MarcacaoVista,
+    ext: ComplementoMarcacao | undefined,
     r: { hoje: string; hhmm: string },
     mascarar: boolean,
   ): MarcacaoResumo {
     const sinais = { atendido: m.atendido, situacaoHorario: m.situacaoHorario, temSenha: m.temSenha };
     const hhmm = m.hora.padStart(4, '0');
     const acoes = acoesDaMarcacao(sinais, { data: m.data, hora: hhmm }, r);
-    const canal = ext?.canal
-      ? (CANAIS_MARCACAO.find((x) => x.codigo === ext.canal) ?? canalDoTpAge(m.tpAge))
-      : canalDoTpAge(m.tpAge);
+    const canal = canalDoCodigo(ext?.canal ?? m.canal);
     return {
       id: m.id,
       agenda: m.agenda ?? 0,
@@ -676,10 +687,10 @@ export class ServicoAgenda {
   /** Marcações futuras da agenda com o convênio (um ano à frente, teto da leitura), nome mascarado. */
   async marcadosComConvenio(c: ContextoAgenda, id: number, convenio: number): Promise<MarcadosComConvenio> {
     const a = await this.exigirAgenda(c, id);
-    const r = await this.porta.relogio(c);
-    const l = await this.porta.marcacoesDaJanela(c, a.nome, a.crm, r.hoje, somarDias(r.hoje, 366));
+    const r = await this.leitura.relogio(c);
+    const l = await this.leitura.marcacoesDaJanela(c, a.id, r.hoje, somarDias(r.hoje, 366));
     const itens = l.itens.filter((m) => m.convenio === convenio);
-    const ext = await this.porta.marcacoesExt(
+    const ext = await this.porta.complementos(
       c,
       itens.map((m) => m.id),
     );
@@ -697,18 +708,18 @@ export class ServicoAgenda {
     agenda: number | null,
     toleranciaMin: number,
   ): Promise<PainelDia> {
-    const r = await this.porta.relogio(c);
-    let a: AgendaLida | null = null;
-    let lista: MarcacaoLida[];
+    const r = await this.leitura.relogio(c);
+    let a: AgendaVista | null = null;
+    let lista: MarcacaoVista[];
     if (agenda) {
       a = await this.exigirAgenda(c, agenda);
-      lista = (await this.porta.marcacoesDaJanela(c, a.nome, a.crm, data, data)).itens;
+      lista = (await this.leitura.marcacoesDaJanela(c, a.id, data, data)).itens;
     } else {
-      lista = (await this.porta.marcacoesDoDia(c, data)).itens;
+      lista = (await this.leitura.marcacoesDoDia(c, data)).itens;
       const ids = await this.agendasDoEscopo(c);
       if (ids) lista = lista.filter((m) => m.agenda !== null && ids.has(m.agenda));
     }
-    const ext = await this.porta.marcacoesExt(
+    const ext = await this.porta.complementos(
       c,
       lista.map((m) => m.id),
     );
@@ -749,8 +760,8 @@ export class ServicoAgenda {
   async detalheMarcacao(c: ContextoAgenda, id: number): Promise<MarcacaoDetalhe> {
     const x = await this.exigirMarcacao(c, id);
     const [r, ext, conf] = await Promise.all([
-      this.porta.relogio(c),
-      this.porta.marcacoesExt(c, [id]),
+      this.leitura.relogio(c),
+      this.porta.complementos(c, [id]),
       this.porta.confirmacoes(c, id),
     ]);
     const e = ext.get(id);
@@ -762,8 +773,8 @@ export class ServicoAgenda {
       marcadaPor: x.marcacao.usuario,
       remarcadaDe: e?.remarcadaDe ?? null,
       confirmacoes: conf.map((k) => ({
-        resultado: RESULTADOS_CONFIRMACAO.find((y) => y.id === k.resultado)?.codigo ?? String(k.resultado),
-        rotulo: RESULTADOS_CONFIRMACAO.find((y) => y.id === k.resultado)?.rotulo ?? String(k.resultado),
+        resultado: k.resultado,
+        rotulo: RESULTADOS_CONFIRMACAO.find((y) => y.codigo === k.resultado)?.rotulo ?? k.resultado,
         em: k.em,
         por: k.por,
       })),
@@ -773,29 +784,28 @@ export class ServicoAgenda {
 
   async marcacoesDoPaciente(c: ContextoAgenda, id: number) {
     const [r, l0, ids] = await Promise.all([
-      this.porta.relogio(c),
-      this.porta.marcacoesDoPaciente(c, id),
+      this.leitura.relogio(c),
+      this.leitura.marcacoesDoPaciente(c, id),
       this.agendasDoEscopo(c),
     ]);
-    const doEscopo = (m: MarcacaoLida) => !ids || (m.agenda !== null && ids.has(m.agenda));
+    const doEscopo = (m: MarcacaoVista) => !ids || (m.agenda !== null && ids.has(m.agenda));
     const itens = l0.itens.filter(doEscopo);
-    const possiveis = l0.possiveis.filter(doEscopo);
     const nomesNoEscopo = ids
-      ? new Set((await this.porta.agendas(c)).filter((a) => ids.has(a.id)).map((a) => a.nome))
+      ? new Set((await this.leitura.agendas(c)).filter((a) => ids.has(a.id)).map((a) => a.nome))
       : null;
-    const ext = await this.porta.marcacoesExt(
+    const ext = await this.porta.complementos(
       c,
-      [...itens, ...possiveis].map((m) => m.id),
+      itens.map((m) => m.id),
     );
     return {
       paciente: id,
       marcacoes: itens.map((m) => this.resumoMarcacao(m, ext.get(m.id), r, false)),
       truncado: l0.truncado,
-      // Possíveis: o nome mascarado (a pessoa confere pelo detalhe, auditado, antes de tratar como do paciente).
-      possiveis: possiveis.map((m) => this.resumoMarcacao(m, ext.get(m.id), r, true)),
+      // Toda marcação do banco próprio tem o paciente (ou o pré-cadastro): não há "possíveis" a conferir pelo nome.
+      possiveis: [],
       preCadastros: l0.preCadastros
-        .filter((p) => !nomesNoEscopo || nomesNoEscopo.has(p.agenda))
-        .map((p) => ({ nomeAgenda: p.agenda, data: p.data })),
+        .filter((p) => !nomesNoEscopo || nomesNoEscopo.has(p.nomeAgenda))
+        .map((p) => ({ nomeAgenda: p.nomeAgenda, data: p.data })),
     };
   }
 
@@ -824,7 +834,7 @@ export class ServicoAgenda {
       ocupacao: [...ocupacao(x.ocupacao, 'especialidade').linhas],
       absenteismoPorAntecedencia: ant.map((l) => ({ ...l, chave: rot[l.chave] ?? l.chave })),
       absenteismoPorEspecialidade: [...absenteismo(x.porAgenda, true).linhas],
-      porCanal: x.porCanal.map((k) => ({ canal: canalDoTpAge(k.tpAge).rotulo, marcados: k.marcados })),
+      porCanal: x.porCanal.map((k) => ({ canal: canalDoCodigo(k.canal).rotulo, marcados: k.marcados })),
     };
   }
 

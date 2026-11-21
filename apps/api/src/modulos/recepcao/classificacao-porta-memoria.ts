@@ -1,17 +1,17 @@
 // Porta da classificação de risco em MEMÓRIA (M44, etapa 1): a sessão sintética de dev/ci (E2E). Protocolo,
-// classificações, sinais e avisos SINTÉTICOS, por estabelecimento, com as mesmas recusas das gravações SGH_ (sucessão
+// classificações, sinais e avisos SINTÉTICOS, por estabelecimento, com as mesmas recusas das gravações da porta própria (sucessão
 // única por atendimento ou anterior, versão seguinte do mesmo tipo, aviso único por chave). O vínculo sintético sai do
 // login: ENFERMEIRO (CBO 223505, COREN ativo), TECNICO (322205), MEDICO (225125); a recepção e os demais, sem vínculo
 // clínico. O relógio é o mesmo da recepção e do atendimento em memória (hora de Brasília, sem fuso). Nada vai à cópia.
 import type {
-  ProtocoloPacienteLido,
-  VersaoGerenciadoLida,
-  ClassificacaoLida,
-  CorLegadoLida,
+  ClassificacaoRegistrada,
+  CorAnterior,
   OpcaoPrioridadeVista,
-  SinaisSgh,
-  VersaoProtocoloLida,
-} from '@sgh/legado';
+  ProtocoloPaciente,
+  SinaisVitais,
+  VersaoGerenciado,
+  VersaoProtocolo,
+} from './tipos.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
@@ -23,20 +23,20 @@ import { relogioDoEstabelecimento } from './porta-memoria.js';
 
 interface Estado {
   seq: number;
-  versoes: (VersaoProtocoloLida & { conteudo: unknown })[];
-  classificacoes: ClassificacaoLida[];
-  sinais: { cabecalho: string; em: string; sinais: SinaisSgh }[];
+  versoes: (VersaoProtocolo & { conteudo: unknown })[];
+  classificacoes: ClassificacaoRegistrada[];
+  sinais: { cabecalho: string; em: string; sinais: SinaisVitais }[];
   avisos: Set<string>;
   /** M44 (etapa 3): as definições publicadas e os protocolos dos pacientes (com os eventos). */
-  gerenciados: VersaoGerenciadoLida[];
-  protocolos: ProtocoloPacienteLido[];
+  gerenciados: VersaoGerenciado[];
+  protocolos: ProtocoloPaciente[];
 }
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não gravado', detalhe, { codigo });
 
-/** A tabela de cores antiga como a cópia pc tem (configuração, sem pessoa). */
-const CORES_LEGADO: CorLegadoLida[] = [
+/** As cores dos registros anteriores (configuração sintética, sem pessoa). */
+const CORES_ANTERIORES: CorAnterior[] = [
   { id: 1, codigoProtocolo: 1, classificacao: 'EMERGENTE', corOriginal: 'clRed', corHex: '#ff0000' },
   { id: 2, codigoProtocolo: 2, classificacao: 'MUITO URGENTE', corOriginal: '$000080FF', corHex: '#ff8000' },
   { id: 3, codigoProtocolo: 3, classificacao: 'URGENTE', corOriginal: 'clYellow', corHex: '#ffff00' },
@@ -101,7 +101,7 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
     );
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     c: ContextoClassificacao,
     _trilha: unknown,
     fn: (g: GravadorClassificacao) => Promise<T>,
@@ -279,17 +279,16 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
         if (!this.opcoes.trilha) throw new Error('trilha indisponível na sessão sintética');
         await this.opcoes.trilha.registrar({
           evento: l.evento,
-          rede: l.rede,
-          hospital: l.hospital,
-          usuario: l.usuario,
+          rede: c.rede,
+          hospital: c.hospital,
+          usuario: l.login,
           estacao: l.estacao ?? '',
           correlacao: l.correlacao,
           recurso: l.recurso,
           resultado: 'sucesso',
-          ...(l.tabelaAlvo ? { tabelaAlvo: l.tabelaAlvo } : {}),
-          ...(l.idAlvo ? { idAlvo: l.idAlvo } : {}),
-          ...(l.chaveNaturalAlvo ? { chaveNaturalAlvo: l.chaveNaturalAlvo } : {}),
-          ...(l.idPaciente ? { paciente: l.idPaciente } : {}),
+          tabelaAlvo: l.tabela,
+          ...(l.id !== null ? { idAlvo: String(l.id) } : {}),
+          ...(l.paciente ? { paciente: l.paciente } : {}),
         });
       },
     };
@@ -324,7 +323,7 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
     return this.e(c).versoes.map((v) => {
       const r: Partial<typeof v> = { ...v };
       delete r.conteudo;
-      return r as VersaoProtocoloLida;
+      return r as VersaoProtocolo;
     });
   }
 
@@ -349,7 +348,7 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
     c: ContextoClassificacao,
     itens: readonly { cabecalho: string; desde: string }[],
   ) {
-    const r = new Map<string, SinaisSgh>();
+    const r = new Map<string, SinaisVitais>();
     for (const i of itens) {
       const s = await this.sinaisRecentes(c, i.cabecalho, i.desde);
       if (s) r.set(i.cabecalho, s);
@@ -360,7 +359,7 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
   async sinaisRecentes(c: ContextoClassificacao, cab: string, desde: string) {
     const l = this.e(c).sinais.filter((x) => x.cabecalho === cab && x.em >= desde);
     if (l.length === 0) return null;
-    const r: { -readonly [K in keyof SinaisSgh]: SinaisSgh[K] } = {
+    const r: { -readonly [K in keyof SinaisVitais]: SinaisVitais[K] } = {
       pas: null,
       pad: null,
       fc: null,
@@ -372,7 +371,7 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
       glasgow: null,
     };
     for (const x of [...l].reverse())
-      for (const [k, v] of Object.entries(x.sinais) as [keyof SinaisSgh, number | null][])
+      for (const [k, v] of Object.entries(x.sinais) as [keyof SinaisVitais, number | null][])
         if (r[k] === null && v !== null) r[k] = v;
     return r;
   }
@@ -385,8 +384,8 @@ export class PortaClassificacaoMemoria implements PortaClassificacao {
     return OPCOES_VISTAS;
   }
 
-  async coresLegado() {
-    return CORES_LEGADO;
+  async coresAnteriores() {
+    return CORES_ANTERIORES;
   }
 
   async avisosGravados(c: ContextoClassificacao, chaves: readonly string[]) {

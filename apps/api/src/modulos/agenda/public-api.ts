@@ -1,8 +1,9 @@
-// Módulo agenda de consultas da API (M17): agendas, escala, grade, marcação, encaixe, remarcação, confirmação,
-// falta, painel do dia, cancelamentos, bloqueios, lista de espera e indicadores.
+// Módulo da agenda de consultas (M17). Outros módulos falam com este só por aqui.
 export { AgendasController } from './agendas.controller.js';
 export { ApoioAgendaController } from './apoio.controller.js';
 export { MarcacoesController } from './marcacoes.controller.js';
-export { PORTA_AGENDA, type PortaAgenda } from './porta.js';
-export { portaAgendaIndisponivel, portaAgendaLegado } from './porta-legado.js';
-export { PortaAgendaMemoria, relogioLocal } from './porta-memoria.js';
+export { PORTA_AGENDA, type ContextoAgenda, type ContextoGravacao, type PortaAgenda } from './porta.js';
+export { PortaAgendaPropria } from './porta-propria.js';
+export { PortaAgendaMemoria, relogioCivil, relogioLocal } from './porta-memoria.js';
+export { moduloAgenda, portaAgendaIndisponivel } from './modulo.js';
+export type * from './tipos.js';

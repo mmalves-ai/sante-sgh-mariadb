@@ -1,10 +1,13 @@
 // Quebra de vidro (M06, regra 8; cap-08 §8.5): só perfil assistencial com conselho (acesso.emergencia.
 // solicitar); aviso na tela, motivo de lista, justificativa, REAUTENTICAÇÃO (a senha vai junto e é conferida
-// no legado), prazo configurável (ACESSO_EMERGENCIA_MINUTOS), registro em SGH_ACESSO_EMERGENCIA e na
-// SGH_TRILHA na mesma transação, e alerta ao Auditor pela fila `email`: com o núcleo real, o alerta vai à
-// SGH_OUTBOX na MESMA transação (o relay do worker publica; fila fora não perde o alerta); com a fonte
-// sintética (dev/ci), direto à fila. O paciente é conferido em RICADPAC (ID inexistente: 404). A revisão é
-// obrigatória (tela do M10). Em dev/ci com a fonte sintética, o registro é em memória (nada grava na cópia).
+// na sessão), prazo configurável (ACESSO_EMERGENCIA_MINUTOS), registro em acesso_emergencial com a trilha na
+// mesma transação (Executor do @sgh/nucleo), e alerta ao Auditor pela fila `email`: com o banco do cliente, o
+// alerta vai ao outbox (integracao_mensagem) na MESMA transação (o relay do worker publica; fila fora não perde o
+// alerta); com a fonte sintética (dev/ci), direto à fila. O paciente é conferido no cadastro (id inexistente: 404).
+// A revisão é obrigatória (tela do M10). Em dev/ci com a fonte sintética, o registro é em memória.
+// Melhoria: o motivo é o do domínio do cliente (motivo_acesso_emergencial) e o registro guarda o IP de quem abriu e a
+// estação de trabalho cadastrada com esse IP; a trilha sai com o código auditável da quebra de vidro.
+// Melhoria: a recusa de negócio da abertura (motivo inexistente, sessão sem conta) responde como recusa, não como 503.
 // A rota de demonstração (só AMBIENTE=dev) abre o "prontuário" de um paciente SINTÉTICO de recurso novo
 // (vínculo sempre exigido), para provar a decisão em passos e o diálogo no E2E até o PEP (M15).
 import { Body, Controller, Get, HttpCode, Inject, NotFoundException, Param, Post, Req } from '@nestjs/common';
@@ -23,7 +26,8 @@ import {
   recusaDaEmergencia,
   type VinculoAssistencialPort,
 } from '@sgh/dominio-acesso';
-import { ErroPacienteInexistente, type LinhaTrilha } from '@sgh/legado';
+import { definirOperacao, ErroOperacao, type Executor, type Leitor, recusa } from '@sgh/nucleo';
+import { z } from 'zod';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/auditoria.interceptor.js';
@@ -38,17 +42,22 @@ import { ALERTA_AUDITOR, type AlertaAuditor } from './alerta.js';
 import { SERVICO_SESSAO } from './acesso.controller.js';
 
 export const REGISTRO_EMERGENCIA = Symbol('REGISTRO_EMERGENCIA');
+
+/** O paciente pedido não existe no cadastro (a rota responde 404). */
+export class ErroPacienteInexistente extends Error {
+  override readonly name = 'ErroPacienteInexistente';
+}
 export const VINCULO_ASSISTENCIAL = Symbol('VINCULO_ASSISTENCIAL');
 
 export interface AberturaRegistrada {
   readonly id: string;
   readonly inicio: Date;
   readonly fim: Date;
-  /** O alerta ao Auditor já está na SGH_OUTBOX da mesma transação (núcleo real). */
+  /** O alerta ao Auditor já está no outbox da mesma transação (banco do cliente). */
   readonly alertaNaOutbox?: boolean;
 }
 
-/** Onde a abertura fica: SGH_ACESSO_EMERGENCIA + SGH_TRILHA (núcleo) ou memória (fonte sintética). */
+/** Onde a abertura fica: acesso_emergencial com a trilha (banco do cliente) ou memória (fonte sintética). */
 export interface RegistroEmergencia {
   abrir(a: {
     rede: string;
@@ -61,6 +70,8 @@ export interface RegistroEmergencia {
     justificativa: string;
     minutos: number;
     estacao: string;
+    /** IP de quem abriu (null numa sessão "como": o hospital não vê o IP do suporte). */
+    enderecoIp?: string | null;
     correlacao: string;
   }): Promise<AberturaRegistrada>;
   vigente(hospital: string, login: string, idPaciente: number): Promise<{ id: string; fim: Date } | null>;
@@ -80,7 +91,7 @@ export class RegistroEmergenciaMemoria implements RegistroEmergencia {
   }[] = [];
   constructor(private readonly trilha: RegistradorTrilha) {}
   async abrir(a: Parameters<RegistroEmergencia['abrir']>[0]): Promise<AberturaRegistrada> {
-    // Só o paciente sintético da demonstração existe na fonte sintética (como RICADPAC no núcleo real).
+    // Só o paciente sintético da demonstração existe na fonte sintética.
     if (a.idPaciente !== PACIENTE_DEMONSTRACAO.id) throw new ErroPacienteInexistente();
     const inicio = new Date();
     const fim = fimDaEmergencia(inicio, a.minutos);
@@ -96,7 +107,7 @@ export class RegistroEmergenciaMemoria implements RegistroEmergencia {
       recurso: 'acesso.emergencia',
       resultado: 'sucesso',
       paciente: a.idPaciente,
-      tabelaAlvo: 'SGH_ACESSO_EMERGENCIA',
+      tabelaAlvo: 'acesso_emergencial',
       idAlvo: id,
     });
     this.aberturas.push({
@@ -140,7 +151,7 @@ export class EmergenciaController {
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
   ) {}
 
-  /** Reautenticação: sessão real, CSRF e a senha conferida de novo no legado (SBIS-07). */
+  /** Reautenticação: sessão real, CSRF e a senha conferida de novo (SBIS-07). */
   private async reautenticar(req: RequisicaoAutorizada, senha: string): Promise<number> {
     const id = this.resolvedor.idSessao(req);
     if (!this.servico || !id || !req.sgh?.real)
@@ -171,7 +182,7 @@ export class EmergenciaController {
 
   @Post('emergencias')
   @AuditadoNoHandler(
-    'SGH_ACESSO_EMERGENCIA, SGH_TRILHA e SGH_OUTBOX na mesma transação (registrarEmergencia)',
+    'acesso_emergencial, trilha e outbox na mesma transação (Executor do núcleo)',
   )
   @HttpCode(201)
   @Permissao(PERMISSOES_ACESSO.emergenciaSolicitar)
@@ -222,11 +233,19 @@ export class EmergenciaController {
         justificativa: r.data.justificativa,
         minutos: prazoEmergencia(Number(process.env['ACESSO_EMERGENCIA_MINUTOS'] ?? '')),
         estacao: estacaoDaRequisicao(req),
+        enderecoIp: req.sghComo ? null : (req.ip ?? '').replace(/[^0-9a-fA-F:.]/g, '').slice(0, 45) || null,
         correlacao: correlacaoDaRequisicao(req, 'emergencia'),
       });
     } catch (e) {
       if (e instanceof ErroPacienteInexistente)
         throw new ErroProblema('nao-encontrado', 404, 'Paciente não encontrado');
+      // Recusa de negócio (motivo inexistente, sessão sem conta, entrada): a resposta é a recusa, não a trilha fora.
+      if (e instanceof ErroOperacao && e.problema.status >= 400 && e.problema.status < 500) {
+        const p = e.problema;
+        const tipo =
+          p.status === 404 ? 'nao-encontrado' : p.status === 400 ? 'entrada-invalida' : p.status === 403 ? 'sem-permissao' : 'recusa-de-negocio';
+        throw new ErroProblema(tipo, p.status, p.title, p.detail, { ...(p.codigo ? { codigo: p.codigo } : {}) });
+      }
       throw new ErroProblema(
         'trilha-indisponivel',
         503,
@@ -289,7 +308,7 @@ export class EmergenciaController {
         correlacao: 'demonstracao',
         recurso: 'pep.prontuario',
         resultado: 'sucesso',
-        tabelaAlvo: 'SGH_DEMONSTRACAO',
+        tabelaAlvo: 'demonstracao',
         idAlvo: String(id),
       });
     } catch {
@@ -303,65 +322,148 @@ export class EmergenciaController {
   }
 }
 
+/** O que o registro usa do NucleoProprio (os testes trocam). */
 export interface NucleoEmergencia {
-  registrarEmergencia(
-    ctx: { rede: string; hospital: string; traceId: string },
-    abertura: {
-      rede: string;
-      hospital: string;
-      idUsuario: number;
-      login: string;
-      idPaciente: number;
-      atendimento: number | null;
-      motivo: string;
-      justificativa: string;
-      minutos: number;
-    },
-    linha: Omit<LinhaTrilha, 'idAlvo' | 'tabelaAlvo'>,
-  ): Promise<{ id: string; inicio: Date; fim: Date; trilha: string }>;
-  emergenciaVigente(
-    codigo: string,
-    login: string,
-    idPaciente: number,
-  ): Promise<{ id: string; fim: Date } | null>;
+  lerSomente<T>(contexto: { readonly cliente: string; readonly correlacao: string }, fn: (l: Leitor) => Promise<T>): Promise<T>;
+  criarExecutor(): Executor;
 }
 
-/** Registro no banco do estabelecimento: SGH_ACESSO_EMERGENCIA e SGH_TRILHA na mesma transação. */
-export class RegistroEmergenciaLegado implements RegistroEmergencia {
-  constructor(private readonly nucleo: NucleoEmergencia) {}
+/**
+ * Ponto do outbox do alerta ao Auditor (o formato de ponto do núcleo não aceita hífen). A carga já é a do job
+ * 'alerta-emergencia' que o EmailService do worker confere; o relay migrado mapeia este ponto para esse job (pedido
+ * do lote 01-04 na saída).
+ */
+export const PONTO_ALERTA_EMERGENCIA = 'acesso.emergencia.aberta';
+/**
+ * O relay já entrega este ponto à fila de e-mail? Enquanto for false, a abertura devolve alertaNaOutbox: false e o
+ * controlador enfileira o alerta direto (o Auditor nunca fica sem aviso). Vira true junto com o mapeamento no relay.
+ */
+export const RELAY_ENTREGA_ALERTA_EMERGENCIA = false;
+
+const ABRIR_EMERGENCIA = definirOperacao({
+  // O nome da operação é o código auditável da quebra de vidro: é o que o histórico de acessos ao prontuário procura.
+  nome: EVENTOS_AUDITAVEIS.emergenciaAberta.codigo,
+  tabelas: ['acesso_emergencial'],
+  entrada: z
+    .object({
+      rede: z.string().max(64),
+      hospital: z.string().min(1).max(64),
+      paciente: z.number().int().positive(),
+      atendimento: z.number().int().positive().nullable(),
+      motivo: z.string().min(1).max(30),
+      justificativa: z.string().min(1).max(2000),
+      inicio: z.date(),
+      fim: z.date(),
+      enderecoIp: z.string().max(45).nullable(),
+    })
+    .strict(),
+  gravar: async (tx, e, ctx) => {
+    const p = await tx.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [e.paciente]);
+    if (!p) throw recusa('paciente-inexistente', 'O paciente não existe no cadastro.');
+    const m = await tx.uma('SELECT id FROM motivo_acesso_emergencial WHERE codigo = ? AND ativo', [e.motivo]);
+    if (!m) throw recusa('motivo-inexistente', 'O motivo do acesso de emergência não está cadastrado.');
+    // Estação de trabalho cadastrada com o IP de quem abriu, no estabelecimento da sessão (null quando não há).
+    const estacao = e.enderecoIp
+      ? await tx.uma(
+          `SELECT id FROM estacao_trabalho WHERE estabelecimento_id = ? AND endereco_ip = ? AND ativo AND excluido_em IS NULL
+           ORDER BY id LIMIT 1`,
+          [ctx.estabelecimento, e.enderecoIp],
+        )
+      : null;
+    const id = await tx.incluir('acesso_emergencial', {
+      estabelecimento_id: ctx.estabelecimento,
+      usuario_id: ctx.usuario,
+      paciente_id: e.paciente,
+      atendimento_id: e.atendimento,
+      motivo_acesso_emergencial_id: m['id'],
+      justificativa: e.justificativa,
+      inicio_em: e.inicio,
+      fim_em: e.fim,
+      situacao: 'ativo',
+      alerta_enviado: true,
+      endereco_ip: e.enderecoIp,
+      estacao_trabalho_id: estacao ? estacao['id'] : null,
+    });
+    return { id };
+  },
+  alvo: (_e, r) => ({ tabela: 'acesso_emergencial', id: Number(r.id) }),
+  // Só ids e códigos no evento, no formato que o EmailService do worker confere (o texto é montado do lado de lá).
+  eventos: (e, r, ctx) => [
+    {
+      tipo: PONTO_ALERTA_EMERGENCIA,
+      carga: {
+        rede: e.rede,
+        hospital: e.hospital,
+        idEmergencia: String(r.id),
+        idUsuario: String(ctx.usuario),
+        motivo: e.motivo,
+        inicio: e.inicio.toISOString(),
+        fim: e.fim.toISOString(),
+      },
+    },
+  ],
+});
+
+/** Registro no banco do cliente: acesso_emergencial, a trilha e o alerta no outbox, na mesma transação. */
+export class RegistroEmergenciaPropria implements RegistroEmergencia {
+  private readonly executor: Executor;
+  constructor(
+    private readonly nucleo: NucleoEmergencia,
+    private readonly cliente: string,
+  ) {
+    this.executor = nucleo.criarExecutor();
+  }
+
+  private ids(codigo: string, login: string, paciente: number) {
+    return this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'emergencia' }, async (l) => ({
+      estabelecimento: await l.uma('SELECT id FROM estabelecimento WHERE codigo = ? AND excluido_em IS NULL', [codigo]),
+      usuario: await l.uma('SELECT id FROM usuario WHERE login = ? AND excluido_em IS NULL', [login]),
+      paciente: await l.uma('SELECT id FROM paciente WHERE id = ? AND excluido_em IS NULL', [paciente]),
+    }));
+  }
+
   async abrir(a: Parameters<RegistroEmergencia['abrir']>[0]): Promise<AberturaRegistrada> {
-    const r = await this.nucleo.registrarEmergencia(
-      { rede: a.rede, hospital: a.hospital, traceId: a.correlacao },
+    const x = await this.ids(a.hospital, a.login, a.idPaciente);
+    if (!x.paciente) throw new ErroPacienteInexistente();
+    if (!x.estabelecimento || !x.usuario) throw recusa('sessao-sem-conta', 'A sessão não tem conta no cliente.');
+    const inicio = new Date();
+    const fim = fimDaEmergencia(inicio, a.minutos);
+    const r = await this.executor.executar(
+      ABRIR_EMERGENCIA,
+      this.cliente,
       {
         rede: a.rede,
         hospital: a.hospital,
-        idUsuario: a.idUsuario,
-        login: a.login,
-        idPaciente: a.idPaciente,
+        paciente: a.idPaciente,
         atendimento: a.atendimento,
         motivo: a.motivo,
         justificativa: a.justificativa,
-        minutos: a.minutos,
+        inicio,
+        fim,
+        enderecoIp: a.enderecoIp ?? null,
       },
       {
-        rede: a.rede,
-        hospital: a.hospital,
-        usuario: a.login,
-        evento: EVENTOS_AUDITAVEIS.emergenciaAberta.codigo,
-        recurso: 'acesso.emergencia',
-        operacao: 'acesso.abrirEmergencia',
-        chaveNaturalAlvo: null,
-        resultado: 'sucesso',
-        estacao: a.estacao.slice(0, 80),
-        correlacao: a.correlacao,
-        origem: a.estacao,
-        idPaciente: a.idPaciente,
-        atendimento: a.atendimento,
+        cliente: this.cliente,
+        estabelecimento: Number(x.estabelecimento['id']),
+        usuario: Number(x.usuario['id']),
+        correlacao: a.correlacao.slice(0, 64),
+        ...(a.enderecoIp ? { enderecoIp: a.enderecoIp } : {}),
+        chaveIdempotencia: `emergencia-${a.correlacao}`.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 80),
       },
     );
-    return { id: r.id, inicio: r.inicio, fim: r.fim, alertaNaOutbox: true };
+    return { id: String(r.resultado.id), inicio, fim, alertaNaOutbox: RELAY_ENTREGA_ALERTA_EMERGENCIA };
   }
-  vigente(hospital: string, login: string, idPaciente: number) {
-    return this.nucleo.emergenciaVigente(hospital, login, idPaciente);
+
+  async vigente(hospital: string, login: string, idPaciente: number) {
+    const l = await this.nucleo.lerSomente({ cliente: this.cliente, correlacao: 'emergencia-vigente' }, (x) =>
+      x.uma(
+        `SELECT a.id, a.fim_em FROM acesso_emergencial a JOIN estabelecimento e ON e.id = a.estabelecimento_id
+         JOIN usuario u ON u.id = a.usuario_id
+         WHERE e.codigo = ? AND u.login = ? AND a.paciente_id = ? AND a.situacao = 'ativo' AND a.excluido_em IS NULL
+           AND a.fim_em > ? ORDER BY a.fim_em DESC LIMIT 1`,
+        [hospital, login, idPaciente, new Date()],
+      ),
+    );
+    return l ? { id: String(l['id']), fim: l['fim_em'] instanceof Date ? l['fim_em'] : new Date(String(l['fim_em'])) } : null;
   }
 }

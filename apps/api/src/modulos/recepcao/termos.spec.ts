@@ -5,10 +5,15 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { esquemaTermosDoPaciente } from '@sgh/contratos';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import {
+  chavesIniciaisSinteticas,
+  fonteConfiguracaoMemoria,
+  parametrosIniciaisSinteticos,
+  prerequisitosIniciaisSinteticos,
+} from '../config/public-api.js';
+import { criarAppRecepcao } from './app-recepcao.spec-util.js';
 import { PortaRecepcaoMemoria } from './porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
@@ -17,13 +22,18 @@ const recepcao = new PortaRecepcaoMemoria(
   { estado: () => 'verde' },
   { agora: () => new Date('2026-10-21T11:30:00Z') },
 );
+// A configuração sintética (liberação e parâmetros) montada aqui: o parâmetro é definido pela fonte, como a tela de
+// parâmetros da administração faria (o módulo de configuração não é montado neste teste).
+const configuracao = fonteConfiguracaoMemoria(trilha, {
+  chavesIniciais: chavesIniciaisSinteticas,
+  prerequisitosIniciais: prerequisitosIniciaisSinteticos,
+  parametrosIniciais: parametrosIniciaisSinteticos,
+});
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, recepcao, vigia: null });
-  await app.init();
-  await app.getHttpAdapter().getInstance().ready();
+  app = await criarAppRecepcao(env, { trilha, recepcao, configuracao });
 });
 afterAll(async () => {
   await app.close();
@@ -114,19 +124,35 @@ describe('termos de consentimento (W1-04)', () => {
   });
 
   it('com recepcao.termos.exigir ligado, o termo faltando dá bloqueio suave', async () => {
-    const admin = await entrar('SINT.ADMIN');
-    const p = await app.inject({
-      method: 'PUT',
-      url: '/api/administracao/parametros/recepcao.termos.exigir',
-      headers: h(admin),
-      payload: {
-        nivel: 'estabelecimento',
-        alvo: 'aa',
-        valor: 'sim',
-        justificativa: 'teste do bloqueio suave',
+    await configuracao.definirParametro(
+      {
+        rede: 'rede-sintetica',
+        hospital: 'aa',
+        fechar: [],
+        nova: {
+          chave: 'recepcao.termos.exigir',
+          nivel: 'estabelecimento',
+          alvo: 'aa',
+          valor: 'sim',
+          vigenteDesde: '2026-01-01T00:00:00',
+          vigenteAte: null,
+          justificativa: 'teste do bloqueio suave',
+          autor: 'SINT.ADMIN',
+        },
       },
-    });
-    expect(p.statusCode, p.body).toBe(200);
+      {
+        rede: 'rede-sintetica',
+        hospital: 'aa',
+        usuario: 'SINT.ADMIN',
+        evento: 'config.parametro.definido',
+        recurso: 'config.parametro',
+        operacao: 'definirParametro',
+        chaveNaturalAlvo: 'recepcao.termos.exigir',
+        resultado: 'sucesso',
+        estacao: null,
+        correlacao: 'teste-termos-exigir',
+      },
+    );
     const s = await entrar('SINT.SENHAS');
     expect((await get(s, '/paciente?prontuario=900001&tipo=consulta')).json()).toMatchObject({
       exigir: true,

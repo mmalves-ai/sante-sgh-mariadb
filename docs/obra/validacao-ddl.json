@@ -1,15 +1,15 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3506,
-  "catalogo": 3500,
+  "tabelas_criadas": 3523,
+  "catalogo": 3517,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
-  "colunas_id_sem_fk": 19,
-  "fks": 13506,
+  "colunas_id_sem_fk": 23,
+  "fks": 13541,
   "gatilhos": 0,
   "plataforma_erros": 0,
   "total_erros": 0
@@ -32,6 +32,9 @@
    "titulo_referencia_id sem FK",
    "documento_referencia_id sem FK"
   ],
+  "chave_busca_nome": [
+   "registro_id sem FK"
+  ],
   "lancamento_contabil": [
    "entidade_origem_id sem FK"
   ],
@@ -40,6 +43,9 @@
   ],
   "regra_alerta_destinatario": [
    "destino_id sem FK"
+  ],
+  "usuario_profissional": [
+   "usuario_vigente_id sem FK"
   ],
   "lancamento_origem_evento": [
    "entidade_origem_id sem FK"
@@ -57,8 +63,12 @@
   "valor_codigo_regulacao": [
    "registro_interno_id sem FK"
   ],
+  "profissional_ocupacao": [
+   "principal_profissional_id sem FK"
+  ],
   "ocupacao_leito_observacao": [
-   "leito_vigente_id sem FK"
+   "leito_vigente_id sem FK",
+   "atendimento_vigente_id sem FK"
   ],
   "sugestao_notificacao_incidente": [
    "fato_id sem FK"

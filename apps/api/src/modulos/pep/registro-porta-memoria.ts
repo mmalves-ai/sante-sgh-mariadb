@@ -4,31 +4,13 @@
 // sintéticos do cadastro (1001 e 1003). O que se grava é o que o adaptador gravaria (as linhas, o RTF e o XML do
 // gravador do domínio), guardado em memória por estabelecimento; nada vai à cópia. Marca "SINTETICO".
 import { createHash } from 'node:crypto';
-import {
-  type AtendimentoLido,
-  type CabecalhoDocumentoLido,
-  type CabecalhoRegistroLido,
-  type DefinicaoFormularioLegado,
-  ErroOperacao,
-  type GravacaoEvolucao,
-  type GravacaoRascunho,
-  type LinhaGravacao,
-  type LinhaRespostaLida,
-  type ModeloDoRegistro,
-  type ProfissionalDoRegistro,
-  type RascunhoLido,
-} from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { type AtendimentoLido, type CabecalhoDocumentoLido, type CabecalhoRegistroLido, type DefinicaoFormularioLida, type GravacaoEvolucao, type GravacaoRascunho, type LinhaGravacao, type LinhaRespostaLida, type ModeloDoRegistro, type ProfissionalDoRegistro, type RascunhoLido, loginDaOperacao } from './tipos-pep.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import type { ContextoRegistro, PortaRegistro, ProvaLida } from './registro-porta.js';
 
-/** Contexto da gravação em memória (o mesmo do executor: rede, estabelecimento, login, rastreio, estação). */
-interface CtxMemoria {
-  readonly usuarioLegado: string;
-  readonly rede?: string;
-  readonly traceId?: string;
-  readonly estacao?: string;
-  readonly reautenticadoEm?: number;
-}
+/** Contexto da gravação em memória: o mesmo da operação do núcleo. */
+type CtxMemoria = ContextoOperacao;
 
 const M = 'SINTETICO';
 
@@ -221,12 +203,12 @@ function dfm(p: PerguntaSintetica, idResposta: number, ids: readonly number[]): 
   return l.join('\r\n');
 }
 
-function definicaoSintetica(modelo: number): DefinicaoFormularioLegado | null {
+function definicaoSintetica(modelo: number): DefinicaoFormularioLida | null {
   const m = MODELOS[modelo];
   if (!m) return null;
   const base = modelo * 100;
-  const respostas: DefinicaoFormularioLegado['respostas'] = [];
-  const componentes: DefinicaoFormularioLegado['componentes'] = [];
+  const respostas: DefinicaoFormularioLida['respostas'] = [];
+  const componentes: DefinicaoFormularioLida['componentes'] = [];
   m.perguntas.forEach((p, i) => {
     const idPergunta = base + i;
     const idResp = (base + i) * 10;
@@ -371,9 +353,9 @@ export class PortaRegistroMemoria implements PortaRegistro {
       evento,
       rede: c.rede,
       hospital: c.hospital,
-      usuario: ctx.usuarioLegado,
-      estacao: (ctx.estacao ?? '').slice(0, 80),
-      correlacao: (ctx.traceId ?? evento).slice(0, 64),
+      usuario: loginDaOperacao(ctx),
+      estacao: '',
+      correlacao: (ctx.correlacao || evento).slice(0, 64),
       recurso: 'pep.evolucao',
       resultado: 'sucesso',
       tabelaAlvo: alvo.tabela,
@@ -521,6 +503,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
       tipoComposicao: 2,
       nomeTipoComposicao: m.tipo,
       especialidades: [],
+      aposentado: false,
       usoRecente: 120,
     }));
   }
@@ -541,6 +524,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
         id: paciente * 10 + 1,
         numero: 31337,
         tipo: 'internacao',
+        aberto: true,
         entrada: `${hoje}T07:00:00.000`,
         unidade: `UNIDADE ${M}`,
         leito: '101A',
@@ -550,7 +534,8 @@ export class PortaRegistroMemoria implements PortaRegistro {
       {
         id: paciente * 10 + 2,
         numero: 31336,
-        tipo: 'externo',
+        tipo: 'pronto_atendimento',
+        aberto: false,
         entrada: '2026-05-05T10:00:00.000',
         unidade: `PRONTO ATENDIMENTO ${M}`,
         leito: null,
@@ -763,7 +748,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
   }
 
   async registrar(c: ContextoRegistro, e: GravacaoEvolucao, ctx: CtxMemoria) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     if (e.corrige !== undefined) {
       const o = this.regs(c.hospital).find((x) => x.id === e.corrige);
       if (!o || o.paciente !== e.paciente)
@@ -813,13 +798,13 @@ export class PortaRegistroMemoria implements PortaRegistro {
       hash: e.hashConteudo,
       fluxo: e.fluxo ?? null,
       supervisao: e.supervisao ?? null,
-      login: ctx.usuarioLegado,
+      login: loginDaOperacao(ctx),
     });
     return { registro: id, trilha: null };
   }
 
   async salvarRascunho(c: ContextoRegistro, e: GravacaoRascunho, ctx: CtxMemoria) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     // Como o legado: salvar de novo cria a versão encadeada (o mesmo lançamento) e arquiva a anterior.
     const anterior = e.rascunho
       ? this.rascunhoAberto(c, e.rascunho, e.cbo, {
@@ -858,7 +843,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
     e: { rascunho: number; versao: string; cbo: number },
     ctx: CtxMemoria,
   ) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     const x = this.rasc(c.hospital).find((y) => y.id === e.rascunho);
     if (!x)
       throw new ErroOperacao(
@@ -884,7 +869,7 @@ export class PortaRegistroMemoria implements PortaRegistro {
     e: { registro: number; cbo: number; justificativa: string; comoSuporte?: boolean | undefined },
     ctx: CtxMemoria,
   ) {
-    this.conferirCbo(e.cbo, ctx.usuarioLegado);
+    this.conferirCbo(e.cbo, loginDaOperacao(ctx));
     if (ctx.reautenticadoEm === undefined)
       throw new ErroOperacao(
         401,

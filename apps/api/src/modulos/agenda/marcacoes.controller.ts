@@ -7,7 +7,7 @@
 //   POST /api/agenda/consultas/marcacoes/:id/cancelar            agenda.cancelarConsulta (motivo padronizado)
 //   POST /api/agenda/consultas/marcacoes/:id/desfazer-encaixe    agenda.desfazerEncaixe
 //   POST /api/agenda/consultas/marcacoes/:id/remarcar            agenda.remarcarConsulta (transferir ou liberar)
-//   POST /api/agenda/consultas/marcacoes/:id/confirmar           confirmado: agenda.confirmarConsulta; demais: SGH_
+//   POST /api/agenda/consultas/marcacoes/:id/confirmar           confirmado: agenda.confirmarConsulta; demais: tentativa
 //   POST /api/agenda/consultas/marcacoes/:id/falta               agenda.registrarFalta
 //   POST /api/agenda/consultas/remarcar-lote                     remarcação em lote (uma transação por item)
 //   GET  /api/agenda/consultas/dia?data&agenda                   painel do dia (estados, risco, candidatos a falta)
@@ -52,6 +52,7 @@ import { corpo, dataDaConsulta } from './agendas.controller.js';
 import { ApoioAgenda, ctxAgenda } from './apoio.js';
 import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { ServicoAgenda } from './servico.js';
+import { LeituraAgenda } from './visao.js';
 
 const POR_PAGINA = 50;
 const inteiroOuNulo = (v: string | undefined) => {
@@ -64,6 +65,7 @@ const inteiroOuNulo = (v: string | undefined) => {
 export class MarcacoesController {
   private readonly apoio: ApoioAgenda;
   private readonly servico: ServicoAgenda;
+  private readonly leitura: LeituraAgenda;
   constructor(
     @Inject(PORTA_AGENDA) private readonly porta: PortaAgenda,
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
@@ -72,6 +74,7 @@ export class MarcacoesController {
   ) {
     this.apoio = new ApoioAgenda(porta, trilha, configuracao, cache);
     this.servico = new ServicoAgenda(porta);
+    this.leitura = new LeituraAgenda(porta);
   }
 
   /** Parâmetro do novo resolvido para a sessão (unidade, estabelecimento, rede). */
@@ -144,7 +147,7 @@ export class MarcacoesController {
   private async exigirAntecedencia(s: SessaoCadastro, data: string, hora: string): Promise<void> {
     const ant = await this.parametro(s, 'agenda.antecedenciaMinimaMinutos');
     if (ant <= 0) return;
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const agora = Date.parse(`${r.hoje}T${r.hhmm.slice(0, 2)}:${r.hhmm.slice(2)}:00Z`);
     const alvo = Date.parse(`${data}T${hora.slice(0, 2)}:${hora.slice(2)}:00Z`);
     if (alvo - agora < ant * 60_000)
@@ -172,9 +175,9 @@ export class MarcacoesController {
     }
     const a = await this.servico.exigirAgenda(ctxAgenda(s), agenda);
     const [r, h, marcadas, limite] = await Promise.all([
-      this.porta.relogio(ctxAgenda(s)),
-      this.porta.horarios(ctxAgenda(s), a.nome, a.crm, data, data),
-      this.porta.horasMarcadas(ctxAgenda(s), a.nome, a.crm, data),
+      this.leitura.relogio(ctxAgenda(s)),
+      this.leitura.horarios(ctxAgenda(s), a.id, data, data),
+      this.leitura.horasMarcadas(ctxAgenda(s), a.id, data),
       this.parametro(s, 'agenda.encaixesPorTurno'),
     ]);
     return avaliarEncaixe(
@@ -216,7 +219,7 @@ export class MarcacoesController {
   @Auditar('agenda.marcacao.lida')
   async detalhe(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<MarcacaoDetalhe> {
     const m = await this.servico.detalheMarcacao(ctxAgenda(sessaoDe(req)), idDaRota(id));
-    req.sghAlvo = { tabelaAlvo: 'REPACAGD', idAlvo: String(m.id) };
+    req.sghAlvo = { tabelaAlvo: 'marcacao_horario', idAlvo: String(m.id) };
     return m;
   }
 
@@ -265,7 +268,7 @@ export class MarcacoesController {
   @HttpCode(200)
   @Permissao('agenda.marcacao.confirmar')
   @AuditadoNoHandler(
-    'confirmado pelo executor; as demais tentativas em SGH_ com a SGH_TRILHA na mesma transação',
+    'confirmado pelo executor; as demais tentativas com a trilha na mesma transação',
   )
   async confirmar(
     @Param('id') id: string,
@@ -279,22 +282,17 @@ export class MarcacoesController {
       return this.apoio.executar(s, 'agenda.confirmarConsulta', { marcacao }, 'Consulta confirmada.');
     const m = await this.servico.exigirMarcacao(ctxAgenda(s), marcacao);
     const r = RESULTADOS_CONFIRMACAO.find((x) => x.codigo === p.resultado) ?? RESULTADOS_CONFIRMACAO[0];
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaConfirmacaoRegistrada.codigo,
       'agenda.consulta',
-      { tabela: 'SGH_AGE_CONFIRMACAO', id: String(marcacao), paciente: m.marcacao.idPaciente },
+      { tabela: 'confirmacao_marcacao', id: String(marcacao), paciente: m.marcacao.idPaciente },
       (g) =>
         g.gravarConfirmacao({
           marcacao,
-          nome: m.marcacao.nomeAgenda,
-          crm: m.marcacao.crm,
-          data: m.marcacao.data,
-          hora: m.marcacao.hora,
-          resultado: r.id,
+          resultado: r.codigo,
           canal: p.canal,
           observacao: p.observacao ?? null,
-          usuario: s.login,
         }),
     );
     return {
@@ -366,7 +364,7 @@ export class MarcacoesController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<PainelDia> {
     const s = sessaoDe(req);
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const tol = await this.parametro(s, 'agenda.toleranciaFaltaMinutos');
     return this.servico.painelDia(
       ctxAgenda(s),
@@ -381,7 +379,7 @@ export class MarcacoesController {
   @Auditar('agenda.marcacao.lida')
   async doPaciente(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<MarcacoesPaciente> {
     const pac = idDaRota(id);
-    req.sghAlvo = { tabelaAlvo: 'RICADPAC', idAlvo: String(pac) };
+    req.sghAlvo = { tabelaAlvo: 'paciente', idAlvo: String(pac) };
     return this.servico.marcacoesDoPaciente(ctxAgenda(sessaoDe(req)), pac);
   }
 
@@ -392,16 +390,16 @@ export class MarcacoesController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ListaCancelamentos> {
     const s = sessaoDe(req);
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const jan = this.servico.janelaCancelamentos(dataDaConsulta(q['de']), dataDaConsulta(q['ate']), r.hoje);
     const pg = pagina(q['pagina']);
     const c = ctxAgenda(s);
-    let agendas: string[] | null = null;
-    if (q['agenda']) agendas = [(await this.servico.exigirAgenda(c, idDaRota(q['agenda']))).nome];
+    let agendas: number[] | null = null;
+    if (q['agenda']) agendas = [(await this.servico.exigirAgenda(c, idDaRota(q['agenda']))).id];
     else {
-      // Escopo restrito: só os cancelamentos das agendas do escopo (pelo nome, a chave do cancelamento).
+      // Escopo restrito: só os cancelamentos das agendas do escopo.
       const ids = await this.servico.agendasDoEscopo(c);
-      if (ids) agendas = (await this.porta.agendas(c)).filter((a) => ids.has(a.id)).map((a) => a.nome);
+      if (ids) agendas = [...ids];
     }
     const motivoFiltro = motivoCancelamento((q['motivo'] ?? '').trim().slice(0, 40));
     const l =
@@ -411,14 +409,14 @@ export class MarcacoesController {
             de: jan.de,
             ate: jan.ate,
             agendas,
-            motivo: motivoFiltro ? { codigo: motivoFiltro.codigo, texto: motivoFiltro.texto } : null,
+            motivo: motivoFiltro ? motivoFiltro.codigo : null,
             pagina: pg,
             porPagina: POR_PAGINA,
           });
     return {
       itens: l.itens.map((c) => ({
         protocolo: c.protocolo,
-        agenda: c.agenda,
+        agenda: c.nomeAgenda,
         data: c.data,
         hora: c.hora.length === 4 ? `${c.hora.slice(0, 2)}:${c.hora.slice(2)}` : c.hora,
         paciente: nomeMascarado(c.paciente),

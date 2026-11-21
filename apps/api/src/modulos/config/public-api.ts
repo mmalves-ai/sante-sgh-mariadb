@@ -1,14 +1,6 @@
-// Módulo config (M02: coexistência com o legado). Outros módulos falam com este só por aqui.
-export { CoexistenciaController } from './coexistencia.controller.js';
-export { FONTE_COEXISTENCIA, type FonteCoexistencia } from './fonte.js';
-export { AssinaturasController } from './assinaturas.controller.js';
-export {
-  caminhosPadrao,
-  FONTE_ASSINATURAS,
-  fonteArquivosAssinatura,
-  type FonteAssinaturas,
-} from './assinaturas.js';
-// M04: conferência de gravação e saúde das conexões; contagens do executor do processo.
+// Módulo config (configuração por estabelecimento, CRUD genérico e saúde da implantação). Outros módulos falam com
+// este só por aqui.
+// M04: saúde das conexões; contagens do executor do processo.
 export { GravacaoController } from './gravacao.controller.js';
 export {
   criarFonteGravacao,
@@ -19,21 +11,20 @@ export {
 } from './gravacao.js';
 // M08: CRUD genérico, parâmetros hierárquicos e funcionalidades por estabelecimento (POL-3).
 export { DominiosController, problemaDaGravacao } from './dominios.controller.js';
-// Revisão do W0-02: o despertar da vigia de reconciliação dos cadastros.
-export {
-  INTERVALO_VIGIA_RECONCILIACAO_MS,
-  VIGIA_RECONCILIACAO,
-  VigiaReconciliacaoCrud,
-} from './vigia-reconciliacao.js';
 export {
   FONTE_DOMINIOS,
   type FonteDominios,
+  FonteDominiosPropria,
   fonteDominiosIndisponivel,
-  fonteDominiosLegado,
   fonteDominiosMemoria,
 } from './dominios-fonte.js';
 export { ParametrosController } from './parametros.controller.js';
-export { CAMINHO_CATALOGO_LIBERACAO, LiberacaoController } from './liberacao.controller.js';
+export { LiberacaoController } from './liberacao.controller.js';
+export {
+  CATALOGO_OPERACOES,
+  type CatalogoOperacoesLiberacao,
+  catalogoOperacoesProprio,
+} from './catalogo-operacoes.js';
 export {
   type AvaliadorLigarSetor,
   CRITERIO_LIGAR_SETOR,
@@ -42,15 +33,19 @@ export {
   type MapaRegra1,
 } from './criterio-ligar.js';
 export {
+  type ChaveLiberacao,
+  destinoNoContrato,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
   fonteConfiguracaoIndisponivel,
-  fonteConfiguracaoLegado,
+  type PrerequisitoRecurso,
+  type TrilhaConfig,
   chavesIniciaisSinteticas,
   parametrosIniciaisSinteticos,
   prerequisitosIniciaisSinteticos,
   fonteConfiguracaoMemoria,
 } from './configuracao-fonte.js';
+export { FonteConfiguracaoPropria } from './configuracao-propria.js';
 export {
   CACHE_CONFIG,
   CacheConfig,
@@ -58,9 +53,9 @@ export {
   TTL_CONFIG_NOVO_S,
   TTL_CONVENIOS_S,
 } from './cache-config.js';
-// M38: onda 0 (situação das telas, vigilância diária e sondas da implantação).
+// M38: onda 0 (situação das telas e sondas da implantação).
 export { Onda0Controller } from './onda0.controller.js';
-export { PORTA_ONDA0, type PortaOnda0, portaOnda0Legado, portaOnda0Memoria } from './onda0.js';
+export { PORTA_ONDA0, type PortaOnda0, portaOnda0Memoria, portaOnda0Propria } from './onda0.js';
 // M36: painel da homologação sobre a cópia (gerado por `pnpm homologacao:roteiro`).
 export { HomologacaoController } from './homologacao.controller.js';
 export {

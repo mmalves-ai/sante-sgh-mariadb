@@ -1,75 +1,58 @@
-// Partida comum dos testes de integração do M27 na API sobre a cópia compartilhada: só com a trava da cópia, AMBIENTE=dev
-// e loopback; toda gravação em transação DESFEITA (ROLLBACK). Os logins e os pacientes da cópia ficam só em memória
-// (nunca impressos); a saída é só de contagens e tempos.
-import { resolve } from 'node:path';
-import {
-  ambienteEfetivo,
-  caminhoArquivoAmbiente,
-  type Executor,
-  fonteCatalogoArquivo,
-  type Leitor,
-  lerCodigos,
-  lerConfiguracaoNucleo,
-  NucleoLegado,
-  travaDaCopiaSegura,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+// Partida comum dos testes de integração da API sobre o banco PRÓPRIO (MariaDB) de um cliente de TESTE (F2.2): o
+// NucleoProprio, o Executor e o primeiro estabelecimento do cliente. Nada de dado real: o cliente de teste só tem
+// massa sintética, e a saída é só de contagens e tempos. SGH_NUCLEO_SEM_BANCO=1 desliga (os specs pulam).
+// Os nomes exportados (AmbienteM27, NA_COPIA, PODE_ESCREVER) ficam para os specs que ainda os importam; "cópia" aqui
+// é o banco do cliente de teste.
+import { type Executor, type Leitor, NucleoProprio } from '@sgh/nucleo';
 
-const raiz = resolve(import.meta.dirname, '../../../../../..');
-const { env } = ambienteEfetivo(caminhoArquivoAmbiente(process.env, raiz));
-export const codigos = lerCodigos(env);
-export const NA_COPIA = codigos.length > 0;
-/** A trava da cópia é deste processo (ou de um ancestral): sem ela, nenhuma gravação na cópia. */
-export const PODE_ESCREVER = NA_COPIA && travaDaCopiaSegura(process.pid);
-export const caminhoCatalogo = resolve(raiz, 'docs/operacoes/catalogo');
+/** Cliente de teste (plataforma.cliente.codigo); padrão: o da onda 1 da F2.2. */
+export const CLIENTE_TESTE = process.env['SGH_CLIENTE_TESTE']?.trim() || 'f22_o1';
+/** Há banco de teste neste processo? */
+export const NA_COPIA = process.env['SGH_NUCLEO_SEM_BANCO'] !== '1';
+/** As gravações vão ao cliente de teste (nunca a um cliente real): liberadas quando há banco. */
+export const PODE_ESCREVER = NA_COPIA;
 
 export interface AmbienteM27 {
-  readonly nucleo: NucleoLegado;
+  readonly nucleo: NucleoProprio;
   readonly executor: Executor;
+  readonly cliente: string;
+  /** Código do estabelecimento usado pelo teste. */
   readonly cod: string;
   readonly c: { rede: string; hospital: string };
 }
 
 export async function ambienteM27(): Promise<AmbienteM27> {
-  const nucleo = new NucleoLegado({
-    env: { ...env, FB_POOL_TETO: '3' },
-    driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(env).bibliotecaCliente }),
-    pastaHomologada: resolve(raiz, 'tools/schema-check/homologado'),
-  });
-  const cod = codigos[0] as string;
-  await nucleo.verificarSchema(cod);
-  return {
-    nucleo,
-    executor: nucleo.criarExecutor({ catalogo: fonteCatalogoArquivo(caminhoCatalogo) }),
-    cod,
-    c: { rede: nucleo.rede, hospital: cod },
-  };
+  const nucleo = new NucleoProprio();
+  await nucleo.cliente(CLIENTE_TESTE);
+  const e = await nucleo.lerSomente({ cliente: CLIENTE_TESTE, correlacao: 'teste-integracao' }, (l) =>
+    l.uma('SELECT codigo FROM estabelecimento WHERE excluido_em IS NULL ORDER BY id LIMIT 1'),
+  );
+  if (!e) throw new Error('O cliente de teste não tem estabelecimento: monte a massa sintética antes.');
+  const cod = String(e['codigo']);
+  return { nucleo, executor: nucleo.criarExecutor(), cliente: CLIENTE_TESTE, cod, c: { rede: CLIENTE_TESTE, hospital: cod } };
 }
 
 const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v)).trim();
 
-/** Dois usuários ativos da cópia (só em memória) e um grupo com usuários ativos. */
+/** Dois usuários ativos do cliente de teste (só em memória) e um perfil com usuários ativos. */
 export async function usuariosAtivos(
   l: Leitor,
 ): Promise<{ a: string; b: string; grupo: string; doGrupo: number }> {
   const us = await l.consultar(
-    "SELECT FIRST 2 NOME FROM TBUSERS WHERE STATUS = 'T' AND BLOQUEADO = 'F' AND GRUPO IS NOT NULL ORDER BY ID_TBUSERS DESC",
+    "SELECT login FROM usuario WHERE situacao = 'ativo' AND excluido_em IS NULL ORDER BY id DESC LIMIT 2",
     [],
     { teto: 2 },
   );
   const [g] = await l.consultar(
-    `SELECT FIRST 1 GRUPO, COUNT(*) N FROM TBUSERS WHERE STATUS = 'T' AND BLOQUEADO = 'F' AND GRUPO IS NOT NULL
-      GROUP BY GRUPO HAVING COUNT(*) BETWEEN 2 AND 200 ORDER BY 2`,
+    `SELECT p.codigo, COUNT(DISTINCT up.usuario_id) AS n FROM usuario_perfil up
+     JOIN perfil_acesso p ON p.id = up.perfil_acesso_id JOIN usuario u ON u.id = up.usuario_id
+     WHERE u.situacao = 'ativo' AND u.excluido_em IS NULL GROUP BY p.codigo
+     HAVING COUNT(DISTINCT up.usuario_id) BETWEEN 2 AND 200 ORDER BY 2 LIMIT 1`,
     [],
     { teto: 1 },
   );
-  if (us.length < 2 || !g) throw new Error('A cópia não tem usuários ativos suficientes.');
-  return {
-    a: txt(us[0]?.['NOME']),
-    b: txt(us[1]?.['NOME']),
-    grupo: txt(g['GRUPO']),
-    doGrupo: Number(g['N']),
-  };
+  if (us.length < 2 || !g) throw new Error('O cliente de teste não tem usuários ativos suficientes.');
+  return { a: txt(us[0]?.['login']), b: txt(us[1]?.['login']), grupo: txt(g['codigo']), doGrupo: Number(g['n']) };
 }
 
 /** Percentil (0 a 100) dos tempos. */

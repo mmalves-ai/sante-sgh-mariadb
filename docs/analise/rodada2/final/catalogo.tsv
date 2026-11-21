@@ -3499,3 +3499,20 @@ teto_financeiro_sus	SUS	configuracao	F7	Teto financeiro por setor, financiamento
 tipo_laudo_apac	SUS	dominio	F7	Tipos de laudo de APAC (oncologia, nefrologia, saúde auditiva, medicamento, cirurgia)	R1#56; MV: TIPO_LAUDO_APAC*, TIPO_LAUDO_SIA	06	5
 transferencia_cota_sus	SUS	historico	F7	Remanejamento de cota entre setores ou municípios, com autor e motivo	R1#54; MV: TRANSFERENCIA_COTA	06	2
 valor_complementar_sus	SUS	configuracao	F7	Valor complementar ou contratado com o gestor local por procedimento da tabela unificada, por estabelecimento, unidade e vigência	rodada2:nova	06	3
+agenda_servico_exame	AGE	vinculo	F3	Exames feitos por agenda de serviço e a fonte pagadora que os cobre	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+atendimento_etapa_pa	REC	item	F3	Etapas do paciente no pronto atendimento	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+aviso_estouro_classificacao	PEP	historico	F3	Aviso de estouro do tempo-alvo da classificação de risco	F2.2 onda 1 (pedido de lote; db/migracoes)	03	0
+chave_busca_nome	CAD	item	F3	Palavras e chaves fonéticas dos nomes para a busca do cadastro	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+dispositivo_recepcao	REC	configuracao	F3	Dispositivo de painel ou totem da recepção (token por resumo)	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+dispositivo_recepcao_gerador	REC	vinculo	F3	Serviços que o totem oferece	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+dispositivo_recepcao_local	REC	vinculo	F3	Locais de atendimento que o painel mostra	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+feriado	AGE	configuracao	F3	Feriados e pontos facultativos por abrangência	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+inclusao_protocolo_registro	PEP	item	F3	Metas, checklist e encerramento do protocolo gerenciado do paciente	F2.2 onda 1 (pedido de lote; db/migracoes)	03	0
+liberacao_chave	ADM	configuracao	F3	Chave de liberação de operação ou recurso por estabelecimento e escopo	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+liberacao_lote	ADM	historico	F3	Lote reversível de mudança das chaves de liberação, com justificativa	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+profissional_ocupacao	CAD	vinculo	F3	Ocupações (CBO) do profissional, com a principal	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+recurso_prerequisito	ADM	configuracao	F3	Pré-requisito externo de um recurso no estabelecimento	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+sessao_suporte_acao	ADM	historico	F3	Ação feita numa sessão de suporte como o usuário	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+sessao_suporte_leitura	ADM	historico	F3	Leituras agregadas por caminho numa sessão de suporte	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0
+termo_consentimento_recepcao	REC	principal	F3	Termo de consentimento assinado no balcão	F2.2 onda 1 (pedido de lote; db/migracoes)	02	0
+usuario_profissional	ADM	vinculo	F3	Profissional que a conta de acesso representa, com vigência	F2.2 onda 1 (pedido de lote; db/migracoes)	01	0

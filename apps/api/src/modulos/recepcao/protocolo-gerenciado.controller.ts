@@ -8,7 +8,7 @@
 //   POST /api/pa/protocolos-gerenciados                    recepcao.iniciarProtocoloGerenciado (enfermeiro ou médico)
 //   POST /api/pa/protocolos-gerenciados/:id/metas          recepcao.registrarMetaProtocolo (perdida com o motivo)
 //   POST /api/pa/protocolos-gerenciados/:id/encerrar       recepcao.encerrarProtocoloGerenciado
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação; a liberação é a da classificação (`pa.classificacao`).
+// Com a trilha na mesma transação; a liberação é a da classificação (`pa.classificacao`).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Req } from '@nestjs/common';
 import {
   CHAVE_LIBERACAO_CLASSIFICACAO,
@@ -44,7 +44,9 @@ import {
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
-import { ApoioGravacao, corpo } from '../exames/public-api.js';
+import { corpo } from '../exames/public-api.js';
+import { ApoioClassificacao } from './apoio.js';
+import { portaDeModuloAusente } from './indisponivel.js';
 import { conferirAutorDoProtocolo, fonteAtendimentosPa } from './classificacao.controller.js';
 import {
   type GravadorClassificacao,
@@ -53,16 +55,18 @@ import {
 } from './classificacao-porta.js';
 import { ServicoProtocoloGerenciado, type SessaoGerenciado } from './protocolo-gerenciado-servico.js';
 
-const TABELA_PAC = 'SGH_PA_PROTOC_PACIENTE';
-const TABELA_EVT = 'SGH_PA_PROTOC_PAC_EVT';
+const TABELA_PAC = 'inclusao_protocolo_paciente';
+const TABELA_EVT = 'inclusao_protocolo_evento';
 
 @Controller('pa/protocolos-gerenciados')
 export class ProtocoloGerenciadoController {
-  private readonly apoio: ApoioGravacao<GravadorClassificacao>;
+  private readonly apoio: ApoioClassificacao<GravadorClassificacao>;
+  private readonly atendimento: PortaAtendimento;
 
   constructor(
     @Inject(PORTA_CLASSIFICACAO) private readonly porta: PortaClassificacao,
-    @Inject(PORTA_ATENDIMENTO) private readonly atendimento: PortaAtendimento,
+    // Sem o módulo do atendimento montado, as leituras do PA respondem 503 (porta ausente), sem derrubar a API.
+    @Optional() @Inject(PORTA_ATENDIMENTO) atendimento: PortaAtendimento | null,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
@@ -70,7 +74,8 @@ export class ProtocoloGerenciadoController {
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
   ) {
-    this.apoio = new ApoioGravacao(
+    this.atendimento = atendimento ?? portaDeModuloAusente<PortaAtendimento>();
+    this.apoio = new ApoioClassificacao(
       { chave: CHAVE_LIBERACAO_CLASSIFICACAO, nome: 'o relógio dos protocolos gerenciados', operacoes: {} },
       porta,
       trilha,
@@ -114,7 +119,7 @@ export class ProtocoloGerenciadoController {
   @HttpCode(201)
   @Permissao('recepcao.protocolo.publicar')
   @AuditadoNoHandler(
-    'recepcao.publicarProtocoloGerenciado: SGH_PA_PROTOC_GERENCIADO e SGH_TRILHA na mesma transação',
+    'recepcao.publicarProtocoloGerenciado: protocolo_gerenciado_versao e trilha_auditoria na mesma transação',
   )
   async publicar(
     @Body() b: unknown,
@@ -132,12 +137,12 @@ export class ProtocoloGerenciadoController {
     await reautenticar(this.sessoes, this.resolvedor, req, e.senha);
     const autor = await conferirAutorDoProtocolo(this.sessoes, s, e.autor);
     const linha = await this.servico().prepararPublicacao(this.sessao(s), { ...e, autor });
-    const r = await this.apoio.sgh(
+    const r = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.protocoloGerenciadoPublicado.codigo,
       'recepcao.protocolo.publicar',
       (x: { id: number; versao: number }) => ({
-        tabela: 'SGH_PA_PROTOC_GERENCIADO',
+        tabela: 'protocolo_gerenciado_versao',
         id: String(x.id),
         chave: `${linha.tipo}:v${x.versao}`,
       }),
@@ -150,13 +155,13 @@ export class ProtocoloGerenciadoController {
   @HttpCode(201)
   @Permissao(P.protocoloPacienteIniciar)
   @AuditadoNoHandler(
-    'recepcao.iniciarProtocoloGerenciado: SGH_PA_PROTOC_PACIENTE e SGH_TRILHA na mesma transação',
+    'recepcao.iniciarProtocoloGerenciado: inclusao_protocolo_paciente e trilha_auditoria na mesma transação',
   )
   async iniciar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoProtocoloGerenciado> {
     const s = sessaoDe(req);
     const e = corpo(esquemaIniciarProtocoloGerenciado, b);
     const p = await this.servico().prepararInclusao(this.sessao(s), e);
-    const id = await this.apoio.sgh(
+    const id = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.protocoloPacienteIniciado.codigo,
       'recepcao.protocoloPaciente.iniciar',
@@ -175,7 +180,9 @@ export class ProtocoloGerenciadoController {
   @Post(':id/metas')
   @HttpCode(201)
   @Permissao(P.protocoloPacienteRegistrar)
-  @AuditadoNoHandler('recepcao.registrarMetaProtocolo: SGH_PA_PROTOC_PAC_EVT e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'recepcao.registrarMetaProtocolo: inclusao_protocolo_evento e trilha_auditoria na mesma transação',
+  )
   async meta(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -184,7 +191,7 @@ export class ProtocoloGerenciadoController {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarMetaProtocolo, b);
     const m = await this.servico().prepararMeta(this.sessao(s), idDaRota(id), e);
-    const ev = await this.apoio.sgh(
+    const ev = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.protocoloPacienteMetaRegistrada.codigo,
       'recepcao.protocoloPaciente.registrar',
@@ -211,7 +218,7 @@ export class ProtocoloGerenciadoController {
   @HttpCode(201)
   @Permissao(P.protocoloPacienteRegistrar)
   @AuditadoNoHandler(
-    'recepcao.encerrarProtocoloGerenciado: SGH_PA_PROTOC_PAC_EVT e SGH_TRILHA na mesma transação',
+    'recepcao.encerrarProtocoloGerenciado: inclusao_protocolo_evento e trilha_auditoria na mesma transação',
   )
   async encerrar(
     @Param('id') id: string,
@@ -222,7 +229,7 @@ export class ProtocoloGerenciadoController {
     this.exigir(s, P.protocoloPacienteRegistrar);
     const e = corpo(esquemaEncerrarProtocoloGerenciado, b);
     const m = await this.servico().prepararEncerramento(this.sessao(s), idDaRota(id), e);
-    const ev = await this.apoio.sgh(
+    const ev = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.protocoloPacienteEncerrado.codigo,
       'recepcao.protocoloPaciente.registrar',

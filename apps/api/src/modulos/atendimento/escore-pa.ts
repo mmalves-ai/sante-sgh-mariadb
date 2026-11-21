@@ -16,7 +16,7 @@ import {
   type LimiaresSepsePa,
   type ResultadoDeterioracaoPa,
 } from '@sgh/dominio-enfermagem';
-import type { EscorePaLido, SinaisSgh } from '@sgh/legado';
+import type { EscorePaRegistrado, SinaisRecentes } from './tipos.js';
 
 const parcial = (x: { total: number; completo: boolean; faltando: readonly string[] }) => ({
   total: x.total,
@@ -25,7 +25,7 @@ const parcial = (x: { total: number; completo: boolean; faltando: readonly strin
 });
 
 /** Os sinais vitais do prontuário (a classificação grava pas, fc, fr, temperatura e saturação) nos sinais do PA. */
-export function sinaisDoProntuario(s: SinaisSgh): SinaisEscorePa {
+export function sinaisDoProntuario(s: SinaisRecentes): SinaisEscorePa {
   return {
     fr: s.fr,
     spo2: s.saturacao,
@@ -50,7 +50,7 @@ export function calcularEscorePa(
   );
 }
 
-export function escoreLidoNoContrato(x: EscorePaLido): EscorePaLidoContrato {
+export function escoreLidoNoContrato(x: EscorePaRegistrado): EscorePaLidoContrato {
   return {
     id: x.id,
     origem: x.origem,
@@ -77,8 +77,8 @@ export function escoreLidoNoContrato(x: EscorePaLido): EscorePaLidoContrato {
  * protocolo pode ter mudado o limiar depois do registro); o calculado dos sinais só quando não há registro válido.
  */
 export function alertaVigente(
-  escores: readonly EscorePaLido[],
-  sinais: SinaisSgh | null,
+  escores: readonly EscorePaRegistrado[],
+  sinais: SinaisRecentes | null,
   limiares: LimiaresSepsePa,
   agora: string,
 ): AlertaEscorePa | null {

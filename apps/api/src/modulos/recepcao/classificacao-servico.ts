@@ -53,7 +53,7 @@ import {
   tempoAlvoDaCor,
   valoresDaClassificacao,
 } from '@sgh/dominio-recepcao';
-import type { AtendimentoPaLegado, ClassificacaoLida, SinaisSgh } from '@sgh/legado';
+import type { AtendimentoPa, ClassificacaoRegistrada, SinaisVitais } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type {
   ContextoClassificacao,
@@ -72,7 +72,7 @@ export interface FonteAtendimentosPa {
   paAbertos(
     c: ContextoClassificacao,
     o: { hoje: string },
-  ): Promise<{ itens: AtendimentoPaLegado[]; cortada: boolean }>;
+  ): Promise<{ itens: AtendimentoPa[]; cortada: boolean }>;
   /** O paciente (ID do cadastro) e a idade do atendimento. */
   pacienteDoAtendimento(
     c: ContextoClassificacao,
@@ -110,7 +110,7 @@ export interface FormularioClassificacao {
       descricaoMudanca: string | null;
       anterior: number | null;
       tempoAlvoMin: number;
-      /** Os eventos próprios da classificação, gravados na SGH_TRILHA dentro da mesma transação. */
+      /** Os eventos próprios da classificação, gravados na trilha dentro da mesma transação. */
       eventos: { evento: string; chave: string }[];
     };
   }): Promise<{ registro: number; comPrioridade: boolean }>;
@@ -170,7 +170,7 @@ function problema(status: number, codigo: string, titulo: string, detalhe: strin
 }
 
 /** A linha lida → a vigente do motor (cor e tempo-alvo). */
-function vigenteDe(l: ClassificacaoLida): ClassificacaoVigente {
+function vigenteDe(l: ClassificacaoRegistrada): ClassificacaoVigente {
   return {
     id: l.id,
     cor: l.corFinal as CorRisco,
@@ -180,15 +180,18 @@ function vigenteDe(l: ClassificacaoLida): ClassificacaoVigente {
   };
 }
 
-const marca = (a: Pick<AtendimentoPaLegado, 'marcas'>, etapa: string) =>
+const marca = (a: Pick<AtendimentoPa, 'marcas'>, etapa: string) =>
   a.marcas.find((m) => m.etapa === etapa)?.em ?? null;
 
 /** O atendimento do PA encerrado (decisão ou saída registrada no quadro, ou a saída pela outra ponta). */
-export function encerradoNoPa(a: Pick<AtendimentoPaLegado, 'marcas' | 'saida'>): boolean {
+export function encerradoNoPa(a: Pick<AtendimentoPa, 'marcas' | 'saida'>): boolean {
   return a.saida !== null || a.marcas.some((m) => m.etapa === 'decisao' || m.etapa === 'saida');
 }
 
-export function resumoDe(l: ClassificacaoLida, conteudo: ConteudoProtocolo | null): ClassificacaoResumo {
+export function resumoDe(
+  l: ClassificacaoRegistrada,
+  conteudo: ConteudoProtocolo | null,
+): ClassificacaoResumo {
   const cor = l.corFinal as CorRisco;
   return {
     id: l.id,
@@ -214,7 +217,7 @@ export function resumoDe(l: ClassificacaoLida, conteudo: ConteudoProtocolo | nul
   };
 }
 
-const sinaisSgh = (s: SinaisClassificacao): SinaisSgh => ({
+const sinaisSgh = (s: SinaisClassificacao): SinaisVitais => ({
   pas: s.pas,
   pad: s.pad,
   fc: s.fc,
@@ -365,7 +368,7 @@ export class ServicoClassificacao {
       c,
       itens.map((a) => a.cabecalho),
     );
-    const porCab = new Map<string, ClassificacaoLida[]>();
+    const porCab = new Map<string, ClassificacaoRegistrada[]>();
     for (const l of linhas)
       (porCab.get(l.cabecalho) ?? porCab.set(l.cabecalho, []).get(l.cabecalho)!).push(l);
     return { hoje, agora, itens, cortada: r.cortada, porCab };
@@ -374,7 +377,7 @@ export class ServicoClassificacao {
   /** O risco de cada atendimento do quadro (M20), pelo cabeçalho; e a contagem por cor. */
   async riscosDoQuadro(
     c: ContextoClassificacao,
-    itens: readonly Pick<AtendimentoPaLegado, 'cabecalho' | 'reg' | 'marcas'>[],
+    itens: readonly Pick<AtendimentoPa, 'cabecalho' | 'reg' | 'marcas'>[],
   ): Promise<{ porReg: Map<number, RiscoNoQuadro | null>; porCor: ReturnType<typeof contagemPorCor> }> {
     const { agora } = await this.porta.relogio(c);
     const linhas = await this.porta.classificacoes(
@@ -390,7 +393,7 @@ export class ServicoClassificacao {
   }
 
   /** W1-04: a identidade exibida de cada atendimento (nome civil, nome social e a marca "sigiloso"), por REG. */
-  private async identidades(c: ContextoClassificacao, itens: readonly AtendimentoPaLegado[]) {
+  private async identidades(c: ContextoClassificacao, itens: readonly AtendimentoPa[]) {
     const pronts = [...new Set(itens.map((x) => x.prontuario ?? 0).filter((p) => p > 0))];
     const sig =
       pronts.length && this.atendimentos.sigilosos
@@ -408,7 +411,7 @@ export class ServicoClassificacao {
     const a = await this.abertos(c);
     const ids = await this.identidades(c, a.itens);
     // A fila mostra o nome de tratamento (o social quando houver); o sigiloso sai mascarado.
-    const nomeDe = (x: AtendimentoPaLegado) => {
+    const nomeDe = (x: AtendimentoPa) => {
       const i = ids.get(x.reg);
       return i?.sigiloso ? NOME_SIGILOSO : (nomeDeTratamento(i ?? { nome: x.paciente }) ?? x.paciente);
     };
@@ -710,6 +713,7 @@ export class ServicoClassificacao {
       sobreposta: d.sobreposta,
       linha: {
         cabecalho: a.x.cabecalho,
+        queixa: e.queixa,
         reg: a.x.reg,
         paciente: pac.id,
         versaoProtocolo: protocolo.versao.id,
@@ -829,8 +833,8 @@ export class ServicoClassificacao {
 
   /**
    * Os indicadores do período pelo motor do domínio (`indicadoresClassificacao`), num único universo: os atendimentos
-   * do PA do período (as marcas de SGH_PA_ETAPA, abertos ou já encerrados) somados aos classificados no período
-   * (SGH_PA_CLASSIFICACAO). De cada um: a chegada, a primeira classificação (a cor inicial e o tempo-alvo dela), o
+   * do PA do período (as marcas de etapas do atendimento, abertos ou já encerrados) somados aos classificados no período
+   * (classificacao_risco). De cada um: a chegada, a primeira classificação (a cor inicial e o tempo-alvo dela), o
    * atendimento médico e o número de reclassificações. `agora` é o fim da conta (o prazo vencido sem médico conta
    * como fora do tempo-alvo; o prazo ainda correndo fica fora do denominador).
    */
@@ -850,7 +854,7 @@ export class ServicoClassificacao {
     for (const m of marcasPa)
       (marcasPorCab.get(m.cabecalho) ?? marcasPorCab.set(m.cabecalho, []).get(m.cabecalho)!).push(m);
     const cabs = [...new Set([...marcasPorCab.keys(), ...doPeriodo.map((l) => l.cabecalho)])];
-    const porCab = new Map<string, ClassificacaoLida[]>();
+    const porCab = new Map<string, ClassificacaoRegistrada[]>();
     for (const l of await this.porta.classificacoes(c, cabs))
       (porCab.get(l.cabecalho) ?? porCab.set(l.cabecalho, []).get(l.cabecalho)!).push(l);
     const primeiraMarca = (ms: readonly { etapa: string; em: string }[], etapa: string) =>

@@ -12,3 +12,5 @@ export * from './observacao.js';
 export * from './quadro.js';
 // M50, etapa 4: telemedicina (sala de espera, início, alerta do crônico, marca dos documentos, teleinterconsulta).
 export * from './teleconsulta/index.js';
+// F2.2: abertura, condução, exclusão, observação e ato médico (regras levadas das portas ao domínio).
+export * from './fluxo-atendimento.js';

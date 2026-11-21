@@ -57,19 +57,8 @@ import {
   montarIndiceBusca,
   TETO_SUGESTOES,
 } from '@sgh/dominio-pep';
-import type {
-  AtendimentoDaPrescricao,
-  ContextoOperacao,
-  GravacaoPrescricao,
-  InclusaoItem,
-  ItemDoIndice,
-  ItemPrescricaoLido,
-  PrescritorLido,
-  ProdutoLido,
-  RetratosAtuais,
-  SuspensaoItem,
-  SuspensaoPrescricao,
-} from '@sgh/legado';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import type { AtendimentoDaPrescricao, GravacaoPrescricao, InclusaoItem, ItemDoIndice, ItemPrescricaoLido, PrescritorLido, ProdutoLido, RetratosAtuais, SuspensaoItem, SuspensaoPrescricao } from './tipos-pep.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoPrescricao, PortaPrescricao } from './prescricao-porta.js';
 
@@ -132,7 +121,7 @@ const hojeDe = (agora: string) => agora.slice(0, 10);
 export class ServicoPrescricao {
   constructor(private readonly porta: PortaPrescricao) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'proprio' | 'memoria' {
     return this.porta.destino;
   }
 
@@ -369,7 +358,7 @@ export class ServicoPrescricao {
     ];
     const lidos = await this.porta.produtos(c, ids);
     const produtos = new Map(lidos.map((p) => [p.produto, PERFIS_PRODUTO(p, politicas)]));
-    const legado = await this.porta.parametrosLegado(c);
+    const legado = await this.porta.parametrosPrescricao(c);
     const sgh = await this.porta.regrasAlerta(c);
     const regras: RegraAlerta[] = [
       ...REGRAS_PADRAO,
@@ -855,7 +844,7 @@ export class ServicoPrescricao {
     const ultimo = [...prova.eventos].reverse().find((e) => e.tipo !== 'coassinado');
     const estadoProva = !ultimo
       ? 'sem-prova'
-      : (await this.porta.hashAtual(c, id)) === ultimo.hashLegado
+      : (await this.porta.hashAtual(c, id)) === ultimo.hashAnterior
         ? 'confere'
         : 'alterado';
     return {

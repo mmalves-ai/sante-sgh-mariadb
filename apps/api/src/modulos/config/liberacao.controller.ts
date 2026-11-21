@@ -11,7 +11,7 @@
 // Recurso com pré-requisito pendente ou vencido não liga (409 prerequisito-pendente, dizendo o que falta);
 // desligar é sempre permitido (recolher). Em PRODUÇÃO, LIGAR qualquer chave (operação ou recurso, também
 // pela reversão de um lote) exige a referência da autorização do dono (ESTADO.md › Autorizações), e a
-// operação tem de estar `liberada` no catálogo. A decisão de gravar é tomada DENTRO da transação SGH_, sobre
+// operação tem de estar `liberada` no catálogo. A decisão de gravar é tomada DENTRO da transação, sobre
 // o estado relido com trava (chaves e pré-requisitos); o cache só serve a tela. Fora de dev/ci, ligar a chave
 // de um setor da onda 2, 3 ou 4 também exige o critério do setor completo (M40 a M42; 409 criterio-onda2-incompleto,
 // criterio-onda3-incompleto ou criterio-onda4-incompleto). Em todo ambiente, ligar a dispensação ou a entrega exige a prescrição eletrônica em uso
@@ -43,13 +43,6 @@ import {
   type RecusaLigar,
   reverterLote,
 } from '@sgh/dominio-config';
-import {
-  type ChaveGravada,
-  fonteCatalogo,
-  lerCatalogoOperacoes,
-  pastaResultadosDoCatalogo,
-  type PrerequisitoGravado,
-} from '@sgh/legado';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
@@ -62,15 +55,20 @@ import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { CACHE_CONFIG, type CacheConfig, TTL_CONFIG_NOVO_S } from './cache-config.js';
 import { CRITERIO_LIGAR_SETOR, type CriterioLigarSetor } from './criterio-ligar.js';
 import {
+  CATALOGO_OPERACOES,
+  type CatalogoOperacoesLiberacao,
+} from './catalogo-operacoes.js';
+import {
+  type ChaveLiberacao,
+  destinoNoContrato,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
   type PedidoLote,
+  type PrerequisitoRecurso,
   type TrilhaConfig,
 } from './configuracao-fonte.js';
 import { falhaDaConfiguracao } from './falha-configuracao.js';
 import { planoDaFonteUnicaDeCor } from './fonte-de-cor.js';
-
-export const CAMINHO_CATALOGO_LIBERACAO = Symbol('CAMINHO_CATALOGO_LIBERACAO');
 
 const MOTIVO = { pendente: 'pendente', vencido: 'vencido', 'sem-registro': 'não registrado' } as const;
 
@@ -82,7 +80,7 @@ export class LiberacaoController {
     @Inject(SERVICO_SESSAO) private readonly servico: ServicoSessao | null,
     @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao,
     @Inject(CONFIGURACAO) private readonly cfg: Configuracao,
-    @Inject(CAMINHO_CATALOGO_LIBERACAO) private readonly caminhoCatalogo: string,
+    @Inject(CATALOGO_OPERACOES) private readonly catalogo: CatalogoOperacoesLiberacao,
     @Optional() @Inject(CRITERIO_LIGAR_SETOR) private readonly criterio: CriterioLigarSetor | null = null,
   ) {}
 
@@ -95,11 +93,14 @@ export class LiberacaoController {
   }
 
   private trilha(req: RequisicaoAutorizada, evento: string, operacaoNome: string): TrilhaConfig {
-    const { rede, hospital, login } = this.sessao(req);
+    const { a, rede, hospital, login } = this.sessao(req);
+    const chave = req.headers?.['idempotency-key'];
     return {
       rede,
       hospital,
       usuario: login,
+      usuarioId: a.sessao.usuario.id,
+      chaveIdempotencia: typeof chave === 'string' ? chave : null,
       evento,
       recurso: 'config.liberacao',
       operacao: operacaoNome,
@@ -128,8 +129,8 @@ export class LiberacaoController {
     descricao: string,
     marco: string | null,
     estadoCatalogo: string | null,
-    todas: readonly ChaveGravada[],
-    prereqs: readonly PrerequisitoGravado[],
+    todas: readonly ChaveLiberacao[],
+    prereqs: readonly PrerequisitoRecurso[],
   ): FuncionalidadeDescrita {
     // Linha que herda (ligada nula, reversão de lote) não decide: fora do painel.
     const chaves = todas
@@ -182,10 +183,8 @@ export class LiberacaoController {
   async painel(@Req() req: RequisicaoAutorizada): Promise<PainelLiberacao> {
     const { rede, hospital } = this.sessao(req);
     const { chaves, prerequisitos } = await this.dados(rede, hospital);
-    const catalogo = lerCatalogoOperacoes(this.caminhoCatalogo);
-    const efetivo = this.estadoEfetivo(catalogo);
     // M41 (regra 1): a dispensação e a entrega mostram, antes de ligar, as unidades sem a prescrição em uso.
-    const base = this.descreverTodas(catalogo, efetivo, hospital, chaves, prerequisitos);
+    const base = this.descreverTodas(hospital, chaves, prerequisitos);
     const daRegra1 = (f: FuncionalidadeDescrita) =>
       chaveExigePrescricao(f.chave) && !f.ligadaNoEstabelecimento;
     const avaliar = this.criterio?.regraFarmacia;
@@ -208,38 +207,31 @@ export class LiberacaoController {
         ? { ...f, podeLigar: false, motivoBloqueio: [f.motivoBloqueio, extra].filter(Boolean).join(' ') }
         : f;
     });
-    return { estabelecimento: hospital, destino: this.fonte.destino, funcionalidades };
+    return { estabelecimento: hospital, destino: destinoNoContrato(this.fonte.destino), funcionalidades };
   }
 
   private descreverTodas(
-    catalogo: ReturnType<typeof lerCatalogoOperacoes>,
-    efetivo: ReturnType<LiberacaoController['estadoEfetivo']>,
     hospital: string,
-    chaves: readonly ChaveGravada[],
-    prerequisitos: readonly PrerequisitoGravado[],
+    chaves: readonly ChaveLiberacao[],
+    prerequisitos: readonly PrerequisitoRecurso[],
   ): FuncionalidadeDescrita[] {
     return [
       ...RECURSOS_DESLIGADOS.map((r) =>
         this.funcionalidade('recurso', r.chave, r.titulo, r.descricao, r.marco, null, chaves, prerequisitos),
       ),
-      ...catalogo.operacoes.map((o) =>
+      ...this.catalogo.operacoes().map((o) =>
         this.funcionalidade(
           'operacao',
           o.nome,
           o.nome,
           o.descricao,
           null,
-          efetivo.estado(o.nome, hospital),
+          this.catalogo.estado(o.nome, hospital),
           chaves,
           prerequisitos,
         ),
       ),
     ];
-  }
-
-  /** Estado efetivo (M36, regra 6): o do catálogo, com a última reexecução das assinaturas aplicada. */
-  private estadoEfetivo(cat: ReturnType<typeof lerCatalogoOperacoes>) {
-    return fonteCatalogo(cat, { pastaResultados: pastaResultadosDoCatalogo(this.caminhoCatalogo) });
   }
 
   /**
@@ -262,9 +254,7 @@ export class LiberacaoController {
       conferirLigarEmProducao({
         ambiente: this.cfg.ambiente,
         tipo,
-        // M36 (regra 6): o estado efetivo (divergência na última reexecução volta a bloqueada) decide.
-        estadoEfetivo: () =>
-          this.estadoEfetivo(lerCatalogoOperacoes(this.caminhoCatalogo)).estado(chave, hospital),
+        estadoEfetivo: () => this.catalogo.estado(chave, hospital),
         referenciaAutorizacao,
       }),
     );
@@ -288,7 +278,7 @@ export class LiberacaoController {
         ambiente: this.cfg.ambiente,
         tipo,
         chave,
-        nomesOperacoes: () => lerCatalogoOperacoes(this.caminhoCatalogo).operacoes.map((o) => o.nome),
+        nomesOperacoes: () => this.catalogo.operacoes().map((o) => o.nome),
         avaliadores: {
           criterioSetor: cr?.avaliar ? (t, k) => cr.avaliar!(c, t, k) : null,
           regraFarmacia: cr?.regraFarmacia ? (t, k) => cr.regraFarmacia!(c, t, k) : null,
@@ -299,14 +289,14 @@ export class LiberacaoController {
   }
 
   /** Pré-requisitos do recurso (sobre o estado relido na transação): ligar com falta é recusado (409). */
-  private conferirPrerequisitos(chave: string, registrados: readonly PrerequisitoGravado[]): void {
+  private conferirPrerequisitos(chave: string, registrados: readonly PrerequisitoRecurso[]): void {
     this.recusar(conferirPrerequisitosDeLigar(chave, registrados, new Date()));
   }
 
   @Post()
   @HttpCode(200)
   @Permissao('config.liberacao.editar')
-  @AuditadoNoHandler('SGH_CFG_LIBERACAO e SGH_TRILHA na mesma transação SGH_ (aplicarLoteLiberacao)')
+  @AuditadoNoHandler('liberacao_chave, liberacao_lote e trilha na mesma transação do Executor (aplicarLote)')
   async aplicar(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoLiberacao> {
     const p = esquemaPedidoLiberacao.safeParse(corpo);
     if (!p.success)
@@ -322,7 +312,7 @@ export class LiberacaoController {
     if (pedido.tipo === 'recurso') {
       if (!recursoDesligado(pedido.chave))
         throw new ErroProblema('nao-encontrado', 404, 'Funcionalidade não encontrada');
-    } else if (!lerCatalogoOperacoes(this.caminhoCatalogo).operacoes.some((o) => o.nome === pedido.chave)) {
+    } else if (!this.catalogo.operacoes().some((o) => o.nome === pedido.chave)) {
       throw new ErroProblema('nao-encontrado', 404, 'Operação não está no catálogo');
     }
     if (pedido.ligar) {
@@ -387,13 +377,13 @@ export class LiberacaoController {
     } else r = await this.fonte.aplicarLote(rede, principal, trilha).catch(falha);
     if (r.alteradas + externaDesligada > 0)
       await this.cache.invalidar(rede, hospital, ['liberacao'], Date.now());
-    return { ...r, destino: this.fonte.destino };
+    return { ...r, destino: destinoNoContrato(this.fonte.destino) };
   }
 
   @Post('lotes/:lote/reverter')
   @HttpCode(200)
   @Permissao('config.liberacao.editar')
-  @AuditadoNoHandler('SGH_CFG_LIBERACAO e SGH_TRILHA na mesma transação SGH_ (aplicarLoteLiberacao)')
+  @AuditadoNoHandler('liberacao_chave, liberacao_lote e trilha na mesma transação do Executor (aplicarLote)')
   async reverter(
     @Param('lote') lote: string,
     @Body() corpo: unknown,
@@ -406,7 +396,7 @@ export class LiberacaoController {
     const linhas = await this.fonte.lote(rede, hospital, lote);
     if (linhas.length === 0) throw new ErroProblema('nao-encontrado', 404, 'Lote não encontrado');
     const primeira = linhas[0]!;
-    const comoMudanca = (l: ChaveGravada) => ({
+    const comoMudanca = (l: ChaveLiberacao) => ({
       escopo: l.escopo,
       valor: l.valor,
       ligada: l.ligada,
@@ -454,12 +444,12 @@ export class LiberacaoController {
         );
       });
     if (r.alteradas > 0) await this.cache.invalidar(rede, hospital, ['liberacao'], Date.now());
-    return { ...r, destino: this.fonte.destino };
+    return { ...r, destino: destinoNoContrato(this.fonte.destino) };
   }
 
   @Put('prerequisitos')
   @Permissao('config.liberacao.editar')
-  @AuditadoNoHandler('SGH_CFG_PREREQUISITO e SGH_TRILHA na mesma transação SGH_ (gravarPrerequisito)')
+  @AuditadoNoHandler('recurso_prerequisito e trilha na mesma transação do Executor (gravarPrerequisito)')
   async prerequisito(@Body() corpo: unknown, @Req() req: RequisicaoAutorizada) {
     const p = esquemaPedidoPrerequisito.safeParse(corpo);
     if (!p.success) throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos');
@@ -494,6 +484,6 @@ export class LiberacaoController {
         );
       });
     await this.cache.invalidar(rede, hospital, ['liberacao'], Date.now());
-    return { ok: true, destino: this.fonte.destino };
+    return { ok: true, destino: destinoNoContrato(this.fonte.destino) };
   }
 }

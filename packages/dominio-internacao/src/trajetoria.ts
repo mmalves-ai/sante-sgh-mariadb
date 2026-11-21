@@ -130,8 +130,11 @@ export function normalizarTrajetorias(
     );
     for (let k = 1; k < trechos.length; k++)
       if (trechos[k]!.unidade !== trechos[k - 1]!.unidade) mudancasDeUnidade++;
+    // O grupo dado pela fonte (tipo de saída do cadastro) prevalece; o código só vale para a fonte em memória.
     const grupo =
-      fim !== null && i.motivo !== null ? grupoMotivoAlta(i.motivo) : fim !== null ? 'alta-domiciliar' : null;
+      fim === null
+        ? null
+        : (i.grupoSaida ?? (i.motivo !== null ? grupoMotivoAlta(i.motivo) : 'alta-domiciliar'));
     internacoes.push({
       reg: i.reg,
       paciente: i.paciente,

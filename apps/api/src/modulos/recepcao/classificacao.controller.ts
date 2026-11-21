@@ -12,7 +12,7 @@
 //   POST /api/pa/protocolos/simular                 o simulador do editor (puro: a mesma proposta do motor)
 //   POST /api/pa/protocolos                         recepcao.publicarProtocoloClassificacao (crítica: reautenticação)
 //   GET  /api/pa/cores-legado                       a tabela de cores antiga (consulta)
-// A classificação grava só neste sistema (SGH_) ou, com o formulário de classificação do prontuário liberado, pelo
+// A classificação grava no banco do produto ou, com o formulário de classificação do prontuário liberado, pelo
 // registro clínico do M22 na mesma transação. Toda gravação é auditada (trilha na mesma transação) e avisa o quadro.
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -48,23 +48,20 @@ import {
   PORTA_ATENDIMENTO,
   type PortaAtendimento,
 } from '../atendimento/public-api.js';
-import {
-  idDaRota,
-  linhaTrilha,
-  problemaDoCadastro,
-  type SessaoCadastro,
-  sessaoDe,
-} from '../cadastro/comum.js';
+import { idDaRota, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
-import { ApoioGravacao, corpo, dataDaConsulta } from '../exames/public-api.js';
+import { corpo, dataDaConsulta } from '../exames/public-api.js';
+import { ApoioClassificacao, trilhaDaSessao } from './apoio.js';
+import { portaDeModuloAusente } from './indisponivel.js';
 import { LiberacaoPep, SERVICO_REGISTRO, type ServicoRegistro } from '../pep/public-api.js';
 import { formularioDaSessao } from './classificacao-formulario.js';
 import {
+  type ContextoClassificacao,
   type GravadorClassificacao,
   PORTA_CLASSIFICACAO,
   type PortaClassificacao,
@@ -79,7 +76,7 @@ import {
   type SessaoClassificacao,
 } from './classificacao-servico.js';
 
-const TABELA = 'SGH_PA_CLASSIFICACAO';
+const TABELA = 'classificacao_risco';
 const ROTULO_COR = new Map<string, string>(CORES_RISCO.map((c) => [c.codigo, c.rotulo]));
 
 /** A fonte dos atendimentos do PA pela porta do atendimento (M20). */
@@ -87,14 +84,17 @@ export function fonteAtendimentosPa(
   porta: PortaAtendimento,
   recepcao: Pick<PortaRecepcao, 'sigilosos'> | null = null,
 ): FonteAtendimentosPa {
+  // O contexto vem da sessão (sessaoDe: o ContextoPorta completo, com cliente, estabelecimento e usuário); a porta da
+  // recepção só lê o código do estabelecimento dele.
+  const doAtendimento = (c: ContextoClassificacao) => c as Parameters<PortaAtendimento['relogio']>[0];
   return {
     ...(recepcao ? { sigilosos: (c, ps) => recepcao.sigilosos(c, ps) } : {}),
-    paAbertos: (c, o) => porta.paAbertos(c, o),
+    paAbertos: (c, o) => porta.paAbertos(doAtendimento(c), o),
     async pacienteDoAtendimento(c, reg) {
-      const d = await porta.detalhe(c, reg);
+      const d = await porta.detalhe(doAtendimento(c), reg);
       if (!d?.paciente.id) return null;
-      const { hoje } = await porta.relogio(c);
-      const a = (await porta.paAbertos(c, { hoje })).itens.find((x) => x.reg === reg);
+      const { hoje } = await porta.relogio(doAtendimento(c));
+      const a = (await porta.paAbertos(doAtendimento(c), { hoje })).itens.find((x) => x.reg === reg);
       return { id: d.paciente.id, nascimento: a?.nascimento ?? null };
     },
   };
@@ -102,12 +102,14 @@ export function fonteAtendimentosPa(
 
 @Controller('pa')
 export class ClassificacaoController {
-  private readonly apoio: ApoioGravacao<GravadorClassificacao>;
+  private readonly apoio: ApoioClassificacao<GravadorClassificacao>;
+  private readonly atendimento: PortaAtendimento;
   private readonly liberacaoPep: LiberacaoPep;
 
   constructor(
     @Inject(PORTA_CLASSIFICACAO) private readonly porta: PortaClassificacao,
-    @Inject(PORTA_ATENDIMENTO) private readonly atendimento: PortaAtendimento,
+    // Sem o módulo do atendimento montado, as leituras do PA respondem 503 (porta ausente), sem derrubar a API.
+    @Optional() @Inject(PORTA_ATENDIMENTO) atendimento: PortaAtendimento | null,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) private readonly configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
@@ -117,7 +119,8 @@ export class ClassificacaoController {
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(PORTA_RECEPCAO) private readonly recepcao: PortaRecepcao | null = null,
   ) {
-    this.apoio = new ApoioGravacao(
+    this.atendimento = atendimento ?? portaDeModuloAusente<PortaAtendimento>();
+    this.apoio = new ApoioClassificacao(
       {
         chave: CHAVE_LIBERACAO_CLASSIFICACAO,
         nome: 'a classificação de risco',
@@ -177,7 +180,7 @@ export class ClassificacaoController {
       throw new ErroProblema('entrada-invalida', 400, 'Período inválido', 'O fim vem depois do início.');
     if (Date.parse(`${fim}T00:00:00Z`) - Date.parse(`${inicio}T00:00:00Z`) > 366 * 86_400_000)
       throw new ErroProblema('entrada-invalida', 400, 'Período inválido', 'O período vai até 366 dias.');
-    // Os atendimentos do PA do período, abertos ou encerrados, com as marcas reais (SGH_PA_ETAPA) lidas pelo período.
+    // Os atendimentos do PA do período, abertos ou encerrados, com as marcas reais (etapas do atendimento) lidas pelo período.
     const { marcasPa } = await this.atendimento.indicadores(s.porta, { inicio, fim });
     return this.servico(s).indicadores(s.porta, inicio, fim, marcasPa, agora);
   }
@@ -223,7 +226,7 @@ export class ClassificacaoController {
     const chaveSobreposta = `${p.linha.reg}:${p.linha.corProposta}>${p.linha.corFinal}`;
     if (form.ligado && sv.gravadorFormulario) {
       // O formulário do prontuário e a classificação na MESMA transação (receita do M22, trilha dupla do executor);
-      // os eventos próprios da classificação vão à SGH_TRILHA dentro dela (registrosSgh da receita).
+      // os eventos próprios da classificação vão à trilha dentro dela.
       const eventos = [
         { evento, chave },
         ...(p.sobreposta ? [{ evento: eventoSobreposta, chave: chaveSobreposta }] : []),
@@ -263,7 +266,7 @@ export class ClassificacaoController {
           'A cor não tem opção equivalente de "Prioridade clínica" no formulário do prontuário: lá o registro aparece sem prioridade.',
         );
     } else {
-      const r = await this.apoio.sgh(
+      const r = await this.apoio.gravar(
         s,
         evento,
         reclassificacao ? 'recepcao.classificacao.reclassificar' : 'recepcao.classificacao.criar',
@@ -272,9 +275,9 @@ export class ClassificacaoController {
           const x = await g.classificar({ ...p.linha, e08: { situacao: 'desligado' } });
           if (p.sobreposta)
             await g.registrarEvento(
-              linhaTrilha(s, eventoSobreposta, 'recepcao.classificacao', eventoSobreposta, {
+              trilhaDaSessao(s, eventoSobreposta, 'recepcao.classificacao', {
                 tabela: TABELA,
-                id: String(x.id),
+                id: x.id,
                 paciente: p.pac.id,
                 chave: chaveSobreposta,
               }),
@@ -300,7 +303,7 @@ export class ClassificacaoController {
   @HttpCode(201)
   @Permissao('recepcao.classificacao.criar')
   @AuditadoNoHandler(
-    'recepcao.classificarRisco: SGH_PA_CLASSIFICACAO e SGH_TRILHA na mesma transação (ou o E08)',
+    'recepcao.classificarRisco: classificacao_risco e trilha_auditoria na mesma transação (ou o E08)',
   )
   classificar(
     @Param('reg') reg: string,
@@ -315,7 +318,7 @@ export class ClassificacaoController {
   @Post('classificacao/:reg/reclassificar')
   @HttpCode(201)
   @Permissao('recepcao.classificacao.reclassificar')
-  @AuditadoNoHandler('recepcao.reclassificarRisco: SGH_PA_CLASSIFICACAO e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('recepcao.reclassificarRisco: classificacao_risco e trilha_auditoria na mesma transação')
   reclassificar(
     @Param('reg') reg: string,
     @Body() b: unknown,
@@ -329,7 +332,7 @@ export class ClassificacaoController {
   @Post('classificacao/:reg/sinais')
   @HttpCode(201)
   @Permissao('recepcao.classificacao.registrarSinais')
-  @AuditadoNoHandler('sinais da classificação (SGH_PEP_SINAL_VITAL) e SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('sinais da classificação (afericao) e trilha_auditoria na mesma transação')
   async sinais(
     @Param('reg') reg: string,
     @Body() b: unknown,
@@ -344,11 +347,11 @@ export class ClassificacaoController {
       throw new ErroProblema('entrada-invalida', 400, 'Sem sinais', 'Registre ao menos um sinal vital.', {
         campos: ['sinais'],
       });
-    const n = await this.apoio.sgh(
+    const n = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.enfermagemSinalRegistrado.codigo,
       'recepcao.classificacao.registrarSinais',
-      { tabela: 'SGH_PEP_SINAL_VITAL', paciente: pac.id, chave: `${a.x.reg}:triagem` },
+      { tabela: 'afericao', paciente: pac.id, chave: `${a.x.reg}:triagem` },
       (g) =>
         g.registrarSinais({
           cabecalho: a.x.cabecalho,
@@ -396,7 +399,7 @@ export class ClassificacaoController {
   @HttpCode(201)
   @Permissao('recepcao.protocolo.publicar')
   @AuditadoNoHandler(
-    'recepcao.publicarProtocoloClassificacao: SGH_PA_PROTOCOLO e SGH_TRILHA na mesma transação',
+    'recepcao.publicarProtocoloClassificacao: protocolo_classificacao_risco_versao e trilha_auditoria na mesma transação',
   )
   async publicar(
     @Body() b: unknown,
@@ -414,12 +417,12 @@ export class ClassificacaoController {
     await reautenticar(this.sessoes, this.resolvedor, req, e.senha);
     const autor = await this.conferirAutor(s, e.autor);
     const r = await this.servico(s).publicar(this.sessao(s), { ...e, autor }, (fn) =>
-      this.apoio.sgh(
+      this.apoio.gravar(
         s,
         EVENTOS_AUDITAVEIS.classificacaoProtocoloPublicado.codigo,
         'recepcao.protocolo.publicar',
         (x: { id: number; protocolo: number; versao: number }) => ({
-          tabela: 'SGH_PA_PROTOCOLO',
+          tabela: 'protocolo_classificacao_risco_versao',
           id: String(x.id),
           chave: `${x.protocolo}:v${x.versao}`,
         }),
@@ -436,9 +439,9 @@ export class ClassificacaoController {
 
   @Get('cores-legado')
   @Permissao('recepcao.protocolo.ler')
-  async coresLegado(@Req() req: RequisicaoAutorizada): Promise<CorLegadoConsulta[]> {
+  async coresAnteriores(@Req() req: RequisicaoAutorizada): Promise<CorLegadoConsulta[]> {
     const s = sessaoDe(req);
-    const cores = await this.porta.coresLegado(s.porta);
+    const cores = await this.porta.coresAnteriores(s.porta);
     return cores.map((c) => ({
       ...c,
       corEquivalente:

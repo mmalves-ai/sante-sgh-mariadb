@@ -90,7 +90,7 @@ import {
   sugerirFoneticos,
   termoIdentifica,
 } from '@sgh/dominio-cadastro';
-import type { ProfissionalLido } from '@sgh/legado';
+import type { ProfissionalCadastro } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -120,7 +120,7 @@ const POR_PAGINA = 50;
  */
 export const PERMISSAO_VINCULO_LOGIN = PERMISSOES_ACESSO.perfilGerir;
 
-export function resumoDoProfissional(p: ProfissionalLido): ProfissionalResumo {
+export function resumoDoProfissional(p: ProfissionalCadastro): ProfissionalResumo {
   const registros = p.registros.map((r) => ({
     id: r.id,
     conselho: r.conselho,
@@ -143,24 +143,24 @@ export function resumoDoProfissional(p: ProfissionalLido): ProfissionalResumo {
 }
 
 const CAMPOS_HISTORICO_PROFISSIONAL: readonly CampoHistorico[] = [
-  { coluna: 'NOME', campo: 'nome', rotulo: 'Nome' },
-  { coluna: 'APELIDO', campo: 'nomeSocial', rotulo: 'Nome social' },
-  { coluna: 'NASC', campo: 'nascimento', rotulo: 'Nascimento' },
-  { coluna: 'SEXO', campo: 'sexo', rotulo: 'Sexo' },
-  { coluna: 'NOME_MAE', campo: 'nomeMae', rotulo: 'Nome da mãe' },
-  { coluna: 'NOME_PAI', campo: 'nomePai', rotulo: 'Nome do pai' },
-  { coluna: 'CNPJ_CPF', campo: 'documento', rotulo: 'CPF/CNPJ', restricao: 'documento' },
-  { coluna: 'CNS', campo: 'cns', rotulo: 'CNS', restricao: 'documento' },
-  { coluna: 'EMAIL', campo: 'email', rotulo: 'E-mail' },
-  { coluna: 'CEP', campo: 'cep', rotulo: 'CEP' },
-  { coluna: 'LOCAL', campo: 'logradouro', rotulo: 'Logradouro' },
-  { coluna: 'NUMERO', campo: 'numero', rotulo: 'Número' },
-  { coluna: 'COMPL', campo: 'complemento', rotulo: 'Complemento' },
-  { coluna: 'BAIRRO', campo: 'bairro', rotulo: 'Bairro' },
-  { coluna: 'CIDADE', campo: 'cidade', rotulo: 'Cidade' },
-  { coluna: 'UF', campo: 'uf', rotulo: 'UF' },
-  { coluna: 'ID_TBCOR', campo: 'racaCor', rotulo: 'Raça/cor', restricao: 'sensivel' },
-  { coluna: 'ID_TBETNIA', campo: 'etnia', rotulo: 'Etnia', restricao: 'sensivel' },
+  { coluna: 'nome', campo: 'nome', rotulo: 'Nome' },
+  { coluna: 'nomeSocial', campo: 'nomeSocial', rotulo: 'Nome social' },
+  { coluna: 'nascimento', campo: 'nascimento', rotulo: 'Nascimento' },
+  { coluna: 'sexo', campo: 'sexo', rotulo: 'Sexo' },
+  { coluna: 'nomeMae', campo: 'nomeMae', rotulo: 'Nome da mãe' },
+  { coluna: 'nomePai', campo: 'nomePai', rotulo: 'Nome do pai' },
+  { coluna: 'documento', campo: 'documento', rotulo: 'CPF/CNPJ', restricao: 'documento' },
+  { coluna: 'cns', campo: 'cns', rotulo: 'CNS', restricao: 'documento' },
+  { coluna: 'email', campo: 'email', rotulo: 'E-mail' },
+  { coluna: 'cep', campo: 'cep', rotulo: 'CEP' },
+  { coluna: 'logradouro', campo: 'logradouro', rotulo: 'Logradouro' },
+  { coluna: 'numero', campo: 'numero', rotulo: 'Número' },
+  { coluna: 'complemento', campo: 'complemento', rotulo: 'Complemento' },
+  { coluna: 'bairro', campo: 'bairro', rotulo: 'Bairro' },
+  { coluna: 'cidade', campo: 'cidade', rotulo: 'Cidade' },
+  { coluna: 'uf', campo: 'uf', rotulo: 'UF' },
+  { coluna: 'racaCor', campo: 'racaCor', rotulo: 'Raça/cor', restricao: 'sensivel' },
+  { coluna: 'etnia', campo: 'etnia', rotulo: 'Etnia', restricao: 'sensivel' },
 ];
 
 /** Registro no conselho pedido: `numero` (e `conselho`, `uf`) ou o termo "CRM 12345 SP", "12345/SP", "12345". */
@@ -206,8 +206,8 @@ export class ProfissionaisController {
     const termo = reg ? '' : (q['termo'] ?? '').slice(0, 100);
     const soAtivos = q['ativos'] !== 'nao';
     try {
-      let lista: ProfissionalLido[];
-      let sugestoes: ProfissionalLido[] = [];
+      let lista: ProfissionalCadastro[];
+      let sugestoes: ProfissionalCadastro[] = [];
       if (reg)
         // Conselho + UF + número (ficha §4); conselho e UF quando informados (lista curta: 871 no pc).
         lista = (await this.porta.listarProfissionais(s.porta)).filter((p) =>

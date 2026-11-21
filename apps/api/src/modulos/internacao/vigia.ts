@@ -2,8 +2,10 @@
 // consulta leve por ciclo (1 a 2 s) enquanto houver quem escute (as telas pelo canal de eventos ou um consumidor
 // do servidor), qualquer que seja o número de telas: 50 telas geram as mesmas consultas que 1. Selo diferente do
 // ciclo anterior = um evento (só o canal e uma versão); a tela relê. A marca d'água fica no armazém compartilhado
-// (Valkey; memória sem ele); perdida, o canal recomeça do zero — as tabelas pequenas relidas inteiras — e avisa
-// a mudança por precaução. Erro do banco: conta, espera o próximo ciclo e nunca derruba o laço.
+// (Valkey; memória sem ele); perdida, o canal recomeça do zero e avisa a mudança por precaução. Erro do banco: conta, espera o próximo ciclo e nunca derruba o laço.
+// Melhoria: o canal é do estabelecimento de um CLIENTE (um banco por cliente): a chave é o cliente e o id do
+// estabelecimento (`sgh:<cliente>:vigia:<estabelecimento>:<canal>`), e a leitura recebe o contexto do núcleo, sem
+// sessão (usuário nulo: processo); nada de rede nem código de hospital em texto.
 import {
   type CanalVigia,
   type EventoVigia,
@@ -13,18 +15,38 @@ import {
   type SaudeCanalVigia,
   type SaudeVigia,
 } from '@sgh/contratos';
-import { type LeituraCanal, MARCA_ZERO, type MarcaVigia } from '@sgh/legado';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import type { ArmazemSessao } from '../../sessao/armazem.js';
 
 export const MOTOR_VIGIA = Symbol('MOTOR_VIGIA');
 
+/** Marca d'água de um canal (números; 0 = recomeçar). */
+export interface MarcaVigia {
+  /** Maior id visto (trilha de auditoria, na fonte do banco). */
+  readonly maiorId: number;
+  readonly maiorId2: number;
+  /** Início da janela recente (quando o canal usar). */
+  readonly janela: number;
+}
+
+export const MARCA_ZERO: MarcaVigia = { maiorId: 0, maiorId2: 0, janela: 0 };
+
+/** O que a fonte devolve a cada ciclo: o selo (muda quando algo mudou), a nova marca e as consultas feitas. */
+export interface LeituraCanal {
+  readonly selo: string;
+  readonly marca: MarcaVigia;
+  readonly consultas: number;
+}
+
 /** Validade da marca d'água no armazém (um dia; a cada ciclo é renovada). */
 const TTL_MARCA_S = 86_400;
 
+/** De quem é o canal: o cliente (banco) e o estabelecimento. O `ContextoNucleo` da sessão já serve. */
+export type AlvoVigia = Pick<ContextoNucleo, 'cliente' | 'estabelecimento'>;
+
 export interface DependenciasVigia {
-  readonly rede: string;
-  /** A consulta do canal no banco do estabelecimento (a fonte do M16). */
-  lerCanal(hospital: string, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal>;
+  /** A consulta do canal no banco do cliente, no estabelecimento do contexto (a fonte do M16). */
+  lerCanal(ctx: ContextoNucleo, canal: CanalVigia, marca: MarcaVigia): Promise<LeituraCanal>;
   /** Armazém da marca d'água (Valkey ou memória). */
   readonly armazem: ArmazemSessao;
   readonly tipoArmazem: 'valkey' | 'memoria';
@@ -36,7 +58,8 @@ export interface DependenciasVigia {
 type Ouvinte = (e: EventoVigia) => void;
 
 interface EstadoCanal {
-  readonly hospital: string;
+  readonly cliente: string;
+  readonly estabelecimento: number;
   readonly canal: CanalVigia;
   readonly ouvintes: Set<Ouvinte>;
   selo: string | null;
@@ -79,16 +102,18 @@ export class MotorVigia {
     return this.d.agora?.() ?? Date.now();
   }
 
-  private chave(hospital: string, canal: CanalVigia): string {
-    return `sgh:${this.d.rede}:vigia:${hospital}:${canal}`;
+  private chave(alvo: { cliente: string; estabelecimento: number | null }, canal: CanalVigia): string {
+    return `sgh:${alvo.cliente}:vigia:${alvo.estabelecimento ?? 0}:${canal}`;
   }
 
-  private estado(hospital: string, canal: CanalVigia): EstadoCanal {
-    const k = this.chave(hospital, canal);
+  private estado(alvo: AlvoVigia, canal: CanalVigia): EstadoCanal {
+    if (alvo.estabelecimento === null) throw new Error('vigia: o canal exige o estabelecimento.');
+    const k = this.chave(alvo, canal);
     let e = this.canais.get(k);
     if (!e) {
       e = {
-        hospital,
+        cliente: alvo.cliente,
+        estabelecimento: alvo.estabelecimento,
         canal,
         ouvintes: new Set(),
         selo: null,
@@ -112,8 +137,8 @@ export class MotorVigia {
   }
 
   /** Escuta um canal; devolve o cancelamento. O laço do canal liga com o primeiro ouvinte e para com o último. */
-  assinar(hospital: string, canal: CanalVigia, ouvinte: Ouvinte): () => void {
-    const e = this.estado(hospital, canal);
+  assinar(alvo: AlvoVigia, canal: CanalVigia, ouvinte: Ouvinte): () => void {
+    const e = this.estado(alvo, canal);
     e.ouvintes.add(ouvinte);
     this.agendar(e, 0);
     return () => {
@@ -126,13 +151,13 @@ export class MotorVigia {
   }
 
   /** Versão atual do canal neste processo (os caches do servidor a usam para saber se mudou). */
-  versao(hospital: string, canal: CanalVigia): number {
-    return this.canais.get(this.chave(hospital, canal))?.versao ?? 0;
+  versao(alvo: AlvoVigia, canal: CanalVigia): number {
+    return this.canais.get(this.chave(alvo, canal))?.versao ?? 0;
   }
 
   /** Momento do último ciclo bem-sucedido do canal (ISO), ou null ("dados até", regra 14). */
-  ultimoCiclo(hospital: string, canal: CanalVigia): string | null {
-    const t = this.canais.get(this.chave(hospital, canal))?.ultimoCiclo;
+  ultimoCiclo(alvo: AlvoVigia, canal: CanalVigia): string | null {
+    const t = this.canais.get(this.chave(alvo, canal))?.ultimoCiclo;
     return t ? new Date(t).toISOString() : null;
   }
 
@@ -155,7 +180,7 @@ export class MotorVigia {
       let guardada: string | null = null;
       let semArmazem = false;
       try {
-        guardada = await this.d.armazem.obter(this.chave(e.hospital, e.canal));
+        guardada = await this.d.armazem.obter(this.chave(e, e.canal));
       } catch {
         // Armazém fora: segue com a marca da memória do processo (não é perda).
         semArmazem = true;
@@ -172,7 +197,11 @@ export class MotorVigia {
         if (perdida) e.releituras++;
         marca = MARCA_ZERO;
       }
-      const r = await this.d.lerCanal(e.hospital, e.canal, marca);
+      const r = await this.d.lerCanal(
+        { cliente: e.cliente, estabelecimento: e.estabelecimento, usuario: null, correlacao: `vigia-${e.canal}` },
+        e.canal,
+        marca,
+      );
       e.ciclos++;
       e.consultasUltimoCiclo = r.consultas;
       e.consultasTotais += r.consultas;
@@ -182,7 +211,7 @@ export class MotorVigia {
       e.selo = r.selo;
       e.marca = r.marca;
       try {
-        await this.d.armazem.gravar(this.chave(e.hospital, e.canal), JSON.stringify(r.marca), TTL_MARCA_S);
+        await this.d.armazem.gravar(this.chave(e, e.canal), JSON.stringify(r.marca), TTL_MARCA_S);
       } catch {
         // Sem armazém: a marca fica na memória do processo.
       }
@@ -192,7 +221,7 @@ export class MotorVigia {
         e.ultimaMudanca = e.ultimoCiclo;
         const evento: EventoVigia = {
           canal: e.canal,
-          estabelecimento: e.hospital,
+          estabelecimento: String(e.estabelecimento),
           versao: e.versao,
           em: new Date(e.ultimoCiclo).toISOString(),
         };
@@ -207,7 +236,7 @@ export class MotorVigia {
     } catch (x) {
       e.erros++;
       this.d.aviso?.('vigia: ciclo falhou', {
-        estabelecimento: e.hospital,
+        estabelecimento: e.estabelecimento,
         canal: e.canal,
         erro: x instanceof Error ? x.name : 'erro',
       });
@@ -217,15 +246,15 @@ export class MotorVigia {
   }
 
   /** Ciclo imediato de um canal (testes e consumidores do servidor). */
-  cicloAgora(hospital: string, canal: CanalVigia): Promise<void> {
-    return this.ciclo(this.estado(hospital, canal));
+  cicloAgora(alvo: AlvoVigia, canal: CanalVigia): Promise<void> {
+    return this.ciclo(this.estado(alvo, canal));
   }
 
   saude(): SaudeVigia {
     const agora = this.agora();
     const canais: SaudeCanalVigia[] = [...this.canais.values()].map((e) => ({
       canal: e.canal,
-      estabelecimento: e.hospital,
+      estabelecimento: String(e.estabelecimento),
       ligado: e.ouvintes.size > 0,
       intervaloMs: this.intervaloMs,
       ciclos: e.ciclos,

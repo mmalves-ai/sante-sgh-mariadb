@@ -1,51 +1,18 @@
 // Porta do prontuário de uso diário (M23): o que as telas do painel, do cabeçalho, da linha do tempo, das alergias,
 // dos problemas, dos exames, dos resultados, dos documentos, da alta, dos anexos, do parecer e das assinaturas leem e
 // gravam, independente de onde (a API não escreve SQL; fronteira):
-//   - `legado`: leituras READ ONLY pelos repositórios de @sgh/legado; gravações no banco do estabelecimento pelo
-//     EXECUTOR (as 8 receitas do M23, com a trilha dupla e as SGH_ da prova na mesma transação) e as só do novo pela
-//     transação SGH_ do núcleo (com a SGH_TRILHA junto); em dev sobre a cópia compartilhada, o executor só de leitura
-//     recusa as gravações com o motivo;
-//   - `memoria`: a sessão sintética de dev/ci (E2E), com pacientes, atendimentos, exames, resultados e documentos
-//     SINTÉTICOS; o que se grava é o que o adaptador gravaria, em memória;
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo (leitura pelo Leitor, gravação pelo Executor);
+//   - `memoria`: a sessão sintética de dev/ci (E2E), com dados SINTÉTICOS em memória;
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 (falha fechada).
-import type {
-  AlergiaLegadaLida,
-  AnexoLido,
-  AtendimentoPepLido,
-  CabecalhoDocumentoLido,
-  CienciaLida,
-  ContextoOperacao,
-  ContextoSgh,
-  DocumentoLegadoLido,
-  DocumentoResumoLido,
-  DocumentoSghLido,
-  EventoLido,
-  ExameCatalogoLido,
-  FichaImpressao,
-  FluxoLido,
-  LiberacaoConsultada,
-  CompletudePainelLida,
-  EpisodioLido,
-  LinhaPainelLida,
-  RecortePainel,
-  SupervisaoLida,
-  PacientePepLido,
-  PedidoLido,
-  ProblemaLido,
-  ProblemaNovo,
-  ProfissionalDoRegistro,
-  ResultadoLido,
-  RetratosAtuais,
-  SumarioLido,
-  TcleLido,
-} from '@sgh/legado';
+// Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
+import type { ContextoPorta } from '../cadastro/porta.js';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import type { AlergiaDoProntuarioLida, AnexoLido, AtendimentoPepLido, CabecalhoDocumentoLido, CienciaLida, ContextoGravacaoPep, DocumentoHistoricoLido, DocumentoResumoLido, DocumentoProprioLido, EventoLido, ExameCatalogoLido, FichaImpressao, FluxoLido, LiberacaoConsultada, CompletudePainelLida, EpisodioLido, LinhaPainelLida, RecortePainel, SupervisaoLida, PacientePepLido, PedidoLido, ProblemaLido, ProblemaNovo, ProfissionalDoRegistro, ResultadoLido, RetratosAtuais, SumarioLido, TcleLido } from './tipos-pep.js';
 
 export const PORTA_DOCUMENTOS = Symbol('PORTA_DOCUMENTOS');
 
-export interface ContextoDocs {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** Contexto da sessão: cliente, estabelecimento e usuário por id, correlação, rede e código do estabelecimento. */
+export type ContextoDocs = ContextoPorta;
 
 /** Profissional da sessão com a ocupação (código CBO 2002 de cada CBO) para a matriz ação × categoria. */
 export interface ProfissionalPep extends ProfissionalDoRegistro {
@@ -54,7 +21,7 @@ export interface ProfissionalPep extends ProfissionalDoRegistro {
 }
 
 export interface PortaDocumentos {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'proprio' | 'memoria';
   // ── Leituras ───────────────────────────────────────────────────────────────────────────────────────
   agora(c: ContextoDocs): Promise<string>;
   profissional(c: ContextoDocs, login: string): Promise<ProfissionalPep | null>;
@@ -74,7 +41,7 @@ export interface PortaDocumentos {
     desde: Date,
   ): Promise<CompletudePainelLida>;
   unidades(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
-  preferenciasLegado(
+  preferenciasPainel(
     c: ContextoDocs,
     login: string,
   ): Promise<{ unidade: number | null; campos: { campo: string; exibir: boolean; ordem: number | null }[] }>;
@@ -89,12 +56,12 @@ export interface PortaDocumentos {
     tipos: ReadonlySet<string>,
     limite: number,
   ): Promise<EventoLido[]>;
-  lerReceita(c: ContextoDocs, id: number): Promise<DocumentoLegadoLido | null>;
-  lerAtestado(c: ContextoDocs, id: number): Promise<DocumentoLegadoLido | null>;
+  lerReceita(c: ContextoDocs, id: number): Promise<DocumentoHistoricoLido | null>;
+  lerAtestado(c: ContextoDocs, id: number): Promise<DocumentoHistoricoLido | null>;
   lerExameExterno(
     c: ContextoDocs,
     id: number,
-  ): Promise<(DocumentoLegadoLido & { elementos: { elemento: string; tipo: string }[] }) | null>;
+  ): Promise<(DocumentoHistoricoLido & { elementos: { elemento: string; tipo: string }[] }) | null>;
   documentoDaTrilha(
     c: ContextoDocs,
     tipoAto: number,
@@ -114,7 +81,7 @@ export interface PortaDocumentos {
     situacao: number,
     tipoAto: number,
   ): Promise<CabecalhoDocumentoLido>;
-  alergias(c: ContextoDocs, paciente: number): Promise<AlergiaLegadaLida[]>;
+  alergias(c: ContextoDocs, paciente: number): Promise<AlergiaDoProntuarioLida[]>;
   catalogoAlergias(c: ContextoDocs): Promise<{
     agentes: { id: number; nome: string; tipo: string | null }[];
     principios: { id: number; nome: string }[];
@@ -157,16 +124,16 @@ export interface PortaDocumentos {
   ): Promise<{ pedidos: number; respostas: number; encaminhamentos: number }>;
   especialidades(c: ContextoDocs): Promise<{ id: number; nome: string }[]>;
   especialidadesDoCbo(c: ContextoDocs, cbos: readonly number[]): Promise<number[]>;
-  documentosSgh(c: ContextoDocs, paciente: number): Promise<DocumentoSghLido[]>;
-  documentoSgh(c: ContextoDocs, id: number): Promise<DocumentoSghLido | null>;
-  documentoSghDaOrigem(c: ContextoDocs, tabela: string, id: number): Promise<DocumentoSghLido | null>;
-  pendencias(c: ContextoDocs, login: string): Promise<DocumentoSghLido[]>;
+  documentosSgh(c: ContextoDocs, paciente: number): Promise<DocumentoProprioLido[]>;
+  documentoSgh(c: ContextoDocs, id: number): Promise<DocumentoProprioLido | null>;
+  documentoSghDaOrigem(c: ContextoDocs, tabela: string, id: number): Promise<DocumentoProprioLido | null>;
+  pendencias(c: ContextoDocs, login: string): Promise<DocumentoProprioLido[]>;
   /** Regra 3: os registros de residentes que aguardam a coassinatura deste preceptor. */
   coassinaturas(c: ContextoDocs, preceptor: string): Promise<SupervisaoLida[]>;
   supervisao(c: ContextoDocs, id: number): Promise<SupervisaoLida | null>;
-  /** A coassinatura (ou a recusa) no novo, com a trilha (sem o campo de supervisão do legado). */
+  /** A coassinatura (ou a recusa) com a trilha. */
   coassinarNoNovo(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     x: { id: number; decisao: 'coassinado' | 'recusado'; motivo?: string | null },
   ): Promise<{ registro: number; paciente: number }>;
   registrosSemAssinatura(
@@ -199,10 +166,10 @@ export interface PortaDocumentos {
     entrada: unknown,
     ctx: ContextoOperacao,
   ): Promise<Record<string, unknown>>;
-  // ── Gravações só do novo (transação SGH_ com a trilha) ──────────────────────────────────────────────
-  gravarProblema(c: ContextoSgh, p: ProblemaNovo): Promise<number>;
+  // ── Gravações do produto (Executor, com a trilha) ──────────────────────────────────────────────
+  gravarProblema(c: ContextoGravacaoPep, p: ProblemaNovo): Promise<number>;
   registrarCiencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     x: {
       paciente: number;
       exame: number;
@@ -213,10 +180,10 @@ export interface PortaDocumentos {
       escalonadoPara: string | null;
     },
   ): Promise<number>;
-  aceitarParecer(c: ContextoSgh, parecer: number): Promise<{ paciente: number }>;
-  cancelarParecer(c: ContextoSgh, parecer: number, motivo: string): Promise<void>;
+  aceitarParecer(c: ContextoGravacaoPep, parecer: number): Promise<{ paciente: number }>;
+  cancelarParecer(c: ContextoGravacaoPep, parecer: number, motivo: string): Promise<void>;
   emitirTcle(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     t: {
       paciente: number;
       atendimento: number;
@@ -228,15 +195,15 @@ export interface PortaDocumentos {
     },
   ): Promise<{ id: number; documento: number }>;
   mudarSituacaoTcle(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     m: { paciente: number; versao: number; situacao: 'assinado' | 'revogado'; motivo: string | null },
   ): Promise<number>;
   salvarRascunhoSumario(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     s: { paciente: number; atendimento: number; versao: number; conteudo: string; hashConteudo: string },
   ): Promise<number>;
   registrarTransferencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     t: {
       paciente: number;
       atendimento: number;
@@ -249,7 +216,7 @@ export interface PortaDocumentos {
     },
   ): Promise<{ id: number; documento: number }>;
   registrarObito(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     o: {
       paciente: number;
       atendimento: number;
@@ -262,16 +229,16 @@ export interface PortaDocumentos {
     },
   ): Promise<{ id: number; documento: number }>;
   assinar(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     itens: readonly { documento: number; hash: string }[],
     comoSuporte?: boolean,
   ): Promise<{ assinados: number[]; recusados: { documento: number; motivo: string }[] }>;
   documentoDoRegistroClinico(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     r: { registro: number; paciente: number; atendimento: number | null; hash: string },
   ): Promise<number>;
   registrarEventoDocumento(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     ev: {
       documento: number;
       tipo: 'visualizado' | 'impresso' | 'segunda-via' | 'exportado';
@@ -279,5 +246,5 @@ export interface PortaDocumentos {
     },
   ): Promise<void>;
   /** A leitura incremental do parecer do outro sistema (o ciclo da vigia), com a marca e a trilha. */
-  trazerPedidosDoLegado(c: ContextoDocs): Promise<number>;
+  trazerPedidosAnteriores(c: ContextoDocs): Promise<number>;
 }

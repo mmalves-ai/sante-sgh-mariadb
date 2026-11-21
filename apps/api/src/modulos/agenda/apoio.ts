@@ -1,7 +1,9 @@
-// Apoio dos controladores da agenda (M17): a liberação da funcionalidade (chave agenda.consulta, POL-3: construída
-// completa e DESLIGADA até a conferência na cópia; o administrador liga por estabelecimento, setor ou pessoa), a
-// gravação pelo executor (Idempotency-Key, trilha na mesma transação; na memória, pelo registrador da API), as
-// gravações só do novo (SGH_ com a SGH_TRILHA junto) e o estado de cada ação para a tela.
+// Apoio dos controladores da agenda (M17): a liberação da funcionalidade (chave agenda.consulta: construída completa
+// e DESLIGADA até a conferência; o administrador liga por estabelecimento, setor ou pessoa), a gravação pela porta
+// (Idempotency-Key; na porta própria, o Executor do núcleo grava a trilha na mesma transação; na memória, o
+// registrador da API) e o estado de cada ação para a tela.
+// Melhoria: o contexto da gravação (login, correlação e chave) é montado aqui, sem depender do formato de outro módulo.
+import { randomUUID } from 'node:crypto';
 import {
   EVENTOS_AUDITAVEIS,
   type GravacaoAgenda,
@@ -9,27 +11,54 @@ import {
   type ResultadoAgenda,
 } from '@sgh/contratos';
 import { recursoLigado } from '@sgh/dominio-config';
-import { operacao } from '@sgh/legado';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
-import { contextoOperacao, linhaTrilha, problemaDoCadastro, type SessaoCadastro } from '../cadastro/comum.js';
+import type { SessaoCadastro } from '../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
 import { TTL_CONFIG_NOVO_S } from '../config/public-api.js';
 import { escopoDaRequisicao } from './escopo.js';
-import type { ContextoAgenda, GravadorSghAgenda, PortaAgenda } from './porta.js';
+import { operacaoAgenda } from './operacoes.js';
+import type { ContextoAgenda, ContextoGravacao, GravadorAgenda, PortaAgenda } from './porta.js';
 import { ServicoAgenda } from './servico.js';
+
+const IDEMPOTENCIA = /^[A-Za-z0-9._:-]{8,80}$/;
 
 /** Contexto da porta com o escopo da sessão (unidade e tipo de agenda) para as decisões do servidor. */
 export const ctxAgenda = (s: SessaoCadastro): ContextoAgenda => ({
-  ...s.porta,
+  rede: s.rede,
+  hospital: s.hospital,
   escopo: escopoDaRequisicao(s.req),
 });
 
+/**
+ * Contexto da gravação: login da sessão, correlação e a Idempotency-Key do pedido. Sem a chave, as operações da
+ * agenda recusam (400); as gravações de apoio sem chave ganham uma nova (não são repetíveis pela tela).
+ */
+export function contextoGravacao(s: SessaoCadastro, rotulo: string, exigirChave: boolean): ContextoGravacao {
+  const bruto = s.req.headers['idempotency-key'];
+  const chave = Array.isArray(bruto) ? bruto[0] : bruto;
+  const valida = typeof chave === 'string' && IDEMPOTENCIA.test(chave);
+  if (!valida && exigirChave)
+    throw new ErroProblema(
+      'entrada-invalida',
+      400,
+      'Pedido incompleto',
+      'Falta a Idempotency-Key do pedido de gravação.',
+    );
+  return {
+    ...ctxAgenda(s),
+    login: s.login,
+    correlacao: correlacaoDaRequisicao(s.req, rotulo).slice(0, 64),
+    chaveIdempotencia: valida ? `${chave}:${rotulo}`.slice(0, 80) : `agenda-${randomUUID()}`,
+    ...(s.req.ip ? { enderecoIp: String(s.req.ip) } : {}),
+  };
+}
+
 export const CHAVE_LIBERACAO_AGENDA = 'agenda.consulta';
 
-/** Alvo da linha da SGH_TRILHA de uma gravação só do novo (tabela real, ID do registro e paciente). */
-export interface AlvoSgh {
+/** Alvo do evento de uma gravação de apoio (tabela do produto, id do registro e paciente). */
+export interface AlvoGravacao {
   readonly tabela: string;
   readonly id?: string | null;
   readonly paciente?: number | null;
@@ -135,7 +164,7 @@ export class ApoioAgenda {
         operacoes[op] = { pode: false, motivo: l.motivo };
         continue;
       }
-      const p = await this.porta.podeGravar(s.porta, op, s.login).catch(() => ({
+      const p = await this.porta.podeGravar(ctxAgenda(s), op, s.login).catch(() => ({
         pode: false,
         codigo: 'indisponivel',
         motivo: 'O banco do estabelecimento está indisponível.',
@@ -145,7 +174,7 @@ export class ApoioAgenda {
     return { ligada: l.ligada, motivo: l.motivo, operacoes };
   }
 
-  /** Grava pelo executor (ou pela memória), com a liberação conferida e a trilha. */
+  /** Grava pela porta (Executor do núcleo ou memória), com a liberação e o escopo conferidos. */
   async executar(
     s: SessaoCadastro,
     op: string,
@@ -154,44 +183,35 @@ export class ApoioAgenda {
   ): Promise<ResultadoAgenda> {
     await this.exigirLiberacao(s);
     await this.servico.exigirEscopoDaEntrada(ctxAgenda(s), op, entrada);
-    const ctx = contextoOperacao(s, op);
-    const r = await this.porta.executar(s.porta, op, entrada, ctx).catch((e: unknown) => {
-      throw problemaDoCadastro(e);
-    });
-    if (this.porta.destino === 'memoria' && !r.repetida) {
-      const receita = operacao(op).receita;
+    const definicao = operacaoAgenda(op);
+    const r = await this.porta.executar(contextoGravacao(s, op, true), op, entrada);
+    if (this.porta.destino === 'memoria' && !r.repetida)
       await this.trilha.registrar({
-        evento: receita.evento,
+        evento: definicao.evento,
         rede: s.rede,
         hospital: s.hospital,
         usuario: s.login,
         estacao: estacaoDaRequisicao(s.req).slice(0, 80),
         correlacao: correlacaoDaRequisicao(s.req, op).slice(0, 64),
-        recurso: receita.recurso,
+        recurso: definicao.recurso,
         resultado: 'sucesso',
         tabelaAlvo: 'MEMORIA',
         idAlvo: String(Object.values(r.resultado)[0] ?? ''),
       });
-    }
     return { ok: true, resultado: r.resultado, repetida: r.repetida, mensagem };
   }
 
-  /** Gravação só do novo (SGH_), com a SGH_TRILHA na mesma transação. */
-  async sgh<T>(
+  /** Gravação de apoio (escala planejada, bloqueio de período, fila, confirmação, vínculos), com a trilha. */
+  async gravar<T>(
     s: SessaoCadastro,
     evento: string,
     recurso: string,
-    alvoOuFn: AlvoSgh | ((r: T) => AlvoSgh),
-    fn: (g: GravadorSghAgenda) => Promise<T>,
+    alvoOuFn: AlvoGravacao | ((r: T) => AlvoGravacao),
+    fn: (g: GravadorAgenda) => Promise<T>,
   ): Promise<T> {
     await this.exigirLiberacao(s);
-    const alvoDe = (r: T) => (typeof alvoOuFn === 'function' ? alvoOuFn(r) : alvoOuFn);
-    const r = await this.porta
-      .gravarSgh(s.porta, (x: T) => linhaTrilha(s, evento, recurso, evento, alvoDe(x)), fn)
-      .catch((e: unknown) => {
-        throw problemaDoCadastro(e);
-      });
-    const alvo = alvoDe(r);
+    const r = await this.porta.gravar(contextoGravacao(s, evento, false), fn);
+    const alvo = typeof alvoOuFn === 'function' ? alvoOuFn(r) : alvoOuFn;
     if (this.porta.destino === 'memoria')
       await this.trilha.registrar({
         evento,

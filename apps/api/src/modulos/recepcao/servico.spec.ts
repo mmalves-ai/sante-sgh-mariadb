@@ -2,7 +2,7 @@
 // antiga que ficou no guichê (a senha de recepção só sai dele com a abertura do atendimento).
 import { describe, expect, it } from 'vitest';
 import { mostraNome, NOME_SIGILOSO } from '@sgh/dominio-recepcao';
-import type { DispositivoLidoLegado } from '@sgh/legado';
+import type { DispositivoRecepcao } from './tipos.js';
 import type { CentralChamadas } from './chamadas.js';
 import type { PortaRecepcao } from './porta.js';
 import { ordenarNoGuiche, ServicoRecepcao } from './servico.js';
@@ -75,7 +75,7 @@ describe('nome social e sigiloso no painel e na lista do guichê (W1-04)', () =>
   } as unknown as CentralChamadas;
   const s = new ServicoRecepcao(porta, central);
   const c = { rede: 'r', hospital: 'pc' };
-  const d = { nome: 'TV', recepcao: 2, locais: [], voz: true } as unknown as DispositivoLidoLegado;
+  const d = { nome: 'TV', recepcao: 2, locais: [], voz: true } as unknown as DispositivoRecepcao;
 
   it('painel: iniciais do nome social; sigiloso sem iniciais; a fala nunca leva nome', async () => {
     const p = await s.painel(c, d, true);

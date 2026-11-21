@@ -1,7 +1,7 @@
-// M17 pela HTTP, com a sessão real sobre a fonte sintética e a porta da agenda EM MEMÓRIA (nada conecta a banco):
-// permissões por opção do legado, liberação (POL-3: desligada sem a chave), busca de vaga, marcação com a disputa
+// M17 pela HTTP, com a sessão real sobre a fonte sintética, o módulo registrado (API_MODULOS=agenda) e a porta da
+// agenda EM MEMÓRIA (nada conecta a banco): permissões, liberação (POL-3: desligada sem a chave), busca de vaga, marcação com a disputa
 // do mesmo horário, detalhe auditado, encaixe com motivo, cancelamento com motivo padronizado, remarcação,
-// confirmação (resultado só do novo), falta, painel do dia, bloqueio por período, lista de espera, prévia e
+// confirmação (tentativas registradas), falta, painel do dia, bloqueio por período, lista de espera, prévia e
 // geração da grade (assinatura da prévia), escala planejada e indicadores.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -9,24 +9,26 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloAgenda, pacientesSinteticos } from './modulo.js';
 import { PortaAgendaMemoria } from './porta-memoria.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
 const AMANHA = '2026-10-22';
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'agenda' };
 const trilha = new RegistradorTrilhaMemoria();
-const cadastro = new PortaCadastroMemoria();
 const agenda = new PortaAgendaMemoria(
   null,
-  (c, ids) => cadastro.lerPacientes(c, ids),
-  () => ({ hoje: HOJE, hhmm: '0700' }),
+  async (_c, ids) => pacientesSinteticos(ids),
+  () => ({ hoje: HOJE, hora: '07:00' }),
 );
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, cadastro, agenda });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { agenda: async () => ({ modulo: (ctx) => moduloAgenda(ctx, { porta: agenda }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -111,7 +113,7 @@ describe('marcação, disputa, detalhe auditado e cancelamento', () => {
     const d = await get(s, `/marcacoes/${id}`);
     expect(d.statusCode).toBe(200);
     const lida = trilha.eventos.filter((e) => e.evento === 'agenda.marcacao.lida').at(-1);
-    expect(lida?.tabelaAlvo).toBe('REPACAGD');
+    expect(lida?.tabelaAlvo).toBe('marcacao_horario');
     expect(lida?.idAlvo).toBe(String(id));
     expect(trilha.eventos.some((e) => e.evento === 'agenda.consulta.marcada')).toBe(true);
   });
@@ -324,7 +326,7 @@ describe('escopo da sessão (unidade e tipo de agenda) no servidor', () => {
     expect(marcarFora.statusCode).toBe(403);
     expect(marcarFora.json().codigo).toBe('fora-do-escopo');
     expect((await get(u2, `/indicadores?de=${HOJE}&ate=${HOJE}`)).statusCode).toBe(403);
-    // A agenda sem unidade informada (como as do legado) vale para todas as unidades.
+    // A agenda sem unidade informada vale para todas as unidades.
     expect((await get(u2, `/vagas?agenda=901&de=${dia}&ate=${dia}`)).json().vagas.length).toBeGreaterThan(0);
   });
 

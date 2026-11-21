@@ -1,61 +1,20 @@
 // Porta da prescrição eletrônica (M24): o que as telas da CPOE, da farmácia clínica e da enfermagem leem e gravam,
 // independente de onde (a API não escreve SQL; fronteira):
-//   - `legado`: leituras READ ONLY pelos repositórios de @sgh/legado e as gravações pelo EXECUTOR (receitas
-//     pep.prescrever, pep.copiarPrescricao, pep.renovarPrescricao, pep.incluirItem, pep.suspenderItem e
-//     pep.suspenderPrescricao, com a trilha dupla e as tabelas SGH_ da prova na mesma transação); os registros só do
-//     novo (regras de alerta, futura, reconciliação, ficha, grade por classe, coassinatura) pelo escritor SGH_ do
-//     núcleo; em dev sobre a cópia compartilhada, as gravações no legado ficam recusadas pelo executor só de leitura;
+//   - `proprio`: o banco do cliente pelo @sgh/nucleo (leitura pelo Leitor, gravação pelo Executor);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): atendimentos, produtos, cadastros e prescrições SINTÉTICOS;
 //   - `indisponivel`: fora de dev/ci sem o núcleo: 503 (falha fechada).
+// Melhoria: tipos de negócio próprios (tipos-pep.ts); nenhum código de convivência.
+import type { ContextoPorta } from '../cadastro/porta.js';
 import type { SecaoCadastroPrescricao } from '@sgh/contratos';
-import type {
-  AlergiaLida,
-  DadosClinicosLidos,
-  ConsultaCadastroLida,
-  AtendimentoDaPrescricao,
-  AtendimentoLido,
-  CabecalhoDocumentoLido,
-  ContextoOperacao,
-  DecisaoLida,
-  FichaAntigaLida,
-  FichaNovaLida,
-  FuturaLidaSgh,
-  GradeClasseLida,
-  GravacaoPrescricao,
-  InclusaoItem,
-  InteracaoLida,
-  ItemDoIndice,
-  ItemPrescricaoLido,
-  KitMedicamentoLido,
-  LiberacaoConsultada,
-  OpcaoDominio,
-  PrescricaoAVencer,
-  PrescricaoCabecalhoLida,
-  PrescritorLido,
-  ProdutoLido,
-  ProtocoloLido,
-  ProvaPrescricaoLida,
-  ReconciliacaoGravacao,
-  ReconciliacaoLidaSgh,
-  RegraAlertaLida,
-  RegraHorarioLida,
-  RetratosAtuais,
-  SuspensaoItem,
-  SuspensaoPrescricao,
-  FuturaProgramada,
-  FichaAvulsa,
-  NovaVersaoRegra,
-  NovaGradeClasse,
-} from '@sgh/legado';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import type { AlergiaLida, DadosClinicosLidos, ConsultaCadastroLida, AtendimentoDaPrescricao, AtendimentoLido, CabecalhoDocumentoLido, DecisaoLida, FichaAntigaLida, FichaNovaLida, FuturaGravadaLida, GradeClasseLida, GravacaoPrescricao, InclusaoItem, InteracaoLida, ItemDoIndice, ItemPrescricaoLido, KitMedicamentoLido, LiberacaoConsultada, OpcaoDominio, PrescricaoAVencer, PrescricaoCabecalhoLida, PrescritorLido, ProdutoLido, ProtocoloLido, ProvaPrescricaoLida, ReconciliacaoGravacao, ReconciliacaoGravadaLida, RegraAlertaLida, RegraHorarioLida, RetratosAtuais, SuspensaoItem, SuspensaoPrescricao, FuturaProgramada, FichaAvulsa, NovaVersaoRegra, NovaGradeClasse } from './tipos-pep.js';
 
 export const PORTA_PRESCRICAO = Symbol('PORTA_PRESCRICAO');
 
-export interface ContextoPrescricao {
-  readonly rede: string;
-  readonly hospital: string;
-}
+/** Contexto da sessão: cliente, estabelecimento e usuário por id, correlação, rede e código do estabelecimento. */
+export type ContextoPrescricao = ContextoPorta;
 
-export interface ParametrosLegadoPrescricao {
+export interface ParametrosPrescricao {
   readonly consistirDuplicidade: boolean;
   readonly porMedicamento: boolean;
   readonly porPrincipio: boolean;
@@ -63,7 +22,7 @@ export interface ParametrosLegadoPrescricao {
 }
 
 export interface PortaPrescricao {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'proprio' | 'memoria';
   prescritores(c: ContextoPrescricao, login: string): Promise<PrescritorLido[]>;
   atendimentos(c: ContextoPrescricao, paciente: number): Promise<AtendimentoLido[]>;
   atendimento(c: ContextoPrescricao, atendimento: number): Promise<AtendimentoDaPrescricao | null>;
@@ -110,7 +69,7 @@ export interface PortaPrescricao {
     fim: string,
     cbo: number,
   ): Promise<{ autor: string; prescricao: number; item: number } | null>;
-  parametrosLegado(c: ContextoPrescricao): Promise<ParametrosLegadoPrescricao>;
+  parametrosPrescricao(c: ContextoPrescricao): Promise<ParametrosPrescricao>;
   regrasAlerta(c: ContextoPrescricao): Promise<RegraAlertaLida[]>;
   interacoes(c: ContextoPrescricao, principios: readonly number[]): Promise<InteracaoLida[] | null>;
   prova(c: ContextoPrescricao, prescricao: number): Promise<ProvaPrescricaoLida>;
@@ -120,8 +79,8 @@ export interface PortaPrescricao {
     prescricoes: readonly number[],
   ): Promise<Map<number, { feitaNoNovo: boolean; coassinaturaPendente: boolean }>>;
   decisoes(c: ContextoPrescricao, prescricao: number): Promise<DecisaoLida[]>;
-  futuras(c: ContextoPrescricao, atendimento: number): Promise<FuturaLidaSgh[]>;
-  reconciliacoes(c: ContextoPrescricao, atendimento: number): Promise<ReconciliacaoLidaSgh[]>;
+  futuras(c: ContextoPrescricao, atendimento: number): Promise<FuturaGravadaLida[]>;
+  reconciliacoes(c: ContextoPrescricao, atendimento: number): Promise<ReconciliacaoGravadaLida[]>;
   fichas(c: ContextoPrescricao, paciente: number | null): Promise<FichaNovaLida[]>;
   fichasAntigas(c: ContextoPrescricao, paciente: number): Promise<FichaAntigaLida[]>;
   planejamentosAntigos(
@@ -162,7 +121,7 @@ export interface PortaPrescricao {
     e: SuspensaoPrescricao,
     ctx: ContextoOperacao,
   ): Promise<{ horarios: number }>;
-  // Só no novo (escritor SGH_ do núcleo).
+  // Registros do produto (pelo Executor do núcleo).
   coassinar(c: ContextoPrescricao, prescricao: number, usuario: string): Promise<void>;
   gravarRegra(
     c: ContextoPrescricao,

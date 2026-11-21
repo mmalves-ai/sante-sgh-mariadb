@@ -76,15 +76,12 @@ import {
 } from '@sgh/contratos';
 import {
   copiasValidas,
-  type DimensaoSelecao,
   fichasAImprimir,
   idadeEmAnos,
   type ModeloFicha,
   podeRegistrarDesfecho,
-  type SelecaoFicha,
 } from '@sgh/dominio-atendimento';
 import { enfileirarZpl, ErroZpl, zplEtiquetaProntuario, zplPulseira } from '@sgh/dominio-documento';
-import { declaracao, listarDominio } from '@sgh/legado';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -100,9 +97,7 @@ import {
   CACHE_CONFIG,
   type CacheConfig,
   FONTE_CONFIGURACAO,
-  FONTE_DOMINIOS,
   type FonteConfiguracao,
-  type FonteDominios,
 } from '../config/public-api.js';
 import { FONTE_DOCUMENTO, type FonteDocumento } from '../documento/public-api.js';
 import { ApoioGravacao, corpo, inteiroOuNulo } from '../exames/public-api.js';
@@ -246,7 +241,6 @@ export class AtendimentoController implements OnModuleDestroy {
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
     @Optional() @Inject(FONTE_DOCUMENTO) private readonly documento: FonteDocumento | null = null,
-    @Optional() @Inject(FONTE_DOMINIOS) private readonly dominios: FonteDominios | null = null,
     @Optional() @Inject(SERVICO_SESSAO) private readonly sessoes: ServicoSessao | null = null,
     @Optional() @Inject(RESOLVEDOR_SESSAO) private readonly resolvedor: ResolvedorSessao | null = null,
     @Optional() @Inject(AVISOS_ATENDIMENTO) private readonly avisos: AvisosAtendimento | null = null,
@@ -856,45 +850,10 @@ export class AtendimentoController implements OnModuleDestroy {
     s: SessaoCadastro,
     d: DadosImpresso,
   ): Promise<{ lista: ImpressosAtendimento['fichas']; lida: boolean }> {
-    const fonte = this.dominios;
-    const dm = declaracao('atendimento.modeloFicha');
-    if (!fonte || !dm) return { lista: [], lida: false };
     try {
-      const lidas = await fonte.ler(s.rede, s.hospital, async (l) => {
-        const modelos = await listarDominio(l, dm);
-        const selecoes: SelecaoFicha[] = [];
-        const dims: [string, DimensaoSelecao, string][] = [
-          ['atendimento.fichaConvenio', 'convenio', 'convenio'],
-          ['atendimento.fichaEspecialidade', 'especialidade', 'especialidade'],
-          ['atendimento.fichaUnidade', 'unidade', 'unidade'],
-          ['atendimento.fichaGrupo', 'grupo', 'grupo'],
-        ];
-        for (const [rec, dim, campo] of dims) {
-          const dd = declaracao(rec);
-          if (!dd) continue;
-          for (const it of (await listarDominio(l, dd)).itens)
-            selecoes.push({
-              grafica: it.valores['grafica'] === 'T',
-              modelo: Number(it.valores['modelo'] ?? 0),
-              dimensao: dim,
-              item: Number(it.valores[campo] ?? 0),
-              imprime: it.valores['selecao'] === 'T',
-            });
-        }
-        return { modelos: modelos.itens, selecoes };
-      });
-      const modelos: ModeloFicha[] = lidas.modelos.map((it) => ({
-        grafica: it.valores['grafica'] === 'T',
-        modelo: Number(it.valores['modelo'] ?? 0),
-        nome: String(it.valores['nome'] ?? ''),
-        copias: Number(it.valores['copias'] ?? 0),
-        ordem: Number(it.valores['ordem'] ?? 0),
-        clinicas: String(it.valores['clinicas'] ?? ''),
-        retorno: it.valores['retorno'] === 'S' ? 'S' : 'N',
-        noAtendimento: it.valores['noAtendimento'] !== 'F',
-        idadeInicial: Number(it.valores['idadeInicial'] ?? 0),
-        idadeFinal: Number(it.valores['idadeFinal'] ?? 0),
-      }));
+      const lidas = await this.porta.fichasConfiguradas(s.porta);
+      if (!lidas) return { lista: [], lida: false };
+      const modelos: ModeloFicha[] = [...lidas.modelos];
       const lista = fichasAImprimir(
         modelos,
         lidas.selecoes,

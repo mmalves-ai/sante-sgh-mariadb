@@ -106,15 +106,8 @@ import {
 } from '@sgh/dominio-pep';
 import { linhasComMarcaTelemedicina } from '@sgh/dominio-atendimento';
 import { type ConteudoPep, type ModeloPep, modeloDoTipo, TITULOS_PEP } from '@sgh/dominio-documento';
-import {
-  type ContextoOperacao,
-  type ContextoSgh,
-  type DocumentoLegadoLido,
-  type DocumentoSghLido,
-  type EpisodioLido,
-  SITUACAO_DOC,
-  TIPO_ATO,
-} from '@sgh/legado';
+import type { ContextoOperacao } from '@sgh/nucleo';
+import { type ContextoGravacaoPep, type DocumentoHistoricoLido, type DocumentoProprioLido, type EpisodioLido, SITUACAO_DOC, TIPO_ATO } from './tipos-pep.js';
 import { createHash } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ErroProblema } from '../../problema.filter.js';
@@ -131,7 +124,7 @@ const RECEITA_SGH = {
 } as const;
 
 /** Origem do documento do novo (tabela de origem) → tipo do documento aberto na tela. */
-export function tipoAbertoDaOrigem(d: Pick<DocumentoSghLido, 'origemTabela' | 'tipo'>): TipoDocumentoAberto {
+export function tipoAbertoDaOrigem(d: Pick<DocumentoProprioLido, 'origemTabela' | 'tipo'>): TipoDocumentoAberto {
   switch (d.origemTabela) {
     case 'PRRECEITA':
       return 'receita';
@@ -299,7 +292,7 @@ export class ServicoDocumentos {
     }
   }
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'proprio' | 'memoria' {
     return this.porta.destino;
   }
 
@@ -403,7 +396,7 @@ export class ServicoDocumentos {
     const [{ data: agora }, unidades, pref] = await Promise.all([
       this.agora(c),
       this.porta.unidades(c),
-      this.porta.preferenciasLegado(c, login).catch(() => ({ unidade: null, campos: [] })),
+      this.porta.preferenciasPainel(c, login).catch(() => ({ unidade: null, campos: [] })),
     ]);
     // Recorte por vínculo: sem ocupação no cadastro de profissionais, "meus" e "equipe" ficam vazios (nenhum CBO).
     const prof = f.profissional ?? null;
@@ -723,9 +716,9 @@ export class ServicoDocumentos {
       : { prova: null, marca: null };
   }
 
-  private doLegado(
+  private documentoHistorico(
     tipo: TipoDocumentoAberto,
-    d: DocumentoLegadoLido,
+    d: DocumentoHistoricoLido,
     prova: Awaited<ReturnType<ServicoDocumentos['provaDe']>>,
   ): DocumentoAberto {
     return {
@@ -771,7 +764,7 @@ export class ServicoDocumentos {
       const d = tipo === 'receita' ? await this.porta.lerReceita(c, id) : await this.porta.lerAtestado(c, id);
       if (!d || d.paciente !== paciente) throw nao();
       return {
-        doc: this.doLegado(
+        doc: this.documentoHistorico(
           tipo,
           d,
           await this.provaDe(c, tipo === 'receita' ? 'PRRECEITA' : 'PRATESTREQIMP', id),
@@ -783,7 +776,7 @@ export class ServicoDocumentos {
       const d = await this.porta.lerExameExterno(c, id);
       if (!d || d.paciente !== paciente) throw nao();
       return {
-        doc: this.doLegado(tipo, d, await this.provaDe(c, 'PRLANCAMENTOEXAME', id)),
+        doc: this.documentoHistorico(tipo, d, await this.provaDe(c, 'PRLANCAMENTOEXAME', id)),
         autor: categoriaDoCbo(d.cbo),
       };
     }
@@ -851,7 +844,7 @@ export class ServicoDocumentos {
     return { doc, autor };
   }
 
-  private async paragrafosSgh(c: ContextoDocs, d: DocumentoSghLido): Promise<string[]> {
+  private async paragrafosSgh(c: ContextoDocs, d: DocumentoProprioLido): Promise<string[]> {
     if (d.origemTabela === 'SGH_PEP_TCLE') {
       const t = (await this.porta.tcles(c, d.paciente)).find((x) => x.id === d.origemId);
       return t ? [`Procedimento: ${t.procedimento}`, `Situação: ${t.situacao}`] : [];
@@ -1018,7 +1011,7 @@ export class ServicoDocumentos {
     }));
   }
 
-  async incluirProblema(c: ContextoSgh, paciente: number, g: GravarProblema): Promise<number> {
+  async incluirProblema(c: ContextoGravacaoPep, paciente: number, g: GravarProblema): Promise<number> {
     if (g.atendimento) await this.exigirAtendimento(c, paciente, g.atendimento);
     return this.porta.gravarProblema(c, {
       paciente,
@@ -1035,7 +1028,7 @@ export class ServicoDocumentos {
   }
 
   async mudarProblema(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     paciente: number,
     id: number,
     m: { situacao: 'ativo' | 'resolvido' | 'descartado'; fim?: string | undefined; versao: number },
@@ -1330,7 +1323,7 @@ export class ServicoDocumentos {
   }
 
   async darCiencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     paciente: number,
     exame: number,
     conduta: string,
@@ -1706,7 +1699,7 @@ export class ServicoDocumentos {
   }
 
   async emitirTcle(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     paciente: number,
     e: EmitirTcle,
     prof: ProfissionalPep,
@@ -1818,7 +1811,7 @@ export class ServicoDocumentos {
     };
   }
 
-  async salvarRascunhoSumario(c: ContextoSgh, paciente: number, s: SalvarSumario) {
+  async salvarRascunhoSumario(c: ContextoGravacaoPep, paciente: number, s: SalvarSumario) {
     await this.exigirAtendimento(c, paciente, s.atendimento);
     const vs = await this.porta.sumarios(c, s.atendimento);
     if (vs.some((v) => v.situacao === 'finalizado'))
@@ -1944,7 +1937,7 @@ export class ServicoDocumentos {
   }
 
   async transferencia(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     paciente: number,
     t: RelatorioTransferencia,
     prof: ProfissionalPep,
@@ -1965,7 +1958,7 @@ export class ServicoDocumentos {
   }
 
   async obito(
-    c: ContextoSgh,
+    c: ContextoGravacaoPep,
     paciente: number,
     o: DeclaracaoObito,
     prof: ProfissionalPep,
@@ -2170,7 +2163,7 @@ export class ServicoDocumentos {
    */
   async conteudoParaAssinatura(
     c: ContextoDocs,
-    d: DocumentoSghLido,
+    d: DocumentoProprioLido,
   ): Promise<{ modelo: ModeloPep; titulo: string; profissional: string; conteudo: ConteudoPep }> {
     const tipo = tipoAbertoDaOrigem(d);
     const modelo = modeloDoTipo(d.tipo);

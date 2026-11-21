@@ -9,14 +9,21 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from './porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from './teste.spec-util.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,cadastro' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, cadastro: new PortaCadastroMemoria() });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: registroDeTeste(
+      { cadastro: new PortaCadastroMemoria() },
+      { configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx) },
+    ),
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

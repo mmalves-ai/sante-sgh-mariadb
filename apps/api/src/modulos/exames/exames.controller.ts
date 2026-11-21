@@ -4,7 +4,7 @@
 //   GET  /api/agenda/exames/agendas?termo&situacao&categoria   agendas de exame (com a contagem da cobertura)
 //   GET  /api/agenda/exames/agendas/:id                     convênios, exames cobertos, escala e gerações
 //   POST /api/agenda/exames/agendas/:id/convenios           agenda.definirCoberturaExame (a última pede confirmação)
-//   POST /api/agenda/exames/agendas/:id/exames              cobertura por exame (SGH_AGE_COBERTURA_EXAME)
+//   POST /api/agenda/exames/agendas/:id/exames              cobertura por exame (agenda_servico_exame)
 //   POST /api/agenda/exames/grade/previa                    prévia da geração (nada é gravado)
 //   POST /api/agenda/exames/grade/gerar                     agenda.gerarGradeExame (a prévia aprovada, pela impressão)
 //   GET  /api/agenda/exames/grade?agenda&de&ate             horários do período (paciente mascarado; resíduo)
@@ -58,7 +58,7 @@ import {
   type FonteConfiguracao,
 } from '../config/public-api.js';
 import { ApoioGravacao } from './apoio-gravacao.js';
-import { type GravadorSghExame, PORTA_EXAME, type PortaExame } from './porta.js';
+import { type GravadorCoberturaExame, PORTA_EXAME, type PortaExame } from './porta.js';
 import { type ContextoExame, exigirJanela, ServicoExame } from './servico.js';
 
 export const CHAVE_LIBERACAO_EXAME = 'agenda.exame';
@@ -72,10 +72,10 @@ export const OPERACOES_EXAME: Readonly<Record<string, string>> = {
   'agenda.gerarGradeExame': 'agenda.gradeExame.gerar',
   'agenda.definirCoberturaExame': 'agenda.agendaExame.editar',
 };
-const ACOES_SGH_EXAME = { coberturaExame: 'agenda.agendaExame.editar' };
+const ACOES_DIRETAS_EXAME = { coberturaExame: 'agenda.agendaExame.editar' };
 
-/** Tabela real da cobertura por exame (script 0188), também na linha da trilha. */
-const TABELA_COBERTURA = 'SGH_AGE_COBERTURA_EXAME';
+/** Tabela da cobertura por exame (pedido de DDL do lote 01-05), também na linha da trilha. */
+const TABELA_COBERTURA = 'agenda_servico_exame';
 
 type Esquema<T> = {
   safeParse(
@@ -112,7 +112,7 @@ export function ctxExame(s: SessaoCadastro): ContextoExame {
 
 @Controller('agenda/exames')
 export class ExamesController {
-  private readonly apoio: ApoioGravacao<GravadorSghExame>;
+  private readonly apoio: ApoioGravacao<GravadorCoberturaExame>;
   private readonly servico: ServicoExame;
   constructor(
     @Inject(PORTA_EXAME) private readonly porta: PortaExame,
@@ -139,7 +139,7 @@ export class ExamesController {
   @Get('gravacao')
   @Permissao('agenda.exame.ler')
   gravacao(@Req() req: RequisicaoAutorizada): Promise<GravacaoAgenda> {
-    return this.apoio.gravacao(sessaoDe(req), ACOES_SGH_EXAME);
+    return this.apoio.gravacao(sessaoDe(req), ACOES_DIRETAS_EXAME);
   }
 
   @Get('agendas')
@@ -181,7 +181,7 @@ export class ExamesController {
   @Post('agendas/:id/exames')
   @HttpCode(200)
   @Permissao('agenda.agendaExame.editar')
-  @AuditadoNoHandler('cobertura por exame (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('cobertura por exame com a trilha na mesma transação')
   async exames(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -223,21 +223,8 @@ export class ExamesController {
       }),
       async (g) => {
         if (p.acao === 'incluir')
-          return g.incluirCobertura({
-            agenda: a.id,
-            nome: a.nome,
-            crm: a.crm,
-            exame: a.exame,
-            idExame: p.exame,
-            convenio: p.convenio,
-            usuario: s.login,
-          });
-        const k = await g.encerrarCobertura({
-          agenda: a.id,
-          idExame: p.exame,
-          convenio: p.convenio,
-          usuario: s.login,
-        });
+          return g.incluirCobertura({ agenda: a.id, exame: p.exame, convenio: p.convenio });
+        const k = await g.encerrarCobertura({ agenda: a.id, exame: p.exame, convenio: p.convenio });
         if (k === 0)
           throw new ErroProblema(
             'nao-encontrado',
@@ -326,7 +313,7 @@ export class ExamesController {
     const s = sessaoDe(req);
     const e = corpo(esquemaAgendarExame, b);
     await this.servico.exigirAgendaDaEntrada(ctxExame(s), e.agenda);
-    // A cobertura por exame do novo (a receita confere a lista de convênios da agenda, que o outro sistema também usa).
+    // A cobertura por exame da agenda (a operação confere as fontes pagadoras aceitas pela agenda).
     if (e.exame !== null) {
       const av = avaliarCoberturaExame(
         await this.porta.cobertura(ctxExame(s), e.agenda),
@@ -368,7 +355,7 @@ export class ExamesController {
   @Auditar('agenda.exame.lido')
   async detalhe(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<MarcacaoExameDetalhe> {
     const m = await this.servico.detalheMarcacao(ctxExame(sessaoDe(req)), idDaRota(id));
-    req.sghAlvo = { tabelaAlvo: 'SIPACAGD', idAlvo: String(m.id) };
+    req.sghAlvo = { tabelaAlvo: 'marcacao_horario', idAlvo: String(m.id) };
     return m;
   }
 
@@ -413,7 +400,7 @@ export class ExamesController {
   @Auditar('agenda.exame.lido')
   async doPaciente(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<ListaMarcacoesExame> {
     const pac = idDaRota(id);
-    req.sghAlvo = { tabelaAlvo: 'RICADPAC', idAlvo: String(pac) };
+    req.sghAlvo = { tabelaAlvo: 'paciente', idAlvo: String(pac) };
     return this.servico.marcacoesDoPaciente(ctxExame(sessaoDe(req)), pac);
   }
 

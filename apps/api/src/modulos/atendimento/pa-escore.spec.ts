@@ -11,12 +11,18 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
+import { moduloConfiguracaoDeTeste, registroDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloAtendimento } from './modulo.js';
 import { PortaRecepcaoMemoria } from '../recepcao/porta-memoria.js';
 import { alertaVigente } from './escore-pa.js';
 import type { GravadorSghAtendimento } from './porta.js';
 import { PortaAtendimentoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,atendimento',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const recepcao = new PortaRecepcaoMemoria({ estado: () => 'verde' });
@@ -51,10 +57,13 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    cadastro,
-    recepcao,
-    atendimento,
-    vigia: null,
+    registro: registroDeTeste(
+      { cadastro },
+      {
+        configuracao_teste: (ctx) => moduloConfiguracaoDeTeste(ctx),
+        atendimento: (ctx) => moduloAtendimento(ctx, { porta: atendimento }),
+      },
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

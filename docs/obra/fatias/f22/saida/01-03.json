@@ -1,0 +1,93 @@
+{
+ "lote": "01-03",
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/config/cache-config.ts",
+  "src/modulos/config/chave-recurso.ts",
+  "src/modulos/config/configuracao-fonte.ts",
+  "src/modulos/config/criterio-ligar.ts",
+  "src/modulos/config/dominios-fonte.ts",
+  "src/modulos/config/dominios.controller.ts",
+  "src/modulos/config/falha-configuracao.ts",
+  "src/modulos/config/fonte-de-cor.ts",
+  "src/modulos/config/gravacao.controller.ts",
+  "src/modulos/config/gravacao.ts",
+  "src/modulos/config/homologacao.controller.ts",
+  "src/modulos/config/homologacao.ts",
+  "src/modulos/config/liberacao.controller.ts",
+  "src/modulos/config/onda0.controller.ts",
+  "src/modulos/config/onda0.ts",
+  "src/modulos/config/parametros.controller.ts",
+  "src/modulos/config/prontidao.controller.ts",
+  "src/modulos/config/prontidao.ts",
+  "src/modulos/config/public-api.ts",
+  "src/modulos/config/catalogo-operacoes.ts",
+  "src/modulos/config/configuracao-propria.ts",
+  "src/modulos/config/dominios-catalogo.ts",
+  "src/modulos/config/dominios-tabelas.ts",
+  "src/modulos/config/configuracao-propria.int.spec.ts",
+  "src/modulos/config/dominios-propria.int.spec.ts",
+  "src/modulos/config/dominios-catalogo.spec.ts"
+ ],
+ "apagados": [
+  "apps/api/src/modulos/config/assinaturas.controller.ts",
+  "apps/api/src/modulos/config/assinaturas.ts",
+  "apps/api/src/modulos/config/coexistencia.controller.ts",
+  "apps/api/src/modulos/config/fonte.ts",
+  "apps/api/src/modulos/config/vigia-reconciliacao.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "ddl",
+   "onde": "db/migracoes/02_ADM (tabelas e chaves)",
+   "motivo": "Chaves de liberação, lotes e pré-requisitos dos recursos não existem no modelo; a FonteConfiguracaoPropria grava nelas (os 4 casos de banco das chaves ficam pulados até a migração entrar, e o cliente f22_o1 precisa recebê-la)",
+   "tabelas": "-- 02_ADM (tabelas): chaves de liberação por estabelecimento, lote reversível e pré-requisitos dos recursos (POL-3)\nCREATE TABLE liberacao_lote (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  numero            BIGINT UNSIGNED NOT NULL COMMENT 'Número de negócio do lote no estabelecimento (sequência liberacao_lote)',\n  tipo              VARCHAR(20) NOT NULL,\n  chave             VARCHAR(120) NOT NULL COMMENT 'Chave da operação ou do recurso',\n  justificativa     VARCHAR(500) NOT NULL,\n  referencia_autorizacao VARCHAR(200) NULL COMMENT 'Referência da autorização do dono para ligar em produção',\n  alteradas         INT UNSIGNED NOT NULL,\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_liberacao_lote_tipo CHECK (tipo IN ('operacao','recurso')),\n  CONSTRAINT ck_liberacao_lote_alteradas CHECK (alteradas > 0),\n  UNIQUE KEY uq_liberacao_lote_numero (estabelecimento_id, numero),\n  KEY ix_liberacao_lote_chave (estabelecimento_id, chave)\n) COMMENT='Lote de mudança das chaves de liberação (uma ação da tela), reversível, com justificativa';\n\nCREATE TABLE liberacao_chave (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  tipo              VARCHAR(20) NOT NULL,\n  chave             VARCHAR(120) NOT NULL COMMENT 'Chave da operação ou do recurso',\n  escopo            VARCHAR(20) NOT NULL,\n  valor             VARCHAR(120) NOT NULL COMMENT 'Asterisco (estabelecimento inteiro), código do setor, do grupo ou login da pessoa',\n  ligada            BOOLEAN NULL COMMENT 'Nulo: a linha não decide e vale o nível acima (devolvida ao herdado pela reversão)',\n  ligada_antes      BOOLEAN NULL COMMENT 'Estado antes do último lote (reversão)',\n  liberacao_lote_id BIGINT UNSIGNED NULL COMMENT 'Último lote que mudou a linha',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_liberacao_chave_tipo CHECK (tipo IN ('operacao','recurso')),\n  CONSTRAINT ck_liberacao_chave_escopo CHECK (escopo IN ('hospital','setor','grupo','pessoa')),\n  CONSTRAINT ck_liberacao_chave_hospital CHECK (escopo <> 'hospital' OR valor = '*'),\n  UNIQUE KEY uq_liberacao_chave_escopo (estabelecimento_id, chave, escopo, valor),\n  KEY ix_liberacao_chave_lote (liberacao_lote_id)\n) COMMENT='Chave de liberação de operação ou recurso por estabelecimento e escopo (estabelecimento, setor, grupo, pessoa)';\n\nCREATE TABLE recurso_prerequisito (\n  id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  recurso           VARCHAR(120) NOT NULL COMMENT 'Chave do recurso',\n  tipo              VARCHAR(30) NOT NULL,\n  situacao          VARCHAR(20) NOT NULL DEFAULT 'pendente',\n  validade          DATE NULL,\n  evidencia         VARCHAR(200) NULL COMMENT 'Referência da evidência (sem segredo)',\n  criado_em         DATETIME(3) NOT NULL,\n  criado_por        BIGINT UNSIGNED NULL,\n  alterado_em       DATETIME(3) NULL,\n  alterado_por      BIGINT UNSIGNED NULL,\n  versao            INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_recurso_prerequisito_tipo CHECK (tipo IN ('certificado','credenciamento','contrato','aprovacao')),\n  CONSTRAINT ck_recurso_prerequisito_situacao CHECK (situacao IN ('pendente','cumprido','dispensado')),\n  UNIQUE KEY uq_recurso_prerequisito_tipo (estabelecimento_id, recurso, tipo)\n) COMMENT='Pré-requisito externo de um recurso no estabelecimento (certificado, credenciamento, contrato, aprovação)';",
+   "chaves": "-- 02_ADM (chaves)\nALTER TABLE liberacao_lote\n  ADD CONSTRAINT fk_liberacao_lote_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT;\nALTER TABLE liberacao_chave\n  ADD CONSTRAINT fk_liberacao_chave_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_liberacao_chave_liberacao_lote_id FOREIGN KEY (liberacao_lote_id) REFERENCES liberacao_lote (id) ON DELETE RESTRICT;\nALTER TABLE recurso_prerequisito\n  ADD CONSTRAINT fk_recurso_prerequisito_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT;"
+  },
+  {
+   "tipo": "carga",
+   "onde": "tools/db/criar_cliente.py",
+   "motivo": "Carregar parametro_definicao (e o modulo_sistema de cada um) a partir de PARAMETROS_NOVOS (@sgh/contratos), como acao_sistema; sem a linha, definir parâmetro responde 409 parametro-nao-carregado. Nível 'empresa' do contrato não existe no modelo (o produto responde 422)."
+  },
+  {
+   "tipo": "carga",
+   "onde": "tools/db/carregar_acoes.py",
+   "motivo": "Incluir as ações do CRUD genérico <modulo>.<recurso>.<ler|criar|editar|inativar|exportar> das tabelas de TABELAS_DOMINIO (apps/api/src/modulos/config/dominios-tabelas.ts; módulo pela área em MODULO_DA_AREA de dominios-catalogo.ts); sem elas, só o administrador vê os domínios."
+  },
+  {
+   "tipo": "contrato",
+   "onde": "packages/contratos (destino das respostas)",
+   "motivo": "O enum destino ['legado','memoria'] dos contratos deveria ser ['banco','memoria']; até lá destinoNoContrato() traduz 'banco' para o valor antigo."
+  },
+  {
+   "tipo": "montagem",
+   "onde": "apps/api/src/modulos/config/modulo.ts (lote que registrar 'config')",
+   "motivo": "Providers (só depois de o DDL de 02_ADM pedido acima entrar em db/migracoes e ser aplicado ao cliente f22_o1): na fábrica do módulo, `await FonteConfiguracaoPropria.conferirModelo(ctx.nucleo, cliente)` ANTES de registrar a fonte própria (recusa subir sem liberacao_chave/liberacao_lote/recurso_prerequisito; não registrar a fonte própria enquanto o DDL faltar); FONTE_CONFIGURACAO=new FonteConfiguracaoPropria(ctx.nucleo, cliente); FONTE_DOMINIOS=new FonteDominiosPropria(ctx.nucleo, cliente); CATALOGO_OPERACOES=catalogoOperacoesProprio() (sem argumento: as operações declaradas em @sgh/contratos; lista vazia é recusada); PORTA_ONDA0=portaOnda0Propria(ctx.nucleo, cliente, fonte, estabelecimentos, catalogo) (o mesmo catálogo do CATALOGO_OPERACOES); FONTE_GRAVACAO=criarFonteGravacao({cliente, rede, metricas, nucleo}); sem núcleo em dev/ci: fonteConfiguracaoMemoria, fonteDominiosMemoria, portaOnda0Memoria(fonte, hospitais, catalogo). CAMINHO_CATALOGO_LIBERACAO, VIGIA_RECONCILIACAO, FONTE_COEXISTENCIA, FONTE_ASSINATURAS e os controllers Coexistencia/Assinaturas saíram."
+  },
+  {
+   "tipo": "specs",
+   "onde": "lote 02-02 (specs do config)",
+   "motivo": "assinaturas.spec, coexistencia.spec, vigia-reconciliacao.spec testam código removido (apagar); gravacao.spec, onda0.spec, dominio.controller.spec e dominios-liberacao.spec precisam ser reescritos sobre as portas novas (FonteConfiguracao sem parametrosLegado; FonteDominios nova; PortaOnda0 sem vigia)."
+  },
+  {
+   "tipo": "web",
+   "onde": "apps/web",
+   "motivo": "Rotas removidas (ADR 0003, convivência): GET config/estabelecimentos, POST config/schema, GET config/assinaturas, GET config/gravacao, GET config/assinaturas/vigia, GET cadastros/dominios/vigia/exclusoes-fora; as telas que as chamam devem sair."
+  },
+  {
+   "tipo": "tsconfig",
+   "onde": "apps/api/tsconfig.migrado.json",
+   "motivo": "Não existe; o conferidor para em 'falta apps/api/tsconfig.migrado.json'. Criar como cópia do tsconfig.login.json e acrescentar fecho_tsconfig. Com um tsconfig equivalente (login + fecho deste lote) o tsc deu 0 erros."
+  },
+  {
+   "tipo": "codigo",
+   "onde": "apps/api/src/modulos/cadastro/profissionais.controller.ts (lote 01-02)",
+   "motivo": "PortaOnda0.podeEscrever agora recebe o sujeito (pessoa, grupo e setor da sessão: {pessoa: s.login, grupo, setor}) em vez de só o login, e rejeita quando não consegue ler as chaves. Na linha ~315, passar o sujeito e não converter a rejeição em false (.catch(() => false)): responder 503 'liberação indisponível' ou marcar a operação como não conferida. A assinatura aceita ainda o login (string) para não quebrar a compilação até a troca."
+  },
+  {
+   "tipo": "ddl-dependencia",
+   "onde": "apps/api/src/modulos/config/configuracao-propria.int.spec.ts",
+   "motivo": "Os 7 casos de banco das chaves (lote, recusa do plano, outro tipo, pré-requisito e os 3 de contrato de efeito: linhas, versao, trilha, número do lote pela sequencia_negocio) ficam pulados até o DDL de 02_ADM ser aplicado ao cliente f22_o1; depois, rodar tools/obra/conferir-lote-f22.sh 01-03 de novo."
+  }
+ ]
+}

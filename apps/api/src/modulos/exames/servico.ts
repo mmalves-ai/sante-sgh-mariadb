@@ -1,6 +1,8 @@
 // Serviço da agenda de exames (M18): monta as respostas das telas a partir das leituras da porta (vocabulário do novo,
 // nome do paciente mascarado nas listas) e decide no servidor o que a tela só mostra: o escopo da unidade, a
 // cobertura do convênio e do exame, a prévia da grade (motor da agenda) e a impressão que a gravação confere.
+// Melhoria: a prévia não recusa mais duração ou faixa "fora do padrão já visto" no outro sistema (era convivência
+// com a gravação antiga); valem as regras do motor da agenda. Agenda por id em todas as leituras.
 import { createHash } from 'node:crypto';
 import {
   type AgendaExameResumo,
@@ -23,7 +25,6 @@ import {
   avaliarCoberturaExame,
   CATEGORIAS_EXAME,
   duracaoMinutos,
-  estadoDoHorarioExame,
   type FaixaEscala,
   formatarHora,
   NOME_DO_DIA,
@@ -35,10 +36,17 @@ import {
   somarDias,
   TIPOS_HORARIO_EXAME,
 } from '@sgh/dominio-agenda';
-import { type AgendaExameLida, foraDoPadraoGradeExame, type MarcacaoExameLida } from '@sgh/legado';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoPortaM18 } from './apoio-gravacao.js';
+import { type ContextoPortaM18, destinoDoContrato } from './apoio-gravacao.js';
 import type { PortaExame } from './porta.js';
+import type { AgendaExame, GeracaoGrade, MarcacaoExame } from './tipos.js';
+
+const ROTULO_GERACAO: Readonly<Record<GeracaoGrade['situacao'], string>> = {
+  gerada: 'Gerada',
+  revertida: 'Excluída',
+  pendente: 'Em processamento',
+  falhou: 'Falhou',
+};
 
 /** Escopo da sessão na agenda de exames: as unidades aceitas (null = sem restrição). */
 export interface ContextoExame extends ContextoPortaM18 {
@@ -76,7 +84,7 @@ const unidadeNoEscopo = (c: ContextoExame, unidade: number) =>
 export class ServicoExame {
   constructor(private readonly porta: PortaExame) {}
 
-  resumo(a: AgendaExameLida, exames: number): AgendaExameResumo {
+  resumo(a: AgendaExame, exames: number): AgendaExameResumo {
     return {
       id: a.id,
       nome: a.nome,
@@ -85,7 +93,7 @@ export class ServicoExame {
       exameRotulo: rotuloTipoHorario(a.exame),
       categoria: { codigo: a.categoria, rotulo: rotuloCategoria(a.categoria) },
       duracao: formatarHora(a.duracao),
-      ativa: a.ativa === 'S',
+      ativa: a.ativa,
       unidade: a.unidade,
       gradeInicio: a.inicio,
       gradeFim: a.fim,
@@ -94,7 +102,7 @@ export class ServicoExame {
     };
   }
 
-  async exigirAgenda(c: ContextoExame, id: number): Promise<AgendaExameLida> {
+  async exigirAgenda(c: ContextoExame, id: number): Promise<AgendaExame> {
     const a = await this.porta.agenda(c, id);
     if (!a || !unidadeNoEscopo(c, a.unidade))
       throw new ErroProblema(
@@ -107,7 +115,7 @@ export class ServicoExame {
   }
 
   /** Confere a agenda (existe e está no escopo da unidade) de uma entrada de gravação. */
-  async exigirAgendaDaEntrada(c: ContextoExame, agenda: number): Promise<AgendaExameLida> {
+  async exigirAgendaDaEntrada(c: ContextoExame, agenda: number): Promise<AgendaExame> {
     return this.exigirAgenda(c, agenda);
   }
 
@@ -130,10 +138,10 @@ export class ServicoExame {
     const itens = ags
       .filter((a) => unidadeNoEscopo(c, a.unidade))
       .filter((a) => !termo || a.nome.toUpperCase().includes(termo))
-      .filter((a) => !f.situacao || (f.situacao === 'ativas') === (a.ativa === 'S'))
+      .filter((a) => !f.situacao || (f.situacao === 'ativas') === a.ativa)
       .filter((a) => f.categoria === null || a.categoria === f.categoria)
       .map((a) => this.resumo(a, exames.get(a.id) ?? 0));
-    return { itens, total: itens.length, destino: this.porta.destino };
+    return { itens, total: itens.length, destino: destinoDoContrato(this.porta.destino) };
   }
 
   async detalhe(c: ContextoExame, id: number): Promise<DetalheAgendaExame> {
@@ -141,8 +149,8 @@ export class ServicoExame {
     const [convenios, cobertura, escala, geracoes] = await Promise.all([
       this.porta.convenios(c, id),
       this.porta.cobertura(c, id),
-      this.porta.escala(c, a.nome, a.crm),
-      this.porta.geracoes(c, a.nome, a.crm),
+      this.porta.escala(c, a.id),
+      this.porta.geracoes(c, a.id),
     ]);
     return {
       agenda: this.resumo(a, new Set(cobertura.map((x) => x.exame)).size),
@@ -167,8 +175,8 @@ export class ServicoExame {
         fim: g.fim,
         criadaEm: g.em,
         hora: formatarHora(g.hora),
-        situacao: g.status === 'C' ? 'Gerada' : g.status === 'E' ? 'Excluída' : g.status || 'Gerada',
-        dias: [...g.semanas].flatMap((x, i) => (x === 'T' ? [i + 1] : [])),
+        situacao: ROTULO_GERACAO[g.situacao],
+        dias: [...g.dias],
       })),
       observacao: null,
     };
@@ -177,13 +185,13 @@ export class ServicoExame {
   async grade(c: ContextoExame, id: number, de: string, ate: string): Promise<GradeExame> {
     const a = await this.exigirAgenda(c, id);
     const [h, exames] = await Promise.all([
-      this.porta.horarios(c, a.nome, a.crm, de, ate),
+      this.porta.horarios(c, a.id, de, ate),
       this.porta.cobertura(c, id),
     ]);
     let cs = 0;
     let os = 0;
     const horarios = h.itens.map((x) => {
-      const estado = estadoDoHorarioExame({ ...x, temMarcacao: x.marcacao !== null });
+      const estado = x.estado;
       if (estado === 'residuo-confirmado-sem-paciente') cs++;
       if (estado === 'marcacao-incompleta') os++;
       return {
@@ -223,13 +231,13 @@ export class ServicoExame {
   ): Promise<BuscaVagasExame> {
     const ags = (await this.porta.agendas(c)).filter(
       (a) =>
-        a.ativa === 'S' &&
+        a.ativa &&
         unidadeNoEscopo(c, a.unidade) &&
         (f.agenda === null || a.id === f.agenda) &&
         (f.categoria === null || a.categoria === f.categoria),
     );
     const cob = await this.porta.cobertura(c, null);
-    const aceitas: AgendaExameLida[] = [];
+    const aceitas: AgendaExame[] = [];
     for (const a of ags) {
       if (f.convenio !== null && a.convenios > 0) {
         const lista = await this.porta.convenios(c, a.id);
@@ -272,21 +280,10 @@ export class ServicoExame {
   }
 
   private resumoMarcacao(
-    m: MarcacaoExameLida,
+    m: MarcacaoExame,
     ext: Map<number, { idExame: number | null; exameNome: string | null; canal: string }>,
   ): MarcacaoExameResumo {
-    const estado = m.temHorario
-      ? estadoDoHorarioExame({
-          data: m.data,
-          hora: m.hora,
-          exame: m.exameHorario,
-          paciente: m.pacienteHorario,
-          livre: 'N',
-          situacao: m.situacaoHorario,
-          tipo: 'N',
-          temMarcacao: true,
-        })
-      : 'outro';
+    const estado = m.estado;
     const e = ext.get(m.id);
     return {
       id: m.id,
@@ -298,20 +295,20 @@ export class ServicoExame {
       prontuario: m.prontuario,
       idPaciente: m.idPaciente,
       convenio: m.convenio,
-      situacao: m.situacaoHorario,
+      situacao: m.situacao,
       estado,
       estadoRotulo: ROTULOS_ESTADO_EXAME[estado],
-      categoria: rotuloCategoria(m.tpAge || m.categoriaAgenda),
+      categoria: rotuloCategoria(m.categoriaAgenda),
       exameEscolhido: e?.idExame ? { id: e.idExame, nome: e.exameNome ?? `Exame ${e.idExame}` } : null,
       canal: e?.canal ?? null,
-      atendido: m.atendido === 'T',
+      atendido: m.atendido,
       vinculo: m.prontuario > 0 ? 'prontuario' : 'sem-vinculo',
     };
   }
 
   async marcacoesDoDia(c: ContextoExame, data: string, agenda: number | null): Promise<ListaMarcacoesExame> {
     const a = agenda === null ? null : await this.exigirAgenda(c, agenda);
-    const r = await this.porta.marcacoesDoDia(c, data, a ? { nome: a.nome, crm: a.crm } : null);
+    const r = await this.porta.marcacoesDoDia(c, data, a ? a.id : null);
     const ags = a ? [a] : await this.porta.agendas(c);
     const noEscopo = new Set(ags.filter((x) => unidadeNoEscopo(c, x.unidade)).map((x) => x.id));
     const itens = r.itens.filter((m) => (m.agenda === null ? !c.unidades : noEscopo.has(m.agenda)));
@@ -367,14 +364,14 @@ export class ServicoExame {
     c: ContextoExame,
     f: { de: string; ate: string; agenda: number | null; pagina: number; porPagina: number },
   ): Promise<ListaCancelamentosExame> {
-    let nomes: string[] | null = null;
-    if (f.agenda !== null) nomes = [(await this.exigirAgenda(c, f.agenda)).nome];
+    let ids: number[] | null = null;
+    if (f.agenda !== null) ids = [(await this.exigirAgenda(c, f.agenda)).id];
     else if (c.unidades)
-      nomes = (await this.porta.agendas(c)).filter((a) => unidadeNoEscopo(c, a.unidade)).map((a) => a.nome);
+      ids = (await this.porta.agendas(c)).filter((a) => unidadeNoEscopo(c, a.unidade)).map((a) => a.id);
     const r = await this.porta.cancelamentos(c, {
       de: f.de,
       ate: f.ate,
-      agendas: nomes,
+      agendas: ids,
       pagina: f.pagina,
       porPagina: f.porPagina,
     });
@@ -455,23 +452,37 @@ export class ServicoExame {
     },
   ): Promise<{ previa: PreviaGradeExame; entrada: GerarGradeExameEntrada }> {
     const a = await this.exigirAgenda(c, p.agenda);
-    const [r, feriados, horarios, escala, cob] = await Promise.all([
+    const [r, feriados, existentes, escala, cob] = await Promise.all([
       this.porta.relogio(c),
       this.porta.feriados(c, p.de, p.ate),
-      this.porta.horarios(c, a.nome, a.crm, p.de, p.ate),
-      this.porta.escala(c, a.nome, a.crm),
+      this.porta.horariosExistentes(c, a.id, p.de, p.ate),
+      this.porta.escala(c, a.id, { de: p.de, ate: p.ate }),
       this.porta.cobertura(c, a.id),
     ]);
-    const faixas: FaixaEscala[] =
-      p.faixas && p.faixas.length > 0
-        ? [...p.faixas]
-        : escala.map((l) => ({
-            semana: l.semana,
-            inicio: l.horaInicio,
-            fim: l.horaFim,
-            intervaloInicio: null,
-            intervaloFim: null,
-          }));
+    const daEscala = !(p.faixas && p.faixas.length > 0);
+    // A escala que muda de vigência dentro do período não cabe numa geração só (o motor usa uma escala por período).
+    const corte = daEscala
+      ? escala.find((l) => l.vigenciaInicio > p.de || (l.vigenciaFim !== null && l.vigenciaFim < p.ate))
+      : undefined;
+    if (corte)
+      throw new ErroProblema(
+        'recusa-de-negocio',
+        409,
+        'Escala muda no período',
+        `A escala da agenda muda de vigência dentro do período (faixa de ${corte.vigenciaInicio} a ${
+          corte.vigenciaFim ?? 'sem fim'
+        }): gere até a véspera da mudança e depois o restante.`,
+        { codigo: 'escala-muda-no-periodo' },
+      );
+    const faixas: FaixaEscala[] = daEscala
+      ? escala.map((l) => ({
+          semana: l.semana,
+          inicio: l.horaInicio,
+          fim: l.horaFim,
+          intervaloInicio: l.intervaloInicio,
+          intervaloFim: l.intervaloFim,
+        }))
+      : [...(p.faixas ?? [])];
     if (faixas.length === 0)
       throw new ErroProblema(
         'entrada-invalida',
@@ -493,11 +504,10 @@ export class ServicoExame {
         { de: p.de, ate: p.ate, duracaoMinutos: duracao, faixas, incluirFeriados: p.incluirFeriados },
         {
           relogio: r,
-          agendaAtiva: a.ativa === 'S',
-          feriados,
+          agendaAtiva: a.ativa,
+          feriados: feriados ?? [],
           bloqueios: [],
-          existentes: new Set(horarios.itens.map((h) => `${h.data} ${h.hora}`)),
-          // Sábado e domingo: a escala dos exames nunca teve (SICTRAGE só de 2 a 6; <5 de 1.673 gerações com sábado).
+          existentes: new Set(existentes),
         },
       );
     } catch (e) {
@@ -507,11 +517,6 @@ export class ServicoExame {
         });
       throw e;
     }
-    const fora = foraDoPadraoGradeExame({ duracao: plano.duracao, escala: plano.escala });
-    if (fora)
-      throw new ErroProblema('recusa-de-negocio', 409, 'Horário fora do padrão da escala', fora, {
-        codigo: 'fora-do-padrao',
-      });
     const entrada: GerarGradeExameEntrada = {
       agenda: a.id,
       de: p.de,
@@ -520,7 +525,19 @@ export class ServicoExame {
       horarios: [...plano.horarios],
       escala: [...plano.escala],
       semanas: [...plano.semanas],
+      incluirFeriados: p.incluirFeriados,
     };
+    const alertas: { codigo: string; texto: string }[] = [...plano.alertas];
+    if (feriados === null && !p.incluirFeriados)
+      alertas.push({
+        codigo: 'feriados-nao-conferidos',
+        texto: 'O calendário de feriados não está cadastrado: confira os feriados do período antes de gerar.',
+      });
+    if (daEscala && !p.incluirFeriados && escala.some((l) => l.atendeFeriado))
+      alertas.push({
+        codigo: 'escala-atende-feriado',
+        texto: 'Parte da escala atende em feriado: marque "incluir feriados" para gerar esses dias.',
+      });
     const assinatura = createHash('sha256').update(JSON.stringify(entrada)).digest('hex').slice(0, 32);
     return {
       entrada,
@@ -550,7 +567,7 @@ export class ServicoExame {
           intervaloInicio: l.intervaloInicio === '0000' ? null : formatarHora(l.intervaloInicio),
           intervaloFim: l.intervaloFim === '0000' ? null : formatarHora(l.intervaloFim),
         })),
-        alertas: [...plano.alertas],
+        alertas,
         assinatura,
       },
     };

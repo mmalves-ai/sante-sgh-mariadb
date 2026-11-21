@@ -1,91 +1,72 @@
-// M19: central de chamadas dos painéis (regra 7): a chamada do novo entra na hora; a do outro sistema entra pelo
-// vigia de mudanças (o canal "senhas" muda → o retrato das senhas do dia → a diferença) em até um ciclo; nada se
-// repete; o painel filtra pela recepção e pelos locais do dispositivo. Porta em memória, vigia de verdade.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
-import { ArmazemMemoria } from '../../sessao/armazem.js';
-import { MotorVigia } from '../internacao/public-api.js';
+// M19: central de chamadas dos painéis (regra 7): a chamada desta instância entra na hora; a feita em outra instância
+// (outro processo da API sobre o mesmo banco) entra pelo retrato das senhas do dia na leitura do painel; nada se
+// repete; o painel filtra pela recepção e pelos locais do dispositivo. Porta em memória compartilhada pelas duas.
+import { describe, expect, it } from 'vitest';
 import { CentralChamadas, chaveDaChamada } from './chamadas.js';
 import { PortaRecepcaoMemoria } from './porta-memoria.js';
+import type { ContextoGravacao } from './tipos.js';
 
-const pasta = mkdtempSync(join(tmpdir(), 'sgh-m19-chamadas-'));
-afterAll(() => rmSync(pasta, { recursive: true, force: true }));
+const ctx = (chave: string): ContextoGravacao => ({
+  login: 'GUICHE.CINCO',
+  correlacao: 't',
+  chaveIdempotencia: chave,
+});
 
 describe('central de chamadas', () => {
-  it('a chamada do outro sistema aparece pelo vigia; a do novo na hora; sem repetir', async () => {
-    const porFora = join(pasta, 'por-fora.json');
+  it('a chamada de outra instância aparece no retrato; a desta, na hora; sem repetir', async () => {
     const porta = new PortaRecepcaoMemoria(
       { estado: () => 'verde' },
-      { arquivoPorFora: porFora, agora: () => new Date('2026-10-21T11:30:00Z') },
+      { agora: () => new Date('2026-10-21T11:30:00Z') },
     );
     const c = { rede: 'r', hospital: 'aa' };
-    const vigia = new MotorVigia({
-      rede: 'r',
-      lerCanal: (hospital, _canal, marca) => porta.canalSenhas({ rede: 'r', hospital }, marca),
-      armazem: new ArmazemMemoria(),
-      tipoArmazem: 'memoria',
-      intervaloMs: 1_000,
-    });
-    const central = new CentralChamadas(porta, 'r', vigia);
+    let agora = 1_000_000;
+    const esta = new CentralChamadas(porta, 'r', null, () => agora);
+    const outra = new CentralChamadas(porta, 'r', null, () => agora);
     const avisos: number[] = [];
-    const cancelar = central.assinar('aa', (v) => avisos.push(v));
+    const cancelar = esta.assinar('aa', (v) => avisos.push(v));
     // Primeiro retrato (nada é anunciado no primeiro).
-    expect((await central.chamadas('aa', { recepcao: 2, locais: [] })).chamadas).toEqual([]);
-    await vigia.cicloAgora('aa', 'senhas');
-    // O outro sistema chama a mais antiga no guichê 1 (o guichê aberto por ele).
-    writeFileSync(porFora, JSON.stringify({ chamadas: [{ id: 'a1', guiche: 1 }] }));
-    await vigia.cicloAgora('aa', 'senhas');
-    await new Promise((r) => setTimeout(r, 20));
-    const depois = await central.chamadas('aa', { recepcao: 2, locais: [] });
-    expect(depois.chamadas).toHaveLength(1);
-    expect(depois.chamadas[0]).toMatchObject({ origem: 'outro', guiche: 1, local: 2, recepcao: 2 });
-    expect(avisos.length).toBeGreaterThan(0);
-    // A primeira chamada do outro sistema entra nos tempos por etapa (gravada na extensão da senha).
-    await new Promise((r) => setTimeout(r, 20));
-    const deFora = await porta.senha(c, depois.chamadas[0]?.senha ?? 0);
-    expect(deFora?.primeiraChamadaEm).toBeTruthy();
-    const ind = await porta.indicadores(c, '2026-10-21', '2026-10-21', 2);
-    expect(ind.tempos.some((t) => t.guiche === 1 && t.chamadaEm !== null)).toBe(true);
-    // A do novo entra na hora (a senha relida depois do COMMIT).
+    expect((await esta.chamadas('aa', { recepcao: 2, locais: [] })).chamadas).toEqual([]);
     await porta.executar(
       c,
       'recepcao.abrirGuiche',
       { recepcao: 2, local: 2, guiche: 5 },
-      {
-        rede: 'r',
-        hospital: 'aa',
-        traceId: 't',
-        usuarioLegado: 'GUICHE.CINCO',
-        idempotencyKey: 'chave-teste-abrir-0001',
-      },
+      ctx('chave-teste-abrir-0001'),
     );
-    const r = await porta.executar(
+    // A outra instância chama: esta vê a chamada na releitura seguinte (origem "outro").
+    const r1 = await porta.executar(
       c,
       'recepcao.chamarSenha',
       { recepcao: 2, local: 2, guiche: 5, geradores: [23, 24] },
-      {
-        rede: 'r',
-        hospital: 'aa',
-        traceId: 't',
-        usuarioLegado: 'GUICHE.CINCO',
-        idempotencyKey: 'chave-teste-chamar-0001',
-      },
+      ctx('chave-teste-chamar-0001'),
     );
-    const senha = await porta.senha(c, Number(r.resultado['senha']));
-    if (!senha) throw new Error('senha não relida');
-    await central.registrarDoNovo('aa', senha);
-    await vigia.cicloAgora('aa', 'senhas');
-    const todas = await central.chamadas('aa', { recepcao: 2, locais: [] });
+    const s1 = await porta.senha(c, Number(r1.resultado['senha']));
+    if (!s1) throw new Error('senha não relida');
+    await outra.registrarDoNovo('aa', s1);
+    agora += 5_000;
+    const depois = await esta.chamadas('aa', { recepcao: 2, locais: [] });
+    expect(depois.chamadas).toHaveLength(1);
+    expect(depois.chamadas[0]).toMatchObject({ origem: 'outro', guiche: 5, local: 2, recepcao: 2 });
+    expect(avisos.length).toBeGreaterThan(0);
+    // A desta instância entra na hora (a senha relida depois do COMMIT) e não se repete na releitura.
+    const r2 = await porta.executar(
+      c,
+      'recepcao.chamarSenha',
+      { recepcao: 2, local: 2, guiche: 5, geradores: [23, 24] },
+      ctx('chave-teste-chamar-0002'),
+    );
+    const s2 = await porta.senha(c, Number(r2.resultado['senha']));
+    if (!s2) throw new Error('senha não relida');
+    await esta.registrarDoNovo('aa', s2);
+    agora += 5_000;
+    const todas = await esta.chamadas('aa', { recepcao: 2, locais: [] });
     expect(todas.chamadas.map((x) => x.origem)).toEqual(['novo', 'outro']);
-    expect(todas.chamadas[0]?.chave).toBe(chaveDaChamada(senha));
+    expect(todas.chamadas[0]?.chave).toBe(chaveDaChamada(s2));
     // O painel de outra recepção ou de outro local não as vê.
-    expect((await central.chamadas('aa', { recepcao: 10, locais: [] })).chamadas).toEqual([]);
-    expect((await central.chamadas('aa', { recepcao: 2, locais: [12] })).chamadas).toEqual([]);
+    expect((await esta.chamadas('aa', { recepcao: 10, locais: [] })).chamadas).toEqual([]);
+    expect((await esta.chamadas('aa', { recepcao: 2, locais: [12] })).chamadas).toEqual([]);
     cancelar();
-    central.parar();
-    vigia.parar();
+    esta.parar();
+    outra.parar();
   });
 
   it('sem vigia, o painel refaz o retrato na leitura', async () => {

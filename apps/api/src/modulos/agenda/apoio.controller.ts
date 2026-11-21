@@ -1,13 +1,13 @@
 // Bloqueios, lista de espera e indicadores da agenda de consultas (M17; ficha, seção 7):
-//   GET  /api/agenda/consultas/bloqueios?agenda&ativos           bloqueios do novo (com os horários que bloquearam)
+//   GET  /api/agenda/consultas/bloqueios?agenda&ativos           bloqueios (com os horários que bloquearam)
 //   POST /api/agenda/consultas/bloqueios/previa                  horários vagos e marcados do período (nada é gravado)
 //   POST /api/agenda/consultas/bloqueios                         agenda.bloquearHorarios nos vagos (ou só o período)
 //   POST /api/agenda/consultas/bloqueios/:agenda/:id/encerrar    agenda.bloquearHorarios (desbloquear) nos que restam
 //   GET  /api/agenda/consultas/espera?situacao&agenda&especialidade   fila de espera (prioridade e antiguidade)
-//   POST /api/agenda/consultas/espera                            inclui na fila (SGH_)
-//   POST /api/agenda/consultas/espera/:id/ofertar                oferta uma vaga (SGH_; nada vai ao paciente aqui)
+//   POST /api/agenda/consultas/espera                            inclui na fila (lista_espera)
+//   POST /api/agenda/consultas/espera/:id/ofertar                oferta uma vaga (lista_espera; nada vai ao paciente aqui)
 //   POST /api/agenda/consultas/espera/:id/marcar                 agenda.agendarConsulta e a fila atendida
-//   POST /api/agenda/consultas/espera/:id/encerrar               cancela ou devolve à fila (SGH_)
+//   POST /api/agenda/consultas/espera/:id/encerrar               cancela ou devolve à fila (lista_espera)
 //   GET  /api/agenda/consultas/indicadores?de&ate                funil, ocupação, absenteísmo e canais (agregados)
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -31,7 +31,8 @@ import {
   TETO_HORARIOS_POR_GRAVACAO,
 } from '@sgh/contratos';
 import { nomeMascarado, podeBloquear, podeDesbloquear, somarDias } from '@sgh/dominio-agenda';
-import type { AgendaLida, BloqueioLido } from '@sgh/legado';
+import type { BloqueioAgenda } from './tipos.js';
+import { type AgendaVista, horaIso, horaIsoOuNull, LeituraAgenda, quatroDigitos } from './visao.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -50,15 +51,15 @@ import { PORTA_AGENDA, type PortaAgenda } from './porta.js';
 import { ServicoAgenda } from './servico.js';
 
 /** Tabela real da lista de espera (script 0185), também na linha da trilha. */
-const TABELA_ESPERA = 'SGH_AGE_LISTA_ESPERA';
+const TABELA_ESPERA = 'lista_espera';
 const hhmm = (h: string | null) => (h && h.length === 4 ? `${h.slice(0, 2)}:${h.slice(2)}` : h);
 const rotuloBloqueio = (c: string) => MOTIVOS_BLOQUEIO.find((m) => m.codigo === c)?.rotulo ?? c;
 
-export function bloqueioResposta(b: BloqueioLido): Bloqueio {
+export function bloqueioResposta(b: BloqueioAgenda): Bloqueio {
   return {
     id: b.id,
     agenda: b.agenda,
-    nomeAgenda: b.nome,
+    nomeAgenda: b.nomeAgenda,
     inicio: b.inicio,
     fim: b.fim,
     horaInicio: hhmm(b.horaInicio),
@@ -81,6 +82,7 @@ const dentroDasHoras = (hora: string, ini: string | null | undefined, fim: strin
 export class ApoioAgendaController {
   private readonly apoio: ApoioAgenda;
   private readonly servico: ServicoAgenda;
+  private readonly leitura: LeituraAgenda;
   constructor(
     @Inject(PORTA_AGENDA) private readonly porta: PortaAgenda,
     @Inject(REGISTRADOR_TRILHA) trilha: RegistradorTrilha,
@@ -89,6 +91,7 @@ export class ApoioAgendaController {
   ) {
     this.apoio = new ApoioAgenda(porta, trilha, configuracao, cache);
     this.servico = new ServicoAgenda(porta);
+    this.leitura = new LeituraAgenda(porta);
   }
 
   // ── Bloqueios ────────────────────────────────────────────────────────────────────────────────────
@@ -113,7 +116,7 @@ export class ApoioAgendaController {
   /** Horários do período: os vagos (que o bloqueio fecha) e os marcados (que ele não toca: remarcar antes). */
   private async horariosDoPeriodo(
     s: SessaoCadastro,
-    a: AgendaLida,
+    a: AgendaVista,
     p: {
       inicio: string;
       fim: string;
@@ -121,20 +124,22 @@ export class ApoioAgendaController {
       horaFim?: string | null | undefined;
     },
   ) {
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const de = p.inicio < r.hoje ? r.hoje : p.inicio;
     if (p.fim < de) return { livres: [], marcados: [], jaBloqueados: 0, relogio: r };
     const [h, m] = await Promise.all([
-      this.porta.horarios(ctxAgenda(s), a.nome, a.crm, de, p.fim),
-      this.porta.marcacoesDaJanela(ctxAgenda(s), a.nome, a.crm, de, p.fim),
+      this.leitura.horarios(ctxAgenda(s), a.id, de, p.fim),
+      this.leitura.marcacoesDaJanela(ctxAgenda(s), a.id, de, p.fim),
     ]);
+    const hi = p.horaInicio ? quatroDigitos(p.horaInicio) : null;
+    const hf = p.horaFim ? quatroDigitos(p.horaFim) : null;
     const noRecorte = h.itens.filter(
-      (x) => dentroDasHoras(x.hora, p.horaInicio, p.horaFim) && (x.data > r.hoje || x.hora > r.hhmm),
+      (x) => dentroDasHoras(x.hora, hi, hf) && (x.data > r.hoje || x.hora > r.hhmm),
     );
     const livres = noRecorte.filter((x) => podeBloquear(x)).map((x) => ({ data: x.data, hora: x.hora }));
     const jaBloqueados = noRecorte.filter((x) => podeDesbloquear(x)).length;
     const marcados = m.itens.filter(
-      (x) => dentroDasHoras(x.hora, p.horaInicio, p.horaFim) && x.atendido.trim() !== 'S',
+      (x) => dentroDasHoras(x.hora, hi, hf) && x.atendido.trim() !== 'S',
     );
     return { livres, marcados, jaBloqueados, relogio: r };
   }
@@ -148,7 +153,7 @@ export class ApoioAgendaController {
     const p = corpo(esquemaPedidoPeriodoBloqueio, b);
     const a = await this.servico.exigirAgenda(ctxAgenda(s), p.agenda);
     const x = await this.horariosDoPeriodo(s, a, p);
-    const ext = await this.porta.marcacoesExt(
+    const ext = await this.porta.complementos(
       ctxAgenda(s),
       x.marcados.map((m) => m.id),
     );
@@ -163,7 +168,7 @@ export class ApoioAgendaController {
   @HttpCode(201)
   @Permissao('agenda.bloqueio.criar')
   @AuditadoNoHandler(
-    'agenda.bloquearHorarios pelo executor; o período sem horários, em SGH_ com a SGH_TRILHA',
+    'agenda.bloquearHorarios pelo executor; o período sem horários, em bloqueio_agenda com a trilha',
   )
   async bloquear(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAgenda> {
     const s = sessaoDe(req);
@@ -192,24 +197,21 @@ export class ApoioAgendaController {
         `${x.livres.length} horário(s) bloqueado(s).`,
       );
     // Sem horários gerados no período: o bloqueio vale para a geração da grade (que pula o período).
-    const id = await this.apoio.sgh(
+    const id = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaHorariosBloqueados.codigo,
       'agenda.bloqueio',
-      { tabela: 'SGH_AGE_BLOQUEIO', id: String(a.id) },
+      (x: number) => ({ tabela: 'bloqueio_agenda', id: String(x) }),
       (g) =>
         g.gravarBloqueioPeriodo({
           agenda: a.id,
-          nome: a.nome,
-          crm: a.crm,
           inicio: p.inicio,
           fim: p.fim,
-          horaInicio: p.horaInicio ?? null,
-          horaFim: p.horaFim ?? null,
+          horaInicio: horaIsoOuNull(p.horaInicio),
+          horaFim: horaIsoOuNull(p.horaFim),
           motivo: p.motivo,
           complemento: p.complemento ?? null,
           previsaoRetorno: p.previsaoRetorno ?? null,
-          usuario: s.login,
         }),
     );
     return {
@@ -223,7 +225,7 @@ export class ApoioAgendaController {
   @Post('bloqueios/:agenda/:id/encerrar')
   @HttpCode(200)
   @Permissao('agenda.bloqueio.criar')
-  @AuditadoNoHandler('agenda.bloquearHorarios (desbloquear) pelo executor; o período sem horários, em SGH_')
+  @AuditadoNoHandler('agenda.bloquearHorarios (desbloquear) pelo executor; o período sem horários, em bloqueio_agenda')
   async encerrar(
     @Param('agenda') agendaRota: string,
     @Param('id') idRota: string,
@@ -237,16 +239,16 @@ export class ApoioAgendaController {
     );
     if (!b) throw new ErroProblema('nao-encontrado', 404, 'Bloqueio não encontrado ou já encerrado');
     const lista = await this.porta.horariosDoBloqueio(ctxAgenda(s), id);
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const restantes: { data: string; hora: string }[] = [];
     if (lista.length > 0) {
       const datas = lista.map((h) => h.data).sort();
       const de = (datas[0] as string) < r.hoje ? r.hoje : (datas[0] as string);
       const atual =
         de <= (datas.at(-1) as string)
-          ? await this.porta.horarios(ctxAgenda(s), a.nome, a.crm, de, datas.at(-1) as string)
+          ? await this.leitura.horarios(ctxAgenda(s), a.id, de, datas.at(-1) as string)
           : { itens: [] };
-      const chaves = new Set(lista.map((h) => `${h.data} ${h.hora}`));
+      const chaves = new Set(lista.map((h) => `${h.data} ${quatroDigitos(h.hora)}`));
       for (const h of atual.itens)
         if (chaves.has(`${h.data} ${h.hora}`) && podeDesbloquear(h))
           restantes.push({ data: h.data, hora: h.hora });
@@ -263,12 +265,12 @@ export class ApoioAgendaController {
         },
         `${Math.min(restantes.length, TETO_HORARIOS_POR_GRAVACAO)} horário(s) desbloqueado(s).`,
       );
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaHorariosBloqueados.codigo,
       'agenda.bloqueio',
-      { tabela: 'SGH_AGE_BLOQUEIO', id: String(id) },
-      (g) => g.encerrarBloqueio({ agenda: a.id, id, usuario: s.login }),
+      { tabela: 'bloqueio_agenda', id: String(id) },
+      (g) => g.encerrarBloqueio({ agenda: a.id, id }),
     );
     return {
       ok: true,
@@ -300,7 +302,7 @@ export class ApoioAgendaController {
         especialidade:
           q['especialidade'] !== undefined && q['especialidade'] !== '' ? Number(q['especialidade']) : null,
       }),
-      this.porta.agendas(ctxAgenda(s)),
+      this.leitura.agendas(ctxAgenda(s)),
       this.porta.opcoes(ctxAgenda(s)),
       this.servico.agendasDoEscopo(ctxAgenda(s)),
     ]);
@@ -323,7 +325,7 @@ export class ApoioAgendaController {
       // Lista: nome mascarado, como nas outras listas da agenda (o completo fica na ação sobre o pedido).
       paciente: pacientes.get(e.paciente)
         ? nomeMascarado(pacientes.get(e.paciente)?.nome ?? '')
-        : `Prontuário ${e.prontuario}`,
+        : `Prontuário ${e.prontuario ?? '-'}`,
       idPaciente: e.paciente,
       agenda: e.agenda,
       nomeAgenda: e.agenda ? (nomeAgenda.get(e.agenda) ?? null) : null,
@@ -335,10 +337,7 @@ export class ApoioAgendaController {
       situacao: sit(e.situacao),
       desde: e.desde,
       observacao: e.observacao,
-      oferta:
-        e.ofertaAgenda && e.ofertaData && e.ofertaHora
-          ? { agenda: e.ofertaAgenda, data: e.ofertaData, hora: hhmm(e.ofertaHora) ?? e.ofertaHora }
-          : null,
+      oferta: e.oferta ? { agenda: e.oferta.agenda, data: e.oferta.data, hora: horaIso(e.oferta.hora) } : null,
       posicao: null,
     }));
     const fila = ordemDaFila(itens);
@@ -361,7 +360,7 @@ export class ApoioAgendaController {
   @Post('espera')
   @HttpCode(201)
   @Permissao('agenda.espera.editar')
-  @AuditadoNoHandler('SGH_AGE_LISTA_ESPERA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('lista_espera com a trilha na mesma transação')
   async incluirEspera(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAgenda> {
     const s = sessaoDe(req);
     const p = corpo(esquemaPedidoEspera, b);
@@ -387,7 +386,7 @@ export class ApoioAgendaController {
           codigo: 'ja-na-fila',
         },
       );
-    const id = await this.apoio.sgh(
+    const id = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEsperaAlterada.codigo,
       'agenda.espera',
@@ -395,12 +394,10 @@ export class ApoioAgendaController {
       (g) =>
         g.incluirEspera({
           paciente: p.paciente,
-          prontuario: pac.prontuario,
           agenda: p.agenda ?? null,
           especialidade: p.especialidade ?? null,
           prioridade: p.prioridade,
           observacao: p.observacao ?? null,
-          usuario: s.login,
         }),
     );
     return { ok: true, resultado: { espera: id }, repetida: false, mensagem: 'Incluído na fila de espera.' };
@@ -409,7 +406,7 @@ export class ApoioAgendaController {
   @Post('espera/:id/ofertar')
   @HttpCode(200)
   @Permissao('agenda.espera.editar')
-  @AuditadoNoHandler('SGH_AGE_LISTA_ESPERA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('lista_espera com a trilha na mesma transação')
   async ofertar(
     @Param('id') idRota: string,
     @Body() b: unknown,
@@ -430,12 +427,12 @@ export class ApoioAgendaController {
         },
       );
     await this.servico.exigirAgenda(ctxAgenda(s), p.agenda);
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEsperaAlterada.codigo,
       'agenda.espera',
       { tabela: TABELA_ESPERA, id: String(id), paciente: e.paciente },
-      (g) => g.ofertarEspera({ id, agenda: p.agenda, data: p.data, hora: p.hora, usuario: s.login }),
+      (g) => g.ofertarEspera({ id, agenda: p.agenda, data: p.data, hora: horaIso(p.hora) }),
     );
     return {
       ok: true,
@@ -448,7 +445,7 @@ export class ApoioAgendaController {
   @Post('espera/:id/marcar')
   @HttpCode(201)
   @Permissao('agenda.marcacao.agendar')
-  @AuditadoNoHandler('agenda.agendarConsulta pelo executor; a fila atendida em SGH_ com a SGH_TRILHA')
+  @AuditadoNoHandler('agenda.agendarConsulta pelo executor; a fila atendida em lista_espera com a trilha')
   async marcarEspera(
     @Param('id') idRota: string,
     @Body() b: unknown,
@@ -484,12 +481,12 @@ export class ApoioAgendaController {
       'Consulta marcada a partir da fila de espera.',
     );
     const marcacao = Number(r.resultado['marcacao'] ?? 0) || null;
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEsperaAlterada.codigo,
       'agenda.espera',
       { tabela: TABELA_ESPERA, id: String(id), paciente: e.paciente },
-      (g) => g.encerrarEspera({ id, situacao: 'atendido', marcacao, usuario: s.login }),
+      (g) => g.encerrarEspera({ id, situacao: 'atendido', marcacao }),
     );
     return r;
   }
@@ -497,7 +494,7 @@ export class ApoioAgendaController {
   @Post('espera/:id/encerrar')
   @HttpCode(200)
   @Permissao('agenda.espera.editar')
-  @AuditadoNoHandler('SGH_AGE_LISTA_ESPERA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('lista_espera com a trilha na mesma transação')
   async encerrarEspera(
     @Param('id') idRota: string,
     @Body() b: unknown,
@@ -517,12 +514,12 @@ export class ApoioAgendaController {
           codigo: 'situacao-mudou',
         },
       );
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.agendaEsperaAlterada.codigo,
       'agenda.espera',
       { tabela: TABELA_ESPERA, id: String(id), paciente: e.paciente },
-      (g) => g.encerrarEspera({ id, situacao: p.situacao, marcacao: null, usuario: s.login }),
+      (g) => g.encerrarEspera({ id, situacao: p.situacao, marcacao: null }),
     );
     return {
       ok: true,
@@ -542,7 +539,7 @@ export class ApoioAgendaController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<IndicadoresAgenda> {
     const s = sessaoDe(req);
-    const r = await this.porta.relogio(ctxAgenda(s));
+    const r = await this.leitura.relogio(ctxAgenda(s));
     const fim = dataDaConsulta(ate) ?? r.hoje;
     const ini = dataDaConsulta(de) ?? somarDias(fim, -29);
     if (ini > fim)

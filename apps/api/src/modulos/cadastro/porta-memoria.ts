@@ -18,29 +18,144 @@ import {
   type UnificarPacienteEntrada,
 } from '@sgh/contratos';
 import {
-  COLUNA_DO_CAMPO_PACIENTE,
-  type ConsentimentoLido,
-  type ContextoOperacao,
   erroConflitoVersao,
   erroEntradaInvalida,
-  type FonteCatalogo,
-  type LiberacaoConsultada,
   type Linha,
-  lerVersaoPaciente,
-  type OpcaoLida,
-  pacienteDaLinha,
-  type ParLido,
   recusa,
-  versaoDaLinhaPaciente,
-  type VersaoCadastroLida,
-} from '@sgh/legado';
-import type { ContextoPorta, PortaCadastro } from './porta.js';
+} from '@sgh/nucleo';
+import { lerVersaoColunas, versaoDasColunas } from './memoria-versao.js';
+import type {
+  ConsentimentoPaciente,
+  ContextoGravacao,
+  LiberacaoOperacao,
+  OpcaoDominio,
+  PacienteFicha,
+  ParFila,
+  VersaoCadastro,
+} from './tipos.js';
+import type { ContextoPorta, EstadoCatalogo, PortaCadastro } from './porta.js';
 import { type OperacaoProfissionalTela, ProfissionaisMemoria } from './profissionais-memoria.js';
+
+
+// ---- Linha sintética da memória (dev/ci) ----
+// A memória guarda cada paciente como uma linha de colunas curtas (a mesma forma desde o M11) e a decodifica aqui para
+// a ficha. Só a memória conhece estas colunas; a porta própria lê o modelo do banco.
+
+/** Campo da ficha → coluna da linha sintética. */
+const COLUNA_DO_CAMPO_PACIENTE: Readonly<Record<string, string>> = {
+  nome: 'NOME',
+  nascimento: 'NASC',
+  sexo: 'SEXO',
+  nomeMae: 'MAE',
+  naturalidade: 'NAT',
+  ufNaturalidade: 'NATUF',
+  cpf: 'CPF',
+  identidade: 'IDENT',
+  estadoCivil: 'ECIV',
+  cep: 'CEP',
+  logradouro: 'ENDERECO',
+  numero: 'NUMERO',
+  complemento: 'COMPL',
+  bairro: 'BAIRRO',
+  telefone: 'FONE',
+  celular: 'CELULAR',
+  email: 'EMAIL',
+  contatoNome: 'CONTATO',
+  contatoTelefone: 'FCONT',
+};
+const CAMPO_DA_COLUNA: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(Object.entries(COLUNA_DO_CAMPO_PACIENTE).map(([c, k]) => [k, c])),
+  CARIMBO: 'versao',
+  ATIVO: 'situacao',
+};
+/** Colunas da versão opaca (o carimbo é obrigatório; documentos saem para quem não os vê). */
+const COLUNAS_VERSAO_PACIENTE = ['CARIMBO', ...Object.values(COLUNA_DO_CAMPO_PACIENTE), 'ATIVO'] as const;
+const COLUNAS_DOCUMENTO_VERSAO: readonly string[] = ['CPF', 'IDENT'];
+
+function versaoDaLinhaPaciente(l: Linha): string {
+  return versaoDasColunas(COLUNAS_VERSAO_PACIENTE, l);
+}
+function lerVersaoPaciente(versao: string): Record<string, string | null> | null {
+  return lerVersaoColunas(versao, COLUNAS_VERSAO_PACIENTE, { todas: false, obrigatoria: 'CARIMBO' });
+}
+
+const textoOuNulo = (v: unknown): string | null => {
+  if (v === null || v === undefined) return null;
+  const t = String(v).trim();
+  return t === '' ? null : t;
+};
+const inteiroOuNulo = (v: unknown): number | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+};
+const dataOuNula = (v: unknown): string | null => {
+  if (!(v instanceof Date) || Number.isNaN(v.getTime())) return null;
+  const p = (n: number, t = 2) => String(n).padStart(t, '0');
+  return `${p(v.getFullYear(), 4)}-${p(v.getMonth() + 1)}-${p(v.getDate())}`;
+};
+const instanteOuNulo = (v: unknown): string | null => {
+  if (!(v instanceof Date) || Number.isNaN(v.getTime())) return null;
+  const p = (n: number, t = 2) => String(n).padStart(t, '0');
+  return `${dataOuNula(v)}T${p(v.getHours())}:${p(v.getMinutes())}:${p(v.getSeconds())}.${p(v.getMilliseconds(), 3)}`;
+};
+
+function pacienteDaLinha(l: Linha): PacienteFicha {
+  const id = inteiroOuNulo(l['ID']) ?? 0;
+  const unif = inteiroOuNulo(l['UNIFICADO_EM']);
+  const cpf = inteiroOuNulo(l['CPF']);
+  const cep = inteiroOuNulo(l['CEP']);
+  const cns = textoOuNulo(l['CNS'])?.replace(/\D+/g, '') ?? '';
+  const sexo = textoOuNulo(l['SEXO']);
+  return {
+    id,
+    prontuario: inteiroOuNulo(l['PRONT']) ?? 0,
+    prontuarioAnterior: inteiroOuNulo(l['PRONT_ANTERIOR']),
+    nome: textoOuNulo(l['NOME']) ?? '',
+    nomeSocial: textoOuNulo(l['APELIDO']),
+    nascimento: dataOuNula(l['NASC']),
+    sexo: sexo === 'F' || sexo === 'M' ? sexo : null,
+    mae: textoOuNulo(l['MAE']),
+    maeDesconhecida: l['MAE_DESCONHECIDA'] === true,
+    pai: textoOuNulo(l['PAI']),
+    cpf: cpf === null || cpf <= 0 ? null : String(cpf).padStart(11, '0'),
+    cns: cns === '' ? null : cns,
+    identidade: textoOuNulo(l['IDENT']),
+    estadoCivil: inteiroOuNulo(l['ECIV']),
+    naturalidade: textoOuNulo(l['NAT']),
+    ufNaturalidade: textoOuNulo(l['NATUF']),
+    nacionalidade: textoOuNulo(l['NAC']),
+    nacionalidadeCodigo: inteiroOuNulo(l['NACIONALIDADE']),
+    cep: cep === null || cep <= 0 ? null : String(cep).padStart(8, '0'),
+    logradouro: textoOuNulo(l['ENDERECO']),
+    numero: inteiroOuNulo(l['NUMERO']),
+    complemento: textoOuNulo(l['COMPL']),
+    bairro: textoOuNulo(l['BAIRRO']),
+    cidade: textoOuNulo(l['CIDADE']),
+    uf: textoOuNulo(l['UF']),
+    telefone: textoOuNulo(l['FONE']),
+    celular: textoOuNulo(l['CELULAR']),
+    email: textoOuNulo(l['EMAIL']),
+    contatoNome: textoOuNulo(l['CONTATO']),
+    contatoTelefone: textoOuNulo(l['FCONT']),
+    racaCor: inteiroOuNulo(l['COR']),
+    religiao: inteiroOuNulo(l['RELIG']),
+    responsavelLegal: textoOuNulo(l['RESPONSAVEL']),
+    ativo: l['ATIVO'] !== false,
+    unificadoEm: unif !== null && unif !== id ? unif : null,
+    obito: dataOuNula(l['OBITO']),
+    cadastradoEm: dataOuNula(l['CADASTRO']),
+    alteradoEm: dataOuNula(l['ALTERACAO']),
+    alergia: textoOuNulo(l['ALERGIA']),
+    medicamentos: textoOuNulo(l['MEDICAMENTOS']),
+    carimbo: instanteOuNulo(l['CARIMBO']),
+    versao: versaoDaLinhaPaciente(l),
+  };
+}
 
 const M = 'SINTETICO';
 const data = (iso: string) =>
   new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
-const SENTINELA = new Date(1899, 11, 30);
 
 /** CEPs sintéticos (logradouro, bairro, cidade, UF, IBGE, tipo de logradouro). */
 const CEPS: Readonly<Record<string, Linha>> = {
@@ -70,7 +185,7 @@ const CEPS: Readonly<Record<string, Linha>> = {
   },
 };
 
-const ESTADOS_CIVIS: OpcaoLida[] = [
+const ESTADOS_CIVIS: OpcaoDominio[] = [
   { codigo: 1, rotulo: 'SOLTEIRO(A)' },
   { codigo: 2, rotulo: 'CASADO(A)' },
   { codigo: 3, rotulo: 'VIUVO(A)' },
@@ -87,7 +202,7 @@ interface PacienteBase {
   celular?: string;
   cep?: string;
   apelido?: string;
-  ativo?: 'T' | 'F';
+  ativo?: boolean;
   unificado?: number;
   cor?: number;
   relig?: number;
@@ -155,7 +270,7 @@ const PACIENTES: readonly PacienteBase[] = [
     nome: `PEDRO ANTIGO ${M}`,
     nasc: '1990-05-05',
     sexo: 'M',
-    ativo: 'F',
+    ativo: false,
     unificado: 1004,
     cep: '01001000',
   },
@@ -174,16 +289,16 @@ function linhaDoPaciente(p: PacienteBase): Linha {
   return {
     ID: p.id,
     PRONT: p.id - 1000 + 500,
-    PRTANT: 0,
+    PRONT_ANTERIOR: null,
     NOME: p.nome,
     APELIDO: p.apelido ?? '',
     NASC: data(p.nasc),
     SEXO: p.sexo,
     MAE: p.mae ?? '',
-    MAE_DESCONHECIDA: 'F',
+    MAE_DESCONHECIDA: false,
     PAI: '',
-    CPF: p.cpf ?? 0,
-    CNS: '0',
+    CPF: p.cpf ?? null,
+    CNS: null,
     IDENT: '',
     ECIV: p.eciv ?? null,
     NAT: 'CIDADE SINTETICA',
@@ -204,16 +319,16 @@ function linhaDoPaciente(p: PacienteBase): Linha {
     FCONT: '',
     COR: p.cor ?? null,
     RELIG: p.relig ?? null,
-    NOME_GUARDIAO: '',
-    ATIVO: p.ativo ?? 'T',
-    ID_RICADPAC_UNIFICADO: p.unificado ?? p.id,
-    DTOBITO: SENTINELA,
-    DTCAD: data('2026-01-10'),
-    DTALTCAD: data('2026-01-10'),
+    RESPONSAVEL: '',
+    ATIVO: p.ativo ?? true,
+    UNIFICADO_EM: p.unificado ?? p.id,
+    OBITO: null,
+    CADASTRO: data('2026-01-10'),
+    ALTERACAO: data('2026-01-10'),
     ALERGIA: p.alergia ?? '',
-    MED_USO: '',
-    DATA_HORA_ULTIMA_ATUALIZACAO: new Date(2026, 0, 10, 9, 0, 0),
-    ID_TBUSERS: 'SINT.RECEPCAO',
+    MEDICAMENTOS: '',
+    CARIMBO: new Date(2026, 0, 10, 9, 0, 0),
+    USUARIO: 'SINT.RECEPCAO',
   };
 }
 
@@ -252,10 +367,10 @@ const SOLICITANTES = [
 
 interface Estado {
   pacientes: Map<number, Linha>;
-  historico: Map<number, VersaoCadastroLida[]>;
+  historico: Map<number, VersaoCadastro[]>;
   indice: Map<string, { entidade: EntidadeBusca; id: number; chave: ChaveBusca }[]>;
-  fila: Map<number, ParLido & { justificativa?: string }>;
-  consentimentos: Map<number, ConsentimentoLido & { idPaciente: number }>;
+  fila: Map<number, ParFila & { justificativa?: string }>;
+  consentimentos: Map<number, ConsentimentoPaciente & { idPaciente: number }>;
   gerador: number;
   geradorHt: number;
   geradorFila: number;
@@ -278,29 +393,30 @@ interface Estado {
 /** Revisão do M39: o cadastro de conselhos sintético (sigla → ID), como TBCONSPROF. */
 const CONSELHOS: Readonly<Record<string, number>> = { CRM: 1, COREN: 2, CRO: 3, CRF: 4, CREFITO: 6 };
 
+/** Campos do retrato da linha do tempo (pelo nome do campo da ficha) → coluna da linha sintética. */
 const COLUNAS_RETRATO: Readonly<Record<string, string>> = {
-  NOME: 'NOME',
-  NOME_SOCIAL_APELIDO: 'APELIDO',
-  DATA_NASCIMENTO: 'NASC',
-  NOME_MAE: 'MAE',
-  CPF: 'CPF',
-  IDENTIDADE: 'IDENT',
-  ID_TBECIV: 'ECIV',
-  NATURALIDADE: 'NAT',
-  ID_TBCEP: 'CEP',
-  LOGRADOURO: 'ENDERECO',
-  NUM_LOGRADOURO: 'NUMERO',
-  COMPL_LOGRADOURO: 'COMPL',
-  BAIRRO_LOGRADOURO: 'BAIRRO',
-  E_MAIL: 'EMAIL',
-  ID_TBCOR: 'COR',
-  ID_TBRELIG: 'RELIG',
+  nome: 'NOME',
+  nomeSocial: 'APELIDO',
+  nascimento: 'NASC',
+  sexo: 'SEXO',
+  nomeMae: 'MAE',
+  cpf: 'CPF',
+  identidade: 'IDENT',
+  estadoCivil: 'ECIV',
+  naturalidade: 'NAT',
+  cep: 'CEP',
+  logradouro: 'ENDERECO',
+  numero: 'NUMERO',
+  complemento: 'COMPL',
+  bairro: 'BAIRRO',
+  email: 'EMAIL',
+  racaCor: 'COR',
+  religiao: 'RELIG',
 };
 
-function retrato(l: Linha, id: number, usuario: string): VersaoCadastroLida {
+function retrato(l: Linha, id: number, usuario: string): VersaoCadastro {
   const valores: Record<string, unknown> = {};
   for (const [h, r] of Object.entries(COLUNAS_RETRATO)) valores[h] = l[r] ?? null;
-  valores['ID_TBSEXO'] = l['SEXO'] === 'M' ? 1 : 2;
   const fones: { tipo: number; numero: string }[] = [];
   if (String(l['FONE'] ?? '').trim()) fones.push({ tipo: 1, numero: String(l['FONE']) });
   if (String(l['CELULAR'] ?? '').trim()) fones.push({ tipo: 3, numero: String(l['CELULAR']) });
@@ -321,14 +437,22 @@ const txt = (v: unknown) => (v === null || v === undefined ? '' : String(v).trim
 export class PortaCadastroMemoria implements PortaCadastro {
   readonly destino = 'memoria' as const;
   private readonly porHospital = new Map<string, Estado>();
-  constructor(private readonly catalogo: FonteCatalogo | null = null) {}
+  constructor(private readonly catalogo: EstadoCatalogo | null = null) {}
 
   estado(operacao: string, hospital: string): EstadoOperacao | null {
     return this.catalogo?.estado(operacao, hospital) ?? 'verde';
   }
 
+  /** Sem verDocumento, a versão opaca não leva CPF nem identidade (o carimbo segue detectando a colisão). */
+  versaoParaTela(versao: string, verDocumento: boolean): string {
+    if (verDocumento) return versao;
+    const v = lerVersaoPaciente(versao);
+    if (!v) return versao;
+    return JSON.stringify(Object.fromEntries(Object.entries(v).filter(([c]) => !COLUNAS_DOCUMENTO_VERSAO.includes(c))));
+  }
+
   /** Sessão sintética (dev/ci): a regra do executor nesses ambientes (só o estado do catálogo decide). */
-  async podeGravar(c: ContextoPorta, operacao: string): Promise<LiberacaoConsultada> {
+  async podeGravar(c: ContextoPorta, operacao: string): Promise<LiberacaoOperacao> {
     const e = this.estado(operacao, c.hospital);
     return e === null || e === 'bloqueada'
       ? {
@@ -375,7 +499,12 @@ export class PortaCadastroMemoria implements PortaCadastro {
   }
 
   private e(c: ContextoPorta): Estado {
-    let s = this.porHospital.get(c.hospital);
+    return this.porHospitalDe(c.hospital);
+  }
+
+  /** Os dados sintéticos do estabelecimento (pelo código da sessão), criados na primeira leitura. */
+  private porHospitalDe(hospital: string): Estado {
+    let s = this.porHospital.get(hospital);
     if (!s) {
       s = {
         pacientes: new Map(),
@@ -400,7 +529,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
         this.indexarChaves(s, 'profissional', p.id, chavesDeBusca({ nome: p.nome }));
       for (const x of SOLICITANTES)
         this.indexarChaves(s, 'solicitante', x.id, chavesDeBusca({ nome: x.nome }));
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(hospital, s);
     }
     return s;
   }
@@ -441,11 +570,11 @@ export class PortaCadastroMemoria implements PortaCadastro {
     inativos: boolean,
   ) {
     const r = [...this.e(c).pacientes.values()]
-      .filter((l) => inativos || l['ATIVO'] !== 'F')
+      .filter((l) => inativos || l['ATIVO'] !== false)
       .filter((l) => {
         switch (criterio.tipo) {
           case 'cpf':
-            return Number(l['CPF']) === criterio.cpf;
+            return l['CPF'] !== null && Number(l['CPF']) === criterio.cpf;
           case 'prontuario':
             return Number(l['PRONT']) === criterio.prontuario;
           case 'cns':
@@ -541,10 +670,10 @@ export class PortaCadastroMemoria implements PortaCadastro {
 
   async unificacoes(c: ContextoPorta, id: number) {
     const l = this.e(c).pacientes.get(id);
-    const u = l ? Number(l['ID_RICADPAC_UNIFICADO']) : id;
+    const u = l ? Number(l['UNIFICADO_EM']) : id;
     if (l && u !== id) return [{ absorvido: id, sobrevivente: u, em: '2025-06-01T10:00:00.000' }];
     return [...this.e(c).pacientes.values()]
-      .filter((x) => Number(x['ID_RICADPAC_UNIFICADO']) === id && Number(x['ID']) !== id)
+      .filter((x) => Number(x['UNIFICADO_EM']) === id && Number(x['ID']) !== id)
       .map((x) => ({ absorvido: Number(x['ID']), sobrevivente: id, em: '2025-06-01T10:00:00.000' }));
   }
 
@@ -569,12 +698,12 @@ export class PortaCadastroMemoria implements PortaCadastro {
     return cep in CEPS;
   }
 
-  async cadastrar(c: ContextoPorta, bruta: Parameters<PortaCadastro['cadastrar']>[1], ctx: ContextoOperacao) {
+  async cadastrar(c: ContextoPorta, bruta: Parameters<PortaCadastro['cadastrar']>[1], ctx: ContextoGravacao) {
     const r = esquemaCadastrarPaciente.safeParse(bruta);
     if (!r.success) throw erroEntradaInvalida([...new Set(r.error.issues.map((i) => i.path.join('.')))]);
     const e = r.data;
     const s = this.e(c);
-    if ([...s.pacientes.values()].some((l) => Number(l['CPF']) === Number(e.cpf)))
+    if (e.cpf && [...s.pacientes.values()].some((l) => Number(l['CPF']) === Number(e.cpf)))
       throw recusa(
         'cpf-existente',
         'Já existe paciente com este CPF. Abra o cadastro existente; o sistema não unifica cadastros.',
@@ -597,7 +726,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
       NATUF: e.ufNaturalidade ?? null,
       ENDERECO: e.logradouro ?? txt(cep['LOGRA']),
       BAIRRO: e.bairro ?? txt(cep['BAIRRO']),
-      NUMERO: e.numero ?? 0,
+      NUMERO: e.numero ?? null,
       COMPL: e.complemento ?? '',
       FONE: e.telefone ?? '',
       CELULAR: e.celular ?? '',
@@ -608,16 +737,16 @@ export class PortaCadastroMemoria implements PortaCadastro {
       RELIG: null,
       ECIV: null,
       ALERGIA: '',
-      DATA_HORA_ULTIMA_ATUALIZACAO: new Date(),
-      ID_TBUSERS: ctx.usuarioLegado,
+      CARIMBO: new Date(),
+      USUARIO: ctx.login,
     };
     s.pacientes.set(id, l);
-    s.historico.set(id, [retrato(l, s.geradorHt++, ctx.usuarioLegado)]);
+    s.historico.set(id, [retrato(l, s.geradorHt++, ctx.login)]);
     this.indexar(s, 'paciente', id, l);
     return { resultado: { idPaciente: id, prontuario: Number(l['PRONT']) }, trilha: null };
   }
 
-  async alterar(c: ContextoPorta, bruta: AlterarPacienteEntrada, ctx: ContextoOperacao) {
+  async alterar(c: ContextoPorta, bruta: AlterarPacienteEntrada, ctx: ContextoGravacao) {
     const r = esquemaAlterarPaciente.safeParse(bruta);
     if (!r.success) throw erroEntradaInvalida([...new Set(r.error.issues.map((i) => i.path.join('.')))]);
     const e = r.data;
@@ -633,8 +762,8 @@ export class PortaCadastroMemoria implements PortaCadastro {
     const mudou = Object.keys(lida)
       .filter((k) => (lida[k] ?? null) !== (agora[k] ?? null))
       .sort();
-    if (mudou.length > 0) throw erroConflitoVersao(mudou);
-    if (atual['ATIVO'] === 'F')
+    if (mudou.length > 0) throw erroConflitoVersao([...new Set(mudou.map((c) => CAMPO_DA_COLUNA[c] ?? c))]);
+    if (atual['ATIVO'] === false)
       throw recusa(
         'cadastro-inativo',
         'Cadastro inativo (absorvido numa unificação): altere o cadastro que ficou ativo.',
@@ -642,6 +771,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     const a = e.alteracoes;
     if (
       a.cpf !== undefined &&
+      a.cpf !== null &&
       [...s.pacientes.values()].some((l) => Number(l['CPF']) === Number(a.cpf) && l['ID'] !== e.idPaciente)
     )
       throw recusa(
@@ -659,7 +789,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
           ? data(String(v))
           : campo === 'cpf'
             ? Number(v)
-            : (v ?? (campo === 'numero' ? 0 : ''));
+            : (v ?? null);
     }
     if (a.cep !== undefined) {
       const cep = CEPS[a.cep];
@@ -679,14 +809,14 @@ export class PortaCadastroMemoria implements PortaCadastro {
       return x instanceof Date && y instanceof Date ? x.getTime() === y.getTime() : txt(x) === txt(y);
     });
     if (iguais) throw recusa('sem-alteracao', 'Nenhum campo mudou em relação ao cadastro.');
-    novo['ID_TBUSERS'] = ctx.usuarioLegado;
-    novo['DATA_HORA_ULTIMA_ATUALIZACAO'] = new Date(
-      Math.max(Date.now(), (atual['DATA_HORA_ULTIMA_ATUALIZACAO'] as Date).getTime() + 1),
+    novo['USUARIO'] = ctx.login;
+    novo['CARIMBO'] = new Date(
+      Math.max(Date.now(), (atual['CARIMBO'] as Date).getTime() + 1),
     );
     s.pacientes.set(e.idPaciente, novo);
     s.historico.set(e.idPaciente, [
       ...(s.historico.get(e.idPaciente) ?? []),
-      retrato(novo, s.geradorHt++, ctx.usuarioLegado),
+      retrato(novo, s.geradorHt++, ctx.login),
     ]);
     this.indexar(s, 'paciente', e.idPaciente, novo);
     return { resultado: { idPaciente: e.idPaciente }, trilha: null };
@@ -697,7 +827,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
    * (e_ricadpac1), o absorvido ainda não unificado; o absorvido (e os que ele tinha absorvido) passa a apontar o que
    * fica, inativo, como faz o gatilho; os pares abertos da fila com o absorvido viram "Unificado".
    */
-  async unificar(c: ContextoPorta, bruta: UnificarPacienteEntrada, ctx: ContextoOperacao) {
+  async unificar(c: ContextoPorta, bruta: UnificarPacienteEntrada, ctx: ContextoGravacao) {
     const r = esquemaUnificarPaciente.safeParse(bruta);
     if (!r.success) throw erroEntradaInvalida([...new Set(r.error.issues.map((i) => i.path.join('.')))]);
     const e = r.data;
@@ -707,7 +837,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     if (!a) throw recusa('registro-inexistente', 'O prontuário absorvido não existe mais.');
     if (!f) throw recusa('registro-inexistente', 'O prontuário que fica não existe mais.');
     const livre = (l: Linha) =>
-      txt(l['ATIVO']) !== 'F' && Number(l['ID_RICADPAC_UNIFICADO']) === Number(l['ID']);
+      l['ATIVO'] !== false && Number(l['UNIFICADO_EM']) === Number(l['ID']);
     if (!livre(f))
       throw recusa(
         'cadastro-inativo',
@@ -720,31 +850,31 @@ export class PortaCadastroMemoria implements PortaCadastro {
       );
     const agora = new Date();
     for (const [id, l] of s.pacientes)
-      if (id === e.idAbsorvido || Number(l['ID_RICADPAC_UNIFICADO']) === e.idAbsorvido)
+      if (id === e.idAbsorvido || Number(l['UNIFICADO_EM']) === e.idAbsorvido)
         s.pacientes.set(id, {
           ...l,
-          ATIVO: 'F',
-          ID_RICADPAC_UNIFICADO: e.idSobrevivente,
-          DATA_HORA_ULTIMA_ATUALIZACAO: agora,
+          ATIVO: false,
+          UNIFICADO_EM: e.idSobrevivente,
+          CARIMBO: agora,
         });
     for (const [id, p] of s.fila)
       if (p.situacao === 'aberto' && (p.a === e.idAbsorvido || p.b === e.idAbsorvido))
         s.fila.set(id, {
           ...p,
           situacao: 'unificado_no_legado',
-          decididoPor: ctx.usuarioLegado,
+          decididoPor: ctx.login,
           decididoEm: agora.toISOString(),
           ...(e.justificativa ? { justificativa: e.justificativa } : {}),
         });
     return { resultado: { idAbsorvido: e.idAbsorvido, idSobrevivente: e.idSobrevivente }, trilha: null };
   }
 
-  /** E2E: alteração "por fora" (como se fosse o SPDATA), para o aviso de colisão. */
+  /** E2E: alteração "por fora" (outra estação gravou antes), para o aviso de colisão. */
   alterarPorFora(hospital: string, id: number, colunas: Readonly<Record<string, unknown>>): boolean {
-    const s = this.e({ rede: '', hospital });
+    const s = this.porHospitalDe(hospital);
     const l = s.pacientes.get(id);
     if (!l) return false;
-    s.pacientes.set(id, { ...l, ...colunas, DATA_HORA_ULTIMA_ATUALIZACAO: new Date() });
+    s.pacientes.set(id, { ...l, ...colunas, CARIMBO: new Date() });
     return true;
   }
 
@@ -764,7 +894,7 @@ export class PortaCadastroMemoria implements PortaCadastro {
     };
   }
 
-  async lerFila(c: ContextoPorta, situacao: ParLido['situacao'], pagina: number, porPagina: number) {
+  async lerFila(c: ContextoPorta, situacao: ParFila['situacao'], pagina: number, porPagina: number) {
     const todos = [...this.e(c).fila.values()]
       .filter((p) => p.situacao === situacao)
       .sort(
@@ -897,10 +1027,10 @@ export class PortaCadastroMemoria implements PortaCadastro {
     c: ContextoPorta,
     op: OperacaoProfissionalTela,
     entrada: unknown,
-    ctx?: { usuarioLegado: string },
+    ctx?: { login: string },
   ) {
     const s = this.e(c);
-    const r = s.profissionais.gravar(op, entrada, ctx?.usuarioLegado);
+    const r = s.profissionais.gravar(op, entrada, ctx?.login);
     if (r.profissional) {
       const nome = String(r.profissional.linha['NOME']);
       const social = String(r.profissional.linha['APELIDO'] ?? '').trim() || null;
@@ -929,11 +1059,11 @@ export class PortaCadastroMemoria implements PortaCadastro {
 
   async historicoProfissional(c: ContextoPorta, id: number) {
     const [p] = this.e(c).profissionais.lidos([id]);
-    const v: VersaoCadastroLida = {
+    const v: VersaoCadastro = {
       id: 1,
       em: '2026-01-10T09:00:00.000',
       usuario: 'SINT.ADMIN',
-      valores: { NOME: p?.nome ?? null, UF: 'MG' },
+      valores: { nome: p?.nome ?? null, uf: 'MG' },
       telefones: [{ tipo: 1, numero: '3133330004' }],
     };
     return { versoes: p ? [v] : [], total: p ? 1 : 0, anterior: null, nome: p?.nome ?? null };

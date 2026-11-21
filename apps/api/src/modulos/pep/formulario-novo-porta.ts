@@ -5,15 +5,7 @@
 //     modelo do prontuário pelo executor (`pep.publicarFormularioNovo`, desligada até o cenário do M36);
 //   - `memoria`: a sessão sintética de dev/ci (E2E): versões SINTÉTICAS em memória, com as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo: 503 em tudo (falha fechada).
-import type {
-  EspecialidadeLida,
-  EventoFormNovoLido,
-  FormNovoLido,
-  MudancaFormNovoSgh,
-  PerguntaDoBancoLegado,
-  RespostaCadastradaLida,
-  SalvarFormNovoSgh,
-} from '@sgh/legado';
+import type { EspecialidadeLida, EventoFormularioNovoLido, FormularioNovoLido, MudancaFormularioNovo, PerguntaDoBancoLida, RespostaCadastradaLida, SalvarFormularioNovo } from './tipos-pep.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_FORMULARIO_NOVO = Symbol('PORTA_FORMULARIO_NOVO');
@@ -23,22 +15,22 @@ export type ContextoFormularioNovo = ContextoPortaM18;
 /** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
 export interface GravadorFormularioNovo {
   salvar(
-    p: Omit<SalvarFormNovoSgh, 'hospital'>,
+    p: Omit<SalvarFormularioNovo, 'hospital'>,
   ): Promise<{ id: number; versao: number; versaoLinha: string }>;
-  mudar(m: Omit<MudancaFormNovoSgh, 'hospital'>): Promise<{ versaoLinha: string }>;
+  mudar(m: Omit<MudancaFormularioNovo, 'hospital'>): Promise<{ versaoLinha: string }>;
 }
 
 export interface PortaFormularioNovo extends PortaGravacaoM18<GravadorFormularioNovo> {
-  versoes(c: ContextoFormularioNovo): Promise<FormNovoLido[]>;
-  versao(c: ContextoFormularioNovo, id: number): Promise<FormNovoLido | null>;
-  eventos(c: ContextoFormularioNovo, id: number): Promise<EventoFormNovoLido[]>;
+  versoes(c: ContextoFormularioNovo): Promise<FormularioNovoLido[]>;
+  versao(c: ContextoFormularioNovo, id: number): Promise<FormularioNovoLido | null>;
+  eventos(c: ContextoFormularioNovo, id: number): Promise<EventoFormularioNovoLido[]>;
   /** Códigos de modelo do prontuário em uso e os do construtor (nunca reaproveitados). */
   codigosEmUso(c: ContextoFormularioNovo): Promise<Set<string>>;
   buscarPerguntas(
     c: ContextoFormularioNovo,
     termo: string,
     tiposperg: readonly string[],
-  ): Promise<PerguntaDoBancoLegado[]>;
+  ): Promise<PerguntaDoBancoLida[]>;
   especialidades(c: ContextoFormularioNovo): Promise<EspecialidadeLida[]>;
   /** Hoje no relógio do banco (AAAA-MM-DD), para as regras com data. */
   hoje(c: ContextoFormularioNovo): Promise<string>;
@@ -54,7 +46,7 @@ export interface PortaFormularioNovo extends PortaGravacaoM18<GravadorFormulario
     textos: readonly string[],
   ): Promise<{
     codigosExistentes: Set<string>;
-    banco: PerguntaDoBancoLegado[];
+    banco: PerguntaDoBancoLida[];
     respostasCadastradas: RespostaCadastradaLida[];
   }>;
 }

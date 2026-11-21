@@ -7,11 +7,10 @@
 import { PROTOCOLO_SINTETICO, PROTOCOLOS_GERENCIADOS_SINTETICOS } from '@sgh/dominio-recepcao';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaAtendimentoMemoria } from '../atendimento/porta-memoria.js';
+import { criarAppRecepcao } from './app-recepcao.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import { PortaClassificacaoMemoria } from './classificacao-porta-memoria.js';
 import { PortaRecepcaoMemoria } from './porta-memoria.js';
@@ -29,16 +28,12 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppRecepcao(env, {
     trilha,
-    cadastro,
     recepcao,
-    atendimento,
     classificacao,
-    vigia: null,
+    atendimento,
   });
-  await app.init();
-  await app.getHttpAdapter().getInstance().ready();
 });
 afterAll(async () => {
   await app.close();

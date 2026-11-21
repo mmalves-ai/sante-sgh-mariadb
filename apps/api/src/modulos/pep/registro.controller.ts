@@ -52,7 +52,7 @@ import {
 } from '@sgh/contratos';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
 import { recursoLigado, resolverParametro, type SujeitoParametro, valorTipado } from '@sgh/dominio-config';
-import type { GravacaoEvolucao, ProfissionalDoRegistro } from '@sgh/legado';
+import type { GravacaoEvolucao, ProfissionalDoRegistro } from './tipos-pep.js';
 import { categoriaDoCbo, podeVerConteudo, prazoDoParecer } from '@sgh/dominio-pep';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -170,7 +170,7 @@ export class RegistroClinicoController {
         'Cadastro indisponível',
         'Não foi possível conferir o preceptor.',
       );
-    const p = await this.fluxos.profissional({ rede: s.rede, hospital: s.hospital }, login.toUpperCase());
+    const p = await this.fluxos.profissional(s.porta, login.toUpperCase());
     const o = p ? (p.ocupacoes.find((x) => x.cbo === p.cbo) ?? p.ocupacoes[0]) : undefined;
     if (!p || categoriaDe(p) !== 'medico' || !o?.conselhoAtivo)
       throw recusa('O preceptor tem de ser um médico com conselho ativo no cadastro de profissionais.');
@@ -183,7 +183,7 @@ export class RegistroClinicoController {
    */
   private async podeVerConteudoDe(s: SessaoCadastro, cbo: number): Promise<boolean> {
     if (!this.fluxos) return true;
-    const c = { rede: s.rede, hospital: s.hospital };
+    const c = s.porta;
     const [autor, leitor] = await Promise.all([
       this.fluxos.ocupacaoDoCbo(c, cbo).catch(() => null),
       this.fluxos.profissional(c, s.login).catch(() => null),
@@ -215,7 +215,7 @@ export class RegistroClinicoController {
         'Fila do parecer indisponível',
         'Não foi possível conferir o parecer respondido.',
       );
-    const f = await this.fluxos.fluxo({ rede: s.rede, hospital: s.hospital }, p.parecer);
+    const f = await this.fluxos.fluxo(s.porta, p.parecer);
     if (!f || f.paciente !== paciente)
       throw new ErroProblema('nao-encontrado', 404, 'Parecer não encontrado');
     if (f.situacao !== 'solicitado' && f.situacao !== 'aceito')

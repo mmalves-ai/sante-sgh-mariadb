@@ -2,9 +2,8 @@
 // vez por mudança do vigia (50 telas → 1 leitura); a chave desligada recusa com o motivo (POL-3); os parâmetros
 // pelo resolvedor do M08, com o padrão quando a fonte falha.
 import type { ValorParametro } from '@sgh/contratos';
-import type { ChaveGravada } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
-import type { FonteConfiguracao } from '../config/public-api.js';
+import type { ChaveLiberacao, FonteConfiguracao } from '../config/public-api.js';
 import { ConfiguracaoM16, PARAMETROS_PADRAO, tiposDoTexto } from './configuracao.js';
 import { FonteInternacaoMemoria } from './fonte-memoria.js';
 import type { CtxInternacao, FonteInternacao } from './fonte.js';
@@ -26,7 +25,13 @@ function contando(f: FonteInternacao) {
   return { fonte: proxy, hospitais };
 }
 
-const ctx = (hospital: string): CtxInternacao => ({ rede: 'r', hospital, traceId: 't' });
+// O contexto do núcleo (cliente e estabelecimento por id) é a chave do cache e do vigia.
+const ctx = (hospital: string): CtxInternacao => ({
+  rede: 'r',
+  hospital,
+  traceId: 't',
+  porta: { cliente: 'r', estabelecimento: hospital === 'pc' ? 1 : 2, usuario: null, correlacao: 't' },
+});
 
 describe('serviço do M16', () => {
   it('cada estabelecimento no seu banco; o painel relido só quando o vigia muda a versão', async () => {
@@ -109,18 +114,18 @@ describe('serviço do M16', () => {
 });
 
 function configuracao(
-  chaves: Partial<ChaveGravada>[],
+  chaves: Partial<ChaveLiberacao>[],
   valores: Partial<ValorParametro>[] = [],
 ): FonteConfiguracao {
   return {
-    chaves: async () => chaves as ChaveGravada[],
+    chaves: async () => chaves as ChaveLiberacao[],
     prerequisitos: async () => [],
     valoresParametro: async () => valores as ValorParametro[],
   } as unknown as FonteConfiguracao;
 }
 
 const sujeito = { rede: 'r', hospital: 'pc', login: 'SINT.X', setor: 2 };
-const ligada = (chave: string): Partial<ChaveGravada> => ({
+const ligada = (chave: string): Partial<ChaveLiberacao> => ({
   tipo: 'recurso',
   chave,
   escopo: 'hospital',

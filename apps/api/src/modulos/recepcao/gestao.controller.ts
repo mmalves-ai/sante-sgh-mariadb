@@ -2,7 +2,7 @@
 // os dispositivos do perfil Painel/Totem (o token sai uma vez) e a lista dos painéis de TV de setores:
 //   GET  /api/recepcao/supervisor[?recepcao]               recepcao.supervisor.ler
 //   GET  /api/recepcao/indicadores?de&ate[&recepcao]        recepcao.indicador.ler (366 dias no máximo)
-//   PUT  /api/recepcao/filas/:gerador                       recepcao.gerador.editar (SGH_REC_FILA_CFG)
+//   PUT  /api/recepcao/filas/:gerador                       recepcao.gerador.editar (gerador_senha)
 //   GET  /api/recepcao/dispositivos                         recepcao.dispositivo.ler (sem token)
 //   POST /api/recepcao/dispositivos                         recepcao.dispositivo.editar (o token sai uma vez)
 //   PUT  /api/recepcao/dispositivos/:id                     recepcao.dispositivo.editar (W1-04: nome, conteúdo,
@@ -41,7 +41,7 @@ import {
   recusaCamposDispositivo,
 } from '@sgh/contratos';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import type { DispositivoLidoLegado } from '@sgh/legado';
+import type { DispositivoRecepcao } from './tipos.js';
 import { z } from 'zod';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -74,7 +74,7 @@ function conteudoDoNome(nome: string): PainelTvLido['conteudo'] {
   return 'outro';
 }
 
-export function dispositivoParaTela(d: DispositivoLidoLegado): DispositivoLido {
+export function dispositivoParaTela(d: DispositivoRecepcao): DispositivoLido {
   return {
     id: d.id,
     tipo: d.tipo,
@@ -84,7 +84,7 @@ export function dispositivoParaTela(d: DispositivoLidoLegado): DispositivoLido {
     geradores: d.geradores,
     conteudo: d.conteudo,
     portalOrdem: d.portalOrdem,
-    usuarioLegado: d.usuarioLegado,
+    usuarioLegado: d.usuarioTecnico,
     voz: d.voz,
     criadoEm: d.criadoEm,
     criadoPor: d.criadoPor,
@@ -183,18 +183,18 @@ export class GestaoRecepcaoController {
 
   @Put('filas/:gerador')
   @Permissao('recepcao.gerador.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_REC_FILA_CFG) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('configuração da fila (gerador_senha) com a trilha na mesma transação')
   async fila(@Param('gerador') g: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaFilaConfig, { ...((b ?? {}) as object), gerador: idDaRota(g) });
     const recepcoes = await this.porta.recepcoes(s.porta);
     const ger = recepcoes.flatMap((r) => r.geradores).find((x) => x.id === e.gerador);
     if (!ger) throw new ErroProblema('nao-encontrado', 404, 'Gerador não encontrado');
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoFilaConfigurada.codigo,
       'recepcao.gerador',
-      { tabela: 'SGH_REC_FILA_CFG', id: String(e.gerador) },
+      { tabela: 'gerador_senha', id: String(e.gerador) },
       (gr) =>
         gr.gravarFilaCfg({
           gerador: e.gerador,
@@ -225,7 +225,7 @@ export class GestaoRecepcaoController {
   @Post('dispositivos')
   @HttpCode(201)
   @Permissao('recepcao.dispositivo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_ACESSO_DISPOSITIVO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dispositivo do perfil Painel/Totem com a trilha na mesma transação')
   async criar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<DispositivoCriado> {
     const s = sessaoDe(req);
     const e = corpo(esquemaDispositivo, b);
@@ -240,12 +240,12 @@ export class GestaoRecepcaoController {
           { campos: ['usuarioLegado'] },
         );
     }
-    const r = await this.apoio.sgh(
+    const r = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoDispositivoAlterado.codigo,
       'recepcao.dispositivo',
       (x: { id: number }) => ({
-        tabela: 'SGH_ACESSO_DISPOSITIVO',
+        tabela: 'dispositivo_recepcao',
         id: String(x.id),
         chave: `criado:${e.tipo}`,
       }),
@@ -258,7 +258,7 @@ export class GestaoRecepcaoController {
           geradores: e.geradores,
           conteudo: e.conteudo,
           portalOrdem: e.portalOrdem,
-          usuarioLegado: e.tipo === 'totem' ? e.usuarioLegado : null,
+          usuarioTecnico: e.tipo === 'totem' ? e.usuarioLegado : null,
           voz: e.voz,
           validadeDias: e.validadeDias,
           usuario: s.login,
@@ -275,7 +275,7 @@ export class GestaoRecepcaoController {
 
   @Put('dispositivos/:id')
   @Permissao('recepcao.dispositivo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_ACESSO_DISPOSITIVO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dispositivo do perfil Painel/Totem com a trilha na mesma transação')
   async alterar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -291,11 +291,11 @@ export class GestaoRecepcaoController {
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', problema[1], {
         campos: [problema[0]],
       });
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoDispositivoAlterado.codigo,
       'recepcao.dispositivo',
-      { tabela: 'SGH_ACESSO_DISPOSITIVO', id: String(n), chave: 'alterado' },
+      { tabela: 'dispositivo_recepcao', id: String(n), chave: 'alterado' },
       (g) =>
         g.alterarDispositivo({
           id: n,
@@ -315,7 +315,7 @@ export class GestaoRecepcaoController {
   @Post('dispositivos/:id/renovar')
   @HttpCode(201)
   @Permissao('recepcao.dispositivo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_ACESSO_DISPOSITIVO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dispositivo do perfil Painel/Totem com a trilha na mesma transação')
   async renovar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -324,11 +324,11 @@ export class GestaoRecepcaoController {
     const s = sessaoDe(req);
     const n = idDaRota(id);
     const e = corpo(esquemaValidade, b);
-    const token = await this.apoio.sgh(
+    const token = await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoDispositivoAlterado.codigo,
       'recepcao.dispositivo',
-      { tabela: 'SGH_ACESSO_DISPOSITIVO', id: String(n), chave: 'renovado' },
+      { tabela: 'dispositivo_recepcao', id: String(n), chave: 'renovado' },
       (g) => g.renovarDispositivo({ id: n, validadeDias: e.validadeDias }),
     );
     const d = (await this.porta.dispositivos(s.porta)).find((x) => x.id === n);
@@ -339,15 +339,15 @@ export class GestaoRecepcaoController {
   @Post('dispositivos/:id/revogar')
   @HttpCode(201)
   @Permissao('recepcao.dispositivo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_ACESSO_DISPOSITIVO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dispositivo do perfil Painel/Totem com a trilha na mesma transação')
   async revogar(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const n = idDaRota(id);
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoDispositivoAlterado.codigo,
       'recepcao.dispositivo',
-      { tabela: 'SGH_ACESSO_DISPOSITIVO', id: String(n), chave: 'revogado' },
+      { tabela: 'dispositivo_recepcao', id: String(n), chave: 'revogado' },
       (g) => g.revogarDispositivo({ id: n, usuario: s.login }),
     );
     return { ok: true as const, mensagem: 'Dispositivo revogado: o token deixou de valer.' };
@@ -360,7 +360,7 @@ export class GestaoRecepcaoController {
   @Post('dispositivos/:id/conferir')
   @HttpCode(201)
   @Permissao('recepcao.dispositivo.editar')
-  @AuditadoNoHandler('gravação só do novo (SGH_ACESSO_DISPOSITIVO) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('dispositivo do perfil Painel/Totem com a trilha na mesma transação')
   async conferir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const n = idDaRota(id);
@@ -375,11 +375,11 @@ export class GestaoRecepcaoController {
         'Escolha um login livre do grupo dos painéis e totens.',
         { campos: ['loginSubstituido'] },
       );
-    await this.apoio.sgh(
+    await this.apoio.gravar(
       s,
       EVENTOS_AUDITAVEIS.recepcaoDispositivoAlterado.codigo,
       'recepcao.dispositivo',
-      { tabela: 'SGH_ACESSO_DISPOSITIVO', id: String(n), chave: `conferido:${login}` },
+      { tabela: 'dispositivo_recepcao', id: String(n), chave: `conferido:${login}` },
       (g) => g.conferirDispositivo({ id: n, loginSubstituido: login, usuario: s.login }),
     );
     const d = (await this.porta.dispositivos(s.porta)).find((x) => x.id === n);

@@ -1,189 +1,108 @@
-// Fonte das telas do M04 (conferência de gravação; saúde das conexões e avisos de colisão): catálogo
-// versionado, receitas do adaptador e, quando o núcleo está ligado, pelas leituras do @sgh/legado (a API não
-// escreve SQL): triggers no RDB$TRIGGERS, provas confirmadas na SGH_TRILHA (fonte compartilhada) e o MON$ de
-// cada estabelecimento (leitura curta, somente leitura). Desfeitas e colisões não deixam linha no banco: vêm
-// do executor deste processo. Nenhum valor de linha.
-import {
-  type CatalogoOperacoes,
-  esquemaPainelConexoes,
-  esquemaPainelGravacao,
-  type PainelConexoes,
-  type PainelGravacao,
-} from '@sgh/contratos';
-import {
-  type Coleta,
-  coletar,
-  type EstadoPool,
-  type EstadoTrigger,
-  estadoDosTriggers,
-  fonteCatalogo,
-  type Leitor,
-  lerCatalogoOperacoes,
-  pastaResultadosDoCatalogo,
-  MetricasExecutor,
-  OPERACOES,
-  provasRecentes,
-  ULTIMAS_LINHAS_TRILHA,
-} from '@sgh/legado';
+// Saúde das conexões do banco do cliente e avisos de colisão (M04, tela "Saúde das conexões"): os pools do processo
+// (@sgh/nucleo), as conexões e transações abertas no banco do cliente (information_schema do MariaDB) e as colisões
+// contadas pelo Executor deste processo (conflito de versão e trava ocupada). Só leitura; só contagens.
+// Melhoria: sem a "conferência de gravação" do sistema de origem (gatilhos, geradores e sentinelas, ADR 0003): o
+// produto não grava por gatilho, e cada operação tem o seu contrato de efeito em teste.
+import { esquemaPainelConexoes, type PainelConexoes } from '@sgh/contratos';
+import type { EstadoPool, Leitor, MetricasExecutor } from '@sgh/nucleo';
 
 export const METRICAS_EXECUTOR = Symbol('METRICAS_EXECUTOR');
 export const FONTE_GRAVACAO = Symbol('FONTE_GRAVACAO');
 
+/** Transação aberta há mais que isto conta como longa (padrão). */
+export const LIMITE_TRANSACAO_MS = 30_000;
+
+/** O que a fonte usa do NucleoProprio (os testes trocam). */
 export interface NucleoLeitura {
-  readonly rede: string;
   estadosDosPools(): EstadoPool[];
   lerSomente<T>(
-    ctx: { rede: string; hospital: string; traceId: string },
+    contexto: { readonly cliente: string; readonly correlacao: string },
     fn: (l: Leitor) => Promise<T>,
   ): Promise<T>;
 }
 
 export interface FonteGravacao {
-  painelGravacao(): Promise<PainelGravacao>;
   painelConexoes(): Promise<PainelConexoes>;
 }
 
-const ctx = (n: NucleoLeitura, hospital: string) => ({
-  rede: n.rede,
-  hospital,
-  traceId: 'tela-coexistencia',
-});
+type Coleta = NonNullable<PainelConexoes['coletas'][string]>;
+
+/** Conexões por conta do banco e transações abertas no banco do cliente (só contagens). */
+export async function coletarConexoes(l: Leitor, limiteTransacaoMs: number, agora: Date): Promise<Coleta> {
+  const porConta = await l.consultar<{ sistema: string; conexoes: number }>(
+    `SELECT USER AS sistema, COUNT(*) AS conexoes FROM information_schema.PROCESSLIST
+      WHERE DB = DATABASE() GROUP BY USER ORDER BY USER`,
+    [],
+    { teto: 500 },
+  );
+  const trx = await l.consultar<{ sistema: string; transacoes: number; longas: number; esperas: number }>(
+    `SELECT p.USER AS sistema, COUNT(*) AS transacoes,
+            SUM(CASE WHEN TIMESTAMPDIFF(MICROSECOND, t.trx_started, NOW(6)) / 1000 > ? THEN 1 ELSE 0 END) AS longas,
+            SUM(CASE WHEN t.trx_state = 'LOCK WAIT' THEN 1 ELSE 0 END) AS esperas
+       FROM information_schema.INNODB_TRX t
+       JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id
+      WHERE p.DB = DATABASE() GROUP BY p.USER`,
+    [limiteTransacaoMs],
+    { teto: 500 },
+  );
+  const porSistema = porConta.map((c) => {
+    const t = trx.find((x) => x.sistema === c.sistema);
+    return { sistema: String(c.sistema), conexoes: Number(c.conexoes), transacoes: Number(t?.transacoes ?? 0) };
+  });
+  const longas = trx.reduce((a, t) => a + Number(t.longas ?? 0), 0);
+  const esperas = trx.reduce((a, t) => a + Number(t.esperas ?? 0), 0);
+  return {
+    em: agora.toISOString(),
+    porSistema,
+    transacoesAcimaDoLimite: longas,
+    esperasPorTrava: esperas,
+    alertas: longas + esperas,
+  };
+}
 
 export function criarFonteGravacao(opcoes: {
-  readonly catalogo: string | (() => CatalogoOperacoes);
-  readonly estabelecimentos: readonly string[];
+  /** Código do cliente (o banco é cliente_<codigo>). */
+  readonly cliente: string;
+  readonly rede: string;
   readonly metricas: MetricasExecutor;
   readonly nucleo: NucleoLeitura | null;
   readonly limiteTransacaoMs?: number;
 }): FonteGravacao {
-  const ler = (): CatalogoOperacoes =>
-    typeof opcoes.catalogo === 'string' ? lerCatalogoOperacoes(opcoes.catalogo) : opcoes.catalogo();
   return {
-    async painelGravacao() {
-      const cat = ler();
-      const estabs = [...opcoes.estabelecimentos];
-      const nomes = [...new Set(cat.operacoes.flatMap((o) => o.triggers.map((t) => t.nome)))];
-      const noBanco: Record<string, Record<string, EstadoTrigger>> = {};
-      const naTrilha: Record<string, Record<string, number>> = {};
-      if (opcoes.nucleo) {
-        for (const e of estabs) {
-          try {
-            const r = await opcoes.nucleo.lerSomente(ctx(opcoes.nucleo, e), async (l) => ({
-              triggers: await estadoDosTriggers(l, nomes),
-              provas: await provasRecentes(l, e),
-            }));
-            noBanco[e] = r.triggers;
-            naTrilha[e] = r.provas;
-          } catch {
-            // banco indisponível: a coluna do estabelecimento fica sem conferência
-          }
-        }
-      }
-      const metricas = opcoes.metricas.resumo();
-      const provasDe = (operacao: string) => {
-        const r: Record<string, { sucesso: number; desfeitas: number }> = {};
-        for (const m of metricas.filter((x) => x.operacao === operacao)) {
-          r[m.hospital] = { sucesso: m.desfechos.sucesso ?? 0, desfeitas: m.desfechos.desfeita ?? 0 };
-        }
-        for (const [e, porOperacao] of Object.entries(naTrilha)) {
-          // Com o banco: os sucessos vêm da trilha (todos os processos), não só deste.
-          r[e] = { sucesso: porOperacao[operacao] ?? 0, desfeitas: r[e]?.desfeitas ?? 0 };
-        }
-        return r;
-      };
-      // M36 (regra 6): o estado mostrado é o efetivo (divergência na última reexecução volta a bloqueada).
-      const efetivo = fonteCatalogo(cat, {
-        pastaResultados:
-          typeof opcoes.catalogo === 'string' ? pastaResultadosDoCatalogo(opcoes.catalogo) : null,
-      });
-      return esquemaPainelGravacao.parse({
-        estabelecimentos: estabs,
-        operacoes: cat.operacoes.map((o) => {
-          const r = OPERACOES[o.nome]?.receita ?? null;
-          return {
-            nome: o.nome,
-            modulo: o.modulo,
-            descricao: o.descricao,
-            estados: Object.fromEntries(estabs.map((e) => [e, efetivo.estado(o.nome, e) ?? 'bloqueada'])),
-            receita: r && {
-              marco: r.marco,
-              passos: r.passos.map((p) => ({
-                ordem: p.ordem,
-                tabela: p.tabela,
-                acao: p.acao,
-                colunas: Object.entries(p.colunas).map(([coluna, c]) => ({
-                  coluna,
-                  classe: c.classe,
-                  origem: c.origem,
-                })),
-              })),
-              efeitos: r.efeitos.map((x) => ({ ...x })),
-              naoFaz: [...r.naoFaz],
-              condicao: r.condicao,
-              concorrencia: r.concorrencia,
-              prova: r.prova,
-              critica: Boolean(r.critica),
-            },
-            triggers: o.triggers.map((t) => ({ ...t })),
-            triggersNoBanco: Object.fromEntries(
-              Object.entries(noBanco).map(([e, m]) => [
-                e,
-                Object.fromEntries(o.triggers.map((t) => [t.nome, m[t.nome] ?? 'ausente'])),
-              ]),
-            ),
-            provas: provasDe(o.nome),
-          };
-        }),
-        limitacao:
-          `Sucessos: últimas ${ULTIMAS_LINHAS_TRILHA} linhas da trilha de cada estabelecimento (todas as origens). ` +
-          'Desfeitas (prova pós-escrita) e colisões não deixam linha no banco: são as do executor deste processo da API, ' +
-          'que só grava quando as operações ganharem tela (M10 e M11); reproduções da assinatura não contam.',
-      });
-    },
     async painelConexoes() {
       const n = opcoes.nucleo;
-      const coletas: Record<string, PainelConexoes['coletas'][string]> = {};
-      for (const e of opcoes.estabelecimentos) {
-        if (!n) {
-          coletas[e] = null;
-          continue;
-        }
+      const coletas: PainelConexoes['coletas'] = {};
+      if (n) {
         try {
-          const c: Coleta = await n.lerSomente(ctx(n, e), (l) =>
-            coletar(l, {
-              estabelecimento: e,
-              ...(opcoes.limiteTransacaoMs ? { limiteTransacaoMs: opcoes.limiteTransacaoMs } : {}),
-            }),
+          coletas[opcoes.cliente] = await n.lerSomente(
+            { cliente: opcoes.cliente, correlacao: 'saude-conexoes' },
+            (l) => coletarConexoes(l, opcoes.limiteTransacaoMs ?? LIMITE_TRANSACAO_MS, new Date()),
           );
-          coletas[e] = {
-            em: c.em,
-            porSistema: c.porSistema.map((s) => ({
-              sistema: s.sistema,
-              conexoes: s.conexoes,
-              transacoes: s.transacoes,
-            })),
-            transacoesAcimaDoLimite: c.alertas.filter((a) => a.tipo === 'transacao-longa').length,
-            esperasPorTrava: c.porSistema.reduce((a, s) => a + s.esperasPorTrava, 0),
-            alertas: c.alertas.length,
-          };
         } catch {
-          coletas[e] = null;
+          coletas[opcoes.cliente] = null;
         }
-      }
+      } else coletas[opcoes.cliente] = null;
+      const resumo = opcoes.metricas.resumo();
       return esquemaPainelConexoes.parse({
-        rede: n?.rede ?? '',
-        pools: n ? n.estadosDosPools().map((p) => ({ ...p })) : [],
+        rede: opcoes.rede,
+        pools: n
+          ? n.estadosDosPools().map((p) => ({
+              estabelecimento: p.banco,
+              abertas: p.total,
+              livres: p.ociosas,
+              emUso: p.ativas,
+              esperando: 0,
+              sysdbaDev: false,
+            }))
+          : [],
         coletas,
-        colisoes: opcoes.metricas
-          .resumo()
-          .filter((m) => Object.keys(m.colisoesPorHora).length > 0)
-          .map((m) => ({
-            operacao: m.operacao,
-            estabelecimento: m.hospital,
-            porHora: { ...m.colisoesPorHora },
-          })),
+        colisoes: Object.entries(resumo)
+          .map(([operacao, d]) => ({ operacao, total: (d['conflito-versao'] ?? 0) + (d.trava ?? 0) }))
+          .filter((c) => c.total > 0)
+          .map((c) => ({ operacao: c.operacao, estabelecimento: opcoes.cliente, porHora: { total: c.total } })),
         limitacao:
-          'A conta de desenvolvimento vê no monitor do Firebird só o que o papel permite; a visão das conexões dos demais sistemas depende da conta da TI.',
+          'Colisões: as do Executor deste processo da API desde a partida (sem divisão por hora). ' +
+          'As conexões de outras contas do banco só aparecem quando a conta da API tem o privilégio PROCESS.',
       });
     },
   };

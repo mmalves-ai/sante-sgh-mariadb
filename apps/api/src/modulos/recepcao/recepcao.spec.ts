@@ -5,10 +5,9 @@
 // CPF), painel de chamada sem nome e o token que não abre rota de usuário.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { criarAppRecepcao } from './app-recepcao.spec-util.js';
 import { PortaRecepcaoMemoria } from './porta-memoria.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
@@ -22,9 +21,7 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, recepcao, vigia: null });
-  await app.init();
-  await app.getHttpAdapter().getInstance().ready();
+  app = await criarAppRecepcao(env, { trilha, recepcao });
 });
 afterAll(async () => {
   await app.close();
