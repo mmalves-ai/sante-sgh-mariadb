@@ -1,0 +1,13 @@
+# lote 05-13 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/worker/src/financeiro apps/worker/src/importadores apps/worker/src/importadores/brasindice tools/instalacao/src
+tools/instalacao/src/empacotar.ts
+tools/instalacao/src/liberacao-ligar-tudo.ts
+tools/instalacao/src/variaveis.spec.ts
+apps/worker/src/financeiro/consumidor-financeiro.spec.ts
+apps/worker/src/financeiro/consumidor-financeiro.ts
+apps/worker/src/importadores/brasindice/licenca.int.spec.ts
+apps/worker/src/importadores/integracao.spec-util.ts
+apps/worker/src/importadores/publicador.spec.ts
+apps/worker/src/importadores/publicador.ts
+apps/worker/src/importadores/responsavel.int.spec.ts

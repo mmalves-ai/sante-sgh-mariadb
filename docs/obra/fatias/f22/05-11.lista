@@ -1,0 +1,10 @@
+# lote 05-11 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: tools/verificadores/src
+tools/verificadores/src/privilegios-gerar.ts
+tools/verificadores/src/privilegios.spec.ts
+tools/verificadores/src/privilegios.ts
+tools/verificadores/src/relatorios-triagem.ts
+tools/verificadores/src/textos-de-produto.ts
+tools/verificadores/src/treino-cli.ts
+tools/verificadores/src/treino.ts

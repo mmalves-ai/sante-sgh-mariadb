@@ -1,0 +1,23 @@
+# lote 03-13 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/suprimentos
+apps/api/src/modulos/suprimentos/apoios.ts
+apps/api/src/modulos/suprimentos/consignado-manipulacao.spec.ts
+apps/api/src/modulos/suprimentos/consignado-porta-legado.ts
+apps/api/src/modulos/suprimentos/consignado-porta-memoria.ts
+apps/api/src/modulos/suprimentos/consignado-porta.ts
+apps/api/src/modulos/suprimentos/consignado.controller.ts
+apps/api/src/modulos/suprimentos/contrato-permissao-vinculo.spec.ts
+apps/api/src/modulos/suprimentos/contrato-porta-legado.ts
+apps/api/src/modulos/suprimentos/contrato-porta-memoria.ts
+apps/api/src/modulos/suprimentos/contrato-porta.ts
+apps/api/src/modulos/suprimentos/contrato.controller.ts
+apps/api/src/modulos/suprimentos/contrato.spec.ts
+apps/api/src/modulos/suprimentos/licitacao-documento.int.spec.ts
+apps/api/src/modulos/suprimentos/licitacao-documento.ts
+apps/api/src/modulos/suprimentos/licitacao-porta-legado.ts
+apps/api/src/modulos/suprimentos/licitacao-porta-memoria.spec.ts
+apps/api/src/modulos/suprimentos/licitacao-porta-memoria.ts
+apps/api/src/modulos/suprimentos/licitacao-porta.ts
+apps/api/src/modulos/suprimentos/licitacao.controller.ts
+apps/api/src/modulos/suprimentos/licitacao.spec.ts

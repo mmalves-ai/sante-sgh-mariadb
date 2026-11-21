@@ -1,0 +1,14 @@
+# lote 05-08 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: packages/testes/src/massa
+packages/testes/src/massa/reproducao-repasse.ts
+packages/testes/src/massa/reproducao-sadt.ts
+packages/testes/src/massa/reproducao-suprimentos.ts
+packages/testes/src/massa/reproducao-tiss.ts
+packages/testes/src/massa/reproducao-w108.ts
+packages/testes/src/massa/simulacao-legado-m23.ts
+packages/testes/src/massa/simulacao-legado-m24.ts
+packages/testes/src/massa/simulacao-legado-m25.ts
+packages/testes/src/massa/simulacao-legado-m34.ts
+packages/testes/src/massa/sintetica.ts
+packages/testes/src/massa/vigia-outro-sistema.ts

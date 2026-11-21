@@ -1,18 +1,23 @@
 # lote 02-07 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: financeiro
-# pastas: apps/api/src/modulos/financeiro apps/api/src/modulos/financeiro/api apps/api/src/modulos/financeiro/aplicacao
-apps/api/src/modulos/financeiro/api/escopo-conta.int.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/baixar-titulo.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/comum.spec-util.ts
-apps/api/src/modulos/financeiro/aplicacao/criar-titulo-pagar.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/tesouraria-fiscal.spec.ts
-apps/api/src/modulos/financeiro/aplicacao/titulo-por-competencia.int.spec.ts
-apps/api/src/modulos/financeiro/apoios.ts
-apps/api/src/modulos/financeiro/armazem.ts
-apps/api/src/modulos/financeiro/financeiro.controller.ts
-apps/api/src/modulos/financeiro/porta-legado.ts
-apps/api/src/modulos/financeiro/porta-memoria.ts
-apps/api/src/modulos/financeiro/porta.ts
-apps/api/src/modulos/financeiro/public-api.ts
-apps/api/src/modulos/financeiro/servico.ts
-apps/api/src/modulos/financeiro/simbolos.ts
+# registrar: -
+# pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
+apps/api/src/modulos/coexistencia/aplicacao/ciclo.ts
+apps/api/src/modulos/coexistencia/ciclo.int.spec.ts
+apps/api/src/modulos/coexistencia/ciclo.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/desligamento.ts
+apps/api/src/modulos/coexistencia/desligamento.controller.ts
+apps/api/src/modulos/coexistencia/desligamento.int.spec.ts
+apps/api/src/modulos/coexistencia/desligamento.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/ensaio-firebird5.ts
+apps/api/src/modulos/coexistencia/aplicacao/ensaio-utf8.ts
+apps/api/src/modulos/coexistencia/ensaio-utf8.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/fim.ts
+apps/api/src/modulos/coexistencia/fim.controller.ts
+apps/api/src/modulos/coexistencia/fim.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/janela.ts
+apps/api/src/modulos/coexistencia/janela.spec.ts
+apps/api/src/modulos/coexistencia/aplicacao/medidor-tarefas.ts
+apps/api/src/modulos/coexistencia/migracao.controller.ts
+apps/api/src/modulos/coexistencia/migracao.spec.ts
+apps/api/src/modulos/coexistencia/onda1.spec.ts
+apps/api/src/modulos/coexistencia/onda2.spec.ts

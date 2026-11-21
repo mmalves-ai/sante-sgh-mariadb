@@ -1,30 +1,26 @@
 # lote 03-01 (onda 3); gerado por tools/obra/fatiar_f22.py
-# registrar: adt
-# pastas: apps/api/src/modulos/adt
-apps/api/src/modulos/adt/adt.spec.ts
-apps/api/src/modulos/adt/apoios.ts
-apps/api/src/modulos/adt/avisos-leitos.spec.ts
-apps/api/src/modulos/adt/fotos.ts
-apps/api/src/modulos/adt/higienizacao.controller.ts
-apps/api/src/modulos/adt/indicadores-giro.ts
-apps/api/src/modulos/adt/internacao.controller.ts
-apps/api/src/modulos/adt/leitos.controller.ts
-apps/api/src/modulos/adt/nir-crud.spec.ts
-apps/api/src/modulos/adt/nir-memoria.ts
-apps/api/src/modulos/adt/nir-porta-legado.ts
-apps/api/src/modulos/adt/nir-porta-memoria.ts
-apps/api/src/modulos/adt/nir-porta.ts
-apps/api/src/modulos/adt/nir-servico.ts
-apps/api/src/modulos/adt/nir.controller.ts
-apps/api/src/modulos/adt/nir.spec.ts
-apps/api/src/modulos/adt/os-leito.spec.ts
-apps/api/src/modulos/adt/os-leito.ts
-apps/api/src/modulos/adt/porta-legado.ts
-apps/api/src/modulos/adt/porta-memoria.ts
-apps/api/src/modulos/adt/porta.ts
-apps/api/src/modulos/adt/public-api.ts
-apps/api/src/modulos/adt/regulacao.controller.ts
-apps/api/src/modulos/adt/regulacao.spec.ts
-apps/api/src/modulos/adt/same.controller.ts
-apps/api/src/modulos/adt/servico.ts
-apps/api/src/modulos/adt/simbolos.ts
+# registrar: cirurgia
+# pastas: apps/api/src/modulos/cirurgia apps/api/src/modulos/cirurgia/aplicacao
+apps/api/src/modulos/cirurgia/anestesia-porta-legado.ts
+apps/api/src/modulos/cirurgia/anestesia-porta-memoria.ts
+apps/api/src/modulos/cirurgia/anestesia-porta.ts
+apps/api/src/modulos/cirurgia/anestesia.controller.ts
+apps/api/src/modulos/cirurgia/anestesia.spec-util.ts
+apps/api/src/modulos/cirurgia/anestesia.spec.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta-legado.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta-memoria.ts
+apps/api/src/modulos/cirurgia/bloco-seguro-porta.ts
+apps/api/src/modulos/cirurgia/bloco-seguro.controller.ts
+apps/api/src/modulos/cirurgia/bloco-seguro.spec-util.ts
+apps/api/src/modulos/cirurgia/bloco-seguro.spec.ts
+apps/api/src/modulos/cirurgia/cirurgia.controller.ts
+apps/api/src/modulos/cirurgia/cirurgia.spec.ts
+apps/api/src/modulos/cirurgia/aplicacao/ficha.autorizacao.int.spec.ts
+apps/api/src/modulos/cirurgia/painel-bloco-familia.ts
+apps/api/src/modulos/cirurgia/porta-legado.ts
+apps/api/src/modulos/cirurgia/porta-memoria.ts
+apps/api/src/modulos/cirurgia/porta.ts
+apps/api/src/modulos/cirurgia/public-api.ts
+apps/api/src/modulos/cirurgia/servico.ts
+apps/api/src/modulos/cirurgia/aplicacao/trava-incisao.int.spec.ts
+apps/api/src/modulos/cirurgia/trava-incisao.ts

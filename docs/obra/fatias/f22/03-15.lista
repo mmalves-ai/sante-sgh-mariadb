@@ -1,0 +1,13 @@
+# lote 03-15 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: telemedicina
+# pastas: apps/api/src/modulos/telemedicina
+apps/api/src/modulos/telemedicina/porta-legado.ts
+apps/api/src/modulos/telemedicina/porta-memoria.ts
+apps/api/src/modulos/telemedicina/porta.ts
+apps/api/src/modulos/telemedicina/portal-teleconsulta.controller.ts
+apps/api/src/modulos/telemedicina/provedor.spec.ts
+apps/api/src/modulos/telemedicina/provedor.ts
+apps/api/src/modulos/telemedicina/public-api.ts
+apps/api/src/modulos/telemedicina/servico.ts
+apps/api/src/modulos/telemedicina/telemedicina.controller.ts
+apps/api/src/modulos/telemedicina/telemedicina.spec.ts

@@ -1,0 +1,15 @@
+# lote 03-11 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: pessoas
+# pastas: apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/infra apps/api/src/modulos/pessoas/treinamento
+apps/api/src/modulos/pessoas/infra/sobreposicao-rede.int.spec.ts
+apps/api/src/modulos/pessoas/aplicacao/titulos-folha.int.spec.ts
+apps/api/src/modulos/pessoas/aplicacao/titulos-folha.spec-util.ts
+apps/api/src/modulos/pessoas/treinamento/crud-treinamento.spec.ts
+apps/api/src/modulos/pessoas/treinamento/documentos-f6.ts
+apps/api/src/modulos/pessoas/treinamento/f6.spec.ts
+apps/api/src/modulos/pessoas/treinamento/porta-treinamento-legado.ts
+apps/api/src/modulos/pessoas/treinamento/porta-treinamento-memoria.ts
+apps/api/src/modulos/pessoas/treinamento/porta-treinamento.ts
+apps/api/src/modulos/pessoas/treinamento/servico-f6.spec.ts
+apps/api/src/modulos/pessoas/treinamento/servico-treinamento.ts
+apps/api/src/modulos/pessoas/treinamento/treinamento.controller.ts

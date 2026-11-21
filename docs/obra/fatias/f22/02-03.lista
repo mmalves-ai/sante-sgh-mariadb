@@ -1,27 +1,23 @@
 # lote 02-03 (onda 2); gerado por tools/obra/fatiar_f22.py
-# registrar: consultas contratualizacao custos
-# pastas: apps/api/src/modulos/consultas apps/api/src/modulos/contratualizacao apps/api/src/modulos/custos
-apps/api/src/modulos/consultas/consultas.controller.ts
-apps/api/src/modulos/consultas/consultas.spec.ts
-apps/api/src/modulos/consultas/fonte.ts
-apps/api/src/modulos/consultas/matriz.controller.ts
-apps/api/src/modulos/contratualizacao/contratualizacao.controller.ts
-apps/api/src/modulos/contratualizacao/contratualizacao.spec.ts
-apps/api/src/modulos/contratualizacao/porta-legado.ts
-apps/api/src/modulos/contratualizacao/porta-memoria.ts
-apps/api/src/modulos/contratualizacao/porta.ts
-apps/api/src/modulos/contratualizacao/public-api.ts
-apps/api/src/modulos/custos/apuracao-http.spec.ts
-apps/api/src/modulos/custos/apuracao.controller.ts
-apps/api/src/modulos/custos/apuracao.int.spec.ts
-apps/api/src/modulos/custos/custos-http.spec.ts
-apps/api/src/modulos/custos/custos.controller.ts
-apps/api/src/modulos/custos/custos.int.spec.ts
-apps/api/src/modulos/custos/porta-legado.ts
-apps/api/src/modulos/custos/porta-memoria.ts
-apps/api/src/modulos/custos/porta.ts
-apps/api/src/modulos/custos/public-api.ts
-apps/api/src/modulos/custos/relatorio-custos.spec.ts
-apps/api/src/modulos/custos/relatorio-custos.ts
-apps/api/src/modulos/custos/servico-apuracao.ts
-apps/api/src/modulos/custos/servico.ts
+# registrar: -
+# pastas: apps/api/src/modulos/acesso apps/api/src/modulos/acesso/aplicacao apps/api/src/modulos/acesso/identidade
+apps/api/src/modulos/acesso/identidade/contingencia.ts
+apps/api/src/modulos/acesso/identidade/identidade.controller.ts
+apps/api/src/modulos/acesso/identidade/politica-2fa-alteracao.spec.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-legado.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-memoria.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-sintetica.spec.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-sintetica.ts
+apps/api/src/modulos/acesso/identidade/servico-identidade.spec.ts
+apps/api/src/modulos/acesso/identidade/servico-identidade.ts
+apps/api/src/modulos/acesso/legado-acesso.ts
+apps/api/src/modulos/acesso/mapa-2fa-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/mapa-ciclo.spec.ts
+apps/api/src/modulos/acesso/aplicacao/mensagem.int.spec.ts
+apps/api/src/modulos/acesso/pedido-acesso.controller.spec.ts
+apps/api/src/modulos/acesso/pedido-acesso.controller.ts
+apps/api/src/modulos/acesso/perfil-parametro-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/perfil-parametro-ciclo.spec.ts
+apps/api/src/modulos/acesso/pin-gestao.controller.ts
+apps/api/src/modulos/acesso/recertificacao.controller.spec.ts
+apps/api/src/modulos/acesso/recertificacao.controller.ts

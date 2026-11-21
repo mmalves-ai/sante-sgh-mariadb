@@ -1,32 +1,21 @@
 # lote 05-03 (onda 5); gerado por tools/obra/fatiar_f22.py
-# registrar: administracao
-# pastas: apps/api/src/modulos/administracao apps/api/src/modulos/administracao/sbis
-apps/api/src/modulos/administracao/administracao.spec.ts
-apps/api/src/modulos/administracao/auditoria.controller.ts
-apps/api/src/modulos/administracao/comum.ts
-apps/api/src/modulos/administracao/estrutura.controller.spec.ts
-apps/api/src/modulos/administracao/estrutura.controller.ts
-apps/api/src/modulos/administracao/fonte-memoria.ts
-apps/api/src/modulos/administracao/fonte.ts
-apps/api/src/modulos/administracao/login-painel.ts
-apps/api/src/modulos/administracao/permissoes.controller.ts
-apps/api/src/modulos/administracao/rede-cpf.controller.spec.ts
-apps/api/src/modulos/administracao/rede-cpf.controller.ts
-apps/api/src/modulos/administracao/sbis/exportacao.ts
-apps/api/src/modulos/administracao/sbis/medidas.ts
-apps/api/src/modulos/administracao/sbis/porta-legado.ts
-apps/api/src/modulos/administracao/sbis/porta-memoria.ts
-apps/api/src/modulos/administracao/sbis/porta.ts
-apps/api/src/modulos/administracao/sbis/sbis.controller.spec.ts
-apps/api/src/modulos/administracao/sbis/sbis.controller.ts
-apps/api/src/modulos/administracao/sbis/sbis.int.spec.ts
-apps/api/src/modulos/administracao/sbis/servico.spec.ts
-apps/api/src/modulos/administracao/sbis/servico.ts
-apps/api/src/modulos/administracao/termo-publicar.spec.ts
-apps/api/src/modulos/administracao/termo-texto.spec.ts
-apps/api/src/modulos/administracao/usuarios-administradores.spec.ts
-apps/api/src/modulos/administracao/usuarios-cpf.spec.ts
-apps/api/src/modulos/administracao/usuarios-painel-cpf.spec.ts
-apps/api/src/modulos/administracao/usuarios-painel.spec.ts
-apps/api/src/modulos/administracao/usuarios-redefinir-senha.spec.ts
-apps/api/src/modulos/administracao/usuarios.controller.ts
+# registrar: -
+# pastas: packages/testes/src/integracao
+packages/testes/src/integracao/m44-e3.int.spec.ts
+packages/testes/src/integracao/m44-nir.int.spec.ts
+packages/testes/src/integracao/m45-e1.int.spec.ts
+packages/testes/src/integracao/m45-e2.int.spec.ts
+packages/testes/src/integracao/m45-e3.int.spec.ts
+packages/testes/src/integracao/m45-e4.int.spec.ts
+packages/testes/src/integracao/m45-e5.int.spec.ts
+packages/testes/src/integracao/m45-e6.int.spec.ts
+packages/testes/src/integracao/m46-e1.int.spec.ts
+packages/testes/src/integracao/m46-e2.int.spec.ts
+packages/testes/src/integracao/m46-e3.int.spec.ts
+packages/testes/src/integracao/m46-e4.int.spec.ts
+packages/testes/src/integracao/m47-e1.int.spec.ts
+packages/testes/src/integracao/m47-e2.int.spec.ts
+packages/testes/src/integracao/m48-e2-sugestao.int.spec.ts
+packages/testes/src/integracao/m50-3.int.spec.ts
+packages/testes/src/integracao/m50-4.int.spec.ts
+packages/testes/src/integracao/m50-e5.int.spec.ts

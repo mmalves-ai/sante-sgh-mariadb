@@ -1,35 +1,23 @@
 # lote 05-04 (onda 5); gerado por tools/obra/fatiar_f22.py
-# registrar: coexistencia
-# pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
-apps/api/src/modulos/coexistencia/aplicacao/ciclo.ts
-apps/api/src/modulos/coexistencia/aplicacao/desligamento.ts
-apps/api/src/modulos/coexistencia/aplicacao/ensaio-firebird5.ts
-apps/api/src/modulos/coexistencia/aplicacao/ensaio-utf8.ts
-apps/api/src/modulos/coexistencia/aplicacao/fim.ts
-apps/api/src/modulos/coexistencia/aplicacao/janela.ts
-apps/api/src/modulos/coexistencia/aplicacao/medidor-tarefas.ts
-apps/api/src/modulos/coexistencia/aplicacao/registro.ts
-apps/api/src/modulos/coexistencia/aplicacao/retrocompatibilidade.ts
-apps/api/src/modulos/coexistencia/aplicacao/servico.ts
-apps/api/src/modulos/coexistencia/ciclo.int.spec.ts
-apps/api/src/modulos/coexistencia/ciclo.spec.ts
-apps/api/src/modulos/coexistencia/desligamento.controller.ts
-apps/api/src/modulos/coexistencia/desligamento.int.spec.ts
-apps/api/src/modulos/coexistencia/desligamento.spec.ts
-apps/api/src/modulos/coexistencia/ensaio-utf8.spec.ts
-apps/api/src/modulos/coexistencia/fim.controller.ts
-apps/api/src/modulos/coexistencia/fim.spec.ts
-apps/api/src/modulos/coexistencia/janela.spec.ts
-apps/api/src/modulos/coexistencia/migracao.controller.ts
-apps/api/src/modulos/coexistencia/migracao.spec.ts
-apps/api/src/modulos/coexistencia/onda1.spec.ts
-apps/api/src/modulos/coexistencia/onda2.spec.ts
-apps/api/src/modulos/coexistencia/porta-legado.ts
-apps/api/src/modulos/coexistencia/porta-memoria.ts
-apps/api/src/modulos/coexistencia/porta.ts
-apps/api/src/modulos/coexistencia/public-api.ts
-apps/api/src/modulos/coexistencia/registro.int.spec.ts
-apps/api/src/modulos/coexistencia/registro.spec.ts
-apps/api/src/modulos/coexistencia/retrocompatibilidade.controller.ts
-apps/api/src/modulos/coexistencia/retrocompatibilidade.int.spec.ts
-apps/api/src/modulos/coexistencia/retrocompatibilidade.spec.ts
+# registrar: -
+# pastas: packages/testes/src/integracao
+packages/testes/src/integracao/m55-e3.int.spec.ts
+packages/testes/src/integracao/m55-e4.int.spec.ts
+packages/testes/src/integracao/m55-e5.int.spec.ts
+packages/testes/src/integracao/m56-rede.int.spec.ts
+packages/testes/src/integracao/m58-desligamento.int.spec.ts
+packages/testes/src/integracao/m58-ensaio-firebird5.int.spec.ts
+packages/testes/src/integracao/m58-ensaio-utf8.int.spec.ts
+packages/testes/src/integracao/m58-janela.int.spec.ts
+packages/testes/src/integracao/m59-4-saneamento.int.spec.ts
+packages/testes/src/integracao/m59-6-retrocompatibilidade.int.spec.ts
+packages/testes/src/integracao/m60-e1-migracao.int.spec.ts
+packages/testes/src/integracao/m60-e2-conexao.int.spec.ts
+packages/testes/src/integracao/m60-e3-fumaca.int.spec.ts
+packages/testes/src/integracao/matriz-autorizacao.int.spec.ts
+packages/testes/src/integracao/mwl.int.spec.ts
+packages/testes/src/integracao/neutralizacao-idempotente.spec.ts
+packages/testes/src/integracao/outbox.int.spec.ts
+packages/testes/src/integracao/painel-leitos.int.spec.ts
+packages/testes/src/integracao/parametro-legado.int.spec.ts
+packages/testes/src/integracao/parametro-vigencia.int.spec.ts

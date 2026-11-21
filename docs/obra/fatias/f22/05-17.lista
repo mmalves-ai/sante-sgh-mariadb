@@ -1,0 +1,17 @@
+# lote 05-17 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/worker/src apps/worker/src/relatorios
+apps/worker/src/vigia-firebird.service.ts
+apps/worker/src/vigia-gravacao.service.ts
+apps/worker/src/vigia-gravacao.spec.ts
+apps/worker/src/vigia-gravacao.ts
+apps/worker/src/vigia-parecer.service.ts
+apps/worker/src/vigia-parecer.spec.ts
+apps/worker/src/vigia-vazias.service.ts
+apps/worker/src/vigia-vazias.spec.ts
+apps/worker/src/vigia-vazias.ts
+apps/worker/src/worker.module.ts
+apps/worker/src/worker.spec.ts
+apps/worker/src/relatorios/envio-agendado.service.ts
+apps/worker/src/relatorios/envio-agendado.spec.ts
+apps/worker/src/relatorios/envio-agendado.ts
