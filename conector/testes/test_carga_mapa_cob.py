@@ -180,7 +180,8 @@ class ConferenciaExemploCob(unittest.TestCase):
                 lidos["segredos"] = c.fetchone()[0]
                 c.execute("SELECT GROUP_CONCAT(dia ORDER BY dia) FROM exc_grupo_dia")
                 lidos["dias"] = c.fetchone()[0]
-                c.execute("SELECT COUNT(*) FROM exc_grupo WHERE carregado_em = UTC_DATE() AND vigencia_inicio ="
+                # rodada 5 (ADR 0007, 16): a vigência sem fonte vem da evidência mais antiga da origem, nunca da carga
+                c.execute("SELECT COUNT(*) FROM exc_grupo WHERE carregado_em = UTC_DATE() AND vigencia_inicio <"
                           " UTC_DATE() AND LENGTH(hash_texto) = 64")
                 lidos["datas"] = c.fetchone()[0]
                 c.execute("SELECT COUNT(*), MIN(origem) FROM exc_grupo WHERE titulo IS NOT NULL")

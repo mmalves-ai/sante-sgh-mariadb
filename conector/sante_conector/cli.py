@@ -68,6 +68,9 @@ def main(argv=None):
     p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
     sub.add_parser("worker-separado")
     p = sub.add_parser("conta-motor"); p.add_argument("--rede", required=True)
+    # rodada 5 (ADR 0006, item 3): semente do espelho padrão da base a partir da cópia da origem (uma vez)
+    p = sub.add_parser("semear-espelho"); p.add_argument("relativo"); p.add_argument("--espelho", default="espelho")
+    p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["worker-separado"]:
         from . import separado
@@ -171,6 +174,14 @@ def main(argv=None):
         if uid:
             os.chown(a.saida, int(uid), int(os.environ.get("CONECTOR_GID", uid)))
         return _json({"colunas": n, "modo": ab.modo})
+    if a.cmd == "semear-espelho":
+        from . import banco, semente_espelho
+        with abridor.abrir(origem["absoluto"], modo=a.modo) as ab, Leitor(ab.dispositivo) as lt:
+            cx = banco.conectar(banco.nome_seguro(a.espelho), autocommit=False, multi=True)
+            try:
+                return _json(semente_espelho.semear(lt, cx))
+            finally:
+                cx.close()
     if a.cmd == "ler-faixa":
         with abridor.abrir(origem["absoluto"], modo=a.modo) as ab:
             with Leitor(ab.dispositivo) as lt:

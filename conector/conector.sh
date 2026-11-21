@@ -18,10 +18,10 @@
 set -euo pipefail
 AQUI=$(cd "$(dirname "$0")" && pwd)
 RAIZ=$(cd "$AQUI/.." && pwd)
-IMG=sante-sgh-conector:dev
-
-# reconstrói quando pedido ou quando o Dockerfile mudou (rótulo com o resumo dele)
+# reconstrói quando pedido ou quando o Dockerfile mudou (rótulo com o resumo dele); a etiqueta leva o resumo, para
+# duas cópias do repositório (worktrees) com Dockerfiles diferentes não se reconstruírem uma à outra
 FICHA=$(sha256sum "$AQUI/Dockerfile" | cut -c1-16)
+IMG=sante-sgh-conector:dev-$FICHA
 if [ "${1:-}" = "--construir" ] || [ "$(docker image inspect "$IMG" --format '{{index .Config.Labels "sante.dockerfile"}}' 2>/dev/null)" != "$FICHA" ]; then
   [ "${1:-}" = "--construir" ] && shift
   docker build -q --label "sante.dockerfile=$FICHA" -t "$IMG" "$AQUI" >/dev/null
@@ -44,12 +44,12 @@ mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
 PRIV=()
-case "$1" in registrar|ler-faixa|dicionario|testes|conferir-fatia|worker) PRIV=(--privileged) ;; esac
+case "$1" in registrar|ler-faixa|dicionario|testes|conferir-fatia|worker|semear-espelho) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 MARIADB_CT=${CONECTOR_MARIADB_CONTAINER:-sante-sgh-mariadb}
 REDE_INT=sante-sgh-conector-int
 case "$1" in
-  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia)
+  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia|semear-espelho)
     docker network inspect "$REDE_INT" >/dev/null 2>&1 || docker network create --internal "$REDE_INT" >/dev/null
     if ! docker inspect "$MARIADB_CT" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"$REDE_INT\""; then
       docker network connect --alias mariadb "$REDE_INT" "$MARIADB_CT"
@@ -78,6 +78,7 @@ docker run --rm "${REDE[@]}" "${PRIV[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" -v "$AQUI/mapa:/app/mapa:ro" \
   -v "$RAIZ/db/plataforma:/db-plataforma:ro" -v "$RAIZ/db/migracoes:/app/db/migracoes:ro" \
+  -v "$RAIZ/catalogos/licenciados:/app/licenciados:ro" -v "$RAIZ/db/espelho:/app/db/espelho:ro" -e PLATAFORMA_CHAVE_MESTRA \
   -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
   -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" \
   -e CONECTOR_UID="$(id -u)" -e CONECTOR_GID="$(id -g)" \

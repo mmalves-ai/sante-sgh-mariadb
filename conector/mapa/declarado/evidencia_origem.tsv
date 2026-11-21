@@ -1,0 +1,3 @@
+tabela	coluna	motivo
+RECADATE	DT_ATE	data do atendimento: o atendimento mais antigo da origem é a evidência do início da operação do hospital (ADR 0007, 16)
+RECADATE	DTGRAV	data de gravação do atendimento (mesma evidência)

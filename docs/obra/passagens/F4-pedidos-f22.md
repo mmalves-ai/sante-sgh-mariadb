@@ -129,3 +129,16 @@ Lotes `40_` (faixa do F4, para não colidir com a numeração da pasta principal
   `catalogos/licenciados/FORMATO.md`). O `criar_cliente` leva o espelho (quando existir) a todo cliente novo e grava
   o resumo no evento `criado`; `espelho.py atualizar` grava o evento `espelho_atualizado`. O painel pode mostrar as
   edições do evento e oferecer "atualizar catálogos" chamando o comando.
+
+### Rodada 5, motor do conector: credenciais copiadas e cofre do cliente (ADR 0007, item 17)
+- `credencial_usuario` (02_ADM/40): `algoritmo` aceita `md5`, `sha1`, `sha256`, `sha512` (resumo importado da origem,
+  hex em minúsculas) com `regravar_no_login = TRUE`. A API DEVE, no login: conferir a senha pelo algoritmo marcado
+  (comparação em tempo constante); no primeiro login bem-sucedido, regravar `resumo_senha` em argon2id,
+  `algoritmo = 'argon2id'`, `regravar_no_login = FALSE`, gravando `historico_senha` com `forma_troca = 'migracao'`.
+  bcrypt/scrypt importados seguem a mesma regravação quando marcados.
+- Cofre do cliente (17_INTG/41): `segredo_cofre` (referência `cofre:migracao/<tabela>/<coluna>/<resumo>`, envelope
+  `v1.<iv>.<tag>.<corpo>` em AES-256-GCM com `PLATAFORMA_CHAVE_MESTRA`, o mesmo de `assinatura/infra/cofre.ts`). A API
+  DEVE ler essas referências por um adaptador de cofre em banco (aceitar o prefixo `migracao/` em
+  `lerReferenciaCofre`/`exigirReferencia`) e mostrar só "definido"/"não definido".
+- Mescla da migração (17_INTG/41): `historico_mescla_migracao` (registro adotado, coluna, valor que a origem trazia).
+  A tela do registro pode mostrar "a origem trazia outro valor" e permitir aplicar com trilha.

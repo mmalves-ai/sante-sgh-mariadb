@@ -235,7 +235,9 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 2, "vigencia_sem_fonte": 4}},
         "TBREFMEMTUSS": {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 5, "licenca_nao_comprovada": 1,
                                                        "pai_inexistente": 1, "restricao_destino_1048": 2,
-                                                       "vigencia_sem_fonte": 4}},
+                                                       # rodada 5 (ADR 0007, 16): a linha com data própria de
+                                                       # evidência não é mais "sem fonte"
+                                                       "vigencia_sem_fonte": 3}},
         # r4 (revisão): 2 recusada (procedimento ausente: item e tabela pai_inexistente, tabela NOT NULL 1048); 3 recusada
         # (tipo de paciente fora do domínio); 5 fonte inexistente (pai_inexistente, 1048)
         "TBPERTHM": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2,

@@ -28,6 +28,12 @@ def _sem_fk(create):
     return re.sub(r",\s*\n(\s*\))", r"\n\1", txt)
 
 
+ESPELHO_CONSULTA = {"brasindice": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
+                    "simpro": ["item_referencia_matmed", "preco_referencia_matmed", "edicao_referencia_matmed"],
+                    "cbhpm": ["tabela_referencia_procedimento", "tabela_referencia_procedimento_item"],
+                    "cep": ["logradouro_cep"]}
+
+
 def ddl_destino(plano, raiz=RAIZ_APP):
     """CREATE TABLE (sem FK) das tabelas de destino do plano e dos catálogos oficiais que ele usa, mais os ADD COLUMN."""
     ddl = mapa.ler_ddl(raiz)
@@ -45,6 +51,8 @@ def ddl_destino(plano, raiz=RAIZ_APP):
                         alvo.append("terminologia")
                 if c["coluna"].startswith("#arquivo:"):  # registro do binário no armazenamento (conferidor r4)
                     alvo.append("arquivo")
+                if c.get("espelho"):  # ligação ao espelho (rodada 5): as tabelas que a ligação consulta
+                    alvo += ESPELHO_CONSULTA[c["espelho"]["catalogo"]]
     faltam = sorted({t for t in alvo if t not in ddl})
     if faltam:
         raise RuntimeError("destino sem DDL no modelo: %s" % ", ".join(faltam))
@@ -64,6 +72,14 @@ def _rodar(lt, cc, ctl, eid, mapa_exec, presentes, contagens):
 
 
 def _comparar(c, res, esperado, erros, rodada):
+    # rodada 5 (ADR 0006 e 0007): prova de "não copiar" e ligação filho -> pai de código derivado
+    for t, r in (res.get("provas") or {}).items():
+        if not r["conferido"]:
+            erros.append("%s: prova de não copiar de %s não conferiu (%d divergentes, %d faltando, %d sobrando)" % (
+                rodada, t, r["divergentes"], r["faltando_no_destino"], r["sobrando_no_destino"]))
+    for k, r in (res.get("filho_pai") or {}).items():
+        if not r["conferido"]:
+            erros.append("%s: filho -> pai divergente em %s (%d de %d)" % (rodada, k, r["divergentes"], r["verificados"]))
     for ent, r in res["entidades"].items():
         if not r["conferido"]:
             erros.append("%s: conciliação divergiu em %s (origem %d, destino %d, recusados %d)" % (
@@ -149,7 +165,10 @@ def conferir(fatia, trabalho=None, manter=False, depois_da_primeira=None):
                                            for k, v in res["entidades"].items()},
                              "pendencias_por_regra": res["pendencias"]["por_regra"],
                              "por_tabela": res["carga"]["por_tabela"],
-                             "fase2": {k: res["carga"][k] for k in ("fase2_gravadas", "fase2_pendentes")}}
+                             "fase2": {k: res["carga"][k] for k in ("fase2_gravadas", "fase2_pendentes")},
+                             "provas": res.get("provas") or {}, "filho_pai": res.get("filho_pai") or {},
+                             "continuidade": {k: res["carga"].get(k, 0) for k in (
+                                 "mescla_preenchidas", "mescla_conflitos", "segredos_no_cofre")}}
                     if depois_da_primeira:
                         depois_da_primeira(cc)
                         cc.commit()

@@ -3601,3 +3601,5 @@ troca_email_conta_portal	INTG	principal	F3	Pedido de troca do e-mail de uma cont
 principio_ativo_cliente	SUP	principal	F4	Princípio ativo do cadastro próprio do hospital sem código oficial, ligado ao catálogo oficial quando houver par	F4 rodada 4, pedido L7-07; SPDATA: TBPRINC	05	1
 item_faturavel_tipo_servico	FAT	vinculo	F4	Tipos de serviço em que o item faturável se enquadra	F4 rodada 4, pedidos L8-03 e L8-04; SPDATA: TBTIPPRO	06	1
 tabela_preco_item_padrao	FAT	configuracao	F4	Item cobrado por padrão em cada finalidade (consulta, consulta eletiva, visita, pedido), por tabela de preço	F4 rodada 4, pedido L8-03; SPDATA: TBCTRTHM	06	1
+segredo_cofre	INTG	principal	F3	Cofre de segredos do cliente: credencial migrada ou cadastrada, cifrada com a chave mestra do deploy; a tabela de uso guarda só a referência	ADR 0007 item 17 (credenciais copiadas)	08	1
+historico_mescla_migracao	INTG	historico	F3	Mescla não destrutiva da migração: valor da origem guardado quando o registro adotado já tinha outro	ADR 0007 item 20	08	1

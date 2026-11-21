@@ -173,7 +173,7 @@ import os
 import json
 import time
 
-from . import carga, depara, mapa, sentinela
+from . import carga, continuidade, depara, mapa, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_linha
 from .pendencia import Propagador
@@ -195,7 +195,15 @@ GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
 GRAVIDADE_REGRA.update({"armazenamento_indefinido": "alta", "arquivo_divergente_no_armazenamento": "alta"})
 GRAVIDADE_REGRA.update({"duracao_ausente": "media", "escolha_pelo_maior": "baixa", "escolha_pelo_menor": "baixa",
                         "sem_filho_com_valor": "media", "fora_do_filtro_da_carga": "baixa"})
+GRAVIDADE_REGRA.update({"rascunho_sem_autor": "alta", "espelho_codigo_inexistente": "media",
+                        "espelho_edicao_inexistente": "media", "espelho_ambiguo": "media",
+                        "senha_hash_invalido": "media", "senha_aguarda_argon2": "media",
+                        "vigencia_pelo_registro_mais_antigo": "baixa", "vigencia_pela_origem": "baixa",
+                        "vigencia_sem_evidencia": "media", "mescla_conflito_origem_guardada": "baixa",
+                        "prova_nao_conferida": "alta", "filho_pai_divergente": "alta"})
 FILTRO_PADRAO = "fora_do_filtro_da_carga"
+# destino de vigência: `@vigencia_carga` e `=@data_carga` nela valem pela EVIDÊNCIA (ADR 0007, item 16)
+_DESTINO_VIGENCIA = re.compile(r"vigencia|vigente")
 TIPOS_INT = (7, 8, 16)
 INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
 DEC_DESTINO = {"decimal"}
@@ -267,7 +275,7 @@ def fonte_especial(nome):
     if nome.startswith("#sha256:#"):
         return None
     for pre in ("#seq:", "#sha256:", "#cofre:", "#codigo_derivado:", "#grupo_somar:", "#grupo_min:", "#grupo_max:",
-                "#arquivo:"):
+                "#arquivo:", "#senha:", "#senha_hash:"):
         if nome.startswith(pre):
             return nome[len(pre):].split(":")[0]
     return None
@@ -382,6 +390,7 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
         if (c.get("destino") or "").count(".") == 1:
             decl.setdefault(c["tabela"], []).append(c)
     quebras = {(d["tabela"], d["depende_de"]) for d in mapa_exec.get("deps", []) if d.get("quebra")}
+    derivados = {c["tabela"] for c in mapa_exec.get("colunas_decl", []) if c["coluna"].startswith("#codigo_derivado:")}
     plano = []
     for r in sorted(mapa_exec["tabelas"], key=lambda r: int(r["ordem"]) if (r.get("ordem") or "").isdigit() else 10**9):
         t = r["tabela"]
@@ -420,6 +429,17 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
             se = [mapa.condicao(x[3:]) for x in via if x.startswith("se:")]
             if se and se[0]:
                 col["se"] = se[0]
+            esp = [mapa.espelho_spec(x) for x in via if x.startswith("espelho:")]
+            if esp and esp[0]:
+                col["espelho"] = esp[0]
+            if c["coluna"] == "@vigencia_carga" or c["coluna"].startswith("#vigencia") or (
+                    c["coluna"] in ("=@data_carga", "=~@data_carga") and _DESTINO_VIGENCIA.search(dc)):
+                col["vigencia"] = c["coluna"][10:].split(",") if c["coluna"].startswith("#vigencia:") else None
+            tabs = [x["tabela"] for x in passos or [] if "tabela" in x]
+            pai = (tabs[-1] if tabs and not termina_em_coluna else "") if passos else \
+                (rd or g.get("referencia") or "") if not _especial(c["coluna"]) else ""
+            if pai in derivados:
+                col["pai_derivado"] = pai  # conciliação filho -> pai (ADR 0007, item 19)
             cols[dt].append(col)
         filtros = [f for c in decl[t] for x in (c.get("via") or "").split(";") if x.startswith("so_se:")
                    for f in [mapa.condicao(x[6:])] if f]
@@ -442,6 +462,8 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                         ler(x)
                 if c.get("se"):
                     _ler_cond(c["se"], ler)
+                if c.get("espelho") and c["espelho"]["edicao_coluna"]:
+                    ler(c["espelho"]["edicao_coluna"])
             if (opcoes.get(dt) or {}).get("se") and "coluna" in opcoes[dt]["se"]:
                 _ler_cond(opcoes[dt]["se"], ler)
             for spec, _ in opcoes.get(dt, {}).get("desdobrar", []):
@@ -464,7 +486,7 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
             if c.get("regra") and not _especial(c["coluna"]) and c["coluna"] in regras \
                     and not mapa.referencia_declarada(c):
                 regras[c["coluna"]] = c["regra"]
-        segredos = {fonte_especial(c["coluna"]) for c in decl[t] if c["coluna"].startswith("#cofre:")}
+        segredos = {fonte_especial(c["coluna"]) for c in decl[t] if c["coluna"].startswith(("#cofre:", "#senha"))}
         plano.append({"tabela": t, "chave": chave, "destinos": dts, "colunas": cols, "lidas": lidas,
                       "retrato": {n: r for n, r in regras.items() if n not in segredos},
                       "retratos": retratos, "segredos": segredos,
@@ -473,6 +495,25 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                       "filtros": filtros,
                       "duas_fases": {p for f, p in quebras if f == t} | {t}})
     return plano
+
+
+def _valor_legivel(x):
+    """Valor da origem como o cliente o lê no histórico da mescla (texto; data ISO; número canônico)."""
+    if isinstance(x, (bytes, bytearray)):
+        return "sha256:" + hashlib.sha256(x).hexdigest()
+    if isinstance(x, (datetime.date, datetime.time)):
+        return x.isoformat()
+    if isinstance(x, (int, decimal.Decimal, float, bool)):
+        return canon(x)
+    return str(x)
+
+
+def _ao_menos(a, b):
+    """Estado do mecanismo: o do destino vale pelo menos o da origem (numérico) ou é igual."""
+    try:
+        return decimal.Decimal(str(a)) >= decimal.Decimal(str(b))
+    except (decimal.InvalidOperation, ValueError, TypeError):
+        return canon(a) == canon(b)
 
 
 def _passos_em_duas_fases(c, p):
@@ -550,6 +591,14 @@ class CargaMapa(carga.Carga):
         self._alt_lista = {}                # (tabela, coluna) -> {valor: [chaves do pai]} (valor repetido)
         self._leit = {}                     # grupos de leitura sem cabeçalho (`#grupo_seq@`, `#grupo_razao:`)
         self._filhos = {}                   # (tabela filha, coluna, FK) -> {FK: [valores]} (`#filhos_*`)
+        # rodada 5 (ADR 0006 e 0007)
+        self._linha = None                  # (tabela, chave) da linha em gravação (mescla, cofre)
+        self._vig = {}                      # (tabela, colunas) -> ({chave: data mais antiga}, data mais antiga)
+        self._vig_origem = False            # data do registro mais antigo da origem (evidência declarada)
+        self._esp = {}                      # (catálogo, código, edição) -> id no espelho do cliente, None ou AMBIGUO
+        self._criadas = set()               # tabelas de continuidade já garantidas no banco do cliente
+        self._filho_pai = {}                # (dt, coluna, tabela do pai) -> [(id da filha, id esperado do pai)]
+        self.chave_cofre = continuidade.chave_mestra()
 
     # ----- destino -----
     def _info(self, dt):
@@ -800,6 +849,11 @@ class CargaMapa(carga.Carga):
                 continue
             if i == 0 and s["modo"] in ("composta", "alt_composta"):
                 partes = [c[1:] if c.startswith("=") else linha[c] for c in (s.get("cols") or s["arg"])]
+                for j, sub in (s.get("cadeias") or {}).items():  # componente encadeado `COL>T>X` (rodada 5)
+                    vj, _, rj = self._seguir(linha, s["arg"][j], sub, pend)
+                    if rj:
+                        return None, None, rj
+                    partes[j] = vj
                 if all(x is None for x in partes):
                     return None, None, None
                 if s["modo"] == "composta":
@@ -1281,9 +1335,9 @@ class CargaMapa(carga.Carga):
                     continue
                 elif nome.startswith("="):
                     x = nome[1:]
-                elif nome == "@vigencia_carga":
-                    x = self.data_carga
-                    pend.append(("vigencia_sem_fonte", "baixa"))
+                elif c.get("vigencia", False) is not False and "vigencia" in c:
+                    x = self._vigencia(p, linha, chave, c["vigencia"], pend)
+                    algum = algum or x is not None
                 elif nome == "@estabelecimento":
                     x = self._estabelecimento()
                     if x is None:
@@ -1342,10 +1396,21 @@ class CargaMapa(carga.Carga):
                     x = self._arquivo(t, chave, dt, linha, nome, pend)
                     algum = algum or x is not None
                 elif nome.startswith("#cofre:"):
-                    # segredo nunca gravado em claro: o conector não tem cofre; a linha pede a credencial no cofre
-                    x = None
-                    if sentinela.aplicar("texto", linha[fonte_especial(nome)])[0] is not None:
-                        pend.append(("segredo_aguarda_cofre", "media"))
+                    # ADR 0007 (17): o segredo vai CIFRADO ao cofre do cliente; a coluna recebe a referência. Sem
+                    # chave mestra ou sem a biblioteca de cifra: NULL e a pendência (falha fechada), nunca em claro
+                    x = self._cofre(t, chave, dt, dc, linha[fonte_especial(nome)], pend)
+                    algum = algum or x is not None
+                elif nome.startswith("#senha:"):  # senha legível ou reversível na origem: argon2id já na carga
+                    y = sentinela.aplicar("texto", linha[fonte_especial(nome)])[0]
+                    x = None if y is None else continuidade.argon2id(str(y))
+                    if y is not None and x is None:
+                        pend.append(("senha_aguarda_argon2", "media"))
+                    algum = algum or x is not None
+                elif nome.startswith("#senha_hash:"):  # hash conhecido: importado, a API regrava no 1º login
+                    x, pr = continuidade.hash_importado(linha[fonte_especial(nome)], nome.split(":")[2])
+                    if pr:
+                        pend.append((pr, "media"))
+                    algum = algum or x is not None
                 else:
                     x, recusa, adiada = self._converter(t, chave, p, linha, c, linha[nome], pend,
                                                         pode_adiar=(info.get(dc) or (True,))[0])
@@ -1362,7 +1427,9 @@ class CargaMapa(carga.Carga):
                     algum = algum or x is not None
                     if dc == "id" and op.get("complementa") and x is None:
                         return None, None, pend, ("pai_inexistente", "media"), []
-                if x == "@data_carga":
+                if x == "@data_carga" and "vigencia" in c:  # vigência: nunca a data da carga (ADR 0007, 16)
+                    x = self._vigencia(p, linha, chave, None, pend)
+                elif x == "@data_carga":
                     x = self.data_carga
                     if c.get("regra") and nome in ("=@data_carga", "=~@data_carga"):  # ex.: competência da carga
                         x, pr = sentinela.aplicar(c["regra"], x)
@@ -1370,6 +1437,12 @@ class CargaMapa(carga.Carga):
                             pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
                 if c.get("cod") and x is not None:  # id pelo código no cadastro do destino
                     x = self._resolver_cod(c["cod"], x, pend)
+                if c.get("espelho") and x is not None:  # ligação ao espelho padrão da base (ADR 0006, 3)
+                    x = self._ligar_espelho(c["espelho"], x, linha, pend)
+                if c.get("autor") and x is None:  # rascunho: o autor pelo login/chave; sem autor, pendência própria
+                    pend[n0:] = [y for y in pend[n0:] if y[0] not in (
+                        "pai_inexistente", "codigo_inexistente_destino", "pai_ambiguo")]
+                    pend.append(("rascunho_sem_autor", "alta"))
                 fora.setdefault(dc, []).extend(i for i in range(n0, len(pend))
                                                if pend[i][0] == "valor_fora_do_dominio")
                 if dc in pos:  # coluna concorrente: vale a primeira com valor, na ordem declarada
@@ -1525,8 +1598,225 @@ class CargaMapa(carga.Carga):
             ids = self._todas("SELECT id FROM `%s` WHERE %s LIMIT 2" % (dt, " AND ".join("`%s`=%%s" % a for a in adotar)),
                               tuple(v[a] for a in adotar))
             if len(ids) == 1:
+                self._mesclar(dt, ids[0][0], v)
                 return ids[0][0], True
         return self._inserir(dt, v), False
+
+    # ----- rodada 5: continuidade (ADR 0006 e 0007) -----
+    def _garantir(self, nome, ddl):
+        if nome not in self._criadas:
+            with self._c() as c:
+                c.execute(ddl)
+            self._criadas.add(nome)
+
+    def _mesclar(self, dt, rid, v):
+        """Mescla NÃO destrutiva (ADR 0007, 20): coluna vazia no destino recebe a da origem; conflito mantém o
+        destino e guarda o valor da origem em `historico_mescla_migracao` (pendência baixa, sem valor)."""
+        cols = [k for k in v if k not in ("id", "origem") and v[k] is not None]
+        if not cols:
+            return
+        atual = dict(zip(cols, self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
+            ", ".join("`%s`" % k for k in cols), dt), (rid,))[0]))
+        vazias = [k for k in cols if atual[k] is None or (isinstance(atual[k], str) and not atual[k].strip())]
+        conflito = [k for k in cols if k not in vazias and canon(atual[k]) != canon(v[k])]
+        with self._c() as c:
+            if vazias:
+                c.execute("UPDATE `%s` SET %s WHERE id=%%s" % (dt, ", ".join("`%s`=%%s" % k for k in vazias)),
+                          [v[k] for k in vazias] + [rid])
+                self.cont["mescla_preenchidas"] = self.cont.get("mescla_preenchidas", 0) + len(vazias)
+        if conflito:
+            self._garantir("historico_mescla_migracao", continuidade.DDL_MESCLA)
+            t, chave = self._linha or ("", "")
+            with self._c() as c:
+                for k in conflito:
+                    c.execute("INSERT INTO historico_mescla_migracao (tabela_destino, registro_id, coluna, valor_origem,"
+                              " tabela_origem, chave_origem, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%s)"
+                              " ON DUPLICATE KEY UPDATE valor_origem=VALUES(valor_origem), alterado_em=%s,"
+                              " versao=versao+1" % (AGORA, AGORA), (dt, rid, k, _valor_legivel(v[k]), t, chave))
+            self.cont["mescla_conflitos"] = self.cont.get("mescla_conflitos", 0) + len(conflito)
+            self._pendencia(t, chave, "mescla_conflito_origem_guardada", "baixa")
+
+    def _cofre(self, t, chave, dt, dc, bruto, pend):
+        y = sentinela.aplicar("texto", bruto)[0]
+        if y is None:
+            return None
+        env = continuidade.cifrar(self.chave_cofre, str(y)) if self.chave_cofre else None
+        if env is None:
+            pend.append(("segredo_aguarda_cofre", "media"))
+            return None
+        self._garantir("segredo_cofre", continuidade.DDL_COFRE)
+        ref = continuidade.referencia_cofre(dt, dc, t, chave)
+        with self._c() as c:  # já no cofre (reexecução): fica como está
+            c.execute("INSERT IGNORE INTO segredo_cofre (referencia, envelope, finalidade, origem, criado_em)"
+                      " VALUES (%%s,%%s,%%s,'migracao',%s)" % AGORA, (ref, env, ("%s.%s" % (dt, dc))[:60]))
+        self.cont["segredos_no_cofre"] = self.cont.get("segredos_no_cofre", 0) + 1
+        return ref
+
+    def _ligar_espelho(self, esp, codigo, linha, pend):
+        """Id da linha do espelho (copiada no cliente com os mesmos ids) pelo código e, com edição, pela edição;
+        nunca copia conteúdo licenciado. Ausente: NULL com `espelho_codigo_inexistente`/`espelho_edicao_inexistente`."""
+        cat = esp["catalogo"]
+        ed = esp["edicao"] or (sentinela.aplicar("texto", linha.get(esp["edicao_coluna"]))[0]
+                               if esp["edicao_coluna"] else None)
+        cod = self._chave(codigo).strip()
+        if cat == "cep":
+            cod = re.sub(r"\D", "", cod)
+        k = (cat, cod, ed)
+        if k not in self._esp:
+            if cat in ("brasindice", "simpro"):
+                sql = "SELECT i.id FROM item_referencia_matmed i WHERE i.fonte_referencia=%s AND i.codigo_referencia=%s"
+                args = [cat, cod]
+                if ed:
+                    sql += (" AND EXISTS (SELECT 1 FROM preco_referencia_matmed pr JOIN edicao_referencia_matmed e"
+                            " ON e.id=pr.edicao_referencia_matmed_id WHERE pr.item_referencia_matmed_id=i.id"
+                            " AND e.numero_edicao=%s)")
+                    args.append(ed)
+            elif cat == "cbhpm":
+                sql = ("SELECT it.id FROM tabela_referencia_procedimento_item it JOIN tabela_referencia_procedimento tr"
+                       " ON tr.id=it.tabela_referencia_procedimento_id WHERE tr.codigo_tabela='cbhpm'"
+                       " AND it.codigo_procedimento=%s")
+                args = [cod]
+                if ed:
+                    sql += " AND tr.edicao=%s"
+                    args.append(ed)
+                else:  # sem edição: a mais recente
+                    sql += " ORDER BY tr.vigencia_inicio DESC, tr.id DESC LIMIT 1"
+            else:
+                sql, args = "SELECT id FROM logradouro_cep WHERE codigo_cep=%s", [cod]
+            ids = [r[0] for r in self._todas(sql, tuple(args))]
+            if not ids and ed:  # o código existe em outra edição?
+                sem = self._ligar_espelho(dict(esp, edicao="", edicao_coluna=""), codigo, linha, [])
+                self._esp[k] = ("edicao", None) if sem is not None else (None, None)
+            else:
+                self._esp[k] = (None, ids[0]) if len(ids) == 1 else ("ambiguo", None) if ids else (None, None)
+        motivo, rid = self._esp[k]
+        if rid is None:
+            pend.append(("espelho_edicao_inexistente" if motivo == "edicao" else
+                         "espelho_ambiguo" if motivo == "ambiguo" else "espelho_codigo_inexistente", "media"))
+        return rid
+
+    def _evidencia(self, tab, cols):
+        """({chave: data mais antiga da linha}, data mais antiga da tabela) nas colunas de evidência (cache)."""
+        k = (tab, tuple(cols))
+        if k not in self._vig:
+            por, menor = {}, None
+            if cols:
+                ch = self.chaves.get(tab) or []
+                nomes, it = self.lt.ler_tudo(tab, colunas=list(dict.fromkeys(ch + list(cols))))
+                for x in it:
+                    d = dict(zip(nomes, x))
+                    ds = [y for y in (continuidade.data_valida(d[c]) for c in cols) if y]
+                    if ds:
+                        m = min(ds)
+                        por["|".join(self._chave(d[c]) for c in ch)] = m
+                        menor = m if menor is None or m < menor else menor
+            self._vig[k] = (por, menor)
+        return self._vig[k]
+
+    def _vigencia_origem(self):
+        """Data do registro mais antigo da origem: pelas colunas de `evidencia_origem` (mapa) presentes; sem nenhuma
+        presente (imagem parcial), pelas colunas de evidência de todas as tabelas da imagem e, por fim, por qualquer
+        coluna de data delas."""
+        if self._vig_origem is False:
+            menor, presentes = None, sorted(self.lt.tabelas())
+
+            def ver(tab, cols):
+                nonlocal menor
+                if cols and self.chaves.get(tab) is not None:
+                    _, m = self._evidencia(tab, cols)
+                    menor = m if m and (menor is None or m < menor) else menor
+            for e in self.mapa_exec.get("evidencia_origem") or []:
+                if e["tabela"] in presentes and e["coluna"] in {c["nome"] for c in self.lt.colunas(e["tabela"])}:
+                    ver(e["tabela"], [e["coluna"]])
+            for todas in (False, True):
+                if menor is not None:
+                    break
+                for tab in presentes:
+                    cs = [(c["nome"], c.get("codigo_tipo")) for c in self.lt.colunas(tab)]
+                    ver(tab, [n for n, tp in cs if tp in continuidade.TIPOS_DATA] if todas
+                        else continuidade.colunas_de_evidencia(cs))
+            if menor is None:  # último recurso, nunca a data da carga: a criação do arquivo da origem
+                try:
+                    r = self.lt.consultar("SELECT MON$CREATION_DATE FROM MON$DATABASE")
+                    menor = continuidade.data_valida(r[0][0]) if r else None
+                except Exception:  # noqa: BLE001 (leitor sem a tabela de monitoramento)
+                    menor = None
+            self._vig_origem = menor
+        return self._vig_origem
+
+    def _vigencia(self, p, linha, chave, cols, pend):
+        """Vigência sem data própria (ADR 0007, 16): a data mais antiga com evidência na LINHA (colunas declaradas em
+        `#vigencia:A,B`, ou as de criação/início/primeiro uso do dicionário vivo); senão a do registro mais antigo da
+        TABELA (pendência baixa); senão a do registro mais antigo da ORIGEM (baixa); nunca a data da carga. Sem
+        nenhuma evidência: NULL com `vigencia_sem_evidencia`."""
+        t = p["tabela"]
+        if cols is None:
+            cols = continuidade.colunas_de_evidencia(
+                [(c["nome"], c.get("codigo_tipo")) for c in self.lt.colunas(t)])
+        por, menor = self._evidencia(t, cols)
+        if chave in por:
+            return por[chave]
+        if menor is not None:  # estimada sem fonte própria na linha (baixa, visível)
+            pend.append(("vigencia_sem_fonte", "baixa"))
+            return menor
+        o = self._vigencia_origem()
+        if o is not None:
+            pend.append(("vigencia_sem_fonte", "baixa"))
+            return o
+        pend.append(("vigencia_sem_evidencia", "media"))
+        return None
+
+    def _conferir_filho_pai(self):
+        """Código derivado sem perder ligação (ADR 0007, 19): cada filha gravada aponta, no destino relido, para a
+        linha do pai que a origem indicava (pelo conector_origem). Só contagens."""
+        res = {}
+        for (dt, dc, pai), pares in sorted(self._filho_pai.items()):
+            div = 0
+            for i in range(0, len(pares), 1000):
+                bloco = dict(pares[i:i + 1000])
+                lido = dict(self._todas("SELECT id, `%s` FROM `%s` WHERE id IN (%s)" % (
+                    dc, dt, ",".join(["%s"] * len(bloco))), tuple(bloco)))
+                div += sum(1 for r, esperado in bloco.items() if lido.get(r) != esperado)
+            res["%s.%s" % (dt, dc)] = {"pai": pai, "verificados": len(pares), "divergentes": div,
+                                       "conferido": div == 0}
+            if div:
+                self._pendencia(pai, "*", "filho_pai_divergente", "alta")
+        return res
+
+    def _provas(self, presentes):
+        """Prova de "não copiar" (ADR 0006, 1) das tabelas declaradas em `declarado/provas.tsv` presentes na origem:
+        as linhas da origem (chave e valores pela regra) contra as recalculadas no destino pelo SQL da prova
+        (`declarado/provas.d/<TABELA>.sql`, `{ctl}` = base de controle). Derivado: igual linha a linha; mecanismo:
+        o estado carregado vale pelo menos o da origem (ex. próximo número >= último + 1)."""
+        res = {}
+        for pv in self.mapa_exec.get("provas") or []:
+            t = pv["tabela"]
+            if t not in presentes or t not in set(self.lt.tabelas()):
+                continue
+            ch, vs = pv["chave"], pv["valores"]
+            nomes, it = self.lt.ler_tudo(t, colunas=list(dict.fromkeys(ch + [v[0] for v in vs])))
+            ger = {g["coluna"]: g.get("regra") for g in self.mapa_exec.get("colunas", []) if g["tabela"] == t}
+            origem = {}
+            for x in it:
+                d = dict(zip(nomes, x))
+                k = "|".join(self._chave(d[c]).strip() for c in ch)
+                origem[k] = [sentinela.aplicar(r or ger.get(col) or "texto", d[col])[0] for col, r in vs]
+            destino = {}
+            for r in self._todas(pv["sql"].replace("{ctl}", self.ctl)):
+                destino["|".join(self._chave(x).strip() for x in r[:len(ch)])] = list(r[len(ch):])
+            if pv["tipo"] == "mecanismo":  # estado: o destino vale pelo menos a origem (numérico) ou igual
+                for k, ov in origem.items():
+                    dv = destino.get(k)
+                    if dv is not None and all(_ao_menos(a, b) for a, b in zip(dv, ov)):
+                        destino[k] = ov
+            o = {k: "|".join(canon(x) for x in v) for k, v in origem.items()}
+            d = {k: "|".join(canon(x) for x in v) for k, v in destino.items()}
+            r = continuidade.comparar(o, d)
+            r["tipo"] = pv["tipo"]
+            res[t] = r
+            if not r["conferido"]:
+                self._pendencia(t, "*", "prova_nao_conferida", "alta")
+        return res
 
     def _nome_ent(self, t, dt):
         k = (t, dt)
@@ -1623,7 +1913,12 @@ class CargaMapa(carga.Carga):
                                 rid = self._inserir(dt, v)
                                 cabs.append(((t, self._grp[0]), rid))
                         else:
+                            self._linha = (t, chave)
                             rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
+                        for c in p["colunas"][dt]:  # filho -> pai de código derivado (ADR 0007, 19)
+                            if c.get("pai_derivado") and v.get(c["destino"]) is not None and not adotado:
+                                self._filho_pai.setdefault((dt, c["destino"], c["pai_derivado"]), []).append(
+                                    (rid, v[c["destino"]]))
                         pad = [x for x in cs if isinstance(x, _PADRAO)]
                         if agrupado:  # o resumo é o cabeçalho no destino; anterior com agregado mudado: pendência
                             self.cont["agrupadas"] = self.cont.get("agrupadas", 0) + 1
@@ -1749,8 +2044,27 @@ class CargaMapa(carga.Carga):
             self._tabela(p)
         self._fase2()
         res = self.conciliar(contagens)
+        res["filho_pai"] = self._conferir_filho_pai()
+        res["provas"] = self._provas(presentes)
+        self._gravar_provas(res)
         self._commit()
         return res
+
+    def _gravar_provas(self, res):
+        """Prova e filho -> pai entram na conciliação (entidade `prova:<TABELA>` e `filho_pai:<destino.coluna>`)."""
+        linhas = [("prova:" + t, r["linhas_origem"], r["linhas_destino"],
+                   r["divergentes"] + r["faltando_no_destino"] + r["sobrando_no_destino"], r["conferido"])
+                  for t, r in res["provas"].items()]
+        linhas += [("filho_pai:" + k, r["verificados"], r["verificados"] - r["divergentes"], r["divergentes"],
+                    r["conferido"]) for k, r in res["filho_pai"].items()]
+        with self._c() as c:
+            for ent, ro, rd, pe, ok in linhas:
+                c.execute("INSERT INTO %s.conciliacao (execucao_id, entidade, registros_origem, registros_destino,"
+                          " pendencias, soma_controle, conferido, criado_em) VALUES (%%s,%%s,%%s,%%s,%%s,%%s,%%s,%s)"
+                          " ON DUPLICATE KEY UPDATE registros_origem=VALUES(registros_origem),"
+                          " registros_destino=VALUES(registros_destino), pendencias=VALUES(pendencias),"
+                          " conferido=VALUES(conferido), versao=versao+1" % (self.ctl, AGORA),
+                          (self.eid, ent[:64], ro, rd, pe, "", ok))
 
     # ----- conciliação (destino relido do banco) -----
     def _destino(self, p, dt, ent, principal):

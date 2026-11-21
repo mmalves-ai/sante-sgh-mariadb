@@ -197,3 +197,16 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
   `>(C1,C2)>U`; vários pais da chave alternativa que apontam a MESMA linha do destino (título agrupado) valem por ela.
 - `#codigo_derivado:C1+C2:n[:prefixo]`; opção `principal` na via escolhe o destino principal; secundário fora de
   `tabelas_destino` vale quando nomeado na via ou com opção de destino (`antes`, `adotar:`...).
+
+## Mecanismos da rodada 5 (motor; ADR 0006 e 0007; prova em `sintetica_d/exemplo_r5.py`, `testes/test_carga_mapa_r5.py`; lista em `saida/aplicados-r5.md`)
+- Rascunho do autor: opção `autor` com `cod:usuario.login` ou `ref:`; sem autor a linha entra com `rascunho_sem_autor`.
+- Espelho: `espelho:<brasindice|simpro|cbhpm|cep>[@COLUNA|@=edição]` liga pelo código (e edição); NUNCA declare destino
+  em tabela licenciada (`mapa.LICENCIADAS_ESPELHO`: a cobertura bloqueia `licenciado_copiado`). Semente: declaração em
+  `declarado/semente_espelho.tsv` e `conector.sh semear-espelho`.
+- Descarte só com PROVA: `declarado/provas.tsv` (tabela, tipo derivado|mecanismo, chave, valores `COL[!regra]`) +
+  `provas.d/<TABELA>.sql` (SELECT no destino, mesmas colunas); sem prova: BLOQUEADA `descarte_sem_prova`.
+- Vigência: `@vigencia_carga` (e `=@data_carga` em vigência) = evidência mais antiga; `#vigencia:A,B` declara as colunas.
+- Credenciais: `#senha_hash:COL:<md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id>` + literais do algoritmo e
+  `regravar_no_login`; `#senha:COL` (legível -> argon2id); `#cofre:COL` grava cifrado no cofre do cliente.
+- `adotar:` mescla sem destruir (histórico da origem); filho de pai com `#codigo_derivado` é conferido no fim.
+- Chave composta com componente encadeado: `ref:T(COL>U>X,C2)`.

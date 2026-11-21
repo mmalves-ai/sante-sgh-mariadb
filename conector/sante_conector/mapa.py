@@ -82,8 +82,28 @@ DEPARA_VALORES = "valores"
 _LISTA = r"[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
 # colunas desta linha na chave alternativa composta: coluna ou literal `=<valor>` (rodada 4: '=1' casa a constante)
 _LISTA_V = r"(?:[A-Z0-9_$]+|=[^,()>;=]*)(?:,(?:[A-Z0-9_$]+|=[^,()>;=]*))+"
+# rodada 5 (sobra da rodada 4, pedido 4 da L8-03): componente da chave composta com valor ENCADEADO `COL>T>X` (a
+# coluna COL desta linha leva a T pela chave e o componente é a coluna X do pai), ex. `TBTABTHM(CON>TBCONVEN>THM,THM)`
+_COMP = r"[A-Z0-9_$]+(?:>[A-Z0-9_$]+(?:\.[A-Z0-9_$]+)?)*"
+_LISTA_C = r"%s(?:,%s)+" % (_COMP, _COMP)
 _REF_TAB = re.compile(r"([A-Z0-9_$]+)(?:\.([A-Z0-9_$]+)|\((%s)\)|\.\((%s)\)=\((%s)\))?(?:/([a-z][a-z0-9_]*))?"
-                      r"(?:@([a-z][a-z0-9_]*))?" % (_LISTA, _LISTA, _LISTA_V))
+                      r"(?:@([a-z][a-z0-9_]*))?" % (_LISTA_C, _LISTA, _LISTA_V))
+
+
+def _partes_ref(spec):
+    """Passos separados por '>' fora dos parênteses (o componente encadeado da chave composta fica inteiro)."""
+    out, nivel, atual = [], 0, ""
+    for ch in spec:
+        if ch == "(":
+            nivel += 1
+        elif ch == ")":
+            nivel -= 1
+        if ch == ">" and nivel == 0:
+            out.append(atual)
+            atual = ""
+        else:
+            atual += ch
+    return out + [atual]
 _COL_ORIGEM = re.compile(r"[A-Z0-9_$]+")
 _COLS_PASSO = re.compile(r"\((%s)\)" % _LISTA)
 _ESCOLHA = re.compile(r"(max|min):([A-Z0-9_$]+)")
@@ -111,7 +131,7 @@ def passos_ref(spec):
     - chave composta num passo SEGUINTE: `...>(C1,C2,C3)>U` monta a chave de U pelas colunas da linha do passo
       anterior (ex.: a natureza do rateio pelo grupo, subgrupo e item)."""
     out = []
-    partes = (spec or "").split(">")
+    partes = _partes_ref(spec or "")
     tabela_agora = True
     for i, p in enumerate(partes):
         ultimo = i == len(partes) - 1
@@ -134,6 +154,16 @@ def passos_ref(spec):
                  m.group(4).split(",") if m.group(4) else None}
             if m.group(4):
                 x["cols"] = m.group(5).split(",")
+            if m.group(3) and ">" in m.group(3):  # componentes encadeados: {posição: passos a partir da coluna}
+                x["cadeias"] = {}
+                for j, comp in enumerate(x["arg"]):
+                    if ">" in comp:
+                        base, resto = comp.split(">", 1)
+                        sub = passos_ref(resto)
+                        if not sub or "coluna" not in sub[-1] or any(s.get("cadeias") for s in sub):
+                            return None
+                        x["arg"][j] = base
+                        x["cadeias"][j] = sub
             if m.group(6):
                 x["destino"] = m.group(6)
             if m.group(7):
@@ -149,6 +179,17 @@ def passos_ref(spec):
                 return None
             out.append({"coluna": p})
     return out or None
+
+
+def tabelas_dos_passos(passos):
+    """Todas as tabelas da origem citadas nos passos (também nos componentes encadeados da chave composta)."""
+    out = []
+    for x in passos or []:
+        if x.get("tabela"):
+            out.append(x["tabela"])
+        for sub in (x.get("cadeias") or {}).values():
+            out += tabelas_dos_passos(sub)
+    return out
 
 
 def colunas_da_linha(passo):
@@ -214,7 +255,10 @@ _ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][
                         r"|#filhos_(?:min|max|somar|contar):[A-Z0-9_$]+\.[A-Z0-9_$]+(?:\|[A-Z0-9_$]+\.[A-Z0-9_$]+)*"
                         r"@[A-Z0-9_$]+"
                         # rodada 4, resíduo do motor: aritmética entre colunas da linha
-                        r"|#dif:[A-Z0-9_$]+,[A-Z0-9_$]+|#soma:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+")
+                        r"|#dif:[A-Z0-9_$]+,[A-Z0-9_$]+|#soma:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+"
+                        # rodada 5 (ADR 0007): vigência pela evidência e senha de login
+                        r"|#vigencia(?::[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*)?|#senha:[A-Z0-9_$]+"
+                        r"|#senha_hash:[A-Z0-9_$]+:(?:md5|sha1|sha256|sha512|bcrypt|scrypt|argon2id)")
 # colunas que um retrato de TODAS as colunas (`#retrato:*`) nunca leva, mesmo sem `#cofre` declarado (segredo)
 SEGREDO_NOME = re.compile(r"SENHA|PASSW|TOKEN|SECRET|SEGREDO|CHAVE_PRIVADA|PRIVATE_KEY")
 
@@ -249,7 +293,26 @@ OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes", "
 # opções de COLUNA na via (resíduo do motor da rodada 4): `exige_dominio` (fora do de-para de valores recusa a linha),
 # `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
 # concorrente: a pendência valor_presumido em TODA linha, mesmo quando outra declaração deu o valor)
-OPCOES_COLUNA = ("exige_dominio", "senao", "marca")
+OPCOES_COLUNA = ("exige_dominio", "senao", "marca", "autor")
+# rodada 5 (ADR 0006, item 3): ligação ao ESPELHO PADRÃO DA BASE pelo código (e pela edição): `espelho:<catalogo>`
+# ou `espelho:<catalogo>@<COLUNA>` / `espelho:<catalogo>@=<edição>` na via. Catálogo -> tabela que a ligação acha.
+ESPELHO_CATALOGOS = {"brasindice": "item_referencia_matmed", "simpro": "item_referencia_matmed",
+                     "cbhpm": "tabela_referencia_procedimento_item", "cep": "logradouro_cep"}
+# tabelas do conteúdo licenciado: vivem no espelho; o conector nunca as grava (a cobertura bloqueia quem declarar)
+LICENCIADAS_ESPELHO = {"fonte_referencia_matmed", "edicao_referencia_matmed", "item_referencia_matmed",
+                       "preco_referencia_matmed", "tabela_referencia_procedimento",
+                       "tabela_referencia_procedimento_item", "logradouro_cep"}
+_ESPELHO = re.compile(r"espelho:([a-z]+)(?:@([A-Z0-9_$]+|=[A-Za-z0-9._/-]{1,30}))?")
+
+
+def espelho_spec(x):
+    """`espelho:<catalogo>[@<COLUNA>|@=<edição>]` -> {"catalogo", "edicao_coluna", "edicao"} ou None."""
+    m = _ESPELHO.fullmatch(x or "")
+    if not m or m.group(1) not in ESPELHO_CATALOGOS:
+        return None
+    e = m.group(2) or ""
+    return {"catalogo": m.group(1), "edicao_coluna": "" if e.startswith("=") else e,
+            "edicao": e[1:] if e.startswith("=") else ""}
 
 
 def opcoes_destino(colunas):
@@ -323,12 +386,17 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                 cols = ([cs[1]] if isinstance(cs[1], str) else cs[1]) if cs else []
                 if not cs or (ddl and (cs[0] not in ddl or any(y not in ddl[cs[0]]["colunas"] for y in cols))):
                     erros.append("cod: a tabela.coluna inexistente no DDL: %s.%s -> %s" % (c["tabela"], n, x[4:]))
+            if x.startswith("espelho:") and espelho_spec(x) is None:
+                erros.append("espelho: mal formado ou catálogo desconhecido: %s.%s -> %s" % (c["tabela"], n, x))
             for pre in ("se:", "so_se:", "destino_se:"):
                 if x.startswith(pre):
                     cd = condicao(x[len(pre):])
                     if cd is None or (cd["regra"] and pre != "so_se:"):
                         erros.append("condição mal formada (%s): %s.%s" % (pre, c["tabela"], n))
         via = (c.get("via") or "").split(";")
+        if "autor" in via and not (referencia_declarada(c) or any(x.startswith("cod:") for x in via)):
+            erros.append("autor sem ref: nem cod: (o autor do rascunho é achado pelo login ou pela chave): %s.%s"
+                         % (c["tabela"], n))
         if "exige_dominio" in via and (c.get("depara") or "") != DEPARA_VALORES:
             erros.append("exige_dominio sem depara=valores: %s.%s" % (c["tabela"], n))
         if "por_pai" in via:
@@ -446,7 +514,7 @@ def erros_referencia_e_valores(colunas_decl, valores, origem):
         passos = passos_ref(rd)
         if passos is None:
             erros.append("referência declarada mal formada: %s.%s" % (c["tabela"], c["coluna"]))
-        elif any(x.get("tabela") and x["tabela"] not in origem for x in passos):
+        elif any(x not in origem for x in tabelas_dos_passos(passos)):
             erros.append("referência declarada a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
     for k in sorted(dv - com_par):
         erros.append("de-para de valores sem par em declarado/valores.tsv: %s.%s -> %s" % k)
@@ -779,7 +847,7 @@ def propor_quebras(ciclos, arestas, linhas):
 
 # ---------------- verificador ----------------
 def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes, colunas, colunas_decl,
-                    catalogos_decl, oficiais_decl=(), valores=(), deps_decl=(), sem_carga=()):
+                    catalogos_decl, oficiais_decl=(), valores=(), deps_decl=(), sem_carga=(), provas=()):
     """Lista de erros (vazia = mapa válido). Só nomes de tabela/coluna e regras; nunca valores."""
     erros = []
     ofi = oficiais(ddl, oficiais_decl)
@@ -902,6 +970,10 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                     erros.append("regra %s com destino %s (esperado TIME): %s.%s -> %s" % (regra, tipo, t, c["coluna"],
                                                                                          dest))
     erros += erros_referencia_e_valores(colunas_decl, valores, vol)
+    oc = {}
+    for c in colunas:
+        oc.setdefault(c["tabela"], set()).add(c["coluna"])
+    erros += erros_provas(provas, oc)
     erros += erros_especiais_e_opcoes(colunas_decl, tabelas, ddl)
     sc = {d["tabela"] for d in sem_carga if d.get("situacao") == "descarte"}
     for t in sorted({c["tabela"] for c in colunas_decl if c.get("destino")} & sc):
@@ -945,7 +1017,8 @@ def carregar(raiz=RAIZ):
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
                 colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
                 oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler_valores(d),
-                deps_decl=ler("declarado/dependencias.tsv"), sem_carga=ler("declarado/sem_carga.tsv"))
+                deps_decl=ler("declarado/dependencias.tsv"), sem_carga=ler("declarado/sem_carga.tsv"),
+                provas=ler_provas(d))
 
 
 def verificar(raiz=RAIZ):
@@ -964,7 +1037,45 @@ def carregar_execucao(d=None):
     ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
             "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
-            "valores": ler_valores(d)}
+            "valores": ler_valores(d), "provas": ler_provas(d), "evidencia_origem": ler(EVIDENCIA_ORIGEM)}
+
+
+# rodada 5 (ADR 0006, item 1; ADR 0007, item 16)
+PROVAS = "declarado/provas.tsv"
+PROVAS_D = "declarado/provas.d"
+CAMPOS_PROVAS = ["tabela", "tipo", "chave", "valores", "motivo"]
+EVIDENCIA_ORIGEM = "declarado/evidencia_origem.tsv"
+
+
+def ler_provas(d):
+    """Provas de "não copiar": [{tabela, tipo (derivado|mecanismo), chave [COL], valores [(COL, regra)], sql}]. O SQL
+    (`provas.d/<TABELA>.sql`) devolve, no destino, as colunas da chave e dos valores na mesma ordem."""
+    d = Path(d)
+    out = []
+    for r in (ler_tsv(d / PROVAS) if (d / PROVAS).exists() else []):
+        f = d / PROVAS_D / ("%s.sql" % r["tabela"])
+        vs = [tuple((x.split("!", 1) + [""])[:2]) for x in (r.get("valores") or "").split(",") if x]
+        out.append({"tabela": r["tabela"], "tipo": r.get("tipo") or "", "motivo": r.get("motivo") or "",
+                    "chave": [x for x in (r.get("chave") or "").split(",") if x], "valores": vs,
+                    "sql": f.read_text(encoding="utf-8").strip().rstrip(";") if f.exists() else ""})
+    return out
+
+
+def erros_provas(provas, origem_cols):
+    """Prova bem formada: tipo conhecido, chave e valores com colunas da origem, SQL presente e só de leitura."""
+    erros = []
+    for pv in provas:
+        t = pv["tabela"]
+        cols = origem_cols.get(t)
+        if pv["tipo"] not in ("derivado", "mecanismo"):
+            erros.append("prova com tipo desconhecido (derivado|mecanismo): %s" % t)
+        if not pv["chave"] or not pv["valores"]:
+            erros.append("prova sem chave ou sem valores: %s" % t)
+        if cols is not None and any(c not in cols for c in pv["chave"] + [v[0] for v in pv["valores"]]):
+            erros.append("prova com coluna inexistente na origem: %s" % t)
+        if not re.match(r"(?is)^\s*(select|with)\b", pv["sql"] or "") or ";" in pv["sql"]:
+            erros.append("prova sem SQL de leitura (um SELECT em %s/%s.sql): %s" % (PROVAS_D, t, t))
+    return erros
 
 
 def tabelas_sem_mapa(contagens, tabelas, descartes):
