@@ -183,3 +183,20 @@ AIH, BPA, OPME.
 
 **Mantidos:** revisão adversarial em todo lote, conferência estrita na integração e conferência final
 independente.
+
+## Economia no relatório (dono, 2026-11-21)
+
+A economia de tokens sem perda de qualidade é **obrigatória e contínua**. O orquestrador mede, analisa a
+estratégia e a melhora quando os números pedirem.
+
+**Todo relatório de 50 minutos traz uma seção "Economia",** gerada por `tools/obra/medir_consumo.py`, com:
+- custo equivalente por agente e por papel (construir, revisar, corrigir, integrar);
+- turnos por agente;
+- **% em relação à linha de base sem a regra nova** (construtor da F2.2 antes das regras 20 a 22: 9,51 M e
+  256 turnos);
+- o efeito na qualidade: achados graves por lote e a integração na primeira tentativa.
+
+**O relatório também traz:**
+- completude geral e por etapa, em %;
+- previsão de término;
+- trabalhos feitos desde o último relatório, com detalhes.
