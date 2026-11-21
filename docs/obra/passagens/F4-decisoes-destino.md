@@ -1151,3 +1151,25 @@ estas são as hipóteses a confirmar pela descrição:
 | Período em dias com unidade (idade mínima/máxima, prazo, aceite) | Dias inteiros, mês = 30 e ano = 365 com pendência baixa `periodo_aproximado`; hora e minuto truncados ao dia | O modelo guarda dias (`idade_*_dias`); a convenção 30/365 é a usual e fica visível ao cliente, sem esconder a aproximação |
 | Horário em pares de colunas no destino principal (TBLOCALHORA, FCHORATE) | `desdobrar` em pares no PRÓPRIO destino principal, uma linha por dia com valor; linha sem nenhum dia: recusa baixa `sem_item_a_gravar`; faixa inválida num dia recusa a linha da origem inteira | Evita o desvio `complementa` + destino extra proposto pela L6-02; a recusa da linha inteira mantém a conciliação por linha da origem e deixa o defeito visível (o cliente corrige a faixa e o Sincronizar regrava) |
 | Fim antes do início na mesma data (CCCADCIR, CCLANCIR) | `#data_hora:D,H,REF`: fim menor que o início vai ao dia seguinte, com pendência baixa `virada_de_dia` | Ato que atravessa a meia-noite; sem isso o CHECK fim > início recusaria a linha |
+
+## Rodada 3, grupo 2 (2026-11-21): regras de estrutura no motor, decisões do integrador
+
+| Assunto | Decisão | Motivo |
+|---|---|---|
+| Retrato de todas as colunas (HT*, REEXCATE) | `#retrato:*` pelo dicionário vivo da imagem, com exclusão explícita (`*-A,B`) e exclusão AUTOMÁTICA de nome de segredo (SENHA, TOKEN...) além do `#cofre` | O histórico é a versão inteira do registro; segredo em claro nunca vai para o JSON, mesmo que a fatia esqueça de excluir |
+| Hash do retrato (versões do paciente e do profissional) | `#sha256:#retrato[...]` = SHA-256 hex do texto JSON gravado, chaves em ordem | É o mesmo cálculo do produto (sha256 do JSON de `dados`), que deduplica versões pelo hash |
+| Várias colunas para a mesma coluna do destino (item faturável por procedimento, diária ou material) | Vale a primeira com valor na ordem declarada; as outras só deixam a pendência que tiverem | O tipo do lançamento escolhe qual coluna vem preenchida; sem condicional nova no motor |
+| Valor da coluna do destino do pai (`ref:T@coluna`) | Lido do DESTINO (o que o cliente vê, inclusive editado), não recalculado da origem | A coluna é derivada pelo próprio conector ou pelo cliente (ex.: item faturável do lançamento); recalcular duplicaria regras de outra tabela |
+| Marcação S/N com 'N' (REPARATE) | Opção `com_falso`: 'N' grava a linha com falso; vazio não grava (cai no padrão do produto) | Herda = falso é configuração real do cliente; omitir a linha inverteria o comportamento |
+| Parcelas sob um título (MFCONPAG, MFCTAREC; pedido 3c da L8-11) | Título como destino SECUNDÁRIO `antes;agrupar:` e a parcela como principal (`@id:`), não "principal agrupado" | A conciliação do principal fica uma linha da origem = uma parcela (lidas = gravadas + recusadas); o título é derivado do grupo |
+| Agregados do título com parcela recusada | Contam todas as linhas LIDAS do grupo (a recusada também), com a recusa visível na pendência dela | O título reflete a origem (a origem vence); corrigida a parcela, o Sincronizar não precisa mudar o título |
+| Título de execução anterior com agregados diferentes | Usado como está, pendência `grupo_divergente_aguarda_sincronizar` (média) | Nada é sobrescrito em silêncio; o Sincronizar regrava pela origem |
+
+Tabelas que ficam só com "refazer a fatia" por estes mecanismos (a causa de cobertura muda quando a fatia declarar):
+HTATENDRESP, HTPACTELEFONE, HTPROFISTEL (L5-06, `#retrato:*` e `#sha256:#retrato:*`); REEXCATE (L6-01, `#retrato:*`
+e `#data_hora`); REPARATE (L6-01, `desdobrar` no principal com `com_falso`); TBHISTTABDTH, TBHISTTABMM, TBHISTTABTHME,
+TBHISTTABTHMI (L8-06, `contrato_fonte_pagadora` como secundário de TBCONVEN e `ref:TBCONVEN/contrato_fonte_pagadora`);
+FCCTRLANCIHA (L8-08, `ref:FCLANEXT@item_faturavel_id`, depois de FCLANEXT carregar). Ainda dependem de outro
+mecanismo ou decisão: FCLANEXT e FCINTEGRPA (alimentadora do `item_faturavel` nas tabelas de preço; função da equipe),
+MFCONPAG e MFCTAREC (credor/devedor exclusivo por tipo e natureza pelo rateio filho: pedidos 2 e 3a/3b da L8-11),
+MFLANGSI (pai por colunas que não são a chave e percentual derivado: pedido A da L8-10).

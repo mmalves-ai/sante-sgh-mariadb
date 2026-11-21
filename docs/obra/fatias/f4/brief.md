@@ -126,3 +126,34 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
   destino num item (ex.: fim <= início) recusa a linha inteira. Desdobrado não combina com `complementa`; rótulo
   repetido ou par sem `#item2` declarado é erro do verificador. Ex.: TBLOCALHORA, FCHORATE (sem `complementa` nem
   destino extra: o próprio horário é o principal).
+
+## Mecanismos da rodada 3, grupo 2: estrutura (integrador; prova em `sintetica_d/exemplo_r3b.py`, `testes/test_carga_mapa_r3b.py`)
+- Retrato COMPLETO da linha (históricos HT*, exclusões): `#retrato:*` grava o JSON de TODAS as colunas da tabela da
+  origem (dicionário vivo; entram também no hash da linha), `#retrato:*-A,B` todas menos A e B, `#retrato:A,B` as
+  colunas lidas mais A e B. Nunca leva segredo: colunas de `#cofre` e nomes de segredo (`mapa.SEGREDO_NOME`: SENHA,
+  PASSW, TOKEN, SECRET, SEGREDO, CHAVE_PRIVADA). Coluna sem regra gerada: BLOB binário em `sha256:<hex>`, BLOB de
+  texto convertido, o resto texto. `#sha256:#retrato[...]` grava o SHA-256 hex do MESMO texto JSON (o produto
+  deduplica versões pelo hash dos dados, ex.: `paciente_versao.hash_dados`). Ex.: HTPACIENTE, HTPACTELEFONE, HTPROFIS,
+  HTPROFISTEL, HTATENDRESP, HTATENDIMENTO, REEXCATE.
+- Referência ao destino SECUNDÁRIO do pai (`ref:T/<destino>`, rodada 2) em colunas CONCORRENTES: várias colunas da
+  origem declaradas para a MESMA coluna do destino gravam a primeira com valor, na ordem declarada (as outras só
+  deixam a pendência própria, ex.: `pai_inexistente`). Ex.: FCLANEXT `item_faturavel_id` por ID_TBPROCTO
+  (`ref:TBPROCTO/item_faturavel`), ID_TBTABDTH e ID_TBMATMED; TBHISTTAB* `ref:TBCONVEN/contrato_fonte_pagadora` com o
+  acordo declarado como destino secundário de TBCONVEN. Item ou `@id` não pode ser concorrente (erro do verificador).
+- Cópia de coluna de outra tabela: `ref:T@<coluna>` (também `ref:T/<destino>@<coluna>` e no fim da encadeada,
+  `ref:T>X>U/<destino>@<coluna>`) grava o VALOR da coluna da linha do DESTINO que o pai gravou (lido do banco: o que o
+  cliente vê), não o id. Pai pendente ou inexistente como na referência comum. Não combina com `cod:`. Ex.: FCCTRLANCIHA
+  `ref:FCLANEXT@item_faturavel_id`.
+- Divisão do destino principal com o item FALSO: opção `com_falso` (na via do `#item`, junto do `desdobrar:`): o
+  valor falso (o 'N' de uma marcação S/N pela `booleano_sn`) também gera a linha; vazio continua sem linha; tabela sem
+  chave funciona (chave pelo hash). Ex.: REPARATE (`regra_heranca_campo`, herda = falso), ATPARAMGERAL.
+- Agrupamento de linhas sob um cabeçalho (parcelas de um título): opção `antes;agrupar:C1,C2,...` (colunas da
+  ORIGEM) num destino SECUNDÁRIO. As linhas com os mesmos valores em C1, C2 (texto aparado; todas vazias: a linha é o
+  próprio grupo) gravam UM cabeçalho: a primeira linha gravada do grupo cria, as outras usam (sem pendência; recusa da
+  primeira desfaz o cabeçalho e a seguinte cria). O principal (a parcela) liga por `@id:<destino>`. Agregados de todas
+  as linhas LIDAS do grupo: `#grupo_contar`, `#grupo_seq` (posição na ordem da chave), `#grupo_somar:C`,
+  `#grupo_min:C`, `#grupo_max:C` (regra declarada na linha especial, ou a gerada da coluna). Cabeçalho de execução
+  anterior com agregado diferente (parcela nova na origem): usado como está, pendência
+  `grupo_divergente_aguarda_sincronizar`. Só um destino agrupado por tabela; não combina com `adotar`, `desdobrar`,
+  `complementa` nem `opcional`. Ex.: MFCONPAG (`titulo_pagar` agrupado por EMPRESA, FORN, DOC, SERIE, TIPO;
+  `parcela_pagar` principal), MFCTAREC.

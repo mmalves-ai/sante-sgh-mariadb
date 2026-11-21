@@ -103,6 +103,28 @@ Mecanismos da rodada 3 de cobertura, regras de data e hora (prova em `sintetica_
   (lidas = com item + recusadas) e os itens (soma de controle por item); linha sem nenhum item é recusada com a
   pendência baixa `sem_item_a_gravar`. Uma restrição do destino num item recusa a linha inteira (SAVEPOINT da linha).
 
+Mecanismos da rodada 3 de cobertura, regras de estrutura (prova em `sintetica_d/exemplo_r3b.py`):
+- retrato COMPLETO da linha (histórico HT*): `#retrato:*` (todas as colunas da tabela da origem, lidas também para o
+  hash da linha; sem segredo: colunas de `#cofre` e nomes de segredo, `mapa.SEGREDO_NOME`), `#retrato:*-A,B` (todas
+  menos A e B), `#retrato:A,B` (as lidas mais A e B); `#sha256:#retrato[...]`: SHA-256 hex do MESMO texto JSON
+  gravado (o produto deduplica versões pelo hash dos dados). Coluna sem regra gerada: BLOB binário em SHA-256, o
+  resto como texto;
+- referência ao destino secundário do pai e colunas CONCORRENTES: várias colunas da origem declaradas para a mesma
+  coluna do destino (ex.: o item faturável pelo procedimento, pela diária ou pelo material, `ref:T/<destino>` em
+  cada uma) gravam a PRIMEIRA com valor, na ordem declarada (as outras só deixam a pendência que tiverem);
+- cópia de coluna de outra tabela: `ref:T@<coluna>` (ou `ref:T/<destino>@<coluna>`, também no fim da encadeada)
+  grava o valor da coluna da linha do DESTINO que o pai gravou (lida do banco, o que o cliente vê), não o id; pai
+  pendente ou inexistente como na referência comum;
+- divisão do destino principal com o item FALSO: opção `com_falso` no `desdobrar` (o 'N' de uma marcação S/N também
+  gera a linha, ex.: herda = falso; vazio continua sem linha);
+- agrupamento de linhas sob um cabeçalho (parcelas de um título): opção `antes;agrupar:C1,C2` num destino
+  SECUNDÁRIO: as linhas da origem com os mesmos valores em C1, C2 (todas vazias: a linha é o próprio grupo) gravam UM
+  cabeçalho (a primeira linha gravada do grupo o cria, as outras o usam, sem pendência) e o principal liga a ele por
+  `@id:<destino>`. Agregados do grupo, de todas as linhas lidas do grupo: `#grupo_contar`, `#grupo_seq` (posição da
+  linha no grupo, na ordem da chave), `#grupo_somar:C`, `#grupo_min:C`, `#grupo_max:C` (pela regra declarada na
+  linha especial, ou a gerada da coluna). Cabeçalho de execução anterior cujos agregados mudaram (parcela nova na
+  origem): usado como está, com a pendência `grupo_divergente_aguarda_sincronizar` (a origem vence no Sincronizar).
+
 O hash da linha cobre as colunas lidas (chave + declaradas): declarar uma coluna nova numa tabela já carregada faz as
 linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em silêncio.
 """
@@ -130,6 +152,7 @@ GRAVIDADE_REGRA.update({"valor_elevado_ao_minimo": "baixa", "texto_resumido": "b
 GRAVIDADE_REGRA.update({"codigo_inexistente_destino": "media", "cadastro_unico_indefinido": "alta"})
 GRAVIDADE_REGRA.update({"periodo_aproximado": "baixa", "unidade_ausente": "media", "virada_de_dia": "baixa",
                         "sem_item_a_gravar": "baixa"})
+GRAVIDADE_REGRA.update({"grupo_divergente_aguarda_sincronizar": "media"})
 TIPOS_INT = (7, 8, 16)
 INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
 DEC_DESTINO = {"decimal"}
@@ -182,8 +205,11 @@ def _especial(nome):
 
 
 def fonte_especial(nome):
-    """Coluna da origem lida por uma coluna especial (`#seq:X`, `#sha256:X`, `#cofre:X`, `#codigo_derivado:X:n`)."""
-    for pre in ("#seq:", "#sha256:", "#cofre:", "#codigo_derivado:"):
+    """Coluna da origem lida por uma coluna especial (`#seq:X`, `#sha256:X`, `#cofre:X`, `#codigo_derivado:X:n`,
+    `#grupo_somar:X`, `#grupo_min:X`, `#grupo_max:X`). `#sha256:#retrato...` não lê coluna própria."""
+    if nome.startswith("#sha256:#"):
+        return None
+    for pre in ("#seq:", "#sha256:", "#cofre:", "#codigo_derivado:", "#grupo_somar:", "#grupo_min:", "#grupo_max:"):
         if nome.startswith(pre):
             return nome[len(pre):].split(":")[0]
     return None
@@ -310,6 +336,16 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
             for spec, _ in opcoes.get(dt, {}).get("desdobrar", []):
                 for col in spec.split("+"):
                     ler(col)
+            for col in opcoes.get(dt, {}).get("agrupar", []):
+                ler(col)
+        retratos = {}
+        for dt in dts:
+            for c in cols[dt]:
+                sr = mapa.spec_retrato(c["coluna"])
+                if sr is not None:
+                    retratos[c["coluna"][8:] if c["coluna"].startswith("#sha256:") else c["coluna"]] = sr
+                    for x in sr["extras"]:
+                        ler(x)
         regras = {n: (geradas.get(t, {}).get(n, {}).get("regra") or "texto") for n in lidas}
         for c in decl[t]:
             if c.get("regra") and not _especial(c["coluna"]) and c["coluna"] in regras \
@@ -318,6 +354,8 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
         segredos = {fonte_especial(c["coluna"]) for c in decl[t] if c["coluna"].startswith("#cofre:")}
         plano.append({"tabela": t, "chave": chave, "destinos": dts, "colunas": cols, "lidas": lidas,
                       "retrato": {n: r for n, r in regras.items() if n not in segredos},
+                      "retratos": retratos, "segredos": segredos,
+                      "regras_geradas": {n: g.get("regra") or "" for n, g in geradas.get(t, {}).items()},
                       "estrategia": r.get("estrategia", ""), "opcoes": {dt: opcoes.get(dt, {}) for dt in dts},
                       "duas_fases": {p for f, p in quebras if f == t} | {t}})
     return plano
@@ -373,6 +411,12 @@ class CargaMapa(carga.Carga):
         self._alt = {}                      # (tabela, coluna) -> {valor canônico: chave do pai ou AMBIGUO}
         self._cod = {}                      # (tabela, coluna, valor) -> id do destino, None ou AMBIGUO (`cod:`)
         self._unico = {}                    # tabela -> id da única linha ativa ou None (`@unico:`)
+        self._princ = {}                    # tabela da origem -> destino principal (`ref:T@coluna`)
+        self._col_dest = {}                 # (destino, coluna) -> {id: valor} (`ref:T@coluna`, cache limitado)
+        self._cab = {}                      # (tabela, grupo) -> id do cabeçalho agrupado gravado nesta execução
+        self._grupos = None                 # (destino agrupado, {chave: (grupo, pos.)}, {grupo: (agregados, membros)})
+        self._grp = None                    # (grupo, posição) da linha atual
+        self.tipos = {}                     # coluna da origem -> código do tipo (tabela atual)
 
     # ----- destino -----
     def _info(self, dt):
@@ -460,6 +504,7 @@ class CargaMapa(carga.Carga):
         if faltam:
             raise ErroCarga("tabela %s sem as colunas do mapa: %s" % (t, ", ".join(faltam)))
         self.subtipo = {n: c.get("subtipo") or 0 for n, c in cols.items()}
+        self.tipos = {n: c.get("codigo_tipo") for n, c in cols.items()}
         ch = p["chave"]
         if len(ch) == 1 and self.lt.chave_primaria(t) == ch and cols[ch[0]]["codigo_tipo"] in TIPOS_INT:
             for ini, fim in self.lt.faixas(t, ch[0]):
@@ -582,6 +627,29 @@ class CargaMapa(carga.Carga):
             return None, "pai_pendente", (ps[0]["gravidade"] if ps else "alta")
         return ant[0], None, None
 
+    def _principal(self, tab):
+        """Destino principal de uma tabela da origem (o de `planejar`; sem declaração, o primeiro do mapa)."""
+        if tab not in self._princ:
+            r = next((r for r in self.mapa_exec.get("tabelas", []) if r["tabela"] == tab), {})
+            decl = [c for c in self.mapa_exec.get("colunas_decl", [])
+                    if c["tabela"] == tab and (c.get("destino") or "").count(".") == 1]
+            dts = mapa.principal_e_destinos(r.get("tabelas_destino") or "", decl) if decl else \
+                [x for x in (r.get("tabelas_destino") or "").split(";") if x]
+            if not dts:
+                raise ErroCarga("ref:...@coluna a tabela sem destino no mapa: %s" % tab)
+            self._princ[tab] = dts[0]
+        return self._princ[tab]
+
+    def _coluna_destino(self, dt, col, rid):
+        """Valor de `col` na linha `rid` de `dt` no DESTINO (o que o cliente vê), com cache limitado."""
+        m = self._col_dest.setdefault((dt, col), {})
+        if rid not in m:
+            if len(m) > 200000:
+                m.clear()
+            r = self._todas("SELECT `%s` FROM `%s` WHERE id=%%s" % (col, dt), (rid,))
+            m[rid] = r[0][0] if r else None
+        return m[rid]
+
     def _converter(self, t, chave, p, linha, c, raw, pend):
         """Uma coluna da origem pela referência (simples, composta, alternativa ou encadeada), de-para oficial ou de
         valores e regra. (valor, recusa ou None, chave do pai adiada ou None)."""
@@ -598,6 +666,9 @@ class CargaMapa(carga.Carga):
                     return None, (pr, g), None
                 if pr:
                     pend.append((pr, g))
+                ult = c["passos"][-1]
+                if x is not None and ult.get("coluna_destino"):  # cópia da coluna do destino que o pai gravou
+                    x = self._coluna_destino(ult.get("destino") or self._principal(alvo[0]), ult["coluna_destino"], x)
                 return x, None, None
             if regra == "chave_origem":
                 regra = "texto"
@@ -636,10 +707,36 @@ class CargaMapa(carga.Carga):
         regra = sentinela.regra_efetiva(c["regra"] or "texto", self.subtipo.get(col, 0))
         return sentinela.aplicar(regra, linha[col])[0]
 
-    def _retrato(self, p, linha):
-        """JSON estável das colunas lidas, convertidas (sem segredo)."""
+    def _preparar(self, p):
+        """Na carga, com o dicionário vivo: `#retrato:*` lê TODAS as colunas da tabela (também no hash da linha)."""
+        if p.get("_preparado"):
+            return
+        p["_preparado"] = True
+        if any(r["todas"] for r in (p.get("retratos") or {}).values()):
+            for c in self.lt.colunas(p["tabela"]):
+                if c["nome"] not in p["lidas"]:
+                    p["lidas"].append(c["nome"])
+
+    def _regras_retrato(self, p, spec):
+        """{coluna: regra} do retrato `spec` (`#retrato`, `#retrato:*...`, `#retrato:A,B`), sem segredo."""
+        sr = (p.get("retratos") or {}).get(spec)
+        if not sr or not sr["todas"]:
+            return p["retrato"]
+        saida = {}
+        for n in p["lidas"]:
+            if n in p.get("segredos", ()) or n in sr["exceto"] or mapa.SEGREDO_NOME.search(n):
+                continue
+            r = p["retrato"].get(n) or (p.get("regras_geradas") or {}).get(n)
+            if not r:
+                r = "blob" if self.tipos.get(n) == 261 and not self.subtipo.get(n) else \
+                    "texto_longo" if self.tipos.get(n) == 261 else "texto"
+            saida[n] = r
+        return saida
+
+    def _retrato(self, p, linha, spec="#retrato"):
+        """JSON estável das colunas do retrato, convertidas (sem segredo)."""
         d = {}
-        for n, r in sorted(p["retrato"].items()):
+        for n, r in sorted(self._regras_retrato(p, spec).items()):
             r = "texto" if r == "chave_origem" else r
             x = sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(n, 0)), linha[n])[0]
             if isinstance(x, (bytes, bytearray)):
@@ -694,11 +791,13 @@ class CargaMapa(carga.Carga):
             info = self._info(dt)
             op = (p.get("opcoes") or {}).get(dt) or {}
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
+            pos = {}                           # coluna destino -> posição no modelo (colunas concorrentes)
             for c in p["colunas"][dt]:
                 nome, dc = c["coluna"], c["destino"]
                 if nome == "@id" or nome.startswith("@id:"):
                     continue  # preenchido na gravação (id do principal ou do secundário `antes`); fora do resumo
                 if mapa.eh_item(nome):
+                    pos[dc] = len(modelo)
                     modelo.append((dc, _Marca(nome)))
                     continue
                 if nome.startswith("=~"):
@@ -719,6 +818,12 @@ class CargaMapa(carga.Carga):
                         return None, None, pend, ("cadastro_unico_indefinido", "alta"), []
                 elif nome.startswith("#seq:"):
                     x = self.seq[nome[5:]]
+                elif mapa.spec_retrato(nome) is not None:  # `#retrato...` e `#sha256:#retrato...`
+                    j = self._retrato(p, linha, nome[8:] if nome.startswith("#sha256:") else nome)
+                    x = hashlib.sha256(j.encode("utf-8")).hexdigest() if nome.startswith("#sha256:") else j
+                elif nome.startswith("#grupo_"):
+                    x = self._agregado(nome)
+                    algum = algum or x is not None
                 elif nome.startswith("#sha256:"):
                     y = self._texto_fonte(c, linha)
                     x = None if y is None else hashlib.sha256(
@@ -745,8 +850,6 @@ class CargaMapa(carga.Carga):
                 elif nome.startswith("#dias:"):
                     x = self._em_dias(linha, c, pend)
                     algum = algum or x is not None
-                elif nome == "#retrato":
-                    x = self._retrato(p, linha)
                 elif nome.startswith("#cofre:"):
                     # segredo nunca gravado em claro: o conector não tem cofre; a linha pede a credencial no cofre
                     x = None
@@ -770,6 +873,11 @@ class CargaMapa(carga.Carga):
                     if x is None or x is _AMBIGUO:
                         pend.append(("pai_ambiguo" if x is _AMBIGUO else "codigo_inexistente_destino", "media"))
                         x = None
+                if dc in pos:  # coluna concorrente: vale a primeira com valor, na ordem declarada
+                    if modelo[pos[dc]][1] is None and x is not None:
+                        modelo[pos[dc]] = (dc, x)
+                    continue
+                pos[dc] = len(modelo)
                 modelo.append((dc, x))
             itens = [("", None)]
             if op.get("desdobrar"):
@@ -784,7 +892,7 @@ class CargaMapa(carga.Carga):
                         if recusa:
                             return None, None, pend, recusa, []
                         xs.append(x)
-                    if any(x is not None and x is not False for x in xs):
+                    if any(x is not None and (x is not False or op.get("com_falso")) for x in xs):
                         itens.append((rot, xs))
             elif op.get("opcional") and not algum:
                 itens = []
@@ -816,6 +924,63 @@ class CargaMapa(carga.Carga):
                 vals[dt].append((rot, v))
                 campos[dt].append((nomes, cs))
         return vals, campos, pend, None, adiadas
+
+    def _montar_grupos(self, p):
+        """Destino agrupado (`antes;agrupar:C1,C2`): lê a tabela uma vez e monta os grupos (linhas com os mesmos
+        valores em C1, C2; todas vazias: a linha sozinha) e os agregados `#grupo_*` de cada um."""
+        self._grupos = None
+        dtg = next((dt for dt in p["destinos"] if ((p.get("opcoes") or {}).get(dt) or {}).get("agrupar")), None)
+        if dtg is None:
+            return
+        cg = p["opcoes"][dtg]["agrupar"]
+        especs = [c for dt in p["destinos"] for c in p["colunas"][dt] if c["coluna"].startswith("#grupo_")]
+        por_linha, membros, vals = {}, {}, {}
+        for linha, ch_sem in self._linhas_mapa(p):
+            chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
+            partes = [sentinela.aplicar("texto", linha[x])[0] if isinstance(linha[x], (str, bytes, bytearray))
+                      else linha[x] for x in cg]
+            g = ("linha:" + chave) if all(x is None for x in partes) else \
+                "|".join("" if x is None else self._chave(x) for x in partes)
+            ms = membros.setdefault(g, [])
+            por_linha[chave] = (g, len(ms) + 1)
+            ms.append(chave)
+            for c in especs:
+                col = fonte_especial(c["coluna"])
+                if col:
+                    r = c["regra"] or (p.get("regras_geradas") or {}).get(col) or "texto"
+                    x = sentinela.aplicar(sentinela.regra_efetiva(r, self.subtipo.get(col, 0)), linha[col])[0]
+                    if x is not None:
+                        vals.setdefault((g, c["coluna"]), []).append(x)
+        grupos = {}
+        for g, ms in membros.items():
+            ag = {"#grupo_contar": len(ms)}
+            for c in especs:
+                n, xs = c["coluna"], vals.get((g, c["coluna"]))
+                if n.startswith("#grupo_somar:"):
+                    ag[n] = sum(decimal.Decimal(str(x)) for x in xs) if xs else None
+                elif n.startswith("#grupo_min:"):
+                    ag[n] = min(xs) if xs else None
+                elif n.startswith("#grupo_max:"):
+                    ag[n] = max(xs) if xs else None
+            grupos[g] = (ag, ms)
+        self._grupos = (dtg, por_linha, grupos)
+
+    def _agregado(self, nome):
+        g, i = self._grp
+        return i if nome == "#grupo_seq" else self._grupos[2][g][0].get(nome)
+
+    def _cabecalho(self, t, dt, chave):
+        """(id do cabeçalho do grupo da linha ou None, de execução anterior): o gravado nesta execução ou o de um
+        membro do grupo já carregado antes."""
+        g = self._grp[0]
+        if (t, g) in self._cab:
+            return self._cab[(t, g)], False
+        ex = self.existente.get(t, {})
+        for m in self._grupos[2][g][1]:
+            e = ex.get("%s/%s" % (m, dt)) if m != chave else None
+            if e and e[0] is not None:
+                return e[0], True
+        return None, False
 
     def _gravar_ou_adotar(self, dt, v, adotar, complementa=False):
         """(id, adotado): com `adotar`, a linha do destino que já tem as mesmas colunas (uma só) é adotada; com
@@ -849,7 +1014,9 @@ class CargaMapa(carga.Carga):
     def _tabela(self, p):
         t, dts = p["tabela"], p["destinos"]
         ents = [self._nome_ent(t, dt) for dt in dts]
+        self._preparar(p)
         colide = self._colisoes(p)
+        self._montar_grupos(p)
         seqs = [c["coluna"][5:] for dt in dts for c in p["colunas"][dt] if c["coluna"].startswith("#seq:")]
         cont_seq = {}
         inicio, n = time.monotonic(), 0
@@ -861,6 +1028,7 @@ class CargaMapa(carga.Carga):
                 cont_seq[k] = cont_seq.get(k, 0) + 1
                 self.seq[col] = cont_seq[k]
             h = bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
+            self._grp = self._grupos[1][chave] if self._grupos else None
             prov = self.existente.get(t, {}).get(chave)
             completar = None
             if prov and prov[0] is not None and prov[1] == carga.HASH_ZERO and PROVISORIO.get(t) == dts[0]:
@@ -893,11 +1061,11 @@ class CargaMapa(carga.Carga):
                 continue
             for regra, g in pend:
                 self._pendencia(t, chave, regra, g)
-            hds = []
+            hds, cabs = [], []
 
             def gravar():
                 ids = {}
-                del hds[:]
+                del hds[:], cabs[:]
                 ops = p.get("opcoes") or {}
                 ordem = [i for i, dt in enumerate(dts) if (ops.get(dt) or {}).get("antes")]
                 ordem += [i for i in range(len(dts)) if i not in ordem]
@@ -911,13 +1079,28 @@ class CargaMapa(carga.Carga):
                             elif c["coluna"].startswith("@id:"):
                                 v[c["destino"]] = ids.get(c["coluna"][4:])
                         op = (p.get("opcoes") or {}).get(dt) or {}
+                        agrupado = anterior = False
                         if i == 0 and completar is not None:
                             rid, adotado = self._gravar_ou_adotar(dt, dict(v, id=completar), None, True)
                             self.cont["provisorios_completados"] = self.cont.get("provisorios_completados", 0) + 1
+                        elif op.get("agrupar"):  # cabeçalho do grupo: a primeira linha gravada cria, as outras usam
+                            rid, anterior = self._cabecalho(t, dt, chave)
+                            agrupado, adotado = rid is not None, False
+                            if not agrupado:
+                                rid = self._inserir(dt, v)
+                                cabs.append(((t, self._grp[0]), rid))
                         else:
                             rid, adotado = self._gravar_ou_adotar(dt, v, op.get("adotar"), op.get("complementa"))
                         pad = [x for x in cs if isinstance(x, _PADRAO)]
-                        if adotado:  # nada é sobrescrito: o resumo é o que está no destino
+                        if agrupado:  # o resumo é o cabeçalho no destino; anterior com agregado mudado: pendência
+                            self.cont["agrupadas"] = self.cont.get("agrupadas", 0) + 1
+                            lido = list(self._todas("SELECT %s FROM `%s` WHERE id=%%s" % (
+                                ", ".join("`%s`" % c for c in nomes), dt), (rid,))[0]) if nomes else []
+                            if anterior and any(not isinstance(a, _PADRAO) and canon(a) != canon(b)
+                                                for a, b in zip(cs, lido)):
+                                self._pendencia(t, chave, "grupo_divergente_aguarda_sincronizar", "media")
+                            cs = lido
+                        elif adotado:  # nada é sobrescrito: o resumo é o que está no destino
                             self._pendencia(t, chave, "adotado_existente", "baixa")
                             self.cont["adotadas"] = self.cont.get("adotadas", 0) + 1
                             if nomes:
@@ -941,6 +1124,7 @@ class CargaMapa(carga.Carga):
                 return [ids.get(dt) for dt in dts]
             ids = self._linha_nova(t, chave, ents[0], h, gravar)
             if ids:
+                self._cab.update(cabs)
                 for ent, k, hd in hds:
                     self.origem.setdefault(ent, {})[k] = hd.hex()
                 for dt, dc, ref, cpai in adiadas:
@@ -1017,9 +1201,14 @@ class CargaMapa(carga.Carga):
     # ----- conciliação (destino relido do banco) -----
     def _destino(self, p, dt, ent, principal):
         info = self._info(dt)
-        cols = [c for c in p["colunas"][dt] if not c["coluna"].startswith("@id") and not (
-            not _especial(c["coluna"]) and (c["regra"] == "chave_origem" and c["referencia"] in p["duas_fases"]
-                                            and not c.get("passos") and not depara.conhecido(c["depara"])))]
+        cols, vistos = [], set()
+        for c in p["colunas"][dt]:
+            if c["coluna"].startswith("@id") or c["destino"] in vistos or (
+                    not _especial(c["coluna"]) and (c["regra"] == "chave_origem" and c["referencia"] in p["duas_fases"]
+                                                    and not c.get("passos") and not depara.conhecido(c["depara"]))):
+                continue
+            vistos.add(c["destino"])  # coluna concorrente (várias declarações): uma vez, como no resumo da origem
+            cols.append(c)
         ed = "(d.versao > 1 OR d.alterado_em IS NOT NULL)" if {"versao", "alterado_em"} <= set(info) else "0"
         sel = ", ".join(["co.chave_original"] + ["d.`%s`" % c["destino"] for c in cols] + [ed])
         rs = self._todas("SELECT %s FROM %s.conector_origem co JOIN `%s` d ON d.id=co.id_destino WHERE"
