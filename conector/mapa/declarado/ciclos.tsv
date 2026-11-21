@@ -1,0 +1,5 @@
+tabela	depende_de	tratamento	motivo
+SITPEQV	SITPEQV_SITPEQVMODELO	duas_fases	ciclo entre 2 tabelas (SITPEQV,SITPEQV_SITPEQVMODELO): o pai vem depois na ordem de carga
+TBCBOPRO	TBPROFIS	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga
+TBPROFIS	TBFORNEC	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga
+TBPROFIS	TBUNIDAD	duas_fases	ciclo entre 4 tabelas (TBCBOPRO,TBFORNEC,TBPROFIS,TBUNIDAD): o pai vem depois na ordem de carga

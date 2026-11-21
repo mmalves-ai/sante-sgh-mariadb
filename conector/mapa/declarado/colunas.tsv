@@ -1,0 +1,34 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBHOSPIT	NOME	estabelecimento.razao_social	texto			declarado no L3 (carga.py)
+TBHOSPIT	NOME_HOT	estabelecimento.nome_fantasia	texto			declarado no L3
+TBHOSPIT	CGC	estabelecimento.cnpj	texto			declarado no L3 (só dígitos; inválido vira pendência cnpj_invalido)
+TBHOSPIT	CNES	estabelecimento.codigo_cnes	texto			declarado no L3 (7 dígitos)
+TBHOSPIT	ENDERECO	estabelecimento.logradouro	texto			declarado no L3
+TBHOSPIT	NUMERO	estabelecimento.numero	texto			declarado no L3
+TBHOSPIT	COMPL	estabelecimento.complemento	texto			declarado no L3
+TBHOSPIT	BAI	estabelecimento.bairro_nome	texto			declarado no L3
+TBHOSPIT	CEP	estabelecimento.cep	texto			declarado no L3 (8 dígitos)
+TBHOSPIT	FONE	estabelecimento.telefone	texto			declarado no L3
+TBHOSPIT	EMAIL	estabelecimento.email	texto			declarado no L3
+TBHOSPIT	DTINI	estabelecimento.inicio_atividade	data			declarado no L3
+TBUSERS	NOME	usuario.login	texto			declarado no L3 (login normalizado; duplicado na collation recusa)
+TBUSERS	NOMEC	usuario.nome	texto			declarado no L3
+TBUSERS	CPF	usuario.cpf	texto			declarado no L3
+TBUSERS	E_MAIL	usuario.email	texto			declarado no L3
+TBUSERS	DT_NASC	usuario.data_nascimento	data			declarado no L3
+TBUSERS	BLOQUEADO	usuario.situacao	booleano_sn			declarado no L3 (S vira situacao bloqueado)
+TBUSERS	STATUS	usuario.situacao	codigo_char			declarado no L3 (I vira inativo)
+RICADPAC	NOME	pessoa_fisica.nome	texto			declarado no L3
+RICADPAC	NASC	pessoa_fisica.data_nascimento	data			declarado no L3
+RICADPAC	SEXO	pessoa_fisica.sexo_id	codigo_char			declarado no L3 (de-para próprio M/F/I)
+RICADPAC	CPF	pessoa_fisica.cpf	texto			declarado no L3
+RICADPAC	CNS	pessoa_fisica.cns	texto			declarado no L3 (15 dígitos)
+RICADPAC	MAE	pessoa_fisica.nome_mae	texto			declarado no L3
+RICADPAC	PAI	pessoa_fisica.nome_pai	texto			declarado no L3
+RICADPAC	DTOBITO	pessoa_fisica.data_obito	data			declarado no L3
+RICADPAC	PRONT	paciente.numero_prontuario	inteiro			declarado no L3
+RICADPAC	ATIVO	paciente.situacao	booleano_sn			declarado no L3 (N vira inativo)
+RICADPAC	IBGE	endereco_pessoa.municipio_ibge_id	inteiro	ibge_municipio		município do endereço pelo catálogo oficial
+ATCABECATEND	ID_RICADPAC	atendimento.paciente_id	chave_origem			declarado no L3
+ATCABECATEND	DATA_HORA_ENTRADA	atendimento.entrada_em	data_hora			declarado no L3 (sentinela recusa: entrada_sentinela)
+TBBANCOS	CODBCOCENTRAL	conta_bancaria.banco_id	texto	banco	conta_bancaria	banco da conta pelo código de compensação

@@ -57,6 +57,9 @@ const portoes: { nome: string; comando: string; args: string[] }[] = [
   // trigger e FK proibidos, MAX+1, função em coluna indexada, generator e procedimento com efeito) e, desde
   // o M04, também as colunas de credencial de TBTISS, TBTISSWEBSERV e TBCONVEN (regra 8 do M09).
   { nome: 'guardas:legado', comando: 'node', args: ['tools/verificadores/src/guardas-legado.ts'] },
+  // F4 L4: mapa declarativo do conector (tabela sem destino nem descarte justificado, ciclo não declarado,
+  // tabela ou coluna de destino inexistente no DDL, regra ou de-para desconhecidos, mapa gerado desatualizado).
+  { nome: 'conector:mapa', comando: 'python3', args: ['-I', 'conector/verificar_mapa.py'] },
   // M60.2: o pacote de instalação (units, nginx, cliente do banco, modelo do arquivo de ambiente e o anexo de
   // variáveis) igual ao gerado, e o catálogo cobrindo toda variável lida pelo código de produção.
   {

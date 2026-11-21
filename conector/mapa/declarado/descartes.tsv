@@ -1,0 +1,3 @@
+padrao	condicao	motivo
+SGH_.*	qualquer	tabela criada pela obra anterior dentro da base de origem (não é dado do cliente nem do sistema de origem)
+.*	vazia	vazia na imagem de referência e fora do mapa da análise; se outra origem trouxer linhas, o motor registra pendência tabela_sem_mapa (nunca carga silenciosa)

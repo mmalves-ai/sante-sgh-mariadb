@@ -1,0 +1,75 @@
+tabela	catalogo	coluna_codigo	motivo
+FPCBO	cbo	COD_CBO	
+RICBOFMRPUSP	cbo	COD_CBOFMRPUSP	código numérico: casa só com 6 dígitos; o resto vira pendência
+TBCBOSUS	cbo	COD	
+TBOCUPAC	cbo		código próprio de 2 dígitos, sem código oficial: referências viram pendência
+TBPAISES	pais		código da origem não é o ISO do carregador: de-para pelo nome a declarar no L5
+TBUF	ibge_uf	UF	
+TBATRIBCOMPL	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBCOMPLEXSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBGRUHAB	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBGRUSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBHABSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBMODALI	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBMOTCOB	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBREGSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBSERSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBCLSERV	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBSUBSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBFORSUS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBSUBTIPFINANC	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBTIPFINANC	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBTABBCO	banco	COD	
+CDTPDESPCTAPG	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+PSPRCANS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+PSSIBCAMPOALT	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBCBOANS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBCLASSIFCREPLS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBDISPONIBILSERV	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBISENCAOONUS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBSIPANSATO	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTABTHMTUSS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSCAPACFUN	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSCATDESP	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSCOBERTESPECIAL	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSDIAGIMG	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSESTTUMOR	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSETAPAAUTORIZ	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSFINTRAT	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSFORMAPG	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSGRPPROC	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSIDENTBENEFI	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSINDACID	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSLCEVENTO	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSMETAST	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSMOTAUSENCODVALID	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSNODULO	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSOPFABRIC	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSREFIND	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSSAUDEOCUPAC	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSSITCANC	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSSITPROT	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSSITSOLIC	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTERMO	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPCONSUL	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPDEBCRE	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPDEMONS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPFAT	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPGUIA	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPINTER	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTPQUIMIO	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSTUMOR	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSUNIDMED	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSVIAACES	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTISSVIAADMIN	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTPACOMTISS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBTPDOCUMENTO_PIXPDQ	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBMUIBGE	ibge_municipio	COD	município pelos 6 dígitos (o verificador fica em DIGITO)
+TBCIAP	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBPROSUS	sigtap	COD	
+HTPROSUS	sigtap	ID_TBPROSUS	histórico da SIGTAP: código pela linha de TBPROSUS referenciada
+TBAPACS	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBCOMREG	sigtap_auxiliar		tabela auxiliar da SIGTAP: o carregador oficial a preenche; a origem só dá de-para pelo código
+TBTP_ATEND_TISS	tiss_ans		terminologia da ANS/TISS: carregador oficial pendente; referências viram pendência até ele existir
+TBBANCOS	banco	CODBCOCENTRAL	conta bancária do cliente: só o banco é catálogo oficial
+TBCID10	cid10	COD	

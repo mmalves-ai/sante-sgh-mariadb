@@ -428,3 +428,43 @@ segue verde (16 testes).
   catálogos reais de sexo/tipos pelo de-para do L4; convênios e profissionais reais (L5) completando os provisórios;
   diferencial de verdade (linha alterada hoje fica com pendência `alteracao_aguarda_sincronizar`); item de menu do
   painel; a ponte por script supõe API e repositório na mesma máquina (produção: serviço do conector).
+
+## 12. Estado do L4 (2026-11-21): concluído, prova verde
+
+Mapa declarativo e verificador. Prova: `python3 -I conector/verificar_mapa.py` ok (também na esteira, passo
+`conector:mapa` do `verificar.ts`); `conector/conector.sh testes` 37 testes verdes (25 do L1 a L3 + 12 do L4, 1
+pulado no container: o do mapa do repositório, que roda no host); `python3 -I tools/obra/fatiar_conector.py
+--conferir` ok.
+
+- **Gerador** `tools/obra/gerar_mapa_conector.py` (determinístico; dicionário da origem fora do git, só nomes e
+  tipos) grava em `conector/mapa/`:
+  - `tabelas.tsv`: as 1.503 tabelas do mapa da análise com destino, tabelas físicas (mecanismo resolvido:
+    `parametro` -> `parametro_definicao`/`parametro_valor`, `historico_entidade:<t>` -> `trilha_auditoria` + `<t>`,
+    `arquivo`), chave, estratégia, lote, ordem e dependências; 1.436 carregáveis, 58 descartadas e 9 mecanismos
+    sem carga (com motivo);
+  - estratégias: `hash_linha` 1.244, `hash_linha_sem_chave` 28, `faixa_id_hash_bloco` 53,
+    `data_alteracao_hash_bloco` 14, `hash_bloco_chave` 24, `sem_chave_recarga` 2, `depara_catalogo_oficial` 71;
+  - `dependencias.tsv` (1.502 arestas da origem entre tabelas carregáveis; dependência de tabela descartada fica em
+    `dep_fora_do_mapa`) e `colunas.tsv` (14.814 colunas: regra de sentinela, referência `ID_<tabela>` e de-para).
+- **Ordem topológica** (`mapa.montar`): Kahn com prioridade (usuários, estabelecimento, catálogos, cadastros,
+  movimento, auditoria) e herança de prioridade pelo pai (o perfil exigido pelo usuário vem antes dele: ordem 1 e
+  2). Ciclos (Tarjan): 4 arestas em duas fases declaradas em `declarado/ciclos.tsv` (profissional, fornecedor,
+  unidade e lotação; equipamento e modelo).
+- **Verificador** (`mapa.verificar_dados`): falha em tabela da origem sem destino nem descarte justificado
+  (`declarado/descartes.tsv`: tabelas `SGH_` da obra anterior e vazias, que em outra origem viram pendência
+  `tabela_sem_mapa`), descarte ou mecanismo sem motivo, ciclo não declarado ou declaração órfã, tabela ou coluna de
+  destino inexistente no DDL (lido com `ADD/DROP COLUMN`), coluna fora dos destinos da tabela, regra ou de-para
+  desconhecidos, catálogo oficial sem declaração e mapa gerado desatualizado (refeito em memória e comparado).
+- **De-para oficial** (`depara.py`): CID-10, SIGTAP, CBO, município IBGE (6 dígitos), UF e banco (COMPE), com
+  normalização e resolução sem nunca criar: inválido/inexistente vira pendência `catalogo_codigo_*`. As 71 tabelas da
+  origem que são catálogo oficial não são gravadas (`declarado/catalogos.tsv`: coluna de código ou motivo; TISS/ANS e
+  auxiliares da SIGTAP aguardam carregador).
+- **Sentinelas por coluna** (`sentinela.py`): S/N, 0/1, datas 1899-12-30/1900-01-01/ano < 1800, HHMM, CHAR com
+  espaços, flutuante, blob em bytes originais; aplicadas sem valor na pendência.
+- **Pendências "pai pendente"** (`pendencia.py`): propagação em cadeia com a raiz e a gravidade dela; `resolver`
+  devolve os descendentes a reavaliar e mantém a pendência própria do filho.
+- **Fatias L5 a L8** (`tools/obra/fatiar_conector.py`): 64 fatias em `docs/obra/fatias/f4/` (L5 16, L6 18, L7 9,
+  L8 21; 1.358 tabelas; maior 112 KB), `indice.tsv` e `brief.md`. As 7 do L3 e as 71 de catálogo oficial ficam fora.
+- **Colunas declaradas**: 33 do L3 em `declarado/colunas.tsv` (o verificador já pegou dois nomes errados do
+  primeiro rascunho). As regras geradas por nome (booleano por nome, de-para por nome) são proposta: os lotes L5 a
+  L8 confirmam.
