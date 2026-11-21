@@ -41,6 +41,7 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   atendimento: () => import('./atendimento/modulo.js'),
   cadastro: () => import('./cadastro/modulo.js'),
   config: () => import('./config/modulo.js'),
+  'plataforma-onboarding': () => import('./plataforma-onboarding/modulo.js'),
   recepcao: () => import('./recepcao/modulo.js'),
 });
 

@@ -466,3 +466,4 @@ export * from './permissoes/endurecimento-sbis.js';
 export * from './patrimonio/patrimonio.js';
 export * from './patrimonio/ajuste.js';
 export * from './permissoes/patrimonio.js';
+export * from './plataforma/onboarding.js';

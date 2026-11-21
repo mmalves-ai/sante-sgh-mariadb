@@ -108,3 +108,14 @@ Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam
   conciliação passa a ser contra o destino real, por entidade.
 - **GRANT sem curinga:** o `_` do nome do banco é escapado (`cliente\_a\_b`), e o banco tem de ser
   `cliente_<codigo>`; o teste prova que o usuário de `ex_l2` não alcança `exxl2`.
+
+## Carga das entidades e painel (L3)
+
+- `carga.py`: mapa `l3-2026-11-21` (só as colunas listadas são lidas; credenciais nunca). Estabelecimento, usuários,
+  pacientes (pessoa física, documento, endereço, telefones) e atendimentos (fichas e altas), no mesmo snapshot,
+  pelo usuário restrito da execução. Conciliação por entidade: lidos = gravados (relidos do destino) + recusados, e
+  soma de controle da origem = a do destino; divergência faz a execução falhar.
+- `sintetica.py --mapa`: acrescenta as tabelas com a forma da origem do mapa, com anomalias anotadas no manifesto
+  (`esperado_destino`).
+- O painel (`/plataforma/clientes`) chama `criar_cliente.py --json` e `conector.sh listar|vincular --admin`; o
+  enfileirar é da API. Prova: `apps/api/src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts`.

@@ -4,7 +4,12 @@ contratos do produto (tools/db/carregar_acoes.py; decisão do dono 2026-11-20, a
 (catalogos/carregar.py), e a importação do SPDATA é do conector (só para cliente com origem conector_spdata).
 
 uso: python3 -I tools/db/criar_cliente.py <codigo> "<nome>" [--origem vazio|conector_spdata] [--cnpj N]
+                                          [--plataforma BANCO] [--admin ID] [--json]
      python3 -I tools/db/criar_cliente.py --listar
+
+É também o serviço do painel da plataforma (F4 L3): a API chama este comando (função `criar`) com --json, o id do
+administrador que pediu (--admin, gravado no evento) e, nos testes, um banco de plataforma de teste (--plataforma ou
+PLATAFORMA_BANCO). Com --json, a saída é uma linha JSON, inclusive na recusa ({"erro": "...", "codigo": "..."}).
 
 O banco do cliente se chama cliente_<codigo>. O comando é idempotente: recusa se o cliente já existir.
 """
@@ -18,7 +23,14 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[2]
 SQL = RAIZ / "tools/db/sql.sh"
 MIG = RAIZ / "db/migracoes"
-PLAT = "plataforma"
+PLAT = re.sub(r"[^a-z0-9_]", "", __import__("os").environ.get("PLATAFORMA_BANCO", "plataforma")) or "plataforma"
+
+
+class Recusa(SystemExit):
+    """Recusa com código curto (o painel mostra a mensagem; a API mapeia o código para o HTTP)."""
+    def __init__(self, codigo, mensagem):
+        super().__init__(mensagem)
+        self.codigo = codigo
 
 
 def sql(banco, entrada=None, *args):
@@ -58,50 +70,79 @@ def carregador_de_acoes():
     return mod
 
 
-def main():
+def criar(codigo, nome, origem="vazio", cnpj=None, admin=None):
+    """Cria o banco cliente_<codigo>, aplica as migrações e as ações do sistema e registra na plataforma (com o
+    evento 'criado'). Recusa (Recusa) se o código for inválido ou o cliente/banco já existir."""
     garantir_plataforma()
-    if "--listar" in sys.argv:
-        print(sql(PLAT, None, "-e", "select id, codigo, nome, situacao, origem_dados, banco_nome, versao_migracao from cliente").stdout)
-        return
-    if len(sys.argv) < 3:
-        raise SystemExit(__doc__)
-    codigo, nome = sys.argv[1], sys.argv[2]
-    origem = sys.argv[sys.argv.index("--origem") + 1] if "--origem" in sys.argv else "vazio"
-    cnpj = sys.argv[sys.argv.index("--cnpj") + 1] if "--cnpj" in sys.argv else None
-    if not re.fullmatch(r"[a-z][a-z0-9_]{1,39}", codigo):
-        raise SystemExit("código inválido: minúsculas, dígitos e _, começando por letra")
+    if not re.fullmatch(r"[a-z][a-z0-9_]{1,39}", codigo or ""):
+        raise Recusa("codigo-invalido", "código inválido: minúsculas, dígitos e _, começando por letra (2 a 40)")
+    if not nome or not nome.strip() or len(nome) > 150:
+        raise Recusa("nome-invalido", "nome obrigatório, até 150 caracteres")
+    if origem not in ("vazio", "conector_spdata"):
+        raise Recusa("origem-invalida", "origem: vazio ou conector_spdata")
+    if cnpj is not None and not re.fullmatch(r"[0-9]{14}", cnpj):
+        raise Recusa("cnpj-invalido", "CNPJ com 14 dígitos")
     banco = f"cliente_{codigo}"
     ja = sql(PLAT, None, "-N", "-e", f"select count(*) from cliente where codigo={q(codigo)}").stdout.strip()
     if ja != "0":
-        raise SystemExit(f"cliente {codigo} já existe")
+        raise Recusa("cliente-existe", f"cliente {codigo} já existe")
     existe = sql(None, None, "-N", "-e", f"select count(*) from information_schema.schemata where schema_name={q(banco)}").stdout.strip()
     if existe != "0":
-        raise SystemExit(f"o banco {banco} já existe; não sobrescrevo")
+        raise Recusa("banco-existe", f"o banco {banco} já existe; não sobrescrevo")
     sql(None, None, "-e", f"CREATE DATABASE {banco} CHARACTER SET utf8mb4 COLLATE utf8mb4_uca1400_ai_ci")
     n, erros = aplicar_migracoes(banco)
     if erros:
         sql(None, None, "-e", f"DROP DATABASE {banco}")
-        raise SystemExit("migrações com erro; banco removido:\n" + "\n".join(erros[:20]))
+        raise Recusa("migracao-falhou", "migrações com erro; banco removido:\n" + "\n".join(erros[:20]))
     try:
         acoes = carregador_de_acoes().carregar(banco)
     except SystemExit as e:
         sql(None, None, "-e", f"DROP DATABASE {banco}")
-        raise SystemExit(f"{e}; banco removido")
+        raise Recusa("acoes-falharam", f"{e}; banco removido")
     tabelas = sql(None, None, "-N", "-e", f"select count(*) from information_schema.tables where table_schema={q(banco)}").stdout.strip()
     versao = sorted(p.parent.name + "/" + p.name for p in MIG.glob("*/*_chaves.sql"))[-1]
     agora = "UTC_TIMESTAMP(3)"
+    adm = str(int(admin)) if admin is not None else "NULL"
+    detalhe = {'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'], 'origem': origem}
     r = sql(PLAT, f"""
-INSERT INTO cliente (codigo, nome, documento_cnpj, situacao, banco_nome, versao_migracao, origem_dados, criado_em)
-VALUES ({q(codigo)}, {q(nome)}, {q(cnpj) if cnpj else 'NULL'}, 'implantacao', {q(banco)}, {q(versao)}, {q(origem)}, {agora});
-INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, criado_em)
-VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps({'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'], 'origem': origem}))}, {agora}, {agora});
+INSERT INTO cliente (codigo, nome, documento_cnpj, situacao, banco_nome, versao_migracao, origem_dados, criado_em, criado_por)
+VALUES ({q(codigo)}, {q(nome.strip())}, {q(cnpj) if cnpj else 'NULL'}, 'implantacao', {q(banco)}, {q(versao)}, {q(origem)}, {agora}, {adm});
+INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, administrador_plataforma_id, criado_em, criado_por)
+VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps(detalhe))}, {agora}, {adm}, {agora}, {adm});
 """)
     if r.returncode:
-        raise SystemExit(f"registro na plataforma falhou: {r.stderr[:400]}")
-    print(json.dumps({"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "acoes_sistema": acoes["ativas"],
-                      "origem": origem,
-                      "proximo_passo": "catalogos/carregar.py " + codigo + (" e conector" if origem == "conector_spdata" else "")},
-                     ensure_ascii=False))
+        sql(None, None, "-e", f"DROP DATABASE {banco}")
+        raise Recusa("registro-falhou", f"registro na plataforma falhou: {r.stderr[:400]}")
+    return {"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "acoes_sistema": acoes["ativas"],
+            "origem": origem, "versao_migracao": versao,
+            "proximo_passo": "catalogos/carregar.py " + codigo + (" e conector" if origem == "conector_spdata" else "")}
+
+
+def _arg(nome):
+    return sys.argv[sys.argv.index(nome) + 1] if nome in sys.argv else None
+
+
+def main():
+    global PLAT
+    if _arg("--plataforma"):
+        PLAT = re.sub(r"[^a-z0-9_]", "", _arg("--plataforma"))
+    if "--listar" in sys.argv:
+        garantir_plataforma()
+        print(sql(PLAT, None, "-e", "select id, codigo, nome, situacao, origem_dados, banco_nome, versao_migracao from cliente").stdout)
+        return
+    pos = [a for i, a in enumerate(sys.argv[1:], 1)
+           if not a.startswith("--") and not (sys.argv[i - 1] in ("--origem", "--cnpj", "--plataforma", "--admin"))]
+    if len(pos) < 2:
+        raise SystemExit(__doc__)
+    admin = _arg("--admin")
+    try:
+        r = criar(pos[0], pos[1], _arg("--origem") or "vazio", _arg("--cnpj"), int(admin) if admin else None)
+    except Recusa as e:
+        if "--json" in sys.argv:
+            print(json.dumps({"erro": str(e)[:600], "codigo": e.codigo}, ensure_ascii=False))
+            raise SystemExit(3)
+        raise
+    print(json.dumps(r, ensure_ascii=False))
 
 
 if __name__ == "__main__":

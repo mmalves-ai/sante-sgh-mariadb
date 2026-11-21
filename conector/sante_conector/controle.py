@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS {b}.imagem_tabela (
 CREATE TABLE IF NOT EXISTS {b}.conector_origem (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   tabela_origem VARCHAR(63) NOT NULL,
-  chave_original VARCHAR(500) NOT NULL COMMENT 'Chave da linha na origem (identificador técnico)',
+  chave_original VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
+                 COMMENT 'Chave da linha na origem (identificador técnico; binária: a origem diferencia maiúsculas)',
   entidade_destino VARCHAR(64) NOT NULL,
   id_destino BIGINT UNSIGNED NULL,
   hash_linha BINARY(16) NOT NULL COMMENT 'BLAKE2b-128 dos bytes crus da linha',
@@ -55,6 +56,8 @@ CREATE TABLE IF NOT EXISTS {b}.conector_origem (
   UNIQUE KEY uq_conector_origem_chave (tabela_origem, chave_original),
   KEY ix_conector_origem_destino (entidade_destino, id_destino)
 ) COMMENT='De-para linha da origem -> registro de destino, com o hash para o diferencial';
+ALTER TABLE {b}.conector_origem MODIFY chave_original VARCHAR(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL
+  COMMENT 'Chave da linha na origem (identificador técnico; binária: a origem diferencia maiúsculas)';
 CREATE TABLE IF NOT EXISTS {b}.pendencia (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   execucao_id BIGINT UNSIGNED NOT NULL,

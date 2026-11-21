@@ -46,7 +46,14 @@ describe('API_MODULOS', () => {
   });
 
   it('"todos": a base e todos os registrados (onda 1 da F2.2: agenda, atendimento, cadastro, configuração, recepção)', () => {
-    expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual(['agenda', 'atendimento', 'cadastro', 'config', 'recepcao']);
+    expect(modulosPedidos({ API_MODULOS: 'todos' })).toEqual([
+      'agenda',
+      'atendimento',
+      'cadastro',
+      'config',
+      'plataforma-onboarding',
+      'recepcao',
+    ]);
     expect(recusaDosModulos({ API_MODULOS: 'sessao,cadastro,atendimento' })).toBeNull();
     expect(modulosPedidos({ API_MODULOS: 'todos' }, registro)).toEqual(['exemplo']);
   });

@@ -65,6 +65,7 @@ import { rotasPortalMedico } from './modulos/portal-medico/rotas.js';
 import { rotasPortalPrestador } from './modulos/portal-prestador/rotas.js';
 import { rotasTelemedicina } from './modulos/telemedicina/rotas.js';
 import { rotasSuporte } from './modulos/suporte/rotas.js';
+import { rotasPlataformaOnboarding } from './modulos/plataforma/rotas.js';
 import { temContaPlataforma } from './modulos/suporte/api-suporte.js';
 
 declare module 'vue-router' {
@@ -115,6 +116,8 @@ export function rotas(desenvolvimento: boolean): RouteRecordRaw[] {
     ...rotasImplantacao,
     // ADR 0021: conta da plataforma, "login como" e suporte técnico.
     ...rotasSuporte,
+    // F4 L3: painel de onboarding de clientes (administrador da plataforma).
+    ...rotasPlataformaOnboarding,
     // M10: acesso, organização e auditoria (telas).
     ...rotasAdministracao,
     // M11: pacientes e profissionais.

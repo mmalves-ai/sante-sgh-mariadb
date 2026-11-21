@@ -64,6 +64,7 @@ import { mensagensNutricao } from '../modulos/nutricao/i18n-nutricao.js';
 import { mensagensEspecialidades } from '../modulos/especialidades/i18n-especialidades.js';
 import { mensagensRouparia } from '../modulos/rouparia/i18n-rouparia.js';
 import { mensagensSessoes } from '../modulos/sessoes/i18n-sessoes.js';
+import { mensagensOnboarding } from '../modulos/plataforma/i18n-onboarding.js';
 import { mensagensDigitalizacao } from '../modulos/same/i18n-digitalizacao.js';
 import { mensagensPortal } from '../modulos/portal/i18n.js';
 import { mensagensBiRede } from '../modulos/rede/i18n-bi.js';
@@ -2296,6 +2297,8 @@ export const mensagensWeb = {
   rouparia: mensagensRouparia,
   // M50 (etapa 6): agenda de sessões e digitalização certificada.
   sessoes: mensagensSessoes,
+  // F4 L3: painel de onboarding de clientes da plataforma.
+  onboarding: mensagensOnboarding,
   digitalizacao: mensagensDigitalizacao,
   protocolos: mensagensProtocolos,
   regulacao: mensagensRegulacao,

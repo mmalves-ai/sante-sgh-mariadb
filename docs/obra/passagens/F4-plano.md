@@ -362,3 +362,47 @@ apagado no fim).
 - **Para o L3:** a carga das entidades, a conciliação contra o destino real por entidade, as rotas e as telas do
   painel. A conta do motor tem `CREATE USER` global (necessário para criar o usuário de cada execução); em
   produção, avaliar conta própria por servidor de clientes.
+
+## 11. Estado do L3 (2026-11-21): concluído, prova verde
+
+Painel mínimo e ponta a ponta. Prova: `vitest run --config apps/api/vitest.integracao.config.ts
+src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts` (4 testes, 58 s, imagem SINTÉTICA, banco plataforma de
+teste `plataforma_teste_onboarding`, cliente `exemplo_l3`; tudo apagado no fim). Autoconferência do conector (L1+L2)
+segue verde (16 testes).
+
+- **Rotas** (`apps/api/src/modulos/plataforma-onboarding`, `API_MODULOS=plataforma-onboarding`), prefixo
+  `/api/plataforma/onboarding`: `GET clientes`, `POST clientes`, `GET origens`, `PUT clientes/:codigo/origem`,
+  `POST clientes/:codigo/execucoes {tipo}`, `GET clientes/:codigo/execucoes/:id`. A guarda pede sessão, CSRF e a
+  permissão declarada (`config.conexao.ler`); o handler exige o **ator da plataforma** (sessão do login
+  `POST /api/sessao/plataforma`, id `plataforma:<id>`): usuário do cliente recebe 403. Recusas: 400, 404, 409
+  (execução ativa, cliente existente), 503 (sem núcleo). A resposta passa por lista branca (`execucao.ts`): só
+  entidade de destino, contagens e pendências por entidade/regra/gravidade; nunca nome de tabela da origem.
+- **Portas:** leitura e enfileirar no banco plataforma pelo núcleo (`RepositorioOnboardingPlataforma`, evento na mesma
+  transação, 409 pelo índice único); criar cliente, listar a pasta autorizada e vincular pela `PonteConectorScript`
+  (`tools/db/criar_cliente.py --json` e `conector/conector.sh listar|vincular`): só o conector abre o arquivo.
+- **Criar cliente como serviço:** `criar_cliente.py` ganhou a função `criar()`, `--json`, `--admin` (vai ao evento)
+  e `--plataforma`/`PLATAFORMA_BANCO`; recusa com código (`cliente-existe`, `banco-existe` → 409).
+- **Telas** (`apps/web/src/modulos/plataforma`, rota `/plataforma/clientes`, i18n `onboarding`): lista de clientes com
+  situação, origem e última execução; novo cliente; arquivos da pasta autorizada com Vincular (recusados com o motivo);
+  Importar e Sincronizar com confirmação; barra de progresso acompanhada a cada 2 s enquanto ativa; conciliação por
+  entidade e pendências por gravidade. Item de menu ainda não criado (a árvore do menu é do produto; entra com o L9).
+- **Carga** (`conector/sante_conector/carga.py`, mapa `l3-2026-11-21`): estabelecimento, tipo de empresa (de-para),
+  usuários (sem credencial: `exige_troca_senha`), pacientes + pessoa física + documento, endereço e telefones,
+  atendimentos com fichas e altas. Toda linha em `conector_origem` (chave **binária**: a origem diferencia
+  maiúsculas; corrigido na base de controle, com ALTER idempotente), recusa com pendência sem valor, linha igual
+  pulada (Importar de novo e Sincronizar sem mudança não duplicam). Catálogo próprio ausente é criado pelo código do
+  mapa; catálogo **oficial** (caráter TISS 23, municípios IBGE) nunca é criado: sem ele a linha vira pendência.
+  Convênio e profissional do atendimento entram **provisórios** por chave da origem (pendência baixa), para o L5
+  completar. Motivo de falha de banco sai só com o código do erro (a mensagem do servidor pode citar valores).
+- **Conciliação por entidade** (`conector_ctl_<codigo>.conciliacao` e `contadores.entidades`): lidos na origem =
+  gravados (relidos do destino pela junção com `conector_origem`) + recusados, e soma de controle sha256 da origem =
+  a relida do destino. Divergência faz a execução `falhou`.
+- **Números da prova (sintética, manifesto do gerador):** 4.838 registros, 14 tabelas; estabelecimentos 2/2,
+  usuários 13 de 14 (1 login duplicado), pacientes 318 de 320 (prontuário repetido, sem nome), atendimentos 515 de
+  520 (número repetido, paciente inexistente, paciente recusado, categoria desconhecida, caráter ausente), fichas
+  515 de 522, altas 138 de 139; todas as entidades conferidas; sha256 do .fdb igual antes e depois; o Sincronizar
+  seguinte conclui sem duplicar.
+- **Para o L4/L5/L9:** carregador oficial do TISS 23 (hoje a prova semeia as duas linhas como faria o carregador);
+  catálogos reais de sexo/tipos pelo de-para do L4; convênios e profissionais reais (L5) completando os provisórios;
+  diferencial de verdade (linha alterada hoje fica com pendência `alteracao_aguarda_sincronizar`); item de menu do
+  painel; a ponte por script supõe API e repositório na mesma máquina (produção: serviço do conector).

@@ -3,7 +3,7 @@
 Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   listar                                  .fdb da pasta autorizada, com aceite/motivo
   validar <relativo>                      caminho + cabeçalho
-  sintetica <arquivo.fdb> [--versao N]    gera a imagem sintética do cliente de exemplo (no trabalho)
+  sintetica <arquivo.fdb> [--versao N] [--mapa]  gera a imagem sintética do cliente de exemplo (no trabalho)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   testes                                  suíte unittest (precisa de --privileged e do MariaDB)
@@ -42,6 +42,7 @@ def main(argv=None):
     sub.add_parser("listar")
     p = sub.add_parser("validar"); p.add_argument("relativo")
     p = sub.add_parser("sintetica"); p.add_argument("arquivo"); p.add_argument("--versao", type=int, default=1)
+    p.add_argument("--mapa", action="store_true")
     p = sub.add_parser("registrar"); p.add_argument("relativo")
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--sem-gstat", action="store_true")
     p.add_argument("--sha256", action="store_true"); p.add_argument("--saida")
@@ -49,6 +50,7 @@ def main(argv=None):
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     sub.add_parser("testes")
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
+    p.add_argument("--admin", type=int)
     p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
     p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
@@ -67,7 +69,12 @@ def main(argv=None):
         conn = banco.conectar(banco.plataforma_banco())
         try:
             if a.cmd == "vincular":
-                return _json(plataforma.vincular_origem(conn, a.codigo, a.relativo))
+                try:
+                    return _json(plataforma.vincular_origem(conn, a.codigo, a.relativo, admin_id=a.admin))
+                except plataforma.ExecucaoAtiva as e:
+                    _json({"erro": 409, "motivo": str(e)}); return 3
+                except (plataforma.PlataformaErro, caminho.OrigemRecusada) as e:
+                    _json({"erro": 400, "motivo": str(e)}); return 3
             if a.cmd == "enfileirar":
                 try:
                     return _json({"execucao_id": plataforma.enfileirar(conn, a.codigo, a.tipo)})
@@ -111,7 +118,7 @@ def main(argv=None):
         return _json(v)
     if a.cmd == "sintetica":
         from . import sintetica
-        return _json(sintetica.gerar(a.arquivo, a.versao))
+        return _json(sintetica.gerar(a.arquivo, a.versao, mapa=a.mapa))
     if a.cmd == "testes":
         import unittest
         r = unittest.main(module=None, argv=["conector", "discover", "-s", "/app/testes", "-t", "/app"], exit=False,
