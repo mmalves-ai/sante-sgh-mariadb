@@ -211,3 +211,31 @@ lista quando L7-07 e L8-11 declararem; ATCONTA (aguarda_fonte_atendimento_conta)
 TBFINCODRECOL depende do carregador oficial (pedido 17 do L8-11).
 Ajustes de fatia exigidos pela própria aplicação: `colunas.d/L6-18.tsv` (ID_RISETOR_ORIGEM/DESTINO com destino, a guarda do
 test_l6_18 exige) e `sintetica_d/l6_12.py` (alergia sem princípio: CHECK 4025 no lugar do NOT NULL 1048).
+
+## Resíduo do motor da rodada 4 (integrador, etapa sozinho no código compartilhado)
+Prova: `sintetica_d/exemplo_r4b.py` e `testes/test_carga_mapa_r4b.py` (carga, conciliação e reexecução idempotente
+na imagem sintética, banco descartável `cliente_cfexemplo_r4b`). Os pedidos atendidos têm o campo `atendido`.
+
+| Pedido | Fatia | Mecanismo | Exemplo de uso (`colunas.d`) |
+|---|---|---|---|
+| competencia_carga | L7-07 #11 | regra declarada vale para `=@data_carga` (e `=~@data_carga`) | `GEVALMEM	=@data_carga	saldo_lote.competencia	data_primeiro_dia_mes` |
+| Pedido 22 | L8-12 #9 | `#dif:A,B` (A - B) e `#soma:A,B,..`; nulo = 0, todas nulas = NULL, texto não numérico = NULL com `valor_fora_do_dominio`; a regra da linha vale para o RESULTADO | `MFCONPAG	#dif:VALOR,PAGO	parcela_pagar.saldo	piso:0` |
+| exige_dominio | L8-12 #6 | opção de coluna (com `depara=valores`): valor sem par RECUSA a linha (`valor_fora_do_dominio`, média) em vez de cair no padrão do destino; o verificador exige `depara=valores` | `MFCCCONV	DEV	...situacao		valores	exige_dominio` |
+| senao | L6-05 #9 | opção de coluna concorrente: quando ela preenche o destino, a pendência `valor_fora_do_dominio` das declarações ANTERIORES da mesma coluna sai | `PRFREQUENCIA	NOME	frequencia.tipo		valores	senao` (depois de `NUM`) |
+| Pedido 25 | L8-12 #12 | `=~x` em coluna concorrente: `valor_presumido` só quando o literal é o valor gravado | `TBTPCONTA	=~corrente	conta.natureza` depois da descrição |
+| resposta replicada por campo | L6-11 #18 | opção `por_pai` na via de uma coluna do destino PRINCIPAL com `ref:T.K` ou `ref:T.(K1,K2)=(C1,C2)` (sem `max:`/`@coluna`): uma linha do destino POR PAI da chave alternativa (item `<chave>/<dt>/<chave do pai>`, conciliado como o desdobrado); sem valor: `sem_item_a_gravar`; sem pai: `pai_inexistente`; pai pendente recusa a linha. Não combina com `desdobrar`, `agrupar` nem `complementa` (erro do verificador) | `PRRESPOSTA	ID_PRPERGUNTA	modelo_campo_opcao.modelo_campo_id			ref:PRPADEVOL.ID_PRPERGUNTA;por_pai` |
+
+Já tinham mecanismo (rodada 4, seção acima) e só pedem a fatia REFEITA (a causa `regra_faltante` vem do comentário
+antigo da declaração): REPACAGI, REPACAGD, SIPACAGI, SIPACAGD (`#data_hora_mais`, L6-03/L6-04), GEKONCDC (`agrupar:` no
+principal, L7-05), TBSEGUIA (`inteiro_mais_um`, L8-05), TBKITPRO (opção `principal` + `agrupar:`, L6-11),
+PRASSINATURA_CAB (documento pelo grupo de PRASSINATURA_DOC e `ref:T.K/<destino>` com vários pais da mesma linha,
+L6-11/L6-12), MFDESACR (`se:` e agora `#dif`, L8-12), GERASVALFINAL/GERASVALINICIAL (agora `=@data_carga` com regra,
+L7-07), TBREFUNI/TBREFMEMTUSS (`so_se:...!licenca_nao_comprovada`, L8-03), PRRESPOSTA (agora `por_pai`, L6-11).
+
+Não aplicados nesta etapa (seguem pedidos abertos):
+- `#arquivo:<COLUNA>` (M4; PRPAREVOLIMG, PRGEDIMP, documento assinado): exige gravar o binário no armazenamento de
+  objetos do produto (S3 compatível, `arquivo.chave_armazenamento`), que o conector ainda não alcança (sem rede de
+  saída); depende da decisão de armazenamento local (ADR 0004, em elaboração na trilha principal).
+- componente encadeado na chave composta `ref:TBTABTHM(ref:TBCONVEN>THM,THM)` (TBPACTHM, L8-03 #3).
+- tributo nativo semeado pelo produto (TBINTIMP, L8-11 #15b): é semente do modelo (trilha F2.2), não motor.
+- MFCTAREC: aguarda a medição na imagem de referência (L8-11 #13), não motor.

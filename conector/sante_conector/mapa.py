@@ -212,7 +212,9 @@ _ESPECIAIS = re.compile(r"@id|@id:[a-z][a-z0-9_]*|@estabelecimento|@unico:[a-z][
                         r"|#grupo_json:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
                         r"|#grupo_seq@[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*|#grupo_razao:[A-Z0-9_$]+@[A-Z0-9_$]+(?:,[A-Z0-9_$]+)*"
                         r"|#filhos_(?:min|max|somar|contar):[A-Z0-9_$]+\.[A-Z0-9_$]+(?:\|[A-Z0-9_$]+\.[A-Z0-9_$]+)*"
-                        r"@[A-Z0-9_$]+")
+                        r"@[A-Z0-9_$]+"
+                        # rodada 4, resíduo do motor: aritmética entre colunas da linha
+                        r"|#dif:[A-Z0-9_$]+,[A-Z0-9_$]+|#soma:[A-Z0-9_$]+(?:,[A-Z0-9_$]+)+")
 # colunas que um retrato de TODAS as colunas (`#retrato:*`) nunca leva, mesmo sem `#cofre` declarado (segredo)
 SEGREDO_NOME = re.compile(r"SENHA|PASSW|TOKEN|SECRET|SEGREDO|CHAVE_PRIVADA|PRIVATE_KEY")
 
@@ -242,7 +244,12 @@ def posicao_item(nome):
 
 def eh_item(nome):
     return bool(_ITEM.fullmatch(nome or "") or _ROTULO.fullmatch(nome or ""))
-OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes", "agrupar:", "com_falso", "destino_se:")
+OPCOES_DESTINO = ("opcional", "adotar:", "desdobrar:", "complementa", "antes", "agrupar:", "com_falso", "destino_se:",
+                  "por_pai")
+# opções de COLUNA na via (resíduo do motor da rodada 4): `exige_dominio` (fora do de-para de valores recusa a linha),
+# `senao` (concorrente que, ao preencher, apaga a pendência valor_fora_do_dominio das anteriores), `marca` (num `=~x`
+# concorrente: a pendência valor_presumido em TODA linha, mesmo quando outra declaração deu o valor)
+OPCOES_COLUNA = ("exige_dominio", "senao", "marca")
 
 
 def opcoes_destino(colunas):
@@ -254,12 +261,15 @@ def opcoes_destino(colunas):
         if not dt:
             continue
         o = saida.setdefault(dt, {"opcional": False, "adotar": [], "desdobrar": [], "complementa": False,
-                                  "antes": False, "agrupar": [], "com_falso": False, "se": None})
+                                  "antes": False, "agrupar": [], "com_falso": False, "se": None,
+                                  "por_pai": False})
         for x in (c.get("via") or "").split(";"):
             if x.startswith("destino_se:"):  # rodada 4: o destino (secundário) só grava quando a condição vale
                 o["se"] = condicao(x[11:]) or {"invalida": x[11:]}
             elif x == "opcional":
                 o["opcional"] = True
+            elif x == "por_pai":       # uma linha do destino por pai da chave alternativa repetida (resíduo r4)
+                o["por_pai"] = True
             elif x == "com_falso":     # desdobrar: o item FALSO também gera linha (ex.: herda = falso)
                 o["com_falso"] = True
             elif x.startswith("agrupar:"):  # cabeçalho de várias linhas (título das parcelas): colunas da ORIGEM
@@ -292,6 +302,10 @@ def principal_e_destinos(tabelas_destino, colunas):
                                       ordem.index(x) if x in ordem else len(ordem), pos[x]))
 
 
+def _especial_decl(nome):
+    return (nome or "")[:1] in ("=", "@", "#")
+
+
 def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
     """Coluna especial conhecida; opções de destino (opcional, adotar, desdobrar) nunca no destino principal, colunas
     de adoção existentes no DDL, `#item`/`#rotulo` só em destino desdobrado. Só nomes."""
@@ -314,6 +328,15 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                     cd = condicao(x[len(pre):])
                     if cd is None or (cd["regra"] and pre != "so_se:"):
                         erros.append("condição mal formada (%s): %s.%s" % (pre, c["tabela"], n))
+        via = (c.get("via") or "").split(";")
+        if "exige_dominio" in via and (c.get("depara") or "") != DEPARA_VALORES:
+            erros.append("exige_dominio sem depara=valores: %s.%s" % (c["tabela"], n))
+        if "por_pai" in via:
+            ps = passos_ref(referencia_declarada(c) or "")
+            if not ps or len(ps) != 1 or ps[0].get("modo") not in ("alt", "alt_composta") or ps[0].get("escolha") \
+                    or ps[0].get("coluna_destino") or _especial_decl(n):
+                erros.append("por_pai sem referência por chave alternativa (ref:T.K ou ref:T.(K1,K2)=(C1,C2)): %s.%s"
+                             % (c["tabela"], n))
         if (c.get("destino") or "").count(".") == 1:
             por_t.setdefault(c["tabela"], []).append(c)
     for t, cols in sorted(por_t.items()):
@@ -327,6 +350,9 @@ def erros_especiais_e_opcoes(colunas_decl, tabelas, ddl):
                 if alvo not in dts or not ops.get(alvo, {}).get("antes") or alvo == c["destino"].split(".")[0]:
                     erros.append("@id:%s sem destino secundário gravado antes (via antes) em %s" % (alvo, t))
         for dt, o in opcoes_destino(cols).items():
+            if o.get("por_pai") and (not dts or dt != dts[0] or o["desdobrar"] or o["agrupar"] or o["complementa"]):
+                erros.append("por_pai só no destino principal, sem desdobrar, agrupar nem complementa: %s -> %s"
+                             % (t, dt))
             if dts and dt == dts[0] and (o["opcional"] or o["antes"] or o["se"]):
                 erros.append("destino principal não pode ser opcional, antes nem destino_se: %s -> %s" % (t, dt))
             if o["desdobrar"] and o["complementa"]:

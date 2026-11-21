@@ -49,7 +49,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_valores)",
    "mudanca": "opção `senao` na via: a declaração só preenche o destino se as anteriores para a mesma coluna deram NULL (sem a pendência valor_fora_do_dominio delas); hoje a última declaração vence, mesmo NULL",
-   "motivo": "PRFREQUENCIA.tipo: NUM_DOSE 1..48 -> vezes_ao_dia; nulo -> pelo NOME (valores: AGORA, SN/SE NECESSARIO, CONTINUO, DOSE UNICA) e só o resto `~a_criterio_medico` (presumido no de-para, pedido já feito); também PRRESPOSTA rótulo COD/CONTEVOL"
+   "motivo": "PRFREQUENCIA.tipo: NUM_DOSE 1..48 -> vezes_ao_dia; nulo -> pelo NOME (valores: AGORA, SN/SE NECESSARIO, CONTINUO, DOSE UNICA) e só o resto `~a_criterio_medico` (presumido no de-para, pedido já feito); também PRRESPOSTA rótulo COD/CONTEVOL",
+   "atendido": "rodada 4, resíduo do motor (integrador): opção de coluna senao (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS_PARAMETRO) + carregador oficial TISS (F3) + colunas das tabelas TISS da origem em conector/mapa/colunas.tsv",

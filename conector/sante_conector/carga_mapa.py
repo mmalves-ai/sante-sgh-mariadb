@@ -147,6 +147,21 @@ Mecanismos da rodada 4 de cobertura (pedidos das fatias; prova em `sintetica_d/e
   `escolha_pelo_maior`/`escolha_pelo_menor`), chave composta num passo seguinte `>(C1,C2)>U`, e vários pais da chave
   alternativa que apontam para a MESMA linha do destino (parcelas do mesmo título agrupado) não são `pai_ambiguo`.
 
+Resíduo do motor da rodada 4 (pedidos que ainda bloqueavam tabelas; prova em `sintetica_d/exemplo_r4b.py`):
+- `=@data_carga` (e `=~@data_carga`) com regra declarada na linha: a regra vale para a data da carga (ex.:
+  `data_primeiro_dia_mes` = competência do mês da carga; estável no diferencial dentro do mês);
+- `#dif:A,B` (A - B) e `#soma:A,B,..`: aritmética entre colunas da linha (nulo = 0; todas nulas: NULL; texto não
+  numérico: NULL com valor_fora_do_dominio); a regra declarada vale para o RESULTADO (ex.: `piso:0`);
+- opção de coluna `exige_dominio` (com `depara=valores`): valor sem par recusa a linha (valor_fora_do_dominio) em vez
+  de cair no padrão do destino;
+- opção de coluna `senao`: concorrente que preenche o destino apaga a pendência valor_fora_do_dominio das
+  declarações anteriores da mesma coluna (o valor certo veio por outro caminho);
+- literal presumido `=~x` em coluna concorrente: a pendência valor_presumido só quando o literal é o valor gravado
+  (opção de coluna `marca`: em toda linha, para o aviso deliberado, ex. hora local sem UTC);
+- opção `por_pai` na via de uma coluna do destino PRINCIPAL com `ref:T.K` (ou `ref:T.(K1,K2)=(C1,C2)`): a chave
+  alternativa repetida (a mesma pergunta em vários modelos) grava UMA linha do destino POR PAI (item `<chave>/<dt>/<chave
+  do pai>`, conciliado como o desdobrado); pai pendente recusa a linha (`pai_pendente`), nenhum pai: `pai_inexistente`.
+
 O hash da linha cobre as colunas lidas (chave + declaradas): declarar uma coluna nova numa tabela já carregada faz as
 linhas aparecerem como alteradas (ficam para o Sincronizar), nunca regravadas em silêncio.
 """
@@ -254,6 +269,8 @@ def fontes_especial(nome):
         return [v] + cols.split(",")
     if nome.startswith("#data_hora_mais:"):
         return nome[16:].split(",")
+    if nome.startswith("#dif:") or nome.startswith("#soma:"):
+        return nome.split(":", 1)[1].split(",")
     x = fonte_especial(nome)
     return [x] if x else []
 
@@ -373,7 +390,12 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
                 col["regra"] = c.get("regra") or ""
             if c["coluna"].startswith("#data_hora_mais:"):  # a regra declarada vale para os MINUTOS
                 col["regra"] = c.get("regra") or ""
+            if c["coluna"].startswith(("#dif:", "#soma:")):  # a regra declarada vale para o RESULTADO
+                col["regra"] = c.get("regra") or ""
             via = (c.get("via") or "").split(";")
+            for o in mapa.OPCOES_COLUNA + ("por_pai",):
+                if o in via:
+                    col[o] = True
             cod = [x[4:] for x in via if x.startswith("cod:")]
             if cod:
                 col["cod"] = mapa.cod_spec(cod[0])
@@ -877,9 +899,70 @@ class CargaMapa(carga.Carga):
             if k in c["valores"]:
                 x = c["valores"][k] or None
             elif x is not None:
+                if c.get("exige_dominio"):  # o código tem sentido de estado: sem par, a linha é recusada
+                    return None, ("valor_fora_do_dominio", "media"), None
                 x = None
                 pend.append(("valor_fora_do_dominio", "media"))
         return x, None, None
+
+    def _aritmetica(self, linha, c, pend):
+        """`#dif:A,B` (A - B) e `#soma:A,B,..`: nulo vale 0; todas nulas: NULL; texto não numérico: NULL com
+        valor_fora_do_dominio. A regra declarada na linha vale para o resultado (ex.: `piso:0`)."""
+        nome = c["coluna"]
+        nums = []
+        for col in nome.split(":", 1)[1].split(","):
+            v = linha[col]
+            if isinstance(v, (bytes, bytearray)):
+                v = v.decode("cp1252", "replace")
+            if v is None or (isinstance(v, str) and not v.strip()):
+                nums.append(None)
+                continue
+            try:
+                nums.append(v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v).strip().replace(",", ".")))
+            except decimal.InvalidOperation:
+                pend.append(("valor_fora_do_dominio", "media"))
+                return None
+        if all(n is None for n in nums):
+            return None
+        nums = [n if n is not None else decimal.Decimal(0) for n in nums]
+        x = nums[0] - nums[1] if nome.startswith("#dif:") else sum(nums, decimal.Decimal(0))
+        if c.get("regra"):
+            x, pr = sentinela.aplicar(c["regra"], x)
+            if pr:
+                pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+        return x
+
+    def _por_pai(self, t, chave, linha, c, pend):
+        """`por_pai`: todos os pais da chave alternativa (repetida ou não) da linha. ([(chave do pai, [id])] na ordem
+        da chave do pai, recusa ou None). Sem valor: nenhum item (sem_item_a_gravar); valor sem pai: pai_inexistente;
+        um pai pendente recusa a linha (pai_pendente, como a referência comum)."""
+        s = c["passos"][0]
+        if s["modo"] == "alt":
+            v = linha.get(c["coluna"])
+            if v is None or (isinstance(v, (int, float, decimal.Decimal)) and v == 0) or \
+                    (isinstance(v, (str, bytes)) and not self._chave(v).strip()):
+                return [], None
+            k, va = (s["tabela"], s["arg"]), self._chave(v).strip()
+        else:
+            partes = [x[1:] if x.startswith("=") else linha[x] for x in (s.get("cols") or s["arg"])]
+            if all(x is None for x in partes):
+                return [], None
+            k, va = (s["tabela"], tuple(s["arg"])), "|".join(self._chave(x).strip() for x in partes)
+        cp = self._chave_alternativa(*k).get(va)
+        cands = self._alt_lista.get(k, {}).get(va, []) if cp is _AMBIGUO else ([cp] if cp is not None else [])
+        if not cands:
+            return None, ("pai_inexistente", "media")
+        suf = "/" + s["destino"] if s.get("destino") else ""
+        itens = []
+        for cpai in sorted(cands, key=_ord_chave):
+            x, pr, g = self._referencia_chave(t, chave, c["coluna"], s["tabela"], cpai + suf)
+            if pr == "pai_pendente":
+                return None, (pr, g)
+            if pr:
+                pend.append((pr, g))
+            if x is not None:
+                itens.append((cpai, [x]))
+        return itens, (None if itens else ("pai_inexistente", "media"))
 
     def _texto_fonte(self, c, linha):
         """Valor convertido da coluna de origem de uma especial (`#sha256`, `#codigo_derivado`), pela regra declarada
@@ -1099,6 +1182,7 @@ class CargaMapa(carga.Carga):
                 vals[dt], campos[dt] = [], []
                 continue
             modelo, algum = [], False          # [(coluna destino, valor ou marca)] na ordem declarada
+            fora, apagar, pp_itens = {}, set(), None  # `senao`: pendências fora do domínio por coluna; `por_pai`
             pos = {}                           # coluna destino -> posição no modelo (colunas concorrentes)
             marcas = {}                        # marca de item -> declaração (`cod:` no #item/#rotulo)
             for c in p["colunas"][dt]:
@@ -1110,11 +1194,21 @@ class CargaMapa(carga.Carga):
                     modelo.append((dc, _Marca(nome)))
                     marcas[nome] = c
                     continue
+                n0 = len(pend)
                 if c.get("se") and not self._cond(linha, c["se"]):
                     x = None  # condição da coluna fora: NULL sem pendência (a próxima concorrente é tentada)
                 elif nome.startswith("=~"):
                     x = nome[2:]
-                    pend.append(("valor_presumido", "baixa"))
+                    # presumida só quando é a gravada (`marca`: em toda linha, aviso deliberado da fatia)
+                    if c.get("marca") or not (dc in pos and modelo[pos[dc]][1] is not None):
+                        pend.append(("valor_presumido", "baixa"))
+                elif c.get("por_pai"):
+                    pp_itens, recusa = self._por_pai(t, chave, linha, c, pend)
+                    if recusa:
+                        return None, None, pend, recusa, []
+                    pos[dc] = len(modelo)
+                    modelo.append((dc, _Marca("#item")))
+                    continue
                 elif nome.startswith("="):
                     x = nome[1:]
                 elif nome == "@vigencia_carga":
@@ -1171,6 +1265,9 @@ class CargaMapa(carga.Carga):
                 elif nome.startswith("#dias:"):
                     x = self._em_dias(linha, c, pend)
                     algum = algum or x is not None
+                elif nome.startswith("#dif:") or nome.startswith("#soma:"):
+                    x = self._aritmetica(linha, c, pend)
+                    algum = algum or x is not None
                 elif nome.startswith("#cofre:"):
                     # segredo nunca gravado em claro: o conector não tem cofre; a linha pede a credencial no cofre
                     x = None
@@ -1194,16 +1291,28 @@ class CargaMapa(carga.Carga):
                         return None, None, pend, ("pai_inexistente", "media"), []
                 if x == "@data_carga":
                     x = self.data_carga
+                    if c.get("regra") and nome in ("=@data_carga", "=~@data_carga"):  # ex.: competência da carga
+                        x, pr = sentinela.aplicar(c["regra"], x)
+                        if pr:
+                            pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
                 if c.get("cod") and x is not None:  # id pelo código no cadastro do destino
                     x = self._resolver_cod(c["cod"], x, pend)
+                fora.setdefault(dc, []).extend(i for i in range(n0, len(pend))
+                                               if pend[i][0] == "valor_fora_do_dominio")
                 if dc in pos:  # coluna concorrente: vale a primeira com valor, na ordem declarada
                     if modelo[pos[dc]][1] is None and x is not None:
                         modelo[pos[dc]] = (dc, x)
+                        if c.get("senao"):  # o valor veio por outro caminho: a recusa de domínio anterior sai
+                            apagar.update(i for i in fora[dc] if i < n0)
                     continue
                 pos[dc] = len(modelo)
                 modelo.append((dc, x))
+            if apagar:
+                pend[:] = [x for i, x in enumerate(pend) if i not in apagar]
             itens = [("", None)]
-            if op.get("desdobrar"):
+            if pp_itens is not None:
+                itens = pp_itens
+            elif op.get("desdobrar"):
                 itens = []
                 cis = {mapa.posicao_item(c["coluna"]): c for c in p["colunas"][dt]
                        if c["coluna"].startswith("#item")}
@@ -1493,7 +1602,8 @@ class CargaMapa(carga.Carga):
 
     @staticmethod
     def _desdobrado(p, dt):
-        return bool(((p.get("opcoes") or {}).get(dt) or {}).get("desdobrar"))
+        op = (p.get("opcoes") or {}).get(dt) or {}
+        return bool(op.get("desdobrar") or op.get("por_pai"))
 
     def _secundarias_ja_carregadas(self, p, ents, chave, sit, ant):
         """Linha já carregada: principal e secundárias entram na soma da origem pelo que foi gravado. Opcional sem
@@ -1508,11 +1618,27 @@ class CargaMapa(carga.Carga):
                 for _, rot in op["desdobrar"]:
                     if base + "/" + rot in ex:
                         self._ja_carregada(ent, chave + "/" + rot, sit, ex[base + "/" + rot])
+            elif op.get("por_pai"):  # rótulos = chaves dos pais gravadas (índice montado uma vez por tabela)
+                for rot in self._itens_por_pai(t, dt).get(chave, ()):
+                    self._ja_carregada(ent, chave + "/" + rot, sit, ex[base + "/" + rot])
             elif op.get("opcional") or op.get("se"):
                 if base in ex:
                     self._ja_carregada(ent, chave, sit, ex[base])
             else:
                 self._ja_carregada(ent, chave, sit, ex.get(base) or ant)
+
+    def _itens_por_pai(self, t, dt):
+        """{chave da linha: [chave do pai]} dos itens `por_pai` já gravados (`<chave>/<dt>/<chave do pai>`)."""
+        k = (t, dt)
+        idx = self.__dict__.setdefault("_idx_por_pai", {})
+        if k not in idx:
+            m, marca = {}, "/" + dt + "/"
+            for ch in self.existente.get(t, {}):
+                j = ch.rfind(marca)
+                if j >= 0:
+                    m.setdefault(ch[:j], []).append(ch[j + len(marca):])
+            idx[k] = m
+        return idx[k]
 
     def _fase2(self):
         """Referências adiadas (autorreferência e ciclo declarado em duas fases): gravadas por UPDATE no fim."""

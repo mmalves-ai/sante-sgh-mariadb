@@ -35,7 +35,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Opção genérica de coluna 'exige_dominio' na via: valor fora do de-para de valores recusa a linha (valor_fora_do_dominio, gravidade media) em vez de cair no padrão do destino",
-   "motivo": "19: quando o código da origem tem sentido de estado (ex.: devolução de crédito), o padrão do destino em silêncio pode contradizer outra coluna; nesta fatia contornado com a situação presumida =~aplicado (MFCCCONV.DEV não vai a destino, código único C nas 2.512 linhas)"
+   "motivo": "19: quando o código da origem tem sentido de estado (ex.: devolução de crédito), o padrão do destino em silêncio pode contradizer outra coluna; nesta fatia contornado com a situação presumida =~aplicado (MFCCCONV.DEV não vai a destino, código único C nas 2.512 linhas)",
+   "atendido": "rodada 4, resíduo do motor (integrador): opção de coluna exige_dominio (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.passos_ref",
@@ -52,7 +53,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Pedido 22. Aritmética simples entre colunas da linha: especial '#dif:A,B' (A - B, nulo = 0; regra da linha depois da conta, ex. piso:0) e '#soma:A,B,...'",
-   "motivo": "parcela_pagar.saldo NOT NULL = VALOR - PAGO (a origem não guarda o saldo); também o líquido do título se o desconto e o acréscimo das parcelas forem ao cabeçalho"
+   "motivo": "parcela_pagar.saldo NOT NULL = VALOR - PAGO (a origem não guarda o saldo); também o líquido do título se o desconto e o acréscimo das parcelas forem ao cabeçalho",
+   "atendido": "rodada 4, resíduo do motor (integrador): #dif:A,B e #soma:A,B,.. (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "medição na imagem de referência (orquestrador)",
@@ -68,7 +70,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "Pedido 25. Em colunas CONCORRENTES (várias declarações para a mesma coluna do destino), a pendência própria de um literal presumido (=~x: valor_presumido) só é registrada quando o literal é o valor gravado (nenhuma declaração anterior teve valor)",
-   "motivo": "TBTPCONTA: natureza pelo de-para da descrição e sobra =~corrente; hoje toda linha leva valor_presumido mesmo quando a descrição casou, o que diz ao cliente no painel que um valor certo foi presumido"
+   "motivo": "TBTPCONTA: natureza pelo de-para da descrição e sobra =~corrente; hoje toda linha leva valor_presumido mesmo quando a descrição casou, o que diz ao cliente no painel que um valor certo foi presumido",
+   "atendido": "rodada 4, resíduo do motor (integrador): =~x em concorrente: valor_presumido só quando gravado (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/sante_conector/sintetica_d/l8_11.py (fatia L8-11)",

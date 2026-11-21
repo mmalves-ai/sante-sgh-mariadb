@@ -78,7 +78,8 @@
    "motivo": "GEVALMEM -> saldo_lote.competencia (NOT NULL, CHECK dia 1): o saldo ATUAL do lote por local sai da GEVALMEM (QTDE, QTDE_KIT) e a competência é o mês da carga. Declaração pronta e comentada (#GEVALMEM ... saldo_lote) em colunas.d/L7-07.tsv; ao aplicar, descomentar e pôr na sintética o esperado do saldo (1 linha por lote x local; a linha 4 grava o saldo do local 2 no lote adotado)",
    "prioridade": "alta (bloqueia GERASVALFINAL/GERASVALINICIAL e o saldo do lote)",
    "patch": "carga_mapa.py, depois de `if x == \"@data_carga\": x = self.data_carga`: se a coluna tem regra declarada (ex.: data_primeiro_dia_mes), aplicar sentinela.aplicar(regra, x)[0]; o resumo e o hash seguem o valor convertido (estável no diferencial dentro do mês)",
-   "ao_aplicar": "descomentar as linhas #GEVALMEM ... saldo_lote de colunas.d/L7-07.tsv; GERASVALFINAL e GERASVALINICIAL viram descarte duplicado em sem_carga.tsv (o teste test_l7_07 já cobre os dois ramos); esperado do saldo_lote na sintética"
+   "ao_aplicar": "descomentar as linhas #GEVALMEM ... saldo_lote de colunas.d/L7-07.tsv; GERASVALFINAL e GERASVALINICIAL viram descarte duplicado em sem_carga.tsv (o teste test_l7_07 já cobre os dois ramos); esperado do saldo_lote na sintética",
+   "atendido": "rodada 4, resíduo do motor (integrador): regra declarada sobre =@data_carga (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py",

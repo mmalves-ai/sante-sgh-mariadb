@@ -100,7 +100,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "opção de resposta replicada por campo: uma linha da origem gera uma linha do destino para cada pai da chave alternativa repetida (ex.: ref:PRPADEVOL.ID_PRPERGUNTA com a pergunta em vários modelos)",
-   "motivo": "PRRESPOSTA (BLOQUEADA, rodada 3 revisão): 559 perguntas em mais de um modelo, 1.539 de 3.849 opções recusadas por pai_ambiguo (medido, só contagem); a perda passaria às respostas do paciente (PREVOLPAC). Declaração pronta e comentada em colunas.d/L6-11.tsv"
+   "motivo": "PRRESPOSTA (BLOQUEADA, rodada 3 revisão): 559 perguntas em mais de um modelo, 1.539 de 3.849 opções recusadas por pai_ambiguo (medido, só contagem); a perda passaria às respostas do paciente (PREVOLPAC). Declaração pronta e comentada em colunas.d/L6-11.tsv",
+   "atendido": "rodada 4, resíduo do motor (integrador): opção por_pai (uma linha do destino por pai da chave alternativa) (exemplo_r4b, test_carga_mapa_r4b)"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-12.tsv (fatia L6-12) — alternativa ao M3 sem motor novo",

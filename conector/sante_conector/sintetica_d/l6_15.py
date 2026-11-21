@@ -414,23 +414,24 @@ def linhas(r, ins):
                                                       "restricao_destino_1048": 2, "hora_sem_data": 2,
                                                       "data_sentinela": 1, "valor_presumido": 10}},
         "TBACOMODLEITO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "valor_fora_do_dominio": 1}},
-        # =~livre: valor_presumido em cada linha lida (concorrente avaliado mesmo quando a sigla tem par)
+        # =~livre: valor_presumido só onde a sigla não deu a situação (resíduo r4: presumida concorrente só quando gravada)
         "RILEITOS": {"gravados": 5, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 1,
                                                    "restricao_destino_1062": 1, "valor_fora_do_dominio": 1,
-                                                   "valor_presumido": 7}},
+                                                   "valor_presumido": 2}},
         # complementa: o código repetido (pai_ambiguo na chave alternativa) recusa a linha como pai_inexistente
         "TBLEITO": {"gravados": 1, "pendencias": {"pai_inexistente": 2}},
         "HTLEITO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1}},
         # 5 gravadas: 7005 (alta médica sem motivo) e 7007 (médico pelo CPF) deixaram de ser recusadas; caráter 'Z' e
-        # regime 0 sem par (valor_fora_do_dominio); modalidade e eletiva presumidas em cada linha (2 x 9)
+        # regime 0 sem par (valor_fora_do_dominio); modalidade presumida em cada linha (9) e eletiva só onde o
+        # caráter não deu o valor (2; resíduo r4: a presumida concorrente só pende quando é a gravada)
         "RICADINT": {"gravados": 5, "pendencias": {"catalogo_codigo_inexistente": 1, "pai_inexistente": 4,
                                                    "restricao_destino_1048": 3, "restricao_destino_1062": 1,
-                                                   "valor_fora_do_dominio": 2, "valor_presumido": 18}},
+                                                   "valor_fora_do_dominio": 2, "valor_presumido": 11}},
         # 2 gravadas (8001 internada, 8003 médico pelo CPF); pai_inexistente: internação correspondente ausente
         # (internacao_id e situação: 2 x 3 linhas), leito reservado de chave parcial (3) e o prontuário nunca visto;
-        # valor_presumido: solicitado_em, eletiva e nao_compareceu em cada linha (3 x 4)
+        # valor_presumido: solicitado_em e nao_compareceu em cada linha (2 x 4); eletiva só quando gravada (resíduo r4: 0)
         "RIPREINT": {"gravados": 2, "pendencias": {"hora_invalida": 1, "pai_inexistente": 10,
-                                                   "restricao_destino_1048": 2, "valor_presumido": 12}},
+                                                   "restricao_destino_1048": 2, "valor_presumido": 8}},
         "RIALTA_EXCLUSAO": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "pai_pendente": 1,
                                                           "restricao_destino_1048": 1}},
         "RIEXCINT": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}},
