@@ -29,3 +29,6 @@ TBDIETAS	TPDIETA	modalidade_dieta.classe	láctea	lactea	L6-18: nome do tipo de d
 TBDIETAS	TPDIETA	modalidade_dieta.classe	JEJUM	jejum	L6-18: nome do tipo de dieta (genérico do domínio, não do cliente) -> jejum
 TBDIETAS	TPDIETA	modalidade_dieta.classe	Jejum	jejum	L6-18: nome do tipo de dieta (genérico do domínio, não do cliente) -> jejum
 TBDIETAS	TPDIETA	modalidade_dieta.classe	jejum	jejum	L6-18: nome do tipo de dieta (genérico do domínio, não do cliente) -> jejum
+GDPRONTMOVIM	EXCLUIDO	movimento_prontuario.excluido_em	1	@data_carga	L6-18 r3: excluído na origem (sem data): excluído na data da carga
+GDPRONTMOVIM	EXCLUIDO	movimento_prontuario.excluido_em	0		L6-18 r3: não excluído
+GDPRONTMOVIM	EXCLUIDO	movimento_prontuario.excluido_em			L6-18 r3: vazio: não excluído

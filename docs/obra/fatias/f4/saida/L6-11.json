@@ -3,32 +3,35 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (passos_ref) + verificar_mapa.py",
    "mudanca": "M1 (PRIORITÁRIO): referência a DESTINO SECUNDÁRIO do pai: via 'ref:<TABELA>/<tabela_destino>' resolve pelo conector_origem da entidade secundária (chave '<chave>/<tabela_destino>'), também no fim de uma referência encadeada",
-   "motivo": "destrava PRITEM_GEITENS, PRPADEVOL, PRFORMULCOMP (e PRRESPOSTA, PRPERGUNTA da L6-10), o item prescritível de PRKITMED e a unidade de prescrição de L6-10/L6-11/L6-13 (medido: só 7 de 53 códigos casam pela sigla; 0 de 13 no kit de cuidado, 238 de 877 nos itens de kit)"
+   "motivo": "destrava PRITEM_GEITENS, PRPADEVOL, PRFORMULCOMP (e PRRESPOSTA, PRPERGUNTA da L6-10), o item prescritível de PRKITMED e a unidade de prescrição de L6-10/L6-11/L6-13 (medido: só 7 de 53 códigos casam pela sigla; 0 de 13 no kit de cuidado, 238 de 877 nos itens de kit)",
+   "atendido": "rodada 2: ref:T/<destino>; usado em PRPADEVOL, PRFORMULCOMP"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-07.tsv (fatia L7-07)",
    "mudanca": "GEITENS grava também item_prescritivel (destino já listado no mapa: insumo_id = @id, código, descrição e tipo de item) e parametro_clinico_item",
-   "motivo": "nenhuma tabela grava item_prescritivel; sem ele PRITEM_GEITENS não carrega e os kits ficam só com o insumo"
+   "motivo": "nenhuma tabela grava item_prescritivel; sem ele PRITEM_GEITENS não carrega e os kits ficam só com o insumo",
+   "atendido": "contornado na L6-11 (rodada 3): PRITEM_GEITENS cria o item prescritível com antes;adotar:insumo_id; a L7-07 pode gravá-lo também (adotado)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (ou gerador do mapa)",
    "mudanca": "numeração da versão atual do modelo migrado depois das versões históricas (maior VERSAO de HTCABECFORMULCOMP do modelo + 1, ou 1 sem histórico); o destino secundário modelo_documento_versao já vai pela via em PREVOLUCAO (declaração comentada pronta)",
-   "motivo": "uq_modelo_documento_versao_numero: a versão 1 fixa colidiria com o histórico da L6-13; PRPADEVOL e PRFORMULCOMP entram nessa versão"
+   "motivo": "uq_modelo_documento_versao_numero: a versão 1 fixa colidiria com o histórico da L6-13; PRPADEVOL e PRFORMULCOMP entram nessa versão; enquanto isso a versão atual migrada usa o número reservado 1000 (=1000)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
    "mudanca": "M2: catálogo oficial de princípio ativo (DCB) no de-para: 'dcb' -> principio_ativo pelo código DCB (mesmo pedido da L6-12 e da L7-07)",
-   "motivo": "PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC -> principio_ativo_id por ref:TBPRINC>COD_DCB (declaração comentada pronta em colunas.d/L6-11.tsv); bloqueia as duas"
+   "motivo": "PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC -> principio_ativo_id por ref:TBPRINC>COD_DCB (declaração comentada pronta em colunas.d/L6-11.tsv); bloqueia as duas",
+   "atendido": "contornado na L6-11 (rodada 3): cod:principio_ativo.codigo_dcb após ref:TBPRINC>COD_DCB; falta só o carregador oficial DCB"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "M3: referência ao PRIMEIRO/ÚLTIMO FILHO: via 'ref:<FILHO>^<COL_FK>:primeiro|ultimo>COL[>T...]' (linha filha que aponta para esta, na ordem da chave do filho; terminada em coluna dá o valor, em tabela dá o id); sem filho: pai_inexistente",
-   "motivo": "PRASSINATURA_CAB (1.326.015): autor, datas e situação do documento do prontuário estão nos eventos de assinatura (PRASSINATURA_DOC); declaração completa comentada em colunas.d/L6-11.tsv (decisão registrada)"
+   "motivo": "PRASSINATURA_CAB (BLOQUEADA, rodada 3 revisão): 51.039 de 1.325.865 cabeçalhos com evento têm mais de um evento (medido, só contagem) e dariam pai_ambiguo em colunas NOT NULL; 150 sem evento. Declaração pronta e comentada em colunas.d/L6-11.tsv"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py (erros_especiais_e_opcoes) + carga_mapa.py",
    "mudanca": "M5: permitir 'adotar:<colunas>' no destino PRINCIPAL (linha que já existe com o mesmo código é adotada)",
-   "motivo": "TBKITPRO: agrupar os itens de um cuidado num só kit_cuidado_enfermagem (hoje um kit por linha da origem)"
+   "motivo": "TBKITPRO (BLOQUEADA, rodada 3 revisão): um kit_cuidado_enfermagem por cuidado (13 linhas em 3 cuidados na referência); declaração pronta e comentada na forma M5 em colunas.d/L6-11.tsv"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -43,7 +46,7 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ armazenamento de arquivos)",
    "mudanca": "M4: coluna especial '#arquivo:<COLUNA>' para BLOB binário (grava no armazenamento do produto e põe o id em arquivo_id)",
-   "motivo": "PRPAREVOLIMG (deixa de ser descarte: declaração comentada pronta) e PRASSINATURA_CAB.DOCUMENTO_CONSOLIDADO (documento assinado, guarda legal)"
+   "motivo": "PRPAREVOLIMG (BLOQUEADA regra_faltante, não descarte: imagem do modelo é dado clínico) e PRASSINATURA_CAB.DOCUMENTO_CONSOLIDADO"
   },
   {
    "arquivo": "tools/obra (relatório de implantação)",
@@ -53,7 +56,8 @@
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-07.tsv (fatia L7-07) — alternativa à decisão da unidade",
    "mudanca": "TBUNICON com o destino unidade_prescricao (código, sigla, descrição), adotando pelo código a que já existe",
-   "motivo": "a unidade de prescrição hoje casa pela sigla de integração de TBUNIDADEMEDIDA (ref:TBUNIDADEMEDIDA.SIGLA_API); medir a correspondência na imagem real antes da virada"
+   "motivo": "a unidade de prescrição hoje casa pela sigla de integração de TBUNIDADEMEDIDA (ref:TBUNIDADEMEDIDA.SIGLA_API); medir a correspondência na imagem real antes da virada",
+   "atendido": "contornado na L6-11 (rodada 3 revisão): cada consumidora cria unidade_prescricao antes e adota pelo código da origem (TBUNICON); a L7-07 pode gravá-la também (mesmo código, adotada)"
   },
   {
    "arquivo": "modelo (db/migracoes/06_PEP) — trilha F2.2, mantidos da rodada anterior",
@@ -78,12 +82,48 @@
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh + tools/obra/cobertura_conector.py",
    "mudanca": "a autoconferência roda 'cobertura_conector.py --fatia <F>' e mostra BLOQUEADA; a causa 'destino_decidido' não vale quando o texto da decisão diz 'bloquead' ou 'espera M'; causas que dependem de mecanismo inexistente (catalogo_oficial_faltante, declaracao_comentada com [bloqueia]) saem de COM_MECANISMO",
-   "motivo": "achado da revisão da L6-11: a conferência devolvia ok com 6 tabelas bloqueadas e o relatório dizia 'sem mecanismo: 0'"
+   "motivo": "achado da revisão da L6-11: a conferência devolvia ok com 6 tabelas bloqueadas e o relatório dizia 'sem mecanismo: 0'",
+   "atendido": "rodada 2: a autoconferência acusa cada tabela BLOQUEADA"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-13.tsv (fatia L6-13)",
    "mudanca": "trocar ref:TBUNIDADEMEDIDA.SIMBOLO por ref:TBUNIDADEMEDIDA.SIGLA_API em PRITENSGLICEMIA, PRPRESCSOL e PRITENSESQ (a decisão da própria L6-13 já revoga o símbolo)",
    "motivo": "medido na referência: 0 de 53 códigos de unidade casam com SIMBOLO (7 com SIGLA_API); a declaração ainda usa o símbolo"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência ao destino secundário (ref:T/<destino>) cujo pai foi RECUSADO deve dar pai_pendente (raiz da cadeia), não pai_inexistente",
+   "motivo": "L6-11 rodada 3: campo e leiaute de modelo recusado ficam com pai_inexistente porque a versão (secundário) nunca foi gravada; perde-se a raiz da cadeia na pendência"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "opção de resposta replicada por campo: uma linha da origem gera uma linha do destino para cada pai da chave alternativa repetida (ex.: ref:PRPADEVOL.ID_PRPERGUNTA com a pergunta em vários modelos)",
+   "motivo": "PRRESPOSTA (BLOQUEADA, rodada 3 revisão): 559 perguntas em mais de um modelo, 1.539 de 3.849 opções recusadas por pai_ambiguo (medido, só contagem); a perda passaria às respostas do paciente (PREVOLPAC). Declaração pronta e comentada em colunas.d/L6-11.tsv"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-12.tsv (fatia L6-12) — alternativa ao M3 sem motor novo",
+   "mudanca": "PRASSINATURA_DOC grava documento_prontuario como destino SECUNDÁRIO 'antes;agrupar:ID_PRASSINATURA_CAB' (o primeiro evento na ordem da chave cria o documento com autor, momento clínico, lançamento e situação; paciente, atendimento, tipo e título pelo cabeçalho com ref:PRASSINATURA_CAB>...); o evento liga por @id:documento_prontuario; PRASSINATURA_CAB passa a complementar o conteúdo",
+   "motivo": "destrava PRASSINATURA_CAB (BLOQUEADA) sem código novo; os 150 cabeçalhos sem evento continuam pendentes"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (principal_e_destinos) ou gerador do mapa",
+   "mudanca": "deixar a fatia escolher o destino principal (ex.: opção 'principal' na via) quando a ordem de tabelas_destino não serve; alternativa ao M5",
+   "motivo": "TBKITPRO: com kit_cuidado_enfermagem_item como principal, o kit sai como secundário 'antes;agrupar:PROCTO' (mecanismo já existente); hoje o verificador recusa porque o kit é o 1.º destino do mapa"
+  },
+  {
+   "arquivo": "colunas.d/L6-10.tsv, L6-12.tsv, L6-13.tsv e L7-07.tsv (fatias irmãs)",
+   "mudanca": "unidade de prescrição pelo código da origem (TBUNICON), como a L6-11: secundário unidade_prescricao 'antes;adotar:codigo' (código e sigla = código da origem, descrição ref:TBUNICON>NOME, unidade_medida_id ref:TBUNICON) e @id:unidade_prescricao; abandonar ref:TBUNIDADEMEDIDA.SIGLA_API",
+   "motivo": "medido na referência (só contagem): 100% dos códigos usados existem em TBUNICON (282/282, 877/877, 169/169, 29/29, 13/13) e nenhum colide com o código numérico das unidades de TBUNIDADEMEDIDA; a sigla de integração casava em 7 de 53"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/sem_carga.tsv (linha de PRPERGUNTA, fatia L6-10) + testes/test_l6_10.py",
+   "mudanca": "PRPERGUNTA pode voltar a descarte 'duplicado': a ligação PRPADEVOL (L6-11) lê agora da pergunta DESCRICAO, TIPOPERG (tipo do campo e destino estruturado, de-para de valores), UNIDPERG (unidade_resposta adotada pela sigla ou criada), CONTEVOL (valor padrão), MANTERHIST (reuso_horas) e ATIVO (excluido_em); estender a guarda test_pergunta_duplicada_so_se_a_ligacao_a_le (a L6-11 tem a sua: test_pergunta_lida_pela_ligacao)",
+   "motivo": "achado da revisão da L6-11; ficam fora só ALTURA/LARGURA_COMPONENTE (leiaute, já no PRFORMULCOMP), COD_PERGUNTA, COLUNA e ID_TBUNIDADEMEDIDA (unidade de prescrição, sem coluna no campo)"
+  },
+  {
+   "arquivo": "tools/obra/conferir-fatia-f4.sh ou sintetica_d/l7_07.py / l7_05.py (orquestrador)",
+   "mudanca": "a conferência da L6-11 (REQUER L7-07) cai em 'tabela TBCENCUS sem as colunas do mapa: NOME, SIGLA, SITUACAO, COD_APURASUS, UNIMEN': a imagem da L7-07 cria TBCENCUS só com (COD, ID) e a declaração da L7-05 lê mais colunas",
+   "motivo": "conciliação da L6-11 sem prova na árvore atual por causa de fatia alheia; tipo_entrada_estoque foi resolvido no PREPARO_DESTINO da L6-11 (INSERT IGNORE, mesma forma da L7-07)"
   }
  ]
 }

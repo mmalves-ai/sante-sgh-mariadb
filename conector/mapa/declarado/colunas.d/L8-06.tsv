@@ -16,8 +16,8 @@ TBTISSWEBSERV	@vigencia_carga	credencial_fonte_pagadora.vigencia_inicio				L8-06
 FCFAIPAC	ID_FCCTAEXT	conta_hospitalar_periodo.conta_hospitalar_id				L8-06: conta externa (FCCTAEXT, mesma fatia); pai nunca visto: NULL com pai_inexistente e NOT NULL recusa
 FCFAIPAC	TIPO_LAN	conta_hospitalar_periodo.tipo_lancamento_id			ref:TBTPLANC	L8-06: tipo de lançamento do período (parte da chave da origem; TBTPLANC, L8-04, chave ID): o período parcial vale só para esse tipo (nulo no destino = todos os tipos, que a origem nunca quis dizer); nunca visto: NULL com pai_inexistente
 FCFAIPAC	#seq:ID_FCCTAEXT	conta_hospitalar_periodo.sequencia				L8-06: 1..n por conta na ordem da chave (tipo de lançamento, SEQ): SEQ sozinho repete entre tipos e colidiria no UNIQUE (conta, sequencia)
-FCFAIPAC	DATAI	conta_hospitalar_periodo.inicio_em	data_hora			L8-06: início do período (HORAI em HHMM fica fora até o especial data + hora; pedido no L8-06.json)
-FCFAIPAC	DATAF	conta_hospitalar_periodo.fim_em	data_hora			L8-06: fim do período; sem fim a linha é recusada (NOT NULL) e fim antes do início pelo CHECK, visíveis
+FCFAIPAC	#data_hora:DATAI,HORAI	conta_hospitalar_periodo.inicio_em				L8-06: início do período: data + hora HHMM (rodada 3; antes a hora se perdia)
+FCFAIPAC	#data_hora:DATAF,HORAF	conta_hospitalar_periodo.fim_em				L8-06: fim do período (data + hora HHMM); sem fim a linha é recusada (NOT NULL) e fim antes do início pelo CHECK, visíveis
 FCFAIPAC	DATAI	conta_hospitalar_periodo.competencia	data_primeiro_dia_mes			L8-06: competência do período = mês do início: a origem não guarda a competência do período (OLD_ANOPRO/OLD_MESPRO/OLD_CONTAS/OLD_CONTA são a chave antiga da conta, substituída por ID_FCCTAEXT; decisão em F4-decisoes-destino.md)
 FCIRREGULARID	@estabelecimento	pendencia_conta.estabelecimento_id				L8-06: o único estabelecimento do cliente (vários: estabelecimento_indefinido)
 FCIRREGULARID	ID_FCCTAEXT	pendencia_conta.conta_hospitalar_id				L8-06: conta externa
@@ -68,7 +68,167 @@ HTPROCTO	ID_TBPROCTO	trilha_auditoria.entidade_id				L8-06: item faturável do p
 HTPROCTO	#retrato	trilha_auditoria.dados_antes				L8-06: retrato JSON da versão anterior (nome antigo)
 FCCTAEXT_FCTISSLOTEPROT	ID_FCTISSLOTEPROT	lote_tiss_conta.lote_tiss_id				L8-06: lote TISS (FCTISSLOTEPROT, mesma fatia)
 FCCTAEXT_FCTISSLOTEPROT	ID_FCCTAEXT	lote_tiss_conta.conta_hospitalar_id				L8-06: conta externa
-#--- bloqueadas por falta de regra do motor (pedidos em saida/L8-06.json); declaração pronta, comentada
+RICONTAS	@estabelecimento	conta_hospitalar.estabelecimento_id				L8-06: o único estabelecimento do cliente (vários: estabelecimento_indefinido)
+RICONTAS	#codigo_derivado:COD:20:i	conta_hospitalar.numero				L8-06: número da conta de internação = COD com prefixo 'i' (a conta externa usa 'e' + ID: não colidem no UNIQUE por estabelecimento); repetido: restrição do destino, visível
+RICONTAS	REG	conta_hospitalar.atendimento_id			ref:RICADINT>ID_ATCABECATEND>ATCABECATEND	L8-06: atendimento da internação (REG = registro da internação, RICADINT L6-15; cabeçalho do atendimento no L3)
+RICONTAS	REG	conta_hospitalar.paciente_id			ref:RICADINT>PRONT>RICADPAC.PRONT	L8-06: paciente pelo prontuário da internação (RICADPAC pela chave alternativa PRONT, como a própria RICADINT)
+RICONTAS	CONV	conta_hospitalar.fonte_pagadora_id			ref:TBCONVEN	L8-06: fonte pagadora da conta; vazia: a da internação (coluna concorrente abaixo)
+RICONTAS	REG	conta_hospitalar.fonte_pagadora_id			ref:RICADINT>CONV>TBCONVEN	L8-06: fonte pagadora da internação quando a conta não tem a sua (concorrente: vale a primeira com valor)
+RICONTAS	@id:tipo_conta	conta_hospitalar.tipo_conta_id				L8-06: tipo de conta 'internacao' do catálogo do produto, criado uma vez e adotado depois (destino secundário antes; F4-decisoes-destino.md)
+RICONTAS	=internacao	tipo_conta.codigo			tipo_conta;antes;adotar:codigo	L8-06: catálogo do produto sem origem no mapa: a carga cria o tipo 'internacao' ou ADOTA o que o cliente já tem (adotado_existente), nunca duplica
+RICONTAS	=Internação	tipo_conta.descricao			tipo_conta	L8-06: descrição do tipo criado pela carga (o cliente renomeia no painel)
+RICONTAS	=internacao	tipo_conta.natureza			tipo_conta	L8-06: natureza do tipo de conta (CHECK do produto)
+RICONTAS	=internacao	conta_hospitalar.natureza				L8-06: a tabela da origem só guarda contas de internação (RI*: registro de internação); certa, não presumida
+RICONTAS	#data:ANOPRO,MESPRO	conta_hospitalar.competencia				L8-06: competência = ano e mês de processamento (1º dia do mês); inválida: NULL e NOT NULL recusa, visível
+RICONTAS	#data_hora:DATAINI,HORAINI	conta_hospitalar.inicio_em				L8-06: início do período da conta (data + hora HHMM em texto)
+RICONTAS	DATA	conta_hospitalar.inicio_em	data			L8-06: sem início do período: a data da conta (concorrente; data em DATETIME à meia-noite pelo tipar)
+RICONTAS	#data_hora:DATAFIN,HORAFIN	conta_hospitalar.fim_em				L8-06: fim do período da conta; fim antes do início: CHECK recusa, visível
+FCDIAINT	COD	conta_hospitalar_segurado.conta_hospitalar_id			ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD)	L8-06: conta de internação pela competência e o código da conta (chave alternativa composta de RICONTAS; repetida: pai_ambiguo)
+FCDIAINT	#seq:COD	conta_hospitalar_segurado.sequencia				L8-06: 1 por conta (a chave da origem é a própria conta)
+FCDIAINT	ANOPRO	conta_hospitalar_segurado.numero_carteira	texto		ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD)>MATRIC	L8-06: carteira/matrícula do segurado na conta (RICONTAS.MATRIC, encadeada terminada em coluna); sem matrícula: NOT NULL recusa, visível
+FCDIAINT	VAL_CAR	conta_hospitalar_segurado.validade_carteira	data			L8-06: validade da carteira
+FCDIAINT	CARGO	conta_hospitalar_segurado.cargo	texto			L8-06: cargo do servidor
+FCDIAINT	PADRAO	conta_hospitalar_segurado.padrao_funcional	inteiro			L8-06: padrão funcional (número gravado como texto)
+FCDIAINT	CLASSE	conta_hospitalar_segurado.classe_funcional	texto			L8-06: classe funcional
+FCDIAINT	UND_ADM	conta_hospitalar_segurado.unidade_administrativa	texto			L8-06: unidade administrativa do órgão
+FCDIAINT	AFINIDADE	conta_hospitalar_segurado.parentesco_titular	texto			L8-06: parentesco com o titular
+FCDIAINT	N_ORDEM	conta_hospitalar_segurado.numero_ordem	texto			L8-06: ordem do dependente no cadastro do órgão
+FCDIAINT	MESPRO	conta_hospitalar.id	chave_origem		ref:RICONTAS.(ANOPRO,MESPRO,COD)=(ANOPRO,MESPRO,COD);conta_hospitalar;complementa	L8-06: o diagnóstico do formulário do órgão completa a conta de internação (UPDATE da observação; a conta da origem não tem observação própria)
+FCDIAINT	DIAG	conta_hospitalar.observacao	texto_longo		conta_hospitalar	L8-06: diagnóstico informado ao órgão, sem mexer no texto
+RICGUIAS	@estabelecimento	guia_fonte_pagadora.estabelecimento_id				L8-06: o único estabelecimento do cliente
+RICGUIAS	GUIA	guia_fonte_pagadora.numero	texto			L8-06: número da guia (a origem não tem outra numeração); vazio: NOT NULL recusa; repetido: UNIQUE recusa, visível
+RICGUIAS	GUIA	guia_fonte_pagadora.numero_guia_operadora	texto			L8-06: o mesmo número é o da fonte pagadora
+RICGUIAS	=internacao	guia_fonte_pagadora.tipo_guia				L8-06: guias da internação (RI*); certa, não presumida
+RICGUIAS	REG	guia_fonte_pagadora.paciente_id			ref:RICADINT>PRONT>RICADPAC.PRONT	L8-06: paciente da internação
+RICGUIAS	REG	guia_fonte_pagadora.atendimento_id			ref:RICADINT>ID_ATCABECATEND>ATCABECATEND	L8-06: atendimento da internação
+RICGUIAS	CONTA	guia_fonte_pagadora.conta_hospitalar_id			ref:RICONTAS.(REG,CONTA)=(REG,CONTA)	L8-06: conta de internação pelas colunas REG e CONTA lidas na origem (chave alternativa composta: CONTA é DOUBLE e a chave montada pelo texto convertido não casa); sem conta: NULL
+RICGUIAS	CONV	guia_fonte_pagadora.fonte_pagadora_id			ref:TBCONVEN	L8-06: fonte pagadora da guia; vazia: a da internação (concorrente)
+RICGUIAS	REG	guia_fonte_pagadora.fonte_pagadora_id			ref:RICADINT>CONV>TBCONVEN	L8-06: fonte pagadora da internação (concorrente)
+RICGUIAS	DATASOLICIT	guia_fonte_pagadora.data_solicitacao	data			L8-06: data da solicitação; vazia: a do cadastro da guia e depois o início do período (concorrentes)
+RICGUIAS	CADASTRO	guia_fonte_pagadora.data_solicitacao	data			L8-06: cadastro da guia (concorrente)
+RICGUIAS	DATAINI	guia_fonte_pagadora.data_solicitacao	data			L8-06: início do período da guia (concorrente); nenhuma das três: NOT NULL recusa, visível
+RICGUIAS	DATAFIN	guia_fonte_pagadora.data_validade	data			L8-06: fim do período autorizado = validade da autorização
+RICGUIAS	SENHA	guia_fonte_pagadora.senha	texto			L8-06: senha de autorização dada pela fonte pagadora (dado da guia, não segredo de acesso)
+RICGUIAS	DIARIAS_SOLICIT	guia_fonte_pagadora.dias_solicitados	inteiro_nao_negativo			L8-06: diárias solicitadas
+RICGUIAS	DIARIAS_AUTOR	guia_fonte_pagadora.dias_autorizados	inteiro_nao_negativo			L8-06: diárias autorizadas
+RICGUIAS	DATAENTREGA	guia_fonte_pagadora.data_envio_fonte_pagadora	data			L8-06: entrega da guia à fonte pagadora
+RICGUIAS	ID_TBCBOPRO_SOLICITANTE	guia_fonte_pagadora.solicitante_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-06: profissional solicitante pela inscrição no conselho
+RICGUIAS	INDICACAO_CLINICA	guia_fonte_pagadora.indicacao_clinica	texto_longo			L8-06: indicação clínica, sem mexer no texto
+RICGUIAS	OBS	guia_fonte_pagadora.observacao	texto_longo			L8-06: observação
+FCTISSLOTEPROT	@estabelecimento	lote_tiss.estabelecimento_id				L8-06: o único estabelecimento do cliente
+FCTISSLOTEPROT	ID_TBCONVEN	lote_tiss.fonte_pagadora_id	chave_origem			L8-06: fonte pagadora do lote (TBCONVEN, L5)
+FCTISSLOTEPROT	NUM_LOTE	lote_tiss.numero_lote	texto			L8-06: número do lote; repetido na fonte: UNIQUE recusa, visível
+FCTISSLOTEPROT	SEQUENCIAL_LOTE	lote_tiss.sequencial	texto			L8-06: sequencial da transação no cabeçalho da mensagem
+FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	inteiro	valores		L8-06: tipo de guia pelo id do tipo (pares com evidência, os mesmos da numeração de guias TBSEGUIA: 1 consulta, 2 SP/SADT, 3 resumo de internação, 4 honorário individual); sem par: valor_fora_do_dominio e NOT NULL recusa, visível
+FCTISSLOTEPROT	ID_TBCONVEN	lote_tiss.versao_padrao_tiss_id	inteiro_zeros_esquerda:6	versao_tiss	ref:TBTISS>VERSAO_TISS	L8-06: versão do padrão TISS PRESUMIDA: a origem não guarda a versão por lote nem por transação (TBTISSSCHEMA só tem nome e tipo, L8-17); vem da versão configurada HOJE para a fonte pagadora (TBTISS por fonte, VERSAO_TISS; de-para oficial versao_tiss pelo código MMmmpp), e o lote antigo, gerado sob outra versão, recebe a atual. Falta a pendência valor_presumido por linha (opção 'presumido' na via) e a versão pela data do lote (vigência do catálogo oficial): pedidos 14 e 19 do saida/L8-06.json; confirmar por agregado na carga real (F4-decisoes-destino.md)
+FCTISSLOTEPROT	DATA_HORA_LOTE	lote_tiss.gerado_em	data_hora			L8-06: geração do lote; vazia: NOT NULL recusa, visível
+FCTISSLOTEPROT	NUM_PROTOCOLO	lote_tiss.numero_protocolo	texto			L8-06: protocolo devolvido pela fonte pagadora (o lote guarda o número; o recebimento não tem data na origem: F4-decisoes-destino.md)
+FCTISSLOTEPROT	NUM_DEMONSTRATIVO_RECURSO_GLOSA	lote_tiss.numero_demonstrativo_recurso	texto			L8-06: demonstrativo do recurso de glosa do lote
+TBHISTTABDTH	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
+TBHISTTABDTH	=diaria_taxa	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de diaria taxa
+TBHISTTABDTH	ID_TBCTRDTH	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRDTH	L8-06: tabela de preço vigente no período (TBCTRDTH, L8-03)
+TBHISTTABDTH	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
+TBHISTTABDTH	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
+TBHISTTABDTH	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
+TBHISTTABDTH	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABDTH	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
+TBHISTTABDTH	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
+TBHISTTABDTH	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte
+TBHISTTABDTH	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
+TBHISTTABMM	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
+TBHISTTABMM	=matmed	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de matmed
+TBHISTTABMM	ID_TBCTRMEM	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRMEM	L8-06: tabela de preço vigente no período (TBCTRMEM, L8-03)
+TBHISTTABMM	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
+TBHISTTABMM	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
+TBHISTTABMM	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
+TBHISTTABMM	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABMM	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
+TBHISTTABMM	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
+TBHISTTABMM	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte
+TBHISTTABMM	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
+TBHISTTABTHME	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
+TBHISTTABTHME	=honorario_ambulatorial	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de honorario ambulatorial
+TBHISTTABTHME	ID_TBCTRTHM_ATEND_EXT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03)
+TBHISTTABTHME	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
+TBHISTTABTHME	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
+TBHISTTABTHME	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
+TBHISTTABTHME	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABTHME	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
+TBHISTTABTHME	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
+TBHISTTABTHME	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte
+TBHISTTABTHME	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
+TBHISTTABTHMI	@id:contrato_fonte_pagadora	contrato_tabela_vigencia.contrato_fonte_pagadora_id				L8-06: acordo migrado da fonte pagadora (um por fonte, criado pela primeira vigência e adotado pelas outras; F4-decisoes-destino.md)
+TBHISTTABTHMI	=honorario_internacao	contrato_tabela_vigencia.tipo_item				L8-06: a tabela da origem é a vigência da tabela de honorario internacao
+TBHISTTABTHMI	ID_TBCTRTHM_ATEND_INT	contrato_tabela_vigencia.tabela_preco_id	chave_origem		ref:TBCTRTHM	L8-06: tabela de preço vigente no período (TBCTRTHM, L8-03)
+TBHISTTABTHMI	PERIODO_INICIAL	contrato_tabela_vigencia.vigencia_inicio	data			L8-06: início da vigência
+TBHISTTABTHMI	PERIODO_FINAL	contrato_tabela_vigencia.vigencia_fim	data			L8-06: fim da vigência; antes do início: CHECK recusa, visível
+TBHISTTABTHMI	@estabelecimento	contrato_fonte_pagadora.estabelecimento_id			contrato_fonte_pagadora;antes;adotar:estabelecimento_id,numero	L8-06: acordo da fonte pagadora: criado uma vez e ADOTADO pelas vigências seguintes, de qualquer das quatro tabelas (adotado_existente)
+TBHISTTABTHMI	ID_TBCONVEN	contrato_fonte_pagadora.fonte_pagadora_id	chave_origem		contrato_fonte_pagadora	L8-06: fonte pagadora do acordo
+TBHISTTABTHMI	#codigo_derivado:ID_TBCONVEN:30:acordo_	contrato_fonte_pagadora.numero			contrato_fonte_pagadora	L8-06: número do acordo migrado = 'acordo_' + código da fonte (um por fonte)
+TBHISTTABTHMI	=Acordo migrado do sistema anterior	contrato_fonte_pagadora.descricao			contrato_fonte_pagadora	L8-06: rótulo verdadeiro; o cliente renomeia
+TBHISTTABTHMI	PERIODO_INICIAL	contrato_fonte_pagadora.vigencia_inicio	data		contrato_fonte_pagadora	L8-06: início do acordo = início da primeira vigência lida da fonte
+TBHISTTABTHMI	=~vigente	contrato_fonte_pagadora.situacao			contrato_fonte_pagadora	L8-06: PRESUMIDO (valor_presumido): a origem não tem o acordo; em rascunho as tabelas não valeriam na conta
+FCLANEXT	ID_FCCTAEXT	conta_hospitalar_item.conta_hospitalar_id	chave_origem			L8-06: conta externa (FCCTAEXT, L8-05)
+FCLANEXT	#seq:ID_FCCTAEXT	conta_hospitalar_item.sequencia				L8-06: 1..n por conta na ordem da chave (UNIQUE conta, sequencia)
+FCLANEXT	ID_TBPROCTO	conta_hospitalar_item.item_faturavel_id	chave_origem		ref:TBPROCTO	L8-06: item faturável do procedimento (TBPROCTO vira item_faturavel, L8-03); concorrentes: vale a primeira com valor
+FCLANEXT	ID_TBTABDTH	conta_hospitalar_item.item_faturavel_id	chave_origem		ref:TBTABDTH/item_faturavel	L8-06: item faturável da diária ou taxa (destino secundário item_faturavel de TBTABDTH, L8-05; pedido)
+FCLANEXT	TIPO	conta_hospitalar_item.tipo_lancamento_id			ref:TBTPLANC	L8-06: tipo de lançamento (TBTPLANC, L8-04), como FCFAIPAC e TBREPGER
+FCLANEXT	#data_hora:DATA,HORA	conta_hospitalar_item.realizado_em				L8-06: realização (data + hora HHMM em texto); sem data: NOT NULL recusa, visível
+FCLANEXT	#data_hora:DATA,HORA_FINAL,HORA	conta_hospitalar_item.realizado_fim_em				L8-06: fim da realização; antes do início passa para o dia seguinte (virada_de_dia)
+FCLANEXT	QTDE	conta_hospitalar_item.quantidade	decimal			L8-06: quantidade; zero ou negativa: CHECK recusa, visível
+FCLANEXT	UNIT_C	conta_hospitalar_item.valor_unitario	decimal			L8-06: valor unitário cobrado (4 casas)
+FCLANEXT	PERC	conta_hospitalar_item.percentual_cobranca	decimal			L8-06: percentual de cobrança (múltiplos, via de acesso); nulo: padrão 100
+FCLANEXT	VLR_CH	conta_hospitalar_item.valor_honorario	decimal			L8-06: valor do honorário
+FCLANEXT	VLR_COP	conta_hospitalar_item.valor_custo_operacional	decimal			L8-06: custo operacional
+FCLANEXT	VLR_FILME	conta_hospitalar_item.valor_filme	decimal			L8-06: valor do filme
+FCLANEXT	CH	conta_hospitalar_item.quantidade_ch	decimal			L8-06: quantidade de coeficientes de honorário
+FCLANEXT	VLR_DESC	conta_hospitalar_item.valor_desconto	decimal			L8-06: desconto
+FCLANEXT	VALOR_C	conta_hospitalar_item.valor_total	decimal			L8-06: valor total cobrado do item; vazio: NOT NULL recusa, visível
+FCLANEXT	VLR_PG	conta_hospitalar_item.valor_pago	decimal			L8-06: valor pago pela fonte pagadora
+FCLANEXT	PACOTE	conta_hospitalar_item.pertence_pacote	booleano_sn			L8-06: S/N
+FCLANEXT	ID_TBCBOPRO_TITULAR	conta_hospitalar_item.executante_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-06: executante pela inscrição no conselho
+FCLANEXT	ID_TBCBOPRO_SOLICITANTE	conta_hospitalar_item.solicitante_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-06: solicitante pela inscrição no conselho
+FCLANEXT	CDC	conta_hospitalar_item.centro_custo_id			ref:TBCENCUS	L8-06: centro de custo; 0 = nenhum
+FCLANEXT	OBS	conta_hospitalar_item.observacao	texto_resumo:2000			L8-06: observação (BLOB de texto; acima de 2000 caracteres é resumida com pendência)
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	booleano_sn	valores		L8-06: item glosado pela fonte pagadora (S/N em qualquer caixa): verdadeiro 'glosado', falso ou nulo 'lancado' (pares em valores.d/L8-06.tsv); glosado sem motivo resolvido: o CHECK da glosa (motivo obrigatório) recusa o item, visível (F4-decisoes-destino.md)
+FCLANEXT	MOTGLO	conta_hospitalar_item.motivo_glosa_id	inteiro_zero_nulo		cod:motivo_glosa.codigo_tuss	L8-06: motivo da glosa pelo código da terminologia oficial de motivos de glosa (TBMOTGLO é de-para do catálogo oficial motivo_glosa, catalogos.tsv; o conector nunca grava o catálogo); 0 = sem glosa; código ausente: codigo_inexistente_destino, NULL
+FCLANEXT	NOTA	conta_hospitalar_item.documento_fiscal	inteiro_zero_nulo			L8-06: número da nota fiscal do material cobrado pelo preço de compra; 0 = nenhuma
+FCLANEXT	TECNICA	conta_hospitalar_item.tecnica_termo_terminologia_id	texto	tiss:48		L8-06: técnica utilizada (terminologia TISS 48, como REPROEXT, que complementa depois); código ausente: catalogo_codigo_inexistente, NULL
+FCLANEXT	COD_AUTORIZ	conta_hospitalar_item.autorizado	preenchido			L8-06: item com código de autorização da fonte pagadora = autorizado (o código vai no retrato da trilha do recurso e, como coluna, no pedido de modelo 20)
+FCLANEXT	USUARIO	conta_hospitalar_item.criado_por			ref:TBUSERS	L8-06: quem lançou o item, pelo login (L3); desconhecido: pai_inexistente e o item entra sem autor
+FCLANEXT	DT_RE	trilha_auditoria.ocorrido_em	data		opcional;trilha_auditoria	L8-06: recurso de glosa do item como trilha do item (só quando há recurso: MOTREA, N_PROCES, DT_RE ou DT_RP; opcional): data do recurso; o item da glosa (glosa_item) exige o cabeçalho glosa por conta (pedido 17)
+FCLANEXT	DT_RP	trilha_auditoria.ocorrido_em	data		trilha_auditoria	L8-06: sem data do recurso: data do recebimento do recurso (concorrente)
+FCLANEXT	=@data_carga	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-06: sem nenhuma das duas (recurso só com motivo ou processo): data da carga (concorrente; a data da origem fica no retrato)
+FCLANEXT	=operacao	trilha_auditoria.acao			trilha_auditoria	L8-06: recurso e recebimento da glosa do item
+FCLANEXT	=conta_hospitalar_item	trilha_auditoria.entidade			trilha_auditoria	L8-06: entidade: o item da conta
+FCLANEXT	@id	trilha_auditoria.entidade_id			trilha_auditoria	L8-06: o item gravado (principal)
+FCLANEXT	MOTREA	trilha_auditoria.motivo	inteiro_zero_nulo		trilha_auditoria	L8-06: motivo da reapresentação (recurso); 0 = nenhum
+FCLANEXT	N_PROCES	trilha_auditoria.correlacao	texto		trilha_auditoria	L8-06: número do processo do recurso (junta os eventos do mesmo recurso)
+FCLANEXT	#retrato:GLOSADO,MOTGLO,MOTREA,VLR_PG,QTD_PG,DT_PG,VLR_RE,QTD_RE,DT_RE,VLR_RP,QTD_RP,DT_RP,N_PROCES,COD_AUTORIZ,NFS,COBRADO,GLOSA_PLS,DATA_FATURADO,SEQUENCIAL_ITEM_FATURADO	trilha_auditoria.dados_depois			trilha_auditoria	L8-06: retrato JSON do resultado financeiro do item (glosa, pagamento, recurso e recebimento com valores, quantidades e datas, autorização, nota de serviço e faturamento): nada do recurso se perde até glosa_item carregar
+REPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento da recepção repete; sem item: pai_inexistente, visível
+REPROEXT	LOTE	conta_hospitalar_item.numero_lote	texto			L8-06: lote do imunobiológico aplicado (rastreabilidade)
+REPROEXT	TECNICA	conta_hospitalar_item.tecnica_termo_terminologia_id	inteiro	tiss:48		L8-06: técnica utilizada (terminologia TISS 48); código ausente: catalogo_codigo_inexistente, NULL
+RIPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento da internação repete
+RIPROEXT	TECNICA	conta_hospitalar_item.tecnica_termo_terminologia_id	inteiro	tiss:48		L8-06: técnica utilizada (terminologia TISS 48)
+FCINTEGRPA	@estabelecimento	producao_repasse.estabelecimento_id				L8-06: o único estabelecimento do cliente
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.conta_hospitalar_item_id	chave_origem			L8-06: item da conta enviado ao repasse (FCLANEXT, mesma fatia)
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.conta_hospitalar_id			ref:FCLANEXT>ID_FCCTAEXT>FCCTAEXT	L8-06: conta do item (encadeada pelo lançamento)
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.funcao_equipe_cobranca_id			ref:FCLANEXT>ATO>TBGRAUPARTPROC	L8-06: função da equipe = ato do lançamento (grau de participação, TBGRAUPARTPROC, a mesma leitura do ATO da regra de repasse; F4-decisoes-destino.md); ato não carregado: NOT NULL recusa, visível
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.quantidade	decimal		ref:FCLANEXT>QTDE	L8-06: quantidade do item (encadeada terminada em coluna)
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.valor_base	decimal		ref:FCLANEXT>VALOR_C	L8-06: valor faturado do item = base do repasse
+FCINTEGRPA	ID_FCLANEXT	producao_repasse.profissional_id			ref:FCLANEXT>ID_TBCBOPRO_TITULAR>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-06: beneficiário = executante do item; sem executante: CHECK do beneficiário recusa, visível
+FCINTEGRPA	VALOR	producao_repasse.valor_repasse	decimal_nao_negativo			L8-06: valor integrado ao repasse
+FCINTEGRPA	PERCENTUAL	producao_repasse.percentual	decimal_nao_negativo			L8-06: percentual aplicado
+FCINTEGRPA	DATA_HORA_INTEGRACAO	producao_repasse.integrado_em	data_hora			L8-06: envio ao repasse; vazio: NOT NULL recusa, visível
+FCLANAUD	@estabelecimento	trilha_auditoria.estabelecimento_id			trilha_auditoria	L8-06: histórico da auditoria item a item como trilha da auditoria da conta (retrato completo; F4-decisoes-destino.md)
+FCLANAUD	DATA_GRA	trilha_auditoria.ocorrido_em	data		trilha_auditoria	L8-06: data da gravação da auditoria; vazia: a realização do item (concorrente)
+FCLANAUD	#data_hora:DATA,HORA	trilha_auditoria.ocorrido_em			trilha_auditoria	L8-06: realização do item auditado (concorrente)
+FCLANAUD	=alteracao	trilha_auditoria.acao			trilha_auditoria	L8-06: cada linha é o item como estava antes da auditoria
+FCLANAUD	=auditoria_conta	trilha_auditoria.entidade			trilha_auditoria	L8-06: entidade: a auditoria da conta
+FCLANAUD	CONTA	trilha_auditoria.entidade_id			ref:FCCTAAUD(ANOPRO,MESPRO,TIPO_CTA,CONTA);trilha_auditoria	L8-06: auditoria da conta (FCCTAAUD, L8-05, chave composta desta linha); não carregada: NULL com pai_inexistente
+FCLANAUD	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS;trilha_auditoria	L8-06: usuário que registrou (TBUSERS pelo login)
+FCLANAUD	#retrato:*	trilha_auditoria.dados_antes			trilha_auditoria	L8-06: retrato JSON de todas as colunas do item auditado (valores, quantidades, glosa, motivos): nada se perde
+#--- FCCTAEXT e FCCTAAUD são da fatia L8-05 (índice): declaração de referência, comentada
 #FCCTAEXT	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_conta sem alimentadora, NOT NULL); o resto pronto abaixo
 #FCCTAEXT	@estabelecimento	conta_hospitalar.estabelecimento_id				L8-06
 #FCCTAEXT	#codigo_derivado:ID:20:e	conta_hospitalar.numero				L8-06: número = chave da origem com prefixo (não colide com a internação)
@@ -82,18 +242,14 @@ FCCTAEXT_FCTISSLOTEPROT	ID_FCCTAEXT	lote_tiss_conta.conta_hospitalar_id				L8-06
 #FCCTAEXT	SENHA	conta_hospitalar.senha_autorizacao	texto			L8-06
 #FCCTAEXT	DATA_FEC	conta_hospitalar.fechada_em	data_hora			L8-06
 #FCCTAEXT	OBS	conta_hospitalar.observacao	texto_longo			L8-06
-#RICONTAS	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_conta, NOT NULL). Pronto: atendimento pela internação (RICADINT, coluna ID_ATCABECATEND, até ATCABECATEND), paciente pela internação (PRONT até RICADPAC), natureza internação, competência pelo ano e mês, número derivado de COD com prefixo
 #FCCTAAUD	-					L8-06: falta regra do motor: id por código no catálogo do produto (tipo_auditoria, NOT NULL) e conta pelos campos de negócio (ANOPRO, MESPRO, TIPO_CTA, COD: colunas que não são a chave do pai); a conta (FCCTAEXT) também espera
-#FCLANAUD	-					L8-06: falta regra do motor: item da conta pelos campos de negócio (tipo, data, hora, procedimento, local, ato: colunas que não são a chave do pai); auditoria (FCCTAAUD) também espera
-#FCLANEXT	-					L8-06: falta regra do motor: item_faturavel sem alimentadora principal (TBTABTHM/TBTABDTH o têm como secundário: referência ao destino secundário) e glosa_item exige o cabeçalho da glosa; a conta (FCCTAEXT) também espera
-#FCINTEGRPA	-					L8-06: falta regra do motor: função da equipe (NOT NULL) sem coluna; item (FCLANEXT) também espera
-#FCTISSLOTEPROT	-					L8-06: falta regra do motor: versão do padrão TISS (NOT NULL) sem coluna nem cadeia na origem; tipo de guia só pelo id do catálogo
-#TBHISTTABDTH	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =diaria_taxa, períodos prontos
-#TBHISTTABMM	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =matmed, períodos prontos
-#TBHISTTABTHME	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =honorario_ambulatorial, períodos prontos
-#TBHISTTABTHMI	-					L8-06: falta regra do motor: acordo da fonte pagadora sem alimentadora (destino secundário de TBCONVEN + referência ao destino secundário); tabela por ref, tipo =honorario_internacao, períodos prontos
-#REPROEXT	-					L8-06: carrega como complemento do item da conta (FCLANEXT), que espera regra do motor (pedido 3); a declaração pronta segue; linha sem ID_FCLANEXT recusa com pai_inexistente (visível)
-#REPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento da recepção repete; o resto do item já vem de FCLANEXT
-#REPROEXT	LOTE	conta_hospitalar_item.numero_lote	texto			L8-06: lote do imunobiológico aplicado (rastreabilidade); validade (VALVACINA), CID10, GUIACOMPL e TECNICA sem coluna no item: pedido de modelo no L8-06.json
-#RIPROEXT	-					L8-06: carrega como complemento do item da conta (FCLANEXT, pedido 3); APAC e DTAPAC sem coluna no item: pedido de modelo no L8-06.json
-#RIPROEXT	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: o item da conta que este procedimento repete
+#--- FCLANEXTSEQITEM: BLOQUEADA por pedido de modelo (pedido 20 do saida/L8-06.json): declaração pronta, comentada
+#FCLANEXTSEQITEM	ID_FCLANEXT	conta_hospitalar_item.id	chave_origem		ref:FCLANEXT;complementa	L8-06: COMPLEMENTA o item da conta (FCLANEXT); item recusado: pai_pendente; nunca visto: pai_inexistente
+#FCLANEXTSEQITEM	SEQUENCIAL_ITEM	conta_hospitalar_item.sequencial_item_guia	inteiro			L8-06: sequencial do item na guia TISS enviada (o sequencialItem do demonstrativo de análise e do recurso de glosa); a coluna é o pedido 20
+#--- TBHISTBR: BLOQUEADA até o filtro de linha por licença (pedido 2 do saida/L8-03.json, o mesmo de TBMATMED e TBREFUNI): declaração pronta, comentada
+#TBHISTBR	DATA	trilha_auditoria.ocorrido_em	data			L8-06: histórico do vínculo do item de mat/med do hospital ao código de referência: data da troca
+#TBHISTBR	=alteracao	trilha_auditoria.acao				L8-06: cada linha é uma troca do vínculo
+#TBHISTBR	=item_referencia_matmed	trilha_auditoria.entidade				L8-06: entidade: o item de mat/med (principal de TBMATMED, L8-03)
+#TBHISTBR	ID_TBMATMED	trilha_auditoria.entidade_id			ref:TBMATMED;so_se:TBMATMED>ID_TBCTRMEM>TBCTRMEM>REF_BRA=N|licenca:brasindice	L8-06: item do hospital; a linha de item de tabela de referência comercial só entra com a licença do cliente (sem ela: pulada com licenca_nao_comprovada)
+#TBHISTBR	USUARIO	trilha_auditoria.usuario_id			ref:TBUSERS	L8-06: quem trocou o vínculo, pelo login
+#TBHISTBR	#retrato:*	trilha_auditoria.dados_depois				L8-06: retrato da linha (tabela, código, tipo de referência e código de referência, sem preço)

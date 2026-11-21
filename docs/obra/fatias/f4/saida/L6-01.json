@@ -3,37 +3,67 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_converter) + mapa.py (opções da via)",
    "mudanca": "Opção de coluna 'exige_pai' (ou 'obrigatoria') na via de uma referência: quando a origem TEM valor e o pai nunca foi visto (pai_inexistente), a linha é RECUSADA em vez de gravar NULL, mesmo com a coluna do destino aceitando NULL; origem sem valor continua NULL",
-   "motivo": "PRIORITÁRIO: em regra_impressao_ficha o critério (fonte pagadora, especialidade, unidade) aceita NULL porque NULL quer dizer 'todas'. Hoje RECONFIC com convênio inexistente grava a regra com critério NULL e pai_inexistente: a regra restrita vira regra geral (na sintética, RECONFIC (1,9) gravada). As dependências RECONFIC->TBCONVEN e REESPFIC->TBESPEC já foram declaradas e o mapa regenerado (o pai carrega antes); falta só a recusa. Depois, declarar 'exige_pai' em RECONFIC.CONV, REESPFIC.ESP e REUNIFIC.UNID e esperar recusa"
+   "motivo": "PRIORITÁRIO: em regra_impressao_ficha o critério (fonte pagadora, especialidade, unidade) aceita NULL porque NULL quer dizer 'todas'. Hoje RECONFIC com convênio inexistente grava a regra com critério NULL e pai_inexistente: a regra restrita vira regra geral (na sintética, RECONFIC (1,9) gravada). As dependências RECONFIC->TBCONVEN e REESPFIC->TBESPEC já foram declaradas e o mapa regenerado (o pai carrega antes); falta só a recusa. Depois, declarar 'exige_pai' em RECONFIC.CONV, REESPFIC.ESP e REUNIFIC.UNID e esperar recusa",
+   "atendido": true,
+   "solucao": "retirado na rodada 3 (correção L6-01): a regra com critério sem pai na origem entra INATIVA (ativo pela encadeada ref:<pai>>COD com preenchido, concorrente =0); o critério fica NULL com pai_inexistente, sem virar regra geral"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
    "mudanca": "Coluna especial '#chave[:n[:prefixo]]': texto da chave da origem (colunas da chave unidas por '-'), com o mesmo resumo estável de '#codigo_derivado' quando não couber. Ao trocar a declaração de REMODFIC COD -> '#chave' em modelo_ficha_impressa.codigo, a tabela tem de ser reprocessada: as colunas da chave já estão no hash da linha, então a linha recusada antes (1062) continuaria 'igual' e nunca seria regravada (sugestão: a assinatura da declaração entra no hash, ou um comando de reprocessar a tabela)",
-   "motivo": "REMODFIC tem chave (COD,GRAFICA): o mesmo número nas variantes comum e de formulário pré-impresso colide em uq_modelo_ficha_impressa_codigo (restricao_destino_1062, pendência visível hoje). Com '#chave' as duas variantes entram"
+   "motivo": "PRIORITÁRIO (perda real): REMODFIC tem chave (COD,GRAFICA): o mesmo número nas variantes comum e de formulário pré-impresso colide em uq_modelo_ficha_impressa_codigo (restricao_destino_1062, pendência visível hoje). Com '#chave' as duas variantes entram; enquanto isso, a variante recusada e as regras de impressão dela (pai_pendente) não entram"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar/canon)",
    "mudanca": "Regra faltante: valor DATE da origem gravado em coluna DATETIME do destino tem de virar datetime à meia-noite antes da soma de controle; hoje a origem soma '2026-04-02' e o destino relido '2026-04-02 00:00:00.000' e a conciliação diverge. Junto, a regra genérica de data + hora HHMM texto em duas colunas -> DATETIME (já pedida por outras fatias)",
-   "motivo": "REEXCATE (520 linhas na referência) -> trilha_auditoria.ocorrido_em (DATETIME NOT NULL): a origem tem DTCANCEL (DATE) + HRCANCEL (VARCHAR HHMM). Também FCRECIBO (L8-09)"
+   "motivo": "REEXCATE (520 linhas na referência) -> trilha_auditoria.ocorrido_em (DATETIME NOT NULL): a origem tem DTCANCEL (DATE) + HRCANCEL (VARCHAR HHMM). Também FCRECIBO (L8-09)",
+   "atendido": true,
+   "solucao": "rodada 3 grupo 1: #data_hora:DTCANCEL,HRCANCEL (REEXCATE carrega)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (#retrato)",
    "mudanca": "Regra/forma '#retrato:*' (ou opção) que lê TODAS as colunas da tabela da origem para o retrato JSON, não só as colunas declaradas com destino",
-   "motivo": "REEXCATE -> trilha_auditoria.dados_antes: o retrato do atendimento excluído (prontuário, nome, médico, convênio, unidade, anamnese, motivo) tem de ir inteiro; essas colunas não têm coluna própria"
+   "motivo": "REEXCATE -> trilha_auditoria.dados_antes: o retrato do atendimento excluído (prontuário, nome, médico, convênio, unidade, anamnese, motivo) tem de ir inteiro; essas colunas não têm coluna própria",
+   "atendido": true,
+   "solucao": "rodada 3 grupo 2: #retrato:* (REEXCATE carrega)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.erros_especiais_e_opcoes",
    "mudanca": "Destino PRINCIPAL desdobrado (desdobrar no único destino da tabela: chave do conector_origem '<chave>/<rótulo>' e conciliação por item); e opção de gravar também o item falso (hoje falso ou vazio não gera linha): em regra_heranca_campo o 'N' é herda=falso e a ausência de linha cai no padrão do produto (herdar)",
-   "motivo": "REPARATE (1 linha, 23 marcações S/N) -> regra_heranca_campo uma linha por campo; declaração pronta comentada em colunas.d/L6-01.tsv (#REPARATE), bloqueada em sem_carga.tsv (regra_faltante)"
+   "motivo": "REPARATE (1 linha, 23 marcações S/N) -> regra_heranca_campo uma linha por campo; declaração pronta comentada em colunas.d/L6-01.tsv (#REPARATE), bloqueada em sem_carga.tsv (regra_faltante)",
+   "atendido": true,
+   "solucao": "rodada 3 grupo 2: desdobrar no principal com com_falso (REPARATE carrega)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (complementa)",
    "mudanca": "Complemento que não diverge a conciliação do pai: colunas gravadas por 'complementa' saem da soma do destino principal (ou opção 'quando_houver' que prefere o valor do complemento a um valor já declarado no pai)",
-   "motivo": "RETITFIC (título impresso do modelo) complementa modelo_ficha_impressa.titulo, já declarado por REMODFIC.NOME; sem a regra a conciliação de REMODFIC diverge quando o título difere do nome. Declaração pronta comentada (#RETITFIC), bloqueada em sem_carga.tsv (regra_faltante)"
+   "motivo": "RETITFIC (título impresso do modelo) complementa modelo_ficha_impressa.titulo, já declarado por REMODFIC.NOME; sem a regra a conciliação de REMODFIC diverge quando o título difere do nome. Declaração pronta comentada (#RETITFIC), bloqueada em sem_carga.tsv (regra_faltante)",
+   "atendido": true,
+   "solucao": "retirado na rodada 3 (L6-01): RETITFIC passou a descarte duplicado; o título entra pela carga do modelo com a encadeada ref:RETITFIC(COD,GRAFICA)>NOME concorrente com NOME"
   },
   {
    "arquivo": "db/migracoes/04_REC/01_tabelas.sql (trilha F2.2: proposta de modelo)",
    "mudanca": "regra_impressao_ficha.clinica_assistencial_id (FK clinica_assistencial), para a restrição do modelo a algumas clínicas; depois, desdobrar REMODFIC.CLINICA (lista separada por vírgula) em uma regra por clínica",
    "motivo": "o modelo restrito a clínicas, quando ativado, passaria a valer para todas; hoje o modelo migrado entra inativo e o cliente restringe ao ativar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (colunas concorrentes)",
+   "mudanca": "Coluna concorrente cuja referência encadeada terminada em coluna não acha o pai (pai_inexistente) não deixa pendência quando outra concorrente da mesma coluna do destino tem valor (ou opção 'se_houver' na via que silencia a ausência do pai)",
+   "motivo": "Não bloqueia. REMODFIC.titulo: o título impresso (ref:RETITFIC(COD,GRAFICA)>NOME) vem antes do nome; modelo sem título impresso é normal e hoje deixa pai_inexistente (média) na sintética: 4 de 8 modelos; na referência, 1 de 6"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (hash da linha)",
+   "mudanca": "Valores lidos na origem por referência encadeada terminada em coluna entram no hash da linha (ou a tabela consultada vira dependência de diferencial): mudança só na tabela consultada regrava a linha que a usa",
+   "motivo": "Não bloqueia. Título impresso alterado em RETITFIC sem mudança em REMODFIC: a linha do modelo seria pulada como igual e a conciliação acusaria a diferença; vale para toda encadeada terminada em coluna (PRCADRESP, SDCFOP). Para REMODFIC/RETITFIC resolvido na fatia (RETITFIC complementa o modelo com diferencial próprio); continua valendo para PRCADRESP, SDCFOP e TBPROCEDPADRAO (nome da lista fixa alterado só é relido quando a procedência muda)"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Tabela declarada que CARREGA, mas citada por pedido não atendido marcado 'PRIORITÁRIO (perda real)' na saída da fatia, conta como PARCIAL (ou BLOQUEADA com a causa do pedido), não como CARREGA",
+   "motivo": "REMODFIC carrega, mas a variante de formulário pré-impresso com o mesmo número é recusada (1062) até o motor ter '#chave'; a cobertura não deve esconder a perda. Comentar a declaração para forçar BLOQUEADA tiraria TODOS os modelos da carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py + sintetica.py",
+   "mudanca": "Opção da fatia SO_LEITURA = [tabelas]: tabelas criadas na imagem sintética só para as encadeadas lerem (fora de `presentes`, não planejadas nem conciliadas)",
+   "motivo": "Não bloqueia. Provar na sintética o caminho ATIVO da regra de impressão (pai na origem: ref:TBCONVEN>COD, ref:TBESPEC>COD, ref:TBUNIDAD>COD); hoje os pais só podem ser PAIS_EXTERNOS e toda regra por critério entra inativa na conferência"
   }
  ]
 }

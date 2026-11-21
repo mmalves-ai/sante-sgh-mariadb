@@ -43,8 +43,7 @@ class FatiaL512(unittest.TestCase):
                          ("ID", "fundo_garantia", "imposto_renda"))
         self.assertEqual((trib["codigo"]["coluna"], trib["codigo"]["regra"]), ("ID", "texto"))
         aut = {c["destino"]: c for c in pl["FPTPEVENTOAUT_TBEMPHOS"]["colunas"]["lancamento_automatico_rubrica"]}
-        self.assertEqual(aut["evento_gatilho"]["coluna"], "ID_FPTPEVENTOAUT")
-        self.assertEqual(set(aut["evento_gatilho"]["valores"].values()), {"outro"})
+        self.assertEqual(aut["evento_gatilho"]["coluna"], "=~outro")  # presumido e visível até o pedido 8
         rub = {c["destino"]: c for c in pl["FPEVENTO"]["colunas"]["rubrica"]}
         resp = {c["destino"]: c for c in pl["FPRESP"]["colunas"]["responsavel_legal_empregador"]}
         self.assertEqual((rub["ativo"]["regra"], resp["ativo"]["regra"]), ("booleano_ai", "booleano_ai"))
@@ -70,9 +69,7 @@ class FatiaL512(unittest.TestCase):
     def test_aguarda_motor_ou_modelo_fica_declarado_com_motivo(self):
         """Coluna NOT NULL que aguarda o motor ou o modelo: fora do plano, com o motivo e o pedido (recusa 1364)."""
         p = {x["tabela"]: x for x in carga_mapa.planejar(self.m, set(FATIA))}
-        faltam = {"FPEVENTO": ("rubrica", "natureza_rubrica_id"), "FPLOTTRIBCAD": ("lotacao_tributaria", "fpas_id"),
-                  "FPTPEVENTOAUT_TBEMPHOS": ("lancamento_automatico_rubrica", "rubrica_id"),
-                  "FPREMESSA": ("competencia_folha", "aberta_em")}
+        faltam = {"FPTPEVENTOAUT_TBEMPHOS": ("lancamento_automatico_rubrica", "rubrica_id")}
         for t in l5_12.INCIDENCIAS:
             faltam[t] = ("incidencia_rubrica", "codigo_incidencia_rubrica_id")
         for t, (dt, dc) in faltam.items():
@@ -84,6 +81,27 @@ class FatiaL512(unittest.TestCase):
         comp = {c["destino"]: c for c in p["FPREMESSA"]["colunas"]["competencia_folha"]}
         self.assertEqual(comp["situacao"]["valores"], {"S": "fechada", "N": "aberta"})
         self.assertEqual(comp["tipo_folha_id"]["referencia"], "FPTP_FOLHA")
+
+    def test_catalogo_oficial_pelo_codigo_no_destino(self):
+        """Natureza da rubrica e FPAS pelo código no catálogo oficial do destino (cod:, só leitura; regra 7); abertura e
+        fechamento da competência pelas datas da apuração (tipar)."""
+        p = {x["tabela"]: x for x in carga_mapa.planejar(self.m, set(FATIA))}
+        rub = {c["destino"]: c for c in p["FPEVENTO"]["colunas"]["rubrica"]}
+        self.assertEqual((rub["natureza_rubrica_id"]["coluna"], rub["natureza_rubrica_id"]["regra"],
+                          rub["natureza_rubrica_id"]["cod"]),
+                         ("ID_FPNATRUBRICA", "texto", ("natureza_rubrica", "codigo_esocial")))
+        lot = {c["destino"]: c for c in p["FPLOTTRIBCAD"]["colunas"]["lotacao_tributaria"]}
+        self.assertEqual((lot["fpas_id"]["regra"], lot["fpas_id"]["cod"]),
+                         ("inteiro_zeros_esquerda:3", ("fpas", "codigo_fpas")))
+        self.assertEqual(sentinela.aplicar("inteiro_zeros_esquerda:3", 515), ("515", None))
+        self.assertEqual(sentinela.aplicar("inteiro_zeros_esquerda:3", 0)[0], None)
+        comp = {c["destino"]: c for c in p["FPREMESSA"]["colunas"]["competencia_folha"]}
+        self.assertEqual((comp["aberta_em"]["coluna"], comp["fechada_em"]["coluna"]), ("DTA_INI_APUR", "DTA_FIN_APUR"))
+        inc = {t: {c["destino"]: c for c in p[t]["colunas"]["incidencia_rubrica"]} for t in l5_12.INCIDENCIAS}
+        self.assertEqual(inc["FPRUBRICAFGTS_FPEVENTO"]["tributo_folha_id"]["coluna"], "=fundo_garantia")
+        self.assertEqual(inc["FPRUBRICAIRRF_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "tipo"))
+        self.assertEqual(inc["FPRUBRICAINSS_FPEVENTO"]["tributo_folha_id"]["cod"], ("tributo_folha", "codigo"))
+        self.assertNotIn("tributo_folha_id", inc["FPRUBRICASIND_FPEVENTO"])  # sindical: tributo criado (pedido 15)
 
     def test_regras_de_valor(self):
         self.assertEqual(sentinela.aplicar("flutuante", 1904.98)[0], decimal.Decimal("1904.98"))
@@ -111,8 +129,6 @@ class FatiaL512(unittest.TestCase):
                 self.assertEqual(len(v), len(cols))
         for t, e in ((t, e) for t, e in esp.items() if t != "TBEMPHOS"):  # lidas = gravadas + recusadas (recusa: restrição do destino ou pai pendente)
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith("restricao_destino_") or k == "pai_pendente")
-            if t == "FPREMESSA":  # a mesma linha pode ter 1364 e outra pendência; todas recusadas
-                recusas = e["pendencias"]["restricao_destino_1364"]
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]))
         self.assertEqual(len(l5_12.COLUNAS["FPEVENTO"]), 113)
 

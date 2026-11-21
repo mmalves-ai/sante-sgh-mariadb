@@ -1,14 +1,16 @@
 """Fatia L6-10 (prontuário, assinatura e assistência, módulo PEP): tabelas de domínio da origem, dados 100% falsos.
 
-Carregadas (20): tipos de encaminhamento, de alergia, de interação, de parto e de recém-nascido (os dois últimos
+Carregadas (21): tipos de encaminhamento, de alergia, de interação, de parto e de recém-nascido (os dois últimos
 INATIVOS até a revisão do campo de segurança presumido); autoridades, periodicidades e modalidades de notificação;
 ações do alerta de alergia (presumido o mais restritivo) e a gravidade de cada uma (complemento da ação, pelo NOME da
 gravidade lido na origem); alergenos; formas de validar interação; bloco de internação da grade de horário (complemento
 da grade); variáveis do cálculo de dose; unidades de medida (dois destinos: unidade de prescrição e de resultado);
 variáveis de escala clínica e as respostas pontuadas (opções e faixas); unidades por tipo de validação de dose e por
-tipo de item da prescrição. Descarte (1): o parâmetro único do sumário de alta (sem_valor). Bloqueadas (3): o banco
-global de perguntas e as opções de resposta (dependem de PRPADEVOL, bloqueada na L6-11) e as regras de situação da
-prescrição (o modelo não tem 'qualquer origem'); entram na imagem para provar que não geram carga.
+tipo de item da prescrição (as duas últimas com carga PARCIAL: a unidade casa pela sigla de integração). O bloco
+da grade grava uma CÓPIA da grade por bloco (dois blocos na mesma grade: duas cópias, nenhuma sobrescrita).
+Bloqueadas (2): o banco global de perguntas (o campo do modelo, PRPADEVOL da L6-11, ainda não lê tipo, unidade,
+texto padrão e situação da pergunta) e o parâmetro do sumário de alta (desdobrar em 4 componentes pede referência no
+item); entram na imagem para provar que não geram carga. As opções de resposta (PRRESPOSTA) passaram à L6-11.
 REQUER a L6-08: a gravidade (TBCBARASEVERIDADE) é lida na origem pela referência encadeada, e a categoria do
 tipo de alergia (TBCLASSIFALERGIA) vem carregada dela; tipo de alergia e alergeno dividem cadastro com a L6-08
 (códigos com prefixo de domínio).
@@ -56,8 +58,6 @@ CREATE TABLE PRPERGUNTA (ID INTEGER NOT NULL PRIMARY KEY, COD_PERGUNTA INTEGER N
 CREATE TABLE PRPARAMSUMARIOALTA (ID SMALLINT NOT NULL PRIMARY KEY, ID_PRTPATEND SMALLINT NOT NULL,
   ID_PROPCAOPERIODO_PROC SMALLINT NOT NULL, ID_PROPCAOPERIODO_EXA SMALLINT NOT NULL, ID_PRPERGUNTA_EVOL_CLIN INTEGER,
   ID_PRPERGUNTA_PLANO INTEGER);
-CREATE TABLE PRRESPOSTA (ID_RESPOSTA INTEGER NOT NULL PRIMARY KEY, ID_PRPERGUNTA INTEGER NOT NULL, COD INTEGER,
-  CONTEVOL BLOB SUB_TYPE 1, ATIVO CHAR(1), ORDEM SMALLINT NOT NULL);
 CREATE TABLE TBUNIDMEDIDA_PRINC_VALID (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBPRINC_VALIDACAO SMALLINT NOT NULL,
   ID_TBUNIDADEMEDIDA INTEGER NOT NULL);
 CREATE TABLE PRUNITPLAN (TPLAN VARCHAR(2) NOT NULL, UNI_PRESC VARCHAR(7) NOT NULL, PRIMARY KEY (TPLAN, UNI_PRESC));
@@ -65,7 +65,8 @@ CREATE TABLE PRUNITPLAN (TPLAN VARCHAR(2) NOT NULL, UNI_PRESC VARCHAR(7) NOT NUL
 REQUER = ["L6-08"]
 PAIS_EXTERNOS = {"PRINDICEAGRUPAMENTO": ["1", "2"],
                  "TBHORMED": ["1", "2", "3"], "RIBLOCOS": ["A", "B"], "PRPARVARUNIRESP": ["1", "2"],
-                 "PRTPLAN": ["1", "2"], "TBPRINC_VALIDACAO": ["1", "2"], "TBUNICON": ["MG", "ML"]}
+                 "PRTPLAN": ["1", "2"], "TBPRINC_VALIDACAO": ["1", "2"], "TBUNICON": ["MG", "ML"],
+                 "TBSITUACAOMP": ["1", "2", "3"]}
 
 
 def _externos():
@@ -90,7 +91,7 @@ def _id_externo(tabela, chave):
     raise KeyError((tabela, chave))
 
 
-# a grade do complemento (TBHORMED_RIBLOCOS) já existe no destino com o id que a conferência dá ao pai externo
+# a grade copiada por bloco (TBHORMED_RIBLOCOS) já existe no destino com o id que a conferência dá ao pai externo
 PREPARO_DESTINO = "".join(
     "INSERT INTO grade_horario_unidade (id, estabelecimento_id, tipo_atendimento, hora_inicio_dia, criado_em)"
     " VALUES (%d, 1, 'internacao', '07:00:00', UTC_TIMESTAMP(3));\n" % _id_externo("TBHORMED", k)
@@ -99,9 +100,10 @@ PREPARO_DESTINO = "".join(
 CARREGADAS = ("TBTABENC", "TBTPALERGIA", "TBTPAUTORIDADE", "TBTPINTMED", "TBTPNOTAGRAVO", "TBTPNOTIFCID10",
               "TBTPNOTIFICACAOALERGIA", "TBALERGIA", "TBTPPARTO", "TBTPRN", "TBTPVALIDINTERACAO", "TBUNIDADEMEDIDA",
               "PRINDICEVARIAVEL", "PRGLASGOW", "PRINDICEPONTUACAO", "TBCBARANOTIFICACAO",
-              "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN")
-DESCARTADAS = ("PRPARAMSUMARIOALTA",)
-BLOQUEADAS = ("PRPERGUNTA", "TBTPSITUACAOMP", "PRRESPOSTA")
+              "TBHORMED_RIBLOCOS", "PRPARVARCAD", "TBUNIDMEDIDA_PRINC_VALID", "PRUNITPLAN", "TBTPSITUACAOMP")
+DESCARTADAS = ()
+# bloqueadas com causa em sem_carga.tsv (rodada 3); PRRESPOSTA passou à L6-11 (carrega lá)
+BLOQUEADAS = ("PRPERGUNTA", "PRPARAMSUMARIOALTA")
 
 D = decimal.Decimal
 
@@ -132,12 +134,15 @@ def linhas(r, ins):
     varias("TBCBARANOTIFICACAO", [(1, 1, 1), (2, 4, 2), (3, 7, 3), (4, 2, 9)])
     varias("TBTPPARTO", [(1, "Normal"), (2, "Cesárea"), (3, "Fórceps"), (4, " ")])
     varias("TBTPRN", [(1, "Vivo"), (2, "Natimorto"), (3, "Vivo  com  anomalia")])
-    # regras de situação (bloqueada: modelo sem 'qualquer origem'): na imagem para provar que não geram carga
+    # regras de situação (qualquer origem = verdadeiro, origem nula; processo presumido): 3 marcações nulas (padrão
+    # falso); 4 motivo fora do domínio S/N (padrão, pendência); 5 situação inexistente (NOT NULL: recusa)
     varias("TBTPSITUACAOMP", [(1, 1, 1, 1, 0, "N", "N", "N"), (2, 2, 2, 1, 1, "S", "N", "S"),
-                              (3, 3, 3, 2, None, None, None, None), (4, 1, 4, 1, 1, "N", "N", "X")])
+                              (3, 3, 3, 2, None, None, None, None), (4, 1, 4, 1, 1, "N", "N", "X"),
+                              (5, 9, 1, 1, 0, "N", "N", "N")])
     varias("TBTPVALIDINTERACAO", [(1, "Princípio ativo"), (2, "Classe terapêutica")])
-    # bloco da grade (complemento, um bloco por grade): Z bloco inexistente (NULL); C grade inexistente (recusa)
-    varias("TBHORMED_RIBLOCOS", [("A", 1), ("B", 2), ("Z", 3), ("C", 9)])
+    # cópia da grade por bloco: A e B na MESMA grade 1 (duas cópias, nenhuma sobrescrita); Z bloco inexistente (cópia
+    # com bloco NULL e pai_inexistente); C grade e bloco inexistentes (estabelecimento NOT NULL: recusa)
+    varias("TBHORMED_RIBLOCOS", [("A", 1), ("B", 1), ("Z", 2), ("C", 9)])
     # variáveis de dose: 3 unidade inexistente (NOT NULL: recusa); 4 sem nome (recusa)
     varias("PRPARVARCAD", [(1, "Peso", 1), (2, "Altura", 2), (3, "Superfície  corporal", 3), (4, "  ", 1)])
     # unidades: 3 sem nome (recusa nos dois destinos); 5 símbolo cabe no resultado (30) e não na prescrição (10);
@@ -163,15 +168,11 @@ def linhas(r, ins):
         (4, 4, D("3"), D("131"), D("999")), (5, 5, D("0"), D("36"), D("38")), (6, 5, D("1.5"), D("38.1"), D("39")),
         (7, 5, None, D("39.1"), D("42")), (8, 5, D("1"), D("40"), D("35")), (9, 7, D("1"), D("1"), D("2")),
         (10, 99, D("1"), D("1"), D("2"))])
+    # perguntas (bloqueada até a PRPADEVOL da L6-11 ler tipo, unidade, texto e situação): não geram carga aqui
     varias("PRPERGUNTA", [(i, 100 + i, 1, "Pergunta exemplo %d" % i, "TX", None,
                            ("texto da pergunta %d" % i).encode("cp1252"), "S", 0, 20, 200, None) for i in range(1, 4)])
-    # parâmetro do sumário de alta (descarte, sem_valor): entra na imagem para provar que não gera carga
+    # parâmetro do sumário de alta (bloqueada: desdobrar com referência no item): prova que não gera carga
     varias("PRPARAMSUMARIOALTA", [(1, 1, 1, 2, 1, None)])
-    # opções de resposta (bloqueada: o campo vem de PRPADEVOL, bloqueada na L6-11): provam que não geram carga
-    varias("PRRESPOSTA", [(1, 1, 1, "Sim".encode("cp1252"), "S", 1), (2, 1, 2, "Não".encode("cp1252"), "S", 2),
-                          (3, 1, None, ("Opção longa " * 30).encode("cp1252"), "N", 3),
-                          (4, 2, 1, b"Talvez", "S", 1), (5, 3, 1, b"Outro", "S", 1), (6, 1, 3, b"Repetida", "S", 1),
-                          (7, 1, 4, None, "S", 4)])
     # unidades por validação: 3 sigla sem unidade de medida; 4 validação inexistente; 6 par repetido (único)
     varias("TBUNIDMEDIDA_PRINC_VALID", [(1, 1, 1), (2, 1, 2), (3, 2, 4), (4, 9, 1), (5, 2, 1), (6, 1, 1)])
     # unidades por tipo de item: X é a sigla da unidade recusada (pai_pendente); tipo 9 e sigla ZZ inexistentes
@@ -190,6 +191,8 @@ def linhas(r, ins):
                                                     "restricao_destino_1048": 1}},
         "TBTPPARTO": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         "TBTPRN": {"gravados": 3, "pendencias": {"valor_presumido": 6}},
+        "TBTPSITUACAOMP": {"gravados": 4, "pendencias": {"valor_presumido": 5, "valor_fora_do_dominio": 1,
+                                                         "pai_inexistente": 1, "restricao_destino_1048": 1}},
         "TBTPVALIDINTERACAO": {"gravados": 2, "pendencias": {"valor_presumido": 2}},
         "TBUNIDADEMEDIDA": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1406": 1,
                                                           "valor_fora_do_dominio": 2}},
@@ -198,7 +201,8 @@ def linhas(r, ins):
                                                            "restricao_destino_1062": 1}},
         "PRGLASGOW": {"gravados": 7, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1}},
         "TBCBARANOTIFICACAO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2}},
-        "TBHORMED_RIBLOCOS": {"gravados": 3, "pendencias": {"pai_inexistente": 2}},
+        # Z: 1 pai_inexistente (bloco); C: 5 (grade, uma por coluna copiada) + 1 (bloco) e a recusa (NOT NULL)
+        "TBHORMED_RIBLOCOS": {"gravados": 3, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 1}},
         "PRPARVARCAD": {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
         "TBUNIDMEDIDA_PRINC_VALID": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2,
                                                                    "restricao_destino_1062": 1}},

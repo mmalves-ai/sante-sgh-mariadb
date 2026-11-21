@@ -50,6 +50,16 @@
    "arquivo": "modelo (F2.2): cuidado_enfermagem.acao_restricao_sexo/idade",
    "mudanca": "acrescentar 'exigir_justificativa' ao CHECK (como acao_gravidade_interacao.comportamento)",
    "motivo": "a notificação da origem tem avisar, exigir justificativa e bloquear; hoje 'exigir justificativa' entra como 'alertar' (perde a exigência)"
+  },
+  {
+   "arquivo": "modelo (F2.2): grade_horario_unidade x unidade_assistencial / horario_padrao_dose",
+   "mudanca": "a L6-09 grava a grade da unidade como CÓPIA da grade (uma linha por unidade, chave de escopo de 06_PEP/16); os horários de dose (horario_padrao_dose) seguem ligados só à grade original. Decidir: associação grade x unidade (e x bloco, L6-10) no lugar da cópia, ou horários de dose também por grade copiada",
+   "motivo": "na imagem de referência a única grade com unidade tem 2 unidades e 8 números de doses; o produto hoje lê só os horários do estabelecimento (grade nula), então nada se perde agora, mas a ligação dos horários à grade da unidade é dado do cliente"
+  },
+  {
+   "arquivo": "modelo (F2.2) e dono: cuidado_enfermagem / TBPROENF.TIPO",
+   "mudanca": "confirmar o significado da letra A/E/M (hipótese: quem pode prescrever, A ambos, E enfermagem, M médico; DEFAULT 'A') e, confirmado, coluna no modelo (ex.: cuidado_enfermagem.prescritor_permitido) com de-para pela letra",
+   "motivo": "medido A 87, E 42, M 71; sem CHECK, descrição nem PSQL na origem. Até lá o tipo do produto entra presumido 'cuidado' com valor_presumido e a letra não tem destino"
   }
  ]
 }

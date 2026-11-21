@@ -27,8 +27,8 @@
   {
    "n": 5,
    "arquivo": "catalogos/carregadores (novo) — trilha de catálogos",
-   "mudanca": "carregador oficial versionado das tabelas legais da folha (IRRF com faixas e redução de 2026, INSS, salário-família, salário mínimo, teto do INSS, contribuinte individual) em tabela_legal_vigencia e faixa_tabela_legal, pela publicação oficial",
-   "motivo": "TBTABIRR é descartada como catálogo oficial (regra 7); o cálculo da folha precisa dessas tabelas carregadas pela fonte oficial"
+   "mudanca": "carregador oficial versionado das tabelas legais da folha (IRRF com faixas e redução de 2026, INSS, salário-família, salário mínimo, teto do INSS, contribuinte individual; proposta: também os dias de afastamento a cargo do empregador) em tabela_legal_vigencia e faixa_tabela_legal, pela publicação oficial, COM o histórico das vigências (a imagem de referência tem 15; o cálculo de retroativos usa as passadas)",
+   "motivo": "PRÉ-REQUISITO BLOQUEANTE da virada da folha: TBTABIRR é descartada como catálogo oficial (regra 7) e o carregador ainda não existe (catalogos/carregadores só tem bcb, cfop, cid10, ibge, sigtap); sem ele a folha não calcula IRRF, INSS, salário-família nem teto. Conflito a decidir: a L5-08 grava FPHSTDIAAFAST na mesma tabela_legal_vigencia a partir da origem"
   },
   {
    "n": 6,
@@ -46,7 +46,7 @@
    "n": 8,
    "arquivo": "db/migracoes/15_RH/02_tabelas.sql (lancamento_automatico_rubrica) — trilha F2.2",
    "mudanca": "rubrica_id NULL (habilitação do lançamento automático por tipo antes da escolha da rubrica; o domínio exige a rubrica para lançar) e CHECK de evento_gatilho com 'licenca_maternidade', 'rescisao' e 'afastamento'",
-   "motivo": "FPTPEVENTOAUT_TBEMPHOS só diz 'empresa X lança o tipo Y automaticamente (S/N)', sem rubrica; os tipos da origem (conferidos por agregado) não estão no CHECK. Com a mudança a fatia troca os pares de valores.d/L5-12.tsv dos tipos 3, 5 e 6"
+   "motivo": "FPTPEVENTOAUT_TBEMPHOS só diz 'empresa X lança o tipo Y automaticamente (S/N)', sem rubrica; os tipos da origem (conferidos por agregado) não estão no CHECK. Com a mudança a fatia troca os pares de valores.d/L5-12.tsv dos tipos 3, 5 e 6; até lá o gatilho é o literal presumido =~outro (valor_presumido por linha, visível), e não um de-para silencioso: com a mudança a coluna volta a ID_FPTPEVENTOAUT com depara=valores, cada tipo no seu gatilho"
   },
   {
    "n": 9,
@@ -77,6 +77,24 @@
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "composição de colunas em texto ('#concat:DDD,TEL') e inscrição por tipo (tipo_inscricao + número com zeros à esquerda pelo tipo: CNPJ 14, CPF 11, CNO 12)",
    "motivo": "FPRESP.DDD+TEL; FPLOTTRIBCAD.ID_FPTPINSCRICAO+CNPJ_CNO (CHECK tipo e número juntos)"
+  },
+  {
+   "n": "14",
+   "arquivo": "conector/sante_conector/carga_mapa.py (cod:)",
+   "mudanca": "cod: com chave composta e literal: 'cod:<tabela>.(<c1>,<c2>)=(<v1>,<v2>)', cada v sendo =literal ou o valor da coluna (depois da regra/de-para e da referência encadeada); ausente: codigo_inexistente_destino; repetido: pai_ambiguo. Ex.: FPRUBRICAFGTS_FPEVENTO.ID_FPRUBRICAFGTS via 'ref:FPRUBRICAFGTS>COD_FPRUBRICAFGTS;cod:codigo_incidencia_rubrica.(tributo,codigo_incidencia)=(=fgts,valor)' (idem inss, irrf, contribuicao_sindical)",
+   "motivo": "incidencia_rubrica.codigo_incidencia_rubrica_id (NOT NULL): o catálogo oficial é único só por (tributo, codigo_incidencia) e o mesmo código existe nos 4 tributos; sem isso as 4 incidências (79 linhas na imagem de referência) ficam BLOQUEADAS. A imagem sintética precisa das tabelas FPRUBRICAFGTS/INSS/IRRF/SIND (ID, NOME, COD_*) e o PREPARO do catálogo"
+  },
+  {
+   "n": "15",
+   "arquivo": "conector/mapa/tabelas.tsv e declarado/dependencias.tsv (gerador do mapa)",
+   "mudanca": "FPRUBRICAFGTS_FPEVENTO, FPRUBRICAINSS_FPEVENTO, FPRUBRICAIRRF_FPEVENTO, FPRUBRICASIND_FPEVENTO dependem de TBTPTRIBUTO (ordem); FPRUBRICASIND_FPEVENTO com tabelas_destino incidencia_rubrica;tributo_folha (secundário antes;adotar:tipo, código e tipo contribuicao_sindical, @id:tributo_folha)",
+   "motivo": "o tributo da incidência é procurado por cod: em tributo_folha, que TBTPTRIBUTO grava DEPOIS das incidências na ordem atual (codigo_inexistente_destino); a contribuição sindical não existe na lista de tributos da origem e o verificador recusa destino fora de tabelas_destino"
+  },
+  {
+   "n": "16",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial condicional '#se:<COL>=<v>:<COLUNA>' (e '#se~:' presumido): grava o valor da COLUNA (pela regra declarada na linha) só quando COL, depois da sua regra, for igual a v; senão NULL sem pendência. A forma presumida deixa valor_presumido na linha que gravou",
+   "motivo": "FPREMESSA: competencia_folha.fechada_em é o instante do fechamento; hoje recebe DTA_FIN_APUR também na competência ABERTA (FECHADA = N). Com o especial a fatia declara '#se~:FECHADA=S:DTA_FIN_APUR' -> fechada_em (NULL na aberta; o CHECK continua exigindo fechada_em na fechada)"
   }
  ],
  "retirados": [

@@ -111,3 +111,41 @@ PRMANCHESTER	COR	nivel_prioridade.ordem	clPurple	71	L6-11: constante de cor da o
 PRMANCHESTER	COR	nivel_prioridade.nome_cor	clOlive	oliva	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
 PRMANCHESTER	COR	nivel_prioridade.cor_hexadecimal	clOlive	#808000	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam
 PRMANCHESTER	COR	nivel_prioridade.ordem	clOlive	72	L6-11: constante de cor da origem (nome ou $00BBGGRR, azul-verde-vermelho); medido na referência: 7 de 7 casam; ordem clínica pela cor, preto entre azul e branco como na origem
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	1	secao	L6-11 r3: TIPOPERG 1 = seção (TGroupBoxPep); evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	2	data	L6-11 r3: TIPOPERG 2 = data; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	3	hora	L6-11 r3: TIPOPERG 3 = hora; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	4	escolha	L6-11 r3: TIPOPERG 4 = sim/não (lista de escolha); evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	5	texto_formatado	L6-11 r3: TIPOPERG 5 = texto formatado; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	6	decimal	L6-11 r3: TIPOPERG 6 = número decimal (com ou sem unidade); evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	7	inteiro	L6-11 r3: TIPOPERG 7 = número inteiro; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	8	escolha_com_texto	L6-11 r3: TIPOPERG 8 = lista com texto livre; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	9	grupo	L6-11 r3: TIPOPERG 9 = grade de colunas (repetidor): aproximado a grupo; revisar com o dono; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	10	texto	L6-11 r3: TIPOPERG 10 = CID (busca na terminologia): texto com destino diagnóstico; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	11	texto	L6-11 r3: TIPOPERG 11 = texto; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	12	multipla	L6-11 r3: TIPOPERG 12 = lista de marcação múltipla; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	13	escolha	L6-11 r3: TIPOPERG 13 = lista de escolha; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	18	texto	L6-11 r3: TIPOPERG 18 = vários CID: texto com destino diagnóstico; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.tipo_campo	19	texto	L6-11 r3: TIPOPERG 19 = alergias: texto com destino alergia; evidência: componente do formulário antigo por tipo de pergunta (new-sgh, dominio-pep formulario/dfm e formulario-novo, medido na cópia)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	1	nenhum	L6-11 r3: TIPOPERG 1 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	2	nenhum	L6-11 r3: TIPOPERG 2 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	3	nenhum	L6-11 r3: TIPOPERG 3 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	4	nenhum	L6-11 r3: TIPOPERG 4 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	5	nenhum	L6-11 r3: TIPOPERG 5 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	6	nenhum	L6-11 r3: TIPOPERG 6 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	7	nenhum	L6-11 r3: TIPOPERG 7 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	8	nenhum	L6-11 r3: TIPOPERG 8 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	9	nenhum	L6-11 r3: TIPOPERG 9 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	10	diagnostico	L6-11 r3: TIPOPERG 10 alimenta diagnostico
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	11	nenhum	L6-11 r3: TIPOPERG 11 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	12	nenhum	L6-11 r3: TIPOPERG 12 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	13	nenhum	L6-11 r3: TIPOPERG 13 alimenta nenhum
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	18	diagnostico	L6-11 r3: TIPOPERG 18 alimenta diagnostico
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.destino_estruturado	19	alergia	L6-11 r3: TIPOPERG 19 alimenta alergia
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.reuso_horas	1	65535	L6-11 r3: MANTERHIST 1 = traz a última resposta do paciente (sem prazo na origem): o máximo do campo (cerca de 7 anos)
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.reuso_horas			L6-11 r3: sem marca: não reaproveita
+PRPADEVOL	ATIVO	modelo_campo.excluido_em	0	@data_carga	L6-11 r3: campo inativo na origem (sem data): excluído na data da carga
+PRPADEVOL	ATIVO	modelo_campo.excluido_em	1		L6-11 r3: campo ativo: não excluído
+PRPADEVOL	ATIVO	modelo_campo.excluido_em			L6-11 r3: vazio: não excluído
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.excluido_em	0	@data_carga	L6-11 r3: pergunta inativo na origem (sem data): excluído na data da carga
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.excluido_em	1		L6-11 r3: pergunta ativo: não excluído
+PRPADEVOL	ID_PRPERGUNTA	modelo_campo.excluido_em			L6-11 r3: vazio: não excluído

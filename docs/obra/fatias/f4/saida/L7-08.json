@@ -3,17 +3,20 @@
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "destino com a opção complementa (via) não exige as colunas NOT NULL do destino: a linha já existe e só recebe UPDATE",
-   "motivo": "GEINFVENEXT (documento_estoque) e PRINTEGRACAOESTOQUE (horario_administracao) estão declaradas e conciliam na imagem sintética, mas a ferramenta as conta como coluna_obrigatoria_sem_fonte"
+   "motivo": "GEINFVENEXT (documento_estoque) e PRINTEGRACAOESTOQUE (horario_administracao) estão declaradas e conciliam na imagem sintética, mas a ferramenta as conta como coluna_obrigatoria_sem_fonte",
+   "atendido": "rodada 2: complementa não exige as NOT NULL (cobertura_conector.py); GEINFVENEXT e PRINTEGRACAOESTOQUE contam como CARREGA"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
    "mudanca": "chave alternativa composta 'ref:T.(A,B,C)': as colunas A,B,C DESTA linha casam com as colunas homônimas de T na origem (repetido = pai_ambiguo), também como primeiro passo de encadeada ('ref:T.(A,B,C)>X>U')",
-   "motivo": "GELANSAI e GELANSAIREQ só ligam ao documento de saída (GECADSAI, chave ID) por ANO,MES,DOC: local, usuário e momento do movimento vêm do documento. Bloqueadas sem a chave alternativa composta"
+   "motivo": "GELANSAI e GELANSAIREQ só ligam ao documento de saída (GECADSAI, chave ID) por ANO,MES,DOC: local, usuário e momento do movimento vêm do documento. Bloqueadas sem a chave alternativa composta",
+   "atendido": "rodada 2: ref:T.(K1,K2)=(C1,C2), também como 1º passo de encadeada; aplicado na rodada 3 da L7-08 (GELANSAI, GELANSAIREQ)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar) ou sentinela.py",
    "mudanca": "regra 'data_em_data_hora' (ou tipar: date em coluna DATETIME vira datetime à meia-noite antes do resumo)",
-   "motivo": "documento_estoque.movimentado_em de GECADSAI/GECADDEV usa DATA_HORA_INCLUSAO (linha sem ela é recusada com 1048); a data do documento (DATA, DATE) diverge a soma de controle em DATETIME. Com a regra, trocar para DATA"
+   "motivo": "documento_estoque.movimentado_em de GECADSAI/GECADDEV usa DATA_HORA_INCLUSAO (linha sem ela é recusada com 1048); a data do documento (DATA, DATE) diverge a soma de controle em DATETIME. Com a regra, trocar para DATA",
+   "atendido": "rodada 2: tipar (data em DATETIME à meia-noite); aplicado na rodada 3 (revisão): GECADSAI/GECADDEV.movimentado_em = DATA_HORA_INCLUSAO ou DATA à meia-noite (colunas concorrentes). Medido: 0 nulos na referência"
   },
   {
    "arquivo": "modelo (F2.2) + conector/sante_conector/carga_mapa.py",
@@ -24,22 +27,25 @@
   {
    "arquivo": "modelo (F2.2) + fatia dona dos locais de consumo",
    "mudanca": "carregar setor_funcional (decisão: um setor funcional por local de consumo da origem, TBLOCCON/LOC_CONS) ou aceitar setor_funcional_id nulo quando origem='migracao'",
-   "motivo": "dispensacao.setor_funcional_id e entrega_setor.setor_funcional_id são NOT NULL e nenhuma fatia carrega setor_funcional: GECADDISPENSACAO e GECTRLENTREGADOCSAIDA bloqueadas; GELANDISPENSACAO, GEDISPHOR e PRINTEGRACAOESTOQUE dependem delas"
+   "motivo": "dispensacao.setor_funcional_id e entrega_setor.setor_funcional_id são NOT NULL e nenhuma fatia carrega setor_funcional: GECADDISPENSACAO e GECTRLENTREGADOCSAIDA bloqueadas; GELANDISPENSACAO, GEDISPHOR e PRINTEGRACAOESTOQUE dependem delas",
+   "atendido": "resolvido na fatia (rodada 3): GECADDISPENSACAO cria um setor funcional por local de consumo (antes;agrupar:LOC_CONS, nome pela TBLOCCON); GECTRLENTREGADOCSAIDA o acha por cod:setor_funcional.codigo pelo local de consumo do documento"
   },
   {
    "arquivo": "modelo (F2.2)",
-   "mudanca": "ficha_antimicrobiano migrada: prescricao_item_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao e justificativa aceitam nulo quando origem='migracao' (CHECK), com avaliacao_situacao 'pendente'",
-   "motivo": "GEANTIMI (liberação) exige a ficha (NOT NULL) e a origem não tem os dados clínicos da ficha (GECADANTIMI descartada como duplicada no L6-05). Declaração prevista no motivo das colunas da versão anterior desta fatia; anomalias mantidas na imagem sintética"
+   "mudanca": "mudança de modelo (F2.2): ficha_antimicrobiano migrada: prescricao_item_id, prescritor_profissional_id, finalidade_terapeutica_id, origem_infeccao e justificativa aceitam nulo quando origem='migracao' (CHECK), com avaliacao_situacao 'pendente'",
+   "motivo": "GEANTIMI (liberação) exige a ficha (NOT NULL) e a origem não tem os dados clínicos da ficha (GECADANTIMI descartada como duplicada no L6-05). Declaração prevista no motivo das colunas da versão anterior desta fatia; anomalias mantidas na imagem sintética. Rodada 3: única tabela da L7-08 bloqueada. A ficha exige prescricao_item_id (NOT NULL) e a origem não liga a liberação ao item prescrito por nenhum caminho (GEANTIMI só tem REG, ITEM, datas e doses; PRLANGERAL e PRPRESCMED não têm o atendimento nem a liberação; GELANSAI.ID_GEANTIMI é N:1). Presumir o item prescrito ou dados clínicos seria dado falso"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "coalescência e literal condicional: '<COL_A>|<COL_B>' e '=?<COLUNA>:<valor se preenchida>:<valor se nula>', com as colunas nas lidas e na soma pela forma gravada",
-   "motivo": "dispensacao_item: CHECK prescricao_item_id ou justificativa (GELANDISPENSACAO não liga ao item prescrito; a justificativa só vem no item não prescrito); GEANTIMI: liberação interrompida (DATA_INT) vira decisao='suspenso'"
+   "motivo": "dispensacao_item: CHECK prescricao_item_id ou justificativa (GELANDISPENSACAO não liga ao item prescrito; a justificativa só vem no item não prescrito); GEANTIMI: liberação interrompida (DATA_INT) vira decisao='suspenso'",
+   "atendido": "resolvido na fatia (rodada 3) com colunas concorrentes (rodada 3, grupo 2): justificativa da origem e, sem ela, o fato registrado; centro de custo da dispensação com 2ª fonte no local de consumo. GEANTIMI (decisão suspenso) segue no pedido 6"
   },
   {
    "arquivo": "modelo (F2.2)",
    "mudanca": "substituicao_dispensacao.dispensacao_item_id nulo quando a troca foi registrada no horário prescrito (prescricao_item_id e horario obrigatórios nesse caso); motivo com presumido",
-   "motivo": "PREXTRATOITEM_SUBST registra a troca no horário prescrito (PRCHKGERAL), sem item dispensado: bloqueada"
+   "motivo": "PREXTRATOITEM_SUBST registra a troca no horário prescrito (PRCHKGERAL), sem item dispensado: bloqueada",
+   "atendido": "resolvido na fatia (rodada 3) sem mudar o modelo: o item dispensado vem da dose dispensada do horário (ref:GEDISPHOR.ID_PRCHKGERAL>ID_GELANDISPENSACAO>GELANDISPENSACAO); troca sem dose dispensada fica recusada (1048) e visível"
   },
   {
    "arquivo": "modelo (F2.2)",
@@ -54,12 +60,14 @@
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "tabela planejada cuja coluna NOT NULL vem de chave_origem/ref de um pai BLOQUEADO sai BLOQUEADA com causa pai_nao_carregado:<PAI>, também para tabela declarada; resolução iterativa até ponto fixo, na ordem do mapa",
-   "motivo": "GERASVALSAIDLOTE (pai GELANSAI) e GEDISPHOR (pai GELANDISPENSACAO) saem CARREGA mas recusam 100% das linhas: a contagem de CARREGA da L7-08 fica inflada em 2"
+   "motivo": "GERASVALSAIDLOTE (pai GELANSAI) e GEDISPHOR (pai GELANDISPENSACAO) saem CARREGA mas recusam 100% das linhas: a contagem de CARREGA da L7-08 fica inflada em 2",
+   "atendido": "rodada 2: ponto fixo de pai_nao_carregado na cobertura (implementado em cobertura_conector.py)"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "_pedidos (linha ~124) ler também o campo 'arquivo'; pedido com 'modelo (F2.2)' dá causa própria (modelo) e tira a tabela de 'só pedem refazer a fatia'",
-   "motivo": "GEANTIMI, GECADNFS, GERASVALDEVLOTE e PREXTRATOITEM_SUBST caem em sem_declaracao e o resumo diz 'sem mecanismo: 0', escondendo que esperam mudança de modelo (pedidos 4, 6 e 8)"
+   "motivo": "GEANTIMI, GECADNFS, GERASVALDEVLOTE e PREXTRATOITEM_SUBST caem em sem_declaracao e o resumo diz 'sem mecanismo: 0', escondendo que esperam mudança de modelo (pedidos 4, 6 e 8)",
+   "atendido": "rodada 2: pedido de modelo cai em destino_a_rever/destino_decidido na cobertura"
   },
   {
    "arquivo": "conector/verificar_mapa.py (ou carga_mapa.py)",
@@ -69,7 +77,13 @@
   {
    "arquivo": "medição na imagem de referência (só contagens)",
    "mudanca": "contar: (a) linhas de GEQTDELOTEVALLOTEDOCSAIDA cuja QTDE difere da QTDE de GERASVALSAIDLOTE pela mesma chave; (b) linhas de GECADSAI e GECADDEV com DATA_HORA_INCLUSAO nula; (c) linhas de TBCENCUS com ID diferente de COD",
-   "motivo": "(a) confirma o descarte por duplicado de GEQTDELOTEVALLOTEDOCSAIDA (diferença > 0: rever, carregar como correção numa só fonte); (b) mede a recusa por 1048 até o pedido 3; (c) documenta a troca para ref:TBCENCUS.ID. A fatia não tem comando de agregado sobre a referência"
+   "motivo": "(a) confirma o descarte por duplicado de GEQTDELOTEVALLOTEDOCSAIDA (diferença > 0: rever, carregar como correção numa só fonte); (b) mede a recusa por 1048 até o pedido 3; (c) documenta a troca para ref:TBCENCUS.ID. A fatia não tem comando de agregado sobre a referência",
+   "atendido": "medido 2026-11-21 (só contagens, transação somente leitura): (a) 951.070 linhas, 0 sem par, QTDE diferente em 57.114, sempre menor e igual à QTDE do lote menos a soma devolvida em GERASVALDEVLOTE (57.114 de 57.114): quantidade líquida derivada, descarte duplicado confirmado; (b) 0 de 639.778 e 0 de 67.192 com DATA_HORA_INCLUSAO nula; (c) já medido (TBCENCUS: ID difere de COD em 99 de 99). Extra: DEST 1/2/3/5 = 504.292/69.884/65.396/206, PAC do destino 1 = internação (504.291), do destino 3 = atendimento (65.378), TP_INTEGRACAO 1x4 e 2x1, MOMENTO_INTEGRACAO 1x5"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_valores, colunas concorrentes)",
+   "mudanca": "coluna concorrente: avaliar a fonte seguinte só quando a anterior vier nula (sem pendência da fonte reserva não usada)",
+   "motivo": "Na imagem sintética da L7-08, fontes reservas (momento do documento, nome e centro de custo do local de consumo) deixam pai_inexistente mesmo quando a 1ª fonte tinha valor: ruído de gravidade média no painel. PRIORIDADE (rodada 3, revisão): GECADSAI.atendimento_id tem duas fontes que se excluem (internação por PAC no destino 1, atendimento por CONTA no destino 3); hoje a que não casa deixa pai_inexistente em cerca de 570 mil documentos na referência (504.292 do destino 1 e 65.396 do destino 3, mais 206 do 5), e as reservas presumidas de PRPARINTEGEST marcam valor_presumido mesmo com o de-para resolvido"
   }
  ]
 }

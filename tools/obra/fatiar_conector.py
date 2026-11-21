@@ -1,6 +1,6 @@
 """Gera as fatias autossuficientes dos lotes de domínio do conector (F4 L5 a L8), pelo protocolo de tokens.
 
-uso: python3 -I tools/obra/fatiar_conector.py [--conferir]
+uso: python3 -I tools/obra/fatiar_conector.py [--conferir] [--refatiar]
 
 Lê só o mapa gerado (conector/mapa/*.tsv) e o DDL (db/migracoes). Para cada lote, os módulos em ordem e, em cada
 módulo, as tabelas na ordem topológica, em fatias de cerca de 25. Cada fatia traz o trecho do mapa, as dependências
@@ -49,6 +49,13 @@ def montar():
             continue
         decl.setdefault(c["tabela"], []).append(c)
     ddl = d["ddl"]
+    fixas = fatias_fixadas(por)
+    if fixas is not None:
+        saida = []
+        for nome, lote, m, x in fixas:
+            desc = next(dd for ll, dd, _ in mapa.LOTES if ll == lote)
+            saida.append((nome, lote, m, x, texto(lote, desc, m, x, int(nome.split("-")[1]), por, cols, decl, ddl)))
+        return saida, tab, cols
     fatias = []
     for lote, desc, mods in mapa.LOTES:
         for m in mods:
@@ -74,6 +81,30 @@ def montar():
         nome = "%s-%02d" % (lote, cont[lote])
         saida.append((nome, lote, m, x, texto(lote, desc, m, x, cont[lote], por, cols, decl, ddl)))
     return saida, tab, cols
+
+
+def fatias_fixadas(por):
+    """Fatia de cada tabela fixada pelo indice.tsv já gravado (a fatia é a unidade de trabalho dona do
+    colunas.d/<fatia>.tsv, da imagem sintética e dos testes): uma aresta nova de ordem muda a ordem, nunca a
+    fatia. Dentro da fatia, a ordem segue o mapa. Tabela nova dos lotes vai para a última fatia do mesmo lote e
+    módulo. `--refatiar` (ou indice.tsv ausente) refaz os blocos do zero."""
+    arq = OUT / "indice.tsv"
+    if "--refatiar" in sys.argv or not arq.exists():
+        return None
+    alvo = {t for t, r in por.items() if r["lote"] in ("L5", "L6", "L7", "L8") and r["tabelas_destino"]}
+    fixas, vistas = [], set()
+    for l in arq.read_text(encoding="utf-8").splitlines()[1:]:
+        c = l.split("\t")
+        ts = [t for t in c[6].split(",") if t in alvo]
+        vistas.update(ts)
+        fixas.append([c[0], c[1], "" if c[2] == "-" else c[2], ts])
+    for t in sorted(alvo - vistas, key=lambda t: int(por[t]["ordem"])):
+        r = por[t]
+        dest = [f for f in fixas if f[1] == r["lote"] and f[2] == r["modulo"]]
+        if not dest:
+            return None
+        dest[-1][3].append(t)
+    return [(n, lt, m, sorted((por[t] for t in ts), key=lambda r: int(r["ordem"]))) for n, lt, m, ts in fixas]
 
 
 def texto(lote, desc, modulo, linhas, n, por, cols, decl, ddl):

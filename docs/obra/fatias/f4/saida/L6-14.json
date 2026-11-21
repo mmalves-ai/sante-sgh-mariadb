@@ -33,17 +33,13 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (regerar tabelas.tsv)",
    "mudanca": "acrescentar as arestas RICONFIC -> TBCONVEN e RIESPFIC -> TBESPEC (motivo: referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga) e regerar o mapa",
-   "motivo": "RICONFIC (412) e RIESPFIC (413) vêm antes de TBCONVEN (718) e TBESPEC (966): sem a aresta, fonte_pagadora_id e especialidade_medica_id ficariam NULL com pai_inexistente, e NULL nessas colunas significa 'vale para todas', o que mudaria o sentido da regra. A fatia não regera o mapa (arquivo gerado, compartilhado entre lotes em paralelo)"
+   "motivo": "RICONFIC (412) e RIESPFIC (413) vêm antes de TBCONVEN (718) e TBESPEC (966): sem a aresta, fonte_pagadora_id e especialidade_medica_id ficariam NULL com pai_inexistente, e NULL nessas colunas significa 'vale para todas', o que mudaria o sentido da regra. A fatia não regera o mapa (arquivo gerado, compartilhado entre lotes em paralelo)",
+   "atendido": "aplicado pelo integrador (rodada 2): arestas em declarado/dependencias.tsv e mapa regerado; test_ordem_de_carga passa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (opção de destino)",
    "mudanca": "opção 'obrigatoria' na via de uma referência anulável: pai_inexistente recusa a linha em vez de gravar NULL (ex.: RICONFIC.CONV -> regra_documento_internacao.fonte_pagadora_id, RIESPFIC.ESP -> especialidade_medica_id)",
    "motivo": "nessas colunas NULL significa 'vale para todas as fontes/especialidades': uma fonte pagadora inexistente na origem vira uma regra geral (hoje só a pendência média pai_inexistente avisa; a imagem sintética da L6-14 tem o caso)"
-  },
-  {
-   "arquivo": "conector/mapa/declarado/sem_carga.tsv (linha RIPARAM)",
-   "mudanca": "trocar o motivo de RIPARAM pelo da decisão genérica dos parâmetros (como PEPARAM, PRPARAM_*, CHPARAM, SIPARGER): 'linha única de parâmetros da internação (cerca de 150 colunas de opção): a definição é catálogo tipado do produto (parametro_definicao, nunca criado pela migração) e o valor da rede é fixado na implantação, a partir do relatório de implantação. Decisão firme (F4-decisoes-destino.md)'; sem 'mecanismo pedido' nem 'revisar'",
-   "motivo": "o motivo atual dá a entender bloqueio esperando mecanismo; a decisão é a mesma, firme, de todas as tabelas de parâmetro de linha única"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L6-14.tsv (com evidência) ou decisão de análise",
@@ -53,17 +49,60 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (regerar tabelas.tsv)",
    "mudanca": "acrescentar as arestas RICTRLOC -> RICADINT, RICTRLOC -> RIACOMOD, RICTRLOC -> RILEITOS e RICTRLOC -> RIBLOCOS (motivo: referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga) e regerar o mapa",
-   "motivo": "RICTRLOC (418) vem antes de RICADINT (1021), RIACOMOD (820) e RILEITOS (821): toda ocupação ficaria com pai_inexistente. O teste test_l6_14.test_ordem_de_carga confere a ordem real e falha até a regeração"
+   "motivo": "RICTRLOC (418) vem antes de RICADINT (1021), RIACOMOD (820) e RILEITOS (821): toda ocupação ficaria com pai_inexistente. O teste test_l6_14.test_ordem_de_carga confere a ordem real e falha até a regeração",
+   "atendido": "aplicado pelo integrador (rodada 2): arestas em declarado/dependencias.tsv e mapa regerado; test_ordem_de_carga passa"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa._ESPECIAIS (M1 e M3 da L6-15)",
    "mudanca": "aplicados M3 ('#data_hora:ENTRADA,HORAENT' e '#data_hora:SAIDA,HORASAI') e M1 ('ref:RIBLOCOS/unidade_internacao' na coluna BLOCO), declarar em colunas.d/L6-14.tsv: RICTRLOC data_hora_inicio, data_hora_fim, unidade_internacao_id e a situação pelo literal condicional (=?SAIDA:encerrada:ativa); trocar ref:RILEITOS.LEITO pela chave alternativa composta M4",
-   "motivo": "ocupacao_leito.data_hora_inicio e unidade_internacao_id são NOT NULL e não têm fonte sem esses mecanismos: RICTRLOC (16263 períodos, base do censo e da diária) está declarada mas BLOQUEADA (coluna_obrigatoria_sem_fonte) e toda linha é recusada com 1364, visível"
+   "motivo": "ocupacao_leito.data_hora_inicio e unidade_internacao_id são NOT NULL e não têm fonte sem esses mecanismos: RICTRLOC (16263 períodos, base do censo e da diária) está declarada mas BLOQUEADA (coluna_obrigatoria_sem_fonte) e toda linha é recusada com 1364, visível",
+   "atendido": "rodada 3: #data_hora, ref:T/<destino> e chave alternativa composta (M4) usados em RICTRLOC; situação pela saída com preenchido + valores, sem literal condicional"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh",
    "mudanca": "acrescentar o passo 'python3 -I tools/obra/cobertura_conector.py --fatia <F> --falhar-se-bloqueada' (erro com as tabelas bloqueadas e a causa)",
-   "motivo": "a autoconferência devolvia ok com tabela da fatia BLOQUEADA (sem_declaracao)"
+   "motivo": "a autoconferência devolvia ok com tabela da fatia BLOQUEADA (sem_declaracao)",
+   "atendido": "passo 6 (cobertura da fatia) já está no conferir-fatia-f4.sh"
+  },
+  {
+   "arquivo": "db/migracoes/07_INT (trilha F2.2) + colunas.d/L6-14.tsv",
+   "mudanca": "acomodacao.local_cobranca_id (FK local_cobranca, anulável) para RIACOMOD.LCONS (ref:TBLOCCON)",
+   "motivo": "o quarto da origem guarda o local de cobrança das diárias; o modelo não tem a coluna e LCONS fica sem destino (documentado)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L6-14.tsv (com evidência)",
+   "mudanca": "de-para de RIACOMOD.TCONV -> acomodacao.abrangencia_cobertura (todas, publica, saude_suplementar, particular) quando houver evidência do significado dos códigos (o painel lista os valores distintos)",
+   "motivo": "sem evidência a abrangência fica no padrão 'todas' (quarto exclusivo do SUS ou de convênio fica aberto a qualquer cobertura até o de-para)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa._ESPECIAIS (integrador)",
+   "mudanca": "mecanismo de posição no grupo com ordem por colunas, para tabelas sem chave: ex. '#primeiro:REG@ENTRADA,HORAENT,COD' (verdadeiro no primeiro período da internação, na ordem das colunas) e '@anterior:REG@ENTRADA,HORAENT,COD' (id gravado do período anterior do mesmo grupo, em fase 2). Ao aplicar, declarar em colunas.d/L6-14.tsv: RICTRLOC '#primeiro:...' -> ocupacao_leito.tipo_movimento com valores 1=admissao, 0=transferencia (e retirar '=~admissao'), e '@anterior:...' -> anterior_ocupacao_leito_id",
+   "motivo": "medido: 3490 de 9162 internações com mais de um período (até 26); COD contradiz a ordem de entrada em 453 pares, então #seq (ordem da chave) não serve. Hoje toda transferência histórica conta como admissão no censo (valor_presumido visível)"
+  },
+  {
+   "arquivo": "db/migracoes/07_INT (trilha F2.2) + colunas.d/L6-14.tsv",
+   "mudanca": "coluna ocupacao_leito.categoria_acomodacao_id (FK categoria_acomodacao, anulável: NULL = a do quarto). Ao aplicar, declarar RICTRLOC ID_TBTIPOACOMOD -> ocupacao_leito.categoria_acomodacao_id via ref:TBTIPOACOMOD",
+   "motivo": "medido: 49 de 15737 períodos com categoria diferente da do quarto (diferença de classe): é a categoria cobrada na diária e hoje se perde"
+  },
+  {
+   "arquivo": "conector/mapa/declarado (chave) + tools/obra/gerar_mapa_conector.py (integrador)",
+   "mudanca": "chave de RICTRLOC = COD (hoje hash_linha_sem_chave)",
+   "motivo": "medido: COD único em 16263 de 16263 linhas; com chave, o diferencial do Sincronizar reconhece o período alterado (saída preenchida depois) em vez de linha nova + linha sumida"
+  },
+  {
+   "arquivo": "db/ (semente do 'criar novo cliente', trilha F2.2)",
+   "mudanca": "semente versionada de regime_atendimento_internacao: hospitalar (TISS 1), hospital_dia (2), domiciliar (3), até existir o carregador oficial da ANS; registrar em F4-plano.md",
+   "motivo": "TBTISSREGINT é descarte catalogo_oficial (regra 7) e o carregador oficial não existe: sem a semente, o destino fica vazio e o regime das internações e contas não tem onde ligar"
+  },
+  {
+   "arquivo": "colunas.d/L8-05.tsv (FCCTAEXT) e colunas.d/L6-15.tsv (RICADINT), com valores.d",
+   "mudanca": "declarar o regime de internação pelo de-para de valores (ID de TBTISSREGINT -> código da semente) em internacao.regime_atendimento_internacao_id (cod:regime_atendimento_internacao.codigo_tiss) e, se o faturamento precisar, pedir a coluna em conta_hospitalar à F2.2",
+   "motivo": "medido: FCCTAEXT.REGIME_INT preenchido em 213641 contas, 4 valores, nenhum órfão; hoje não há declaração em nenhum colunas.d e o regime se perde em silêncio"
+  },
+  {
+   "arquivo": "domínio da numeração (prontuário e internação) + conciliação da virada",
+   "mudanca": "ao ligar a sequência do produto ao tipo prontuario/internacao, valor inicial = MAIOR entre a sequência migrada ativa e MAX(número migrado)+1; a conciliação confere proximo_valor > MAX(número migrado)",
+   "motivo": "medido: os contadores de RIPARAM estão abaixo do maior prontuário e registro migrados (defasados); ligar a sequência pelo contador repetiria números"
   }
  ]
 }

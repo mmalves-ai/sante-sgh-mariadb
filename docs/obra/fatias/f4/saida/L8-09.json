@@ -3,16 +3,18 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
    "mudanca": "DATE da origem (ou literal ISO '=AAAA-MM-DD[ HH:MM:SS]' e '=@data_carga') gravado em coluna DATETIME/TIMESTAMP do destino: converter para datetime à meia-noite em tipar() antes da soma de controle (mesma forma dos dois lados). Depois, na fatia: descomentar as declarações de FCRECIBO e COSPEDHSTSEMP em colunas.d/L8-09.tsv, descomentar as linhas '#FCRECIBO' e '#COSPEDHSTSEMP' de valores.d/L8-09.tsv (já prontas: situação e vias do recibo; códigos públicos 1 a 7 da situação especial), mover FCRECIBO e COSPEDHSTSEMP para CARREGADAS em sintetica_d/l8_09.py (FCRECIBO com PREVISTO_FCRECIBO); COSPEDHSTSEMP com PREVISTO_COSPEDHSTSEMP; ajustar test_bloqueadas_com_declaracao_pronta_comentada",
-   "motivo": "recibo.emitido_em e situacao_especial_empresa.ocorrido_em são DATETIME(3) NOT NULL e a origem só tem DATE: o resumo da origem ('AAAA-MM-DD') não casa com o relido ('AAAA-MM-DD 00:00:00.000') e a conciliação diverge (mesmo caso de GECADBAL, L7-07). Regra genérica, não código por tabela"
+   "motivo": "recibo.emitido_em e situacao_especial_empresa.ocorrido_em são DATETIME(3) NOT NULL e a origem só tem DATE: o resumo da origem ('AAAA-MM-DD') não casa com o relido ('AAAA-MM-DD 00:00:00.000') e a conciliação diverge (mesmo caso de GECADBAL, L7-07). Regra genérica, não código por tabela",
+   "atendido": "rodada 2: tipar grava DATE e '=@data_carga' em DATETIME; rodada 3: declarações de FCRECIBO e COSPEDHSTSEMP e pares de valores.d ativados, as duas tabelas CARREGAM"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial)",
    "mudanca": "'#data_hora:DATA,HORA' (DATE + texto HHMM vira DATETIME; hora inválida: hora_invalida) para recibo.emitido_em com a hora de emissão",
-   "motivo": "melhora opcional depois do pedido anterior: sem ela o recibo entra à meia-noite do dia"
+   "motivo": "melhora opcional depois do pedido anterior: sem ela o recibo entra à meia-noite do dia",
+   "atendido": "rodada 2: #data_hora:DATA,HORA; rodada 3: recibo.emitido_em declarado com ele (HORA por hora_hhmm)"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
-   "mudanca": "regra 'valor_extenso' (decimal em reais por extenso, pt-BR) para recibo.valor_extenso a partir de VALOR; até lá a declaração usa o literal presumido (valor_presumido por linha)",
+   "mudanca": "regra 'valor_extenso' (decimal em reais por extenso, pt-BR) para recibo.valor_extenso a partir de VALOR; até lá a declaração usa o literal presumido (valor_presumido por linha) PRIORITÁRIO (achado da revisão r3): o literal presumido sai impresso numa reemissão do recibo; até a regra, o produto deve tratar valor_extenso com valor_presumido como não reimprimível (recalcular na reemissão)",
    "motivo": "recibo.valor_extenso é NOT NULL sem padrão e a origem não guarda o extenso"
   },
   {
@@ -22,18 +24,29 @@
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (literal condicional)",
-   "mudanca": "literal condicionado a outra coluna: recibo.cancelado_em = DATA só quando CANCELADO='S' (presumido, marcado); recibo.tipo = 'honorario' quando ID_TBCBOPRO tem valor, senão 'recebimento'; vínculo do recibo à conta hospitalar por TIPO_CTA+CONTA(+REF), que leva também paciente_id (a conta fica em tabelas diferentes da origem conforme TIPO_CTA: referência por tipo)",
-   "motivo": "ck_recibo_cancelamento exige cancelado_em e motivo: sem a data o recibo cancelado fica recusado (visível na conciliação); o tipo presumido 'recebimento' troca o significado do recibo de honorário; paciente só por chave, nunca pelo nome livre"
+   "mudanca": "RESTANTE do literal condicional (o resto foi resolvido na fatia, rodada 3: tipo por ID_TBCBOPRO preenchido + valores; cancelado_em S -> @data_carga e motivo pelo de-para de CANCELADO; conta e paciente por ref:FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)): (a) valor_destino iniciado por '=~' em valores.d emitir valor_presumido (baixa) na linha, para marcar cancelado_em presumido e os textos 'não informado'; (b) cancelado_em pela data de emissão (#data_hora:DATA,HORA) só quando CANCELADO='S', no lugar da data da carga (melhor para a DMED do ano)",
+   "motivo": "hoje o recibo cancelado carrega com cancelado_em = data da carga, sem pendência própria (o motivo literal diz 'motivo e data não informados' quando a origem não tem motivo); pagador e referente vazios entram com literal visível, sem pendência por linha"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d (por cliente, depois da revisão no painel)",
-   "mudanca": "de-para de valores por cliente, revisado no painel: COPERIODESCRIT -> periodo_escrituracao.forma (pela descrição); CTCTARECEITANCI.GRUPO -> conta_receita_custeio.grupo; CTWGRUPOEXPORTACAO -> grupo_exportacao_custo.destino; CTTIPODADO -> tipo_dado_estatistico.unidade_medida; COTP_ORIGEM_LANCAMENTO já tem de-para genérico pela descrição (valores.d/L8-09.tsv) e o cliente acrescenta os pares que faltarem",
+   "mudanca": "de-para de valores por cliente, revisado no painel: CTWGRUPOEXPORTACAO -> grupo_exportacao_custo.destino; CTTIPODADO -> tipo_dado_estatistico.unidade_medida; COPERIODESCRIT (forma pela descrição) e CTCTARECEITANCI.GRUPO (H/M/S do programa antigo) JÁ têm de-para na fatia (rodada 3) e o cliente acrescenta pares que faltarem; COTP_ORIGEM_LANCAMENTO idem",
    "motivo": "entram PRESUMIDOS (valor_presumido por linha) porque o domínio da origem depende do conteúdo da imagem do cliente; nada fixo por cliente no código"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py (classificação das bloqueadas)",
    "mudanca": "não classificar como 'regra_disponivel'/'vigencia_sem_fonte' uma bloqueada só porque o motivo cita '@data_carga' ou 'vigência'",
-   "motivo": "FCRECIBO e COSPEDHSTSEMP aparecem como 'só pedem refazer a fatia', mas esperam o pedido 1 (motor)"
+   "motivo": "FCRECIBO e COSPEDHSTSEMP aparecem como 'só pedem refazer a fatia', mas esperam o pedido 1 (motor)",
+   "atendido": "moot na rodada 3: as duas tabelas deixaram de estar bloqueadas"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "aresta de ordem FCRECIBO -> FCCTAEXT",
+   "motivo": "recibo.conta_hospitalar_id e paciente_id vêm da conta (ref alternativa composta); na ordem atual FCRECIBO (767) carrega antes de FCCTAEXT (971) e todo recibo fica com pai_inexistente nas duas colunas (anuláveis, visível)"
+  },
+  {
+   "arquivo": "catalogos/carregadores (trilha de catálogos) e docs/ESTADO.md",
+   "mudanca": "carregadores oficiais pendentes dos catálogos descartados pela fatia como catalogo_oficial: prefixo NIRE por UF (CONIRE), situações especiais da ECD (COSPEDSITEMP; o histórico usa os códigos 1 a 7 pelo valores.d), motivos de ECD substituta (COTPSUBSTECD), leiaute da DMED (DMCADLEIAUTE), ajustes da CPRB (ESTPCODAJUSTE), forma de tributação e relação do beneficiário no exterior do Reinf (FPFORMATRIBRENDEXT, FPINFOBENEFRENDEXT), serviço tomado do Reinf (FPTP_SERV_NF_TO) e coeficiente de depreciação por turnos (GPCOEFICIENTE_DEPREC -> coeficiente_turno, tabela sem semente)",
+   "motivo": "o descarte vale pela regra 7, mas hoje só existem os carregadores bcb, cfop, cid10, ibge e sigtap: sem os outros, DMED, Reinf, CPRB, ECD substituta e depreciação acelerada ficam sem códigos depois da virada"
   }
  ]
 }

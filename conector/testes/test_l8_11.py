@@ -13,7 +13,8 @@ TABELAS = set(l8_11.CARREGADAS)
 BLOQUEADAS = set(l8_11.NAO_CARREGADAS)
 DESTINO = {"TBAGEBAN": "agencia_bancaria", "TBCTABAN": "conta_bancaria", "MFBORDER": "bordero_pagamento",
            "MFCTAUSU": "permissao_conta_bancaria", "TBCENCUS": "centro_custo", "TBCLIENT": "cliente_financeiro",
-           "MFREFDES": "tipo_ajuste_titulo", "TBGRUDES": "grupo_natureza_financeira"}
+           "MFREFDES": "tipo_ajuste_titulo", "TBGRUDES": "grupo_natureza_financeira", "MFADIFOR": "adiantamento",
+           "MFLANCTO": "movimento_bancario", "MFSALATU": "saldo_diario_conta", "MFSALDOS": "saldo_diario_conta"}
 # obrigatórias do destino (NOT NULL sem padrão, fora id/criado_em/origem), conferidas contra o DDL da fatia
 OBRIGATORIAS = {"agencia_bancaria": {"banco_id", "codigo_agencia"},
                 "conta_bancaria": {"estabelecimento_id", "codigo", "descricao", "tipo"},
@@ -23,7 +24,11 @@ OBRIGATORIAS = {"agencia_bancaria": {"banco_id", "codigo_agencia"},
                 "centro_custo": {"estabelecimento_id", "codigo", "nome", "vigencia_inicio"},
                 "cliente_financeiro": {"tipo_pessoa", "nome"},
                 "tipo_ajuste_titulo": {"codigo", "descricao", "natureza"},
-                "grupo_natureza_financeira": {"codigo", "nome", "tipo"}}
+                "grupo_natureza_financeira": {"codigo", "nome", "tipo"},
+                "adiantamento": {"estabelecimento_id", "numero", "tipo_credor", "data_emissao", "valor"},
+                "movimento_bancario": {"estabelecimento_id", "conta_bancaria_id", "tipo_lancamento_bancario_id",
+                                       "natureza", "data_movimento", "historico", "valor"},
+                "saldo_diario_conta": {"conta_bancaria_id", "data_saldo", "operacao", "ocorrido_em"}}
 
 
 class Plano(unittest.TestCase):
@@ -42,7 +47,8 @@ class Plano(unittest.TestCase):
     def test_tabelas_e_destino_principal(self):
         self.assertEqual(set(self.plano), TABELAS)
         for t, dt in DESTINO.items():
-            self.assertEqual(self.plano[t]["destinos"], [dt], t)
+            self.assertEqual(self.plano[t]["destinos"], [dt] + (["tipo_lancamento_bancario"] if t == "MFLANCTO" else []),
+                             t)
 
     def test_obrigatorias_do_destino_cobertas(self):
         for t, dt in DESTINO.items():
@@ -115,6 +121,60 @@ class Plano(unittest.TestCase):
         self.assertNotIn("compoe_custo", c)  # domínio da origem não é S/N: fica o padrão
         self.assertEqual(self.pares("TBGRUDES", "CLASSIF"), {("D", "despesa"), ("R", "receita")})
 
+    def test_adiantamento_credor_pelo_tipo(self):
+        a = self.cols("MFADIFOR")
+        self.assertEqual(self.pares("MFADIFOR", "TIPO_CREDOR"), {("F", "fornecedor"), ("M", "profissional")})
+        self.assertEqual((a["empresa_fornecedora_id"]["coluna"], a["empresa_fornecedora_id"]["referencia"]),
+                         ("COD", "TBFORNEC"))
+        # profissional pela inscrição ligada ao adiantamento, e dela o profissional (encadeada)
+        self.assertEqual([x.get("tabela") or x.get("coluna") for x in a["profissional_id"]["passos"]],
+                         ["MFADIFOR_TBCBOPRO", "ID_TBCBOPRO", "TBCBOPRO", "ID_TBPROFIS", "TBPROFIS"])
+        self.assertEqual(a["conta_bancaria_id"]["passos"], [{"tabela": "TBCTABAN", "modo": "alt", "arg": "ID_CTABAN"}])
+        # a conta vem primeiro: conta recusada recusa a linha antes das outras colunas
+        self.assertEqual(self.plano["MFADIFOR"]["colunas"]["adiantamento"][0]["destino"], "conta_bancaria_id")
+        self.assertEqual((a["numero"]["coluna"], a["valor_pago"]["regra"]), ("ID_MFADIFOR", "decimal_nao_negativo"))
+        self.assertNotIn("MFADIFOR_TBCBOPRO", self.plano)  # descarte duplicado: o profissional já é o credor
+        # pago com data de pagamento; saldo a compensar = pago até a compensação carregar
+        self.assertEqual(self.pares("MFADIFOR", "DT_PGTO"), {("1", "pago")})
+        self.assertEqual((a["situacao"]["coluna"], a["situacao"]["regra"]), ("DT_PGTO", "preenchido"))
+        self.assertEqual((a["saldo_compensar"]["coluna"], a["saldo_compensar"]["regra"]),
+                         ("PAGO", "decimal_nao_negativo"))
+
+    def test_lancamento_um_movimento_por_lado(self):
+        p = self.plano["MFLANCTO"]
+        op = p["opcoes"]["movimento_bancario"]
+        self.assertEqual([r for _, r in op["desdobrar"]], ["credito", "debito"])
+        self.assertEqual([x for x, _ in op["desdobrar"]], ["ID_TBCTABAN_CRE+CDC_CRE", "ID_TBCTABAN_DEV+CDC_DEB"])
+        c = {x["coluna"]: x for x in p["colunas"]["movimento_bancario"]}
+        self.assertEqual((c["#item"]["regra"], c["#item"]["referencia"]), ("chave_origem", "TBCTABAN"))
+        self.assertEqual(c["#item2"]["referencia"], "TBCENCUS")
+        self.assertEqual(c["#rotulo"]["destino"], "natureza")
+        m = {x["destino"]: x["coluna"] for x in p["colunas"]["movimento_bancario"]}
+        self.assertEqual((m["compensado"], m["data_compensacao"]), ("=1", "DATA"))  # histórico realizado
+        # histórico vazio: texto fixo concorrente (vale a primeira coluna com valor)
+        self.assertEqual([x["coluna"][:1] or x["coluna"] for x in p["colunas"]["movimento_bancario"]
+                          if x["destino"] == "historico"], ["H", "="])
+        # tipo de migração por empresa, gravado antes e usado pelas outras linhas do grupo
+        t = p["opcoes"]["tipo_lancamento_bancario"]
+        self.assertEqual(t["agrupar"], ["EMPRESA"])
+        self.assertTrue(t["antes"])
+        tc = {x["destino"]: x["coluna"] for x in p["colunas"]["tipo_lancamento_bancario"]}
+        self.assertEqual((tc["sentido"], tc["transferencia"], tc["ativo"]), ("=transferencia", "=1", "=0"))
+        self.assertEqual(c["@id:tipo_lancamento_bancario"]["destino"], "tipo_lancamento_bancario_id")
+        self.assertEqual(carga_mapa.codigo_derivado("1", 30, "migracao_"), ("migracao_1", False))
+
+    def test_saldos(self):
+        for t in ("MFSALDOS", "MFSALATU"):
+            c = {x["destino"]: x for x in self.plano[t]["colunas"]["saldo_diario_conta"]}
+            self.assertEqual(c["operacao"]["coluna"], "=inclusao", t)
+            self.assertEqual(c["conta_bancaria_id"]["referencia"], "TBCTABAN", t)
+        c = {x["destino"]: x["coluna"] for x in self.plano["MFSALATU"]["colunas"]["saldo_diario_conta"]}
+        self.assertEqual((c["data_saldo"], c["ocorrido_em"]), ("=@data_carga", "=@data_carga"))
+        self.assertEqual(c["saldo_anterior"], "=~0")
+        self.assertNotIn("fechado", c)  # o dia da carga continua aberto
+        c = {x["destino"]: x["coluna"] for x in self.plano["MFSALDOS"]["colunas"]["saldo_diario_conta"]}
+        self.assertEqual((c["fechado"], c["saldo_anterior"]), ("=1", "=~0"))  # dia histórico fechado
+
     def test_bloqueadas_sem_destino(self):
         # dependem de regra genérica do motor (docs/obra/fatias/f4/saida/L8-11.json)
         self.assertFalse(BLOQUEADAS & set(self.plano))
@@ -152,8 +212,10 @@ class Sintetica(unittest.TestCase):
         self.assertTrue(BLOQUEADAS <= set(cont))
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items()
-                          if k.startswith(("restricao_destino_", "pai_pendente", "codigo_colisao_caixa")))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+                          if k.startswith(("restricao_destino_", "pai_pendente", "codigo_colisao_caixa",
+                                           "sem_item_a_gravar")))
+            # principal desdobrado: "gravados" conta itens; a linha conta uma vez
+            self.assertEqual(cont[t], l8_11.LINHAS_COM_ITEM.get(t, e["gravados"]) + recusas, t)
 
     def test_linhas_com_a_forma_do_ddl(self):
         f = l8_11.formas()

@@ -5,3 +5,11 @@ GECADSAI	CONSOL	documento_estoque.situacao		aberto	L7-08: sem marca: não lança
 GECADDEV	CONSOL	documento_estoque.situacao	S	concluido	L7-08: consolidado: lançado no saldo
 GECADDEV	CONSOL	documento_estoque.situacao	N	aberto	L7-08: não consolidado: ainda não lançado no saldo
 GECADDEV	CONSOL	documento_estoque.situacao		aberto	L7-08: sem marca: não lançado no saldo
+GECADSAI	DEST	documento_estoque.tipo	1	saida_paciente	L7-08: destino 1: paciente internado (PAC = registro da internação, medido)
+GECADSAI	DEST	documento_estoque.tipo	2	saida_setor	L7-08: destino 2: setor (centro de custo; nenhum com paciente, medido)
+GECADSAI	DEST	documento_estoque.tipo	3	saida_paciente	L7-08: destino 3: paciente em atendimento (PAC = registro do atendimento, medido)
+GECADSAI	DEST	documento_estoque.tipo	5	venda	L7-08: destino 5: venda externa (todos com terceiro e complemento de venda externa, medido)
+PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	1	requisicao_automatica	L7-08: 1ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
+PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	2	dispensacao_direta	L7-08: 2ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
+PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	1	na_prescricao	L7-08: 1ª opção do programa antigo; a confirmar pelo cliente (regra inativa)
+PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	2	no_aprazamento	L7-08: 2ª opção do programa antigo; a confirmar pelo cliente (regra inativa)

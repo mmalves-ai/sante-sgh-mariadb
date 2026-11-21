@@ -14,3 +14,10 @@ TBREPGER	TIPO_CTA	regra_repasse_item.escopo_conta		todas	L8-06: nulo: todas
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao	1	basica	L8-06: S: autenticação básica
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao	0	nenhuma	L8-06: N: sem autenticação
 TBTISSWEBSERV	CTR_AUT_TP_BASIC	credencial_fonte_pagadora.autenticacao		nenhuma	L8-06: nulo: sem autenticação
+FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	1	consulta	L8-06: guia de consulta
+FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	2	sp_sadt	L8-06: guia de SP/SADT
+FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	3	resumo_internacao	L8-06: resumo de internação
+FCTISSLOTEPROT	ID_TBTISSTPGUIA	lote_tiss.tipo_guia	4	honorario_individual	L8-06: honorário individual
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	1	glosado	L8-06: S (qualquer caixa): item glosado
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao	0	lancado	L8-06: N: item sem glosa
+FCLANEXT	GLOSADO	conta_hospitalar_item.situacao		lancado	L8-06: nulo: item sem glosa

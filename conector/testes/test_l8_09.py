@@ -48,10 +48,42 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("COPERIODESCRIT", "periodo_escrituracao")["estabelecimento_id"]["coluna"],
                          "@estabelecimento")
 
+    def decl(self, t, dt, dc):
+        return [c for c in self.plano[t]["colunas"][dt] if c["destino"] == dc]
+
+    def test_forma_e_grupo_pelo_de_para_nunca_presumidos(self):
+        # forma do período pela descrição (sem par: recusa visível, nunca presumida)
+        (f,) = self.decl("COPERIODESCRIT", "periodo_escrituracao", "forma")
+        self.assertEqual((f["coluna"], f["depara"]), ("NOME", "valores"))
+        self.assertEqual(set(f["valores"].values()), {"mensal", "trimestral", "semestral", "anual"})
+        self.assertEqual(f["valores"]["ANUAL"], "anual")
+        # grupo do custeio pelo código H/M/S do programa antigo; o código sem par cai na classe 'outro' (concorrente)
+        g1, g2 = self.decl("CTCTARECEITANCI", "conta_receita_custeio", "grupo")
+        self.assertEqual((g1["coluna"], g1["regra"], g2["coluna"]), ("GRUPO", "codigo_char", "=outro"))
+        self.assertEqual(g1["valores"], {"H": "servico", "M": "honorario", "S": "servico"})
+
+    def test_recibo_cancelado_tipo_e_textos_vazios(self):
+        rec = lambda dc: self.decl("FCRECIBO", "recibo", dc)
+        (tp,) = rec("tipo")
+        self.assertEqual((tp["coluna"], tp["regra"], tp["valores"]["1"], tp["valores"][""]),
+                         ("ID_TBCBOPRO", "preenchido", "honorario", "recebimento"))
+        (ce,) = rec("cancelado_em")
+        self.assertEqual((ce["valores"]["S"], ce["valores"]["N"]), ("@data_carga", ""))
+        m1, m2 = rec("motivo_cancelamento")
+        self.assertEqual((m1["coluna"], m2["coluna"]), ("ID_TBMOTEXC", "CANCELADO"))   # o motivo da origem vence
+        self.assertTrue(m2["valores"]["S"] and not m2["valores"]["N"])
+        for dc, col in (("pagador_nome", "PAGADOR"), ("referente", "DESC_REF")):
+            a, b = rec(dc)   # o texto da origem vence; vazio: literal visível (concorrente), em vez de recusa
+            self.assertEqual(a["coluna"], col)
+            self.assertTrue(b["coluna"].startswith("=") and "não informado" in b["coluna"], dc)
+        (ct,) = rec("conta_hospitalar_id")
+        (pc,) = rec("paciente_id")
+        self.assertEqual(ct["coluna"], "CONTA")
+        self.assertTrue(pc["via"].startswith(ct["via"]) if "via" in pc else True)
+        self.assertEqual(sentinela.aplicar("preenchido", 301), (True, None))
+
     def test_literais_presumidos(self):
-        esperado = {("COPERIODESCRIT", "periodo_escrituracao", "forma"): "=~mensal",
-                    ("CTCTARECEITANCI", "conta_receita_custeio", "grupo"): "=~outro",
-                    ("CTWGRUPOEXPORTACAO", "grupo_exportacao_custo", "destino"): "=~outro"}
+        esperado = {("CTWGRUPOEXPORTACAO", "grupo_exportacao_custo", "destino"): "=~outro"}
         for (t, dt, dc), lit in esperado.items():
             self.assertEqual(self.cols(t, dt)[dc]["coluna"], lit, (t, dc))
         self.assertTrue(self.cols("CTTIPODADO", "tipo_dado_estatistico")["unidade_medida"]["coluna"].startswith("=~"))
@@ -71,25 +103,24 @@ class Plano(unittest.TestCase):
         self.assertEqual(mod["Folha"], "folha")
         self.assertNotIn("Integração antiga exemplo", mod)
 
-    def test_bloqueadas_com_declaracao_pronta_comentada(self):
-        # emitido_em e ocorrido_em DATETIME(3) com DATE da origem divergiriam a soma: declaração só comentada
-        for t in l8_09.BLOQUEADAS:
-            self.assertNotIn(t, self.plano)
-        with open(os.path.join(RAIZ, "colunas.d", "L8-09.tsv"), encoding="utf-8") as f:
-            coment = [l.rstrip("\n").split("\t") for l in f if l.startswith("#") and "\t" in l]
-        destinos = {(c[0][1:], c[2]) for c in coment}
-        for dc in ("recibo.emitido_em", "recibo.valor_extenso", "recibo.pagador_nome", "recibo.referente",
-                   "recibo.estabelecimento_id", "recibo.numero", "recibo.tipo", "recibo.valor", "recibo.origem",
-                   "recibo.profissional_id", "recibo.vias_impressas", "recibo.situacao"):
-            self.assertIn(("FCRECIBO", dc), destinos)
-        # toda coluna NOT NULL sem padrão de situacao_especial_empresa (inclusive data_evento)
+    def test_recibo_e_situacao_especial_carregam(self):
+        # rodada 3: DATE em DATETIME pelo tipar; emissão por DATA + HORA; toda NOT NULL sem padrão coberta
+        self.assertEqual(l8_09.BLOQUEADAS, ())
+        rec = self.cols("FCRECIBO", "recibo")
+        for dc in ("emitido_em", "valor_extenso", "pagador_nome", "referente", "estabelecimento_id", "numero", "tipo",
+                   "valor", "origem", "profissional_id", "vias_impressas", "situacao", "motivo_cancelamento"):
+            self.assertIn(dc, rec)
+        self.assertEqual(rec["emitido_em"]["coluna"], "#data_hora:DATA,HORA")
+        self.assertTrue(rec["valor_extenso"]["coluna"].startswith("=~"))
+        sit = self.cols("COSPEDHSTSEMP", "situacao_especial_empresa")
         for dc in ("estabelecimento_id", "situacao", "data_evento", "vigencia_inicio", "operacao", "ocorrido_em"):
-            self.assertIn(("COSPEDHSTSEMP", "situacao_especial_empresa." + dc), destinos)
-        self.assertTrue(all("DATE em DATETIME" in c[-1] for c in coment))
-        # toda coluna da origem do recibo e do histórico declarada (aproveitada ou com motivo)
-        for t in l8_09.BLOQUEADAS:
-            cols = {c[1] for c in coment if c[0][1:] == t and c[1][:1] not in "=@#"}
-            self.assertEqual(len(cols), len(l8_09._TODAS[t]), t)
+            self.assertIn(dc, sit)
+        self.assertEqual(sit["ocorrido_em"]["coluna"], "=@data_carga")
+        with open(os.path.join(RAIZ, "colunas.d", "L8-09.tsv"), encoding="utf-8") as f:
+            self.assertFalse([l for l in f if l.startswith("#")])
+        with open(os.path.join(RAIZ, "valores.d", "L8-09.tsv"), encoding="utf-8") as f:
+            pares = [l.split("\t") for l in f if l.startswith("COSPEDHSTSEMP\t")]
+        self.assertEqual({p[3] for p in pares}, {str(n) for n in range(1, 8)})   # códigos oficiais públicos 1 a 7
 
     def test_descartes_com_causa_de_produto(self):
         with open(os.path.join(RAIZ, "sem_carga.tsv"), encoding="utf-8") as f:
@@ -162,11 +193,8 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in FORA:  # presença na imagem, nada esperado no destino
-            self.assertEqual(cont[t], {"FCRECIBO": 13, "COSPEDSITEMP": 3, "COSPEDHSTSEMP": 4}.get(t, 2), t)
-        # bloqueadas: o esperado previsto fecha com as linhas (para quando a regra de data e hora entrar)
-        for t, e in (("FCRECIBO", l8_09.PREVISTO_FCRECIBO), ("COSPEDHSTSEMP", l8_09.PREVISTO_COSPEDHSTSEMP)):
-            recusas = sum(n for k, n in e["pendencias"].items() if k.startswith("restricao_destino_"))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            self.assertEqual(cont[t], {"COSPEDSITEMP": 3}.get(t, 2), t)
+        self.assertEqual((cont["FCRECIBO"], cont["COSPEDHSTSEMP"]), (13, 4))
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_09.DDL.splitlines() if l.startswith("CREATE TABLE")}

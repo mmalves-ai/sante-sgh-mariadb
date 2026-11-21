@@ -140,24 +140,104 @@ MFREFDES	FATO_GERADOR_PAGAR		inteiro			L8-11 (cobertura): sem destino: domínio 
 MFREFDES	FATO_GERADOR_RECEBER		inteiro			L8-11 (cobertura): sem destino: domínio sem sentido provado (medido: nulo 17, 1 em 6, 3 em 1-2); momento_aplicacao fica o padrão (baixa); decisão em F4-decisoes-destino.md
 MFREFDES	INTEGRAR_IMPOSTO_CTA_PAG		inteiro			L8-11 (cobertura): sem destino: integração contábil do imposto é configuração do produto (medido: 1 ou 2 em 24 de 24, sem sentido provado)
 MFREFDES	INTEGRAR_IMPOSTO_CTA_REC		inteiro			L8-11 (cobertura): sem destino: integração contábil do imposto é configuração do produto (medido: 1 ou 2 em 24 de 24, sem sentido provado)
-MFSALDOS	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 1 em docs/obra/fatias/f4/saida/L8-11.json): ocorrido_em é DATETIME(3) NOT NULL e a origem só tem DATE; a soma de controle não converte data em data e hora (o mesmo de FCRECIBO e COSPEDHSTSEMP na L8-09). Declaração pronta e comentada (#MFSALDOS)
-MFSALATU	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 1 em docs/obra/fatias/f4/saida/L8-11.json): idem MFSALDOS: saldo atual vira o saldo do dia da carga (=@data_carga), ocorrido_em DATETIME. Declaração pronta e comentada (#MFSALATU)
-MFADIFOR	ID_MFADIFOR					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 2 em docs/obra/fatias/f4/saida/L8-11.json): credor exclusivo por TIPO_CREDOR (medido F 3926 fornecedor, M 395 profissional pela MFADIFOR_TBCBOPRO, E 7): a CHECK do adiantamento exige um só credor e sem regra condicional o código do credor iria para o tipo errado
-MFADIFOR_TBCBOPRO	ID_MFADIFOR					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 2 em docs/obra/fatias/f4/saida/L8-11.json): pai MFADIFOR (adiantamento) espera a regra condicional
 MFPAGADF	ID_MFADIFOR					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 2,3 em docs/obra/fatias/f4/saida/L8-11.json): compensação exige adiantamento, parcela a pagar e baixa, pais que esperam os pedidos 2 e 3
 MFCONPAG	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 2,3 em docs/obra/fatias/f4/saida/L8-11.json): título a pagar: credor exclusivo por TP_FORNPRES (medido F 55725, P 10081, vazio 5441, A 15, N 5), natureza financeira e tipo de documento NOT NULL sem fonte no título (a natureza está no rateio MFLANGSI, filho do título) e parcelas da origem agrupadas num título
 MFCONPAG_TBCBOPRO	ID_MFCONPAG					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 3 em docs/obra/fatias/f4/saida/L8-11.json): pai MFCONPAG (título a pagar) espera os pedidos 2 e 3
 SDMFCONPAG	ID_MFCONPAG					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 3 em docs/obra/fatias/f4/saida/L8-11.json): pai MFCONPAG (título a pagar) espera os pedidos 2 e 3
 MFDESACR	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 3 em docs/obra/fatias/f4/saida/L8-11.json): ajuste exige a parcela a pagar ou a receber (pais MFCONPAG e MFCTAREC esperam os pedidos 2 e 3)
-MFCTAREC	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 2,3 em docs/obra/fatias/f4/saida/L8-11.json): título a receber: devedor exclusivo por DEV (medido E 17130, I 5096, C 2559, T 190, L 83, O 1), natureza financeira, tipo de documento e tipo de origem NOT NULL sem fonte direta e parcelas agrupadas num título
-MFLANCTO	ID					L8-11 (cobertura): não carregada: falta mecanismo genérico do motor (pedido 4 em docs/obra/fatias/f4/saida/L8-11.json): uma linha com os dois lados vira dois movimentos (medido: 24741 com crédito e débito, 4798 só crédito, 6812 só débito, 34 sem conta); o desdobramento hoje é proibido no destino principal e não leva colunas por lado; o tipo de lançamento NOT NULL pede o tipo nativo por código
-#MFSALDOS	ID_TBCTABAN	saldo_diario_conta.conta_bancaria_id	chave_origem			L8-11 (cobertura): conta pela chave ID (medido 581 de 581; 7 nulas: NOT NULL recusa)
-#MFSALDOS	DATA	saldo_diario_conta.data_saldo	data			L8-11 (cobertura): dia do saldo; repetido na conta (medido 1): a chave única recusa
-#MFSALDOS	DATA	saldo_diario_conta.ocorrido_em	data			L8-11 (cobertura): o registro do saldo ocorreu no dia do saldo (meia-noite)
-#MFSALDOS	SALDO	saldo_diario_conta.saldo_final	decimal			L8-11 (cobertura): saldo no fim do dia; entradas e saídas do dia não existem na origem: padrão 0
-#MFSALDOS	=inclusao	saldo_diario_conta.operacao				L8-11 (cobertura): operação de inclusão (carga)
-#MFSALATU	ID_TBCTABAN	saldo_diario_conta.conta_bancaria_id	chave_origem			L8-11 (cobertura): conta pela chave ID (medido 260 de 260; 132 nulas: NOT NULL recusa)
-#MFSALATU	=@data_carga	saldo_diario_conta.data_saldo				L8-11 (cobertura): saldo atual = saldo do dia da carga (decisão em F4-decisoes-destino.md)
-#MFSALATU	=@data_carga	saldo_diario_conta.ocorrido_em				L8-11 (cobertura): idem
-#MFSALATU	SALDO	saldo_diario_conta.saldo_final	decimal			L8-11 (cobertura): saldo atual
-#MFSALATU	=inclusao	saldo_diario_conta.operacao				L8-11 (cobertura): operação de inclusão (carga)
+MFCTAREC	ID					L8-11 r3: não carregada: falta mecanismo do MOTOR (pedido 13 em docs/obra/fatias/f4/saida/L8-11.json): devedor exclusivo pelo mesmo COD conforme DEV (regra condicional, pedido 2), natureza financeira NOT NULL só no rateio filho MFLANGSI (referência reversa, pedido 3a) e tipo de documento NOT NULL sem cadastro nativo (pedido 3b); parcelas sob o título já têm mecanismo (antes;agrupar:)
+MFSALDOS	ID_TBCTABAN	saldo_diario_conta.conta_bancaria_id	chave_origem			L8-11 (cobertura): conta pela chave ID (medido 581 de 581; 7 nulas: NOT NULL recusa)
+MFSALDOS	DATA	saldo_diario_conta.data_saldo	data			L8-11 (cobertura): dia do saldo; repetido na conta (medido 1): a chave única recusa
+MFSALDOS	DATA	saldo_diario_conta.ocorrido_em	data			L8-11 (cobertura): o registro do saldo ocorreu no dia do saldo (meia-noite)
+MFSALDOS	SALDO	saldo_diario_conta.saldo_final	decimal			L8-11 (cobertura): saldo no fim do dia; entradas e saídas do dia não existem na origem: padrão 0
+MFSALDOS	=inclusao	saldo_diario_conta.operacao				L8-11 (cobertura): operação de inclusão (carga)
+MFSALATU	ID_TBCTABAN	saldo_diario_conta.conta_bancaria_id	chave_origem			L8-11 (cobertura): conta pela chave ID (medido 260 de 260; 132 nulas: NOT NULL recusa)
+MFSALATU	=@data_carga	saldo_diario_conta.data_saldo				L8-11 (cobertura): saldo atual = saldo do dia da carga (decisão em F4-decisoes-destino.md)
+MFSALATU	=@data_carga	saldo_diario_conta.ocorrido_em				L8-11 (cobertura): idem
+MFSALATU	SALDO	saldo_diario_conta.saldo_final	decimal			L8-11 (cobertura): saldo atual
+MFSALATU	=inclusao	saldo_diario_conta.operacao				L8-11 (cobertura): operação de inclusão (carga)
+MFSALDOS	ID		inteiro			L8-11 r3: sem destino: chave da origem (fica no conector_origem)
+MFSALDOS	EMPRESA		inteiro			L8-11 r3: sem destino: mantenedora; a conta (ID_TBCTABAN) já é da empresa
+MFSALDOS	BANCO		inteiro			L8-11 r3: sem destino: banco, agência, conta e dígito vêm da conta (ID_TBCTABAN)
+MFSALDOS	AGENCIA		inteiro			L8-11 r3: sem destino: vem da conta (ID_TBCTABAN)
+MFSALDOS	CONTA		inteiro			L8-11 r3: sem destino: vem da conta (ID_TBCTABAN)
+MFSALDOS	DIGITO		texto			L8-11 r3: sem destino: vem da conta (ID_TBCTABAN)
+MFSALATU	ID		inteiro			L8-11 r3: sem destino: chave da origem (fica no conector_origem)
+MFSALATU	EMPRESA		inteiro			L8-11 r3: sem destino: mantenedora; a conta (ID_TBCTABAN) já é da empresa
+MFSALATU	BANCO		inteiro			L8-11 r3: sem destino: banco, agência e conta vêm da conta (ID_TBCTABAN)
+MFSALATU	AGENCIA		inteiro			L8-11 r3: sem destino: vem da conta (ID_TBCTABAN)
+MFSALATU	CONTA		inteiro			L8-11 r3: sem destino: vem da conta (ID_TBCTABAN)
+MFADIFOR	ID_TBCTABAN	adiantamento.conta_bancaria_id			ref:TBCTABAN.ID_CTABAN	L8-11 r3: conta de saída pelo número interno ID_CTABAN (chave alternativa; medido 4328 de 4328 casam com ID_CTABAN); conta recusada: pai_pendente; número inexistente: pai_inexistente, coluna nula
+MFADIFOR	@estabelecimento	adiantamento.estabelecimento_id				L8-11 r3: estabelecimento único do cliente (EMPRESA é a mantenedora); vários: estabelecimento_indefinido
+MFADIFOR	ID_MFADIFOR	adiantamento.numero	texto			L8-11 r3: número de negócio = chave da origem (única; DOC repete entre credores e fica em observacao)
+MFADIFOR	DOC	adiantamento.observacao	texto			L8-11 r3: número do documento da origem guardado na observação (o modelo não tem coluna de documento no adiantamento)
+MFADIFOR	TIPO_CREDOR	adiantamento.tipo_credor	codigo_char	valores		L8-11 r3: F fornecedor, M profissional (valores.d/L8-11.tsv; medido F 3926, M 395, E 7); E sem par no modelo: NULL com valor_fora_do_dominio e o NOT NULL recusa (visível, decisão do dono pendente)
+MFADIFOR	COD	adiantamento.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L8-11 r3: credor fornecedor pela chave COD do fornecedor. Sem regra condicional no motor (pedido 2) a referência é tentada em toda linha: na linha de profissional o código que não é fornecedor fica NULL com pai_inexistente, e o que coincide com um fornecedor faz a CHECK do credor recusar a linha (restricao_destino_4025, visível; nunca credor trocado)
+MFADIFOR	ID_MFADIFOR	adiantamento.profissional_id			ref:MFADIFOR_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L8-11 r3: credor profissional pela inscrição ligada ao adiantamento (MFADIFOR_TBCBOPRO, uma por adiantamento, 395 = as linhas M) e dela o profissional; adiantamento de fornecedor fica NULL com pai_inexistente (ruído até a regra condicional, pedido 2); depende de TBPROFIS carregar antes (dependência pedida)
+MFADIFOR	EMISSAO	adiantamento.data_emissao	data			L8-11 r3: emissão; sem data: o NOT NULL recusa
+MFADIFOR	VENC	adiantamento.data_vencimento	data			L8-11 r3: prazo para compensar; antes da emissão: a CHECK recusa
+MFADIFOR	DATA_PREVISTA_PGTO	adiantamento.data_prevista_pagamento	data			L8-11 r3: previsão de pagamento
+MFADIFOR	AUTORIZADO_PGTO_PARA	adiantamento.pagamento_autorizado_para	data			L8-11 r3: pagamento liberado a partir de
+MFADIFOR	DT_PGTO	adiantamento.data_pagamento	data			L8-11 r3: data do pagamento
+MFADIFOR	VLR_DOC_TOT	adiantamento.valor	decimal			L8-11 r3: valor do adiantamento; zero ou negativo: a CHECK recusa
+MFADIFOR	PAGO	adiantamento.valor_pago	decimal_nao_negativo			L8-11 r3: valor pago; negativo: padrão 0 com pendência
+MFADIFOR	REFERENTE	adiantamento.referente	texto			L8-11 r3: finalidade
+MFADIFOR	EMPRESA		inteiro			L8-11 r3: sem destino: mantenedora; o estabelecimento é o único do cliente
+MFADIFOR	CHEQUE		inteiro			L8-11 r3: sem destino: o cheque emitido é da tabela de cheques (fora do mapa)
+MFADIFOR	TP_PGTO		inteiro			L8-11 r3: sem destino: forma de pagamento sem domínio documentado na origem; forma_pagamento fica nula
+MFADIFOR	HIST		inteiro			L8-11 r3: sem destino: histórico padrão sem carregador no mapa (pedido 6)
+MFADIFOR	ID_MFCABECLANC		inteiro			L8-11 r3: sem destino: agrupador descartado (sem_valor)
+MFADIFOR	ID_MFTIPOLANC		inteiro			L8-11 r3: sem destino: o tipo do credor vem de TIPO_CREDOR (o tipo de lançamento é cadastro do credor, L8-10)
+MFADIFOR_TBCBOPRO	ID_TBCBOPRO		chave_origem			L8-11 r3: descarte duplicado (sem_carga.tsv): a inscrição leva ao profissional credor do adiantamento (adiantamento.profissional_id); gravada também em beneficiario_adiantamento repetiria o mesmo profissional
+MFLANCTO	#item	movimento_bancario.conta_bancaria_id	chave_origem		desdobrar:ID_TBCTABAN_CRE+CDC_CRE=credito,ID_TBCTABAN_DEV+CDC_DEB=debito;ref:TBCTABAN	L8-11 r3: um movimento por lado com conta (medido 24741 com os dois lados, 4798 só crédito, 6812 só débito, 34 sem conta): conta pela chave ID (medido: lançamentos casam com ID); sem conta em nenhum lado: recusa baixa sem_item_a_gravar; conta recusada: pai_pendente; centro de custo de um lado sem a conta dele: o NOT NULL recusa a linha (visível)
+MFLANCTO	#item2	movimento_bancario.centro_custo_id	chave_origem		ref:TBCENCUS	L8-11 r3: centro de custo do mesmo lado (CDC_CRE do crédito, CDC_DEB do débito) pelo código COD do centro; inexistente: pai_inexistente, coluna nula
+MFLANCTO	#rotulo	movimento_bancario.natureza				L8-11 r3: credito ou debito pelo lado
+MFLANCTO	@estabelecimento	movimento_bancario.estabelecimento_id				L8-11 r3: estabelecimento único do cliente (EMPRESA é a mantenedora)
+MFLANCTO	@id:tipo_lancamento_bancario	movimento_bancario.tipo_lancamento_bancario_id				L8-11 r3: tipo de lançamento de migração da empresa (destino agrupado abaixo)
+MFLANCTO	DATA	movimento_bancario.data_movimento	data			L8-11 r3: data do lançamento; sentinela: o NOT NULL recusa
+MFLANCTO	DOC	movimento_bancario.numero_documento	texto			L8-11 r3: número do documento
+MFLANCTO	HIST	movimento_bancario.historico	texto			L8-11 r3: histórico; vazio: texto fixo concorrente abaixo (o NOT NULL não perde o movimento)
+MFLANCTO	=Lançamento sem histórico no sistema anterior	movimento_bancario.historico				L8-11 r3: histórico vazio na origem (coluna concorrente: só vale sem HIST)
+MFLANCTO	VALOR	movimento_bancario.valor	decimal			L8-11 r3: valor; zero ou negativo: a CHECK recusa a linha inteira (os dois lados)
+MFLANCTO	GRUPO	movimento_bancario.natureza_financeira_id			ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)	L8-11 r3: natureza pelo item do plano gerencial (chave composta de TBITEDES, L8-12); inexistente: pai_inexistente, coluna nula
+MFLANCTO	#codigo_derivado:EMPRESA:30:migracao_	tipo_lancamento_bancario.codigo	inteiro		antes;agrupar:EMPRESA	L8-11 r3: tipo NATIVO de migração, um por empresa da origem, criado pela primeira linha e usado pelas outras (sem pendência): a origem não tem tipo de lançamento; inativo para movimento novo; o cliente reclassifica
+MFLANCTO	=Lançamento migrado do sistema anterior	tipo_lancamento_bancario.descricao				L8-11 r3: descrição do tipo de migração
+MFLANCTO	=transferencia	tipo_lancamento_bancario.sentido				L8-11 r3: o lançamento da origem é entre até duas contas (crédito numa, débito na outra); o lado de cada movimento fica na natureza dele
+MFLANCTO	=1	tipo_lancamento_bancario.transferencia				L8-11 r3: coerente com o sentido (CHECK)
+MFLANCTO	=0	tipo_lancamento_bancario.ativo				L8-11 r3: inativo: o usuário não o escolhe em movimento novo
+MFLANCTO	EMPRESA		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	BCO_CRE		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	BCO_DEV		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	AGE_CRE		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	CTA_CRE		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	AGE_DEV		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	CTA_DEV		inteiro			L8-11 r3: sem destino: banco, agência e conta de cada lado vêm da conta (ID_TBCTABAN_CRE/DEV); EMPRESA só agrupa o tipo de migração
+MFLANCTO	SUBGRUPO		inteiro			L8-11 r3: sem destino: lida pela referência composta da natureza (GRUPO)
+MFLANCTO	ITEM		inteiro			L8-11 r3: sem destino: lida pela referência composta da natureza (GRUPO)
+MFLANCTO	TIPO_TRF		codigo_char			L8-11 r3: sem destino: domínio sem sentido documentado; o meio da transferência fica para o pedido da transferência bancária
+MFLANCTO	EMITIDO		codigo_char			L8-11 r3: sem destino: marca de impressão do documento no sistema anterior
+MFLANCTO	USUARIO		texto			L8-11 r3: sem destino: o movimento do modelo não guarda o autor
+MFLANCTO	ANO_CONT		inteiro			L8-11 r3: sem destino: integração contábil do sistema anterior (o lançamento contábil é do produto)
+MFLANCTO	MES_CONT		inteiro			L8-11 r3: sem destino: integração contábil do sistema anterior
+MFLANCTO	DOC_CONT		inteiro			L8-11 r3: sem destino: integração contábil do sistema anterior
+MFLANCTO	HIST_CONT		inteiro			L8-11 r3: sem destino: histórico contábil sem carregador no mapa
+MFLANCTO	CDC_GSI		inteiro			L8-11 r3: sem destino: centro de custo do rateio gerencial: o centro de cada lado vem de CDC_CRE/CDC_DEB
+MFLANCTO	DATA_HORA_INCLUSAO		data_hora			L8-11 r3: sem destino: data de gravação do sistema anterior
+MFLANCTO	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L8-11 r3: sem destino: marca do diferencial, não dado do movimento
+MFLANCTO	ID_MFCABECLANC		inteiro			L8-11 r3: sem destino: agrupador descartado (sem_valor)
+MFLANCTO	ID_MFCHEQUE		inteiro			L8-11 r3: sem destino: tabela de cheques fora do mapa
+MFLANCTO	ID		inteiro			L8-11 r3: sem destino: chave da origem (fica no conector_origem)
+MFADIFOR	DT_PGTO	adiantamento.situacao	preenchido	valores		L8-11 r3 (revisão): adiantamento com data de pagamento fica 'pago' (de-para 1 -> pago em valores.d); sem data fica o padrão 'aberto'. Compensado e compensado_parcial só quando a compensação (MFPAGADF, fora do mapa desta fatia) carregar
+MFADIFOR	PAGO	adiantamento.saldo_compensar	decimal_nao_negativo			L8-11 r3 (revisão): o valor pago ainda não compensado; sem a compensação carregada, o saldo a compensar é o próprio valor pago (decisão em F4-decisoes-destino.md); pago maior que o valor recusa pela CHECK (visível)
+MFSALDOS	=1	saldo_diario_conta.fechado				L8-11 r3 (revisão): dia histórico do sistema anterior é dia fechado: não aceita lançamento retroativo na conta
+MFSALDOS	=~0	saldo_diario_conta.saldo_anterior				L8-11 r3 (revisão): a origem guarda só o saldo do dia; saldo anterior, entradas e saídas não vieram e ficam 0 PRESUMIDO (pendência baixa valor_presumido por linha, o cliente vê que o detalhamento não foi migrado)
+MFSALATU	=~0	saldo_diario_conta.saldo_anterior				L8-11 r3 (revisão): saldo atual sem detalhamento na origem: anterior, entradas e saídas 0 PRESUMIDO (valor_presumido); o dia da carga continua aberto
+MFLANCTO	=1	movimento_bancario.compensado				L8-11 r3 (revisão): o lançamento bancário do sistema anterior é o movimento realizado da conta (o cheque a compensar fica no cadastro de cheques, fora deste lançamento): histórico entra compensado
+MFLANCTO	DATA	movimento_bancario.data_compensacao	data			L8-11 r3 (revisão): compensado na própria data do lançamento
+#TBINTIMP	#item	aliquota_tributo_vigencia.aliquota	decimal		desdobrar:IRRF=IRRF,ISS=ISS,PIS=PIS,COFINS=COFINS,CSLL=CSLL,PIS_COFINS_CSLL=CSRF,ALIQUOTA_CBS=CBS,ALIQUOTA_IBS=IBS	L8-11 r3: pronta para o pedido 15 (cod: sobre o rótulo do item e tributo nativo); uma alíquota por tributo
+#TBINTIMP	#rotulo	aliquota_tributo_vigencia.tributo_id			cod:tributo.codigo	L8-11 r3: pedido 15 (a): o rótulo do item acha o tributo nativo pela sigla
+#TBINTIMP	@estabelecimento	aliquota_tributo_vigencia.estabelecimento_id				L8-11 r3: pedido 15
+#TBINTIMP	TIPO_CTA	aliquota_tributo_vigencia.aplicacao	inteiro	valores		L8-11 r3: pedido 15 e 14: tipo de conta -> retencao_pagar/retencao_receber pelos pares medidos
+#TBINTIMP	TIPO	aliquota_tributo_vigencia.tipo_pessoa	codigo_char	valores		L8-11 r3: pedido 14: M (profissional) fisica, E (empresa) juridica, a confirmar por contagem
+#TBINTIMP	DT_VIG_I	aliquota_tributo_vigencia.vigencia_inicio	data			L8-11 r3: pedido 15
+#TBINTIMP	DT_VIG_F	aliquota_tributo_vigencia.vigencia_fim	data			L8-11 r3: pedido 15 (c): data de fim aberta (ano 2999) vira NULL sem pendência

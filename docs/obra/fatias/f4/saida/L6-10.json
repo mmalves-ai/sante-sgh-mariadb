@@ -12,17 +12,18 @@
   },
   {
    "arquivo": "orquestrador: python3 -I tools/obra/gerar_mapa_conector.py",
-   "mudanca": "Regenerar tabelas.tsv e dependencias.tsv: a L6-10 acrescentou em declarado/dependencias.tsv PRRESPOSTA -> PRPADEVOL e TBUNIDMEDIDA_PRINC_VALID -> TBUNICON (o pai vinha depois do filho). Não rodei o gerador (arquivo gerado compartilhado; outras fatias também acrescentaram arestas).",
+   "mudanca": "Regenerar tabelas.tsv e dependencias.tsv: a L6-10 acrescentou em declarado/dependencias.tsv TBUNIDMEDIDA_PRINC_VALID -> TBUNICON (o pai vinha depois do filho). Não rodei o gerador (arquivo gerado compartilhado; outras fatias também acrescentaram arestas). (rodada 3: a aresta PRRESPOSTA -> PRPADEVOL passou a ser da L6-11, que carrega PRRESPOSTA.)",
    "motivo": "O verificador acusa tabelas.tsv e dependencias.tsv desatualizados."
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e verificar_mapa.py",
    "mudanca": "Desdobrar no destino PRINCIPAL (uma linha da origem em N linhas da mesma tabela): conector_origem por item (<chave>/<rótulo>) e situação da linha pela chave da origem. Com isso PRPARAMSUMARIOALTA pode sair do descarte (uma seção por parâmetro, #rotulo em codigo/tipo_conteudo, #item em ativo pela regra preenchido); vale também para TBPERMISSAO_SUS (L5-02).",
-   "motivo": "O verificador recusa hoje 'destino principal não pode ser opcional nem desdobrado'."
+   "motivo": "O verificador recusa hoje 'destino principal não pode ser opcional nem desdobrado'.",
+   "atendido": "rodada 3, grupo 1: desdobrar no principal (#item/#item2, #rotulo/#rotulo2); PRPARAMSUMARIOALTA ainda pede referência no item (pedido novo nesta saída)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (complementa)",
-   "mudanca": "Complemento de vários filhos no mesmo pai (TBHORMED_RIBLOCOS: vários blocos na mesma grade; TBCBARANOTIFICACAO: várias gravidades na mesma ação): hoje o último sobrescreve e a conciliação acusa divergência. Opções: pendência própria complemento_repetido nas linhas seguintes (sem UPDATE), ou cópia da linha do pai com a coluna a mais (grade por bloco).",
+   "mudanca": "Complemento de vários filhos no mesmo pai (TBHORMED_RIBLOCOS: vários blocos na mesma grade; TBCBARANOTIFICACAO: várias gravidades na mesma ação): hoje o último sobrescreve e a conciliação acusa divergência. Opções: pendência própria complemento_repetido nas linhas seguintes (sem UPDATE), ou cópia da linha do pai com a coluna a mais (grade por bloco). Rodada 3: TBHORMED_RIBLOCOS deixou o complemento e grava uma CÓPIA da grade por bloco (ref:TBHORMED@<coluna>); segue valendo para TBCBARANOTIFICACAO.",
    "motivo": "Na imagem sintética há um filho por pai; na real, mais de um bloco por grade é provável (7 linhas)."
   },
   {
@@ -68,8 +69,8 @@
   },
   {
    "arquivo": "conector/mapa (L6-11: colunas.d/L6-11.tsv)",
-   "mudanca": "Ao destravar PRPADEVOL (modelo_campo): ler título, tipo, unidade e texto da pergunta pela ref: encadeada PRPERGUNTA (ex.: titulo <- ref:PRPERGUNTA>DESCRICAO, tipo_campo <- ref:PRPERGUNTA>TIPOPERG com de-para, texto <- ref:PRPERGUNTA>CONTEVOL). Avisar a L6-10 para (1) descomentar PRRESPOSTA, (2) trocar PRPERGUNTA de bloqueada para descarte duplicado. A L6-10 não define mais PRPADEVOL na sua imagem sintética.",
-   "motivo": "PRPERGUNTA e PRRESPOSTA estão bloqueadas por dependerem de PRPADEVOL (pai_nao_carregado / depende_de_fatia:L6-11)."
+   "mudanca": "Na PRPADEVOL (modelo_campo), ler pela ref: encadeada terminada em coluna TODO o conteúdo da pergunta, não só o título: tipo_campo <- ref:PRPERGUNTA>TIPOPERG com de-para de valores medido na referência (hoje =~texto presumido em toda linha); unidade do campo <- ref:PRPERGUNTA>ID_TBUNIDADEMEDIDA (ou UNIDPERG) para unidade_resposta_id; texto padrão <- ref:PRPERGUNTA>CONTEVOL (valor_padrao, resumo a 500, ou texto_padrao_campo_modelo); situação <- ref:PRPERGUNTA>ATIVO (ativo/editável); MANTERHIST, ALTURA_COMPONENTE e LARGURA_COMPONENTE nas propriedades. A guarda test_l6_10.test_pergunta_duplicada_so_se_a_ligacao_a_le só aceita PRPERGUNTA como descarte duplicado quando DESCRICAO, TIPOPERG, CONTEVOL, ATIVO e UNIDPERG ou ID_TBUNIDADEMEDIDA forem lidas; então a L6-10 troca sem_carga.tsv de bloqueada para descarte duplicado.",
+   "motivo": "Revisão da rodada 3: hoje só DESCRICAO é lida; tipo, unidade, texto padrão e situação dos campos dos formulários clínicos se perderiam. PRPERGUNTA (1514 linhas na referência) está BLOQUEADA (referencia_encadeada:PRPADEVOL) até isso."
   },
   {
    "arquivo": "conector/mapa (L6-13: colunas.d/L6-13.tsv)",
@@ -78,8 +79,42 @@
   },
   {
    "arquivo": "conector/mapa (L6-05: sem_carga.tsv, PRCADRESP)",
-   "mudanca": "Reavaliar o descarte 'duplicado' de PRCADRESP: ele depende de PRRESPOSTA carregar, e PRRESPOSTA está bloqueada (pai_nao_carregado:PRPADEVOL).",
-   "motivo": "Mesmo tipo de descarte apoiado num duplicado que hoje não carrega."
+   "mudanca": "Reavaliar o descarte duplicado de PRCADRESP pela declaração de PRRESPOSTA na L6-11 (rótulo por ref:PRCADRESP>DESCRICAO, concorrente com CONTEVOL).",
+   "motivo": "PRRESPOSTA carrega agora na L6-11 (rodada 3); a declaração comentada da L6-10 foi apagada."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar)",
+   "mudanca": "Referência no item desdobrado: #item/#item2 com via ref:T>COLUNA (encadeada terminada em coluna) e depara=valores, e coluna comum da linha com ref: junto do desdobrar. Uso: PRPARAMSUMARIOALTA em 4 componente_sumario_alta (desdobrar:ID_PROPCAOPERIODO_PROC=procedimentos|procedimentos,ID_PROPCAOPERIODO_EXA=exames|exames,ID_PRPERGUNTA_EVOL_CLIN=evolucao_clinica|evolucao_clinica,ID_PRPERGUNTA_PLANO=plano_terapeutico|plano_terapeutico; #rotulo codigo, #rotulo2 tipo_conteudo; período pelo NOME de PROPCAOPERIODO com o de-para de nomes da L6-06 para o domínio atendimento_inteiro/ultimas_24_horas/ultimas_72_horas; modelo pela pergunta via PRPADEVOL>ID_EVOLUCAO>PREVOLUCAO; tipo_atendimento por PRTPATEND).",
+   "motivo": "Hoje o item é convertido sem passos (passos=None em _montar): o período é id de cadastro do cliente e não pode ir por de-para de chave. PRPARAMSUMARIOALTA fica BLOQUEADA (desdobrar_item_com_referencia) até isso; descarte sem_valor foi recusado na revisão (é a configuração do sumário de alta do cliente)."
+  },
+  {
+   "arquivo": "modelo 06_PEP/05 (trilha F2.2) ou colunas.d/L6-09.tsv (TBHORARIODOSE)",
+   "mudanca": "Horários padrão por dose (horario_padrao_dose) da grade também nas cópias por bloco: ou associação grade x bloco no modelo (grade_horario_bloco) com a grade única, ou TBHORARIODOSE replicado para cada cópia da grade (uma linha por cópia).",
+   "motivo": "TBHORMED_RIBLOCOS agora grava uma cópia da grade por bloco (nenhum bloco perde a grade, nenhuma ligação é sobrescrita); os horários por dose continuam só na grade original, e a cópia do bloco usa o padrão do estabelecimento."
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Situação PARCIAL na cobertura: tabela que carrega com taxa de casamento medida abaixo de 100% numa coluna obrigatória por referência (ex.: campo 'parcial' no pedido da fatia: {tabela, coluna, casadas, total}), mostrada à parte de CARREGA.",
+   "motivo": "PRUNITPLAN (1 de 3 linhas casam) e TBUNIDMEDIDA_PRINC_VALID (2 de 4) aparecem como CARREGA pura; a perda já é pendência por linha (pai_inexistente + recusa), mas a cobertura não a mostra.",
+   "parcial": [
+    {
+     "tabela": "PRUNITPLAN",
+     "coluna": "UNI_PRESC",
+     "casadas": 1,
+     "total": 3
+    },
+    {
+     "tabela": "TBUNIDMEDIDA_PRINC_VALID",
+     "coluna": "ID_TBUNIDADEMEDIDA",
+     "casadas": 2,
+     "total": 4
+    }
+   ]
+  },
+  {
+   "arquivo": "colunas.d/L7-07.tsv (TBUNICON) e declarado/dependencias.tsv",
+   "mudanca": "(1) TBUNICON com o destino secundário unidade_prescricao (codigo, sigla, descricao; adotar:codigo), reforçando o pedido da L6-11; a L6-10 passa PRUNITPLAN.UNI_PRESC a ref:TBUNICON/unidade_prescricao. (2) Aresta TBUNIDADEMEDIDA -> TBUNICON, para a L6-10 dar a TBUNIDADEMEDIDA o destino unidade_medida adotando pelo código (SIGLA_API) a unidade que TBUNICON já gravou e criando a que falta; TBUNIDMEDIDA_PRINC_VALID passa a ref:TBUNIDADEMEDIDA/unidade_medida (100% das ligações).",
+   "motivo": "Hoje a unidade casa pela SIGLA_API: 7 dos 53 códigos; PRUNITPLAN 1 de 3 e TBUNIDMEDIDA_PRINC_VALID 2 de 4 na referência. Sem a aresta, a unidade criada pela L6-10 colidiria com a de TBUNICON (único) e recusaria linhas da L7-07."
   }
  ]
 }

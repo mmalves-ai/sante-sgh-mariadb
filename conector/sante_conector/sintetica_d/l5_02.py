@@ -1,20 +1,24 @@
 """Fatia L5-02 (cadastros e administração, módulo ADM): tabelas da origem com os mesmos nomes e tipos do dicionário e
 dados 100% falsos.
 
-Carregadas pelo mapa (11): modelo de leitor biométrico, motivo de anonimização (base legal, descrição resumida),
+Carregadas pelo mapa (15): modelo de leitor biométrico, motivo de anonimização (base legal, descrição resumida),
 função do responsável de proteção de dados, papel de segurança (origem 'migracao', limite 0 = sem limite), tipo de
 termo, mensagem interna (mensagem + destinatário, remetente e destinatário pelo login, estabelecimento único,
 prioridade pelo tipo), nível de criticidade (severidade pelo nome do nível), tipo de certificado (modalidade e
-repositório pelo nome) e, como referência histórica inativa, módulo, opção de menu (tela + ação de acesso) e evento.
-As outras 9 entram na imagem para provar que nada delas é gravado: descarte de produto (situação do termo, tipo de
-signatário e tipo de OID: domínio fixo do modelo; cópia de segurança e conexão: infraestrutura) e as que aguardam o
-motor (permissão SUS: desdobrar no destino principal; papel x opção e perfil x opção: referência ao destino
-secundário do pai; pedidos em docs/obra/fatias/f4/saida/L5-02.json).
+repositório pelo nome), como referência histórica inativa, módulo, opção de menu (tela + ação de acesso) e evento,
+as concessões antigas papel x opção e perfil x opção (ação de ACESSO da opção: destino secundário do pai,
+`ref:TBOPCOES/acao_sistema`) e a permissão SUS (uma linha por indicador S/N, desdobrada no destino principal, com a
+negação explícita) e o último acesso de cada usuário por módulo (usuário e módulo legado pela chave, só a data:
+hora 00:00). As outras 5 entram na imagem para provar que nada delas é gravado: descarte de produto
+(situação do termo, tipo de signatário e tipo de OID: domínio fixo do modelo; cópia de segurança:
+infraestrutura).
 Anomalias: nome vazio e nulo (NOT NULL no destino: recusa só a linha), descrição longa (resumida, texto integral na
 explicação), código repetido (1062), S/N fora do domínio (padrão do destino), espaços internos, quebra de linha,
 acentos CP1252, lacunas; mensagem repetida (sem chave: duas mensagens), destinatário nunca visto (pai_inexistente),
 sem remetente, sem texto e sem data de envio (recusa só a linha); nível sem par na escala e nível com a mesma
-severidade de outro; tipo de certificado sem par; módulo vazio e opção de módulo recusado ou sem módulo.
+severidade de outro; tipo de certificado sem par; módulo vazio e opção de módulo recusado ou sem módulo; concessão
+de papel recusado (pai_pendente), de opção recusada (sem ação de acesso) ou de opção ou grupo nunca vistos (pai_inexistente + 1048); permissão SUS
+de usuário nunca visto, sem nenhum indicador (sem_item_a_gravar) e repetida para o mesmo usuário (1062).
 """
 import datetime
 
@@ -59,15 +63,20 @@ CREATE TABLE TBTIPOOID (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(30) NOT N
 CREATE TABLE TBTIPOREPRE (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(60) NOT NULL, ATIVO CHAR(1) NOT NULL);
 """ % ", ".join("%s CHAR(1)" % c for c in FLAGS_SUS)
 
-NAO_CARREGADAS = ["TBMOVTERMSTATUS", "TBPAPEL_TBOPCOES", "TBPERMISSAO_SUS", "TBPERUSU", "TBPROCBACKUP",
-                  "TBSGHCONEXAO", "TBSITBACKUP", "TBTIPOOID", "TBTIPOREPRE"]
+NAO_CARREGADAS = ["TBMOVTERMSTATUS", "TBPROCBACKUP", "TBSITBACKUP", "TBTIPOOID", "TBTIPOREPRE"]
 CARREGADAS = ["TBLEITORBIOME", "TBLGPDANONMOT", "TBLGPDANONUSERFUNCAO", "TBMENSAG", "TBNVLCRITICID", "TBPAPEL",
-              "TBTERMCONREVTP", "TBTIPOCERTIFICADO", "TBMODULO", "TBOPCOES", "TBEVENTOS"]
-# as que aguardam o motor (declaração pronta e comentada; pedidos no L5-02.json) e o descarte de produto
-AGUARDA_MOTOR = ["TBPERMISSAO_SUS", "TBPAPEL_TBOPCOES", "TBPERUSU"]
-DESCARTE = [t for t in NAO_CARREGADAS if t not in AGUARDA_MOTOR]
+              "TBTERMCONREVTP", "TBTIPOCERTIFICADO", "TBMODULO", "TBOPCOES", "TBEVENTOS", "TBPAPEL_TBOPCOES",
+              "TBPERUSU", "TBPERMISSAO_SUS", "TBSGHCONEXAO"]
+DESCARTE = list(NAO_CARREGADAS)  # descarte de produto (sem_carga.tsv)
 
-PAIS_EXTERNOS = {"TBUSERS": ["usuario1", "usuario2", "usuario3"]}
+PAIS_EXTERNOS = {"TBUSERS": ["usuario1", "usuario2", "usuario3"], "TBGRUUSU": ["Grupo A", "Grupo B"]}
+# permissão SUS: (ID, login, indicadores); None = sem indicador (não gera linha), N = negação explícita (gera linha)
+_SN = ["S", "N", None, "s"]
+PERMISSOES_SUS = [(1, "usuario1", [_SN[i % 4] for i in range(len(FLAGS_SUS))]),
+                  (2, "usuario2", ["S"] * len(FLAGS_SUS)),
+                  (3, "usuario3", [None] * len(FLAGS_SUS)),           # nenhum indicador: sem_item_a_gravar
+                  (4, "usuario9", ["S"] * 3 + [None] * (len(FLAGS_SUS) - 3)),  # nunca visto: pai_inexistente + 1048
+                  (5, "usuario2", ["N"] + [None] * (len(FLAGS_SUS) - 1))]     # mesmo usuário e regra: 1062
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
@@ -86,6 +95,13 @@ NIVEIS = [(1, "Emergência"), (2, "ALERTA"), (3, "Crítico"), (4, "Erro"), (8, "
 CERTIFICADOS = [(1, "A1", "S"), (2, "A3", "S"), (3, "Em nuvem", "N"), (4, "Modelo sem par", "S")]
 PAPEIS = [(1, 10, "Médico"), (2, 20, "Enfermagem"), (3, 30, None), (4, 10, "Papel repetido"), (5, 50, "Farmácia")]
 TERMOS = [(1, "Consentimento de tratamento", "S"), (2, "Revogação de consentimento", "N"), (4, "Anonimização", "S")]
+# último acesso (módulo, login, data, enviado): 5 = módulo recusado (pai_pendente); usuario9 e módulo 99 nunca vistos
+# (pai_inexistente + 1048); ENVIADO sem destino (fora do domínio não pesa)
+CONEXOES = [(1, "usuario1", datetime.date(2026, 3, 1), "N"), (2, "usuario1", datetime.date(2026, 3, 2), "S"),
+            (1, "usuario2", datetime.date(2012, 5, 7), None), (3, "usuario3", datetime.date(2026, 2, 10), "X"),
+            (5, "usuario2", datetime.date(2026, 1, 4), "N"),
+            (1, "usuario9", datetime.date(2026, 1, 5), "N"),
+            (99, "usuario1", datetime.date(2026, 1, 6), "N")]
 # opções: 7 sem título (1048), 11 com ordem negativa (padrão 0), 9 com S/N fora do domínio (coluna sem destino);
 # 31 do módulo recusado (pai_pendente), 32 sem módulo (1048)
 OPCOES_SEM_TITULO, OPCAO_NEGATIVA, OPCAO_SN_INVALIDO = 7, 11, 9
@@ -133,18 +149,21 @@ def linhas(r, ins):
     pares = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 4), (5, 8), (5, 10),
              (3, 1),            # papel recusado (nome nulo): pai_pendente
              (4, 2),            # papel recusado (código repetido): pai_pendente
-             (2, OPCOES_SEM_TITULO),  # opção recusada: pai_pendente
+             (2, OPCOES_SEM_TITULO),  # opção recusada: sem ação de acesso, pai_inexistente + 1048
              (1, 9999)]         # opção inexistente: NULL na coluna NOT NULL
     for p in pares:
         ins("TBPAPEL_TBOPCOES", list(p))
-    for i in (1, 2):
-        ins("TBPERMISSAO_SUS", [i, "usuario%d" % i] + [r.choice(["S", "N", None]) for _ in FLAGS_SUS])
-    for g, o in [("Grupo A", 1), ("Grupo A", 2), ("Grupo B", 3)]:
+    for i, u, fl in PERMISSOES_SUS:
+        ins("TBPERMISSAO_SUS", [i, u] + fl)
+    for g, o in [("Grupo A", 1), ("Grupo A", 2), ("Grupo B", 3), ("Grupo B", 4),
+                 ("Grupo B", OPCOES_SEM_TITULO),  # opção recusada: sem ação de acesso, pai_inexistente + 1048
+                 ("Grupo C", 1),                  # grupo nunca visto: pai_inexistente + 1048
+                 ("Grupo A", 9999)]:              # opção inexistente: pai_inexistente + 1048
         ins("TBPERUSU", [g, o])
     for i, d in [(1, "Cópia"), (2, "Restauração")]:
         ins("TBPROCBACKUP", [i, d])
-    for m in (1, 2):
-        ins("TBSGHCONEXAO", [m, "usuario1", datetime.date(2026, 3, m), "N"])
+    for row in CONEXOES:
+        ins("TBSGHCONEXAO", list(row))
     for i, d in [(1, "Concluído"), (2, "Falhou")]:
         ins("TBSITBACKUP", [i, d])
     for row in TERMOS:
@@ -170,4 +189,15 @@ def linhas(r, ins):
         "TBLGPDANONUSERFUNCAO": {"gravados": 3, "pendencias": {}},
         "TBPAPEL": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1}},
         "TBTERMCONREVTP": {"gravados": 3, "pendencias": {}},
+        # opção recusada: a ação de acesso (secundário) nunca foi gravada, a referência ao secundário dá
+        # pai_inexistente (não pai_pendente) e a NOT NULL recusa a concessão
+        "TBPAPEL_TBOPCOES": {"gravados": 7, "pendencias": {"pai_pendente": 2, "pai_inexistente": 2,
+                                                           "restricao_destino_1048": 2}},
+        "TBPERUSU": {"gravados": 4, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 3}},
+        # gravados = itens (uma linha por indicador preenchido): 26 do usuário 1 (S, N, s) + 34 do usuário 2
+        "TBSGHCONEXAO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
+                                                       "restricao_destino_1048": 2}},
+        "TBPERMISSAO_SUS": {"gravados": 60, "pendencias": {"sem_item_a_gravar": 1, "pai_inexistente": 1,
+                                                           "restricao_destino_1048": 1,
+                                                           "restricao_destino_1062": 1}},
     }

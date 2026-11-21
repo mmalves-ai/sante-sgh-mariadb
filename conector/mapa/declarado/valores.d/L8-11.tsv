@@ -16,3 +16,6 @@ MFREFDES	TIPO	tipo_ajuste_titulo.natureza	8	retencao	L8-11: medido 2 linha(s), d
 MFREFDES	TIPO	tipo_ajuste_titulo.natureza	9	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
 MFREFDES	TIPO	tipo_ajuste_titulo.natureza	10	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
 MFREFDES	TIPO	tipo_ajuste_titulo.natureza	13	retencao	L8-11: medido 1 linha(s), descrição de tributo retido e código de receita preenchido; sem tributo vinculado a CHECK recusa (visível); TIPO 16 (1 linha, descrição sem pista) fica sem par: valor_fora_do_dominio
+MFADIFOR	TIPO_CREDOR	adiantamento.tipo_credor	F	fornecedor	L8-11 r3: medido F 3926
+MFADIFOR	TIPO_CREDOR	adiantamento.tipo_credor	M	profissional	L8-11 r3: medido M 395 (as 395 linhas com inscrição em MFADIFOR_TBCBOPRO)
+MFADIFOR	DT_PGTO	adiantamento.situacao	1	pago	L8-11 r3 (revisão): data de pagamento preenchida (regra preenchido) = adiantamento pago; sem data fica o padrão aberto

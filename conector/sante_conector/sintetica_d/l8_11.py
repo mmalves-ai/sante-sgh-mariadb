@@ -21,10 +21,21 @@ Carregadas (CARREGADAS), com as anomalias:
   recusa), sem descrição, natureza financeira pelo item do plano (composta; inexistente: pai_inexistente);
 - TBGRUDES (grupo da natureza): tipo pelo de-para, centro de custo pela origem (recusado: pai_pendente; inexistente:
   pai_inexistente), sem nome, classificação e situação fora do domínio.
-Não carregadas (NAO_CARREGADAS, sem coluna com destino): títulos a pagar e a receber, adiantamentos, lançamentos,
-compensações, ajustes, dados fiscais e saldos: falta mecanismo genérico do motor (pedidos em
-docs/obra/fatias/f4/saida/L8-11.json; saldos com declaração pronta e comentada).
-TBBANCOS e TBUSERS entram só como origem lida pelas referências (de outras fatias; nenhuma coluna declarada aqui).
+- MFSALDOS, MFSALATU (saldo diário da conta; o atual no dia da carga): conta nula (NOT NULL recusa), conta recusada
+  (pai_pendente), dia repetido na conta (chave única), saldo negativo aceito;
+- MFADIFOR (adiantamento): credor fornecedor pelo COD e profissional pela inscrição ligada (MFADIFOR_TBCBOPRO, só
+  lida); sem a regra condicional, o lado que não se aplica fica NULL com pai_inexistente e o código de profissional
+  que coincide com um fornecedor é recusado pela CHECK do credor; tipo E sem par (recusa), conta recusada
+  (pai_pendente) ou inexistente (pai_inexistente), valor zero e vencimento antes da emissão (CHECK), sem emissão
+  (NOT NULL), pago negativo (padrão 0);
+- MFLANCTO (lançamento bancário): um movimento por lado (crédito, débito) com o centro de custo do lado, tipo de
+  migração por empresa (destino agrupado), histórico vazio com texto fixo; sem conta (sem_item_a_gravar), conta
+  recusada (pai_pendente), conta inexistente de um lado (o outro grava), centro inexistente sem a conta do lado,
+  valor negativo (CHECK recusa os dois lados), data sentinela, natureza inexistente (pai_inexistente).
+Não carregadas (NAO_CARREGADAS, sem coluna com destino): títulos a pagar e a receber, compensações, ajustes e dados
+fiscais: falta mecanismo genérico do motor (pedidos em docs/obra/fatias/f4/saida/L8-11.json).
+TBBANCOS, TBUSERS, MFADIFOR_TBCBOPRO e TBCBOPRO entram só como origem lida pelas referências (TBCBOPRO, da L5-04,
+tem a forma que o mapa lê e é carregada por ela; o esperado dela é da L5-04, não conferido aqui).
 """
 import datetime
 import decimal
@@ -128,7 +139,9 @@ CREATE TABLE TBGRUDES ("COD" INTEGER NOT NULL, "NOME" VARCHAR(40), "CODCONT" VAR
   PRIMARY KEY ("COD"));
 CREATE TABLE TBINDNIF ("ID" SMALLINT NOT NULL, "DESCRICAO" VARCHAR(50) NOT NULL, PRIMARY KEY ("ID"));
 CREATE TABLE TBBANCOS ("EMPRESA" INTEGER NOT NULL, "COD" SMALLINT NOT NULL, "NOME" VARCHAR(40), "CODBCOCENTRAL"
-  VARCHAR(4), PRIMARY KEY ("EMPRESA", "COD"));
+  VARCHAR(4), "AGENCIA" VARCHAR(20), "CONTA" VARCHAR(20), "CARTEIRA" SMALLINT, "CODCEDENTE" VARCHAR(18),
+  "SITUACAO" VARCHAR(1), "CODCEDENTEEXP" VARCHAR(18), "CEDENTE_DEBITO_AUTO" VARCHAR(18), "VARIACAO_CARTEIRA" SMALLINT,
+  PRIMARY KEY ("EMPRESA", "COD"));
 CREATE TABLE TBUSERS ("NOME" VARCHAR(31) NOT NULL, "ID_TBUSERS" SMALLINT NOT NULL, PRIMARY KEY ("NOME"));
 CREATE TABLE MFCTAUSU ("ID_TBUSERS" SMALLINT NOT NULL, "ID_TBCTABAN" SMALLINT NOT NULL, PRIMARY KEY ("ID_TBUSERS",
   "ID_TBCTABAN"));
@@ -139,13 +152,21 @@ CREATE TABLE MFADIFOR ("ID_MFADIFOR" INTEGER NOT NULL, "EMPRESA" SMALLINT NOT NU
   NOT NULL, "DATA_PREVISTA_PGTO" DATE, "AUTORIZADO_PGTO_PARA" DATE, PRIMARY KEY ("ID_MFADIFOR"));
 CREATE TABLE MFADIFOR_TBCBOPRO ("ID_MFADIFOR" INTEGER NOT NULL, "ID_TBCBOPRO" INTEGER NOT NULL, PRIMARY KEY
   ("ID_MFADIFOR"));
+CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL, "ID_TBCBOSUS" INTEGER NOT NULL, "UF" VARCHAR(2) NOT NULL, "COD" INTEGER
+  NOT NULL, "ID_TBPROFIS" INTEGER NOT NULL, "VINC_EMPR" VARCHAR(1) NOT NULL, "CONS_PROF" VARCHAR(7), "ATIVO" VARCHAR(1),
+  "COMP_INICIAL" INTEGER, "COMP_FINAL" INTEGER, "ATENDE_SUS" CHAR(1), "CRM_DIGITO" VARCHAR(1), PRIMARY KEY ("ID"));
 """
-CARREGADAS = ("TBAGEBAN", "TBCTABAN", "MFBORDER", "MFCTAUSU", "TBCENCUS", "TBCLIENT", "MFREFDES", "TBGRUDES")
-NAO_CARREGADAS = ("MFADIFOR", "MFADIFOR_TBCBOPRO", "MFCONPAG", "MFCONPAG_TBCBOPRO", "MFCTAREC", "MFLANCTO", "MFPAGADF",
-                  "MFSALATU", "MFSALDOS", "SDMFCONPAG", "MFDESACR", "TBFINCODRECOL", "TBINDNIF")
-SO_ORIGEM = ("TBBANCOS", "TBUSERS")
-PROPRIAS = ("MFSALDOS",)
-PAIS_EXTERNOS = {"TBUSERS": ["usr.um", "usr.dois"], "TBITEDES": ["1|1|1"]}
+CARREGADAS = ("TBAGEBAN", "TBCTABAN", "MFBORDER", "MFCTAUSU", "TBCENCUS", "TBCLIENT", "MFREFDES", "TBGRUDES",
+              "MFADIFOR", "MFLANCTO", "MFSALATU", "MFSALDOS")
+NAO_CARREGADAS = ("MFCONPAG", "MFCONPAG_TBCBOPRO", "MFCTAREC", "MFPAGADF", "SDMFCONPAG", "MFDESACR", "TBFINCODRECOL",
+                  "TBINDNIF")
+SO_ORIGEM = ("TBBANCOS", "TBUSERS", "MFADIFOR_TBCBOPRO", "TBCBOPRO")
+PROPRIAS = ()
+# fornecedores e profissionais de fora da fatia (L7, L5), dados como já carregados
+PAIS_EXTERNOS = {"TBUSERS": ["usr.um", "usr.dois"], "TBITEDES": ["1|1|1"], "TBFORNEC": [10, 11, 12],
+                 "TBPROFIS": [700, 701]}
+# destino principal desdobrado (um item por lado): linhas da origem que gravaram ao menos um item
+LINHAS_COM_ITEM = {"MFLANCTO": 6}
 PREPARO_DESTINO = """
 CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, nome VARCHAR(40) NOT NULL);
 INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');
@@ -267,7 +288,7 @@ def linhas(r, ins):
                                     (1, 5, "Tipo sem par", 16, "A", None, None)]:
         put("MFREFDES", EMPRESA=e, COD=c, DESCRICAO=n, TIPO=tp, SITUACAO=s, ID_TBFINCODRECOL=rec, GRUPO=it,
             SUBGRUPO=it, ITEM=it, CDC=11)
-    # saldos (não carregada: data do saldo em coluna de data e hora, pedido): (id, conta, dia, saldo)
+    # saldos do dia: (id, conta, dia, saldo); 4 sem conta, 5 dia repetido, 6 conta recusada
     for i, cta, d, s in [(1, 1, D(2026, 1, 31), M("100.00")), (2, 1, D(2026, 2, 1), M("150.50")),
                          (3, 2, D(2026, 1, 31), M("0.00")), (4, None, D(2026, 1, 31), M("5.00")),
                          (5, 1, D(2026, 1, 31), M("100.00")), (6, 4, D(2026, 1, 31), M("7.00")),
@@ -280,6 +301,54 @@ def linhas(r, ins):
                         (6, "Grupo desativado", "R", "I")]:
         put("TBGRUDES", COD=c, NOME=n, CODCONT="1.1.%d" % c, CDC=10 + c, CUSTO="D", TIPODESP=1, REFCDC=None,
             SITUACAO=s, UNIMEN=1, CLASSIF=cl)
+    # saldo atual (dia da carga): (id, conta, saldo); 2 sem conta, 4 conta repetida no mesmo dia, 5 conta recusada
+    for i, cta, s in [(1, 1, M("10.00")), (2, None, M("1.00")), (3, 2, M("20.00")), (4, 1, M("11.00")),
+                      (5, 4, M("3.00"))]:
+        put("MFSALATU", ID=i, EMPRESA=1, BANCO=1, AGENCIA=1234, CONTA=11111, SALDO=s, ID_TBCTABAN=cta)
+    # inscrições (só lidas pela referência encadeada ao profissional) e o vínculo do adiantamento com a inscrição
+    for i, pf in [(31, 700), (32, 701)]:
+        put("TBCBOPRO", ID=i, ID_TBPROFIS=pf, ID_TBCBOSUS=1, UF="SP", COD=90000 + i, VINC_EMPR="N", CONS_PROF="CRM",
+            ATIVO="S")
+    for a, i in [(2, 31), (3, 32)]:
+        put("MFADIFOR_TBCBOPRO", ID_MFADIFOR=a, ID_TBCBOPRO=i)
+    # adiantamentos: (id, tipo, credor, conta interna, emissão, vencimento, valor, pago)
+    # 1 fornecedor; 2 profissional; 3 profissional cujo código coincide com o fornecedor 11 (CHECK); 4 tipo E (sem
+    # par); 5 conta recusada (43); 6 valor zero; 7 sem emissão; 8 vencimento antes da emissão; 9 conta inexistente;
+    # 10 pago negativo
+    for i, tp, cod, cta, em, vc, v, pg in [
+            (1, "F", 10, 41, D(2026, 3, 1), D(2026, 3, 31), M("500.00"), M("500.00")),
+            (2, "M", 999, 41, D(2026, 3, 2), None, M("800.00"), M("0.00")),
+            (3, "M", 11, 42, D(2026, 3, 3), None, M("300.00"), M("0.00")),
+            (4, "E", 12, 41, D(2026, 3, 4), None, M("70.00"), M("0.00")),
+            (5, "F", 10, 43, D(2026, 3, 5), None, M("90.00"), M("0.00")),
+            (6, "F", 10, 41, D(2026, 3, 6), None, M("0.00"), M("0.00")),
+            (7, "F", 10, 41, None, None, M("60.00"), M("0.00")),
+            (8, "F", 10, 41, D(2026, 3, 8), D(2026, 3, 1), M("40.00"), M("0.00")),
+            (9, "F", 10, 99, D(2026, 3, 9), None, M("30.00"), M("30.00")),
+            (10, "F", 10, 45, D(2026, 3, 10), None, M("20.00"), M("-1.00"))]:
+        put("MFADIFOR", ID_MFADIFOR=i, EMPRESA=1, COD=cod, TIPO_CREDOR=tp, DOC=9000 + i, EMISSAO=em, VENC=vc,
+            DT_PGTO=em if pg else None, VLR_DOC_TOT=v, PAGO=pg, REFERENTE="Adiantamento inventado %d" % i,
+            ID_TBCTABAN=cta, CHEQUE=0, TP_PGTO=1, HIST=1, ID_MFCABECLANC=i, ID_MFTIPOLANC=1)
+    # lançamentos: (id, empresa, data, conta crédito, centro crédito, conta débito, centro débito, valor, histórico,
+    # item do plano). 1 os dois lados; 2 só crédito, sem histórico, natureza inexistente; 3 só débito; 4 sem conta;
+    # 5 crédito na conta recusada (3); 6 valor negativo; 7 conta de crédito inexistente; 8 centro de crédito
+    # inexistente e sem a conta (o lado não grava); 9 outra empresa (outro tipo de migração); 10 data sentinela.
+    # Nenhum centro válido: TBCENCUS vem depois de MFLANCTO na ordem atual do mapa (dependência pedida); a imagem não
+    # depende da ordem
+    for i, e, d, cc, ccc, cd, ccd, v, h, it in [
+            (1, 1, D(2026, 4, 1), 1, None, 2, None, M("100.00"), "Transferência  entre contas", 1),
+            (2, 1, D(2026, 4, 2), 5, None, None, None, M("50.00"), None, 9),
+            (3, 1, D(2026, 4, 3), None, None, 6, None, M("30.00"), "Tarifa inventada", None),
+            (4, 1, D(2026, 4, 4), None, None, None, None, M("10.00"), "Sem conta", None),
+            (5, 1, D(2026, 4, 5), 3, None, 1, None, M("10.00"), "Conta recusada", None),
+            (6, 1, D(2026, 4, 6), 1, None, 2, None, M("-5.00"), "Valor negativo", None),
+            (7, 1, D(2026, 4, 7), 99, None, 7, None, M("15.00"), "Crédito em conta inexistente", None),
+            (8, 1, D(2026, 4, 8), None, 77, 8, None, M("25.00"), "Centro inexistente sem conta", None),
+            (9, 2, D(2026, 4, 9), 9, None, None, None, M("35.00"), "Lançamento da filial", None),
+            (10, 1, D(1899, 12, 30), 1, None, None, None, M("45.00"), "Data sentinela", None)]:
+        put("MFLANCTO", ID=i, EMPRESA=e, DATA=d, DOC=7000 + i, HIST=h, VALOR=v, GRUPO=it, SUBGRUPO=it, ITEM=it,
+            ID_MFCABECLANC=i, ID_TBCTABAN_CRE=cc, CDC_CRE=ccc, ID_TBCTABAN_DEV=cd, CDC_DEB=ccd, TIPO_TRF="T",
+            USUARIO="usuario.falso")
     # não carregadas: formas da origem só para a imagem
     for t in NAO_CARREGADAS:
         if t in PROPRIAS:
@@ -309,4 +378,16 @@ ESPERADO = {
                                                "valor_fora_do_dominio": 1, "valor_presumido": 12}},
     "TBGRUDES": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "pai_pendente": 1, "restricao_destino_1048": 1,
                                                "valor_fora_do_dominio": 2}},
+    # saldo anterior 0 PRESUMIDO (valor_presumido por linha lida até a gravação)
+    "MFSALATU": {"gravados": 2, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
+                                               "restricao_destino_1062": 1, "valor_presumido": 4}},
+    "MFSALDOS": {"gravados": 4, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
+                                               "restricao_destino_1062": 1, "valor_presumido": 6}},
+    "MFADIFOR": {"gravados": 4, "pendencias": {"pai_inexistente": 9, "pai_pendente": 1, "restricao_destino_1048": 2,
+                                               "restricao_destino_4025": 3, "valor_fora_do_dominio": 3}},
+    # gravados = movimentos (itens): 2 + 1 + 1 + 1 + 1 + 1
+    # data sentinela: na data do movimento e na data de compensação
+    "MFLANCTO": {"gravados": 7, "pendencias": {"data_sentinela": 2, "pai_inexistente": 3, "pai_pendente": 1,
+                                               "restricao_destino_1048": 1, "restricao_destino_4025": 1,
+                                               "sem_item_a_gravar": 1}},
 }

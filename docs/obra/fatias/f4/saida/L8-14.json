@@ -3,27 +3,42 @@
   {
    "arquivo": "conector/sante_conector/mapa.py (passos_ref, _REF_TAB) + carga_mapa.py (_seguir)",
    "mudanca": "referência por CHAVE ALTERNATIVA COMPOSTA: via 'ref:T[K1=C1,K2=C2,...]' (ou a forma já pedida pelo L6-03, 'ref:T(K1=C1,...)'): monta a tupla das colunas C desta linha e casa com as colunas K do pai na origem (cache como _chave_alternativa; tupla repetida no pai = pai_ambiguo; ausente = pai_inexistente; pai recusado = pai_pendente). Com ela, em colunas.d/L8-14.tsv: PSATVASS e PSPLNASS, coluna EMP -> movimento_cadastral_beneficiario.beneficiario_plano_id com via 'ref:PSBENEFI[EMP=EMP,BEN=BEN,DEP=DEP]' (PSPLNASS com ';movimento_cadastral_beneficiario'). É a 1ª metade do que falta; a 2ª é o beneficiário carregar (PSBENEFI, L8-15: contrato_plano_id por ref:PSEMPBEN, cadastro de contratos vazio nesta origem e fora do mapa, e plano por ref:PSPLANOS idem: todo beneficiário é recusado por pai_inexistente). Sem as duas, toda linha cai em pai_pendente. Hoje toda linha é lida, guardada e recusada com restricao_destino_1364 (crítica), visível na conciliação",
-   "motivo": "PSBENEFI tem chave ID e a origem identifica o beneficiário pela chave natural EMP+BEN+DEP; ref:T(C1,C2) só monta a chave do pai e ref:T.K só casa uma coluna. Primeira das duas causas das 2 tabelas BLOQUEADAS da fatia (coluna_obrigatoria_sem_fonte: beneficiario_plano_id); a segunda é PSBENEFI não carregar (contrato fora do mapa, ver L8-15)"
+   "motivo": "PSBENEFI tem chave ID e a origem identifica o beneficiário pela chave natural EMP+BEN+DEP; ref:T(C1,C2) só monta a chave do pai e ref:T.K só casa uma coluna. Primeira das duas causas das 2 tabelas BLOQUEADAS da fatia (coluna_obrigatoria_sem_fonte: beneficiario_plano_id); a segunda é PSBENEFI não carregar (contrato fora do mapa, ver L8-15)",
+   "atendido": "rodada 3: atendido pelo mecanismo da rodada 2 'ref:T.(K1,K2)=(C1,C2)'; declarado em PSATVASS.EMP e PSPLNASS.EMP"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + regerar o mapa (integrador)",
    "mudanca": "arestas de ordem: PSATVASS -> PSBENEFI, PSATVASS -> PSMOTIVO, PSPLNASS -> PSBENEFI (o beneficiário e o motivo vêm depois na ordem atual: 961 e 924 contra 918 e 928). Depois disso, declarar PSATVASS.MOTIVO -> movimento_cadastral_beneficiario.motivo_movimento_cadastral_id (ref:PSMOTIVO) e PSPLNASS.PLANO -> produto_plano_id pela referência ao plano",
-   "motivo": "sem a ordem, a referência daria pai_inexistente em toda linha; não editado aqui para não mexer no mapa gerado durante o trabalho em paralelo"
+   "motivo": "sem a ordem, a referência daria pai_inexistente em toda linha; não editado aqui para não mexer no mapa gerado durante o trabalho em paralelo",
+   "atendido": "rodada 3: atendido (dependencias.tsv); PSATVASS.MOTIVO declarado por ref:PSMOTIVO"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (soma de controle)",
    "mudanca": "DATE da origem gravado em DATETIME(3) do destino (mesmo pedido de saida/L8-09.json): PSPLNASS.DATA -> movimento_cadastral_beneficiario.ocorrido_em",
-   "motivo": "a origem só tem a data da troca de plano; enquanto o beneficiário não resolve, nenhuma linha grava e a soma não é afetada"
+   "motivo": "a origem só tem a data da troca de plano; enquanto o beneficiário não resolve, nenhuma linha grava e a soma não é afetada",
+   "atendido": "rodada 3: atendido pelo 'tipar' da rodada 2 (DATE em DATETIME); conferência ok"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py (COM_MECANISMO)",
    "mudanca": "tirar 'referencia_composta' de COM_MECANISMO até o motor ter a referência por chave alternativa composta (pedido 1); 'coluna_obrigatoria_sem_fonte' só conta como 'refazer a fatia' quando a saida/<fatia>.json não trouxer pedido de motor para a mesma coluna",
-   "motivo": "a ferramenta relata L8-14 como '2 só pedem refazer a fatia; sem mecanismo: 0', mas o mecanismo não existe (passos_ref aceita só T, T.K e T(C1,C2)); o orquestrador leria a fatia como 'refazer' quando depende de motor novo (o L7-07 espera o mesmo)"
+   "motivo": "a ferramenta relata L8-14 como '2 só pedem refazer a fatia; sem mecanismo: 0', mas o mecanismo não existe (passos_ref aceita só T, T.K e T(C1,C2)); o orquestrador leria a fatia como 'refazer' quando depende de motor novo (o L7-07 espera o mesmo)",
+   "atendido": "rodada 3: sem efeito agora (fatia sem bloqueada)"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-15.tsv (PSBENEFI) e o cadastro de contratos (PSEMPBEN) no mapa",
    "mudanca": "decidir como o beneficiário carrega quando a origem não tem o cadastro de contratos (PSEMPBEN vazio e fora do mapa) nem o de planos (PSPLANOS): ex. contrato por EMP pela empresa contratante, ou contrato de migração por contratante; sem isso PSATVASS e PSPLNASS seguem bloqueadas mesmo com o pedido 1",
-   "motivo": "cadeia de bloqueio de PSATVASS/PSPLNASS: beneficiario_plano_id NOT NULL depende de PSBENEFI, que recusa 100% das linhas (contrato_plano_id NOT NULL por ref:PSEMPBEN). Fora desta fatia (L8-15)"
+   "motivo": "cadeia de bloqueio de PSATVASS/PSPLNASS: beneficiario_plano_id NOT NULL depende de PSBENEFI, que recusa 100% das linhas (contrato_plano_id NOT NULL por ref:PSEMPBEN). Fora desta fatia (L8-15)",
+   "atendido": "rodada 3: atendido pela L8-15 (PSBENEFI CARREGA na cobertura)"
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py (conferir)",
+   "mudanca": "conferência isolada: tabela de PAIS_ORIGEM da fatia (pai de OUTRA fatia, posto na imagem só para a referência ler a origem, com as chaves em PAIS_EXTERNOS) fica fora de 'presentes' no planejar/executar (não é recarregada nem conciliada). Com isso a L8-14 tira o MAPA_TESTE (hoje: __getattr__ em sintetica_d/l8_14.py que devolve o mapa do repositório sem as colunas_decl de PSBENEFI)",
+   "motivo": "o pai externo carregado de novo pela declaração da fatia dele não concilia (conector_origem 'externo', sem linha no destino: origem 4, destino 0) e quebra a conferência; a referência por chave alternativa composta precisa das linhas do pai NA ORIGEM. Genérico: vale para L5-05, L6-15, L6-16 e qualquer fatia com PAIS_ORIGEM"
+  },
+  {
+   "arquivo": "tools/obra/conferir-fatia-f4.sh / validador global do mapa (conector/sante_conector/mapa.py ou ferramenta de checagem do mapa gerado)",
+   "mudanca": "checagem determinística global: para cada destino.coluna que receba mais de um emissor (#codigo_derivado:<col>:<n>:<prefixo>, coluna crua mapeada, ou de-para de valores), dois #codigo_derivado não podem ter o mesmo prefixo, nem prefixo vazio quando outro emissor grava chave crua ou valor de de-para que possa coincidir; violação = erro com as duas tabelas e o prefixo",
+   "motivo": "PSORIGEMCOBR (L8-14) e TBTIPOCOBRANCASGO (L8-15) usavam ambos 'cobranca_' em origem_cobranca_plano.codigo; cada fatia é conferida isolada e o choque (1062) só aparece na carga completa. Corrigido na L8-14 (prefixo 'origem_'); a checagem evita a reincidência em qualquer fatia"
   }
  ]
 }

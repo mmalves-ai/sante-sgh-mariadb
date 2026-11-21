@@ -15,7 +15,8 @@
     "CCSALAS\tHORARIO_FINAL_AGENDA_WEB\tsala_cirurgica.agenda_web_fim\thora\t\t\tL6-16: fim <= início recusa (CHECK 4025)",
     "CCSALAS_TBUSERS\tID_CCSALAS\tpermissao_sala_usuario.sala_cirurgica_id\t\t\tref:CCSALAS\tL6-16",
     "CCSALAS_TBUSERS\tUSUARIO\tpermissao_sala_usuario.usuario_id\t\t\tref:TBUSERS\tL6-16: pode_agendar e pode_registrar ficam com o padrão TRUE (a origem só lista as salas liberadas)"
-   ]
+   ],
+   "atendido": "rodada 2 (@unico:<tabela>); aplicado na rodada 3 (CCSALAS carrega)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (ou db/migracoes/08_CC, proposta à F2.2)",
@@ -38,7 +39,8 @@
     "CCAGENDA\tINTERVALO\tagendamento_cirurgico.tempo_limpeza_minutos\tminutos_em_timestamp\t\t\tL6-16",
     "CCAGENDA\tCTI\tagendamento_cirurgico.reserva_uti\tbooleano_sn\t\t\tL6-16",
     "CCAGENDA\tOBS\tagendamento_cirurgico.observacao\ttexto\t\t\tL6-16"
-   ]
+   ],
+   "atendido": "rodada 2 (cod:<tabela>.<coluna> com literal =~); aplicado na rodada 3: CCAGENDA com '=~eletiva' e cod:carater_cirurgia.natureza"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + sentinela.py",
@@ -58,17 +60,20 @@
     "CCCADCIR\tPESO\tato_cirurgico.peso_kg\tdecimal\t\t\tL6-16",
     "CCCADCIR\tSUPUR\tato_cirurgico.supuracao\tbooleano_sn\t\t\tL6-16",
     "CCCADCIR\t#data_hora:DATA,HORA_I\tato_cirurgico.inicio_cirurgia_em\t\t\t\tL6-16: pedido 3 (idem HORA_T, HORA_IA, HORA_TA, DATA_P_I/HORA_P_I, DATA_P_F/HORA_P_F)"
-   ]
+   ],
+   "atendido": "rodada 2/3 (#data_hora:D,H[,REF]); aplicado na rodada 3 (CCCADCIR)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "no destino com desdobrar, '#rotulo' resolvido por coluna de domínio do destino ('#rotulo' com via 'busca:funcao_equipe_cirurgica.grau_participacao_tiss': o rótulo é o grau de participação TISS, terminologia oficial) e '#posicao' (1..n na ordem das colunas desdobradas) para a sequência",
-   "motivo": "a equipe vem em colunas repetidas (CCAGENDA: ID_CRM, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_CIRCUL; CCLANCIR: ID_CIRUR, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_PED, ID_CIRC, ID_TBCBOPRO_AUX4). agendamento_cirurgico_equipe e participante_cirurgia exigem funcao_equipe_cirurgica_id e sequencia NOT NULL; o código da função vem do cadastro do cliente (PRTIPO_PROFISSIONAL), então o rótulo fixo só pode ser o grau TISS (00 cirurgião, 01 a 04 auxiliares, 05 instrumentador, 06 anestesista...). O #item usa ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS"
+   "mudanca": "equipe desdobrada: no destino com desdobrar, o #item aceitar a referência da via (hoje _converter recebe passos=None), inclusive encadeada (ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS), e o #rotulo aceitar cod:<tabela>.<coluna> (hoje o cod: recebe a marca, não o rótulo), para a função pelo grau de participação TISS (funcao_equipe_cirurgica.grau_participacao_tiss); e a sequência pela posição do item",
+   "motivo": "CCAGENDA (ID_CRM, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_CIRCUL, ID_TBCBOPRO_PEDIATRA) -> agendamento_cirurgico_equipe e CCLANCIR (ID_CIRUR, ID_AUX1..3, ID_INSTR, ID_ANEST, ID_PED, ID_CIRC, ID_TBCBOPRO_AUX4) -> participante_cirurgia: hoje sem destino (as tabelas carregam; a equipe fica pendente deste pedido). Também exige o grau TISS preenchido no cadastro de funções do cliente (PRTIPO_PROFISSIONAL não o traz)",
+   "prioridade": "alta"
   },
   {
    "arquivo": "decisão de destino (fatia L8 de TBPROCTO) + declarado/dependencias.tsv",
    "mudanca": "alimentar procedimento_cirurgico a partir de TBPROCTO (procedimentos usados no bloco), como destino adicional da fatia dona de TBPROCTO, ou declarar a fonte do cadastro cirúrgico",
-   "motivo": "ato_cirurgico_procedimento (CCLANCIR) e agendamento_cirurgico_procedimento (CCPROEXT, CCAGENDA.PROCTO) exigem procedimento_cirurgico_id NOT NULL e nenhuma tabela da origem alimenta procedimento_cirurgico"
+   "motivo": "ato_cirurgico_procedimento (CCLANCIR) e agendamento_cirurgico_procedimento (CCPROEXT, CCAGENDA.PROCTO) exigem procedimento_cirurgico_id NOT NULL e nenhuma tabela da origem alimenta procedimento_cirurgico",
+   "atendido": "decidido pela fatia na rodada 3 (F4-decisoes-destino.md): o cadastro cirúrgico nasce dos procedimentos usados no bloco (CCAGENDA, CCPROEXT, CCLANCIR: destino procedimento_cirurgico com antes;adotar:codigo); a ligação ao item faturável fica para quando TBPROCTO carregar"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
@@ -87,12 +92,14 @@
     "CCHISAGE\tID_CRM\treagendamento_cirurgico.solicitante_profissional_id\t\t\tref:TBCBOPRO>ID_TBPROFIS>TBPROFIS\tL6-16",
     "CCHISAGE\tJUSTIF\treagendamento_cirurgico.justificativa\ttexto\t\t\tL6-16",
     "CCHISAGE\t#retrato\treagendamento_cirurgico.dados\t\t\t\tL6-16"
-   ]
+   ],
+   "atendido": "rodada 2 (ref:T.(K1,K2)=(C1,C2)); aplicado na rodada 3 (CCPROEXT e CCHISAGE)"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
-   "mudanca": "linhas novas: CCHISAGE<TAB>CCAGENDA, CCPROEXT<TAB>CCAGENDA (agenda antes do histórico e dos procedimentos extras); CCAGENDA<TAB>CCSALAS e CCCADCIR<TAB>CCSALAS já seguem a ordem (426 < 436/976)",
-   "motivo": "CCAGENDA carrega na ordem 976, depois de CCHISAGE (423) e CCPROEXT (425): o filho viria antes do pai e seria recusado"
+   "mudanca": "linhas novas em declarado/dependencias.tsv (e regerar tabelas.tsv): CCHISAGE<TAB>CCAGENDA, CCPROEXT<TAB>CCAGENDA, CCHISAGE<TAB>CCSALAS, CCHISAGE<TAB>TBPROFIS, CCCADCIR<TAB>TBCONVEN, CCSALAS<TAB>TBCENCUS",
+   "motivo": "ordem atual: CCHISAGE (414) e CCPROEXT (416) antes de CCAGENDA (968), CCHISAGE antes de CCSALAS (417) e de TBPROFIS (833), CCCADCIR (427) antes de TBCONVEN (690), CCSALAS (417) antes de TBCENCUS (832): o filho vem antes do pai e a referência dá pai_inexistente (histórico e extras da agenda são TODOS recusados). A imagem sintética já confere as duas ordens: o esperado segue a ordem do mapa (l6_16._ordem_pedida_aplicada) e a ordem pedida foi conferida com SIMULAR_ORDEM_PEDIDA=True (zero erros, idempotente)",
+   "atendido": "rodada 3b: gravado pela própria fatia em declarado/dependencias.tsv (mais CCCADCIR->CCSALAS, CCAGENDA->TBPROFIS e CCAGENDA->TBCONVEN) e tabelas.tsv regerado; conferência na ordem real, sem simulação"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -117,17 +124,77 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_ESPECIAIS)",
    "mudanca": "especial '#texto_ou:<COLUNA>:<literal>' (ou opção da regra): grava o texto da coluna quando preenchido, senão o literal",
-   "motivo": "CCAGENDA_EXC_CANC.JUSTIF -> registro_excluido.justificativa (NOT NULL): JUSTIF é opcional e hoje fica o texto fixo para todas as linhas, perdendo a justificativa real quando existe"
+   "motivo": "CCAGENDA_EXC_CANC.JUSTIF -> registro_excluido.justificativa (NOT NULL): JUSTIF é opcional e hoje fica o texto fixo para todas as linhas, perdendo a justificativa real quando existe",
+   "atendido": "resolvido pela fatia na rodada 3 com colunas concorrentes (JUSTIF primeiro, texto fixo depois)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (#retrato) — já pedido em L6-02/L5-03",
    "mudanca": "'#retrato:<C1,C2,...>' lê e serializa também colunas sem destino",
-   "motivo": "CCAGENDA_EXC_CANC: registro_excluido.dados deve ser o retrato do agendamento excluído (SALA, DATA_HORA, DURACAO, PROCTO, CRM/ID_CRM, equipe, ANESTESIA, OBS, JUSTIF, ID_TBSITAGE...); hoje só leva as 5 colunas lidas. Colunas listadas com motivo em colunas.d/L6-16.tsv"
+   "motivo": "CCAGENDA_EXC_CANC: registro_excluido.dados deve ser o retrato do agendamento excluído (SALA, DATA_HORA, DURACAO, PROCTO, CRM/ID_CRM, equipe, ANESTESIA, OBS, JUSTIF, ID_TBSITAGE...); hoje só leva as 5 colunas lidas. Colunas listadas com motivo em colunas.d/L6-16.tsv",
+   "atendido": "rodada 3 (#retrato:*-A,B); aplicado na rodada 3 (CCAGENDA_EXC_CANC sem os dados pessoais)"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh + tools/obra/cobertura_conector.py",
    "mudanca": "autoconferência roda 'cobertura_conector.py --fatia <F> --falhar-se-bloqueada' e acusa coluna da origem sem declaração em tabela carregada; conferir-fatia aceita asserções de valor por caso (ex.: {tabela_destino: [(filtro, coluna, valor)]}) além das contagens",
    "motivo": "a conferência dá ok com tabelas bloqueadas e só concilia contagens; a fatia L6-16 prova os valores em testes de unidade (test_valor_gravado_nos_casos_de_anomalia), pelo mesmo caminho do motor, mas não no banco"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (#data_hora)",
+   "mudanca": "opção de #data_hora com hora obrigatória ('#data_hora!:D,H[,R]', ou o comportamento padrão): hora vazia (nula ou só espaços) grava NULL com a pendência media 'hora_ausente', nunca meia-noite; com a hora de referência R vazia, não há virada. Com ela a fatia declara: incisão, fim, anestesia com '#data_hora!'; entrada da sala = HORA_IA, senão HORA_I (concorrentes de verdade); saída = HORA_TA, senão HORA_T; e a situação concorrente ('#se_todos:entrada_sala_em,inicio_cirurgia_em,fim_cirurgia_em,saida_sala_em=realizado' ou, mais simples, o motor grava 'em_andamento' quando o CHECK de realizado recusaria) para o ato sem os quatro horários. Caso sintético pronto para a imagem: ato com HORA_IA preenchida e HORA_TA vazia (hoje o fim da anestesia vira 00:00 antes do início e o CHECK recusa o ato inteiro) e ato sem nenhuma hora (hoje 'realizado' com quatro horários 00:00); teste marcado expectedFailure em test_l6_16.py (test_hora_vazia_nao_vira_meia_noite) vira verde quando o motor atender",
+   "motivo": "CCCADCIR: ato sem HORA_I/HORA_T/HORA_IA/HORA_TA grava entrada, incisão, fim e saída à meia-noite da data do ato (horário falso que passa no CHECK de realizado). Com a opção, o ato sem horários é recusado pelo CHECK (4025) e fica como pendência para o cliente completar. A imagem sintética não tem ato sem horários para não fixar o comportamento atual",
+   "prioridade": "alta"
+  },
+  {
+   "arquivo": "declaração da fatia (depois do pedido) + carga_mapa (ref:T@coluna com de-para de valores)",
+   "mudanca": "situação da agenda cirúrgica pela situação do cliente: ID_TBSITAGE -> ref:TBSITAGE/situacao_marcacao@significado e de-para do significado (cancelada, confirmada, realizada...) para agendamento_cirurgico.situacao",
+   "motivo": "CCAGENDA.situacao segue presumida agendado (=~agendado, valor_presumido por linha); a situação real (cancelada, confirmada) está em TBSITAGE",
+   "atendido": "rodada 3b, pela fatia: ID_TBSITAGE já é o código da situação (VARCHAR(2), domínio de TBSITAGE.COD do L6-04): de-para de valores direto para a situação do agendamento (a cópia @significado não passa pelo de-para de valores). Restam os pedidos 19 (cancelado_em condicional) e 20 (presumido concorrente), numerados a partir de 1"
+  },
+  {
+   "arquivo": "modelo (F2.2) ou declaração futura",
+   "mudanca": "destino para a avaliação e a ficha anestésica do ato migrado: ficha_anestesica com o anestesista vindo do lançamento (CCLANCIR.ID_ANEST, complementa) e os campos de CCCADCIR (PRESSAO, PULSO, TEMPO, SANGUE, PROG_ANES, PROG_HORA, EFEITO, AP_RESP, AP_CIRC, AP_DIGEST, SIST_NERV, ANEST_ANT, OUT_TIP_ANES, USA_*/TUBO/ANTIMI/DOSAGEM/SONDA/CATETER/PUNCAO); e para os dados do ato sem coluna (TIPO_CIR, POT_CONT -> classe de contaminação, PARTO, ACOMPANHANTE_SALA_PARTO, EPISIOTOMIA, ANAT_PAT, CIRCUL em texto, pós-operatório DATA_P_I/HORA_P_I/DATA_P_F/HORA_P_F)",
+   "motivo": "o ato carrega sem esses campos clínicos (declarados sem destino, com motivo); ficha_anestesica exige anestesista NOT NULL que não está em CCCADCIR",
+   "prioridade": "alta"
+  },
+  {
+   "arquivo": "declaração futura (CCLANCIR e CCAGENDA)",
+   "mudanca": "destinos para: uso de gás do ato (CCLANCIR LOCAL, DTGASI/HRGASI, DTGASF/HRGASF: uso_gas_medicinal exige o insumo do gás), hora do procedimento (HORA/HORAF com a data do ato do pai: #data_hora com data por ref:CCCADCIR>DATA), cobrança do lançamento (CDC, FP, TIPO, ESP, TECNICA, ANAP, QUANTIDADE, ID_TBPROCTO_TAXA) e reservas da agenda (QTSAN e os recursos MIC, IMA, FUR, CAN, VID, TOR, ORT, ELE, ARCO, CONGEL, RX, UCO, OUTR)",
+   "motivo": "declarados sem destino com motivo; as tabelas carregam. Itens que exigem mecanismo (data do pai na #data_hora) ou cadastro sem fonte (gás, recurso)"
+  },
+  {
+   "prioridade": "alta",
+   "arquivo": "conector/sante_conector/carga_mapa.py (_valores) + verificar_mapa.py",
+   "mudanca": "coluna concorrente CONDICIONAL: o valor de uma coluna da origem só vale quando outra coluna do destino já resolvida tem um dos valores dados, ex. 'CCAGENDA DATA_HORA_ULTIMA_ATUALIZACAO -> agendamento_cirurgico.cancelado_em, via se:situacao=cancelado|suspenso'; e destino secundário/linha filtrada pelo valor ('filtro:HORA_BLOQUEADA=S' manda a linha para bloqueio_sala_cirurgica em vez do principal)",
+   "motivo": "Agenda cancelada ou suspensa na origem exige cancelado_em (CHECK), que só existe como última atualização: hoje a linha é recusada com restricao_destino_4025 (visível, mas fora do produto). Horário bloqueado na grade (HORA_BLOQUEADA = S ou situação HR/Q/P) hoje é recusado com 4025 (nunca vira cirurgia agendada): com o filtro vai para bloqueio_sala_cirurgica (sala, DATA_HORA, DATA_HORA + DURACAO, natureza reserva_equipe/interdicao, motivo por @unico ou cod:)",
+   "declaracao": [
+    "CCAGENDA\tDATA_HORA_ULTIMA_ATUALIZACAO\tagendamento_cirurgico.cancelado_em\tdata_hora\t\tse:situacao=cancelado|suspenso\tL6-16: momento do cancelamento = última atualização (presumido)",
+    "CCAGENDA\tSALA\tbloqueio_sala_cirurgica.sala_cirurgica_id\t\t\tbloqueio_sala_cirurgica;filtro:HORA_BLOQUEADA=S;ref:CCSALAS\tL6-16"
+   ]
+  },
+  {
+   "prioridade": "media",
+   "arquivo": "conector/sante_conector/carga_mapa.py (_valores)",
+   "mudanca": "literal presumido (=~x) CONCORRENTE só deixa a pendência valor_presumido quando é ele que grava (hoje deixa em toda linha, mesmo quando uma coluna anterior da origem deu o valor)",
+   "motivo": "CCAGENDA situação: HORA_BLOQUEADA, ID_TBSITAGE e só então '=~agendado'. Hoje as 11 agendas da imagem levam valor_presumido da situação, inclusive as que têm situação da origem: o painel diria 'presumido' para dado que veio da origem"
+  },
+  {
+   "prioridade": "baixa",
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'maior_que_zero' (booleano): número > 0 TRUE, 0 FALSE, nulo nulo, negativo NULL com valor_fora_do_dominio",
+   "motivo": "CCAGENDA.QTSAN (quantidade de sangue reservada) -> reserva_hemocomponente: hoje 'decimal_zero_nulo' + de-para de valores com os pares 1 a 20 (nas formas '2' e '2.000'); fração ou mais de 20 cai em valor_fora_do_dominio e fica o padrão FALSE"
+  },
+  {
+   "prioridade": "alta",
+   "arquivo": "db/migracoes/08_CC (proposta à F2.2) + tools/obra/cobertura_conector.py",
+   "mudanca": "(1) coluna 'dados_origem JSON NULL' (retrato das colunas sem destino) em ato_cirurgico, ato_cirurgico_procedimento e agendamento_cirurgico, para declarar já '#retrato:<colunas sem destino>' e nada se perder enquanto participante_cirurgia, agendamento_cirurgico_equipe e ficha_anestesica esperam os pedidos 4 e 17; (2) 'paciente_informado VARCHAR(70)', 'nascimento_informado DATE' e 'contato_informado' em agendamento_cirurgico com paciente_id anulável quando origem='migracao' (CHECK), para a agenda feita antes do cadastro (sem prontuário nem CPF conhecido) não ser recusada; (3) a cobertura marcar CARREGA_PARCIAL a tabela com coluna clínica ou financeira sem destino nem retrato",
+   "motivo": "CCLANCIR (cirurgião, auxiliares, anestesista, instrumentador, pediatra, circulante: base do honorário), CCCADCIR (avaliação e ficha anestésica, cerca de 25 colunas: sinais, via aérea, tubo, sonda, cateter, punção, antimicrobiano) e CCAGENDA (equipe prevista, recursos pedidos) carregam a linha mas não esses dados: o modelo não tem coluna JSON nessas tabelas e ato_cirurgico.observacao (500) não comporta o retrato. A conciliação prova as linhas, não a completude",
+   "declaracao": [
+    "CCLANCIR\t#retrato:CIRUR,AUX1,AUX2,AUX3,INSTR,ANEST,PED,CIRC,ID_CIRUR,ID_AUX1,ID_AUX2,ID_AUX3,ID_INSTR,ID_ANEST,ID_PED,ID_CIRC,ID_TBCBOPRO_AUX4,HORA,HORAF,LOCAL,DTGASI,HRGASI,DTGASF,HRGASF,TIPO,FP,CDC,TECNICA,ANAP,QUANTIDADE,ID_TBPROCTO_TAXA\tato_cirurgico_procedimento.dados_origem\t\t\t\tL6-16",
+    "CCCADCIR\t#retrato:PRESSAO,PULSO,TEMPO,SANGUE,PROG_ANES,PROG_HORA,EFEITO,AP_RESP,AP_CIRC,AP_DIGEST,SIST_NERV,ANEST_ANT,OUT_TIP_ANES,USA_TUBO,USA_ANTIMI,USA_SONDA,USA_CATETER,USA_PUNCAO,TUBO,ANTIMI,DOSAGEM,SONDA,CATETER,PUNCAO,TIPO_CIR,PARTO,CIRCUL,ANAT_PAT,TP_CIR,DATA_P_I,HORA_P_I,DATA_P_F,HORA_P_F,ACOMPANHANTE_SALA_PARTO,EPISIOTOMIA\tato_cirurgico.dados_origem\t\t\t\tL6-16",
+    "CCAGENDA\t#retrato:CRM,AUX1,AUX2,AUX3,INSTR,ANEST,CIRCUL,ID_AUX1,ID_AUX2,ID_AUX3,ID_INSTR,ID_ANEST,ID_CIRCUL,ID_TBCBOPRO_PEDIATRA,MIC,IMA,FUR,CAN,VID,TOR,ORT,ELE,ARCO,CONGEL,RX,UCO,OUTR,OUTR_TIPO_ANEST,JUSTIF,TP_CIR\tagendamento_cirurgico.dados_origem\t\t\t\tL6-16",
+    "CCAGENDA\tPACIENTE\tagendamento_cirurgico.paciente_informado\ttexto_nome\t\t\tL6-16",
+    "CCAGENDA\tDATA_NASCIMENTO\tagendamento_cirurgico.nascimento_informado\tdata\t\t\tL6-16"
+   ]
   }
  ]
 }

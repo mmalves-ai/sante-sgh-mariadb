@@ -3,12 +3,14 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py (aplicar, regra hora_hhmm)",
    "mudanca": "hora_hhmm decodificar bytes/bytearray (texto cru CP1252 da origem) antes do teste de str: `if isinstance(v, (bytes, bytearray)): v = _str(v)`; é o mesmo pedido 2 do L6-04 (SICTRAGE) e afeta também a L6-09 (TBHORMED, TBHORARIODOSE)",
-   "motivo": "PRHORPAD.HORARIO é VARCHAR(4) e chega em bytes: hoje toda hora dá hora_invalida e toda linha é recusada (conferência da L6-18: PRHORPAD gravou 0 de 4 esperados); a declaração e o esperado da imagem já estão prontos para a regra corrigida"
+   "motivo": "PRHORPAD.HORARIO é VARCHAR(4) e chega em bytes: hoje toda hora dá hora_invalida e toda linha é recusada (conferência da L6-18: PRHORPAD gravou 0 de 4 esperados); a declaração e o esperado da imagem já estão prontos para a regra corrigida",
+   "atendido": true
   },
   {
-   "arquivo": "db/migracoes/09_HOT/02_tabelas.sql e 02_chaves.sql (movimento_prontuario) — trilha F2.2 (DECIDIDO na F4, F4-decisoes-destino.md L6-18)",
-   "mudanca": "Em CREATE TABLE movimento_prontuario: `volume_prontuario_id BIGINT UNSIGNED NULL COMMENT 'Nulo só na migração: a origem movimenta o prontuário do paciente, sem volume'`; depois de destino_setor_funcional_id: `saida_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite de onde o prontuário saiu'`, `destino_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite para onde o prontuário foi'`; `CONSTRAINT ck_movimento_prontuario_volume CHECK (origem = 'migracao' OR volume_prontuario_id IS NOT NULL)`; `KEY ix_movimento_prontuario_saida_setor_tramite_id (saida_setor_tramite_id)`, `KEY ix_movimento_prontuario_destino_setor_tramite_id (destino_setor_tramite_id)`. Em 02_chaves.sql: `ADD CONSTRAINT fk_movimento_prontuario_saida_setor_tramite_id FOREIGN KEY (saida_setor_tramite_id) REFERENCES setor_tramite (id) ON DELETE RESTRICT`, idem destino. Sem CHECK de setores diferentes (a origem registra trâmite no mesmo setor; recusar perderia histórico). Ao aplicar: descomentar #GDPRONTMOVIM em colunas.d/L6-18.tsv, acrescentar a valores.d/L6-18.tsv os pares GDPRONTMOVIM EXCLUIDO movimento_prontuario.excluido_em (1 -> data da carga, valor especial do de-para; 0 e vazio -> nulo), tirar GDPRONTMOVIM de NAO_CARREGADAS na sintética (3 linhas: uma com EXCLUIDO='S') e recontar o esperado.",
-   "motivo": "GDPRONTMOVIM (cerca de 729 mil linhas, todo o histórico de trâmite de prontuário) não carrega sem isso: nenhuma tabela da origem alimenta volume_prontuario e um volume 'migrado' por paciente exigiria tipo de documento fixo (id do produto por código, mecanismo inexistente no motor). Declaração completa e comentada (EXCLUIDO, setores de saída e destino; motivo descartado: RIMOTIVO obsoleta)."
+   "arquivo": "db/migracoes/09_HOT (movimento_prontuario) — trilha F2.2 (REVISTO na rodada 3, F4-decisoes-destino.md L6-18)",
+   "mudanca": "Só acrescentar a movimento_prontuario, depois de destino_setor_funcional_id: `saida_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite de onde o prontuário saiu'`, `destino_setor_tramite_id BIGINT UNSIGNED NULL COMMENT 'Setor de trâmite para onde o prontuário foi'`, `KEY ix_movimento_prontuario_saida_setor_tramite_id (saida_setor_tramite_id)`, `KEY ix_movimento_prontuario_destino_setor_tramite_id (destino_setor_tramite_id)` e as FKs para setor_tramite (ON DELETE RESTRICT); sem CHECK de setores diferentes (a origem registra trâmite no mesmo setor). RETIRADO: volume_prontuario_id anulável na migração (o modelo não se deforma; o volume do prontuário antigo por paciente já carrega pelo antes+adotar). Ao aplicar: em colunas.d/L6-18.tsv dar a ID_RISETOR_ORIGEM/ID_RISETOR_DESTINO os destinos movimento_prontuario.saida_setor_tramite_id/destino_setor_tramite_id com regra chave_origem e via ref:RISETOR; as linhas aparecem alteradas e entram pelo Sincronizar.",
+   "motivo": "GDPRONTMOVIM já CARREGA (rodada 3), mas sem as colunas os setores de saída e destino ficam só na origem (lidos no hash): o produto não responde onde cada prontuário está (cerca de 729 mil movimentações na imagem de referência). Não há caminho interino: setor_tramite.setor_funcional_id não tem fonte na origem. PRÉ-REQUISITO da virada do módulo de arquivo: o orquestrador registra no F4-plano.md e no ESTADO.md (arquivos compartilhados, fora desta fatia). Teste de guarda: test_l6_18 falha se as colunas chegarem ao DDL sem destino declarado.",
+   "gravidade": "alta: pré-requisito da virada do módulo de arquivo"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.tsv (por cliente, pelo painel) + modelo setor_tramite",
@@ -19,6 +21,11 @@
    "arquivo": "conector/sante_conector/sentinela.py (aplicar: regra nova, genérica)",
    "mudanca": "regra `hora_hhmm_desloca:<±minutos>`: igual a hora_hhmm (com bytes decodificados) e soma o deslocamento, limitado a 00:00:00..23:59:59, deixando pendência baixa `valor_presumido`. PRHORPAD passa a: horario_corte_mapa = HORARIO com `hora_hhmm_desloca:-120`; horario_fim = HORARIO com `hora_hhmm_desloca:+60` (no lugar de `=~23:59:59`)",
    "motivo": "Corte igual ao início é o MAIS permissivo (sem tempo de preparo) e fim 23:59:59 sobrepõe as janelas das refeições do dia; hoje só há literal fixo. Interino declarado com motivo corrigido; o cliente ajusta no painel"
+  },
+  {
+   "arquivo": "docs/obra/passagens/F4-plano.md e docs/ESTADO.md (orquestrador)",
+   "mudanca": "Registrar o pedido 2 do L6-18.json (saida_setor_tramite_id/destino_setor_tramite_id em movimento_prontuario, trilha F2.2) como pré-requisito da virada do módulo de arquivo de prontuários, não como pendência média.",
+   "motivo": "Achado da revisão da rodada 3: sem os setores o trâmite carregado não diz onde está o prontuário."
   }
  ]
 }

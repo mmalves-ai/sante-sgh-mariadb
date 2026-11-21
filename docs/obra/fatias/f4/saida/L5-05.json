@@ -2,12 +2,12 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
-   "mudanca": "catálogo oficial 'conselho_classe': tabela conselho_classe, coluna sigla, normalizar = texto aparado em maiúsculas (ex.: CRM, COREN), chave = upper; usado com a referência encadeada terminada em coluna ref:TBCONSPROF>COD_CONSELHO_PROF",
+   "mudanca": "ATENDIDO (rodada 3): catálogo oficial 'conselho_classe': tabela conselho_classe, coluna sigla, normalizar = texto aparado em maiúsculas (ex.: CRM, COREN), chave = upper; usado com a referência encadeada terminada em coluna ref:TBCONSPROF>COD_CONSELHO_PROF",
    "motivo": "TBMEDSOL (7.660 linhas) -> solicitante_externo exige conselho_classe_id NOT NULL; a declaração está pronta e comentada em colunas.d/L5-05.tsv (#TBMEDSOL): ao existir o catálogo, descomentar e acrescentar TBMEDSOL à imagem sintética. Serve também a TBOID (L5-03), TBMEDSOLWEBCAD (L8-16) e FCCTAEXT"
   },
   {
    "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv + tools/obra/gerar_mapa_conector.py (ou opção genérica de via)",
-   "mudanca": "TBEMPHOS com destinos 'pessoa_juridica;mantenedora' (principal pessoa_juridica); alternativa genérica: opção de via 'principal' que põe um destino declarado por via à frente dos de tabelas_destino",
+   "mudanca": "DISPENSADO (rodada 3): resolvido na fatia com o mecanismo `antes` + `@id:pessoa_juridica` (mantenedora principal, pessoa jurídica gravada antes). Pedido original: TBEMPHOS com destinos 'pessoa_juridica;mantenedora' (principal pessoa_juridica); alternativa genérica: opção de via 'principal' que põe um destino declarado por via à frente dos de tabelas_destino",
    "motivo": "mantenedora.pessoa_juridica_id é NOT NULL e o @id só liga secundário ao principal. Hoje a TBEMPHOS já carrega a pessoa jurídica (adotada pelo CNPJ); as colunas da mantenedora estão prontas e comentadas (#TBEMPHOS): ao existir, descomentar (as linhas da pessoa jurídica aparecem alteradas e o Sincronizar completa)"
   },
   {
@@ -37,8 +37,8 @@
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_converter, referência encadeada)",
-   "mudanca": "aresta duas_fases também para a referência encadeada terminada em tabela (ref:T>X>U): pai U ainda não visto numa tabela com aresta (filho, U) em ciclos.tsv adia a coluna para a fase 2 em vez de NULL com pai_inexistente; declarar então TBUNIDAD -> TBPROFIS duas_fases em ciclos.tsv",
-   "motivo": "TBUNIDAD (ordem 90) aponta o farmacêutico pela inscrição (ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS) e TBPROFIS vem depois (ordem ~870); TBPROFIS -> TBUNIDAD já é duas_fases, então TBUNIDAD não pode ir para depois. Hoje o farmacêutico fica sempre NULL com pai_inexistente na carga real"
+   "mudanca": "aresta duas_fases também para a referência encadeada terminada em tabela (ref:T>X>U): pai U ainda não visto numa tabela com aresta (filho, U) em ciclos.tsv adia a coluna para a fase 2 em vez de NULL com pai_inexistente; declarar então TBUNIDAD -> TBPROFIS duas_fases em ciclos.tsv; AMPLIADO (rodada 3): também para a referência por CHAVE ALTERNATIVA (ref:T.K): valor da chave alternativa cujo pai U ainda não foi carregado numa tabela com aresta (filho, U) duas_fases adia a coluna para a fase 2 em vez de NULL com pai_inexistente",
+   "motivo": "TBUNIDAD (ordem 90) aponta o farmacêutico pela inscrição (ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS) e TBPROFIS vem depois (ordem ~870); TBPROFIS -> TBUNIDAD já é duas_fases, então TBUNIDAD não pode ir para depois. Hoje o farmacêutico fica sempre NULL com pai_inexistente na carga real; rodada 3: diretor e autorizador da unidade (CPF_DIR/CNS_DIR, CPF_AUT/CNS_AUT -> diretor_profissional_id/autorizador_profissional_id por ref:TBPROFIS.CPF e ref:TBPROFIS.CNS) têm o mesmo problema de ordem; provados na conferência com o profissional já carregado"
   },
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
@@ -54,6 +54,26 @@
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "comparar os destinos do plano (carga_mapa.planejar) com tabelas_destino do mapa: destino declarado sem nenhuma coluna e não opcional vira BLOQUEADA destino_sem_colunas; e só contar CARREGA quando as referências NOT NULL vierem de tabela anterior na ordem (ou duas_fases)",
    "motivo": "TBEMPHOS aparece CARREGA com a mantenedora (tabelas_destino) nunca gravada (só a pessoa jurídica); a lotação aparecia CARREGA antes da dependência de TBPROFIS (falso positivo de cobertura)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-06.tsv (fatia L7-06)",
+   "mudanca": "TBFORNEC: destino secundário pessoa_fisica (antes;adotar:cpf) gravado só quando PESSOA = F (depende do destino condicional pelo tipo já pedido pela L7-06), nome = NOME, cpf = CGC (regra cpf), data_nascimento = DATA_NASCIMENTO; empresa_fornecedora.pessoa_fisica_id = @id:pessoa_fisica; ligar a essa pessoa os dados do autônomo (CAT_SEFIP, OCOR_SEFIP, NUMERO_INSS, IDENTIDADE, NDEP, ID_FPCBO, ID_TBCBOPRO, ID_FPTIPO_TRABALHADOR, ID_FPCATEGTRAB) e, o que não tiver coluna, ao retrato da trilha do fornecedor; trocar o motivo de ID_TBPESSOA (a ligação nunca se resolve: TBPESSOA é descarte). Até o destino condicional: só ligar a pessoa já existente por cod:pessoa_fisica.cpf",
+   "motivo": "achado da revisão (gravidade alta): TBPESSOA é descarte e nunca grava destino; o dado fiscal e de pessoal do autônomo pessoa física (eSocial, SEFIP) se perderia. Decisão registrada em F4-decisoes-destino.md (TBPESSOA e TBFORNEC)"
+  },
+  {
+   "arquivo": "db/migracoes 14_FIN (trilha F2.2, proposta de modelo)",
+   "mudanca": "parâmetro de ISS por município do cliente (municipio_ibge_id, valor_minimo_retencao, tipo do mínimo, acumula_periodo) ou regra_retencao.aliquota anulável (alíquota a completar pelo cliente)",
+   "motivo": "TBMUIBGE traz VALOR_MIN_RETENCAO_ISS, TIPO_VALOR_MIN_RET_ISS e CALCULO_ACUMULATIVO_ISS por município; sem alíquota a regra_retencao recusaria (NOT NULL). Hoje a configuração vai à trilha do município (sem perda)"
+  },
+  {
+   "arquivo": "db/migracoes 03_CAD/14_FIN (trilha F2.2, proposta de modelo)",
+   "mudanca": "configuração fiscal da mantenedora: emissão de NFS-e (tributação, imunidade e tipo de retenção do ISSQN, classificação tributária, texto adicional da nota), escrituração digital (instituição responsável, código do empresário, indicador de descentralização, números dos livros, datas de arquivamento, natureza da PJ e atividade preponderante, obrigatoriedade da ECD), EFD-Reinf/eSocial do empregador (ente federativo responsável, indicador da União, desoneração, isenção de multa, situação, data de transformação), CNAE fiscal e da RAIS, NIT, CEI, SUFRAMA, responsável pela DMED; natureza_juridica_id por de-para oficial pelo código",
+   "motivo": "TBEMPHOS: ~65 colunas fiscais sem coluna no modelo; hoje guardadas no retrato completo da trilha da mantenedora (#retrato:*) e declaradas uma a uma com o motivo em colunas.d/L5-05.tsv"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (apelido de destino)",
+   "mudanca": "dois destinos secundários da MESMA tabela numa linha (ex.: pessoa_fisica#responsavel e pessoa_fisica#contador), cada um com opções, @id:<destino#apelido> e conector_origem <chave>/<destino#apelido>",
+   "motivo": "TBEMPHOS: responsável legal e contador (OLD_NOMECONT, OLD_CPFCONTADOR) são duas pessoas físicas; hoje só o responsável grava e o contador fica no retrato da trilha (mantenedora.contador_pessoa_fisica_id NULL)"
   }
  ]
 }

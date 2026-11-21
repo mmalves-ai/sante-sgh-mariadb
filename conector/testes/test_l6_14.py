@@ -8,8 +8,8 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_14
 
 TABELAS = set(l6_14.CARREGADAS)
-# RIPARAM: descarte de produto (sem_carga.tsv, decisão genérica dos parâmetros)
-DESCARTADAS = {"RIPARAM"}
+# RIPARAM carrega os contadores de numeração (rodada 3); a fatia não tem descarte
+DESCARTADAS = set()
 FORA = set()
 
 
@@ -27,6 +27,9 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.plano["RETPLEITO"]["destinos"], ["tipo_leito_observacao"])
         self.assertEqual(self.plano["RIBLOCOS"]["destinos"], ["bloco_internacao", "unidade_internacao"])
         self.assertEqual(self.plano["RICTRLOC"]["destinos"], ["ocupacao_leito"])
+        self.assertEqual(self.plano["RIACOMOD"]["destinos"], ["acomodacao"])
+        self.assertEqual(self.plano["RILEITOS"]["destinos"], ["leito_hospitalar"])
+        self.assertEqual(self.plano["RIPARAM"]["destinos"], ["sequencia_negocio"])
         self.assertEqual(self.plano["RISITREGLEITO"]["destinos"], ["situacao_pedido_leito"])
         self.assertEqual(self.plano["TBALTARN"]["destinos"], ["desfecho_recem_nascido"])
         self.assertEqual(self.plano["RITITFIC"]["destinos"], ["titulo_documento_internacao"])
@@ -92,11 +95,47 @@ class Plano(unittest.TestCase):
 
     def test_ocupacao_de_leito(self):
         cs = self.cols("RICTRLOC", "ocupacao_leito")
+        self.assertTrue({"estabelecimento_id", "internacao_id", "leito_hospitalar_id", "unidade_internacao_id",
+                         "acomodacao_id", "data_hora_inicio"} <= set(cs))
         self.assertEqual(cs["internacao_id"]["referencia"], "RICADINT")
         self.assertEqual(cs["acomodacao_id"]["passos"], [{"tabela": "RIACOMOD", "modo": "composta",
                                                           "arg": ["BLOCO", "ACOMOD"]}])
-        self.assertEqual(cs["leito_hospitalar_id"]["passos"], [{"tabela": "RILEITOS", "modo": "alt", "arg": "LEITO"}])
+        # leito pela chave alternativa COMPOSTA (o mesmo código de leito em dois quartos não confunde)
+        self.assertEqual(cs["leito_hospitalar_id"]["passos"][0]["tabela"], "RILEITOS")
+        self.assertEqual(cs["leito_hospitalar_id"]["passos"][0]["modo"], "alt_composta")
+        self.assertEqual(cs["unidade_internacao_id"]["passos"][0]["tabela"], "RIBLOCOS")
+        self.assertEqual(cs["unidade_internacao_id"]["passos"][-1].get("destino"), "unidade_internacao")
+        self.assertEqual(cs["data_hora_inicio"]["coluna"], "#data_hora:ENTRADA,HORAENT")
+        self.assertEqual(cs["data_hora_fim"]["coluna"], "#data_hora:SAIDA,HORASAI")
+        self.assertEqual((cs["situacao"]["regra"], cs["situacao"]["valores"]), ("preenchido", {"1": "encerrada", "0": ""}))
         self.assertEqual(cs["estabelecimento_id"]["coluna"], "@estabelecimento")
+
+    def test_acomodacao(self):
+        cs = self.cols("RIACOMOD", "acomodacao")
+        self.assertTrue({"estabelecimento_id", "unidade_internacao_id", "categoria_acomodacao_id", "codigo", "nome"}
+                        <= set(cs))
+        self.assertEqual(cs["unidade_internacao_id"]["passos"][-1].get("destino"), "unidade_internacao")
+        self.assertEqual(cs["categoria_acomodacao_id"]["referencia"], "TBTIPOACOMOD")
+        self.assertEqual(cs["bloco_internacao_id"]["referencia"], "RIBLOCOS")
+        self.assertEqual(cs["quantidade_leitos"]["regra"], "faixa:1,999")
+        self.assertEqual(cs["idade_minima_dias"]["coluna"], "#dias:IDADE_MINIMA,ID_TBUNID_IDADE_MIN")
+        self.assertEqual(cs["idade_minima_dias"]["valores"]["Anos"], "ano")
+        self.assertEqual(cs["sexo_permitido"]["valores"], {"M": "masculino", "F": "feminino", "I": "indiferente"})
+        # nome concorrente: sem NOME, o código do quarto (nada se perde, o quarto e os leitos carregam)
+        nomes = [c["coluna"] for c in self.plano["RIACOMOD"]["colunas"]["acomodacao"] if c["destino"] == "nome"]
+        self.assertEqual(nomes, ["NOME", "ACOMOD"])
+        # alimentadora única de acomodacao: a outra tabela que escreve nela (TBACOMODLEITO, L6-15) só COMPLETA o
+        # quarto de RIACOMOD (`complementa` na via do id: UPDATE da linha resolvida por ref:RIACOMOD, nunca linha nova)
+        decl = [c for c in self.mapa["colunas_decl"] if (c.get("destino") or "").startswith("acomodacao.")]
+        complementa = {c["tabela"] for c in decl if "complementa" in (c.get("via") or "").split(";")}
+        self.assertEqual({c["tabela"] for c in decl} - complementa, {"RIACOMOD"})
+        for t in complementa:
+            via = next(c["via"] for c in decl if c["tabela"] == t and c["destino"] == "acomodacao.id")
+            self.assertTrue(via.startswith("ref:RIACOMOD("), t)
+            # nenhuma coluna que RIACOMOD grava é escrita pela complementar (duas fontes divergiriam na conciliação)
+            proprias = {c["destino"] for c in decl if c["tabela"] == "RIACOMOD"}
+            self.assertFalse({c["destino"] for c in decl if c["tabela"] == t and c["destino"] != "acomodacao.id"}
+                             & proprias, t)
 
     def test_ordem_de_carga(self):
         """Referência declarada a pai que carrega DEPOIS fica NULL (pai_inexistente). Em regra_documento_internacao NULL
@@ -104,7 +143,9 @@ class Plano(unittest.TestCase):
         as dependências pedidas no L6-14.json serem aplicadas e o mapa regerado."""
         ordem = {r["tabela"]: int(r["ordem"]) for r in self.mapa["tabelas"] if r["ordem"].isdigit()}
         faltam = [(f, p) for f, p in [("RICONFIC", "TBCONVEN"), ("RIESPFIC", "TBESPEC"), ("RICTRLOC", "RICADINT"),
-                                      ("RICTRLOC", "RIACOMOD"), ("RICTRLOC", "RILEITOS")] if ordem[f] <= ordem[p]]
+                                      ("RICTRLOC", "RIACOMOD"), ("RICTRLOC", "RILEITOS"),
+                                      ("RICTRLOC", "RIBLOCOS"), ("RIACOMOD", "RIBLOCOS"),
+                                      ("RIACOMOD", "TBTIPOACOMOD"), ("RIACOMOD", "TBUNID_IDADE")] if ordem[f] <= ordem[p]]
         self.assertEqual(faltam, [], "pai depois do filho na ordem do mapa (dependência pedida no L6-14.json)")
 
     def test_codigos_como_texto(self):
@@ -130,9 +171,23 @@ class Plano(unittest.TestCase):
 
     def test_descarte_e_fora_da_fatia(self):
         self.assertFalse((DESCARTADAS | FORA) & set(self.plano))
-        self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in DESCARTADAS])
-        sem = {r["tabela"]: r for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
-        self.assertEqual((sem["RIPARAM"]["situacao"], sem["RIPARAM"]["causa"]), ("descarte", "mecanismo_do_produto"))
+        sem = {r["tabela"] for r in mapa.ler_tsv(mapa.DIR_PACOTE / "declarado/sem_carga.tsv")}
+        self.assertFalse(sem & TABELAS)
+
+    def test_contadores_da_internacao_em_sequencia_inativa(self):
+        c = self.cols("RIPARAM", "sequencia_negocio")
+        self.assertEqual((c["proximo_valor"]["coluna"], c["proximo_valor"]["regra"]), ("#item", "inteiro_nao_negativo"))
+        self.assertEqual(c["tipo"]["coluna"], "#rotulo")
+        self.assertEqual(c["ativo"]["coluna"], "=~0")   # inativa e presumida: o cliente confere antes de ligar
+        via = next(x for x in self.mapa["colunas_decl"] if x["tabela"] == "RIPARAM" and x["coluna"] == "#item")["via"]
+        rot = dict(p.split("=") for p in via.split("desdobrar:")[1].split(";")[0].split(","))
+        self.assertEqual(set(rot), {"PRONT", "REGISTRO", "PRTANT", "REGANT", "PRT_OTMU", "PRTA_OTMU"})
+        for col, tipo in rot.items():   # nome de negócio, nunca o nome da coluna da origem (regra 1)
+            self.assertTrue(tipo.startswith("origem_internacao_") and tipo[18:] != col.lower() and "otmu" not in tipo,
+                            col)
+        # os tipos não colidem com os contadores da recepção (REPARAM, L6-02) na UNIQUE (estabelecimento, tipo)
+        rec = next(x for x in self.mapa["colunas_decl"] if x["tabela"] == "REPARAM" and x["coluna"] == "#item")["via"]
+        self.assertFalse(set(rot.values()) & {p.split("=")[1] for p in rec.split("desdobrar:")[1].split(";")[0].split(",")})
 
 
 class Regras(unittest.TestCase):
@@ -150,6 +205,10 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("faixa:1,99", 0), (None, "valor_fora_do_dominio"))
         self.assertEqual(a("faixa:0,150", 200), (None, "valor_fora_do_dominio"))
         self.assertEqual(a("faixa:0,150", 12), (12, None))
+        self.assertEqual(a("faixa:1,999", 0), (None, "valor_fora_do_dominio"))
+        self.assertEqual(a("preenchido", "2026-01-07"), (True, None))
+        self.assertEqual(sentinela.periodo_em_dias(18, "ano"), (6570, "periodo_aproximado"))
+        self.assertEqual(sentinela.periodo_em_dias(30, "dia"), (30, None))
 
 
 class Sintetica(unittest.TestCase):
@@ -160,4 +219,4 @@ class Sintetica(unittest.TestCase):
         self.assertFalse((DESCARTADAS | FORA) & set(cont))
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            self.assertEqual(cont[t], l6_14.DESDOBRADAS.get(t, e["gravados"]) + recusas, t)

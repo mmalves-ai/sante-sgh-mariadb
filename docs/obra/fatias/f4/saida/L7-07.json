@@ -4,37 +4,43 @@
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "M1",
    "mudanca": "referência ao id de um destino SECUNDÁRIO do pai: via `ref:<TABELA>/<tabela destino>` lê o conector_origem pela chave `<chave>/<tabela destino>`",
-   "motivo": "GERASVALTRANSFLOTE -> movimento_lote.movimento_estoque_id (movimento_estoque é secundário de GELANTRA); GELANBAL -> inventario_estoque_item.inventario_estoque_contagem_id (contagem secundária de GECADBAL); GERASVALNFS (movimento de entrada da nota). Mesmo M1 do saida/L6-15.json. Declarações prontas e comentadas em colunas.d/L7-07.tsv"
+   "motivo": "GERASVALTRANSFLOTE -> movimento_lote.movimento_estoque_id (movimento_estoque é secundário de GELANTRA); GELANBAL -> inventario_estoque_item.inventario_estoque_contagem_id (contagem secundária de GECADBAL); GERASVALNFS (movimento de entrada da nota). Mesmo M1 do saida/L6-15.json. Declarações prontas e comentadas em colunas.d/L7-07.tsv",
+   "atendido": "rodada 2 (ref:T/<destino>): usado em GELANBAL, GERASVALNFS, GERASVALTRANSFLOTE"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "M4",
    "mudanca": "referência por identificação natural de VÁRIAS colunas do pai que não são a chave dele (ex.: `ref:GECADNFS[ANO,MES,DOC]`), com pai_ambiguo se repetida",
-   "motivo": "GELANNFS -> nota_entrada_item.nota_entrada_id: a chave de GECADNFS é ID e a linha só traz ANO,MES,DOC. Mesmo M4 do saida/L6-15.json"
+   "motivo": "GELANNFS -> nota_entrada_item.nota_entrada_id: a chave de GECADNFS é ID e a linha só traz ANO,MES,DOC. Mesmo M4 do saida/L6-15.json",
+   "atendido": "rodada 2 (ref:T.(K1,K2)=(C1,C2)): usado em GELANNFS"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "M2",
    "mudanca": "id pelo código no destino (catálogo do produto, ex.: tipo_movimento_estoque pelo código) para coluna NOT NULL sem coluna na origem",
-   "motivo": "GELANPAC -> movimento_estoque.tipo_movimento_estoque_id (consumo do paciente = saída). Mesmo M2 do saida/L6-15.json"
+   "motivo": "GELANPAC -> movimento_estoque.tipo_movimento_estoque_id (consumo do paciente = saída). Mesmo M2 do saida/L6-15.json",
+   "atendido": "rodada 2 (cod:): usado em GELANPAC e GELANNFS"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "data_em_datetime",
    "mudanca": "tipar: DATE da origem em coluna DATETIME do destino vira datetime à meia-noite ANTES da soma de controle (hoje o resumo da origem tem '2026-01-31' e o relido '2026-01-31 00:00:00.000')",
-   "motivo": "GECADBAL -> inventario_estoque.data_corte/aberto_em: a conciliação diverge (provado na conferência da fatia; o mesmo do pedido 2d do L6-04 e de GEESTINI no L7-05). Declaração pronta e comentada; ao descomentar, pôr os pares CONSOL S=aprovado, N=aberto em valores.d/L7-07.tsv. Também GEFECMES/GEESTINI (L7-05)"
+   "motivo": "GECADBAL -> inventario_estoque.data_corte/aberto_em: a conciliação diverge (provado na conferência da fatia; o mesmo do pedido 2d do L6-04 e de GEESTINI no L7-05). Declaração pronta e comentada; ao descomentar, pôr os pares CONSOL S=aprovado, N=aberto em valores.d/L7-07.tsv. Também GEFECMES/GEESTINI (L7-05)",
+   "atendido": "rodada 2 (tipar): GECADBAL carrega"
   },
   {
    "arquivo": "conector/sante_conector/depara.py",
    "id": "dcb",
    "mudanca": "catálogo `dcb` em CATALOGOS: tabela principio_ativo, coluna codigo_dcb (texto aparado, maiúsculas)",
-   "motivo": "GEITENS_TBPRINC -> insumo_principio_ativo.principio_ativo_id por `ref:TBPRINC>COD_DCB` com depara dcb (TBPRINC descartada como catálogo oficial). Serve também PRALERGIAPAC_TBPRINC (L6)"
+   "motivo": "GEITENS_TBPRINC -> insumo_principio_ativo.principio_ativo_id por `ref:TBPRINC>COD_DCB` com depara dcb (TBPRINC descartada como catálogo oficial). Serve também PRALERGIAPAC_TBPRINC (L6)",
+   "atendido": "não é mais preciso: cod:principio_ativo.codigo_dcb (rodada 2), como a L6-12"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "destino_condicional",
    "mudanca": "destino condicional por valor de coluna (ex.: `?OQUE=P` na via do destino): a linha só grava os destinos cuja condição vale",
-   "motivo": "GECADPED vira pedido_compra, cotacao ou processo_licitatorio conforme OQUE; GELANPED segue o cabeçalho"
+   "motivo": "GECADPED vira pedido_compra, cotacao ou processo_licitatorio conforme OQUE; GELANPED segue o cabeçalho",
+   "atendido": "não é mais preciso: OQUE = P em 18.090 de 18.090 linhas medidas (só pedido de compra)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -46,12 +52,14 @@
    "arquivo": "tools/obra/cobertura_conector.py",
    "id": "cobertura_complementa",
    "mudanca": "não exigir as colunas NOT NULL do destino quando ele é `complementa` (UPDATE da linha do pai, sem linha nova); e `tools/obra/conferir-fatia-f4.sh` passa a rodar `cobertura_conector.py --fatia <F> --falhar-se-bloqueada` (hoje devolve ok com tabelas bloqueadas)",
-   "motivo": "GESALDOKITRAS e GERASVALINICIAL CARREGAM (provado na conferência da fatia), mas a ferramenta as mostra como coluna_obrigatoria_sem_fonte"
+   "motivo": "GESALDOKITRAS e GERASVALINICIAL CARREGAM (provado na conferência da fatia), mas a ferramenta as mostra como coluna_obrigatoria_sem_fonte",
+   "atendido": "rodada 2: a cobertura não exige as NOT NULL do complemento"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "agregação por chave do destino: linhas da origem com o mesmo (kit, insumo) gravam UM kit_rastreavel_item (quantidade_padrao = soma, parcelas na conciliação) e cada linha grava o seu kit_rastreavel_lote (lote = ID_GEVALMEM, quantidade da linha), com o destino secundário opcional já pedido; depois, o esperado da sintética l7_07 (GEITEMKITRAS linha 4, outro lote) passa de restricao_destino_1062 para lote secundário",
-   "motivo": "GEITEMKITRAS é uma linha por insumo E LOTE do kit: na referência 1795 pares (kit, insumo) repetidos em 4216 linhas, todos com lotes distintos e nenhum com lote nulo; hoje 2421 linhas caem em 1062 em uq_kit_rastreavel_item_insumo, a quantidade padrão sai subcontada e o lote se perde"
+   "motivo": "GEITEMKITRAS é uma linha por insumo E LOTE do kit: na referência 1795 pares (kit, insumo) repetidos em 4216 linhas, todos com lotes distintos e nenhum com lote nulo; hoje 2421 linhas caem em 1062 em uq_kit_rastreavel_item_insumo, a quantidade padrão sai subcontada e o lote se perde",
+   "atendido": "rodada 3 (correção), em parte: adotar:kit_rastreavel_id,insumo_id no item + kit_rastreavel_lote opcional por linha; falta a soma da quantidade (pedido kit_quantidade_soma)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
@@ -67,7 +75,9 @@
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "id": "competencia_carga",
    "mudanca": "a regra declarada vale também para `=@data_carga` (ex.: `=@data_carga` com `data_primeiro_dia_mes` = 1º dia do mês da carga), estável no diferencial como o `=@data_carga`",
-   "motivo": "GEVALMEM -> saldo_lote.competencia (NOT NULL, CHECK dia 1): o saldo ATUAL do lote por local sai da GEVALMEM (QTDE, QTDE_KIT) e a competência é o mês da carga. Declaração pronta e comentada (#GEVALMEM ... saldo_lote) em colunas.d/L7-07.tsv; ao aplicar, descomentar e pôr na sintética o esperado do saldo (1 linha por lote x local; a linha 4 grava o saldo do local 2 no lote adotado)"
+   "motivo": "GEVALMEM -> saldo_lote.competencia (NOT NULL, CHECK dia 1): o saldo ATUAL do lote por local sai da GEVALMEM (QTDE, QTDE_KIT) e a competência é o mês da carga. Declaração pronta e comentada (#GEVALMEM ... saldo_lote) em colunas.d/L7-07.tsv; ao aplicar, descomentar e pôr na sintética o esperado do saldo (1 linha por lote x local; a linha 4 grava o saldo do local 2 no lote adotado)",
+   "prioridade": "alta (bloqueia GERASVALFINAL/GERASVALINICIAL e o saldo do lote)",
+   "patch": "carga_mapa.py, depois de `if x == \"@data_carga\": x = self.data_carga`: se a coluna tem regra declarada (ex.: data_primeiro_dia_mes), aplicar sentinela.aplicar(regra, x)[0]; o resumo e o hash seguem o valor convertido (estável no diferencial dentro do mês)"
   },
   {
    "arquivo": "conector/sante_conector/depara.py",
@@ -86,6 +96,103 @@
    "id": "cobertura_por_coluna",
    "mudanca": "acusar coluna da origem sem declaração (com ou sem destino) nas tabelas que carregam (fora a chave e as licenciadas)",
    "motivo": "colunas com destino no modelo sumiam em silêncio (GEITENS tinha 72 sem declaração); a L7-07 já declara todas e tem o teste test_toda_coluna_da_origem_declarada_nas_carregadas"
+  },
+  {
+   "id": "complementa_cod",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "prioridade": "alta (antes da carga real)",
+   "mudanca": "complemento (`complementa`) cujo id vem de `cod:` e não acha a linha: recusar com pai_inexistente (hoje a checagem de id nulo roda antes do cod:, o UPDATE vai com id NULL e a releitura do padrão quebra com IndexError em gravar)",
+   "motivo": "GECADNFS completa a nota criada pelos itens pelo número (ref:GECADNFS>ID;cod:nota_entrada.numero;complementa). Provado na conferência da fatia (cabeçalho sem nota: IndexError). Na referência, 1 nota tem emissão depois da entrada e não cria cabeçalho: a carga real quebraria. A imagem sintética tira esse caso até o pedido"
+  },
+  {
+   "id": "mov_transferencia",
+   "arquivo": "conector/mapa/declarado/colunas.d/L7-05.tsv",
+   "fatia": "L7-05",
+   "mudanca": "GELANTRA grava também o destino secundário movimento_estoque (saída do local de origem da transferência, tipo de migração por cod:, @id em documento_estoque_item.movimento_estoque_id ou o contrário)",
+   "motivo": "GERASVALTRANSFLOTE (74.459 linhas) liga o lote ao movimento por ref:GELANTRA/movimento_estoque; sem ele toda linha fica pai_inexistente/1048"
+  },
+  {
+   "id": "texto_composto",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial `#texto:C1,C2,C3[:sep][:prefixo]` (texto composto de colunas, ex.: balanco_2026/01/10)",
+   "motivo": "GECADBAL: o mesmo DOC em meses diferentes (30 grupos medidos) colide no número do inventário; hoje #codigo_derivado:DOC:20:balanco_ deixa 1062 visível nessas linhas e nos itens (pai_pendente)"
+  },
+  {
+   "id": "diferenca",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial `#diferenca:A,B` (A - B, decimal) para colunas derivadas",
+   "motivo": "GELANBAL: saldo_sistema = QTDE - DIFER e a inventario_estoque_divergencia (diferenca = contada - sistema, CHECK); hoje DIFER fica sem destino"
+  },
+  {
+   "id": "ref_por_tipo",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência condicionada ao valor de outra coluna da linha, concorrente na MESMA coluna da origem: ex. `REG ref:RECADATE?TIPO=E` e `REG ref:RICADINT@atendimento_id?TIPO=I` para movimento_estoque.atendimento_id (e `@paciente_id` para paciente_id), sem pendência na via que não se aplica; o verificador hoje recusa a mesma (tabela, coluna, destino) duas vezes",
+   "motivo": "GELANPAC.REG é atendimento (TIPO E) ou internação (TIPO I, 27.388 linhas fora do cadastro de atendimentos): hoje atendimento NULL com pai_inexistente nessas linhas",
+   "prioridade": "alta (antes da carga real)"
+  },
+  {
+   "id": "numero_origem",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2)",
+   "trilha": "F2.2",
+   "mudanca": "pedido_compra.numero_documento_origem VARCHAR(30) NULL (número que o usuário conhece no sistema anterior)",
+   "motivo": "GECADPED.DOC repete no ano (6.429 grupos): o número único vem do ID e o DOC fica sem destino"
+  },
+  {
+   "id": "fornecedor_opcional",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2)",
+   "trilha": "F2.2",
+   "mudanca": "pedido_compra.empresa_fornecedora_id NULL permitido nas situações rascunho e em_cotacao (CHECK), como na melhor prática (pedido em elaboração ainda sem fornecedor)",
+   "motivo": "GECADPED: FORN = 0 em 6.900 de 18.090 linhas medidas; hoje 1048 visível"
+  },
+  {
+   "id": "solicitante_imagem",
+   "arquivo": "conector/sante_conector/sintetica_d (padrão ORIGEM_PAIS)",
+   "mudanca": "nenhuma no motor: na próxima rodada a fatia declara GELANPAC.ID_TBCBOPRO -> movimento_estoque.solicitante_profissional_id por ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS, com TBCBOPRO em ORIGEM_PAIS",
+   "motivo": "registro do que ficou sem destino nesta rodada",
+   "atendido": "rodada 3 (correção): GELANPAC.ID_TBCBOPRO -> solicitante_profissional_id por ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS (TBCBOPRO em ORIGEM_PAIS na sintética)"
+  },
+  {
+   "id": "kit_quantidade_soma",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "prioridade": "media",
+   "mudanca": "agrupar no destino PRINCIPAL (o mesmo do pedido 15 da L6-05), ou agregado `#grupo_somar:C` válido num principal com `adotar:` (soma das linhas lidas com a mesma chave de adoção)",
+   "motivo": "GEITEMKITRAS: o par kit+insumo adotado fica com a quantidade_padrao da primeira linha; kit_rastreavel_item.saldo_atual (soma dos lotes) fica no padrão 0"
+  },
+  {
+   "id": "via_alternativa",
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
+   "prioridade": "alta",
+   "mudanca": "permitir a mesma (tabela, coluna, destino) declarada mais de uma vez com vias diferentes, como colunas concorrentes (vale a primeira que acha valor; as outras não deixam pendência quando uma achou)",
+   "motivo": "GEITENS_TBPRINC (e L6-11, L6-12): princípio pelo DCB quando houver e pelo NOME na falta; GELANPAC.REG por atendimento ou internação (com ref_por_tipo)"
+  },
+  {
+   "id": "principio_ativo_cliente",
+   "arquivo": "db/migracoes/11_SUP (trilha F2.2)",
+   "trilha": "F2.2",
+   "prioridade": "alta (segurança do paciente: alergia por princípio)",
+   "mudanca": "CREATE TABLE principio_ativo_cliente (id, nome VARCHAR(255) NOT NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, principio_ativo_id NULL FK principio_ativo (ligação ao oficial, por nome ou pelo farmacêutico), classe_terapeutica_codigo VARCHAR(30) NULL, unidade_medida_padrao_id NULL FK unidade_medida, origem, auditoria; UNIQUE(nome)); e nas ligações insumo_principio_ativo, alergia_paciente_principio, item_nao_padronizado_principio e alergeno_principio_ativo: principio_ativo_id NULL + principio_ativo_cliente_id NULL com CHECK (exatamente um)",
+   "motivo": "TBPRINC: 138 princípios do hospital sem código DCB; o que não casar pelo nome com o catálogo oficial hoje é recusado nas ligações (pendência visível) e o princípio não tem onde gravar (regra 7: o oficial nunca é gravado)"
+  },
+  {
+   "id": "nome_principio_outras_fatias",
+   "fatia": "L6-11, L6-12",
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv, L6-12.tsv",
+   "mudanca": "PRALERGIAPAC_TBPRINC, PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC: princípio por `ref:TBPRINC>NOME;cod:principio_ativo.descricao` com regra texto_nome (como GEITENS_TBPRINC)",
+   "motivo": "COD_DCB vazio nas 138 linhas de TBPRINC: pelo DCB as ligações clínicas (alergia do paciente) caem 100% em 1048"
+  },
+  {
+   "id": "carrega_sem_linhas",
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "prioridade": "media",
+   "mudanca": "classificar como BLOQUEADA (ou carrega_sem_linhas) a tabela cuja coluna obrigatória depende de uma coluna da origem medida 100% vazia (medida de vazios por coluna no dicionário de referência)",
+   "motivo": "GEITENS_TBPRINC aparecia CARREGA com 0 de 189 linhas gravadas na referência (DCB vazio)"
+  },
+  {
+   "id": "pai_pendente_secundario",
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "prioridade": "baixa",
+   "mudanca": "`ref:T/<destino>` para linha do pai RECUSADA: pendência pai_pendente (com a raiz) em vez de pai_inexistente",
+   "motivo": "GESALDOKITRAS da linha recusada de GEITEMKITRAS aparece como pai_inexistente (provado na conferência da fatia)"
   }
  ]
 }

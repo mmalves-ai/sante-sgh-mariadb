@@ -35,7 +35,7 @@ class PlanoL506(unittest.TestCase):
         # o dado fiscal é secundário opcional; conta bancária, configuração TISS e contrato por estabelecimento
         # ficam para o cliente (decisões em docs/obra/passagens/F4-decisoes-destino.md)
         self.assertEqual(self.plano["TBPROFIS"]["destinos"], ["profissional", "profissional_dado_fiscal",
-                                                              "pessoa_fisica"])
+                                                              "pessoa_fisica", "usuario_profissional"])
         self.assertTrue(self.plano["TBPROFIS"]["opcoes"]["pessoa_fisica"]["antes"])
         self.assertTrue(self.plano["TBPROFIS"]["opcoes"]["profissional_dado_fiscal"]["opcional"])
         self.assertEqual(self.plano["TBCONVEN"]["destinos"], ["fonte_pagadora"])
@@ -75,11 +75,64 @@ class PlanoL506(unittest.TestCase):
     def test_retrato_por_linha_e_sem_hash_constante(self):
         self.assertEqual(self.col("HTCONVEN", "#retrato")["destino"], "dados")
         for c in self.m["colunas_decl"]:
-            if c["tabela"] in CARREGADAS and (c.get("destino") or "").endswith((".hash_dados", ".dados")):
-                self.assertEqual(c["coluna"], "#retrato", c)
+            if c["tabela"] in CARREGADAS and (c.get("destino") or "").endswith(".hash_dados"):
+                self.assertTrue(c["coluna"].startswith("#sha256:#retrato"), c)
+            if c["tabela"] in CARREGADAS and (c.get("destino") or "").endswith((".dados", ".dados_antes",
+                                                                                 ".dados_depois")):
+                self.assertTrue(c["coluna"].startswith("#retrato"), c)
         # HTCONVEN: o retrato cobre todas as colunas da tabela
         self.assertEqual(set(self.plano["HTCONVEN"]["retrato"]),
                          {"ID", "ID_TBCONVEN", "DATA_HORA_HISTORICO", "NOME", "CLASSIFICACAO"})
+
+    def test_historicos_com_retrato_de_todas_as_colunas_e_hash_do_mesmo_json(self):
+        for t, dt in [("HTPACIENTE", "paciente_versao"), ("HTPACTELEFONE", "trilha_auditoria"),
+                      ("HTPROFIS", "profissional_versao"), ("HTPROFISTEL", "trilha_auditoria"),
+                      ("HTATENDRESP", "trilha_auditoria"), ("HTTBCBOPRO", "trilha_auditoria"),
+                      ("HTTBCBOPRO_TBUNIDAD", "trilha_auditoria"), ("HTTBHOSPIT", "trilha_auditoria")]:
+            self.assertEqual(self.plano[t]["destinos"], [dt], t)
+            k = next(x for x in self.plano[t]["retratos"] if x.startswith("#retrato:*"))
+            self.assertTrue(self.plano[t]["retratos"][k]["todas"], t)
+            if dt != "trilha_auditoria":
+                self.assertIn("#sha256:#retrato:*", [c["coluna"] for c in self.plano[t]["colunas"][dt]], t)
+            else:  # o histórico da origem guarda o estado DEPOIS da alteração (F4-decisoes-destino.md seção 4)
+                self.assertEqual([c["destino"] for c in self.plano[t]["colunas"][dt]
+                                  if c["coluna"].startswith("#retrato")], ["dados_depois"], t)
+        # o telefone do histórico nunca vira versão própria do cadastro (o retrato da versão é o cadastro completo)
+        for c in self.m["colunas_decl"]:
+            if c["tabela"] in ("HTPACTELEFONE", "HTPROFISTEL"):
+                self.assertFalse((c.get("destino") or "").startswith(("paciente_versao", "profissional_versao")), c)
+        # HTTBHOSPIT: nenhuma credencial no retrato
+        r = self.plano["HTTBHOSPIT"]["retratos"]["#retrato:*-USUARIO_PROXY,USERPROV"]
+        self.assertFalse({"USUARIO_PROXY", "USERPROV", "SENHAPROV", "SENHA_PROXY"} & set(r.get("colunas") or []), r)
+
+    def test_telefone_e_responsavel_pela_versao_pai(self):
+        cam = lambda t, dst: [p.get("tabela") or p.get("coluna") for c in self.plano[t]["colunas"][
+            self.plano[t]["destinos"][0]] if c["destino"] == dst for p in c["passos"]]
+        self.assertEqual(cam("HTPACTELEFONE", "entidade_id"), ["HTPACIENTE", "ID_RICADPAC", "RICADPAC"])
+        self.assertEqual(cam("HTPACTELEFONE", "ocorrido_em"), ["HTPACIENTE", "DATA_HORA_HISTORICO"])
+        self.assertEqual(cam("HTPROFISTEL", "entidade_id"), ["HTPROFIS", "ID_TBPROFIS", "TBPROFIS"])
+        self.assertEqual(cam("HTATENDRESP", "entidade_id"), ["HTATENDIMENTO", "ID_ATCABECATEND", "ATCABECATEND"])
+        self.assertEqual(cam("HTATENDRESP", "ocorrido_em"), ["HTATENDIMENTO", "DATA_HORA_HISTORICO"])
+
+    def test_regra_do_cadastro_desdobrada_por_campo(self):
+        p = self.plano["ATPARAMGERAL"]
+        self.assertEqual(p["destinos"], ["regra_campo_cadastro"])
+        des = p["opcoes"]["regra_campo_cadastro"]["desdobrar"]
+        self.assertEqual(len(des), l5_06.CAMPOS_REGRA)
+        self.assertEqual(len({r for _, r in des}), len(des))  # rótulo (campo|entidade) único
+        self.assertEqual(len({r.split("|")[0] for _, r in des}), len(des))  # um campo, uma regra
+        ent = {r.split("|")[1] for _, r in des}
+        self.assertLessEqual(ent, {"paciente", "pessoa_fisica", "documento_pessoa", "endereco_pessoa",
+                                   "telefone_pessoa", "responsavel_paciente"})
+        # os S/N antigos do telefone ficam fora: o campo novo (código da lista) é o mesmo
+        self.assertFalse({"DIGITAR_TELEFONE", "DIGITAR_TEL_CONTATO", "DIGITAR_CELULAR"} & {c for c, _ in des})
+        item = next(c for c in p["colunas"]["regra_campo_cadastro"] if c["coluna"] == "#item")
+        # lista confirmada por contagem na imagem de referência (TBDIGITAR: 1 Não, 2 Sim, 3 Obrigatório; T/F nas
+        # marcações CHAR); 0 fica fora da lista e nunca oculta
+        self.assertEqual(item["valores"], {"T": "opcional", "F": "oculto", "S": "opcional", "N": "oculto",
+                                           "0": "opcional", "1": "oculto", "2": "opcional", "3": "obrigatorio",
+                                           "4": "opcional"})
+        self.assertLessEqual(set(item["valores"].values()), {"obrigatorio", "opcional", "oculto", "somente_leitura"})
 
     def test_sem_carga_comentadas_ou_pedidas(self):
         linhas = [x.split("\t") for x in DECL.read_text(encoding="utf-8").splitlines() if x.startswith("#")]
@@ -113,7 +166,8 @@ class RegrasL506(unittest.TestCase):
 
 class SinteticaL506(unittest.TestCase):
     def test_tabelas_e_colunas_da_imagem_cobrem_o_plano(self):
-        plano = carga_mapa.planejar(mapa.carregar_execucao(), set(l5_06.COLUNAS))
+        plano = [p for p in carga_mapa.planejar(mapa.carregar_execucao(), set(l5_06.COLUNAS))
+                 if p["tabela"] not in l5_06.PAIS_NA_IMAGEM]
         self.assertEqual([p["tabela"] for p in plano], CARREGADAS)
         for p in plano:
             self.assertFalse(set(p["lidas"]) - set(l5_06.COLUNAS[p["tabela"]]), p["tabela"])
@@ -122,7 +176,10 @@ class SinteticaL506(unittest.TestCase):
         cont = {}
         esp = l5_06.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), set(CARREGADAS))
+        self.assertEqual(cont["ATPARAMGERAL"], 3)  # desdobrado: gravados = itens, conferidos na carga
         for t, e in esp.items():
+            if t == "ATPARAMGERAL":
+                continue
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino") or r == "pai_pendente")
             self.assertEqual(e["gravados"] + recusas, cont[t], t)
 
@@ -137,3 +194,40 @@ class SinteticaL506(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevisaoL506(unittest.TestCase):
+    """Achados da revisão da rodada 3: documento do profissional, pessoa física, vínculo com o usuário, sexo da
+    especialidade e colunas não carregadas sempre com motivo."""
+    @classmethod
+    def setUpClass(cls):
+        cls.m = mapa.carregar_execucao()
+        cls.plano = {p["tabela"]: p for p in carga_mapa.planejar(cls.m, set(CARREGADAS + SEM_CARGA))}
+        cls.decl = [c for c in cls.m["colunas_decl"] if c["tabela"] in CARREGADAS]
+
+    def test_documento_do_profissional_concorrente_com_o_indice_da_origem(self):
+        cpf = [c["coluna"] for c in self.plano["TBPROFIS"]["colunas"]["pessoa_fisica"] if c["destino"] == "cpf"]
+        self.assertEqual(cpf, ["CNPJ_CPF", "CPF", "ID_TBPESSOA"])
+        self.assertEqual(self.plano["TBPROFIS"]["opcoes"]["pessoa_fisica"]["adotar"], ["cpf"])
+
+    def test_pessoa_fisica_e_vinculo_do_usuario(self):
+        dts = self.plano["TBPROFIS"]["destinos"]
+        self.assertIn("usuario_profissional", dts)
+        op = self.plano["TBPROFIS"]["opcoes"]["usuario_profissional"]
+        self.assertTrue(op["opcional"])
+        self.assertEqual(op["adotar"], ["usuario_id"])
+        pf = {c["destino"] for c in self.plano["TBPROFIS"]["colunas"]["pessoa_fisica"]}
+        self.assertLessEqual({"data_nascimento", "sexo_id", "nome_mae", "cns"}, pf)
+
+    def test_sexo_da_especialidade(self):
+        c = next(c for c in self.plano["TBESPEC"]["colunas"]["especialidade_medica"] if c["coluna"] == "SEXO")
+        self.assertEqual(c["valores"], {"A": "ambos", "F": "feminino", "M": "masculino"})
+
+    def test_coluna_nao_carregada_sempre_com_motivo(self):
+        for c in self.decl:
+            if not c.get("destino"):
+                self.assertIn("não carregada", c.get("motivo") or "", c)
+        sem = {(c["tabela"], c["coluna"]) for c in self.decl if not c.get("destino")}
+        for x in [("TBCONVEN", "CGC"), ("TBCONVEN", "COD_CON"), ("TBCONVEN", "VENC_CTR"), ("TBPROFIS", "CONTA"),
+                  ("TBPROFIS", "ASS")]:
+            self.assertIn(x, sem)

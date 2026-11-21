@@ -14,3 +14,5 @@ TBSITAGE	COD	situacao_marcacao.significado	W	cancelada	L6-04: evidência pelo no
 TBSITAGE	COD	situacao_marcacao.significado	Z	cancelada	L6-04: evidência pelo nome da situação (legenda do código de leitura): Outras intercorrências: a marcação não se realiza
 TBSITAGE	COD	situacao_marcacao.significado	R	aguardando	L6-04: evidência pelo nome da situação (legenda do código de leitura): Outros: sem significado próprio, fica pendente como marcada (revisar no painel)
 TBSITAGE	COD	situacao_marcacao.significado	N	aguardando	L6-04: evidência pelo nome da situação (legenda do código de leitura): Não informado: marcada
+SIAGECRI	STATUS	geracao_grade.situacao	C	concluida	L6-04: geração concluída (legenda do código de leitura, como REAGECRI)
+SIAGECRI	STATUS	geracao_grade.situacao	E	revertida	L6-04: linha que o sistema antigo grava na reversão da geração (como REAGECRI); recusada pela restrição do destino até a regra condicional pedida (L6-04.json, pedido 4)

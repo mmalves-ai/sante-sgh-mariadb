@@ -1,6 +1,44 @@
 {
  "pedidos": [
   {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv (integrador ou fatia L8-02)",
+   "mudanca": "remover as linhas de RPEVENTOESOC, RPLANEVE e RPLANEVE_COMPOSICAOBASE (14 linhas sem destino, 109 a 122) e tirar as três do FATIA/esperado de sintetica_d/l8_02.py e de test_l8_02.py",
+   "motivo": "o índice passou as três para a L8-01, que agora as declara com destino: o verificador acusa 'tabela declarada em mais de um arquivo' até a remoção; a L8-01 não edita arquivo de outra fatia",
+   "atendido": "feito pela L8-02 na rodada 3 (as linhas sumiram de L8-02.tsv); conferir só o FATIA/esperado de l8_02.py"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
+   "mudanca": "arestas de ordem: FCHORATE -> TBCTRTHM; FCGUIAS -> TBCONVEN, FCCTAEXT, TBPROFIS; FCORCPAD -> TBCONVEN, TBPROCTO, TBTIPOACOMOD; FCORLAME -> FCORCAME, TBPROCTO; RPLANEVE -> TBPROFIS, RPEVENTO; RPEVENTOESOC -> RPEVENTO (já existe); RPLANEVE_COMPOSICAOBASE -> RPEVENTO",
+   "motivo": "os pais vêm depois na ordem atual (TBCTRTHM 645, FCCTAEXT 971, TBPROCTO 658, FCORCAME 1048, TBPROFIS 869 contra 607-626): sem a aresta, o modelo e o item do orçamento são recusados (pai_inexistente) e a conta da guia fica NULL. A imagem sintética já mostra isso (esperado anotado); com as arestas, FCORCPAD passa a 1 gravado",
+   "atendido": "r3 (correção): arestas declaradas pela própria fatia em declarado/dependencias.tsv (mais RECONTAS -> FCCTAEXT) e ordem regenerada (gerar_mapa_conector.py; só a ordem e depende_de mudaram)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-01.tsv (revisão do cliente no painel)",
+   "mudanca": "de-para com evidência para FCGUIAS.TP_GUIA/TP_GUIA_S -> guia_fonte_pagadora.tipo_guia (hoje =~sp_sadt) e RPLANEVE.TIPO -> lancamento_repasse.tipo_favorecido (hoje =~medico) e favorecido_repasse.tipo_favorecido (hoje =~proprio_profissional)",
+   "motivo": "códigos sem domínio documentado; presumidos com valor_presumido por linha",
+   "atendido": "r3 (correção): TP_GUIA (S, R) e RPLANEVE.TIPO (M, E) com evidência por agregado; segue presumido só favorecido_repasse.tipo_favorecido (proprio_profissional x empresa do médico)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "autorreferência por chave alternativa composta em duas fases: guia_fonte_pagadora.guia_principal_id por ref:FCGUIAS.(CON,GUIA_S)=(CON,GUIA_P) quando GUIA_P difere de GUIA_S",
+   "motivo": "a ligação guia principal x guia secundária (SADT ligada à principal) fica só na chave original até lá"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, a mesma da L5-12 pedido 14)",
+   "mudanca": "cod: com filtro de coluna fixa (ex.: cod:codigo_incidencia_rubrica.codigo_incidencia[tributo=inss])",
+   "motivo": "RPEVENTOESOC.ID_FPRUBRICAINSS/IRRF -> evento_repasse_incidencia.inss/irrf_codigo_incidencia_rubrica_id (anuláveis, fora por ora)"
+  },
+  {
+   "arquivo": "decisão do produto (funções da equipe)",
+   "mudanca": "códigos estáveis de funcao_equipe_cobranca para titular, anestesista, 1º auxiliar, instrumentador e 1º a 3º auxiliares; com eles, FCORLAME ganha um item honorário por função (desdobrar CRM_x+VLR_x, função por cod:)",
+   "motivo": "hoje o item do orçamento leva o procedimento com o VALOR total; a divisão por função fica fora"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py / conferencia (integrador)",
+   "mudanca": "a conferência por fatia carrega toda tabela declarada presente na imagem, inclusive as intermediárias de outras fatias (FCCTAEXT, TBPROCTO, TBCBOPRO aqui); a L8-01 criou no PREPARO_DESTINO a forma mínima de atendimento e tipo_conta para a conta (L8-05) não quebrar. Avaliar excluir do plano as tabelas de fora da fatia (só lidas)",
+   "motivo": "declarações em andamento de outra fatia quebravam a conferência desta (tabela de destino inexistente)"
+  },
+  {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, tipar)",
    "mudanca": "converter valor DATE para coluna DATETIME do destino (data com 00:00) e DATETIME para DATE (trunca a hora) no tipo do destino, antes da soma de controle; hoje a data entra no banco mas a conciliação diverge (data contra data e hora)",
    "motivo": "FCPORANE.ocorrido_em e RICGUIAS.data_solicitacao são DATETIME NOT NULL e a origem só tem DATE; é a mesma regra faltante pedida pela L8-09 (recibos). As declarações estão prontas em declaracao_pronta: ao existir a regra, basta acrescentá-las a colunas.d/L8-01.tsv e pôr o esperado (a imagem sintética já tem as linhas e anomalias). A mesma regra libera a situação realizada/aceita de FCORCAME (aceito_em DATETIME a partir de DATA_REALIZ DATE): de-para pronto em depara_situacao_pronto",
@@ -30,12 +68,14 @@
    "depara_situacao_pronto": [
     "FCORCAME\tREALIZ\torcamento_particular.situacao\tcodigo_char\tvalores\t\tL8-01: S = realizado, N = emitido (pares em valores.d/L8-01.tsv), no lugar do literal presumido =~emitido",
     "FCORCAME\tDATA_REALIZ\torcamento_particular.aceito_em\tdata\t\t\tL8-01: aceite PRESUMIDO no dia da realização (o CHECK exige aceito_em para realizado); depende da conversão DATE -> DATETIME"
-   ]
+   ],
+   "atendido": "rodada 2/3 do integrador; usado pela L8-01 na rodada 3 (FCPORANE, RICGUIAS, FCCRECUN, FCDIAEXT e FCDIAINT passaram a outras fatias pelo índice)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
    "mudanca": "referência que grava o id de um destino SECUNDÁRIO do pai (M1, já pedida pela L6-15): item_faturavel_id pelo item da tabela de honorários (TBTABTHM, destino secundário item_faturavel) e da tabela de diárias e taxas (TBTABDTH)",
-   "motivo": "FCORCPAD (orçamento padrão) e FCORLAME (item do orçamento, honorários por função na equipe) exigem item_faturavel_id; sem a regra não há como achar o item; uma linha cada na imagem de referência"
+   "motivo": "FCORCPAD (orçamento padrão) e FCORLAME (item do orçamento, honorários por função na equipe) exigem item_faturavel_id; sem a regra não há como achar o item; uma linha cada na imagem de referência",
+   "atendido": "rodada 2/3 do integrador; usado pela L8-01 na rodada 3 (FCPORANE, RICGUIAS, FCCRECUN, FCDIAEXT e FCDIAINT passaram a outras fatias pelo índice)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
@@ -60,7 +100,8 @@
     "FCDIAINT\tUND_ADM\tconta_hospitalar_segurado.unidade_administrativa\ttexto\t\t\tL8-01: unidade administrativa do órgão",
     "FCDIAINT\tAFINIDADE\tconta_hospitalar_segurado.parentesco_titular\ttexto\t\t\tL8-01: parentesco com o titular",
     "FCDIAINT\tN_ORDEM\tconta_hospitalar_segurado.numero_ordem\ttexto\t\t\tL8-01: ordem do dependente no cadastro do órgão"
-   ]
+   ],
+   "atendido": "rodada 2/3 do integrador; usado pela L8-01 na rodada 3 (FCPORANE, RICGUIAS, FCCRECUN, FCDIAEXT e FCDIAINT passaram a outras fatias pelo índice)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, a mesma pedida pela L8-06)",
@@ -75,7 +116,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (regra genérica)",
    "mudanca": "gerar várias linhas do destino PRINCIPAL a partir de pares de colunas da mesma linha (DOM_I/DOM_F=0, SEG_I/SEG_F=1, ..., SAB_I/SAB_F=6), com início e fim por item e a hora HHMM em texto pela regra hora_hhmm; hoje a opção vale só em destino secundário e com uma coluna por item",
-   "motivo": "FCHORATE -> horario_normal_tabela tem uma linha por dia com início e fim; a tabela de preço vem da TAB (TBCTRTHM.COD)"
+   "motivo": "FCHORATE -> horario_normal_tabela tem uma linha por dia com início e fim; a tabela de preço vem da TAB (TBCTRTHM.COD)",
+   "atendido": "rodada 2/3 do integrador; usado pela L8-01 na rodada 3 (FCPORANE, RICGUIAS, FCCRECUN, FCDIAEXT e FCDIAINT passaram a outras fatias pelo índice)"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
@@ -121,6 +163,41 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (planejar, integrador)",
    "mudanca": "regra declarada numa coluna com ref:<Tabela> simples substitui chave_origem e desliga a referência (o valor cru é gravado); recusar no verificador ou ignorar a regra quando há ref simples",
    "motivo": "descoberta na rodada anterior; na L8-01 as colunas com ref: ficaram com regra vazia (teste garante chave_origem). Vale conferir as outras fatias que declaram regra junto com ref:"
+  },
+  {
+   "arquivo": "db/migracoes/12_FAT/03_tabelas.sql (modelo, trilha F2.2)",
+   "mudanca": "favorecido_repasse.profissional_id anulável quando tipo_favorecido é pessoa_juridica ou cooperativa (CHECK: proprio_profissional e terceiro_profissional exigem o profissional; pessoa_juridica exige favorecido_pessoa_juridica_id), para o lançamento de repasse a EMPRESA",
+   "motivo": "RPLANEVE TIPO E: 573 lançamentos na referência (todos em RPA) sem profissional; hoje recusados (1048, visível) porque o favorecido exige o titular. Junto: evidência de qual cadastro COD_PRESTADOR do E aponta (o agregado casa com TBCOOPER, TBPRESER e TBPROFIS ao mesmo tempo)"
+  },
+  {
+   "arquivo": "db/migracoes/12_FAT/03_tabelas.sql (modelo, trilha F2.2)",
+   "mudanca": "guia_fonte_pagadora: unicidade por (estabelecimento_id, fonte_pagadora_id, numero) em vez de (estabelecimento_id, numero)",
+   "motivo": "FCGUIAS: 462 números de guia aparecem em convênios diferentes (1.569 linhas na referência): guias legítimas de operadoras distintas hoje recusadas com 1062. O mesmo número no mesmo convênio já ADOTA a guia gravada"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (fatia L8-03) + carga_mapa.py (filtro de linha, pedido 11 da L8-03)",
+   "mudanca": "o filtro de linha pela tabela pai de TBMATMED vale também para FCREFUND (via TAB -> TBCTRMEM); as marcas da origem valem T/F (não S/N): própria = REF_BRA F e REF_SIMP F. TBCTRMEM grava também fonte_referencia_matmed (secundário: codigo matmed_<COD>, tipo_fonte propria ou publicacao_comercial com exige_licenca pelas marcas) para a edição de migração de FCREFUND",
+   "motivo": "FCREFUND passou de descarte licenciado a BLOQUEADA (pai TBMATMED): 1.065.998 de 1.077.674 linhas são preço de tabela própria. Declaração pronta comentada em colunas.d/L8-01.tsv; ao carregar TBMATMED, descomentar e pôr na imagem sintética"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv e L8-02.tsv (fatias L8-05, L8-02)",
+   "mudanca": "descomentar RPLANRPA em L8-05 (rpa_lancamento) e retirar as 2 linhas sem destino de RPLANRPA em L8-02",
+   "motivo": "a guarda do produto contra pagar duas vezes (ja-em-rpa) lê rpa_lancamento; a situação aprovado dos 8.477 lançamentos em RPA já vem da L8-01, mas o vínculo lançamento x RPA ainda não é gravado"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d da fatia de FCCADNFS (nota de serviço)",
+   "mudanca": "FCCADNFS.ID_FCTPPGTONFSE -> nota_fatura.condicao_pagamento_id (ou a coluna da condição na nota) por ref:FCTPPGTONFSE (destino condicao_pagamento, L8-01)",
+   "motivo": "FCTPPGTONFSE passou a carregar no cadastro condicao_pagamento; 0 linhas de nota com a condição na referência, mas o vínculo vale para outros clientes"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py e conector/sante_conector/conferencia.py (integrador)",
+   "mudanca": "(1) ref: para pai de ORDEM maior que a do filho, ou para pai BLOQUEADO, conta como pai_nao_carregado na cobertura; (2) a conciliação da fatia falha quando uma tabela CARREGA grava 0 linhas na imagem sintética com todas as recusas por pai_inexistente ou pai_pendente",
+   "motivo": "achado da revisão: a meta 'zero bloqueadas' contava tabelas que não gravavam nada (FCORCPAD 0/4 e FCORLAME 0/3 antes das arestas); a L8-01 corrigiu as suas, a regra genérica evita o mesmo em outras fatias"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica, opcional)",
+   "mudanca": "modo de existência na referência por chave alternativa (ex.: 'existe:RPLANRPA.ID_RPLANEVE'): repetido conta como existente (não pai_ambiguo) e ausente não deixa pai_inexistente (só o padrão)",
+   "motivo": "a situação do lançamento pela evidência do RPA deixa pai_inexistente (média) nos 198 lançamentos sem RPA, que é o estado normal deles; na referência não há repetição, mas outro cliente com o lançamento em dois RPAs cairia em pai_ambiguo e no padrão aberto"
   }
  ]
 }

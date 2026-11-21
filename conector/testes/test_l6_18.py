@@ -4,6 +4,7 @@ coerência da imagem sintética. Sem banco; só valores inventados. A carga e a 
 import datetime
 import random
 import unittest
+from pathlib import Path
 
 from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l6_18
@@ -29,7 +30,8 @@ class Plano(unittest.TestCase):
                     "CHTPLIMPEZA_GEITENS": ["material_modalidade_limpeza"], "PRHORPAD": ["horario_refeicao"],
                     "TBLEITO_CHPROFISLIMP": ["leito_profissional_higienizacao"],
                     "CHSOLICITLIMP": ["solicitacao_limpeza"], "CHEXECLIMPEZA": ["execucao_limpeza"],
-                    "CHSOLICITLIMP_TBLEITO": ["solicitacao_limpeza_local"]}
+                    "CHSOLICITLIMP_TBLEITO": ["solicitacao_limpeza_local"],
+                    "GDPRONTMOVIM": ["movimento_prontuario", "volume_prontuario"]}
         for t, d in esperado.items():
             self.assertEqual(self.plano[t]["destinos"], d, t)
 
@@ -98,6 +100,12 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("CHSOLICITLIMP", "solicitacao_limpeza")["motivo_geracao"]["coluna"], "=~manual")
         mod = self.cols("CHEXECLIMPEZA", "execucao_limpeza")["modalidade_limpeza_id"]
         self.assertEqual(mod["referencia"], "CHSOLICITLIMP>ID_CHTPLIMPEZA>CHTPLIMPEZA")
+        # quem executou: login > usuário > profissional pela chave alternativa do destino; nunca a auditoria
+        ex = self.cols("CHEXECLIMPEZA", "execucao_limpeza")
+        self.assertEqual(ex["profissional_higienizacao_id"]["coluna"], "USUARIO_EXECUTANTE")
+        self.assertEqual(ex["profissional_higienizacao_id"]["referencia"], "TBUSERS")
+        self.assertEqual(ex["profissional_higienizacao_id"]["cod"], ("profissional_higienizacao", "usuario_id"))
+        self.assertNotIn("criado_por", ex)
         self.assertEqual(self.cols("CHSOLICITLIMP_TBLEITO", "solicitacao_limpeza_local")["sequencia"]["coluna"],
                          "#seq:ID_CHSOLICITLIMP")
 
@@ -124,8 +132,45 @@ class Plano(unittest.TestCase):
                       if (c.get("destino") or "").startswith(dt + ".")} - {t}
             self.assertEqual(outras, set(), dt)
 
+    def test_tramite_do_prontuario(self):
+        # um volume de prontuário antigo por paciente, gravado antes do movimento e adotado nas seguintes
+        p = self.plano["GDPRONTMOVIM"]
+        op = mapa.opcoes_destino(self.mapa_decl("GDPRONTMOVIM"))["volume_prontuario"]
+        self.assertTrue(op["antes"])
+        self.assertEqual(op["adotar"], ["estabelecimento_id", "paciente_id", "tipo_documento_arquivo_id",
+                                        "numero_volume"])
+        m = self.cols("GDPRONTMOVIM", "movimento_prontuario")
+        self.assertEqual(m["volume_prontuario_id"]["coluna"], "@id:volume_prontuario")
+        self.assertEqual(m["excluido_em"]["regra"], "booleano_sn")
+        v = self.cols("GDPRONTMOVIM", "volume_prontuario")
+        self.assertEqual(v["tipo_documento_arquivo_id"]["coluna"], "=prontuario-antigo")
+        self.assertEqual(v["numero_volume"]["coluna"], "=1")
+        pares = {x["valor_origem"]: x["valor_destino"] for x in self.mapa["valores"]
+                 if x["tabela"] == "GDPRONTMOVIM" and x["coluna"] == "EXCLUIDO"}
+        self.assertEqual(pares, {"1": "@data_carga", "0": "", "": ""})
+        # setores de trâmite lidos (no hash) e sem destino até o modelo ganhar as colunas (pedido 2 do L6-18.json)
+        semdest = {c["coluna"] for c in self.mapa_decl("GDPRONTMOVIM") if not c.get("destino")}
+        # guarda: chegando as colunas ao DDL (pedido 2, F2.2), os setores PRECISAM ganhar destino (pré-requisito da
+        # virada do módulo de arquivo); sem elas, ficam lidos e sem destino
+        raiz = next((r for r in (Path(__file__).resolve().parents[2], Path("/app")) if (r / "db/migracoes").is_dir()),
+                    None)
+        self.assertIsNotNone(raiz, "DDL do modelo ausente: a guarda dos setores de trâmite não pode rodar")
+        cols_mov = mapa.ler_ddl(raiz)["movimento_prontuario"]["colunas"]
+        destinos = {c["coluna"]: c.get("destino") for c in self.mapa_decl("GDPRONTMOVIM")}
+        for col, dc in [("ID_RISETOR_ORIGEM", "saida_setor_tramite_id"),
+                        ("ID_RISETOR_DESTINO", "destino_setor_tramite_id")]:
+            if dc in cols_mov:
+                self.assertEqual(destinos[col], "movimento_prontuario." + dc, col)
+            else:
+                self.assertIn(col, semdest)
+        self.assertIn("ID_RIMOTIVO", semdest)
+        self.assertEqual(p["destinos"][0], "movimento_prontuario")
+
+    def mapa_decl(self, t):
+        return [c for c in self.mapa["colunas_decl"] if c["tabela"] == t]
+
     def test_bloqueadas_e_descartadas_sem_destino(self):
-        # GDPRONTMOVIM espera a mudança do modelo (saida/L6-18.json); descartadas em declarado/sem_carga.tsv
+        # descartadas em declarado/sem_carga.tsv
         fora = BLOQUEADAS | DESCARTADAS
         self.assertFalse(fora & set(self.plano))
         self.assertFalse([c for c in self.mapa["colunas_decl"] if c["tabela"] in fora and c.get("destino")])

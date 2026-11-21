@@ -10,3 +10,19 @@ GEESTINI	CONS	inventario_estoque.situacao		aberto	L7-05: sem marca de consolida�
 GECADTRA	CONSOL	documento_estoque.situacao	S	concluido	L7-05: documento lançado no saldo
 GECADTRA	CONSOL	documento_estoque.situacao	N	aberto	L7-05: não consolidado: fica aberto e visível
 GECADTRA	CONSOL	documento_estoque.situacao		aberto	L7-05: sem marca de consolidação
+GELANESI	CONS	inventario_estoque_item.situacao	S	ok	L7-05: item consolidado
+GELANESI	CONS	inventario_estoque_item.situacao	N	pendente	L7-05: não consolidado
+GELANESI	CONS	inventario_estoque_item.situacao		pendente	L7-05: sem marca de consolidação
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	0	anual	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	1	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	2	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	3	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	4	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	5	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	6	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	7	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	8	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	9	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	10	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	11	mensal	L7-05 r3
+GEGERSEQ	MES	sequencia_documento_estoque.reinicio	12	mensal	L7-05 r3

@@ -3,42 +3,50 @@
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
    "mudanca": "arestas: GECADTRA -> GELOCARM; GEESTINI -> GELOCARM; GELIMLOC -> GELOCARM; GELIMLOC -> GEITENS; GELANTRA -> GEITENS; GELANTRA -> TBUNICON; GEGERSEQ -> GETPLANCTO (pai que a origem não declara como FK e vem depois do filho na ordem atual)",
-   "motivo": "local de estoque (545), insumo (588), unidade (586) e tipo de movimento (560) vêm depois de documentos (525), estoque inicial (532), itens (543), reposição (544) e sequências (534): toda linha seria recusada (NOT NULL). A imagem sintética calcula o esperado nas duas ordens"
+   "motivo": "local de estoque (545), insumo (588), unidade (586) e tipo de movimento (560) vêm depois de documentos (525), estoque inicial (532), itens (543), reposição (544) e sequências (534): toda linha seria recusada (NOT NULL). A imagem sintética calcula o esperado nas duas ordens",
+   "atendido": "rodada 2: arestas aplicadas em dependencias.tsv"
   },
   {
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
    "mudanca": "descarte: GECOMPRA duplicado; GEKONCDC duplicado; GECTRVMM duplicado; GECADTER sem_valor (motivos em colunas.d/L7-05.tsv e em F4-decisoes-destino.md, seção L7-05)",
-   "motivo": "histórico de compra = notas de entrada + pedidos; consumo por centro de custo = saídas migradas pelo movimento_estoque; lote por documento do modelo antigo = GEVALMEM + GERASVAL*; 5 terceiros só com nome e nascimento (os das vendas vêm de GEINFVENEXT)"
+   "motivo": "histórico de compra = notas de entrada + pedidos; consumo por centro de custo = saídas migradas pelo movimento_estoque; lote por documento do modelo antigo = GEVALMEM + GERASVAL*; 5 terceiros só com nome e nascimento (os das vendas vêm de GEINFVENEXT)",
+   "atendido": "rodada 3: descartes aplicados em sem_carga.tsv; rodada 3 (revisão): GEKONCDC e GECTRVMM VOLTAM (retiradas de sem_carga.tsv pela fatia, descarte sem prova); GECOMPRA e GECADTER seguem descarte"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (data em DATETIME)",
    "mudanca": "tipar: valor datetime.date gravado em coluna DATETIME/TIMESTAMP vira datetime à meia-noite antes do resumo (=@data_carga, =~@data_carga, #data e regra data)",
-   "motivo": "PRIORIDADE ALTA. fechamento_estoque.fechado_em com =~@data_carga gravou e a conciliação divergiu (soma: data na origem x datetime relido). GEFECMES está BLOQUEADA (sem destino) até isso: carregar como 'aberto' invertia o significado. Ao aplicar, descomentar em colunas.d/L7-05.tsv as linhas #GEFECMES (=fechado e fechado_em =~@data_carga), tirar GEFECMES de FORMAS_BLOQUEADAS na sintetica_d/l7_05.py e ajustar o teste test_fechamento_nunca_entra_aberto. Confira também documento_estoque.movimentado_em e inventario_estoque.data_corte/aberto_em (regra data em DATETIME), que só gravam depois da aresta de ordem"
+   "motivo": "PRIORIDADE ALTA. fechamento_estoque.fechado_em com =~@data_carga gravou e a conciliação divergiu (soma: data na origem x datetime relido). GEFECMES está BLOQUEADA (sem destino) até isso: carregar como 'aberto' invertia o significado. Ao aplicar, descomentar em colunas.d/L7-05.tsv as linhas #GEFECMES (=fechado e fechado_em =~@data_carga), tirar GEFECMES de FORMAS_BLOQUEADAS na sintetica_d/l7_05.py e ajustar o teste test_fechamento_nunca_entra_aberto. Confira também documento_estoque.movimentado_em e inventario_estoque.data_corte/aberto_em (regra data em DATETIME), que só gravam depois da aresta de ordem",
+   "atendido": "rodada 3: tipar (rodada 2) aplicado; GEFECMES carrega"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (secundário antes do principal)",
    "mudanca": "opção de destino 'antes' na via: o destino secundário é gravado (ou adotado, com adotar:) ANTES do principal, e a coluna especial '@id:<destino>' do principal recebe o id dele",
-   "motivo": "GEARMLOC e GECONITL: saldo_estoque_mensal exige saldo_estoque_id e o saldo por local x insumo não tem tabela própria na origem (saldo_estoque com adotar:local_estoque_id,insumo_id, depois o mensal; GECONITL complementa o mensal de GEARMLOC por ref:GEARMLOC(ANO,MES,ITEM,LOCAL)). Também serve a GESALDOS (L7-06)"
+   "motivo": "GEARMLOC e GECONITL: saldo_estoque_mensal exige saldo_estoque_id e o saldo por local x insumo não tem tabela própria na origem (saldo_estoque com adotar:local_estoque_id,insumo_id, depois o mensal; GECONITL complementa o mensal de GEARMLOC por ref:GEARMLOC(ANO,MES,ITEM,LOCAL)). Também serve a GESALDOS (L7-06)",
+   "atendido": "rodada 3: antes + @id:<destino> + adotar; GEARMLOC e GECONITL carregam"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (referência a destino secundário do pai)",
    "mudanca": "mesmo pedido M1 da L7-02: ref ao destino secundário do pai (ex.: 'ref:GEESTINI/inventario_estoque_contagem')",
-   "motivo": "GELANESI -> inventario_estoque_item exige inventario_estoque_contagem_id; a GEESTINI já grava a rodada de contagem como secundário (@id), falta a referência a ela"
+   "motivo": "GELANESI -> inventario_estoque_item exige inventario_estoque_contagem_id; a GEESTINI já grava a rodada de contagem como secundário (@id), falta a referência a ela",
+   "atendido": "rodada 3: ref:T/<destino>; GELANESI carrega"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar com dois rótulos)",
    "mudanca": "mesmo pedido da L6-02 (item em par no desdobrar, com dois rótulos) e rótulo resolvido por referência (frequência pelo número de doses: ref:PRFREQUENCIA.NUM_DOSE)",
-   "motivo": "GEHORMED (linha única, 36 colunas H<f><n>) -> horario_padrao_medicacao: frequência f, ordem da dose n, horário HHMM no valor"
+   "motivo": "GEHORMED (linha única, 36 colunas H<f><n>) -> horario_padrao_medicacao: frequência f, ordem da dose n, horário HHMM no valor",
+   "atendido": "substituído pelo pedido de regra do rótulo resolvido pelo código (abaixo)"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py (referência por chave alternativa composta)",
    "mudanca": "ref:T.(K1,K2)<-(C1,C2): casa colunas desta linha com colunas não-chave do pai, para complementar o item do pedido (GELANPED) ou da licitação",
-   "motivo": "GEDESPDS (23 linhas): descrição do serviço do item, identificado por ANO, OQUE, DOC, SEQ; o item tem chave ID"
+   "motivo": "GEDESPDS (23 linhas): descrição do serviço do item, identificado por ANO, OQUE, DOC, SEQ; o item tem chave ID",
+   "atendido": "rodada 3: ref:T.(K1,K2)=(C1,C2) + complementa; GEDESPDS carrega"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
    "mudanca": "regra 'inteiro_mais_um' (n -> n+1; nulo fica nulo), se o dono confirmar que GEGERSEQ.SEQ é o último número gerado",
-   "motivo": "GEGERSEQ.SEQ -> sequencia_documento_estoque.proximo_numero entra hoje como SEQ (piso 1); a evidência deve vir por agregado da imagem de referência (por COD/ANO/MES: SEQ comparado com o maior número de documento emitido no mês); se SEQ = maior emitido, usar inteiro_mais_um, senão manter piso:1"
+   "motivo": "GEGERSEQ.SEQ -> sequencia_documento_estoque.proximo_numero entra hoje como SEQ (piso 1); a evidência deve vir por agregado da imagem de referência (por COD/ANO/MES: SEQ comparado com o maior número de documento emitido no mês); se SEQ = maior emitido, usar inteiro_mais_um, senão manter piso:1",
+   "atendido": "retirado na rodada 3: SEQ é o próximo número (captura de assinatura do sistema antigo); proximo_numero = SEQ"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py",
@@ -54,6 +62,51 @@
    "arquivo": "conector/mapa/declarado/sem_carga.tsv (GESALDOS, L7-06)",
    "mudanca": "condicionar o descarte de GESALDOS ('duplicado = soma de GEARMLOC') à carga de GEARMLOC -> saldo_estoque_mensal (pedido 4 e data em DATETIME para ocorrido_em)",
    "motivo": "GEARMLOC segue sem carga por mecanismo; sem ela o saldo mensal histórico se perde por inteiro e o descarte da GESALDOS fica sem base"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
+   "mudanca": "arestas: GEARMLOC -> GELOCARM; GEARMLOC -> GEITENS; GECONITL -> GEARMLOC (já em ordem, mantém); GELANESI -> GEITENS; GELANESI -> TBUNICON; GEDESPDS -> GELANPED",
+   "motivo": "local de estoque (527), insumo (573), unidade (568) e item de compra (853) vêm depois do saldo mensal (510), do movimento do mês (515), dos itens do estoque inicial (533) e da descrição do serviço (518): toda linha seria recusada. A imagem sintética calcula o esperado nas duas ordens (_local_antes)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra do rótulo resolvido pelo código no destino)",
+   "mudanca": "regra nova no motor: aplicar cod:<tabela>.<coluna> (na via da linha #rotulo) à parte do rótulo, com uma linha por id encontrado quando o código se repete (opção, ex. 'cod_todos:'), em vez de pai_ambiguo",
+   "motivo": "GEHORMED (1 linha, 36 colunas H<doses><posição>, hora HHMM inteira) -> horario_padrao_medicacao: #item = horário (hora_hhmm), #rotulo = doses ao dia (cod:frequencia_administracao.doses_por_dia, uma linha por frequência com esse número de doses), #rotulo2 = posição da dose no dia. Declaração pronta: via de #item 'H11=1|1,H21=2|1,H22=2|2,...,H1212=12|12'; único bloqueio da L7-05"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (adotar e atualizar)",
+   "mudanca": "opção 'adotar_atualiza:<colunas>' no secundário 'antes': a linha adotada recebe as colunas declaradas quando a linha atual é mais recente pela coluna indicada (ex.: competência)",
+   "motivo": "saldo_estoque (local x insumo) é criado pelo primeiro mês da GEARMLOC com quantidade e custo 0 e só adotado depois; o saldo atual do produto seria o QTDE/VALOR do mês mais recente. Até lá o saldo atual vem do inventário da virada (decisão em F4-decisoes-destino.md)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (destino principal agrupado)",
+   "mudanca": "opção 'agrupar_principal:C1,C2,...' na via de uma coluna do destino PRINCIPAL: as linhas da origem com os mesmos valores em C1, C2 gravam UMA linha do destino (a primeira cria, as outras apontam o mesmo id no conector_origem, sem pendência), com os agregados #grupo_somar/#grupo_min/#grupo_max/#grupo_contar já existentes; grupo com agregado mudado em execução posterior: grupo_divergente_aguarda_sincronizar",
+   "motivo": "GEKONCDC (2,97 mi linhas, consumo por documento) -> consumo_centro_custo (uma linha por ano, mês, centro de custo, insumo e local: UNIQUE). Declaração pronta comentada em colunas.d/L7-05.tsv (#GEKONCDC). O orçamento lê consumo_centro_custo.valor_liquido; sem a carga o histórico de custo por centro some"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py (pai repetido com o mesmo id no destino)",
+   "mudanca": "na referência por chave alternativa (ref:T.K e ref:T.(K1,K2)=(C1,C2)), valor repetido no pai NÃO é pai_ambiguo quando todas as linhas do pai gravaram (ou adotaram) o MESMO id no destino; ids diferentes seguem pai_ambiguo",
+   "motivo": "GECTRVMM (2,08 mi linhas de lote por documento): o lote é ITEM+LOTE na GEVALMEM, que tem uma linha por local e adota o mesmo lote_insumo. Declaração pronta comentada (#GECTRVMM). Rastreio do lote dispensado (recolhimento, farmacovigilância)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (destino repetido na mesma linha)",
+   "mudanca": "destino secundário repetido com rótulo (ex.: 'movimento_estoque#entrada.local_estoque_id'): duas linhas da mesma tabela de destino pela mesma linha da origem, cada uma com chave '<chave>/<destino>#<rótulo>' no conector_origem",
+   "motivo": "GELANTRA: a transferência baixa o local de origem (gravado agora) e dá ENTRADA no local de destino; sem o destino repetido, a entrada no destino fica fora do razão (contrapartida gravada na saída)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
+   "mudanca": "arestas: GEKONCDC -> TBCENCUS; GEKONCDC -> GEITENS; GEKONCDC -> GECADSAI; GEKONCDC -> GELOCARM; GECTRVMM -> GELANSAI; GECTRVMM -> GEVALMEM",
+   "motivo": "os pais vêm depois (ordem 516/526 contra 573 a 1040): sem elas, toda linha seria recusada quando o mecanismo chegar"
+  },
+  {
+   "arquivo": "db/migracoes/11_SUP/05_tabelas.sql (trilha F2.2, modelo)",
+   "mudanca": "saldo_estoque_mensal: quantidade_saida_nao_classificada, valor_saida_nao_classificada, quantidade_devolucao_nao_classificada, valor_devolucao_nao_classificada (DEFAULT 0)",
+   "motivo": "GECONITL traz o total de saídas e devoluções do mês sem natureza; hoje vai para setor com a classificação marcada =~ (valor_presumido). Com as colunas, o total entra sem presunção"
+  },
+  {
+   "arquivo": "conector/sante_conector/sintetica_d/l7_07.py e testes/test_l7_07.py (fatia L7-07)",
+   "mudanca": "conferir ponta a ponta GERASVALTRANSFLOTE -> movimento_lote pelo movimento de saída que a GELANTRA grava agora (ref:GELANTRA/movimento_estoque)",
+   "motivo": "pedido mov_transferencia da L7-07 atendido na L7-05 (rodada 3); a prova positiva do lote de transferência é da L7-07 ou da carga integrada (na imagem desta fatia o insumo, de outra fatia, não existe)"
   }
  ]
 }

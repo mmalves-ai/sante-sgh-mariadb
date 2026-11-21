@@ -57,7 +57,6 @@ class Plano(unittest.TestCase):
                             ("TBTPLANC", "tipo_lancamento", "gera_repasse", "=~0"),
                             ("TBGRAUPARTPROC", "funcao_equipe_cobranca", "tipo_funcao", "=~outro"),
                             ("TBPRESER", "prestador_terceiro", "tipo_pessoa", "=~juridica"),
-                            ("TBSUBDES", "subgrupo_natureza_financeira", "classificacao", "=~despesa"),
                             ("TBFORMULAPAGTO", "regra_via_acesso", "vigencia_inicio", "@vigencia_carga")]:
             self.assertEqual(self.cols(t, dt)[c]["coluna"], v, (t, c))
 
@@ -95,8 +94,12 @@ class Plano(unittest.TestCase):
         s = self.cols("TBSUBDES", "subgrupo_natureza_financeira")
         self.assertEqual(s["grupo_natureza_financeira_id"]["referencia"], "TBGRUDES")
         f = self.cols("TBFORMULAPAGTO", "regra_via_acesso")
-        self.assertEqual((f["via_acesso_cirurgico_id"]["referencia"], f["tipo_lancamento_id"]["referencia"]),
-                         ("TBTISSVIAACES", "TBTPLANC"))
+        self.assertEqual(f["tipo_lancamento_id"]["referencia"], "TBTPLANC")
+        # via de acesso pelo código TISS no cadastro do produto (a tabela de vias da origem é terminologia oficial)
+        v = f["via_acesso_cirurgico_id"]
+        self.assertEqual((v["coluna"], v["regra"], v["cod"]), ("ID_TBTISSVIAACES", "inteiro",
+                                                                ("via_acesso_cirurgico", "codigo_tiss")))
+        self.assertNotIn("TBTISSVIAACES", self.plano)
         self.assertEqual((f["ordem_procedimento"]["regra"], f["percentual"]["regra"]), ("piso:1", "faixa:0,999"))
         pr = self.cols("TBPRESER", "prestador_terceiro")
         self.assertEqual((pr["cnpj"]["regra"], pr["cep"]["regra"], pr["cnes"]["regra"]),
@@ -132,22 +135,66 @@ class Plano(unittest.TestCase):
             self.assertEqual(sc[t]["situacao"], "descarte", t)
             self.assertIn(sc[t]["causa"], {"licenciado", "mecanismo_do_produto", "catalogo_oficial"}, t)
             self.assertTrue(sc[t]["motivo"].startswith("L8-04: "), t)
-        self.assertNotIn("TBPERTHM", sc)  # falta mecanismo, não é descarte
+        self.assertNotIn("TBPERTHM", sc)  # acordo do cliente: carrega (L8-03), nunca descarte
+        self.assertNotIn("TBPERTHM", {d["tabela"] for d in self.mapa["colunas_decl"]
+                                      if d.get("_arquivo", "").endswith("L8-04.tsv")})
 
     def test_bloqueadas_fora_do_plano(self):
         # presentes na imagem, as bloqueadas nunca entram no plano de carga: zero linha no destino
         self.assertFalse(set(self.plano) & set(l8_04.BLOQUEADAS))
 
     def test_terminologia_tiss_nunca_gravada(self):
-        # grau de participação TISS é catálogo oficial: nem a tabela nem a referência entram
-        f = self.cols("TBGRAUPARTPROC", "funcao_equipe_cobranca")
-        self.assertNotIn("grau_participacao_termo_terminologia_id", f)
+        # grau de participação TISS é catálogo oficial: a tabela nunca entra; o termo vem pelo de-para oficial
+        # tiss:35 (a chave da origem é o código TISS: 0 a 13 na imagem), e o tipo e a ordem do auxiliar pelo grau
         self.assertNotIn("TBTISSPOSPROF", self.plano)
+        decl = [d for d in self.mapa["colunas_decl"] if d["tabela"] == "TBGRAUPARTPROC"]
+        por = {(d["coluna"], d["destino"].split(".")[-1]): d for d in decl if d["destino"]}
+        self.assertEqual(por[("ID_TBTISSPOSPROF", "grau_participacao_termo_terminologia_id")]["depara"], "tiss:35")
+        self.assertEqual(por[("ID_TBTISSPOSPROF", "tipo_funcao")]["depara"], "valores")
+        self.assertEqual(por[("ID_TBTISSPOSPROF", "ordem_auxiliar")]["depara"], "valores")
+        self.assertIn(("=~outro", "tipo_funcao"), por)  # reserva para a função sem grau
+        val = {(v["destino"].split(".")[-1], v["valor_origem"]): v["valor_destino"] for v in self.mapa["valores"]
+               if v["tabela"] == "TBGRAUPARTPROC"}
+        self.assertEqual(val[("tipo_funcao", "0")], "cirurgiao")
+        self.assertEqual(val[("tipo_funcao", "6")], "anestesista")
+        self.assertEqual({k for (c, k), x in val.items() if c == "tipo_funcao" and x == "auxiliar"}, {"1", "2", "3", "4"})
+        self.assertEqual({k: x for (c, k), x in val.items() if c == "ordem_auxiliar" and x},
+                         {"1": "1", "2": "2", "3": "3", "4": "4"})
+
+    def test_classificacao_do_subgrupo_pelo_grupo(self):
+        # o tipo do grupo (receita ou despesa) é copiado do destino do pai, nunca presumido
+        c = [d for d in self.mapa["colunas_decl"] if d["tabela"] == "TBSUBDES"
+             and d["destino"] == "subgrupo_natureza_financeira.classificacao"]
+        self.assertEqual(len(c), 1)
+        self.assertEqual((c[0]["coluna"], c[0]["via"].split(";")[0]), ("GRUPO", "ref:TBGRUDES@tipo"))
 
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
         self.assertFalse(com_destino & set(l8_04.BLOQUEADAS))
-        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 23)
+        self.assertEqual(len(TABELAS) + len(l8_04.BLOQUEADAS), 24)  # TBPERTHM passou à L8-03 (rodada 3)
+
+    def test_credito_da_producao(self):
+        # rodada 3: profissional e ocupação pela inscrição (encadeadas), tipo de conta pelo código no catálogo do
+        # produto; T e nulo = todas (NULL sem pendência), nunca escopo ampliado em silêncio
+        self.assertEqual(self.plano["FCCRECUN"]["destinos"], ["regra_credito_producao"])
+        c = self.cols("FCCRECUN", "regra_credito_producao")
+        self.assertEqual(c["estabelecimento_id"]["coluna"], "@estabelecimento")
+        self.assertEqual(c["fonte_pagadora_id"]["referencia"], "TBCONVEN")
+        self.assertEqual(c["ocupacao_cbo_id"]["depara"], "cbo")
+        tc = c["tipo_conta_id"]
+        self.assertEqual((tc["coluna"], tc["regra"], tc["cod"]), ("CONTAS", "codigo_char", ("tipo_conta", "codigo")))
+        self.assertEqual(tc["valores"], {"I": "internacao", "E": "externa", "A": "ambulatorial", "U": "urgencia",
+                                         "T": ""})
+        decl = {(d["coluna"], d["destino"]) for d in self.mapa["colunas_decl"] if d["tabela"] == "FCCRECUN"}
+        self.assertIn(("CRM", ""), decl)  # duplicado da inscrição: sem destino
+
+    def test_terminologia_do_tipo_de_lancamento(self):
+        # rodada 3: terminologia TISS pelo número da tabela (catálogo oficial nunca gravado), tipo da mesma fatia
+        c = self.cols("TBTISSTERMO_TBTPLANC", "terminologia_tipo_lancamento")
+        self.assertEqual((c["terminologia_id"]["coluna"], c["terminologia_id"]["depara"]),
+                         ("ID_TBTISSTERMO", "terminologia"))
+        self.assertEqual(c["tipo_lancamento_id"]["referencia"], "TBTPLANC")
+        self.assertNotIn("TBTISSTERMO", self.plano)
 
 
 class Regras(unittest.TestCase):
@@ -183,7 +230,7 @@ class Sintetica(unittest.TestCase):
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_04.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, TABELAS | set(l8_04.BLOQUEADAS))
+        self.assertEqual(criadas, TABELAS | set(l8_04.BLOQUEADAS) | set(l8_04.CADEIA) | {"TBCBOSUS"})
 
     def test_colunas_das_linhas_batem_com_o_ddl(self):
         ncols = {}

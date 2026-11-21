@@ -4,13 +4,15 @@
    "id": "M1",
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (_REF_TAB)",
    "mudanca": "referência ao destino SECUNDÁRIO do pai: 'ref:T/<destino>' (também no fim da composta, alternativa e encadeada, ex.: 'ref:RIACOMOD(BLOCO,ACOMOD)>BLOCO>RIBLOCOS/unidade_internacao' ou 'ref:RIBLOCOS/unidade_internacao' na coluna BLOCO): procura existente[T]['<chave>/<destino>'] no conector_origem (a chave que o motor já grava para os destinos secundários)",
-   "motivo": "unidade_internacao não tem alimentadora própria no mapa; decidido que cada bloco de RIBLOCOS é uma unidade de internação (destino secundário de RIBLOCOS, pedido L6-14 abaixo). acomodacao, leito_hospitalar e internacao têm unidade_internacao_id NOT NULL: sem M1, RIACOMOD, RILEITOS, RICADINT e todas as filhas (12 tabelas) não carregam"
+   "motivo": "unidade_internacao não tem alimentadora própria no mapa; decidido que cada bloco de RIBLOCOS é uma unidade de internação (destino secundário de RIBLOCOS, pedido L6-14 abaixo). acomodacao, leito_hospitalar e internacao têm unidade_internacao_id NOT NULL: sem M1, RIACOMOD, RILEITOS, RICADINT e todas as filhas (12 tabelas) não carregam",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "M2",
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (verificador)",
    "mudanca": "id por código no destino: via 'cod:<tabela>.<coluna>' numa coluna (ou literal '=x') com destino '<consumidora>.<fk>_id': o valor convertido (regra, de-para de valores ou literal) procura a linha da tabela pelo código (filtrando estabelecimento_id quando a tabela tiver e @estabelecimento for único); ausente: NULL + pendência media 'codigo_inexistente_destino' (NOT NULL recusa a linha); repetido: 'pai_ambiguo'. Substitui o '=>tabela.codigo=<v>' pedido pela L6-14",
-   "motivo": "carater_admissao, modalidade_internacao, situacao_leito, motivo_troca_leito, tipo_troca_internacao e motivo_cancelamento_internacao não têm tabela de origem e são NOT NULL em internacao, agendamento_internacao, leito_hospitalar, transferencia_leito, troca_internacao e cancelamento_internacao"
+   "motivo": "carater_admissao, modalidade_internacao, situacao_leito, motivo_troca_leito, tipo_troca_internacao e motivo_cancelamento_internacao não têm tabela de origem e são NOT NULL em internacao, agendamento_internacao, leito_hospitalar, transferencia_leito, troca_internacao e cancelamento_internacao",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "M2b",
@@ -22,13 +24,15 @@
    "id": "M3",
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa._ESPECIAIS",
    "mudanca": "especial '#data_hora:<DATA>,<HORA>': DATE + hora HHMM (texto 'HHMM'/'HH:MM' ou inteiro) em DATETIME; hora nula ou vazia = 00:00 com pendência baixa 'hora_ausente'; hora inválida = hora_invalida (fica 00:00); data sentinela = data_sentinela e NULL",
-   "motivo": "internacao.data_hora_entrada (ENTRADA+HORAENT), data_hora_alta (ALTA+HORASAI), agendamento_internacao.previsto_para, transferencia_leito.transferido_em e troca_internacao.ocorrido_em (DATA+HORA) são NOT NULL e a origem guarda data e hora separadas; gravar só a data perderia a hora"
+   "motivo": "internacao.data_hora_entrada (ENTRADA+HORAENT), data_hora_alta (ALTA+HORASAI), agendamento_internacao.previsto_para, transferencia_leito.transferido_em e troca_internacao.ocorrido_em (DATA+HORA) são NOT NULL e a origem guarda data e hora separadas; gravar só a data perderia a hora",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "M4",
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.passos_ref",
    "mudanca": "chave alternativa composta 'ref:T.(K1,K2,K3)=(C1,C2,C3)': as colunas C desta linha casam com as colunas K do pai na origem (repetido = pai_ambiguo); cada C pode ser coluna encadeada 'X>Y' (valor da coluna Y do pai apontado por X)",
-   "motivo": "RITRANSF aponta os leitos por BLOCOO,ACOMODO,LEITOO e BLOCOD,ACOMODD,LEITOD (RILEITOS tem chave ID); TBLEITO completa o leito de RILEITOS por (ID_TBACOMODLEITO>ID_RIBLOCOS, ID_TBACOMODLEITO>COD_ACOMODACAO, COD_LEITO)"
+   "motivo": "RITRANSF aponta os leitos por BLOCOO,ACOMODO,LEITOO e BLOCOD,ACOMODD,LEITOD (RILEITOS tem chave ID); TBLEITO completa o leito de RILEITOS por (ID_TBACOMODLEITO>ID_RIBLOCOS, ID_TBACOMODLEITO>COD_ACOMODACAO, COD_LEITO)",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "M5",
@@ -40,13 +44,15 @@
    "id": "L6-14",
    "arquivo": "conector/mapa/declarado/colunas.d/L6-14.tsv (fatia L6-14)",
    "mudanca": "RIBLOCOS com destino secundário unidade_internacao (via 'unidade_internacao'): @estabelecimento, BLOCO -> codigo, NOME -> descricao, UNID -> unidade_assistencial_id (ref:TBUNIDAD), =~outro -> tipo, @id -> bloco_internacao_id. RICTRLOC fica com a L6-14 (já declarada lá; a L6-15 não a declara)",
-   "motivo": "decisão L6-15: o bloco é a unidade de internação; RICTRLOC: um só dono (L6-14), conforme as duas seções do F4-decisoes-destino.md"
+   "motivo": "decisão L6-15: o bloco é a unidade de internação; RICTRLOC: um só dono (L6-14), conforme as duas seções do F4-decisoes-destino.md",
+   "atendido": "rodada 3: RIBLOCOS com unidade_internacao e RIACOMOD declarados na L6-14"
   },
   {
    "id": "DEP",
    "arquivo": "conector/mapa/declarado/dependencias.tsv",
    "mudanca": "RICADINT -> RICADPAC, RIPREINT -> RICADPAC, RIPREINT -> TBCONVEN, TBACOMODLEITO -> RIACOMOD (complementa), TBLEITO -> RILEITOS (complementa), HTLEITO -> RILEITOS",
-   "motivo": "paciente_id e fonte_pagadora_id NOT NULL; a complementação exige o pai já gravado"
+   "motivo": "paciente_id e fonte_pagadora_id NOT NULL; a complementação exige o pai já gravado",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "IDADE",
@@ -64,7 +70,8 @@
    "id": "SEM_CARGA",
    "arquivo": "conector/mapa/declarado/sem_carga.tsv",
    "mudanca": "TBTISSREGINT\tdescarte\tcatalogo_oficial\tL6-15: terminologia TISS de regime de internação (hospitalar, hospital-dia, domiciliar): vem do carregador oficial da ANS (regra 7); regime_atendimento_internacao.codigo_tiss pelo catálogo oficial",
-   "motivo": "achado de revisão (regra 7); a linha da TBTISSREGINT em colunas.d/L6-15.tsv ficou sem destino. A cobertura atribui a tabela à L6-14 (sem_declaracao) até o descarte entrar"
+   "motivo": "achado de revisão (regra 7); a linha da TBTISSREGINT em colunas.d/L6-15.tsv ficou sem destino. A cobertura atribui a tabela à L6-14 (sem_declaracao) até o descarte entrar",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "REVISAO",
@@ -76,13 +83,15 @@
    "id": "CONFERIR",
    "arquivo": "tools/obra/conferir-fatia-f4.sh",
    "mudanca": "acrescentar 'python3 -I tools/obra/cobertura_conector.py --fatia \"$F\" --falhar-se-bloqueada' (erro com as tabelas bloqueadas da fatia); e, opcional, conferencia.py reler VALORES_ESPERADOS da sintética (a L6-15 já faz isso no próprio teste: SignificadoL615)",
-   "motivo": "hoje o 'ok' sai com 14 tabelas bloqueadas; e a conciliação (contagem e soma) não prova o significado das colunas"
+   "motivo": "hoje o 'ok' sai com 14 tabelas bloqueadas; e a conciliação (contagem e soma) não prova o significado das colunas",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "COBERTURA",
    "arquivo": "tools/obra/cobertura_conector.py",
    "mudanca": "classificar como sem mecanismo (regra_faltante/coluna_obrigatoria_sem_fonte) as tabelas da L6-15 que dependem de M1 a M3",
-   "motivo": "a ferramenta diz 'só pedem refazer a fatia: 14' (referencia_composta/complementa), mas esses mecanismos já existem e não bastam: unidade_internacao_id (M1), situacao_leito_id, carater_admissao_id e modalidade_internacao_id (M2) e data_hora_entrada (M3) são NOT NULL sem fonte"
+   "motivo": "a ferramenta diz 'só pedem refazer a fatia: 14' (referencia_composta/complementa), mas esses mecanismos já existem e não bastam: unidade_internacao_id (M1), situacao_leito_id, carater_admissao_id e modalidade_internacao_id (M2) e data_hora_entrada (M3) são NOT NULL sem fonte",
+   "atendido": "rodada 3: mecanismo ou mudança disponível e usado pela fatia"
   },
   {
    "id": "VALORES",
@@ -95,6 +104,85 @@
    "mudanca": "desempate de unicidade de vigência: para destino com coluna gerada de vigência (leito_vigente_id), ler as linhas candidatas abertas do mesmo pai em ordem decrescente de entrada (a mais recente vence) e gravar as abertas mais antigas com situacao 'encerrada' (saída NULL) e pendência própria 'vigencia_duplicada', em vez de recusar a mais recente com restricao_destino_1062",
    "motivo": "hoje a primeira na ordem da chave da origem (atendimento, tipo, entrada) fica vigente e a outra recusa com 1062, que pode ser a atual. Medido na imagem de referência (só contagem): 0 leitos e 0 atendimentos com mais de uma ocupação aberta; o destino não tem unicidade por atendimento (só leito_vigente_id). Escolha registrada até a regra",
    "id": "DESEMPATE"
+  },
+  {
+   "id": "M4b",
+   "arquivo": "conector/sante_conector/mapa.py (passos_ref) + carga_mapa.py (_seguir)",
+   "mudanca": "coluna encadeada nas colunas C da chave alternativa composta: 'ref:RILEITOS.(BLOCO,ACOMOD,LEITO)=(ID_TBACOMODLEITO>ID_RIBLOCOS,ID_TBACOMODLEITO>COD_ACOMODACAO,COD_LEITO)'",
+   "motivo": "TBLEITO completa o leito de RILEITOS hoje só pelo código (ref:RILEITOS.LEITO); código repetido entre quartos recusa a linha; medido: 26 códigos repetidos em TBLEITO (recusados com pai_ambiguo). O verificador recusa hoje a coluna encadeada na chave composta"
+  },
+  {
+   "id": "CODIGO_COMPOSTO",
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa._ESPECIAIS",
+   "mudanca": "especial '#juntar:<C1>,<C2>[:<sep>]' (texto das colunas aparadas unido pelo separador; vazia some)",
+   "motivo": "leito_hospitalar.codigo é único por unidade de internação; se a origem repetir LEITO entre quartos do mesmo bloco (medir), o código do leito passa a ser ACOMOD-LEITO"
+  },
+  {
+   "id": "M2b-ainda",
+   "arquivo": "F2.2 (carga inicial do 'criar novo cliente')",
+   "mudanca": "semente dos catálogos-base com os códigos usados pelo conector: carater_admissao (eletiva, urgencia, emergencia), modalidade_internacao (clinica...), situacao_leito (livre, ocupado, reservado, interditado, bloqueado, higienizacao, manutencao), motivo_troca_leito (migracao), tipo_troca_internacao (clinica, fonte_pagadora, especialidade, profissional)",
+   "motivo": "sem a semente toda internação, leito, transferência e troca recusa com codigo_inexistente_destino; a imagem sintética os cria no PREPARO_DESTINO"
+  },
+  {
+   "id": "MEDIR",
+   "arquivo": "imagem de referência (só contagens)",
+   "mudanca": "contar (BLOCO, LEITO) repetidos em RILEITOS, valores distintos de RILEITOS.STATUS, RICADINT.CARINT e TBACOMODLEITO.TP_ATENDIMENTO (contagem por valor de código)",
+   "motivo": "confirmar os de-para de valores e a unicidade do código do leito antes da carga real",
+   "atendido": "rodada 3 (achados): medido na imagem de referência (só contagens); de-para corrigidos (CARINT 1/2, STATUS A/I, TP_ATENDIMENTO I); 6 (BLOCO, LEITO) repetidos em RILEITOS e 26 COD_LEITO repetidos em TBLEITO: CODIGO_COMPOSTO e M4b seguem pedidos"
+  },
+  {
+   "id": "OPCIONAL_COL",
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "opção de destino 'opcional:<C1>,<C2>' (colunas da ORIGEM): o destino secundário só grava quando uma dessas colunas tem valor (hoje o 'opcional' conta qualquer coluna, inclusive referências e datas que sempre têm valor)",
+   "motivo": "RICADINT: responsavel_paciente + pessoa_fisica (opcional:NOMRESP,CPFRESP), sumario_alta (opcional:ALTDIAG,ALTTRAT,ALTOBS,ALTJUST,ALTHPP,CIDOBITO), acompanhante_internacao (opcional:ACOMP), gestacao_paciente (opcional:DTPARTO); hoje esses dados ficam no retrato da trilha (nada se perde), sem a estrutura própria"
+  },
+  {
+   "id": "PROCEDENCIA_INTERNACAO",
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-01.tsv (fatia L6-01)",
+   "mudanca": "TBPROCED com destino secundário procedencia_internacao (codigo = COD, descricao = NOME, ativo pela SITUACAO); depois RICADINT.PROCEDENCIA -> internacao.procedencia_internacao_id por 'ref:TBPROCED/procedencia_internacao' (e RIPREINT.PROCEDENCIA, se o agendamento ganhar a coluna)",
+   "motivo": "a internação aponta procedencia_internacao, e TBPROCED só grava procedencia (recepção); medido: 9160 de 9160 internações casam com TBPROCED.COD"
+  },
+  {
+   "id": "COMPOSTA_VAZIA",
+   "arquivo": "conector/sante_conector/carga_mapa.py (_seguir, modo composta/alt_composta)",
+   "mudanca": "chave composta com TODAS as partes nulas OU vazias (texto só de espaços, zero) = sem referência (hoje só todas nulas)",
+   "motivo": "RIPREINT.LEITO (BLOCO, ACOMOD, LEITO) só tem leito em 11 de 1066 linhas; as outras deixariam pai_inexistente falso"
+  },
+  {
+   "id": "LEITO_CRITICIDADE_AREA",
+   "arquivo": "db/migracoes/07_INT (F2.2)",
+   "mudanca": "leito_hospitalar.criticidade_area_id (FK criticidade_area), para a higienização pela classe sanitária da área do leito; depois TBLEITO.ID_CHCRITICIDADE por ref:CHCRITICIDADE com complementa",
+   "motivo": "65 de 134 leitos têm criticidade de limpeza na origem; a coluna leito_hospitalar.criticidade é clínica (baixa a intensiva), outro conceito"
+  },
+  {
+   "id": "LEITO_DIARIA",
+   "arquivo": "db/migracoes/07_INT ou 12_FAT (F2.2)",
+   "mudanca": "diária própria do leito (leito_hospitalar.item_faturavel_diaria_id ou regra de diária por leito), quando o hospital cobra diária diferente por leito",
+   "motivo": "TBLEITO.ID_TBTABDTH preenchido em 95 de 134; hoje a diária é por acomodação e plano"
+  },
+  {
+   "id": "LEITO_TIPO",
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-15.tsv + catálogo especialidade_leito",
+   "mudanca": "de-para do tipo de leito da origem (RETPLEITO.COD_TP_LEITO) para especialidade_leito (tipo nacional de leito)",
+   "motivo": "TBLEITO.ID_RETPLEITO em 12 de 134; o código pede confirmação do domínio"
+  },
+  {
+   "id": "INTERNACAO_AUTORIZACAO",
+   "arquivo": "db/migracoes/07_INT/02_tabelas.sql (F2.2)",
+   "mudanca": "internacao.autorizacao_validade (DATE) e autorizado_em (DATE), como o agendamento já tem",
+   "motivo": "RICADINT.VALSENHA (2885) e DTAUTORIZ (7755): hoje só no retrato da trilha"
+  },
+  {
+   "id": "REGIME_SEMENTE",
+   "arquivo": "F2.2 (carga inicial do 'criar novo cliente')",
+   "mudanca": "semente de regime_atendimento_internacao com codigo_tiss 1 hospitalar, 2 hospital-dia, 3 domiciliar",
+   "motivo": "RICADINT e RIPREINT ligam o regime por cod:regime_atendimento_internacao.codigo_tiss; sem a semente, codigo_inexistente_destino em toda linha"
+  },
+  {
+   "id": "DEP_R3B",
+   "arquivo": "conector/mapa/declarado/dependencias.tsv",
+   "mudanca": "RICADINT -> TBTIPPLANO, RICADINT -> TBTABTHM, RIPREINT -> RICADINT, RIPREINT -> TBTIPPLANO, RIPREINT -> RILEITOS",
+   "motivo": "referências novas declaradas sem FK na origem (a ordem do mapa já as atende hoje: 710, 667, 1018 e 843 antes de 1018/1022; a dependência explícita protege a ordem)"
   }
  ]
 }

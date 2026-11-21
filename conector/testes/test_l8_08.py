@@ -4,24 +4,30 @@ imagem sintética. Sem banco; só valores inventados. A carga e a conciliação 
 import random
 import unittest
 
-from sante_conector import carga_mapa, conferencia, mapa, sentinela
+from sante_conector import carga_mapa, conferencia, depara, mapa, sentinela
 from sante_conector.sintetica_d import l8_08
 
 TABELAS = set(l8_08.CARREGADAS)
-DOMINIO = TABELAS - {"FHLEITOUTI"}
+DOMINIO = TABELAS - {"FHLEITOUTI", "FCCTRLANCIHA"}
 BLOQUEADAS = set(l8_08.BLOQUEADAS)
 LISTA = {"TBALTSUS": "motivo_saida", "TBASSOCI": "associacao_quimioterapia", "TBCARATERATEND": "carater_atendimento",
          "TBDRS": "regional_saude", "TBFONTE_ORCAMENTARIA_SUS": "fonte_orcamentaria", "TBGRUATE": "grupo_atendimento",
-         "TBTIPATE": "tipo_atendimento", "TBTPAPAC": "tipo_apac", "TBLOCPRI": "localizacao_tumor"}
-# catálogo oficial da tabela unificada (regra 7): nunca lista própria, só de-para para dominio_sigtap
-OFICIAIS = {"TBLOCSUS", "TBNIVSUS", "TBPRESUS", "TBNIVEL", "TBPRESSE"}
+         "TBTIPATE": "tipo_atendimento", "TBTPAPAC": "tipo_apac", "TBLOCPRI": "localizacao_tumor",
+         "TBPRESUS": "tipo_prestador", "TBNIVSUS": "nivel_atencao"}
+# versão antiga sem id que carrega na MESMA lista da versão com id (adoção pelo código)
+MESMA_LISTA = {"TBNIVEL": "TBNIVSUS"}
+# catálogo oficial da tabela unificada (regra 7): nunca lista própria, só de-para para dominio_sigtap. Só a modalidade:
+# tipo de prestador e nível NÃO vêm no pacote oficial (catalogos/carregadores/sigtap.py não os grava)
+OFICIAIS = {"TBLOCSUS"}
 # código = código do leiaute (único na lista); o id da origem só no conector_origem. A fonte orçamentária é
 # versionada por competência: código = id da origem, código do leiaute em codigo_oficial
 CODIGO = {"TBALTSUS": "COD", "TBASSOCI": "COD", "TBCARATERATEND": "COD_CARATERATEND", "TBDRS": "COD",
-          "TBFONTE_ORCAMENTARIA_SUS": "ID", "TBGRUATE": "COD", "TBTIPATE": "COD", "TBTPAPAC": "ID", "TBLOCPRI": "COD"}
+          "TBFONTE_ORCAMENTARIA_SUS": "ID", "TBGRUATE": "COD", "TBTIPATE": "COD", "TBTPAPAC": "ID", "TBLOCPRI": "COD",
+          "TBPRESUS": "COD", "TBNIVSUS": "COD", "TBNIVEL": "COD"}
 # listas aceitas pelo CHECK do destino (db/migracoes/13_SUS/01_tabelas.sql), conferidas no DDL lido pelo mapa
 OFICIAL = {"TBALTSUS": "COD", "TBASSOCI": "COD", "TBCARATERATEND": "COD_CARATERATEND", "TBDRS": "COD",
-           "TBFONTE_ORCAMENTARIA_SUS": "CODIGO", "TBGRUATE": "COD", "TBTIPATE": "COD", "TBLOCPRI": "COD"}
+           "TBFONTE_ORCAMENTARIA_SUS": "CODIGO", "TBGRUATE": "COD", "TBTIPATE": "COD", "TBLOCPRI": "COD",
+           "TBPRESUS": "COD", "TBNIVSUS": "COD", "TBNIVEL": "COD"}
 
 
 class Plano(unittest.TestCase):
@@ -38,6 +44,25 @@ class Plano(unittest.TestCase):
         for t in DOMINIO:
             self.assertEqual(self.plano[t]["destinos"], ["dominio_sus"], t)
         self.assertEqual(self.plano["FHLEITOUTI"]["destinos"], ["leito_uti_habilitado"])
+        # o registro CIHA não tem fonte na origem: só a equivalência item x procedimento
+        self.assertEqual(self.plano["FCCTRLANCIHA"]["destinos"], ["equivalencia_sigtap_item"])
+
+    def test_equivalencia_ciha(self):
+        decl = {c["destino"].split(".")[1]: c for c in self.mapa["colunas_decl"]
+                if c["tabela"] == "FCCTRLANCIHA" and c.get("destino")}
+        self.assertEqual(set(decl), {"item_faturavel_id", "procedimento_sigtap_id", "instrumento", "vigencia_inicio"})
+        via = decl["item_faturavel_id"]["via"].split(";")
+        self.assertIn("ref:FCLANEXT@item_faturavel_id", via)
+        # UMA equivalência vigente por item e instrumento (regra do produto, porta-propria.registrarEquivalencia): a
+        # adoção é pelo item e instrumento, nunca pelo procedimento (senão o item ambíguo teria duas vigentes)
+        self.assertIn("adotar:item_faturavel_id,instrumento", via)
+        self.assertFalse(any("procedimento_sigtap_id" in x for x in via if x.startswith("adotar:")))
+        p = decl["procedimento_sigtap_id"]
+        self.assertEqual((p["coluna"], p["depara"], p["via"]), ("ID_TBPROSUS", "sigtap", "ref:TBPROSUS>COD"))
+        self.assertEqual(decl["instrumento"]["coluna"], "=ciha")
+        self.assertEqual(decl["vigencia_inicio"]["coluna"], "@vigencia_carga")
+        ddl = mapa.ler_ddl(conferencia.RAIZ_APP)["equivalencia_sigtap_item"]["create"]
+        self.assertIn("'ciha'", ddl)
 
     def test_uti_habilitada(self):
         cs = {c["destino"]: c for c in self.plano["FHLEITOUTI"]["colunas"]["leito_uti_habilitado"]}
@@ -50,12 +75,28 @@ class Plano(unittest.TestCase):
         self.assertNotIn("unidade_internacao_id", cs)
 
     def test_localizacao_tumor_no_check_trava_o_estado(self):
-        """A imagem espera recusa pelo CHECK enquanto a lista falta no modelo; ao migrar, trocar LOCALIZACAO_NO_CHECK."""
-        ddl = mapa.ler_ddl(conferencia.RAIZ_APP)["dominio_sus"]["create"]
+        """A imagem espera recusa pelo CHECK enquanto a lista falta no modelo (LOCALIZACAO_NO_CHECK é lido do DDL)."""
+        d = mapa.ler_ddl(conferencia.RAIZ_APP)["dominio_sus"]
+        ddl = d["create"] + " ".join(d["alter"])
         self.assertEqual("'localizacao_tumor'" in ddl, l8_08.LOCALIZACAO_NO_CHECK)
 
+    def test_listas_novas_no_check(self):
+        """Tipo de prestador e nível: listas que o CHECK de dominio_sus já aceita."""
+        ddl = mapa.ler_ddl(conferencia.RAIZ_APP)["dominio_sus"]["create"]
+        for lista in ("tipo_prestador", "nivel_atencao"):
+            self.assertIn("'%s'" % lista, ddl)
+
+    def test_versoes_da_mesma_lista_adotam_pelo_codigo(self):
+        for t in ("TBPRESUS", "TBNIVSUS", "TBNIVEL"):
+            via = [c.get("via") or "" for c in self.mapa["colunas_decl"]
+                   if c["tabela"] == t and c.get("destino") == "dominio_sus.codigo"]
+            self.assertEqual(len(via), 1, t)
+            self.assertIn("adotar:lista,codigo", via[0].split(";"), t)
+        for antiga, atual in MESMA_LISTA.items():
+            self.assertEqual(self.cols(antiga)["lista"]["coluna"], self.cols(atual)["lista"]["coluna"])
+
     def test_descartes_e_sem_mecanismo(self):
-        self.assertEqual(set(l8_08.DESCARTADAS.values()), {"mecanismo_do_produto", "catalogo_oficial"})
+        self.assertEqual(set(l8_08.DESCARTADAS.values()), {"mecanismo_do_produto", "catalogo_oficial", "duplicado"})
         self.assertEqual(set(l8_08.BLOQUEADAS), set(l8_08.DESCARTADAS) | set(l8_08.SEM_MECANISMO))
         self.assertFalse(set(l8_08.BLOQUEADAS) & TABELAS)
 
@@ -86,7 +127,7 @@ class Plano(unittest.TestCase):
     def test_listas_distintas_e_sem_outra_alimentadora(self):
         self.assertEqual(len(set(LISTA.values())), len(LISTA))
         outras = {c["coluna"] for c in self.mapa["colunas_decl"]
-                  if c.get("destino") == "dominio_sus.lista" and c["tabela"] not in LISTA}
+                  if c.get("destino") == "dominio_sus.lista" and c["tabela"] not in set(LISTA) | set(MESMA_LISTA)}
         self.assertFalse(outras & {"=" + x for x in LISTA.values()})
 
     def test_bloqueadas_sem_destino(self):
@@ -115,6 +156,14 @@ class Plano(unittest.TestCase):
 
 
 class Regras(unittest.TestCase):
+    def test_sigtap_da_ciha(self):
+        n = depara.norm_sigtap
+        self.assertEqual(n("202010503"), "0202010503")
+        self.assertEqual(n(301010072), "0301010072")
+        self.assertIsNone(n("ABC"))
+        self.assertIsNone(n("0"))
+        self.assertTrue(set(l8_08.SIGTAP_NO_CATALOGO) <= {n(x) for x in ("0301010072", "202010503")})
+
     def test_conversoes_da_fatia(self):
         a = sentinela.aplicar
         self.assertEqual(a("texto_nome", "Alta   melhorado ".encode("cp1252")), ("Alta melhorado", None))
@@ -124,11 +173,26 @@ class Regras(unittest.TestCase):
 
 
 class Sintetica(unittest.TestCase):
+    def esperado(self):
+        return l8_08.linhas(random.Random(1), lambda t, v: None)
+
+    @unittest.skipUnless(l8_08.LOCALIZACAO_NO_CHECK, "lista 'localizacao_tumor' fora do CHECK de dominio_sus: "
+                         "pedido de migração aberto em saida/L8-08.json; TBLOCPRI grava 0 linhas")
+    def test_localizacao_tumor_grava(self):
+        self.assertGreater(self.esperado()["TBLOCPRI"]["gravados"], 0)
+
+    def test_item_ambiguo_adota_uma_so_equivalencia(self):
+        """9108 informou outro procedimento para o item de 9101: adota (2 adotadas = uma vigente por item)."""
+        e = self.esperado()["FCCTRLANCIHA"]
+        self.assertEqual(e["pendencias"]["adotado_existente"], 2)
+        itens = l8_08.ITENS_DOS_LANCAMENTOS
+        self.assertEqual(itens["9108"], itens["9101"])
+
     def test_esperado_coerente_com_as_linhas(self):
         cont = {}
         esp = l8_08.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
-        self.assertEqual(set(cont), TABELAS | BLOQUEADAS)
+        self.assertEqual(set(cont), TABELAS | BLOQUEADAS | {"TBPROSUS"})
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)

@@ -1,16 +1,29 @@
 {
  "fatia": "L5-01",
- "rodada": "cobertura total (2026-11-21), correção após revisão",
+ "rodada": "rodada 3, revisão (2026-11-21): zero bloqueadas; TBAGEUSE carrega; achados da revisão corrigidos",
  "pedidos": [
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv (+ gerar_mapa_conector.py)",
+   "mudanca": "aresta de ordem DIPERMPS -> TBPRESER",
+   "motivo": "DIPERMPS (ordem 7) acha o prestador pela chave alternativa composta de TBPRESER (ordem 864, L8-04): sem a aresta o recorte de todo usuário fica pai_inexistente e é recusado (NOT NULL). Com a aresta, o esperado da imagem sintética muda sozinho (cenário pai_antes em sintetica_d/l5_01.py, já provado em test_l5_01.test_recorte_com_a_aresta_de_ordem) BLOQUEANTE para a carga real: hoje DIPERMPS tem ordem 7 e TBPRESER 864, e as 35 restrições de acesso por prestador seriam todas recusadas (a sintética, no cenário da ordem real, espera 0 gravados). A fatia não edita declarado/dependencias.tsv (arquivo compartilhado): linha a acrescentar: \"DIPERMPS\\tTBPRESER\\tL5-01 cobertura: ref:TBPRESER.(ATO,COD,MODULO)=(ATO,PS,MODULO) declarada na fatia (prestador do recorte, NOT NULL) sem FK na origem: o pai vinha depois do filho na ordem de carga\", e regenerar o mapa.",
+   "bloqueante": true
+  },
+  {
+   "arquivo": "db/migracoes/02_ADM/04_tabelas.sql (trilha F2.2)",
+   "mudanca": "usuario_escopo.pode_excluir BOOLEAN NOT NULL DEFAULT FALSE (com o CHECK de permissão incluindo-a)",
+   "motivo": "DIPERMPS distingue gravar (PERM_GRA -> pode_operar) de excluir (PERM_EXC) por prestador; sem a coluna, a exclusão segue só a ação do perfil e PERM_EXC fica sem destino"
+  },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (motor, genérico)",
    "mudanca": "mecanismo de cadastro do produto por código, em duas formas genéricas: (a) via `cadastro:<tabela>.<coluna>` numa coluna `<tabela>_id`: o valor (literal `=x`, ou o da coluna depois da regra e da tradução declarada) é procurado em <tabela>.<coluna> do destino e grava o id; sem par, cadastro ausente ou mais de um: NULL com pendência (cadastro_codigo_inexistente / pai_ambiguo) e a restrição NOT NULL recusa a linha; (b) `@id:<destino>`: grava no principal o id de um destino SECUNDÁRIO declarado na mesma tabela, que então é gravado ANTES do principal (com `adotar:codigo`, o mesmo código de várias linhas cria uma vez e adota depois)",
-   "motivo": "regra faltante para 2 tabelas de restrição de acesso em uso, bloqueio explícito ao dono (não podem ser descartadas): TBCTRPRTUSU (1.314 concessões, 9 letras fixas; X só para 22 usuários) -> usuario_tipo_prontuario.tipo_documento_clinico_id NOT NULL, pela forma (b) com tipo_documento_clinico código prontuario_<letra> adotado, descrição presumida, categoria outro; DIPERMPS (35 permissões por usuário, posto e setor de exame) -> usuario_escopo.tipo_escopo_acesso_id NOT NULL, pela forma (a) com literal do tipo de escopo (posto, setor de exame) ou (b) criando o tipo de escopo com adotar:codigo. Ver F4-decisoes-destino.md (DIPERMPS, TBCTRPRTUSU)"
+   "motivo": "regra faltante para 2 tabelas de restrição de acesso em uso, bloqueio explícito ao dono (não podem ser descartadas): TBCTRPRTUSU (1.314 concessões, 9 letras fixas; X só para 22 usuários) -> usuario_tipo_prontuario.tipo_documento_clinico_id NOT NULL, pela forma (b) com tipo_documento_clinico código prontuario_<letra> adotado, descrição presumida, categoria outro; DIPERMPS (35 permissões por usuário, posto e setor de exame) -> usuario_escopo.tipo_escopo_acesso_id NOT NULL, pela forma (a) com literal do tipo de escopo (posto, setor de exame) ou (b) criando o tipo de escopo com adotar:codigo. Ver F4-decisoes-destino.md (DIPERMPS, TBCTRPRTUSU)",
+   "atendido": "rodada 2 do integrador: `cod:`, `antes`+`adotar:` e `@id:<destino>`; usados na rodada 3 por DIPERMPS e TBCTRPRTUSU"
   },
   {
    "arquivo": "tools/obra/conferir-fatia-f4.sh",
    "mudanca": "passo 6: python3 -I tools/obra/cobertura_conector.py --fatia <F>; erro se houver tabela BLOQUEADA",
-   "motivo": "a autoconferência devolvia ok com tabelas bloqueadas (achado da revisão)"
+   "motivo": "a autoconferência devolvia ok com tabelas bloqueadas (achado da revisão)",
+   "atendido": "rodada 2 do integrador: passo 6 da autoconferência"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
@@ -20,7 +33,8 @@
   {
    "arquivo": "conector/sante_conector/sentinela.py",
    "mudanca": "regra periodo_em_dias:<COLUNA_UNIDADE>: quantidade + unidade D/M/A vira dias (D exato; M = 30 e A = 365 com a pendência baixa periodo_aproximado); unidade desconhecida: NULL com valor_fora_do_dominio",
-   "motivo": "TBCFGLOGIN: o aceite periódico agora vem da origem (nunca desligado), mas o período entra presumido =~30 por falta de regra que combine as duas colunas"
+   "motivo": "TBCFGLOGIN: o aceite periódico agora vem da origem (nunca desligado), mas o período entra presumido =~30 por falta de regra que combine as duas colunas",
+   "atendido": "rodada 3 do integrador: #dias:<VALOR>,<UNIDADE>; usado em TBCFGLOGIN (período do aceite periódico da origem, sem presumir)"
   },
   {
    "arquivo": "conector/sante_conector/sentinela.py",
@@ -29,8 +43,8 @@
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06)",
-   "mudanca": "descomentar ATPARAMGERAL -> regra_campo_cadastro.exigencia (desdobrar DIGITAR_*), com os pares em valores.d/L5-06.tsv para os códigos das listas TBDIGITAR, TBDIGITAR_CNSCADPAC e TBDIGITAR_FILIACAO (opcional, obrigatorio, oculto)",
-   "motivo": "as três listas são descarte por domínio fixo (o rótulo não tem valor próprio), mas o código só chega ao produto pelo parâmetro que o usa"
+   "mudanca": "ATPARAMGERAL -> regra_campo_cadastro.exigencia: as opções DIGITAR_* que apontam para as listas TBDIGITAR, TBDIGITAR_CNSCADPAC e TBDIGITAR_FILIACAO são traduzidas POR LISTA e pelo RÓTULO da lista do próprio cliente (ref:<lista>>DESCRICAO, rótulo normalizado com pares declarados por lista em valores.d/L5-06.tsv), não pelo de-para global de códigos 0/1/2/3 (valores.d/L5-06.tsv linhas 8 a 11, com o 3 \"a confirmar\"); rótulo ou código sem par = valor_fora_do_dominio por linha. Os rótulos de domínio (não são dado de pessoa) se confirmam por consulta agregada à imagem de referência",
+   "motivo": "as três listas têm tamanhos diferentes (3, 4 e 4) e o significado está no rótulo: o de-para global presume o significado e, em outro cliente, pode trocar obrigatório por oculto (achado da revisão da rodada 3)"
   },
   {
    "arquivo": "db/migracoes/02_ADM/03_tabelas.sql (trilha F2.2)",
@@ -41,6 +55,36 @@
    "arquivo": "db/migracoes (trilha F2.2)",
    "mudanca": "permissões de prontuário por usuário: assinatura digital, assinatura em lote, lançamento retroativo, somente salvar, avaliar, prescrição futura, alertas de pendência de avaliação e de exame repetido em 4 h, tela inicial do painel e do prontuário",
    "motivo": "PRLOCPACDEFAULT carrega só as preferências (preferencia_usuario); as permissões por usuário não têm coluna no destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (motor, genérico)",
+   "mudanca": "referência por coluna no #item do desdobrar (ex.: desdobrar:DIGITAR_CNS=cns|paciente com via ref:TBDIGITAR_CNSCADPAC>DESCRICAO só para aquela coluna), ou declaração por coluna do desdobrado",
+   "motivo": "permitir a tradução por lista e pelo rótulo do pedido acima (hoje o #item usa só a regra da linha #item, sem passos de referência)"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "marcar BLOQUEADA (pai_nao_carregado:<PAI>) a tabela com coluna NOT NULL por ref: (simples, composta, alternativa ou encadeada) de um pai carregado DEPOIS dela na ordem do mapa",
+   "motivo": "DIPERMPS conta como CARREGA embora, sem a aresta, a carga real recuse todas as linhas (achado alto da revisão da rodada 3)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (motor, genérico)",
+   "mudanca": "especial #sem_destino:<COLUNA>[=<padrão>]: a coluna da origem sem destino no modelo é lida (entra no hash) e a linha cuja valor convertido pela regra declarada diverge do padrão (ou, sem padrão, tem valor) leva a pendência valor_sem_destino (média), com o nome da coluna no motivo da declaração",
+   "motivo": "PRLOCPACDEFAULT (10 permissões e opções de prontuário por usuário, ex.: não lança retroativo, não assina em lote), TBCFGLOGIN (PERIOD_REUTILIZACAO_SENHA, CARACTERE_ALFANUMERICO), DIPERMPS.PERM_EXC: hoje declaradas sem destino; a perda precisa ficar visível por linha no painel até as colunas da F2.2"
+  },
+  {
+   "arquivo": "conector/verificar_mapa.py ou tools/obra/conferir-fatia-f4.sh",
+   "mudanca": "acusar coluna da origem (mapa/colunas.tsv) de tabela carregada que não esteja declarada em nenhum colunas.d (com destino, sem destino com motivo, ou lida por especial)",
+   "motivo": "a perda silenciosa de colunas (achado da revisão) passava pela autoconferência; a fatia L5-01 já tem o teste test_nenhuma_coluna_da_origem_sem_declaracao, que pode virar regra global"
+  },
+  {
+   "arquivo": "db/migracoes/02_ADM/03_tabelas.sql (trilha F2.2)",
+   "mudanca": "politica_senha.exige_alfanumerico BOOLEAN NOT NULL DEFAULT FALSE",
+   "motivo": "TBCFGLOGIN.CARACTERE_ALFANUMERICO (letra e número juntos) sem coluna; hoje declarada sem destino"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador) e decisão de RETPAGEN",
+   "mudanca": "revisar o descarte de RETPAGEN (duplicado de categoria_agenda): o domínio numérico de tipo de agenda (RETPAGEN.COD) é o que TBAGEUSE.TPAGE, AGCADAGENDA.TPAGEN, RETIPAGE.TPAGEN e SIPACAGD/REPACAGD.TP_AGE usam, e não é o das letras de AGTPAGENDA; carregando RETPAGEN em categoria_agenda com código tipo_agenda_<COD> (o mesmo código derivado que TBAGEUSE grava), a categoria criada por TBAGEUSE passa a ser adotada com o nome real",
+   "motivo": "TBAGEUSE cria a categoria tipo_agenda_<n> inativa com descrição provisória; com RETPAGEN carregado antes, o nome vem da origem"
   }
  ]
 }

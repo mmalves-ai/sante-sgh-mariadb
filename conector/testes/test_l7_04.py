@@ -11,13 +11,16 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l7_04
 
 # na ordem do mapa
-CARREGADAS = ["SIWSETIQUETA", "TBFATORRH", "TBTPSANGUINEO", "SICADATE", "SIRES01_DELETE", "SILANEXA",
-              "SIASSLAUDO_IMP_SILANEXA", "SILIBERACAOEXAME", "SIRES01", "SIRESOBS", "HTNOTEXAMESEXO",
-              "SIKITHISTEXA", "SIKITHISTITE"]
-# vínculo exame -> documento assinado: decisão registrada, espera o documento (L6-11) e a coluna do DDL (pedido)
-BLOQUEADAS = {"PREXAMEASSINATURA": "destino_decidido"}
-DESCARTES = {"SHBOLSAHIST": "sem_valor", "SIHISTVLREF": "duplicado",
-             "SIHISTVLREFEXAME": "duplicado", "SIHISTVLREFELEMENTO": "duplicado", "SIRESVAR": "duplicado"}
+CARREGADAS = ["SIWSETIQUETA", "TBFATORRH", "TBTPSANGUINEO", "SICADATE", "SIHISTVLREF", "SIHISTVLREFEXAME",
+              "SIRES01_DELETE", "SILANEXA", "SIASSLAUDO_IMP_SILANEXA", "SILIBERACAOEXAME", "SIRES01", "SIRESOBS",
+              "SIRESVAR", "HTNOTEXAMESEXO", "SHBOLSAHIST", "SIKITHISTEXA", "SIKITHISTITE"]
+# vínculo exame -> documento assinado (rodada 3): carrega em exame_item_assinatura; a posição na ordem depende do
+# pedido de dependências (exame e cabeçalho antes do vínculo)
+VINCULO = "PREXAMEASSINATURA"
+# versão da faixa do analito: declarada (faixa_referencia_versao), bloqueada só até o L7-03 gravar a faixa
+BLOQUEADAS = {"SIHISTVLREFELEMENTO": "depende_faixa_referencia"}
+# revisão da rodada 3: nenhum descarte (os cinco antigos eram dado que o hospital usa)
+DESCARTES = {}
 # NOT NULL sem padrão de cada destino (db/migracoes), menos id, origem e criado_em
 OBRIGATORIAS = {
     "modelo_etiqueta_amostra_biologica": {"estabelecimento_id", "codigo", "descricao", "largura_mm", "altura_mm",
@@ -33,7 +36,11 @@ OBRIGATORIAS = {
     "resultado_analito": {"resultado_exame_id", "sequencia", "analito_id"},
     "resultado_observacao": {"resultado_exame_id", "sequencia", "texto"},
     "kit_exame_versao": {"kit_exame_id", "ocorrido_em", "numero_versao", "nome", "vigencia_inicio"},
-    "kit_exame_versao_item": {"kit_exame_versao_id", "sequencia", "exame_id"}}
+    "kit_exame_versao_item": {"kit_exame_versao_id", "sequencia", "exame_id"},
+    "exame_item_assinatura": {"exame_item_id", "documento_prontuario_id"},
+    "movimento_bolsa": {"bolsa_hemocomponente_id", "tipo_movimento_bolsa_id", "ocorrido_em", "usuario_id"},
+    "resultado_variavel_formula": {"resultado_exame_id", "sequencia", "variavel_formula_id", "valor_numerico"},
+    "faixa_referencia_versao": {"faixa_referencia_id", "operacao", "ocorrido_em", "vigente_de"}}
 
 
 def _raiz():
@@ -56,7 +63,7 @@ class Plano(unittest.TestCase):
         self.m = _mapa()
         if self.m is None:
             self.skipTest("mapa do conector ausente")
-        self.plano = carga_mapa.planejar(self.m, set(CARREGADAS) | set(DESCARTES) | set(BLOQUEADAS))
+        self.plano = carga_mapa.planejar(self.m, set(CARREGADAS) | {VINCULO} | set(DESCARTES) | set(BLOQUEADAS))
         self.por = {p["tabela"]: p for p in self.plano}
 
     def _col(self, t, destino, dt=None):
@@ -68,7 +75,17 @@ class Plano(unittest.TestCase):
         return c["coluna"], c["referencia"]
 
     def test_carregadas_em_ordem_e_descartes_fora(self):
-        self.assertEqual([p["tabela"] for p in self.plano], CARREGADAS)
+        self.assertEqual([p["tabela"] for p in self.plano if p["tabela"] != VINCULO and p["tabela"] not in BLOQUEADAS],
+                         CARREGADAS)
+        self.assertIn(VINCULO, self.por)
+
+    def test_vinculo_exame_documento_assinado(self):
+        self.assertEqual(self.por[VINCULO]["destinos"], ["exame_item_assinatura"])
+        self.assertEqual(self._via(VINCULO, "exame_item_id"), ("ID_SILANEXA", "SILANEXA"))
+        self.assertEqual(self._via(VINCULO, "documento_prontuario_id"), (
+            "ID", "PRASS_DOC_PREXAMEASS.ID_PREXAMEASSINATURA>ID_PRASSINATURA_DOC>PRASSINATURA_DOC"
+                  ">ID_PRASSINATURA_CAB>PRASSINATURA_CAB"))
+        self.assertEqual(self._via(VINCULO, "local_assistencia_id"), ("ID_PRLOCAL_ASSISTENCIA", "PRLOCAL_ASSISTENCIA"))
 
     def test_destinos(self):
         self.assertEqual(self.por["SICADATE"]["destinos"], ["requisicao_exame"])
@@ -112,7 +129,7 @@ class Plano(unittest.TestCase):
         self.assertEqual(self._col("SIWSETIQUETA", "layout")[0]["coluna"], "#retrato")
         self.assertEqual(self._col("SIWSETIQUETA", "largura_mm")[0]["coluna"], "=~50")
         self.assertIn("LAYOUTETIQUETA", self.por["SIWSETIQUETA"]["retrato"])
-        self.assertEqual(self._col("HTNOTEXAMESEXO", "dados_depois")[0]["coluna"], "#retrato")
+        self.assertEqual(self._col("HTNOTEXAMESEXO", "dados_depois")[0]["coluna"], "#retrato:*")
         self.assertEqual(self._via("HTNOTEXAMESEXO", "entidade_id"),
                          ("ID_SITABPRO_ATO", "SITABPRO(ID_SITABPRO_ATO,ID_SITABPRO_CODALF)"))
 
@@ -139,11 +156,61 @@ class Plano(unittest.TestCase):
         self.assertEqual(self._via("SIRES01", "liberado_por_profissional_id"),
                          ("ID_TBCBOPRO_EMISSOR", "TBCBOPRO>ID_TBPROFIS>TBPROFIS"))
         self.assertEqual(self._via("SIRES01", "metodo_analitico_id", "resultado_analito"), ("METODO", "SIMETODO"))
-        self.assertEqual(self._via("SIRES01", "observacao"), ("ID_SIHISTVLREFEXAME", "SIHISTVLREFEXAME>VLRREF"))
+        # a referência do exame nunca vai a observacao (observação clínica): DDL referencia_texto pedido
+        self.assertFalse(self._col("SIRES01", "observacao"))
+        u = self._col("SIRES01", "unidade_resultado_id", "resultado_analito")[0]
+        self.assertEqual((u["coluna"], u["referencia"], u.get("cod")),
+                         ("ID_SIHISTVLREFELEMENTO", "SIHISTVLREFELEMENTO>UNIDADE", ("unidade_resultado", "codigo")))
+        # limites de valor ABSURDO (MIN_ABE/MAX_ABE) não são valor crítico
+        self.assertFalse(self._col("SIRES01", "critico_minimo", "resultado_analito"))
+        self.assertFalse(self._col("SIRES01", "critico_maximo", "resultado_analito"))
+
+    def test_resultado_situacao_pela_liberacao_e_momento_por_concorrentes(self):
+        s = self._col("SIRES01", "situacao")
+        self.assertEqual([(c["coluna"], c["referencia"]) for c in s],
+                         [("ID_SILANEXA", "SILANEXA>DATA_HORA_LIBERA_EXAME"), ("=digitado", "")])
+        self.assertEqual(s[0]["valores"], {"1": "liberado", "0": "", "": ""})
+        self.assertEqual(self._via("SIRES01", "liberado_em"), ("ID_SILANEXA", "SILANEXA>DATA_HORA_LIBERA_EXAME"))
+        self.assertEqual([c["coluna"] for c in self._col("SIRES01", "resultado_em")],
+                         ["DATA_HORA_EVENTO", "#data_hora:DATARES,HORA", "DATA"])
+        self.assertEqual([c["coluna"] for c in self._col("SIRES01_DELETE", "ocorrido_em")],
+                         ["DATA_HORA_EVENTO", "DATA_HORA_GRAVACAO"])
+
+    def test_liberacao_sem_etapa_presumida(self):
+        e = self._col("SILIBERACAOEXAME", "etapa")
+        self.assertEqual([(c["coluna"], c["depara"]) for c in e], [("SITUACAO", "valores")])
+        self.assertEqual(e[0]["valores"], {"": "liberacao_clinica"})   # todo código sem par confirmado recusa
+
+    def test_movimento_da_bolsa(self):
+        self.assertEqual(self.por["SHBOLSAHIST"]["destinos"], ["movimento_bolsa"])
+        for d, c, r in (("bolsa_hemocomponente_id", "ID_BOLSA", "SHBOLSA"), ("tipo_movimento_bolsa_id", "CODMOV", "SHMOV"),
+                        ("motivo_devolucao_bolsa_id", "CODMOTDEV", "SHMOTDEV"), ("usuario_id", "USUARIO", "TBUSERS")):
+            self.assertEqual(self._via("SHBOLSAHIST", d), (c, r))
+
+    def test_variaveis_da_formula(self):
+        self.assertEqual(self.por["SIRESVAR"]["destinos"], ["resultado_variavel_formula"])
+        r = self._col("SIRESVAR", "resultado_exame_id")[0]
+        self.assertEqual((r["coluna"], r["referencia"], r.get("cod")),
+                         ("ID_SILANEXA", "SILANEXA", ("resultado_exame", "exame_item_id")))
+        self.assertEqual(self._via("SIRESVAR", "variavel_formula_id"), ("CODIGOVARFORMULA", "SIVARFORMULA"))
+
+    def test_historicos_de_referencia(self):
+        for t in ("SIHISTVLREF", "SIHISTVLREFEXAME"):
+            self.assertEqual(self.por[t]["destinos"], ["trilha_auditoria"], t)
+            self.assertEqual(self._col(t, "dados_depois")[0]["coluna"], "#retrato:*", t)
+        p = self.por["SIHISTVLREFELEMENTO"]
+        self.assertEqual(p["destinos"], ["faixa_referencia_versao"])
+        self.assertEqual(self._col("SIHISTVLREFELEMENTO", "dados")[0]["coluna"], "#retrato:*")
+        self.assertEqual(self._via("SIHISTVLREFELEMENTO", "faixa_referencia_id"),
+                         ("ID_SITABELE_CODPRC", "SITABELE(ID_SITABELE_CODPRC,ID_SITABELE_CODELE)/faixa_referencia"))
 
     def test_exclusao_com_retrato(self):
-        self.assertEqual(self._col("SIRES01_DELETE", "dados_antes")[0]["coluna"], "#retrato")
-        self.assertIn("ID_SILANEXA", self.por["SIRES01_DELETE"]["retrato"])
+        self.assertEqual(self._col("SIRES01_DELETE", "dados_antes")[0]["coluna"], "#retrato:*")
+        self.assertTrue(mapa.spec_retrato("#retrato:*")["todas"])
+        # a imagem sintética traz o conteúdo do resultado excluído, que tem de chegar ao retrato
+        ddl = re.search(r"CREATE TABLE SIRES01_DELETE \(([^;]*)\);", l7_04.DDL).group(1)
+        for c in ("NUMERICO", "ALFA", "TEXTO", "CONCLUSAO", "EXAME", "ELEMENTO"):
+            self.assertIn(c + " ", ddl)
 
     def test_kit_pela_referencia_e_versao_por_kit(self):
         k = self._col("SIKITHISTEXA", "kit_exame_id")[0]
@@ -162,7 +229,9 @@ class Declaracoes(unittest.TestCase):
             self.sem_carga = {l["tabela"]: l for l in csv.DictReader(f, delimiter="\t")}
 
     def test_toda_tabela_da_fatia_declarada(self):
-        self.assertEqual({l["tabela"] for l in self.linhas}, set(CARREGADAS) | set(DESCARTES) | set(BLOQUEADAS))
+        self.assertEqual({l["tabela"] for l in self.linhas},
+                         set(CARREGADAS) | {VINCULO} | set(DESCARTES) | set(BLOQUEADAS))
+        self.assertNotIn(VINCULO, self.sem_carga)
 
     def test_bloqueadas_com_decisao(self):
         for t, causa in BLOQUEADAS.items():
@@ -172,8 +241,13 @@ class Declaracoes(unittest.TestCase):
     def test_sem_motivo_generico(self):
         for l in self.linhas:
             self.assertNotIn("coluna técnica, de controle ou repetida de outra tabela; o que importa",
-                             l["motivo"] if l["tabela"] in ("SICADATE", "SIRES01") and l["coluna"] in (
-                                 "ID_TBMEDSOL", "CRM", "MEDICO", "RESULTADO_PDF", "ID_TBCBOPRO_EMISSOR", "METODO")
+                             l["motivo"] if (l["tabela"], l["coluna"]) == ("SICADATE", "ID_TBMEDSOL")
+                             or l["tabela"] == "SIRES01" and l["coluna"] in (
+                                 "CRM", "MEDICO", "RESULTADO_PDF", "ID_TBCBOPRO_EMISSOR", "METODO",
+                                 "RESPONSAVEL_TECNICO", "NOME_RESPONSAVEL_TECNICO", "APAREL", "AMOSTRA", "DATARES",
+                                 "HORA", "ID_SITPEQV", "ID_SIHISTVLREF", "ID_SIHISTVLREFEXAME")
+                             or l["tabela"] in ("SHBOLSAHIST", "SIRESVAR", "SIHISTVLREF", "SIHISTVLREFEXAME",
+                                                "SIHISTVLREFELEMENTO", "SIRES01_DELETE", "HTNOTEXAMESEXO")
                              else "", (l["tabela"], l["coluna"]))
 
     def test_descartes_com_causa_de_produto_e_sem_destino(self):
@@ -183,7 +257,7 @@ class Declaracoes(unittest.TestCase):
             self.assertFalse([l for l in self.linhas if l["tabela"] == t and l["destino"]], t)
 
     def test_carregadas_tem_destino_e_motivo(self):
-        for t in CARREGADAS:
+        for t in CARREGADAS + [VINCULO]:
             self.assertTrue([l for l in self.linhas if l["tabela"] == t and l["destino"]], t)
         for l in self.linhas:
             self.assertTrue(l["motivo"], (l["tabela"], l["coluna"]))
@@ -202,13 +276,13 @@ class Declaracoes(unittest.TestCase):
 class Sintetica(unittest.TestCase):
     def test_ddl_tem_as_carregadas(self):
         tabs = set(re.findall(r"CREATE TABLE (\w+)", l7_04.DDL))
-        self.assertFalse(set(CARREGADAS) - tabs)
+        self.assertFalse((set(CARREGADAS) | {VINCULO}) - tabs)
         self.assertFalse(tabs & (set(DESCARTES) - {"SIHISTVLREFELEMENTO", "SIHISTVLREFEXAME"}))
 
     def test_esperado_coerente_com_as_linhas(self):
         ins = []
         esp = l7_04.linhas(None, lambda t, v: ins.append(t))
-        self.assertEqual(set(esp), set(CARREGADAS))
+        self.assertEqual(set(esp), set(CARREGADAS) | {VINCULO} | set(BLOQUEADAS))
         for t, e in esp.items():
             recusas = sum(n for rg, n in e["pendencias"].items()
                           if rg.startswith("restricao_destino_") or rg == "pai_pendente")
@@ -226,6 +300,36 @@ class Sintetica(unittest.TestCase):
     def test_kit_externo_e_inexistente(self):
         kits = {v[6] for t, ls, _ in l7_04.DADOS if t == "SIKITHISTEXA" for v in ls}
         self.assertEqual(kits - {int(k) for k in l7_04.PAIS_EXTERNOS["SIKITEXA"]}, {9})
+
+
+class Vinculo(unittest.TestCase):
+    def test_esperado_so_na_ordem_certa(self):
+        e = l7_04.ESPERADO_ASSINATURA
+        recusas = sum(n for rg, n in e["pendencias"].items()
+                      if rg.startswith("restricao_destino_") or rg == "pai_pendente")
+        self.assertEqual(e["gravados"] + recusas, len(l7_04.ASSINATURA_EXAME))
+        self.assertEqual(e["gravados"], 4)
+        self.assertFalse(hasattr(l7_04, "ESPERADO_ASSINATURA_ANTES"))
+
+    def test_vinculo_depois_do_exame_e_do_cabecalho(self):
+        # pedido de dependências (saida/L7-04.json, alta): falha enquanto o mapa carregar o vínculo antes dos pais
+        m = _mapa()
+        if m is None:
+            self.skipTest("mapa do conector ausente")
+        o = {r["tabela"]: int(r["ordem"]) for r in m["tabelas"] if (r.get("ordem") or "").isdigit()}
+        self.assertGreater(o[VINCULO], o["SILANEXA"])
+        self.assertGreater(o[VINCULO], o["PRASSINATURA_CAB"])
+
+    def test_ligacoes_coerentes(self):
+        ligadas = {}
+        for _, ev, ass in l7_04.LIGACAO:
+            self.assertIn(ev, l7_04.EVENTO_CAB)
+            ligadas.setdefault(ass, set()).add(l7_04.EVENTO_CAB[ev])
+        self.assertNotIn(6, ligadas)                     # sem ligação
+        self.assertEqual(len(ligadas[7]), 2)             # dois documentos: ambiguidade real
+        self.assertEqual(ligadas[1], ligadas[10])        # par repetido: 1062
+        externos = {int(k) for k in l7_04.PAIS_EXTERNOS["PRASSINATURA_CAB"]}
+        self.assertEqual({c for c in l7_04.EVENTO_CAB.values()} - externos, {99})
 
 
 if __name__ == "__main__":

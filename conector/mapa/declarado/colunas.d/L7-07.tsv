@@ -140,9 +140,9 @@ GEVALMEM	DATA	lote_insumo.validade	data			L7-07: validade; data sentinela: data_
 GEVALMEM	DATA_ORIGINAL	lote_insumo.validade_original	data			L7-07: validade antes da redução
 GEVALMEM	ID_TBLABORA	lote_insumo.fabricante_id	chave_origem			L7-07: fabricante (L7, ordem 593); nunca visto: NULL com pai_inexistente
 GEVALMEM	DATAMATRIX_QRCODE	lote_insumo.codigo_rastreio	texto			L7-07: código bidimensional lido
-GEVALMEM	LOCAL		inteiro			L7-07: sem destino: saldo do lote no local; vai para saldo_lote (declaração pronta e comentada abaixo) quando a competência da carga existir (=@data_carga com regra data_primeiro_dia_mes, pedido no L7-07.json)
-GEVALMEM	QTDE		decimal			L7-07: sem destino: saldo do lote no local; vai para saldo_lote (declaração pronta e comentada abaixo) quando a competência da carga existir (=@data_carga com regra data_primeiro_dia_mes, pedido no L7-07.json)
-GEVALMEM	QTDE_KIT		decimal			L7-07: sem destino: saldo do lote dentro de kits; vai para saldo_lote.quantidade_em_kit com o saldo (ver LOCAL)
+GEVALMEM	LOCAL		inteiro			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
+GEVALMEM	QTDE		decimal			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
+GEVALMEM	QTDE_KIT		decimal			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
 GEVALMEM	QTDE_ORIGINAL		decimal			L7-07: sem destino: quantidade da entrada do lote: está no item da nota (GELANNFS) e no movimento do lote
 GEVALMEM	DATA_REDUCAO		data			L7-07: sem destino: data em que a validade foi reduzida; a validade original fica em lote_insumo.validade_original
 GEVALMEM	ID_SEQ_LOTE_ITEM		chave_origem			L7-07: sem destino: sequência do lote no item do sistema antigo; o lote do produto tem id próprio
@@ -158,13 +158,15 @@ GEVALMEM	ID_GENOMCOM		chave_origem			L7-07: sem destino: apresentação comercia
 #GEVALMEM	QTDE	saldo_lote.quantidade	decimal_nao_negativo			L7-07: saldo do lote no local
 #GEVALMEM	QTDE_KIT	saldo_lote.quantidade_em_kit	decimal_nao_negativo			L7-07: parte do saldo dentro de kits
 #GEVALMEM	=@data_carga	saldo_lote.competencia	data_primeiro_dia_mes			L7-07: mês corrente do saldo = mês da carga (regra sobre =@data_carga pedida no L7-07.json)
-GEITEMKITRAS	ID_GEKITRAS	kit_rastreavel_item.kit_rastreavel_id	chave_origem			L7-07: kit rastreável (L7, ordem 560); nunca visto: pai_inexistente e recusa (NOT NULL)
+GEITEMKITRAS	ID_GEKITRAS	kit_rastreavel_item.kit_rastreavel_id	chave_origem		ref:GEKITRAS;adotar:kit_rastreavel_id,insumo_id	L7-07 r3 (correção): kit rastreável (L7, ordem 560); nunca visto: pai_inexistente e recusa (NOT NULL). A origem tem uma linha por insumo E LOTE do kit (1795 pares kit+insumo repetidos em 4216 linhas, todos com lotes distintos, na referência): o par repetido ADOTA o item já gravado (adotado_existente, baixa) e grava o seu lote em kit_rastreavel_lote
 GEITEMKITRAS	#seq:ID_GEKITRAS	kit_rastreavel_item.sequencia				L7-07: posição do item no kit, na ordem da chave. Instável no diferencial (exclusão + inclusão no mesmo kit repete a posição: 1062): sequência estável pedida no L7-07.json
-GEITEMKITRAS	ID_GEITENS	kit_rastreavel_item.insumo_id	chave_origem			L7-07: insumo (mesma fatia); recusado: pai_pendente. A origem tem uma linha por insumo E LOTE do kit (1795 pares kit+insumo repetidos, 4216 linhas, todos com lotes distintos, na referência): a repetição cai em 1062 até o motor agregar por insumo e levar o lote a kit_rastreavel_lote, pedido no L7-07.json
+GEITEMKITRAS	ID_GEITENS	kit_rastreavel_item.insumo_id	chave_origem			L7-07 r3 (correção): insumo (mesma fatia); recusado: pai_pendente. Com o kit, identifica o item (adotar)
 GEITEMKITRAS	ID_TBUNICON	kit_rastreavel_item.unidade_medida_id	chave_origem		ref:TBUNICON	L7-07: unidade (mesma fatia); nunca vista: pai_inexistente e recusa (NOT NULL)
-GEITEMKITRAS	QUANTIDADE	kit_rastreavel_item.quantidade_padrao	decimal			L7-07: zero ou negativa recusa (CHECK > 0)
+GEITEMKITRAS	QUANTIDADE	kit_rastreavel_item.quantidade_padrao	decimal			L7-07 r3 (correção): zero ou negativa recusa (CHECK > 0). No par adotado fica a quantidade da primeira linha (nada é sobrescrito na adoção); a soma por par pede o agrupamento no principal (pedido kit_quantidade_soma no saida/L7-07.json)
 GEITEMKITRAS	ITEM_OBRIGATORIO	kit_rastreavel_item.obrigatorio	booleano_sn			L7-07: S/N
-GEITEMKITRAS	ID_GEVALMEM		chave_origem			L7-07: sem destino: kit_rastreavel_lote exige lote (NOT NULL) e a origem o tem anulável: gravar o lote secundário recusaria o item inteiro (destino secundário condicional pedido no L7-07.json)
+GEITEMKITRAS	ID_GEVALMEM	kit_rastreavel_lote.lote_insumo_id	chave_origem		ref:GEVALMEM;opcional	L7-07 r3 (correção): lote da linha no kit (o lote por local adota o lote físico); sem lote na origem (coluna anulável): o lote não grava (opcional) e o item fica; lote nunca visto: pai_inexistente e o lote não grava; recusado: pai_pendente
+GEITEMKITRAS	@id	kit_rastreavel_lote.kit_rastreavel_item_id				L7-07 r3 (correção): o item gravado ou ADOTADO por esta linha
+GEITEMKITRAS	#seq:ID_GEKITRAS	kit_rastreavel_lote.sequencia				L7-07 r3 (correção): posição da linha no kit, única no item (sequência estável no diferencial: pedido no L7-07.json)
 GERASVALESTINI	ID_GELANESI	inventario_estoque_lote.inventario_estoque_item_id	chave_origem			L7-07: item do inventário de abertura (L7, ordem 553); nunca visto: pai_inexistente e recusa (NOT NULL)
 GERASVALESTINI	#seq:ID_GELANESI	inventario_estoque_lote.sequencia				L7-07: posição do lote no item, na ordem da chave. Instável no diferencial (ver GEITEMKITRAS): sequência estável pedida no L7-07.json
 GERASVALESTINI	ID_GEVALMEM	inventario_estoque_lote.lote_insumo_id	chave_origem			L7-07: lote (mesma fatia); recusado: pai_pendente; sem lote vale o lote informado
@@ -180,40 +182,259 @@ GEKITITE	ITEM	kit_material_item.insumo_id	chave_origem		ref:GEITENS	L7-07 cobert
 GEKITITE	ITEM	kit_material_item.unidade_medida_id			ref:GEITENS>UNI_ARM>TBUNICON	L7-07 cobertura: a origem não guarda a unidade do kit; quantidade na unidade de estoque do insumo (UNI_ARM), pela referência encadeada ao insumo; decisão em F4-decisoes-destino.md
 GEKITITE	QTDE	kit_material_item.quantidade	decimal			L7-07 cobertura: nula recusa (NOT NULL); zero ou negativa recusa (CHECK > 0)
 GEKITITE	ITEM_OBRIG_KIT_RASTREAVEL	kit_material_item.obrigatorio_kit_rastreavel	booleano_sn			L7-07 cobertura: S/N; fora do domínio: valor_fora_do_dominio e fica o padrão (FALSE)
-GESALDOKITRAS	ID_GEITEMKITRAS	kit_rastreavel_item.id	chave_origem		ref:GEITEMKITRAS;complementa	L7-07 cobertura: o saldo é atributo do item do kit já gravado por GEITEMKITRAS: UPDATE da linha (complementa); item recusado: pai_pendente; nunca visto: pai_inexistente
-GESALDOKITRAS	QTDE_SALDO	kit_rastreavel_item.saldo_atual	decimal_nao_negativo			L7-07 cobertura: saldo atual do item no kit; negativo vira NULL com valor_fora_do_dominio e fica o saldo gravado
-#GECADBAL	@estabelecimento	inventario_estoque.estabelecimento_id				BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: id do único estabelecimento do cliente
-#GECADBAL	DOC	inventario_estoque.numero	texto			BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: número do documento do inventário; repetido em outro mês: restricao_destino_1062, visível (número AAAA/MM/DOC pede texto composto ao motor, saida/L7-07.json)
-#GECADBAL	ARM	inventario_estoque.local_estoque_id	chave_origem		ref:GELOCARM	BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: local inventariado (L7, ordem 545); nunca visto: pai_inexistente e recusa
-#GECADBAL	=~geral	inventario_estoque.tipo				BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: a origem não classifica o inventário (OQUE sem significado documentado): 'geral' com valor_presumido por linha
-#GECADBAL	DATA	inventario_estoque.data_corte	data			BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: data do balanço; sem data recusa (NOT NULL)
-#GECADBAL	DATA	inventario_estoque.aberto_em	data			BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: a origem só tem a data do balanço: abertura na mesma data
-#GECADBAL	USUARIO	inventario_estoque.abertura_usuario_id	chave_origem		ref:TBUSERS	BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: login de quem lançou (TBUSERS, L3); nunca visto: pai_inexistente e recusa
-#GECADBAL	CONSOL	inventario_estoque.situacao	codigo_char	valores		BLOQUEADA até o motor converter DATE em DATETIME antes da soma de controle (data_corte e aberto_em divergem na conciliação; pedido em saida/L7-07.json, o mesmo do L6-04). Declaração pronta: L7-07 cobertura: consolidado S = aprovado, N = aberto (valores.d/L7-07.tsv); outro: valor_fora_do_dominio e fica o padrão (aberto); pares S=aprovado, N=aberto a pôr em valores.d/L7-07.tsv ao descomentar
-#GECADBAL	OQUE		codigo_char			L7-07: sem destino: tipo do balanço na origem; tipo fica geral presumido
-#GECADBAL	CDC		inteiro			L7-07: sem destino: centro de custo do balanço; o inventário do produto é por local
-#GECADBAL	CDC_BK		inteiro			L7-07: sem destino: cópia de CDC
-#GECADBAL	DOCSAI		inteiro			L7-07: sem destino: documento de saída do ajuste: vem pelos movimentos do ajuste (outra fatia)
-#GECADBAL	DOCDEV		inteiro			L7-07: sem destino: documento de devolução do ajuste; ver DOCSAI
-#GECADBAL	MEXENDO		texto			L7-07: sem destino: trava de edição do sistema antigo, sem valor
-#GELANNFS	ID_GELANNFS	nota_entrada_item.nota_entrada_id	chave_origem		ref:GECADNFS[ANO,MES,DOC]	BLOQUEADA até o motor ter o pai por identificação natural de várias colunas (GECADNFS por ANO,MES,DOC; chave do pai é ID); M4 do saida/L6-15.json e saida/L7-07.json
-#GELANNFS	SEQ	nota_entrada_item.sequencia	inteiro			BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	ITEM	nota_entrada_item.insumo_id	chave_origem		ref:GEITENS	BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	ITEM	nota_entrada_item.unidade_medida_id			ref:GEITENS>UNI_ARM>TBUNICON	BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	QTDE	nota_entrada_item.quantidade	decimal			BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	QTDE_ARM	nota_entrada_item.quantidade_estoque	decimal			BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	VLR_UNI	nota_entrada_item.valor_unitario	decimal			BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GELANNFS	CUSTO	nota_entrada_item.custo_unitario	decimal			BLOQUEADA até o motor ter M4 (ver ID_GELANNFS)
-#GERASVALNFS	ID_GELANNFS	movimento_lote.movimento_estoque_id			ref:GELANNFS/movimento_estoque	BLOQUEADA até o motor ter o id de destino SECUNDÁRIO do pai (M1) e GELANNFS carregada com o movimento de entrada (M4)
-#GERASVALNFS	ID_GEVALMEM	movimento_lote.lote_insumo_id	chave_origem		ref:GEVALMEM	BLOQUEADA até o motor ter M1 e M4 (ver ID_GELANNFS)
-#GERASVALTRANSFLOTE	ID_GELANTRA	movimento_lote.movimento_estoque_id			ref:GELANTRA/movimento_estoque	BLOQUEADA até o motor ter o id de destino SECUNDÁRIO do pai (M1: o movimento_estoque de GELANTRA; o principal é documento_estoque_item)
-#GERASVALTRANSFLOTE	#seq:ID_GELANTRA	movimento_lote.sequencia				BLOQUEADA até o motor ter M1 (ver ID_GELANTRA)
-#GERASVALTRANSFLOTE	ID_GEVALMEM_ORI	movimento_lote.lote_insumo_id	chave_origem		ref:GEVALMEM	BLOQUEADA até o motor ter M1 (ver ID_GELANTRA)
-#GERASVALTRANSFLOTE	QTDE	movimento_lote.quantidade	decimal			BLOQUEADA até o motor ter M1 (ver ID_GELANTRA)
-#GEITENS_TBPRINC	ID_GEITENS	insumo_principio_ativo.insumo_id	chave_origem		ref:GEITENS	BLOQUEADA até o motor ter o catálogo dcb em depara.CATALOGOS (principio_ativo.codigo_dcb), pedido em saida/L7-07.json
-#GEITENS_TBPRINC	ID_TBPRINC	insumo_principio_ativo.principio_ativo_id		dcb	ref:TBPRINC>COD_DCB	BLOQUEADA até o motor ter o catálogo dcb (ver ID_GEITENS)
-#GELANBAL	ID	inventario_estoque_item.inventario_estoque_contagem_id			ref:GECADBAL/inventario_estoque_contagem	BLOQUEADA até o motor ter o id de destino SECUNDÁRIO do pai (M1): a contagem única do inventário gravada por GECADBAL
-#GELANBAL	ANO	inventario_estoque_item.inventario_estoque_id	chave_origem		ref:GECADBAL(ANO,MES,DOC)	BLOQUEADA até o motor ter M1 (ver ID)
-#GECADPED	OQUE	pedido_compra.estabelecimento_id				BLOQUEADA até o motor ter o destino condicional por valor (OQUE: pedido, cotação ou licitação), pedido em saida/L7-07.json
-#GELANPED	ID_GECADPED	pedido_compra_item.pedido_compra_id	chave_origem		ref:GECADPED	BLOQUEADA até o motor ter o destino condicional por valor (segue o cabeçalho GECADPED)
-#GELANPAC	LOCAL	movimento_estoque.local_estoque_id	chave_origem		ref:GELOCARM	BLOQUEADA até o motor ter o id pelo código no destino (M2 do saida/L6-15.json): tipo_movimento_estoque NOT NULL sem coluna na origem; o consumo do paciente vira movimento de saída
+GESALDOKITRAS	ID_GEITEMKITRAS	kit_rastreavel_lote.id	chave_origem		ref:GEITEMKITRAS/kit_rastreavel_lote;complementa	L7-07 r3 (correção): o saldo é do LOTE no kit (kit_rastreavel_lote: 'saldo do kit por lote'): UPDATE do lote gravado pela linha (complementa pelo destino secundário do pai); linha sem lote ou com lote não gravado: pai_inexistente; item recusado: pai_pendente. O saldo do item (kit_rastreavel_item.saldo_atual) é a soma dos lotes: sobrescrever por linha deixaria o do último lote (pedido kit_quantidade_soma)
+GESALDOKITRAS	QTDE_SALDO	kit_rastreavel_lote.quantidade	decimal_nao_negativo			L7-07 r3 (correção): saldo atual do lote no kit; negativo vira NULL com valor_fora_do_dominio e fica o gravado
+GECADBAL	@estabelecimento	inventario_estoque.estabelecimento_id				L7-07 r3: balanço do estoque = inventário do local
+GECADBAL	#codigo_derivado:DOC:20:balanco_	inventario_estoque.numero				L7-07 r3: número com prefixo de domínio (o inventário inicial usa o número puro: 215 de 251 números coincidem); o mesmo DOC em meses diferentes (30 grupos medidos) colide na chave única até o pedido texto_composto (AAAA/MM/DOC) do saida/L7-07.json: 1062 visível, nunca silencioso
+GECADBAL	ARM	inventario_estoque.local_estoque_id	chave_origem		ref:GELOCARM	L7-07 r3: local inventariado
+GECADBAL	=~geral	inventario_estoque.tipo				L7-07 r3: tipo do balanço (OQUE B/C, sem dicionário) presumido geral, com valor_presumido
+GECADBAL	DATA	inventario_estoque.data_corte	data			L7-07 r3: data do balanço (DATE em DATETIME: meia-noite, tipar)
+GECADBAL	DATA	inventario_estoque.aberto_em	data			L7-07 r3: abertura = data do balanço
+GECADBAL	USUARIO	inventario_estoque.abertura_usuario_id	chave_origem		ref:TBUSERS	L7-07 r3: usuário do balanço
+GECADBAL	CONSOL	inventario_estoque.situacao	codigo_char	valores		L7-07 r3: consolidado T/S = aprovado; F/N = aberto (valores.d)
+GECADBAL	@id	inventario_estoque_contagem.inventario_estoque_id			inventario_estoque_contagem	L7-07 r3: rodada única de contagem do balanço (os itens a exigem), como no inventário inicial
+GECADBAL	=1	inventario_estoque_contagem.sequencia			inventario_estoque_contagem	L7-07 r3: rodada única
+GECADBAL	=fechada	inventario_estoque_contagem.situacao			inventario_estoque_contagem	L7-07 r3: contagem migrada já encerrada
+GECADBAL	DATA	inventario_estoque_contagem.aberta_em	data		inventario_estoque_contagem	L7-07 r3: data do balanço
+GECADBAL	USUARIO	inventario_estoque_contagem.contador_usuario_id	chave_origem		inventario_estoque_contagem;ref:TBUSERS	L7-07 r3: usuário do balanço
+GECADBAL	OQUE		texto			L7-07 r3: sem destino: tipo do balanço da origem (B/C) sem dicionário; tipo presumido geral
+GECADBAL	CDC		inteiro			L7-07 r3: sem destino: centro de custo do balanço; o inventário do produto é por local
+GECADBAL	CDC_BK		inteiro			L7-07 r3: sem destino: cópia de CDC
+GECADBAL	DOCSAI		inteiro			L7-07 r3: sem destino: documento de saída do ajuste (vem pelos movimentos do ajuste, outra fatia)
+GECADBAL	DOCDEV		inteiro			L7-07 r3: sem destino: documento de devolução do ajuste; ver DOCSAI
+GECADBAL	MEXENDO		texto			L7-07 r3: sem destino: trava de edição do sistema antigo, sem valor
+GELANBAL	ANO	inventario_estoque_item.inventario_estoque_id	chave_origem		ref:GECADBAL(ANO,MES,DOC)	L7-07 r3: balanço pelo ANO, MES e DOC da linha (chave composta do pai)
+GELANBAL	MES	inventario_estoque_item.inventario_estoque_contagem_id	chave_origem		ref:GECADBAL(ANO,MES,DOC)/inventario_estoque_contagem	L7-07 r3: rodada única gravada pelo balanço (destino secundário do pai)
+GELANBAL	#seq:DOC	inventario_estoque_item.sequencia				L7-07 r3: SEQ da origem repete dentro do balanço (391 grupos medidos): sequência própria pela ordem da chave
+GELANBAL	ITEM	inventario_estoque_item.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo contado
+GELANBAL	ITEM	inventario_estoque_item.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r3: unidade de estoque do insumo
+GELANBAL	QTDE	inventario_estoque_item.quantidade_contada	decimal			L7-07 r3: quantidade contada
+GELANBAL	VLR_UNI	inventario_estoque_item.custo_medio_unitario	decimal_nao_negativo			L7-07 r3: custo unitário na data do balanço
+GELANBAL	CONSOL	inventario_estoque_item.situacao	codigo_char	valores		L7-07 r3: consolidado T/S = ok; F/N = pendente (valores.d)
+GELANBAL	DOC	inventario_estoque_item.contagem_usuario_id	chave_origem		ref:GECADBAL(ANO,MES,DOC)>USUARIO>TBUSERS	L7-07 r3: usuário do balanço
+GELANBAL	DOC	inventario_estoque_item.contado_em	data		ref:GECADBAL(ANO,MES,DOC)>DATA	L7-07 r3: data do balanço
+GELANBAL	SEQ		inteiro			L7-07 r3: sem destino: repete dentro do balanço; a sequência é própria (#seq)
+GELANBAL	VLR_TOT		decimal			L7-07 r3: sem destino: derivado (quantidade x custo)
+GELANBAL	DIFER		decimal			L7-07 r3: sem destino nesta rodada: diferença contada x sistema; saldo_sistema = QTDE - DIFER e a divergência pedem a conta entre colunas (pedido diferenca no saida/L7-07.json)
+GELANBAL	VALIDADE		data			L7-07 r3: sem destino: lote nunca informado (0 de 6.806 com lote); sem lote não há inventário por lote
+GELANBAL	LOTE		texto			L7-07 r3: sem destino: vazio em todas as linhas medidas
+GELANBAL	ID_NOMCOM		chave_origem			L7-07 r3: sem destino: apresentação comercial; o inventário é por insumo
+GELANBAL	ID		chave_origem			L7-07 r3: chave da origem (conector_origem)
+GELANPAC	@estabelecimento	movimento_estoque.estabelecimento_id				L7-07 r3: consumo do paciente é saída do estoque do local
+GELANPAC	LOCAL	movimento_estoque.local_estoque_id	chave_origem		ref:GELOCARM	L7-07 r3: local que forneceu
+GELANPAC	#data_hora:DATA,HORA	movimento_estoque.ocorrido_em				L7-07 r3: data e hora HHMM do lançamento
+GELANPAC	DATA	movimento_estoque.competencia	data_primeiro_dia_mes			L7-07 r3: competência = mês do lançamento
+GELANPAC	=migracao_saida	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-07 r3: tipo nativo de migração (07_chaves.sql), achado pelo código; a origem não tem coluna de tipo
+GELANPAC	=saida	movimento_estoque.natureza				L7-07 r3: consumo do paciente: saída (quantidades medidas todas positivas)
+GELANPAC	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo consumido
+GELANPAC	ITEM	movimento_estoque.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r3: unidade de estoque do insumo
+GELANPAC	QTDE	movimento_estoque.quantidade	decimal			L7-07 r3: quantidade lançada
+GELANPAC	QTDE	movimento_estoque.quantidade_estoque	decimal			L7-07 r3: lançada na unidade de estoque
+GELANPAC	VALOR	movimento_estoque.valor_total	decimal_nao_negativo			L7-07 r3: valor do lançamento
+GELANPAC	USUARIO	movimento_estoque.usuario_id	chave_origem		ref:TBUSERS	L7-07 r3: responsável pelo lançamento
+GELANPAC	REG	movimento_estoque.atendimento_id	chave_origem		ref:RECADATE	L7-07 r3 (correção): atendimento externo (TIPO E). REG de internação (TIPO I: 27.388 linhas medidas fora do cadastro de atendimentos) fica NULL com pai_inexistente VISÍVEL: o atendimento da internação vem por ref:RICADINT@atendimento_id, mas a mesma coluna REG não pode ter duas vias para o mesmo destino (verificador) e a via condicional ao TIPO não existe: pedido ref_por_tipo (alta) no saida/L7-07.json
+GELANPAC	CDC	movimento_estoque.centro_custo_id	chave_origem		ref:TBCENCUS	L7-07 r3: centro de custo (CDC casa com COD)
+GELANPAC	ID_TBFORNEC	movimento_estoque.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L7-07 r3: dono do item consignado
+GELANPAC	TIPO		codigo_char			L7-07 r3: sem destino: tipo do paciente (I internado, E externo); vem pelo atendimento
+GELANPAC	ATO		inteiro			L7-07 r3: sem destino: código do ato do lançamento na conta; a conta do paciente é migrada pelo faturamento
+GELANPAC	ORIGEM		codigo_char			L7-07 r3: sem destino: tela de origem do lançamento no sistema antigo
+GELANPAC	PERC		decimal			L7-07 r3: sem destino: percentual de cobrança da conta (faturamento)
+GELANPAC	KIT		inteiro			L7-07 r3: sem destino: kit do lançamento; o kit do produto é cadastrado na implantação
+GELANPAC	CONSOL		codigo_char			L7-07 r3: sem destino: marca de consolidação do fechamento antigo
+GELANPAC	DOC_SAI		inteiro			L7-07 r3: sem destino: documento de saída gerado (outra fatia)
+GELANPAC	MES_SAI		inteiro			L7-07 r3: sem destino: ver DOC_SAI
+GELANPAC	ANO_SAI		inteiro			L7-07 r3: sem destino: ver DOC_SAI
+GELANPAC	ID_PRESC		chave_origem			L7-07 r3 (correção): sem destino: o movimento do produto liga a dispensação (dispensacao_item_id), não a prescrição; a dispensação e a prescrição vêm pela farmácia (L7-08)
+GELANPAC	ID_NOMCOM		chave_origem			L7-07 r3: sem destino: apresentação comercial; o razão é por insumo
+GELANPAC	CRM		inteiro			L7-07 r3: sem destino: número do conselho; o profissional vem por ID_TBCBOPRO
+GELANPAC	ID_TBCBOPRO	movimento_estoque.solicitante_profissional_id	chave_origem		ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L7-07 r3 (correção): solicitante pela inscrição no conselho -> profissional (encadeada, como L7-08); nunca visto: NULL com pai_inexistente
+GELANPAC	CONTA		flutuante			L7-07 r3: sem destino: conta hospitalar; o lançamento na conta vem pelo faturamento
+GELANPAC	CDC_BK		inteiro			L7-07 r3: sem destino: cópia de CDC
+GELANPAC	ID		chave_origem			L7-07 r3: chave da origem (conector_origem)
+GECADPED	@estabelecimento	pedido_compra.estabelecimento_id				L7-07 r3: pedido de compra (OQUE = P em todas as linhas medidas: sem cotação nem licitação nesta origem)
+GECADPED	ANO	pedido_compra.ano	inteiro			L7-07 r3: ano do pedido
+GECADPED	ID	pedido_compra.numero	inteiro			L7-07 r3: número único: DOC repete no ano (6.429 grupos medidos); DOC fica sem destino, pedido numero_origem no saida/L7-07.json
+GECADPED	FORN	pedido_compra.empresa_fornecedora_id	chave_origem		ref:TBFORNEC	L7-07 r3: fornecedor; FORN 0 (6.900 linhas medidas, pedido ainda sem fornecedor) recusa por 1048 até o pedido de modelo fornecedor_opcional do saida/L7-07.json
+GECADPED	ID_TBCENCUS	pedido_compra.centro_custo_id	chave_origem		ref:TBCENCUS.ID	L7-07 r3: centro de custo pelo ID (decisão TBCENCUS)
+GECADPED	DATA	pedido_compra.data_pedido	data			L7-07 r3: data do pedido
+GECADPED	TIPO_COMPRA	pedido_compra.tipo_compra	codigo_char	valores		L7-07 r3: P programada, E emergencial, N e S outra (valores.d)
+GECADPED	ID_GESITUACAOPED	pedido_compra.situacao	inteiro	valores		L7-07 r3: situação pelo código do cadastro de situações (valores.d); sem situação fica o padrão rascunho
+GECADPED	DT_HOMOL	pedido_compra.aprovado_em	data			L7-07 r3: data de homologação = aprovação (exigida nas situações aprovadas)
+GECADPED	USUARIO	pedido_compra.comprador_usuario_id	chave_origem		ref:TBUSERS	L7-07 r3: usuário comprador
+GECADPED	VLR_FRETE	pedido_compra.valor_frete	decimal_nao_negativo			L7-07 r3: frete
+GECADPED	VLR_DESCONTO	pedido_compra.valor_desconto	decimal_nao_negativo			L7-07 r3: desconto
+GECADPED	VLR_OUTRA_DESPESA	pedido_compra.valor_outras_despesas	decimal_nao_negativo			L7-07 r3: outras despesas
+GECADPED	FRETE_INCLUSO	pedido_compra.frete_incluso	booleano_sn			L7-07 r3: frete no preço
+GECADPED	OBS	pedido_compra.observacao	texto_longo			L7-07 r3: observação impressa (até 2.000: medido)
+GECADPED	OBS_INTERNA	pedido_compra.observacao_interna	texto_longo			L7-07 r3: observação interna
+GECADNFS	ID	nota_entrada.id	inteiro		ref:GECADNFS>ID;cod:nota_entrada.numero;complementa	L7-07 r3: a nota é criada pelos itens (GELANNFS, agrupados por ANO, MES, DOC: o local de estoque obrigatório só existe no item; 113 notas medidas com mais de um local); o cabeçalho a completa por UPDATE, achando-a pelo número (= ID)
+GECADNFS	NAT_OP	nota_entrada.natureza_operacao_id	chave_origem		ref:TBNATOPE	L7-07 r3: natureza da operação
+GECADNFS	SERIE	nota_entrada.serie	texto			L7-07 r3: série
+GECADNFS	DESCONTO	nota_entrada.valor_desconto	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	FRETE	nota_entrada.valor_frete	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	SEGURO	nota_entrada.valor_seguro	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	OUTROS	nota_entrada.valor_outras_despesas	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	ICMS	nota_entrada.valor_icms	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	BASE_CALC_ICMS	nota_entrada.base_calculo_icms	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	TOTAL	nota_entrada.valor_total	decimal_nao_negativo			L7-07 r3: total da nota
+GECADNFS	DATA_VENCIMENTO_FRETE	nota_entrada.data_vencimento_frete	data			L7-07 r3: vencimento do frete
+GECADNFS	OBS	nota_entrada.observacao	texto			L7-07 r3: observação
+GECADNFS	CONSOL	nota_entrada.situacao	codigo_char	valores		L7-07 r3: consolidada T/S = confirmada; F/N = digitação (valores.d)
+GECADNFS	USUARIO	nota_entrada.recebido_por_usuario_id	chave_origem		ref:TBUSERS	L7-07 r3: usuário que lançou o recebimento
+GECADNFS	#data_hora:DATA_GRAV,HORA_GRAV	nota_entrada.recebido_em				L7-07 r3: gravação do recebimento
+GELANNFS	@id:nota_entrada	nota_entrada_item.nota_entrada_id				L7-07 r3: cabeçalho do grupo ANO, MES, DOC
+GELANNFS	SEQ	nota_entrada_item.sequencia	inteiro			L7-07 r3: sequência do item (2 grupos repetidos medidos: 1062 visível)
+GELANNFS	ITEM_NOTA_ENTRADA	nota_entrada_item.numero_item_documento	inteiro			L7-07 r3: número do item no documento
+GELANNFS	ITEM	nota_entrada_item.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo
+GELANNFS	ITEM	nota_entrada_item.unidade_medida_id	chave_origem		ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r3: unidade de estoque do insumo
+GELANNFS	FATOR	nota_entrada_item.fator_conversao	decimal_zero_nulo			L7-07 r3: 0 = sem conversão: fica o padrão 1
+GELANNFS	QTDE	nota_entrada_item.quantidade	decimal			L7-07 r3: quantidade comprada
+GELANNFS	QTDE_ARM	nota_entrada_item.quantidade_estoque	decimal_zero_nulo			L7-07 r3: na unidade de estoque (8.901 vazias ou zero medidas: vale QTDE, coluna concorrente)
+GELANNFS	QTDE	nota_entrada_item.quantidade_estoque	decimal			L7-07 r3: quantidade de estoque quando QTDE_ARM falta (concorrente)
+GELANNFS	VLR_UNI	nota_entrada_item.valor_unitario	decimal			L7-07 r3: preço unitário
+GELANNFS	VLR_DES	nota_entrada_item.valor_desconto	decimal_nao_negativo			L7-07 r3: desconto do item
+GELANNFS	VLR_DESC	nota_entrada_item.valor_desconto	decimal_nao_negativo			L7-07 r3: desconto do item (concorrente de VLR_DES)
+GELANNFS	VLR_TOT	nota_entrada_item.valor_total	decimal_nao_negativo			L7-07 r3: total do item
+GELANNFS	CUSTO	nota_entrada_item.custo_unitario	decimal			L7-07 r3: custo unitário
+GELANNFS	LAB	nota_entrada_item.fabricante_id	chave_origem		ref:TBLABORA	L7-07 r3: fabricante
+GELANNFS	MARCA	nota_entrada_item.marca	texto			L7-07 r3: marca
+GELANNFS	DATAMATRIX_QRCODE	nota_entrada_item.codigo_barras	texto			L7-07 r3: código bidimensional lido
+GELANNFS	@estabelecimento	nota_entrada.estabelecimento_id			nota_entrada;antes;agrupar:ANO,MES,DOC	L7-07 r3: cabeçalho da nota: a primeira linha do grupo cria, as outras usam
+GELANNFS	ANO	nota_entrada.numero	inteiro		nota_entrada;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>ID	L7-07 r3: número interno = ID do cabeçalho na origem (o cabeçalho completa por ele)
+GELANNFS	MES	nota_entrada.empresa_fornecedora_id	chave_origem		nota_entrada;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>FORN>TBFORNEC	L7-07 r3: emitente pelo cabeçalho da origem
+GELANNFS	ARM	nota_entrada.local_estoque_id	chave_origem		nota_entrada;ref:GELOCARM	L7-07 r3: local que recebe = o do primeiro item (o razão guarda o local de cada item)
+GELANNFS	=migracao	nota_entrada.tipo_entrada_estoque_id			nota_entrada;cod:tipo_entrada_estoque.codigo	L7-07 r3: tipo nativo de migração (07_chaves.sql)
+GELANNFS	DOC	nota_entrada.numero_documento	inteiro		nota_entrada;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>NF	L7-07 r3: número da nota do emitente
+GELANNFS	DOC	nota_entrada.data_emissao	data		nota_entrada;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>EMIS	L7-07 r3: emissão
+GELANNFS	DOC	nota_entrada.data_entrada	data		nota_entrada;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA	L7-07 r3: entrada
+GELANNFS	@estabelecimento	movimento_estoque.estabelecimento_id			movimento_estoque	L7-07 r3: movimento de entrada do item no razão (lote em GERASVALNFS)
+GELANNFS	@id	movimento_estoque.nota_entrada_item_id			movimento_estoque	L7-07 r3: item da nota que gerou o movimento
+GELANNFS	ARM	movimento_estoque.local_estoque_id	chave_origem		movimento_estoque;ref:GELOCARM	L7-07 r3: local do item
+GELANNFS	DOC	movimento_estoque.ocorrido_em	data		movimento_estoque;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA	L7-07 r3: data de entrada da nota
+GELANNFS	#data:ANO,MES	movimento_estoque.competencia			movimento_estoque	L7-07 r3: competência da nota
+GELANNFS	=migracao_entrada	movimento_estoque.tipo_movimento_estoque_id			movimento_estoque;cod:tipo_movimento_estoque.codigo	L7-07 r3: tipo nativo de migração
+GELANNFS	=entrada	movimento_estoque.natureza			movimento_estoque	L7-07 r3: entrada por nota
+GELANNFS	ITEM	movimento_estoque.insumo_id	chave_origem		movimento_estoque;ref:GEITENS	L7-07 r3: insumo
+GELANNFS	ITEM	movimento_estoque.unidade_medida_id	chave_origem		movimento_estoque;ref:GEITENS>UNI_ARM>TBUNICON	L7-07 r3: unidade de estoque
+GELANNFS	QTDE	movimento_estoque.quantidade	decimal		movimento_estoque	L7-07 r3: quantidade
+GELANNFS	QTDE_ARM	movimento_estoque.quantidade_estoque	decimal_zero_nulo		movimento_estoque	L7-07 r3: na unidade de estoque; vazia: QTDE (concorrente)
+GELANNFS	QTDE	movimento_estoque.quantidade_estoque	decimal		movimento_estoque	L7-07 r3: concorrente de QTDE_ARM
+GELANNFS	CUSTO	movimento_estoque.custo_unitario	decimal		movimento_estoque	L7-07 r3: custo unitário
+GELANNFS	VLR_TOT	movimento_estoque.valor_total	decimal_nao_negativo		movimento_estoque	L7-07 r3: valor
+GELANNFS	MES	movimento_estoque.usuario_id	chave_origem		movimento_estoque;ref:GECADNFS.(ANO,MES,DOC)=(ANO,MES,DOC)>USUARIO>TBUSERS	L7-07 r3: usuário que lançou a nota
+GERASVALNFS	ID_GELANNFS	movimento_lote.movimento_estoque_id	chave_origem		ref:GELANNFS/movimento_estoque	L7-07 r3: movimento de entrada gravado pelo item da nota
+GERASVALNFS	#seq:ID_GELANNFS	movimento_lote.sequencia				L7-07 r3: sequência do lote no movimento
+GERASVALNFS	ID_GEVALMEM	movimento_lote.lote_insumo_id	chave_origem		ref:GEVALMEM	L7-07 r3: lote (o lote por local adota o lote físico)
+GERASVALNFS	QTDE	movimento_lote.quantidade	decimal			L7-07 r3: quantidade do lote
+GERASVALTRANSFLOTE	ID_GELANTRA	movimento_lote.movimento_estoque_id	chave_origem		ref:GELANTRA/movimento_estoque	L7-07 r3: movimento de saída da transferência gravado pelo item (GELANTRA, L7-05: pedido mov_transferencia no saida/L7-07.json)
+GERASVALTRANSFLOTE	#seq:ID_GELANTRA	movimento_lote.sequencia				L7-07 r3: sequência do lote no movimento
+GERASVALTRANSFLOTE	ID_GEVALMEM_ORI	movimento_lote.lote_insumo_id	chave_origem		ref:GEVALMEM	L7-07 r3: lote (o lote por local adota o lote físico)
+GERASVALTRANSFLOTE	QTDE	movimento_lote.quantidade	decimal			L7-07 r3: quantidade do lote
+GEITENS_TBPRINC	ID_GEITENS	insumo_principio_ativo.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo
+GEITENS_TBPRINC	ID_TBPRINC	insumo_principio_ativo.principio_ativo_id	texto_nome		ref:TBPRINC>NOME;cod:principio_ativo.descricao	L7-07 r3 (correção): princípio ativo pelo NOME do princípio da origem achado no catálogo oficial do destino (descrição, espaços colapsados, comparação do banco sem caixa e sem acento): o código DCB vem vazio nas 138 linhas da referência. Sem par: codigo_inexistente_destino e recusa (NOT NULL, visível); nome repetido no catálogo: pai_ambiguo. O princípio próprio do hospital sem par espera o modelo principio_ativo_cliente (pedido F2.2 no saida/L7-07.json); usar o DCB quando houver pede a via alternativa na mesma coluna (pedido via_alternativa)
+GECADPED	OQUE		codigo_char			L7-07 r3: sem destino: P em todas as linhas (pedido)
+GECADPED	DOC		inteiro			L7-07 r3: sem destino: número do documento repetido no ano; ver ID
+GECADPED	CONDICAO		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	PRAZO		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	FRETE		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	OLD_DESCONTO		decimal			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	PER_IPI		decimal			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DEST		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	SETOR		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	PRACA		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	REQUIS		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	SOLIC		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	IPI_INC		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	CONDI		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	TRANSP		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	MEXENDO		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	CONVITE		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	LICIT		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	EMPENHO		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	VAL_PROP		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	LOC_ENT		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	FIN_OBJ		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DATA_ABER		data			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	HORA_ABER		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	STATUS		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DATA_EMAIL		data			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	HORA_EMAIL		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DATA_VIG		data			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	TIP_RESP		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	TIP_DISP		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	PED_ORI		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	ANO_PED_ORI		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	LOCENTREGA		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	NOME_RESPONSAVEL		texto_nome			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	TIPO_DOC_RESPONSAVEL		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DOCUMENTO_RESPONSAVEL		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	EMIS_ORDEM_COMPRA		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	CR		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	CONTA_CONT		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	FONTE		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	FONTE_PAG		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	TIP_REG_EXEC		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	DOCFEC		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	EMITIDO		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	AUTORIZADO		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	FORNECEDOR_CLASSIFICADO		codigo_char			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	JUSTIF_FORN_DESCLASSIFICADO		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADPED	NUM_PROCESSO_ADMINISTRATIVO		inteiro			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
+GECADNFS	ANO		inteiro			L7-07 r3: identificação da nota pelos itens (agrupamento)
+GECADNFS	MES		inteiro			L7-07 r3: ver ANO
+GECADNFS	DOC		inteiro			L7-07 r3: ver ANO
+GECADNFS	NF		inteiro			L7-07 r3: número do documento: gravado pelo item (nota_entrada.numero_documento)
+GECADNFS	FORN		inteiro			L7-07 r3: emitente: gravado pelo item
+GECADNFS	DATA		data			L7-07 r3: entrada: gravada pelo item
+GECADNFS	NUM_LANC		inteiro			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	FECHA		decimal			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	PERC_ICMS		decimal			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	INC1		codigo_char			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	INC2		codigo_char			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	INC3		codigo_char			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	CONSIS		codigo_char			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	QTDES		decimal			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	REFERENTE		texto			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	TRANSP		inteiro			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	CONHEC		texto			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	EMIS		data			L7-07 r3: emissão: gravada pelo item
+GECADNFS	DATA_GRAV		data			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	HORA_GRAV		texto			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	MEXENDO		texto			L7-07 r3: trava de edição do sistema antigo
+GECADNFS	DESTINO		inteiro			L7-07 r3: 0 em todas as linhas medidas
+GECADNFS	EMPRESA		inteiro			L7-07 r3: 1 em todas as linhas medidas (estabelecimento único)
+GECADNFS	USU_CONS		texto			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	FONTE_PAG		inteiro			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	TIPO_DOC		codigo_char			L7-07 r3: N em todas as linhas medidas
+GECADNFS	NUM_PROCES		texto			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	TIPO_COMPRA		codigo_char			L7-07 r3: vazio em todas as linhas medidas
+GECADNFS	DATA_HORA_INCLUSAO		data_hora			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GECADNFS	NOTA_ENTRADA		inteiro			L7-07 r3: sem destino nesta rodada: controle do lançamento da nota no sistema antigo
+GELANNFS	PER_ICM		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	PER_IPI		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	PER_DES		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	VLR_MED		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	VLR_ICM		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	VLR_IPI		decimal			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	DATA_VAL		data			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	COD_NOC		inteiro			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	LOTE		texto			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	PEDIDO		inteiro			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	CONSOL		codigo_char			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	ANO_PED		inteiro			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	TIPO_PED		codigo_char			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	DATA_HORA_INCLUSAO		data_hora			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GELANNFS	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-07 r3: sem destino nesta rodada: imposto, lote ou vínculo do item (impostos por item pedem tributo pelo código: próxima rodada; lote em GERASVALNFS)
+GERASVALNFS	DATA		data			L7-07 r3: sem destino: o lote, a validade e o fabricante vêm do lote (GEVALMEM)
+GERASVALNFS	LOTE		texto			L7-07 r3: sem destino: o lote, a validade e o fabricante vêm do lote (GEVALMEM)
+GERASVALNFS	ID_GERASVALFINAL		chave_origem			L7-07 r3: sem destino: o lote, a validade e o fabricante vêm do lote (GEVALMEM)
+GERASVALNFS	ID_TBLABORA		chave_origem			L7-07 r3: sem destino: o lote, a validade e o fabricante vêm do lote (GEVALMEM)
+GERASVALNFS	ID_GENOMCOM		chave_origem			L7-07 r3: sem destino: o lote, a validade e o fabricante vêm do lote (GEVALMEM)
+GERASVALTRANSFLOTE	ID_GEVALMEM_DES		chave_origem			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GERASVALTRANSFLOTE	DATA		data			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GERASVALTRANSFLOTE	LOTE		texto			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GERASVALTRANSFLOTE	ARM_ORI		inteiro			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GERASVALTRANSFLOTE	ARM_DES		inteiro			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GERASVALTRANSFLOTE	ID_GERASVALFINAL		chave_origem			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
+GELANPAC	HORA		texto			L7-07 r3: lida pela data e hora do lançamento (#data_hora:DATA,HORA)

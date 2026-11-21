@@ -17,12 +17,16 @@ Dados 100% falsos (nomes, códigos e logins inventados). Carregadas (CARREGADAS)
 - TBLEITO_CHPROFISLIMP: leito e profissional nunca vistos (pai_inexistente + 1048), vigência sem fonte;
 - CHSOLICITLIMP: situação pela execução (sem execução: pai_inexistente; duas execuções: pai_ambiguo; ambas + 1048),
   tipo de limpeza nulo (1048), solicitante nunca visto (pai_inexistente + 1048), atendimento nunca visto (NULL);
-- CHEXECLIMPEZA: solicitação recusada (pai_pendente), executante nunca visto (pai_inexistente, NULL), fim antes do
+- CHEXECLIMPEZA: solicitação recusada (pai_pendente), executante nunca visto (pai_inexistente, NULL), executante
+  com profissional de higienização (bia: gravado pelo usuário) e sem (ana: codigo_inexistente_destino, NULL; conta também na linha recusada pelo ck), fim antes do
   início (ck periodo: restricao_destino_4025), observação com quebra de linha;
 - CHSOLICITLIMP_TBLEITO: sequência por solicitação, solicitação recusada (pai_pendente), leito nunca visto
   (pai_inexistente + ck alvo 4025), indicador fora do domínio (valor_fora_do_dominio, padrão FALSE).
-Descartadas (DESCARTADAS, `declarado/sem_carga.tsv`): TBTPDIETA (lida pelas consumidoras), CHPARAM, CVPARAM. Bloqueada por modelo
-(NAO_CARREGADAS, pedido no L6-18.json, declaração comentada): GDPRONTMOVIM.
+- GDPRONTMOVIM: paciente e atendimento pela encadeada conta > atendimento > paciente; UM volume de prontuário
+  antigo por paciente (criado na primeira movimentação, adotado nas seguintes: adotado_existente), paciente nunca
+  visto (pai_inexistente + 1048), usuário e operação nunca vistos (pai_inexistente + 1048), excluído S (data da
+  carga) e fora do domínio (valor_fora_do_dominio).
+Descartadas (DESCARTADAS, `declarado/sem_carga.tsv`): TBTPDIETA (lida pelas consumidoras), CHPARAM, CVPARAM.
 """
 import datetime
 import decimal
@@ -57,6 +61,8 @@ CREATE TABLE GDPRONTMOVIM (ID INTEGER NOT NULL PRIMARY KEY, ID_GDPRONTCADOPER SM
   ID_RISETOR_ORIGEM SMALLINT, ID_RISETOR_DESTINO SMALLINT, ID_RIMOTIVO SMALLINT, NOME_RESPONSAVEL VARCHAR(70),
   OBSERVACAO BLOB SUB_TYPE 1, CIENTIFICO CHAR(1), DATA_VALIDADE_PRONTUARIO DATE, EXCLUIDO CHAR(1),
   USUARIO_EXCLUSAO VARCHAR(31));
+CREATE TABLE ATCONTA (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL);
+CREATE TABLE ATCABECATEND (ID BIGINT NOT NULL PRIMARY KEY, ID_RICADPAC INTEGER NOT NULL);
 CREATE TABLE CVPARAM (COD_TBHOSPIT SMALLINT NOT NULL PRIMARY KEY, GRAVAR_FOTO_BANCO CHAR(1),
   COR_LEGENDA_EM_VISITA VARCHAR(20), COR_LEGENDA_VISITA_FINALIZADA VARCHAR(20), COR_LEGENDA_SAIDA_PENDENTE VARCHAR(20),
   COR_LEGENDA_VISITA_ESPERA VARCHAR(20), DIRETORIO_ARM_FOTO VARCHAR(80), DIGITAR_DATA_NASCIMENTO SMALLINT,
@@ -67,13 +73,43 @@ CREATE TABLE CVPARAM (COD_TBHOSPIT SMALLINT NOT NULL PRIMARY KEY, GRAVAR_FOTO_BA
 # situação da limpeza L6, usuários L3, atendimento L3, leito L6, profissional de limpeza L6)
 PAIS_EXTERNOS = {"GELOCARM": ["1", "2"], "PRCARACTDIE": ["1", "2", "3"], "CHTPLIMPEZA": ["1", "2"],
                  "GEITENS": ["10", "11", "12"], "CHSITUACAO": ["1", "2"], "TBUSERS": ["ana.exemplo", "bia.exemplo"],
-                 "ATCABECATEND": ["900", "901"], "TBLEITO": ["1", "2", "3"], "CHPROFISLIMP": ["1", "2"]}
+                 "ATCABECATEND": ["900", "901", "7601", "7602", "7603", "7604"], "TBLEITO": ["1", "2", "3"],
+                 "CHPROFISLIMP": ["1", "2"], "RICADPAC": ["7701", "7702"], "GDPRONTCADOPER": ["1", "2"]}
+
+
+def _id_externo(tabela, chave):
+    """Id que a conferência dá ao pai externo no conector_origem: sequencial pelas tabelas em ordem alfabética e pelas
+    chaves na ordem declarada (conferencia.conferir). Só serve ao preparo do banco descartável."""
+    i = 0
+    for t, ks in sorted(PAIS_EXTERNOS.items()):
+        for k in ks:
+            i += 1
+            if (t, k) == (tabela, chave):
+                return i
+    raise KeyError((tabela, chave))
+
+
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
+                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
+                   # tipo documental da carga de domínio do produto (09_HOT/06_chaves.sql), que o banco descartável
+                   # da conferência não traz
+                   " CREATE TABLE IF NOT EXISTS tipo_documento_arquivo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " codigo VARCHAR(30) NOT NULL UNIQUE, descricao VARCHAR(150) NOT NULL, grupo VARCHAR(30) NOT NULL,"
+                   " criado_em DATETIME(3) NOT NULL);"
+                   " INSERT INTO tipo_documento_arquivo (codigo, descricao, grupo, criado_em) SELECT 'prontuario-antigo',"
+                   " 'Prontuário antigo', 'prontuario', NOW(3) FROM DUAL WHERE NOT EXISTS"
+                   " (SELECT 1 FROM tipo_documento_arquivo WHERE codigo = 'prontuario-antigo')"
+                   # profissional de higienização do executante, achado pelo usuário (chave alternativa do destino,
+                   # `cod:profissional_higienizacao.usuario_id`): cadastro da L6-17, que não grava na imagem dela
+                   " ;CREATE TABLE IF NOT EXISTS profissional_higienizacao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+                   " estabelecimento_id BIGINT UNSIGNED NOT NULL, nome VARCHAR(150) NOT NULL, usuario_id BIGINT UNSIGNED"
+                   " NULL, UNIQUE KEY uq_profissional_higienizacao_usuario (estabelecimento_id, usuario_id));"
+                   " INSERT IGNORE INTO profissional_higienizacao (estabelecimento_id, nome, usuario_id) VALUES"
+                   " (1, 'Profissional exemplo', %d)" % _id_externo("TBUSERS", "bia.exemplo"))
 CARREGADAS = ("PRTPREFEIC", "RISETOR", "PRVIAADMIN", "TBDIETAS", "PRCARACT_TBDIETAS", "CHTPLIMPEZA_GEITENS", "PRHORPAD",
-              "TBLEITO_CHPROFISLIMP", "CHSOLICITLIMP", "CHEXECLIMPEZA", "CHSOLICITLIMP_TBLEITO")
+              "TBLEITO_CHPROFISLIMP", "CHSOLICITLIMP", "CHEXECLIMPEZA", "CHSOLICITLIMP_TBLEITO", "GDPRONTMOVIM")
 DESCARTADAS = ("TBTPDIETA", "CHPARAM", "CVPARAM")
-NAO_CARREGADAS = ("GDPRONTMOVIM",)
+NAO_CARREGADAS = ()
 
 
 def linhas(r, ins):
@@ -124,10 +160,25 @@ def linhas(r, ins):
         ins("CHEXECLIMPEZA", [e, s_, st, u, ts[s_] + m * ini, ts[s_] + m * fim if fim else None, ob])
     for x in [(1, 1, "S"), (1, 2, "N"), (2, 1, None), (3, 1, "S"), (7, 9, "N"), (8, 2, "X")]:
         ins("CHSOLICITLIMP_TBLEITO", list(x))
-    # bloqueada por modelo (GDPRONTMOVIM): formas da origem só para a imagem
-    for i in range(1, 4):
-        ins("GDPRONTMOVIM", [i, 1, 500 + i, ts[i], "ana.exemplo", 1, 2, None, "Responsável Exemplo", None, "N",
-                             datetime.date(2045, 1, 1), "N", None])
+    # trâmite do prontuário: conta -> atendimento -> paciente (só as colunas lidas pela encadeada); 7604 leva a um
+    # paciente nunca visto
+    for x in [(7801, 7601), (7802, 7602), (7803, 7603), (7804, 7604)]:
+        ins("ATCONTA", list(x))
+    for x in [(7601, 7701), (7602, 7701), (7603, 7702), (7604, 7799)]:
+        ins("ATCABECATEND", list(x))
+    v = datetime.date(2045, 1, 1)
+    # (id, operação, conta, quando, usuário, setor de/para, motivo, responsável, observação, científico, validade,
+    #  excluído, quem excluiu): 1 cria o volume do paciente 7701, 2 o adota (excluído: data da carga), 3 cria o do
+    #  7702, 4 paciente nunca visto (recusa), 5 usuário nunca visto (volume adotado, movimento recusado), 6 operação
+    #  nunca vista (recusa), 7 excluído fora do domínio e científico S (adota)
+    for x in [(1, 1, 7801, 1, "ana.exemplo", 1, 2, None, "Responsável  Exemplo", obs(1), "N", v, "N", None),
+              (2, 2, 7802, 2, "bia.exemplo", 2, 1, None, None, None, None, None, "S", "ana.exemplo"),
+              (3, 1, 7803, 3, "ana.exemplo", None, None, 1, None, None, "N", None, None, None),
+              (4, 1, 7804, 4, "ana.exemplo", 1, 2, None, None, None, "N", None, "N", None),
+              (5, 2, 7803, 5, "zeca.exemplo", 2, 5, None, None, None, "N", None, "N", None),
+              (6, 9, 7801, 6, "ana.exemplo", 1, 2, None, None, None, "N", None, "N", None),
+              (7, 1, 7801, 7, "bia.exemplo", 2, 1, None, None, None, "S", v, "X", None)]:
+        ins("GDPRONTMOVIM", list(x[:3]) + [ts[x[3]]] + list(x[4:]))
     return {
         "PRTPREFEIC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1}},
         "RISETOR": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "valor_presumido": 5}},
@@ -148,7 +199,10 @@ def linhas(r, ins):
         "CHSOLICITLIMP": {"gravados": 5, "pendencias": {"pai_inexistente": 3, "pai_ambiguo": 1,
                                                         "restricao_destino_1048": 4, "valor_presumido": 9}},
         "CHEXECLIMPEZA": {"gravados": 4, "pendencias": {"pai_pendente": 4, "pai_inexistente": 1,
+                                                        "codigo_inexistente_destino": 2,
                                                         "restricao_destino_4025": 1}},
+        "GDPRONTMOVIM": {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 3,
+                                                       "adotado_existente": 2, "valor_fora_do_dominio": 1}},
         "CHSOLICITLIMP_TBLEITO": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                                 "restricao_destino_4025": 1,
                                                                 "valor_fora_do_dominio": 1}},

@@ -1,17 +1,20 @@
 """Fatia L6-09 (prontuário, assinatura e assistência, módulo PEP): domínios do diagnóstico, da prescrição, da
 interação medicamentosa, da grade de horários e dos cuidados de enfermagem. Dados 100% falsos.
 
-Cobertura: 17 tabelas carregadas; 4 descartadas com motivo de produto e TBHORMED_TBUNIDAD bloqueada por modelo
-(`declarado/sem_carga.tsv`): ficam na imagem para provar que nada delas é gravado como linha. Requer a L6-08
+Cobertura: 18 tabelas carregadas (TBHORMED_TBUNIDAD grava uma CÓPIA da grade por unidade assistencial: a grade 1
+tem duas unidades e as duas ligações ficam);
+4 descartadas com motivo de produto (`declarado/sem_carga.tsv`): ficam na imagem para provar que nada delas é gravado
+como linha. Requer a L6-08
 (TBACAOGRAUGRA e PRUNIDRESPOSTA, lidas pela referência encadeada ao nome).
 Comportamento das listas pelo NOME (de-para de valores, nunca pela ordem da chave nem presumido): categoria e
 clinicamente ativo da situação do problema, grau e confirmado da certeza, papel do tipo de diagnóstico, base da
 validação e da referência da dose (com a unidade da base), categoria/vigente/final da situação da prescrição,
 etapa/final da situação do procedimento, nível da gravidade e ação da gravidade; nome sem par: valor_fora_do_dominio e
-a linha recusada (1048). Tipo do cuidado pela letra (sem par: padrão 'cuidado' com pendência); ação das restrições
+a linha recusada (1048). Tipo do cuidado presumido 'cuidado' (valor_presumido: a letra A/E/M da origem não é a
+classificação do produto); nome do cuidado acima de 150 resumido (texto_resumido) com o integral no detalhe; ação das restrições
 por sexo e idade 'alertar' sem notificação; unidade do parâmetro vital pelo nome (inexistente: pai_inexistente).
 Outras anomalias: pai inexistente, S/N e A/I fora do domínio, tipo de atendimento sem par e hora HHMM inválida ou
-nula na grade (1048), horários em pai_pendente, CHECK 4025, nome acima de 150 (1406), ordem negativa (1264),
+nula na grade (1048), horários em pai_pendente, CHECK 4025, ordem negativa (1264),
 situação repetida sem caixa no código único (1062), tipo de resposta presumido (valor_presumido).
 """
 
@@ -55,17 +58,23 @@ CREATE TABLE TBSTATUSPROCEDIMENTO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHA
 CREATE TABLE TBTABELA_CAMPO (ID SMALLINT NOT NULL PRIMARY KEY, NOME VARCHAR(50) NOT NULL);
 """
 REQUER = ["L6-08"]
-PAIS_EXTERNOS = {"TBSEXO": ["1", "2"], "TBUNID_IDADE": ["1", "2"]}
+PAIS_EXTERNOS = {"TBSEXO": ["1", "2"], "TBUNID_IDADE": ["1", "2"], "TBUNIDAD": ["1", "2", "3", "4"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " nome VARCHAR(40) NOT NULL);\nINSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');")
+                   " nome VARCHAR(40) NOT NULL);\nINSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');\n"
+                   # a cópia da grade lê o estabelecimento da unidade gravada (ref:TBUNIDAD@estabelecimento_id): as
+                   # unidades externas têm id_destino 1..n na conferência; todas do estabelecimento de exemplo
+                   "CREATE TABLE IF NOT EXISTS unidade_assistencial (id BIGINT UNSIGNED PRIMARY KEY,"
+                   " estabelecimento_id BIGINT UNSIGNED NOT NULL);\n"
+                   "INSERT INTO unidade_assistencial (id, estabelecimento_id) SELECT n, (SELECT MIN(id) FROM"
+                   " estabelecimento) FROM (WITH RECURSIVE s(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM s WHERE"
+                   " n < 200) SELECT n FROM s) x;")
 
-NAO_CARREGADAS = ["TBHORMED_TBUNIDAD", "TBLANC_DIAG_STATUS", "TBLANC_DIAG_MANTER", "TBNUMDOSE", "TBTABELA_CAMPO"]
+NAO_CARREGADAS = ["TBLANC_DIAG_STATUS", "TBLANC_DIAG_MANTER", "TBNUMDOSE", "TBTABELA_CAMPO"]
 
 
 def linhas(r, ins):
     for i in range(1, 5):
         ins("TBTABELA_CAMPO", [i, "Campo exemplo %d" % i])      # descarte: domínio do produto
-    ins("TBHORMED_TBUNIDAD", [1, 1])                           # descarte: escopo da grade é do produto
     ins("TBLANC_DIAG_MANTER", [1, "Sim", "Mantém no próximo atendimento"])
     # gravidade: nível pelo NOME (Grave = 3, nunca pela chave); ação pela ref. encadeada ao nome da ação (L6-08:
     # 1 Avisar, 2 Bloquear), destino opcional; 4: ação inexistente e S/N fora; 5: nome sem par (1048); 6: só
@@ -77,6 +86,12 @@ def linhas(r, ins):
     for h in [(1, "I", "0700", 1, "S", "N"), (2, "U", "0000", 0, "N", "S"), (3, "A", None, 1, None, None),
               (4, "A", "0600", None, "N", "N"), (5, "E", "0700", 1, "N", "N"), (6, "I", "2575", 1, "N", "N")]:
         ins("TBHORMED", list(h))
+    # cópia da grade por unidade: 1 e 4 são da MESMA grade 1 (as duas ligações ficam, a conciliação fecha), 2 grava;
+    # 3 aponta a grade recusada 3 (pai_pendente); 9 é unidade inexistente (estabelecimento NULL: 1048, nunca uma
+    # segunda grade do estabelecimento inteiro); 8 aponta grade e unidade inexistentes (1048); pai_inexistente
+    # conta uma por coluna: 9 nas duas da unidade, 8 nas quatro da grade e nas duas da unidade
+    for u in [(1, 1), (2, 2), (3, 3), (9, 4), (8, 77), (4, 1)]:
+        ins("TBHORMED_TBUNIDAD", list(u))
     # doses (descarte como linha): 4 é da grade recusada 3; 5 tem 50 doses (CHECK)
     for n in [(1, 1, 1), (2, 1, 2), (3, 2, 3), (4, 3, 2), (5, 1, 50), (6, 4, 2)]:
         ins("TBNUMDOSE", list(n))
@@ -84,8 +99,10 @@ def linhas(r, ins):
               (3, 3, "2200"), (4, 1, "0800"), (4, 2, "2000"), (5, 1, "0800"), (6, 1, "0700"), (6, 2, "2575"),
               (99, 1, "0800")]:
         ins("TBHORARIODOSE", list(h))
-    for s in [(1, "Ativo"), (2, "Resolvido"), (3, "  Em   observação "), (4, "Descartado"), (5, "ATIVO")]:
-        ins("TBLANC_DIAG_STATUS", list(s))           # não carregada
+    # não carregada (sem_valor: lista sem consumidora); 7 situações, só 1 com o nome de uma da lista de problemas
+    for s in [(1, "Ativo"), (2, "Em acompanhamento"), (3, "Aguardando exame"), (4, "Excluído"), (5, "Revisado"),
+              (6, "Pendente de alta"), (7, "Arquivado")]:
+        ins("TBLANC_DIAG_STATUS", list(s))
     # categoria e clinicamente ativo pelo NOME: 3 colapsa espaços; 4 S/N fora (padrão); 5 nome sem par (1048)
     for s in [(1, "Ativo", "S"), (2, "Resolvido", "N"), (3, "  Em   remissão ", "S"), (4, "Descartado", "X"),
               (5, "Situação sem par", "S")]:
@@ -114,7 +131,7 @@ def linhas(r, ins):
         if i == 2:
             sexo = 9                                   # pai inexistente: NULL com pendência
         if i == 3:
-            nome = "Cuidado " + "longo " * 26          # acima de 150: restricao_destino_1406
+            nome = "Cuidado " + "longo " * 26          # acima de 150: resumido (texto_resumido), integral no detalhe
         if i == 4:
             nome = None                                # NOT NULL: restricao_destino_1048
         if i == 5:
@@ -128,9 +145,9 @@ def linhas(r, ins):
         if i == 9:
             ordem = -1                                 # SMALLINT UNSIGNED: restricao_destino_1264
         if i == 10:
-            umax, tipo = 7, "Z"                        # pai inexistente; tipo sem par: padrão 'cuidado'
+            umax, tipo = 7, "Z"                        # pai inexistente; tipo: presumido 'cuidado' em toda linha
         else:
-            tipo = "CPOM"[i % 4]
+            tipo = "AEM"[i % 3]
         # sem notificação: ação 'alertar' (de-para do vazio)
         ins("TBPROENF", [i, nome, sit, tipo, 1, sexo, imin, imax, None, umin, umax, None, exib, ordem])
     # unidade pelo nome da unidade de resposta (L6-08: 1 mg); 2: unidade inexistente (pai_inexistente, gravada)
@@ -152,6 +169,8 @@ def linhas(r, ins):
                                                         "restricao_destino_1048": 2, "restricao_destino_1062": 1}},
         "TBHORMED": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "hora_invalida": 1,
                                                    "restricao_destino_1048": 3}},
+        "TBHORMED_TBUNIDAD": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 8,
+                                                            "restricao_destino_1048": 2}},
         "TBHORARIODOSE": {"gravados": 7, "pendencias": {"restricao_destino_4025": 2, "pai_pendente": 2,
                                                         "hora_invalida": 1, "pai_inexistente": 2,
                                                         "restricao_destino_1048": 2}},
@@ -167,8 +186,9 @@ def linhas(r, ins):
         "TBMOTIVOMP": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "TBPRINC_VALIDACAO": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "TBPROBOCINTMED": {"gravados": 2, "pendencias": {}},
-        "TBPROENF": {"gravados": 6, "pendencias": {"pai_inexistente": 2, "valor_fora_do_dominio": 2,
-                                                   "restricao_destino_1406": 1, "restricao_destino_1048": 1,
+        "TBPROENF": {"gravados": 7, "pendencias": {"pai_inexistente": 2, "valor_fora_do_dominio": 1,
+                                                   "valor_presumido": 10, "texto_resumido": 1,
+                                                   "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1, "restricao_destino_1264": 1}},
         "PRSINAIS": {"gravados": 2, "pendencias": {"valor_presumido": 3, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},

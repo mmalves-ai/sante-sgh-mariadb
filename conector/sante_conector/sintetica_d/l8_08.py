@@ -1,21 +1,30 @@
 """Fatia L8-08 (faturamento e restantes, módulo SUS): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Carregáveis: 9 listas fechadas do SUS para dominio_sus (separadas pela lista literal; código = código do leiaute
+Carregáveis: 12 listas fechadas do SUS para dominio_sus (separadas pela lista literal; código = código do leiaute
 em texto, ou o id quando a origem não tem código do leiaute; código do leiaute também em codigo_oficial) e a UTI
-habilitada (FHLEITOUTI -> leito_uti_habilitado). Anomalias: nome vazio ou nulo (descricao NOT NULL: recusa só a linha,
+habilitada (FHLEITOUTI -> leito_uti_habilitado). Tipo de prestador (TBPRESUS, lista tipo_prestador) e nível (TBNIVSUS e a
+versão antiga sem id TBNIVEL, lista nivel_atencao) são listas do gestor fora da tabela unificada: carregam com
+`adotar:lista,codigo` (a versão que vier depois adota o código que a outra já gravou; o que só uma tem é criado).
+Anomalias: nome vazio ou nulo (descricao NOT NULL: recusa só a linha,
 restricao_destino_1048), espaços repetidos no nome (colapsados), o mesmo código do leiaute em dois ids (duplicidade: o
 segundo vira pendência restricao_destino_1062), o mesmo código em duas competências da fonte orçamentária (duas
 versões, código = id da origem); a lista
 'localizacao_tumor' (TBLOCPRI) ainda fora do CHECK do destino (toda linha recusada com restricao_destino_4025 até a
-migração pedida; LOCALIZACAO_NO_CHECK trava o estado); UTI com zero leito (CHECK, 4025), com tipo inexistente
+migração pedida; LOCALIZACAO_NO_CHECK lido do DDL); UTI com zero leito (CHECK, 4025), com tipo inexistente
 (pai_inexistente e NOT NULL, 1048), duas unidades com o mesmo tipo (unidade nula: habilitação do estabelecimento) e
 vigência sem fonte (vigencia_sem_fonte).
-NÃO CARREGADAS (forma e 2 linhas falsas): descartes de produto pedidos em saida/L8-08.json para sem_carga.tsv
-(FIPARAM, FAPARAM, FAPARAMA: mecanismo_do_produto; TBLOCSUS, TBNIVSUS, TBPRESUS, TBNIVEL, TBPRESSE: catalogo_oficial)
-e FCCTRLANCIHA (sem mecanismo: item faturável do destino do pai).
+FCCTRLANCIHA -> equivalencia_sigtap_item (instrumento ciha): item faturável copiado da linha que o lançamento
+(FCLANEXT, pai externo) gravou em conta_hospitalar_item (`ref:FCLANEXT@item_faturavel_id`), procedimento pelo código
+da TBPROSUS (INTEGER na origem; encadeada + de-para sigtap); UMA equivalência vigente por item e instrumento: o
+segundo lançamento do item ADOTA a já gravada, com o mesmo procedimento ou com outro (item ambíguo: adotado_existente; a
+conferência prova a unicidade pela contagem de adotadas); item ainda sem equivalência com código fora do catálogo,
+procedimento sem código, procedimento inexistente na origem ou lançamento inexistente: recusa (NOT NULL).
+NÃO CARREGADAS (forma e 2 linhas falsas): descartes de produto em sem_carga.tsv
+(FIPARAM, FAPARAM, FAPARAMA: mecanismo_do_produto; TBLOCSUS: catalogo_oficial; TBPRESSE: duplicado).
 """
 import datetime
 import decimal
+from pathlib import Path
 
 FORMAS = {
     'FHLEITOUTI': ('', [
@@ -160,15 +169,25 @@ FORMAS = {
 }
 
 CARREGADAS = ("TBALTSUS", "TBASSOCI", "TBCARATERATEND", "TBDRS", "TBFONTE_ORCAMENTARIA_SUS", "TBGRUATE", "TBTIPATE",
-              "TBTPAPAC", "TBLOCPRI", "FHLEITOUTI")
+              "TBTPAPAC", "TBLOCPRI", "TBNIVSUS", "TBNIVEL", "TBPRESUS", "FHLEITOUTI", "FCCTRLANCIHA")
 DESCARTADAS = {"FIPARAM": "mecanismo_do_produto", "FAPARAM": "mecanismo_do_produto", "FAPARAMA": "mecanismo_do_produto",
-               "TBLOCSUS": "catalogo_oficial", "TBNIVSUS": "catalogo_oficial", "TBPRESUS": "catalogo_oficial",
-               "TBNIVEL": "catalogo_oficial", "TBPRESSE": "catalogo_oficial"}
-SEM_MECANISMO = ("FCCTRLANCIHA",)
+               "TBLOCSUS": "catalogo_oficial", "TBPRESSE": "duplicado"}
+SEM_MECANISMO = ()
 BLOQUEADAS = tuple(DESCARTADAS) + SEM_MECANISMO  # não carregadas (nenhuma coluna com destino)
-# a lista 'localizacao_tumor' falta no CHECK ck_dominio_sus_lista (pedido em saida/L8-08.json): ao migrar, trocar para
-# True (o esperado de TBLOCPRI passa a gravar) e o teste que compara com o DDL passa a valer de novo
-LOCALIZACAO_NO_CHECK = False
+
+
+def _lista_no_check(lista):
+    """A lista está no CHECK de dominio_sus do DDL (db/migracoes, montado no container)? Lido, não fixado: quando a
+    migração pedida em saida/L8-08.json chegar, o esperado de TBLOCPRI passa a gravar sem mudar a fatia."""
+    raiz = Path(__file__).resolve().parents[2] / "db" / "migracoes"
+    try:
+        return any("'%s'" % lista in a.read_text(encoding="utf-8") and "ck_dominio_sus_lista" in a.read_text(encoding="utf-8")
+                   for a in raiz.rglob("*.sql"))
+    except OSError:
+        return False
+
+
+LOCALIZACAO_NO_CHECK = _lista_no_check("localizacao_tumor")
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 
@@ -179,14 +198,45 @@ def _ddl():
         if chave:
             defs.append("PRIMARY KEY (%s)" % chave)
         saida.append("CREATE TABLE %s (%s);" % (t, ", ".join(defs)))
+    # procedimento da tabela unificada na origem (catálogo oficial, nunca gravado): só o código, lido pela encadeada
+    # o código é INTEGER na origem (conferido no dicionário da imagem de referência): os zeros à esquerda somem
+    saida.append("CREATE TABLE TBPROSUS (ID INTEGER NOT NULL, COD INTEGER, PRIMARY KEY (ID));")
     return "\n".join(saida) + "\n"
 
 
 DDL = _ddl()
 # tipo de UTI (FHLEITOUTITP, L8-07) já carregado; um estabelecimento único no destino (@estabelecimento)
-PAIS_EXTERNOS = {"FHLEITOUTITP": ["1", "2"]}
-PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
+# lançamentos da conta (FCLANEXT, L8-06) já carregados: os pais externos recebem os ids 1 a 6 em
+# conta_hospitalar_item, na ordem da lista (FCLANEXT antes de FHLEITOUTITP, que fica com 8 e 9), com o item faturável
+# 880801, 880802 ou 880803; 9105 não é lançamento carregado; dois procedimentos no catálogo oficial carregado
+PAIS_EXTERNOS = {"FCLANEXT": ["9101", "9102", "9103", "9104", "9106", "9107", "9108"], "FHLEITOUTITP": ["1", "2"]}
+ITENS_DOS_LANCAMENTOS = {"9101": 880801, "9102": 880801, "9103": 880802, "9104": 880803, "9106": 880803,
+                         "9107": 880803, "9108": 880801}
+SIGTAP_NO_CATALOGO = ("0301010072", "0202010503")
+PREPARO_DESTINO = (
+    "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);\n"
+    # o banco da conferência só cria os destinos do plano (sem FK): a linha do lançamento que o pai gravou vem aqui,
+    # com as colunas que o modelo exige (CREATE só se a tabela não existir, ex.: conferência isolada da fatia)
+    "CREATE TABLE IF NOT EXISTS conta_hospitalar_item (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
+    " conta_hospitalar_id BIGINT UNSIGNED NOT NULL, sequencia INT UNSIGNED NOT NULL,"
+    " item_faturavel_id BIGINT UNSIGNED NOT NULL, realizado_em DATETIME(3) NOT NULL, quantidade DECIMAL(15,4) NOT NULL,"
+    " valor_unitario DECIMAL(15,4) NOT NULL, valor_total DECIMAL(15,2) NOT NULL,"
+    " origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL);\n"
+    "SET FOREIGN_KEY_CHECKS=0;\n"
+    "INSERT INTO conta_hospitalar_item (id, conta_hospitalar_id, sequencia, item_faturavel_id, realizado_em, quantidade,"
+    " valor_unitario, valor_total, origem, criado_em) VALUES"
+    " (1, 1, 1, 880801, '2025-01-02 08:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (2, 1, 2, 880801, '2025-01-02 09:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (3, 1, 3, 880802, '2025-01-02 10:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (4, 1, 4, 880803, '2025-01-02 11:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (5, 1, 5, 880803, '2025-01-02 12:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (6, 1, 6, 880803, '2025-01-02 13:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3)),"
+    " (7, 1, 7, 880801, '2025-01-02 14:00', 1, 10, 10, 'migracao', UTC_TIMESTAMP(3));\n"
+    "INSERT INTO procedimento_sigtap (codigo_sigtap, descricao, grupo_sigtap_id, vigencia_inicio, versao_fonte,"
+    " criado_em) VALUES ('0301010072', 'Procedimento sigtap exemplo um', 1, '2020-01-01', 'exemplo', UTC_TIMESTAMP(3)),"
+    " ('0202010503', 'Procedimento sigtap exemplo dois', 1, '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));\n"
+    "SET FOREIGN_KEY_CHECKS=1")
 
 
 def _falso(tipo, i):
@@ -251,10 +301,34 @@ def linhas(r, ins):
     # fonte fica em toda linha lida, também nas recusadas
     for i, tp, qt, un in [(1, 1, 10, 1), (2, 2, 4, 1), (3, 1, 6, 2), (4, 1, 0, 1), (5, 9, 3, 1)]:
         _ins(ins, "FHLEITOUTI", ID=i, ID_FHLEITOUTITP=tp, QTDE_LEITO=qt, ID_TBUNIDAD=un)
+    # equivalência CIHA (uma vigente por item e instrumento): 9101 grava (880801 x A); 9102 tem o mesmo par (adotado);
+    # 9103 grava (880802 x B); 9108 informou OUTRO procedimento (B) para o item 880801: adota a equivalência já gravada
+    # (se gravasse, o item ficaria com duas vigentes e a contagem de adotadas cairia para 1); o item 880803 nunca tem
+    # equivalência válida: 9104 código fora do catálogo (catalogo_codigo_inexistente), 9106 procedimento inexistente na
+    # origem (pai_inexistente), 9107 procedimento sem código: recusa pelo NOT NULL (1048); 9105 lançamento inexistente
+    # (pai_inexistente, 1048). Código INTEGER como na origem (zeros à esquerda completados pelo de-para)
+    for i, cod in [(1, 301010072), (2, 202010503), (3, 399999999), (4, None)]:
+        ins("TBPROSUS", [i, cod])
+    for lan, pro in [(9101, 1), (9102, 1), (9103, 2), (9104, 3), (9105, 1), (9106, 77), (9107, 4), (9108, 2)]:
+        _ins(ins, "FCCTRLANCIHA", ID_FCLANEXT=lan, ID_TBPROSUS=pro)
+    ciha = {"gravados": 4, "pendencias": {"vigencia_sem_fonte": 8, "adotado_existente": 2, "catalogo_codigo_inexistente": 1,
+                                          "pai_inexistente": 2, R1048: 4}}
+    # tipo de prestador: 3 sem nome (1048); a versão antiga TBPRESSE é descarte duplicado (mesmos códigos)
+    for i, cod, nome in [(1, 1, "Prestador exemplo um"), (2, 2, "Prestador   exemplo dois"), (3, 3, None)]:
+        _ins(ins, "TBPRESUS", ID=i, COD=cod, NOME=nome)
+    # nível: a versão antiga sem id (TBNIVEL) carrega antes, pela ordem do mapa, e cria 1, 2 e 9; a versão com id adota
+    # 1 e 2 (adotado_existente) e cria 3; o 4 sem nome recusa (1048). O 9 só existe na antiga (por isso ela carrega)
+    for cod, nome in [(1, "Nível exemplo um"), (2, "Nível exemplo dois"), (9, "Nível exemplo nove")]:
+        _ins(ins, "TBNIVEL", COD=cod, NOME=nome.encode("cp1252"))
+    for i, cod, nome in [(1, 1, "Nível exemplo um"), (2, 2, "Nível  exemplo dois"), (3, 3, "Nível exemplo três"),
+                         (4, 4, " ")]:
+        _ins(ins, "TBNIVSUS", ID=i, COD=cod, NOME=nome)
     uti = {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, R4025: 1, "pai_inexistente": 1, R1048: 1}}
     ok = lambda n: {"gravados": n, "pendencias": {}}
     rec = lambda n: {"gravados": n, "pendencias": {R1048: 1}}
     return {"TBALTSUS": {"gravados": 3, "pendencias": {R1048: 1, R1062: 1}}, "TBASSOCI": ok(2),
             "TBCARATERATEND": rec(2), "TBDRS": ok(2),
             "TBFONTE_ORCAMENTARIA_SUS": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}, "TBGRUATE": ok(3),
-            "TBTIPATE": ok(2), "TBTPAPAC": rec(2), "TBLOCPRI": loc, "FHLEITOUTI": uti}
+            "TBTIPATE": ok(2), "TBTPAPAC": rec(2), "TBLOCPRI": loc, "FHLEITOUTI": uti, "FCCTRLANCIHA": ciha,
+            "TBPRESUS": rec(2), "TBNIVEL": ok(3),
+            "TBNIVSUS": {"gravados": 3, "pendencias": {"adotado_existente": 2, R1048: 1}}}

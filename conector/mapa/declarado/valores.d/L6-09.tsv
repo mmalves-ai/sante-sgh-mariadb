@@ -1323,7 +1323,3 @@ TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	bloqu
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	Impedir	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	IMPEDIR	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
 TBPROENF	ID_PRTIPONOTIFICACAOIDADE	cuidado_enfermagem.acao_restricao_idade	impedir	bloquear	L6-09: ação da restrição por idade (sem notificação: alertar; justificativa: alertar) pelo nome (evidência: o próprio nome); nome sem par: valor_fora_do_dominio
-TBPROENF	TIPO	cuidado_enfermagem.tipo	C	cuidado	L6-09: tipo do cuidado pela inicial (revisar com o dono)
-TBPROENF	TIPO	cuidado_enfermagem.tipo	P	procedimento	L6-09: tipo do cuidado pela inicial (revisar com o dono)
-TBPROENF	TIPO	cuidado_enfermagem.tipo	O	orientacao	L6-09: tipo do cuidado pela inicial (revisar com o dono)
-TBPROENF	TIPO	cuidado_enfermagem.tipo	M	monitorizacao	L6-09: tipo do cuidado pela inicial (revisar com o dono)

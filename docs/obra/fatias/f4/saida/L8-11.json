@@ -2,11 +2,12 @@
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
-   "mudanca": "Pedido 1. data (DATE da origem, =@data_carga ou #data) gravada em coluna DATETIME do destino: tipar converte date em datetime à meia-noite antes da soma de controle (a releitura devolve datetime e a conciliação diverge). Destrava MFSALDOS e MFSALATU (declarações prontas e comentadas #MFSALDOS/#MFSALATU em colunas.d/L8-11.tsv: basta tirar o '#'), e também FCRECIBO e COSPEDHSTSEMP da L8-09."
+   "mudanca": "Pedido 1. data (DATE da origem, =@data_carga ou #data) gravada em coluna DATETIME do destino: tipar converte date em datetime à meia-noite antes da soma de controle (a releitura devolve datetime e a conciliação diverge). Destrava MFSALDOS e MFSALATU (declarações prontas e comentadas #MFSALDOS/#MFSALATU em colunas.d/L8-11.tsv: basta tirar o '#'), e também FCRECIBO e COSPEDHSTSEMP da L8-09.",
+   "atendido": "rodada 3: tipar (rodada 2) converte a data em DATETIME; MFSALDOS e MFSALATU carregam (declarações descomentadas)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
-   "mudanca": "Pedido 2. regra condicional por coluna (genérica): opção na via 'se:<COLUNA>=<v1>,<v2>' (a coluna só é aplicada quando outra coluna da linha tem um dos valores; fora: NULL sem pendência). Destrava o credor/devedor exclusivo por tipo: MFADIFOR (TIPO_CREDOR F -> empresa_fornecedora_id por ref:TBFORNEC; M -> profissional_id pela MFADIFOR_TBCBOPRO ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS; E, 7 linhas, sem tipo no modelo), MFCONPAG (TP_FORNPRES F/P/A/N/vazio), MFCTAREC (DEV E/I/C/T/L/O -> fonte pagadora, paciente ou cliente) e TBCLIENT (CPFCGC -> cpf se PESSOA=F, cnpj se J; hoje pendência falsa documento_invalido por linha). Também resolve 'tipo do destino' condicional (tipo_credor/tipo_devedor pelo de-para de valores já existe)."
+   "mudanca": "Pedido 2. regra condicional por coluna (genérica): opção na via 'se:<COLUNA>=<v1>,<v2>' (a coluna só é aplicada quando outra coluna da linha tem um dos valores; fora: NULL sem pendência). Destrava o credor/devedor exclusivo por tipo: MFADIFOR (TIPO_CREDOR F -> empresa_fornecedora_id por ref:TBFORNEC; M -> profissional_id pela MFADIFOR_TBCBOPRO ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS; E, 7 linhas, sem tipo no modelo), MFCONPAG (TP_FORNPRES F/P/A/N/vazio), MFCTAREC (DEV E/I/C/T/L/O -> fonte pagadora, paciente ou cliente) e TBCLIENT (CPFCGC -> cpf se PESSOA=F, cnpj se J; hoje pendência falsa documento_invalido por linha). Também resolve 'tipo do destino' condicional (tipo_credor/tipo_devedor pelo de-para de valores já existe). ATUALIZAÇÃO r3: MFADIFOR carrega sem a regra (fornecedor por ref:TBFORNEC e profissional pela inscrição ligada, os dois tentados em toda linha): o lado que não se aplica deixa pai_inexistente (ruído) e o código de profissional que coincide com um fornecedor é recusado pela CHECK (visível, nunca credor trocado). A regra condicional tira o ruído e a recusa; continua indispensável para MFCTAREC (três devedores pelo mesmo COD)."
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
@@ -14,7 +15,8 @@
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
-   "mudanca": "Pedido 4. MFLANCTO -> movimento_bancario (36385 linhas: 24741 com os dois lados, 4798 só crédito, 6812 só débito, 34 sem conta): desdobrar no destino PRINCIPAL com colunas por lado ('desdobrar:credito=ID_TBCTABAN_CRE,CDC_CRE;debito=ID_TBCTABAN_DEV,CDC_DEB' e #rotulo -> natureza), contrapartida = conta do outro lado, e transferencia_bancaria (secundário opcional) quando os dois lados existem, ligando saida/entrada aos ids dos dois movimentos; tipo_lancamento_bancario_id NOT NULL pelo literal de referência por código do pedido 3b (tipos nativos transferencia, credito, debito)."
+   "mudanca": "Pedido 4. MFLANCTO -> movimento_bancario (36385 linhas: 24741 com os dois lados, 4798 só crédito, 6812 só débito, 34 sem conta): desdobrar no destino PRINCIPAL com colunas por lado ('desdobrar:credito=ID_TBCTABAN_CRE,CDC_CRE;debito=ID_TBCTABAN_DEV,CDC_DEB' e #rotulo -> natureza), contrapartida = conta do outro lado, e transferencia_bancaria (secundário opcional) quando os dois lados existem, ligando saida/entrada aos ids dos dois movimentos; tipo_lancamento_bancario_id NOT NULL pelo literal de referência por código do pedido 3b (tipos nativos transferencia, credito, debito).",
+   "atendido": "rodada 3, em parte: desdobrar em pares no principal (rodada 3, grupo 1) carrega um movimento por lado com conta e centro de custo; tipo de lançamento NATIVO de migração por empresa como destino agrupado (antes;agrupar:EMPRESA). Continua pedido (11): contrapartida e transferência ligando os dois movimentos"
   },
   {
    "arquivo": "integrador: tools/obra/gerar_mapa_conector.py + conector/mapa/tabelas.tsv/dependencias.tsv + fatias L6-15, L7-08, L8-03",
@@ -26,7 +28,7 @@
   },
   {
    "arquivo": "db/migracoes/14_FIN (modelo)",
-   "mudanca": "Pedido 7. conta_bancaria.acesso_restrito BOOLEAN (conta só para os usuários de permissao_conta_bancaria): TBCTABAN.CONTA_RESTRICAO (F em 489 de 489 neste cliente; outro cliente com 'T' perderia a restrição)."
+   "mudanca": "Pedido 7. conta_bancaria.acesso_restrito BOOLEAN (conta só para os usuários de permissao_conta_bancaria): TBCTABAN.CONTA_RESTRICAO (F em 489 de 489 neste cliente; outro cliente com 'T' perderia a restrição). ATUALIZAÇÃO r3: a chave geral é MFPARAM.REST_CTA_USU (por empresa): ela diz se a lista de MFCTAUSU restringia de fato o acesso às contas; carregar as permissões sem ela pode mudar o comportamento do cliente. Com o pedido 16, REST_CTA_USU vira parâmetro do estabelecimento (ou acesso_restrito de cada conta listada)."
   },
   {
    "arquivo": "L8-12 (TBBANCOS) + carga_mapa (chave alternativa composta)",
@@ -34,11 +36,39 @@
   },
   {
    "arquivo": "conector/mapa (de-para) ou modelo 14_FIN",
-   "mudanca": "Pedido 9. tipo_ajuste_titulo de retenção (TIPO 2,4,6,8,9,10,13: 8 linhas) exige tributo_id (CHECK): vincular o tributo pelo código de receita (de-para codigo_receita -> tributo do produto) ou o dono decidir; até lá a linha é recusada com restricao_destino_4025 (visível)."
+   "mudanca": "Pedido 9. tipo_ajuste_titulo de retenção (TIPO 2,4,6,8,9,10,13: 8 linhas) exige tributo_id (CHECK): vincular o tributo pelo código de receita (de-para codigo_receita -> tributo do produto) ou o dono decidir; até lá a linha é recusada com restricao_destino_4025 (visível). ATUALIZAÇÃO r3: decisão de melhor prática registrada: tributo_id por de-para de valores TIPO -> sigla do tributo ('cod:tributo.codigo', depara=valores em MFREFDES.TIPO com destino tipo_ajuste_titulo.tributo_id; TIPO sem tributo identificável fica valor_fora_do_dominio). Faltam: (a) o tributo nativo semeado (pedido 15 b); (b) os pares, que pedem a medição do pedido 14 (qual tributo cada TIPO 2, 4, 6, 8, 9, 10, 13 nomeia)."
   },
   {
    "arquivo": "conector/mapa/declarado/valores.d/L8-11.tsv (dono/cliente)",
    "mudanca": "Pedido 10. confirmar sentidos: TBCTABAN.TP_CONTA C corrente, A aplicacao; SITUACAO A ativa, I bloqueada; TBGRUDES.CLASSIF D despesa, R receita; MFREFDES.TIPO 0 desconto, 1 acréscimo, 2-13 retenção, 16 sem par (medidos por contagem de palavras da descrição)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
+   "mudanca": "Pedido 11. Dependências de ordem da rodada 3 da L8-11: MFADIFOR -> TBPROFIS (profissional pela encadeada ref:MFADIFOR_TBCBOPRO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS; hoje TBPROFIS tem ordem 833 e MFADIFOR 797: todo adiantamento de profissional seria recusado por pai_inexistente + CHECK) e MFLANCTO -> TBCENCUS (centro de custo de cada lado por ref:TBCENCUS; TBCENCUS 851 vem depois de MFLANCTO 802). A imagem sintética da fatia não depende da ordem. ATUALIZAÇÃO r3 (revisão): falta também MFLANCTO -> TBITEDES (natureza financeira por ref:TBITEDES(GRUPO,SUBGRUPO,ITEM); TBITEDES 803 vem depois de MFLANCTO 798: os lançamentos ficariam com natureza NULL e pai_inexistente, sem recusa). Lista completa a aplicar em declarado/dependencias.tsv e regerar o mapa: MFADIFOR -> TBPROFIS, MFLANCTO -> TBCENCUS, MFLANCTO -> TBITEDES (provado sem ciclo pelas ordens atuais: TBPROFIS 829 não depende de MFADIFOR; TBCENCUS 828 e TBITEDES 803 não dependem de MFLANCTO). A fatia não editou o arquivo compartilhado (regra do trabalho em paralelo). Pede-se ainda que tools/obra/cobertura_conector.py marque BLOQUEADA (pai_depois_do_filho) toda ref: declarada cujo pai tem ordem maior que o filho e não está em duas fases (hoje a cobertura só olha a situação do pai e a conciliação sintética não depende da ordem)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "Pedido 12. MFLANCTO: contrapartida e transferência. (a) coluna por item que lê a coluna do OUTRO lado (contrapartida_conta_bancaria_id = conta do outro lado): bastaria um #item3 por par com a 3.ª coluna (desdobrar:ID_TBCTABAN_CRE+CDC_CRE+ID_TBCTABAN_DEV=credito,...) se o item só fosse gerado pela 1.ª coluna (opção 'pela_primeira'); (b) destino secundário 'transferencia_bancaria' gravado só quando TODAS as colunas obrigatórias dele têm valor (opção 'se_completo', sem pendência quando falta), com saida/entrada pelos ids dos itens do principal (@item:debito, @item:credito). Medido 24741 lançamentos com os dois lados."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (MFCTAREC)",
+   "mudanca": "Pedido 13. MFCTAREC continua BLOQUEADA, por três faltas do MOTOR, nenhuma de decisão: (a) regra condicional do pedido 2 (DEV E -> fonte pagadora por ref:TBCONVEN, I -> paciente, C -> cliente pelo MESMO COD: sem ela o código do paciente que coincide com um convênio recusaria a linha em massa); (b) natureza financeira NOT NULL só no rateio filho MFLANGSI (pedido 3a, referência reversa ao filho de maior valor; o encadeamento não chega a TBITEDES, de chave composta, a partir de um passo do meio); (c) tipo de documento NOT NULL sem cadastro nativo (pedido 3b; o 'antes;agrupar:' que criaria o tipo nativo já é usado pelo título, e só um destino agrupado por tabela é aceito). Declaração do título e da parcela pronta para quando (a) a (c) existirem: titulo_receber 'antes;agrupar:EMPRESA,DEV,COD,DOC,SERIE', parcela_receber principal com #grupo_seq, recebimento opcional pela data PGTO."
+  },
+  {
+   "arquivo": "medição na imagem de referência (orquestrador)",
+   "mudanca": "Pedido 14. Medir (só contagens) MFADIFOR por TIPO_CREDOR: COD que existe em TBFORNEC nas linhas M e E, e MFCTAREC por DEV: COD que existe em TBCONVEN, TBCLIENT e no cadastro de pacientes. O agente da fatia não teve permissão de abrir a imagem nesta rodada; o número diz quantos adiantamentos de profissional a CHECK recusa até a regra condicional. ATUALIZAÇÃO r3: medir também (só contagens): MFREFDES por TIPO, quantas descrições citam cada tributo (IR/IRRF, INSS, ISS, PIS, COFINS, CSLL, PIS/COFINS/CSLL) para os pares do pedido 9; TBINTIMP por TIPO_CTA e TIPO (aplicação e tipo de pessoa); MFPARAM: quantas linhas com valor não nulo e não zero em cada coluna do pedido 16; MFADIFOR TIPO_CREDOR E: COD que existe em TBFORNEC, em TBPROFIS e no cadastro de funcionários (decisão: E segue recusado e visível até a medição dizer o credor; nunca se adivinha o tipo); MFADIFOR com PAGO > VLR_DOC_TOT (recusados pela CHECK do saldo a compensar)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py; db (semente nativa de tributo); sentinela.py",
+   "mudanca": "Pedido 15. TBINTIMP -> aliquota_tributo_vigencia (declaração pronta e comentada #TBINTIMP em colunas.d/L8-11.tsv; tabela BLOQUEADA em sem_carga). (a) 'cod:<tabela>.<coluna>' aplicado ao #rotulo (ou #item) de um desdobrado: o rótulo de cada item acha o id no destino (tributo pela sigla), com as mesmas pendências do cod:; (b) tributo NATIVO semeado pelo produto (IRRF, INSS, ISS, PIS, COFINS, CSLL, CSRF para PIS/COFINS/CSLL, IBS, CBS, com esfera, forma de apuração e incidência): hoje nenhuma tabela da origem nem semente grava tributo, e o cod: sempre falharia; serve também ao pedido 9 (MFREFDES); (c) regra de data de fim aberta (ano >= 2999 vira NULL sem pendência) para vigencia_fim; (d) opcional: #item2 por par (IRRF+IRRF_C...) com ref:MFREFDES(EMPRESA,#item2)>ID_TBFINCODRECOL e de-para codigo_receita_federal para codigo_receita_federal_id (depende do pedido 17)."
+  },
+  {
+   "arquivo": "db/migracoes (semente de parametro_definicao do financeiro) + L8-11",
+   "mudanca": "Pedido 16. MFPARAM: o produto define em parametro_definicao os parâmetros do financeiro por estabelecimento: centro de custo padrão de crédito a pagar, banco a pagar, devedor a receber, banco a receber e glosa; tipo de ajuste padrão de glosa, acréscimo, desconto, adiantamento e cheque compensado; dias de antecedência do alerta de vencimento e quantidade de dias de vencimento; meses de consulta; forma de pagamento obrigatória; usa empenho; restringe contas bancárias por usuário; natureza financeira padrão. Com eles, a L8-11 declara MFPARAM em parametro_valor (desdobrar por coluna, ref:TBCENCUS, ref:MFREFDES, ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)). Até lá a tabela fica BLOQUEADA (parametro_definicao_faltante), não descartada."
+  },
+  {
+   "arquivo": "catalogos/carregadores/ (codigo_receita_federal) + catalogos/baixar.py",
+   "mudanca": "Pedido 17. Carregador oficial versionado de codigo_receita_federal (tabela de códigos de receita do DARF e da GPS, publicada pela Receita Federal), com documento, código, descrição, tributo e vigência. Sem ele TBFINCODRECOL fica BLOQUEADA (catalogo_oficial_faltante) e as referências a codigo_receita_federal_id (alíquota, regra de retenção, guia) ficam sem alvo. Com ele: de-para pelo código (depara oficial novo 'receita_federal') e a marca ATIVO da origem como uso do cliente."
   }
  ]
 }

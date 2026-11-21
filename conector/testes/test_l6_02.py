@@ -81,11 +81,32 @@ class Plano(unittest.TestCase):
         self.assertEqual((f["operacao"]["coluna"], f["ocorrido_em"]["regra"]), ("=inclusao", "data_hora"))
         h = self.cols("HTATENDIMENTO", "trilha_auditoria")
         self.assertEqual((h["acao"]["coluna"], h["entidade"]["coluna"], h["dados_antes"]["coluna"]),
-                         ("=alteracao", "=atendimento", "#retrato"))
+                         ("=alteracao", "=atendimento", "#retrato:*"))
         self.assertEqual(h["entidade_id"]["referencia"], "ATCABECATEND")
         # o histórico é a versão ANTERIOR: retrato em dados_antes, como HTPROCTO (L8-06); dados_depois nulo
         self.assertNotIn("dados_depois", h)
-        self.assertEqual(set(self.plano["HTATENDIMENTO"]["retrato"]), {"ID", "ID_ATCABECATEND", "DATA_HORA_HISTORICO"})
+        # retrato COMPLETO da versão anterior (todas as colunas da origem, sem segredo)
+        self.assertEqual(mapa.spec_retrato("#retrato:*"), {"todas": True, "exceto": [], "extras": []})
+
+    def test_horario_do_local_em_pares(self):
+        c = self.cols("TBLOCALHORA", "local_atendimento_horario")
+        self.assertEqual(self.plano["TBLOCALHORA"]["destinos"], ["local_atendimento_horario"])
+        self.assertEqual(c["local_atendimento_id"]["referencia"], "TBLOCAL")
+        self.assertEqual({k: c[k]["coluna"] for k in ("hora_inicio", "hora_fim", "dia_semana", "dia_nao_util")},
+                         {"hora_inicio": "#item", "hora_fim": "#item2", "dia_semana": "#rotulo",
+                          "dia_nao_util": "#rotulo2"})
+        self.assertEqual((c["hora_inicio"]["regra"], c["hora_fim"]["regra"]), ("hora", "hora"))
+        via = next(d["via"] for d in self.mapa["colunas_decl"] if d["tabela"] == "TBLOCALHORA" and d["coluna"] == "#item")
+        pares = dict(p.split("=") for p in via.split(":", 1)[1].split(","))
+        # 7 dias + feriado; 1 domingo a 7 sábado (CHECK do destino); feriado: dia_semana nulo, dia não útil
+        self.assertEqual(len(pares), 8)
+        self.assertEqual(sorted(v for k, v in pares.items() if not k.startswith("FERIADO")),
+                         ["%d|0" % d for d in range(1, 8)])
+        self.assertEqual(pares["FERIADO_INICIO+FERIADO_FINAL"], "|1")
+        for k in pares:
+            a, b = k.split("+")
+            self.assertEqual((a.rsplit("_", 1)[1], b.rsplit("_", 1)[1], a.rsplit("_", 1)[0]),
+                             ("INICIO", "FINAL", b.rsplit("_", 1)[0]))
 
     def test_descartes_com_causa_de_produto(self):
         # no sem_carga.tsv ou, até o integrador aplicar, no pedido do L6-02.json; nunca "bloqueada esperando decisão"
@@ -108,19 +129,38 @@ class Plano(unittest.TestCase):
             else:
                 self.assertTrue(re.search(r"(^|\n)%s\tdescarte\t(%s)\t\S" % (t, "|".join(causas)), pedido), t)
 
-    def test_atconta_so_descartada_com_atendimento_conta_carregada(self):
-        # ATCONTA só vira descarte `duplicado` quando outra fonte carregar atendimento_conta (L8-06, contas): sem isso
-        # o atendimento migrado com conta apareceria sem conta (porta-propria.ts consulta atendimento_conta)
+    def test_atconta_so_descartada_com_atendimento_conta_declarada(self):
+        # ATCONTA só é descarte `duplicado` com outra fonte de atendimento_conta DECLARADA (carga das contas, L8-05 e
+        # L8-06); pedido aberto não basta: sem a fonte, o atendimento migrado com conta apareceria sem conta e poderia
+        # ser excluído (porta-propria.ts consulta atendimento_conta). Até lá: BLOQUEADA em sem_carga.tsv
         raiz = pathlib.Path(mapa.__file__).resolve().parents[1]
         with open(raiz / "mapa/declarado/sem_carga.tsv", encoding="utf-8") as f:
             sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
-        fonte = {c["tabela"] for c in self.mapa["colunas_decl"]
-                 if c.get("destino") == "atendimento_conta.conta_hospitalar_id" and c["tabela"] != "ATCONTA"}
-        if "ATCONTA" in sc and sc["ATCONTA"].get("situacao") == "descarte":
-            self.assertTrue(fonte, "ATCONTA descartada sem atendimento_conta carregada por outra fonte")
-        if not fonte:
-            self.assertIn("ATCONTA", l6_02.BLOQUEADAS)
-            self.assertNotIn("ATCONTA", l6_02.DESCARTADAS)
+        fonte = {c["tabela"] for c in self.mapa["colunas_decl"] if c["tabela"] != "ATCONTA"
+                 and c.get("destino") in ("atendimento_conta.conta_hospitalar_id", "atendimento_conta.atendimento_id")}
+        completa = {t for t in fonte if {c["destino"] for c in self.mapa["colunas_decl"] if c["tabela"] == t}
+                    >= {"atendimento_conta.conta_hospitalar_id", "atendimento_conta.atendimento_id"}}
+        if completa >= {"FCCTAEXT", "RICONTAS"}:
+            return  # fonte declarada: ATCONTA pode ser descarte `duplicado`
+        self.assertIn("ATCONTA", sc)
+        self.assertEqual(sc["ATCONTA"]["situacao"], "bloqueada")
+        self.assertIn("ATCONTA", l6_02.BLOQUEADAS)
+        self.assertNotIn("ATCONTA", l6_02.DESCARTADAS)
+
+    def test_contadores_da_recepcao_em_sequencia_inativa(self):
+        c = self.cols("REPARAM", "sequencia_negocio")
+        self.assertEqual(self.plano["REPARAM"]["destinos"], ["sequencia_negocio"])
+        self.assertEqual((c["proximo_valor"]["coluna"], c["proximo_valor"]["regra"]), ("#item", "inteiro_nao_negativo"))
+        self.assertEqual(c["tipo"]["coluna"], "#rotulo")
+        self.assertEqual(c["ativo"]["coluna"], "=~0")   # inativa e presumida: o cliente confere antes de ligar
+        via = next(x for x in self.mapa["colunas_decl"] if x["tabela"] == "REPARAM" and x["coluna"] == "#item")["via"]
+        rot = dict(p.split("=") for p in via.split("desdobrar:")[1].split(";")[0].split(","))
+        self.assertEqual(set(rot), {"ULTPRONT", "ULTREG", "ULTPRTFAM", "PRTANT", "PRT_OTMU", "PRTA_OTMU",
+                                    "CTR_PAG_REG"})
+        for col, tipo in rot.items():   # nome de negócio, nunca o nome da coluna da origem (regra 1)
+            self.assertTrue(tipo.startswith("origem_recepcao_") and len(tipo) <= 60, col)
+            self.assertNotIn(col.lower(), tipo)
+        self.assertEqual(len(set(rot.values())), len(rot))
 
     def test_de_para_de_valores(self):
         for (t, col, dest), pares in PARES.items():
@@ -180,8 +220,10 @@ class Sintetica(unittest.TestCase):
         esp = l6_02.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
-            recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(("restricao_destino_", "pai_pendente")))
-            self.assertEqual(cont[t], e["gravados"] + recusas, t)
+            recusas = sum(n for k, n in e["pendencias"].items()
+                          if k.startswith(("restricao_destino_", "pai_pendente", "sem_item_a_gravar")))
+            # tabela desdobrada: "gravados" conta itens; a conta é por linha da origem com item
+            self.assertEqual(cont[t], l6_02.DESDOBRADAS.get(t, e["gravados"]) + recusas, t)
 
     def test_ddl_so_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l6_02.DDL.splitlines() if l.startswith("CREATE TABLE")}

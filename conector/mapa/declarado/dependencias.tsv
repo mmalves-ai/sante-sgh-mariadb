@@ -102,3 +102,61 @@ PSATVASS	PSBENEFI	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo 
 PSATVASS	PSMOTIVO	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
 PSPLNASS	PSBENEFI	pedido da fatia L8-14 na rodada 2 de cobertura (aplicado pelo integrador): referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga
 TBGRUDES	TBCENCUS	pedido implícito da fatia L8-11 (ref:TBCENCUS declarada no centro de custo do grupo, sem FK na origem): integrador da rodada 2, o pai passou a vir depois com as arestas novas
+CCHISAGE	CCAGENDA	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (histórico de remarcação liga à agenda)
+CCPROEXT	CCAGENDA	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (procedimento extra liga à agenda)
+CCHISAGE	CCSALAS	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (sala anterior e nova)
+CCHISAGE	TBPROFIS	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (solicitante pela inscrição até o profissional)
+CCCADCIR	TBCONVEN	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (convênio do ato)
+CCSALAS	TBCENCUS	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (centro de custo da sala)
+CCAGENDA	TBPROFIS	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (cirurgião pela inscrição até o profissional)
+CCAGENDA	TBCONVEN	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (convênio da agenda)
+CCCADCIR	CCSALAS	pedido da fatia L6-16 na rodada 3 de cobertura: referência declarada sem FK na origem; o pai vinha depois do filho na ordem de carga (sala do ato: com o centro de custo antes da sala, a sala passou a vir depois do ato)
+FCHORATE	TBCTRTHM	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (tabela de honorários do horário, NOT NULL)
+FCGUIAS	TBCONVEN	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (convênio da guia, NOT NULL)
+FCGUIAS	FCCTAEXT	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (conta da guia pela chave alternativa composta)
+FCORCPAD	TBPROCTO	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (procedimento do modelo de orçamento, NOT NULL)
+FCORCPAD	TBCONVEN	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (convênio do modelo)
+FCORLAME	FCORCAME	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (orçamento do item, NOT NULL)
+FCORLAME	TBPROCTO	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (procedimento do item)
+RPLANEVE	TBPROFIS	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (profissional do lançamento e do favorecido pela inscrição, NOT NULL no favorecido)
+RECONTAS	FCCTAEXT	L8-01 r3 (correção): referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (conta da abertura na recepção pela chave alternativa composta, NOT NULL)
+DIPERMPS	TBPRESER	L5-01 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBESPPRO	TBPROCTO	L5-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBESPPRO	TBESPEC	L5-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SITECNIC	TBPROFIS	L5-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SHTECNIC	TBPROFIS	L5-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SIPACAGI	SIAGENDA	L6-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+PREXAMEASSINATURA	PRASSINATURA_CAB	L7-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+PREXAMEASSINATURA	SILANEXA	L7-04 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+PRITENSGLICEMIA	PRITEM_GEITENS	L6-13 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+PRITENSESQ	PRITEM_GEITENS	L6-13 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+PRITEMRECEITA	PRITEM_GEITENS	L6-13 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+HTPARAMORIGEMCABIMP	PRPARAMORIGEMCABIMP	L6-13 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+RICADINT	TBTIPPLANO	L6-15 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+RIPREINT	RICADINT	L6-15 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+RIPREINT	TBTIPPLANO	L6-15 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+RIPREINT	RILEITOS	L6-15 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SITBEXHP	SITBEXEQ	L7-03 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SIFORMUL	SITABELE	L7-02 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEARMLOC	GELOCARM	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEARMLOC	GEITENS	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GECONITL	GEARMLOC	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GELANESI	GEITENS	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GELANESI	TBUNICON	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEDESPDS	GELANPED	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEKONCDC	TBCENCUS	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEKONCDC	GEITENS	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEKONCDC	GECADSAI	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GEKONCDC	GELOCARM	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GECTRVMM	GELANSAI	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+GECTRVMM	GEVALMEM	L7-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+RPLANEVE_COMPOSICAOBASE	RPEVENTO	L8-01 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+SIREFCON	TBCONVEN	L8-02 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBINDPRO	TBCONVEN	L8-02 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBINDPRO	TBPROCTO	L8-02 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBPORMED	TBCONVEN	L8-03 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBCRECOO	TBPROFIS	L8-03 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+TBINDICE	TBCONVEN	L8-03 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCCTAAUD	FCCTAEXT	L8-05 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+FCRECIBO	FCCTAEXT	L8-09 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga
+MFADIFOR	TBPROFIS	L8-11 r3 (conferidor): referência declarada na fatia sem FK na origem: o pai vinha depois do filho na ordem de carga

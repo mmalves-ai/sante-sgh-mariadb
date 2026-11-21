@@ -27,7 +27,7 @@ PRCAB_IDENTIFIC_PAC	ID	identificacao_paciente_documento.codigo	texto			a origem 
 PRCAB_IDENTIFIC_PAC	NOME	identificacao_paciente_documento.descricao	texto_nome			descrição; vazia recusa a linha
 PRCAB_IDENTIFIC_PAC	ATIVO	identificacao_paciente_documento.ativo	booleano_sn			S/N
 PRCAMPOSLOCALIZACAOPACIENTE	ID	coluna_painel_paciente.codigo	texto			a origem só tem o id: vira o código de negócio
-PRCAMPOSLOCALIZACAOPACIENTE	ID	coluna_painel_paciente.chave_atributo	texto			chave única do atributo exibido: o id da coluna na origem (o mesmo que a preferência do usuário guarda); a aplicação liga ao atributo
+PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.chave_atributo	texto_nome	valores		L6-05 r3: chave do atributo do produto pelo NOME (valores.d/L6-05.tsv: leito, paciente, idade, atendimento, entrada, dias, convenio, medico, alergias, alertas, as chaves que a tela do painel exibe, COLUNAS_PAINEL do contrato do PEP); nome sem par recusa a linha (valor_fora_do_dominio + NOT NULL) em vez de gravar o id da origem; dois nomes da mesma chave: o segundo recusa pela chave única (1062)
 PRCAMPOSLOCALIZACAOPACIENTE	NOME	coluna_painel_paciente.descricao	texto_nome			descrição da coluna
 PRFA_UTILIZACAO	ID	utilizacao_item_prescricao.codigo	texto			a origem só tem o id: vira o código de negócio
 PRFA_UTILIZACAO	DESCRICAO	utilizacao_item_prescricao.descricao	texto			descrição (só as pontas aparadas)
@@ -75,11 +75,25 @@ PRHRRELATIVA	ORDEM	frequencia_horario_relativo.sequencia	inteiro			posição do 
 PRHRRELATIVA	NOME	frequencia_horario_relativo.descricao	texto_nome			descrição (em jejum, ao deitar); vazia recusa
 PRHRRELATIVA	HORARIO	frequencia_horario_relativo.horario_referencia	hora_em_timestamp			hora guardada em TIMESTAMP 1899-12-30; outra data: a hora é usada com hora_com_data
 PRFAVORITO_EXIBIR	LOCPACDEFAULT	painel_coluna_usuario.usuario_id			ref:PRLOCPACDEFAULT>USUARIO>TBUSERS	usuário da preferência: a origem aponta a preferência (PRLOCPACDEFAULT), cujo login leva ao usuário (ref encadeada à origem do pai); preferência ou login inexistente: pai_inexistente e recusa (NOT NULL)
-PRFAVORITO_EXIBIR	CAMPOSLOCALIZACAOPACIENTE	painel_coluna_usuario.coluna	inteiro			identificador da coluna da tela: o id da coluna na origem em texto, o mesmo gravado em coluna_painel_paciente.chave_atributo
+PRFAVORITO_EXIBIR	CAMPOSLOCALIZACAOPACIENTE	painel_coluna_usuario.coluna			ref:PRCAMPOSLOCALIZACAOPACIENTE@chave_atributo	L6-05 r3: identificador da coluna da tela = chave do atributo que a coluna do painel gravou (cópia do destino do pai, a mesma de coluna_painel_paciente.chave_atributo); coluna recusada (sem par no de-para): pai_pendente e recusa; nunca vista: pai_inexistente e recusa (NOT NULL)
 PRFAVORITO_EXIBIR	ORDEM	painel_coluna_usuario.ordem	inteiro			ordem; vazia fica com o padrão (0)
 PRFAVORITO_EXIBIR	EXIBIR	painel_coluna_usuario.exibir	booleano_sn			S/N (gerada codigo_char); fora do domínio fica com o padrão (exibir)
-#PRDADOSENVIOOPERADORA	=envio_operadora	grupo_informacao_clinica_operadora.codigo			antes adotar:codigo	L6-05: aguarda destino secundário gravado antes do principal (pedido no L6-05.json): grupo padrão das informações enviadas à operadora, criado uma vez e adotado pelas outras linhas
-#PRDADOSENVIOOPERADORA	=Informações enviadas à operadora	grupo_informacao_clinica_operadora.descricao				L6-05: descrição do grupo padrão
-#PRDADOSENVIOOPERADORA	#codigo_derivado:ID:30:envio_	informacao_clinica_operadora.codigo				L6-05: código envio_<ID>: o prefixo evita colidir com as informações de PRINFOPERGOPERADORA (L6-07, ids inteiros no mesmo código único)
-#PRDADOSENVIOOPERADORA	NOME	informacao_clinica_operadora.descricao	texto_nome			L6-05: nome da informação; vazio recusa (NOT NULL)
-#PRDADOSENVIOOPERADORA	@id:grupo_informacao_clinica_operadora	informacao_clinica_operadora.grupo_informacao_clinica_operadora_id				L6-05: id do grupo padrão gravado antes (especial pedida)
+PRDADOSENVIOOPERADORA	#codigo_derivado:ID:30:envio_	informacao_clinica_operadora.codigo			informacao_clinica_operadora	L6-05: código envio_<ID> (estável); o prefixo evita colidir com as informações de PRINFOPERGOPERADORA (L6-07, ids inteiros no mesmo código único)
+PRDADOSENVIOOPERADORA	NOME	informacao_clinica_operadora.descricao	texto_nome		informacao_clinica_operadora	L6-05: nome da informação enviada à operadora; vazio recusa (NOT NULL)
+PRDADOSENVIOOPERADORA	@id:grupo_informacao_clinica_operadora	informacao_clinica_operadora.grupo_informacao_clinica_operadora_id			informacao_clinica_operadora	L6-05 rodada 3: id do grupo padrão gravado antes (a origem não tem grupo; o modelo exige)
+PRDADOSENVIOOPERADORA	=envio_operadora	grupo_informacao_clinica_operadora.codigo			grupo_informacao_clinica_operadora;antes;adotar:codigo	L6-05 rodada 3: grupo padrão das informações enviadas à operadora, criado pela primeira linha e adotado pelas seguintes (adotado_existente); grupo já criado no cliente com o mesmo código é adotado, sem sobrescrever
+PRDADOSENVIOOPERADORA	=Informações enviadas à operadora	grupo_informacao_clinica_operadora.descricao			grupo_informacao_clinica_operadora	L6-05 rodada 3: descrição do grupo padrão
+#GECADANTIMI	=migracao	ficha_antimicrobiano.origem				PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): ficha migrada: campos clínicos que a origem não tem ficam nulos, avaliação pendente
+#GECADANTIMI	REG	ficha_antimicrobiano.atendimento_id			ref:RECADATE	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): atendimento pelo registro; inexistente recusa (NOT NULL)
+#GECADANTIMI	REG	ficha_antimicrobiano.paciente_id			ref:RECADATE>PRONT>RICADPAC.PRONT	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): paciente pelo prontuário do atendimento (como CCCADCIR)
+#GECADANTIMI	@estabelecimento	ficha_antimicrobiano.estabelecimento_id				PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): estabelecimento da carga
+#GECADANTIMI	ID_TBCBOPRO	ficha_antimicrobiano.prescritor_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): prescritor pelo conselho e CBO
+#GECADANTIMI	CONV	ficha_antimicrobiano.fonte_pagadora_id			ref:TBCONVEN	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): convênio da ficha (pode diferir do atendimento: fica o da ficha)
+#GECADANTIMI	TIPO	ficha_antimicrobiano.finalidade_terapeutica_id	codigo_char	valores	cod:finalidade_terapeutica.codigo	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): tipo de tratamento (profilático, empírico, terapêutico) por pares de valor, depois da contagem por valor
+#GECADANTIMI	CRM		inteiro			PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): sem destino: o número do conselho já vem pelo ID_TBCBOPRO (inscrição do prescritor)
+#PRFICHAREL	COD	modelo_impressao_clinica.codigo	texto		agrupar:COD	PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): um leiaute por COD da origem; as linhas são os componentes dele
+#PRFICHAREL	#codigo_derivado:COD:150:leiaute_	modelo_impressao_clinica.nome				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): a origem não nomeia o leiaute; o cliente renomeia
+#PRFICHAREL	=leiaute_migrado	modelo_impressao_clinica.tipo_modelo_impressao_id			cod:tipo_modelo_impressao.codigo	PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): tipo nativo de migração (proposto ao modelo)
+#PRFICHAREL	=0	modelo_impressao_clinica.ativo				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): entra inativo, para revisão no editor do produto
+#PRFICHAREL	#grupo_json:SEQUENCIA,NOMECOMP,NOMECLASSE,PARENT,TIPO,NOME,COMPONENTE,CONTEUDO	modelo_impressao_clinica.conteudo				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): lista JSON dos componentes, na ordem de SEQUENCIA e da chave; propriedades do BLOB como texto
+#PRFICHAREL	ID_FICHAREL					PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): chave do componente: entra no JSON pela ordem; o modelo não tem tabela de componente

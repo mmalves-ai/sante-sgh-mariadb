@@ -8,22 +8,25 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",
    "mudanca": "regra faltante: SHA-256 do retrato (ex.: `#sha256:#retrato`), o mesmo cálculo do produto (sha256 do JSON gravado em dados)",
-   "motivo": "paciente_versao.hash_dados é NOT NULL e o produto deduplica as versões pelo hash do JSON: HTPACIENTE e HTPACTELEFONE ficam sem carga (declarações comentadas); hash constante ou de outra coluna não serve"
+   "motivo": "paciente_versao.hash_dados é NOT NULL e o produto deduplica as versões pelo hash do JSON: HTPACIENTE e HTPACTELEFONE ficam sem carga (declarações comentadas); hash constante ou de outra coluna não serve",
+   "atendido": "rodada 3 (grupo 2): #sha256:#retrato:*; HTPACIENTE e HTPACTELEFONE carregam"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "regra faltante: retrato de todas as colunas da linha da origem (ex.: `#retrato:*`, sem segredo), não só das colunas lidas pelas declarações",
-   "motivo": "o histórico (HT*) tem dezenas de colunas sem coluna própria no destino de versão: HTPROFIS (agora sem carga: o retrato só com quem e quando não é o cadastro), HTPROFISTEL, HTATENDRESP e HTPACIENTE ficam sem carga; HTTBCBOPRO, HTTBCBOPRO_TBUNIDAD e HTTBHOSPIT carregam quem/quando/qual e ganham trilha_auditoria.dados_depois com ele (HTTBHOSPIT sem SENHAPROV e SENHA_PROXY)"
+   "motivo": "o histórico (HT*) tem dezenas de colunas sem coluna própria no destino de versão: HTPROFIS (agora sem carga: o retrato só com quem e quando não é o cadastro), HTPROFISTEL, HTATENDRESP e HTPACIENTE ficam sem carga; HTTBCBOPRO, HTTBCBOPRO_TBUNIDAD e HTTBHOSPIT carregam quem/quando/qual e ganham trilha_auditoria.dados_depois com ele (HTTBHOSPIT sem SENHAPROV e SENHA_PROXY)",
+   "atendido": "rodada 3 (grupo 2): #retrato:*; HTPROFIS, HTPROFISTEL, HTATENDRESP e HTPACIENTE carregam"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",
    "mudanca": "regra faltante: desdobrar no destino principal (uma linha da origem vira N linhas do único destino; conector_origem `<chave>/<rótulo>`)",
-   "motivo": "ATPARAMGERAL tem um único destino (regra_campo_cadastro, uma linha por campo) e o verificador recusa destino principal desdobrado; declaração pronta e comentada. Os pares do de-para da exigência (S/N e código de TBDIGITAR) pedem conferência na imagem de referência por contagem por valor"
+   "motivo": "ATPARAMGERAL tem um único destino (regra_campo_cadastro, uma linha por campo) e o verificador recusa destino principal desdobrado; declaração pronta e comentada. Os pares do de-para da exigência (S/N e código de TBDIGITAR) pedem conferência na imagem de referência por contagem por valor",
+   "atendido": "rodada 3 (grupo 1/2): desdobrar no principal; ATPARAMGERAL carrega (42 campos, rótulo campo|entidade)"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "falha em destino secundário (restrição do banco ou estabelecimento_indefinido) vira pendência daquele destino sem recusar o principal",
-   "motivo": "TBPROFIS -> conta_bancaria_profissional (CHECK de favorecido e meio de pagamento) e TBCONVEN -> fonte_pagadora_estabelecimento (@estabelecimento recusa a fonte inteira em cliente com vários estabelecimentos) e configuracao_tiss_fonte_pagadora (versão TISS obrigatória) ficaram fora: hoje uma falha neles recusaria o profissional ou a fonte inteira"
+   "motivo": "TBPROFIS -> conta_bancaria_profissional (CHECK de favorecido e meio de pagamento) e TBCONVEN -> fonte_pagadora_estabelecimento (@estabelecimento recusa a fonte inteira em cliente com vários estabelecimentos) e configuracao_tiss_fonte_pagadora (versão TISS obrigatória) ficaram fora: hoje uma falha neles recusaria o profissional ou a fonte inteira | r3 (revisão): inclui pai_pendente numa referência de destino secundário OPCIONAL (TBPROFIS -> usuario_profissional por ref:TBUSERS: usuário recusado recusaria o profissional inteiro) e @estabelecimento num secundário (fonte_pagadora_estabelecimento: VENC_CTR -> data_fim_contrato). Colunas que aguardam: TBCONVEN VENC_CTR; TBPROFIS BANCO, AGENCIA, CONTA, dígitos, NUMBCO, ID_TBTABBCO, ID_TBTPCONTA (conta_bancaria_profissional, 106 profissionais), LOCAL, NUMERO, COMPL, BAIRRO, CEP, ID_TBMUIBGE_RESIDENCIAL (endereco_pessoa, 155), NUM_RG (documento_pessoa, 245)"
   },
   {
    "arquivo": "conector/sante_conector/sintetica_d (integração)",
@@ -37,8 +40,39 @@
   },
   {
    "arquivo": "conector/mapa (destinos de TBCONVEN)",
-   "mudanca": "pessoa_juridica como destino de TBCONVEN (adotar:cnpj) para CGC -> fonte_pagadora.pessoa_juridica_id e DNF_* (dados da nota fiscal)",
-   "motivo": "fonte_pagadora.pessoa_juridica_id não tem pai carregável hoje (a pessoa jurídica de TBEMPHOS é só a do hospital); a operadora fica sem CNPJ"
+   "mudanca": "opção de destino genérica `exige:<coluna do destino>` (secundário só grava quando essa coluna tem valor depois da regra; ex.: `pessoa_juridica;antes;adotar:cnpj;exige:cnpj`), ou a falha do secundário como pendência (pedido acima)",
+   "motivo": "TBCONVEN -> pessoa_juridica pelo CGC (cnpj, adotar:cnpj) e fonte_pagadora.pessoa_juridica_id por @id:pessoa_juridica: a razão social vem de NOME (sempre preenchido), então `opcional` grava a pessoa jurídica também nas 25 de 77 fontes sem CNPJ e o CHECK ck_pessoa_juridica_cnpj recusaria a FONTE inteira. Contagem na imagem de referência: endereço e dados da nota (DNF_*) só existem nas 52 fontes com CNPJ; DNF_CGC difere do CGC em 8 (a nota vai a outra pessoa jurídica: segundo destino pessoa_juridica da nota). Colunas registradas como não carregadas com o destino decidido no motivo: CGC, LOCAL, NUMERO, COMPL, BAIRRO, CIDADE, UF, CEP, IBGE, INSC, CONV_FONE, CONV_FAX, DNF_*, IBGE_NF e os contatos por setor CRED_*, CMED_*, RECG_FONE/FAX/EMAIL, AUTORIZ_*"
+  },
+  {
+   "arquivo": "conferência na imagem de referência (integrador)",
+   "mudanca": "contagem por valor (só agregados) de ATPARAMGERAL.DIGITAR_*/ID_TBDIGITAR_* e das chaves de TBDIGITAR, TBDIGITAR_CNSCADPAC e TBDIGITAR_FILIACAO classificadas pelo texto (opcional/obrigatório/não digitar), sem expor valores",
+   "motivo": "os pares do de-para da exigência em valores.d/L5-06.tsv (S/N e códigos 0..3) foram decididos por melhor prática sem ler linhas: 1=opcional e 2=obrigatorio valem nas duas numerações possíveis; 0 e 3 = não digitar (oculto) a confirmar; as listas de 4 opções (CNS, filiação) podem ter um código a mais",
+   "atendido": "r3 (revisão, pela própria fatia): contagem agregada na imagem de referência: TBDIGITAR 1 Não, 2 Sim, 3 Obrigatório; CNS também 4 Obrig.atend.SUS; filiação 1 Não, 2 Ambos, 3 Mãe, 4 Pai; marcações CHAR em T/F; 0 só nas colunas novas NOT NULL. Pares refeitos em valores.d/L5-06.tsv"
+  },
+  {
+   "arquivo": "conector/sante_conector/conferencia.py",
+   "mudanca": "deixar fora do plano, por regra genérica, as tabelas de PAIS_EXTERNOS (e as criadas só para a referência encadeada) presentes na imagem (mesmo pedido da L6-13)",
+   "motivo": "a L5-04 passou a declarar TBCBOPRO: a imagem da L5-06 tem TBCBOPRO só para ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS e a conferência a planejava de novo (alteracao_aguarda_sincronizar, conciliação falsa). A fatia usa hoje MAPA_TESTE = mapa real sem as declarações de TBCBOPRO, TBCBOSUS e HTATENDIMENTO (padrão da L6-13)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",
+   "mudanca": "retrato do pai com os filhos agregados: opção `#retrato:*+FILHA(chave)` (ou `agregar_filhos:TABELA`) que junta ao JSON da versão pai a lista das linhas da tabela filha (ex.: HTPACIENTE + HTPACTELEFONE, HTPROFIS + HTPROFISTEL), com o hash do JSON completo",
+   "motivo": "o telefone do histórico é parte do retrato da versão do cadastro; hoje (r3, revisão) HTPACTELEFONE e HTPROFISTEL vão para trilha_auditoria (entidade paciente/profissional, dados_depois com o retrato do telefone, correlacao = hash_dados da versão pai por ref:HTPACIENTE@hash_dados), nunca como versão própria. Com o mecanismo, o telefone entra no dados da versão e a trilha deixa de ser necessária"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "marca booleana por igualdade com coluna do pai: especial `#igual:<COLUNA>,<via ref>` (TRUE quando o valor da linha é igual ao da coluna do pai), para profissional_especialidade.principal = (TBMEDESP.ESP == TBPROFIS.ESP_PRINC pela inscrição)",
+   "motivo": "TBPROFIS.ESP_PRINC (459 profissionais) não tem destino próprio: a especialidade principal é a marca principal da especialidade do profissional (TBMEDESP, L5-06); o índice único uq_profissional_especialidade_principal exige no máximo uma por profissional"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "acusar destino do mapa (tabelas_destino) sem nenhuma coluna declarada e contar, por tabela, as colunas da origem sem declaração (nem carregada nem registrada com motivo)",
+   "motivo": "achado da revisão: TBCONVEN dava 19/0/0 com configuracao_tiss_fonte_pagadora e fonte_pagadora_estabelecimento sem coluna e o CNPJ fora sem registro; a conciliação por contagem não vê perda de coluna"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-02.tsv (fatia L6-02)",
+   "mudanca": "HTATENDIMENTO: #retrato:* em trilha_auditoria.dados_depois (hoje dados_antes)",
+   "motivo": "semântica dos históricos decidida por contagem na imagem de referência (F4-decisoes-destino.md seção 4, revisão r3): o retrato mais recente é igual à linha atual em 47.063 de 47.063 pacientes (nome, nascimento, CNS), 871 de 871 profissionais (nome), 77 de 77 fontes e 1.890 de 1.895 inscrições: o histórico guarda o estado DEPOIS da alteração. HTATENDRESP (L5-06) já foi alinhado"
   }
  ]
 }

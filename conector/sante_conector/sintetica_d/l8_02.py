@@ -1,56 +1,47 @@
-"""Fatia L8-02 (faturamento e restantes, módulo FAT; 23 tabelas): tabelas da origem com a forma do dicionário e dados
-100% falsos. Rodada de cobertura total (F4).
+"""Fatia L8-02 (faturamento e restantes, módulo FAT): tabelas da origem com a forma do dicionário e dados 100% falsos.
+Rodadas de cobertura total 2 e 3 (F4).
 
-Carregadas (10): RPRENDISENTO, RPTIPOPRESTADOR (categoria presumida), TBCLASSI (código TISS por de-para de valores),
+Carregadas (15): RPRENDISENTO, RPTIPOPRESTADOR (categoria presumida), TBCLASSI (código TISS por de-para de valores),
 RPEMPCALCIMP (@estabelecimento duas vezes, @vigencia_carga), RPEVENTO (natureza e crédito/débito pelo tipo do evento
-V/F/D, de-para de valores com evidência; sem par recusa), RPINTEVE (evento por chave alternativa ref:RPEVENTO.COD, natureza financeira por chave
-composta ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)), RPPARUSUEMP (competência por #data:ANO,MES, usuário pelo login), RPRPA
-(profissional pela origem ENCADEADA RPRPA_TBCBOPRO > TBCBOPRO > TBPROFIS, situação G e método E por de-para,
-fato gerador AAAAMM, totais presumidos), SIORCAME (número derivado, validade = data, paciente pelo prontuário
-ref:RICADPAC.PRONT) e SIEXAORC (orçamento por chave composta ref:SIORCAME(NOME,ATO), sequência #seq, nome do
-exame pela origem encadeada ref:SITABPRO(ATO,EXAME)>NOME). As intermediárias das referências encadeadas (TBCBOPRO,
-SITABPRO, RICADPAC) entram com TODAS as colunas do dicionário.
+V/F/D, de-para de valores com evidência; sem par recusa), RPINTEVE (evento por chave alternativa ref:RPEVENTO.COD,
+natureza financeira por chave composta ref:TBITEDES(GRUPO,SUBGRUPO,ITEM)), RPPARUSUEMP (competência por #data:ANO,MES,
+usuário pelo login), RPRPA (profissional pela origem ENCADEADA RPRPA_TBCBOPRO > TBCBOPRO > TBPROFIS, situação G e
+método E por de-para, fato gerador AAAAMM, totais presumidos), SIORCAME (número derivado, validade = data, paciente
+pelo prontuário ref:RICADPAC.PRONT), SIEXAORC (orçamento por chave composta ref:SIORCAME(NOME,ATO), sequência #seq,
+nome do exame pela origem encadeada ref:SITABPRO(ATO,EXAME)>NOME) e, na rodada 3: TBCOOPER (cooperativa com a pessoa jurídica gravada ANTES e adotada pelo CNPJ, @id:pessoa_juridica;
+município e banco pelos catálogos oficiais), TBINDPRO (valor do índice por procedimento: item faturável pelo CÓDIGO do procedimento,
+ref:TBPROCTO.COD_PROCEDIMENTO; código em duas tabelas de honorários dá pai_ambiguo; o id do procedimento usado como
+código dá pai_inexistente)
+e FCPORANE (valor do porte anestésico, DATE em DATETIME, retrato completo #retrato:* no JSON).
+As intermediárias das referências (TBCBOPRO, SITABPRO, RICADPAC) e as tabelas novas da rodada 3 entram com TODAS as
+colunas do dicionário. SITABPRO é carregada na conferência pelas declarações da L7-03. TBPROCTO está na imagem só para a
+chave alternativa ser LIDA: as declarações dela (L8-03) ficam fora do plano desta conferência (MAPA_TESTE) e os ids
+entram como pais já carregados.
 Pais externos (TBUSERS, RICADPAC do L3; TBPROFIS, TBCONVEN, TBITEDES) só são registrados como já carregados quando a
-ORDEM DO MAPA os põe antes do filho: sem as dependências pedidas em saida/L8-02.json (RPINTEVE -> RPEVENTO e TBITEDES,
-RPRPA -> TBPROFIS, SIORCAME -> TBCONVEN, SIEXAORC -> SIORCAME), a conciliação FALHA nessas tabelas, como falharia a
-carga real. O esperado é um só (pai antes do filho) e exige linhas gravadas em toda tabela carregada. Descartes pedidos (RPPARAM, RPRPA_TBCBOPRO,
-RPLANEVE_TBCBOPRO e as cinco listas de opções) e as que aguardam modelo ou catálogo (RPEVENTOESOC, RPLANEVE,
-RPLANEVE_COMPOSICAOBASE, RPLANRPA, SIREFCON) entram só com a forma (2 linhas falsas).
+ORDEM DO MAPA os põe antes do filho (rodada 2); os da rodada 3 (TBCONVEN, TBPROCTO, TBCTRTHM) entram sempre, e o teste
+exige o pedido de dependência registrado para cada par ainda fora de ordem. O CNPJ da cooperativa vem em DOUBLE como
+na origem e o esperado é SÓ o correto (pessoa jurídica nova, adoção pelo CNPJ, cooperativa repetida recusada por 1062,
+cooperativa sem CNPJ recusada pelo CHECK da pessoa jurídica): até o integrador aplicar os pedidos (dígitos de float
+inteiro em sentinela._digitos; CHECK de CNPJ obrigatório em empresa nacional, trilha F2.2), a conciliação de TBCOOPER
+FALHA de propósito. SIREFCON (bloqueada: o exame não tem item faturável carregado), o descarte RPRPA_TBCBOPRO, as cinco
+listas de opções (bloqueadas: a escolha de cada fonte pagadora ainda não é gravada) e RPLANRPA (aguarda o lançamento)
+entram só com a forma.
+As tabelas que o índice da rodada 3 dá à L8-01 (RPEVENTOESOC, RPLANEVE, RPLANEVE_COMPOSICAOBASE, RPLANEVE_TBCBOPRO,
+RPPARAM) saíram desta imagem: são declaradas lá.
 """
 import csv
 import datetime
 import decimal
 import os
 
+
 FORMAS = {
     'RPEMPCALCIMP': ('ID_TBEMPHOS,ID_TBEMPHOS_CONSIDERAR_IMP', [
         ('ID_TBEMPHOS', 'SMALLINT', True), ('ID_TBEMPHOS_CONSIDERAR_IMP', 'SMALLINT', True),
     ]),
-    'RPEVENTOESOC': ('ID_RPEVENTO,ID_TBEMPHOS', [
-        ('ID_RPEVENTO', 'INTEGER', True), ('ID_TBEMPHOS', 'SMALLINT', True), ('ID_FPNATRUBRICA', 'SMALLINT', True),
-        ('ID_FPRUBRICAINSS', 'SMALLINT', False), ('ID_FPRUBRICAIRRF', 'SMALLINT', False),
-    ]),
     'RPINTEVE': ('EMPRESA,EVENTO', [
         ('EMPRESA', 'SMALLINT', True), ('EVENTO', 'SMALLINT', True), ('GRUPO', 'SMALLINT', False),
         ('SUBGRUPO', 'SMALLINT', False), ('ITEM', 'SMALLINT', False), ('HIST', 'SMALLINT', False),
-    ]),
-    'RPPARAM': ('EMPRESA', [
-        ('EMPRESA', 'SMALLINT', True), ('OLD_ANO', 'SMALLINT', False), ('OLD_MES', 'SMALLINT', False),
-        ('SERIE_RPA', 'CHAR(1)', True), ('NUMERO_RPA', 'INTEGER', True), ('HAB_RET_IRRF', 'CHAR(1)', False),
-        ('HAB_RET_INSS', 'CHAR(1)', False), ('HAB_RET_ISS', 'CHAR(1)', False),
-        ('IDENT_LOTES_RPA', 'CHAR(1)', False), ('INTEG_FIN', 'CHAR(1)', False), ('INTEG_CONT', 'CHAR(1)', False),
-        ('DIG_DESC_PADRAO_SERV', 'CHAR(1)', False), ('DESC_PADRAO_SERV', 'VARCHAR(70)', False),
-        ('IMP_BASE_LIQ_IR', 'CHAR(1)', False), ('DESC_IRRF', 'CHAR(1)', False),
-        ('INCLUI_REFERENTE_CONTAB', 'CHAR(1)', False), ('IR_PJ_CUMULATIVO', 'CHAR(1)', False),
-        ('PROVISIONAR_EVENTOS_PLS', 'CHAR(1)', False), ('MODELO_PADRAO_RPA', 'SMALLINT', False),
-        ('CALCULAR_INSS_SALARIO_BASE', 'CHAR(1)', False), ('GERAR_RPA_PREST_SEM_PIS', 'CHAR(1)', False),
-        ('ORDEM_GRAV_RPA_CONT', 'SMALLINT', False), ('ORDEM_GRAV_NOME_PREST_CONT', 'SMALLINT', False),
-        ('ORDEM_GRAV_DESC_SERV_CONT', 'SMALLINT', False), ('ORDEM_GRAV_REFERENTE_CONT', 'SMALLINT', False),
-        ('INTEG_FATO_GERADOR', 'CHAR(1)', False), ('IDENT_CDC', 'CHAR(1)', False),
-        ('APENAS_INTEG_CUSTOS', 'CHAR(1)', False), ('FATO_GERADOR', 'INTEGER', False),
-        ('INCLUIR_DADOS_BANCARIOS', 'CHAR(1)', False), ('MALA_DIRETA_MEDICO', 'VARCHAR(200)', False),
-        ('MALA_DIRETA_COOPERATIVA', 'VARCHAR(200)', False), ('MALA_DIRETA_FORNECEDOR', 'VARCHAR(200)', False),
-        ('MALA_DIRETA_REPRESENTANTE_SGO', 'VARCHAR(200)', False), ('HABILITA_DATA_PREVISAO', 'CHAR(1)', False),
     ]),
     'RPPARUSUEMP': ('EMPRESA_RPPARAM,USUARIO', [
         ('EMPRESA_RPPARAM', 'SMALLINT', True), ('USUARIO', 'VARCHAR(31)', True),
@@ -74,27 +65,6 @@ FORMAS = {
         ('COD_TAB_ERP_TERCEIRO', 'VARCHAR(8)', False), ('ID_FPESOCTPAPURIR', 'SMALLINT', False),
         ('METODO_ENVIO', 'SMALLINT', False), ('ID_RPDEDUTIVEL', 'INTEGER', False),
         ('ID_RPRENDISENTO', 'INTEGER', False), ('INTEGRACAO_FATURAMENTO', 'CHAR(1)', False),
-    ]),
-    'RPLANEVE': ('ID_RPLANEVE', [
-        ('ID_RPLANEVE', 'INTEGER', True), ('EMPRESA', 'SMALLINT', True), ('TIPO', 'CHAR(1)', True),
-        ('COD_PRESTADOR', 'INTEGER', True), ('DATA', 'DATE', True), ('ID_RPEVENTO', 'SMALLINT', True),
-        ('VALOR', 'NUMERIC(18,2)', False), ('OBS', 'VARCHAR(1024)', False), ('PERC', 'NUMERIC(9,2)', False),
-        ('VEIO', 'CHAR(1)', False), ('REFERENTE', 'VARCHAR(60)', False), ('ID_FPCATEGTRAB', 'SMALLINT', False),
-        ('VALOR_DIG_CALC', 'CHAR(1)', False), ('DATA_LAUDO', 'DATE', False),
-        ('DESC_RENDIMENTO', 'VARCHAR(100)', False), ('ENTIDADE_PREVIDENCIA', 'VARCHAR(1)', False),
-        ('ID_TBPREVIDENCIACOMPL', 'INTEGER', False), ('VALOR_PATROC_FUNP', 'NUMERIC(18,2)', False),
-        ('IND_DECIMO_TERCEIRO', 'VARCHAR(1)', False), ('VLR_PERC_SCP', 'NUMERIC(4,2)', False),
-        ('EMAIL_ENVIADO', 'CHAR(1)', True), ('DATA_PREVISAO', 'DATE', False),
-    ]),
-    'RPLANEVE_COMPOSICAOBASE': ('ID', [
-        ('ID', 'BIGINT', True), ('ID_RPLANEVE', 'INTEGER', False), ('IMPOSTO', 'INTEGER', False),
-        ('CONTA', 'INTEGER', False), ('PARCELA', 'INTEGER', False), ('BASE_CALCULO', 'NUMERIC(18,2)', False),
-        ('ALIQUOTA', 'NUMERIC(9,2)', False), ('VALOR', 'NUMERIC(18,2)', False),
-        ('FATO_GERADOR_CONTABIL', 'INTEGER', False), ('ID_FPITENSNATRENDIMENTO', 'INTEGER', False),
-        ('VALOR_BRUTO', 'NUMERIC(18,2)', False), ('ID_EVENTO', 'INTEGER', False),
-    ]),
-    'RPLANEVE_TBCBOPRO': ('ID_RPLANEVE', [
-        ('ID_RPLANEVE', 'INTEGER', True), ('ID_TBCBOPRO', 'INTEGER', True),
     ]),
     'RPRPA': ('ID_RPRPA', [
         ('EMPRESA', 'SMALLINT', True), ('ID_RPRPA', 'INTEGER', True), ('SERIE', 'VARCHAR(3)', True),
@@ -147,19 +117,24 @@ FORMAS = {
         ('ID', 'SMALLINT', True), ('NOME', 'VARCHAR(30)', True),
     ]),
 }
+# rodada 3: tabelas do índice da L8-02 declaradas agora nesta fatia, com TODAS as colunas do dicionário
+NOVAS_R3 = {"TBCOOPER": "COD", "TBINDPRO": "CONV,PROCTO,DATA", "FCPORANE": "TAB,PORTE,DATA_PORTE"}
 CARREGADAS = ("RPRENDISENTO", "RPTIPOPRESTADOR", "TBCLASSI", "RPEMPCALCIMP", "RPEVENTO", "RPINTEVE", "RPPARUSUEMP",
-              "RPRPA", "SIORCAME", "SIEXAORC")
+              "RPRPA", "SIORCAME", "SIEXAORC") + tuple(NOVAS_R3)
 COM_DADOS = CARREGADAS + ("RPRPA_TBCBOPRO",)  # intermediária da referência encadeada do RPA (descarte pedido)
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 # intermediárias das referências encadeadas (de outras fatias): todas as colunas do dicionário
 _TIPOS_FB = {"DOUBLE": "DOUBLE PRECISION", "BLOB": "BLOB SUB_TYPE 0"}
-INTERMEDIARIAS = {"TBCBOPRO": "ID", "SITABPRO": "ATO,CODALF", "RICADPAC": "ID"}
+INTERMEDIARIAS = {"TBCBOPRO": "ID", "SITABPRO": "ATO,CODALF", "RICADPAC": "ID", "TBPROCTO": "ID"}
+# só LIDAS pela chave alternativa (pais já carregados em PAIS_EXTERNOS): fora do plano da conferência
+SO_LIDAS = ("TBPROCTO",)
+DO_DICIONARIO = dict(INTERMEDIARIAS, **NOVAS_R3)
 _MAPA = os.path.join(os.path.dirname(__file__), "..", "..", "mapa")
 
 
 def _dicionario():
-    cols = {t: [] for t in INTERMEDIARIAS}
+    cols = {t: [] for t in DO_DICIONARIO}
     with open(os.path.join(_MAPA, "colunas.tsv"), encoding="utf-8") as f:
         for r in csv.DictReader(f, delimiter="\t"):
             if r["tabela"] in cols:
@@ -205,7 +180,7 @@ def _ddl():
         if chave:
             defs.append("PRIMARY KEY (%s)" % chave)
         saida.append("CREATE TABLE %s (%s);" % (t, ", ".join(defs)))
-    for t, k in INTERMEDIARIAS.items():
+    for t, k in DO_DICIONARIO.items():
         saida.append('CREATE TABLE %s (%s, PRIMARY KEY (%s));' % (t, ", ".join('"%s" %s' % c for c in COLS_INTER[t]), k))
     return "\n".join(saida) + "\n"
 
@@ -214,9 +189,43 @@ DDL = _ddl()
 # pais de fora da fatia registrados como já carregados SÓ quando a ordem do mapa os põe antes de todos os filhos
 _FORA = {p for _, p in dependencias_fora_de_ordem()}
 PAIS_EXTERNOS = {p: ks for p, ks in _CHAVES_EXTERNAS.items() if p not in _FORA}
-# único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele)
+# rodada 3: dependências novas PEDIDAS em saida/L8-02.json (o integrador regenera a ordem). Os pais entram sempre como
+# já carregados; o teste confere que cada par fora de ordem tem o pedido registrado.
+DEPENDENCIAS_PEDIDAS_R3 = [("SIREFCON", "TBCONVEN"), ("TBINDPRO", "TBCONVEN"), ("TBINDPRO", "TBPROCTO")]
+PAIS_EXTERNOS.update({"TBCONVEN": [1], "TBPROCTO": [1, 2, 3], "TBCTRTHM": [10, 20]})
+
+
+def __getattr__(nome):
+    """`MAPA_TESTE` (lido pela conferência): o mapa real sem as declarações de SO_LIDAS (TBPROCTO é da L8-03; aqui só
+    a chave alternativa é lida, e o pai já conta como carregado)."""
+    if nome != "MAPA_TESTE":
+        raise AttributeError(nome)
+    from .. import mapa
+    m = mapa.carregar_execucao()
+    return dict(m, colunas_decl=[c for c in m["colunas_decl"] if c["tabela"] not in SO_LIDAS])
+
+
+def cnpj_falso(base12):
+    """CNPJ de 14 dígitos com dígitos verificadores válidos a partir de 12 dígitos inventados."""
+    d = [int(x) for x in "%012d" % base12]
+    for pesos in ([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]):
+        r = sum(x * p for x, p in zip(d, pesos)) % 11
+        d.append(0 if r < 2 else 11 - r)
+    return "".join(map(str, d))
+
+
+CNPJ_A, CNPJ_B, CNPJ_C, CNPJ_EXISTENTE = (cnpj_falso(x) for x in (221113330001, 223335550001, 224446660001,
+                                                                    225557770001))
+# único estabelecimento do cliente de exemplo (o @estabelecimento resolve por ele); catálogos oficiais usados pela
+# cooperativa (município, banco); a pessoa jurídica já cadastrada (CNPJ_EXISTENTE) prova a adoção pelo CNPJ
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
-                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
+                   " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');"
+                   " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES"
+                   " ('3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3));"
+                   " INSERT INTO banco (codigo_compensacao, codigo_ispb, descricao, vigencia_inicio, versao_fonte,"
+                   " criado_em) VALUES ('001', '00000001', 'Banco exemplo', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));"
+                   " INSERT INTO pessoa_juridica (cnpj, razao_social, origem, criado_em) VALUES ('%s',"
+                   " 'Pessoa juridica ja cadastrada', 'sistema', UTC_TIMESTAMP(3));" % CNPJ_EXISTENTE)
 
 
 def _falso(tipo, i):
@@ -236,7 +245,7 @@ def _falso(tipo, i):
 
 
 def _ins(ins, tab, **v):
-    if tab in INTERMEDIARIAS:
+    if tab in DO_DICIONARIO:
         ins(tab, [v.get(c) for c, _ in COLS_INTER[tab]])
     else:
         ins(tab, [v.get(c) for c, _, _ in COLUNAS[tab]])
@@ -310,9 +319,42 @@ def linhas(r, ins):
             ("Interessado  Exemplo Dois", 1, 150, DT(2025, 6, 3), 1, "USR2", 999),
             ("Interessado Exemplo Tres", 1, None, None, None, None, None)]:
         _ins(ins, "SIORCAME", NOME=nome, ATO=ato, PERC=perc, DATA=data, CONV=conv, USUARIO=usu, PRONT=pront)
-    for ato, cod, nome in [(1, "HEM", "Hemograma exemplo"), (1, "GLI", "Glicose exemplo"),
-                           (2, "HEM", "Hemograma setor dois exemplo")]:
-        _ins(ins, "SITABPRO", ATO=ato, CODALF=cod, NOME=nome)
+    for i, ato, cod, nome in [(1, 1, "HEM", "Hemograma exemplo"), (2, 1, "GLI", "Glicose exemplo"),
+                              (3, 2, "HEM", "Hemograma setor dois exemplo")]:
+        _ins(ins, "SITABPRO", ID=i, ATO=ato, CODALF=cod, NOME=nome)
+    # cooperativas: 1 completa (pessoa jurídica nova); 2 CNPJ já cadastrado (adotada), conta e ISS fora do domínio;
+    # 3 sem CNPJ (CHECK da pessoa jurídica: recusa); 4 município e banco fora do catálogo (gravada, NULL); 5 mesmo
+    # CNPJ da 1 (adota a mesma pessoa: a cooperativa repetida recusa por 1062); 6 sem nome (1048)
+    base = dict(IBGE=3550308, BANCO=1, AGENCIA=1234, DG_AGENCIA="5", CONTA=98765, DG_CONTA="0", TP_CONTA="C",
+                RETER_IR="S", ALIQUOTA_IR=D("1.50"), P_ISS=D("2.00"), P_PIS=D("0.65"), P_COFINS=D("3.00"),
+                P_CSLL=D("1.00"), REPASSE=80.0, ATIVO="S", IMPOSTOS10REAIS="S", OPT_SIMPLES="N", CEP=1310100,
+                CNES=1234567, LOCAL="Rua Exemplo", NUM=10, BAIRRO="Bairro Exemplo", FONE="1100000000", UF="SP",
+                CIDADE="Cidade Exemplo", P_R_CO=D("70.00"))
+    for cod, nome, cnpj, extra in [
+            (1, "Cooperativa Exemplo Um", CNPJ_A, {}),
+            (2, "Cooperativa  Exemplo  Dois", CNPJ_EXISTENTE, dict(TP_CONTA="X", P_ISS=D("150.00"))),
+            (3, "Cooperativa Exemplo Sem Documento", None, {}),
+            (4, "Cooperativa Exemplo Quatro", CNPJ_B, dict(IBGE=9999999, BANCO=999)),
+            (5, "Cooperativa Exemplo Repetida", CNPJ_A, {}),
+            (6, None, CNPJ_C, {})]:
+        _ins(ins, "TBCOOPER", **dict(base, COD=cod, NOME=nome, CGC=float(cnpj) if cnpj else None, **extra))
+    # procedimentos (só lidos pela chave alternativa): 10101 numa tabela de honorários; 10102 em duas
+    for i, tab, cod in [(1, 10, 10101), (2, 10, 10102), (3, 20, 10102)]:
+        _ins(ins, "TBPROCTO", ID=i, ID_TBCTRTHM=tab, COD_PROCEDIMENTO=cod, NOME="Procedimento exemplo %d" % i)
+    # índice por procedimento (PROCTO = código): dois valores do 10101 (vigências); valor negativo (recusa); código
+    # em duas tabelas (pai_ambiguo, recusa); o ID 1 usado como código (pai_inexistente: a ligação não é pelo id)
+    for proc, data, val in [(10101, DT(2025, 1, 1), D("0.5000")), (10101, DT(2025, 6, 1), D("0.7000")),
+                            (10101, DT(2025, 9, 1), D("-1.0000")), (10102, DT(2025, 1, 1), D("0.8000")),
+                            (1, DT(2025, 1, 1), D("0.9000"))]:
+        _ins(ins, "TBINDPRO", CONV=1, PROCTO=proc, DATA=data, VALOR=val)
+    # porte anestésico: 10/1 em duas vigências (com equivalência ao porte médico, no retrato); sem valor (1048);
+    # tabela inexistente (recusa); 20/0 sem equivalência
+    for tab, porte, data, val, qt, pm in [(10, "1", DT(2024, 1, 1), D("100.1234"), 1.5, "1A"),
+                                          (10, "1", DT(2024, 6, 1), D("120.0000"), 1.5, "1A"),
+                                          (10, "2", DT(2024, 1, 1), None, None, None),
+                                          (99, "3", DT(2024, 1, 1), D("50.0000"), None, None),
+                                          (20, "0", DT(2024, 1, 1), D("10.0000"), None, None)]:
+        _ins(ins, "FCPORANE", TAB=tab, PORTE=porte, DATA_PORTE=data, VALOR=val, QTDE=qt, PMEDICO=pm)
     # itens: dois do orçamento Um/1; um do Um/2 (pai recusado); um de orçamento inexistente
     for nome, ex, val, ato in [("Interessado Exemplo Um", "HEM", D("10.00"), 1),
                                ("Interessado Exemplo Um", "GLI", D("20.00"), 1),
@@ -344,4 +386,14 @@ def esperado():
                                                    "restricao_destino_1048": 1, "restricao_destino_4025": 1}}
     e["SIEXAORC"] = {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}}
+    # cooperativa: só o esperado correto (CNPJ em DOUBLE lido como número inteiro; nacional sem CNPJ recusada pelo
+    # CHECK da pessoa jurídica). Falha até os pedidos de sentinela._digitos e do CHECK serem aplicados (de propósito).
+    # Medido numa cópia descartável com os dois pedidos aplicados: gravadas 1, 2 e 4; a 2 adota a pessoa já cadastrada
+    # (adotado_existente); a 5 usa a pessoa que a 1 criou na mesma execução e a cooperativa repetida recusa (1062)
+    e["TBCOOPER"] = {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "catalogo_codigo_inexistente": 2,
+                                                   "adotado_existente": 1, "restricao_destino_1062": 1,
+                                                   "restricao_destino_1048": 1, "restricao_destino_4025": 1}}
+    e["TBINDPRO"] = {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
+                                                   "pai_ambiguo": 1, "restricao_destino_1048": 3}}
+    e["FCPORANE"] = {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}}
     return e

@@ -9,14 +9,20 @@ from sante_conector.sintetica_d import l6_05
 
 CARREGADAS = ["GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
               "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC",
-              "PRCAMPOSLOCALIZACAOPACIENTE", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
+              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
               "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA"]
 # descarte de produto (declarado/sem_carga.tsv), com a causa aceita
-DESCARTADAS = {"GECADANTIMI": "duplicado", "PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
-               "PRFICHAREL": "sem_valor", "PRLAYIMPPRESC": "mecanismo_do_produto"}
-# decisão tomada, declaração pronta comentada; falta regra genérica no motor (pedido no saida/L6-05.json)
-BLOQUEADAS = {"PRDADOSENVIOOPERADORA": "regra_faltante"}
+DESCARTADAS = {"PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
+               "PRLAYIMPPRESC": "mecanismo_do_produto"}
+# dado que o hospital usa e que ainda não carrega: declaração pronta, comentada, à espera do pedido (saida/L6-05.json);
+# nunca descarte (a ficha do antimicrobiano é clínica; o leiaute é do hospital)
+BLOQUEADAS = {"GECADANTIMI": "pedido 14", "PRFICHAREL": "pedido 15"}
 AGUARDAM = list(DESCARTADAS) + list(BLOQUEADAS)
+# chaves de atributo que a tela do painel exibe (COLUNAS_PAINEL, packages/contratos/src/pep/documentos.ts)
+COLUNAS_PAINEL = {"leito", "paciente", "idade", "atendimento", "entrada", "dias", "convenio", "medico", "alergias",
+                  "alertas"}
+# tabela -> destinos (principal primeiro); as outras têm um destino só
+MULTIDESTINO = {"PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"]}
 # colunas da origem declaradas sem destino, de propósito (motivo na declaração)
 SEM_DESTINO = {("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
                ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")}
@@ -66,18 +72,54 @@ class Plano(unittest.TestCase):
             self.assertTrue(sc[t]["motivo"].strip(), t)
             self.assertNotIn(t, self.por)
 
-    def test_bloqueadas_com_declaracao_pronta(self):
+    def test_bloqueadas_so_com_declaracao_pronta_e_pedido(self):
+        """Só GECADANTIMI e PRFICHAREL ficam de fora sem descarte: declaração pronta comentada (motivo cita o pedido),
+        nenhuma linha em sem_carga.tsv (não é descarte) e o pedido em aberto no saida/L6-05.json."""
         if not (DECLARADO / "sem_carga.tsv").exists():
             self.skipTest("mapa do conector ausente")
-        sc = {r["tabela"]: r for r in mapa.ler_tsv(DECLARADO / "sem_carga.tsv")}
+        sc = {r["tabela"] for r in mapa.ler_tsv(DECLARADO / "sem_carga.tsv")}
+        self.assertFalse(sc & (set(CARREGADAS) | set(BLOQUEADAS)))
         txt = (DECLARADO / "colunas.d" / "L6-05.tsv").read_text(encoding="utf-8")
-        for t, causa in BLOQUEADAS.items():
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", causa), t)
-            self.assertNotIn(t, self.por)
-            pronta = [l.split("\t") for l in txt.splitlines() if l.startswith("#" + t + "\t")]
-            destinos = {x[2] for x in pronta}
-            self.assertIn("informacao_clinica_operadora.grupo_informacao_clinica_operadora_id", destinos)
-            self.assertIn("informacao_clinica_operadora.codigo", destinos)
+        coment = [l.split("\t") for l in txt.splitlines() if l.startswith("#")]
+        self.assertEqual({c[0][1:] for c in coment}, set(BLOQUEADAS))
+        for c in coment:
+            self.assertIn(BLOQUEADAS[c[0][1:]], c[-1], c[:3])
+        import json
+        saida = Path(__file__).resolve().parents[2] / "docs/obra/fatias/f4/saida/L6-05.json"
+        if saida.exists():
+            abertos = [p for p in json.loads(saida.read_text(encoding="utf-8"))["pedidos"] if not p.get("atendido")]
+            for t in BLOQUEADAS:
+                self.assertTrue(any(t in p["mudanca"] + p["motivo"] for p in abertos), t)
+
+    def test_coluna_do_painel_pela_chave_do_produto(self):
+        """A chave do atributo vem do NOME por de-para para as chaves que a tela exibe (nunca o id da origem), e a
+        preferência do usuário copia a chave que a coluna do painel gravou."""
+        c = self._col("PRCAMPOSLOCALIZACAOPACIENTE", "chave_atributo")
+        self.assertEqual([(x["coluna"], x["regra"]) for x in c], [("NOME", "texto_nome")])
+        self.assertTrue(c[0]["valores"])
+        self.assertLessEqual(set(c[0]["valores"].values()), COLUNAS_PAINEL)
+        self.assertEqual(c[0]["valores"].get("Dias de internação"), "dias")
+        u = self._col("PRFAVORITO_EXIBIR", "coluna")
+        self.assertEqual(len(u), 1)
+        decl = [r for r in mapa.ler_tsv(DECLARADO / "colunas.d" / "L6-05.tsv")
+                if r["tabela"] == "PRFAVORITO_EXIBIR" and r["destino"] == "painel_coluna_usuario.coluna"]
+        self.assertEqual(decl[0]["via"], "ref:PRCAMPOSLOCALIZACAOPACIENTE@chave_atributo")
+
+    def test_informacao_operadora_com_grupo_padrao_gravado_antes(self):
+        """A informação é o principal (PRTPRESPOSTA a aponta por ref:); o grupo, que a origem não tem e o modelo exige,
+        é gravado antes, criado uma vez e adotado pelo código, e o principal recebe o id dele."""
+        p = self.por["PRDADOSENVIOOPERADORA"]
+        dp, dg = MULTIDESTINO["PRDADOSENVIOOPERADORA"]
+        self.assertEqual(p["destinos"], [dp, dg])
+        og = (p.get("opcoes") or {}).get(dg) or {}
+        self.assertTrue(og.get("antes"))
+        self.assertEqual(og.get("adotar"), ["codigo"])
+        g = {c["destino"]: c["coluna"] for c in p["colunas"][dg]}
+        self.assertEqual(g["codigo"], "=envio_operadora")
+        d = {c["destino"]: c["coluna"] for c in p["colunas"][dp]}
+        self.assertEqual(d["grupo_informacao_clinica_operadora_id"], "@id:" + dg)
+        self.assertEqual(d["codigo"], "#codigo_derivado:ID:30:envio_")
+        self.assertEqual(d["descricao"], "NOME")
 
     def test_cobertura_por_coluna(self):
         """Toda coluna da origem de tabela carregada tem declaração (com destino ou com motivo), e toda ref: termina
@@ -119,7 +161,8 @@ class Plano(unittest.TestCase):
 
     def test_um_destino_por_tabela(self):
         for p in self.plano:
-            self.assertEqual(len(p["destinos"]), 1, p["tabela"])
+            self.assertEqual(p["destinos"] if p["tabela"] in MULTIDESTINO else len(p["destinos"]),
+                             MULTIDESTINO.get(p["tabela"], 1), p["tabela"])
 
     def test_referencias(self):
         self.assertEqual(self._col("PRAGRAVOPERGUNTA", "agravo_notificavel_id")[0]["referencia"], "PRAGRAVOTPARQUETIPO")
@@ -178,7 +221,7 @@ class Plano(unittest.TestCase):
             self.assertEqual(self._col("PRBHTPELIMINA", d)[0]["regra"], "booleano_sn", d)
         for p in self.plano:
             for c in p["colunas"][p["destinos"][0]]:
-                if c["destino"] == "codigo":
+                if c["destino"] == "codigo" and not c["coluna"].startswith("#codigo_derivado:"):
                     self.assertIn(c["regra"], ("texto", "codigo_char"), p["tabela"])
 
     def test_obrigatorias_do_destino_cobertas(self):

@@ -106,24 +106,75 @@ SIEXAORC	VALOR	orcamento_particular_item.valor_unitario	decimal_nao_negativo			L
 SIEXAORC	VALOR	orcamento_particular_item.valor_total	decimal_nao_negativo			L8-02: quantidade 1: total = valor
 SIEXAORC	ATO		inteiro			L8-02: setor (chave da origem)
 SIEXAORC	DATA		data			L8-02: data (chave da origem)
-RPEVENTOESOC	ID_RPEVENTO		chave_origem			L8-02: não carregada: natureza_rubrica_id NOT NULL é catálogo oficial do eSocial (tabela 03) sem de-para no conector (depara.CATALOGOS não tem natureza_rubrica nem codigo_incidencia_rubrica): catalogo_oficial_faltante, pedido em saida/L8-02.json; declaração pronta: evento ref:RPEVENTO, natureza ref:FPNATRUBRICA>COD de-para natureza_rubrica, @vigencia_carga
-RPEVENTOESOC	ID_TBEMPHOS		chave_origem			L8-02: não carregada: natureza_rubrica_id NOT NULL é catálogo oficial do eSocial (tabela 03) sem de-para no conector (depara.CATALOGOS não tem natureza_rubrica nem codigo_incidencia_rubrica): catalogo_oficial_faltante, pedido em saida/L8-02.json; declaração pronta: evento ref:RPEVENTO, natureza ref:FPNATRUBRICA>COD de-para natureza_rubrica, @vigencia_carga
-RPEVENTOESOC	ID_FPNATRUBRICA		chave_origem			L8-02: não carregada: natureza_rubrica_id NOT NULL é catálogo oficial do eSocial (tabela 03) sem de-para no conector (depara.CATALOGOS não tem natureza_rubrica nem codigo_incidencia_rubrica): catalogo_oficial_faltante, pedido em saida/L8-02.json; declaração pronta: evento ref:RPEVENTO, natureza ref:FPNATRUBRICA>COD de-para natureza_rubrica, @vigencia_carga
-RPEVENTOESOC	ID_FPRUBRICAINSS		chave_origem			L8-02: não carregada: natureza_rubrica_id NOT NULL é catálogo oficial do eSocial (tabela 03) sem de-para no conector (depara.CATALOGOS não tem natureza_rubrica nem codigo_incidencia_rubrica): catalogo_oficial_faltante, pedido em saida/L8-02.json; declaração pronta: evento ref:RPEVENTO, natureza ref:FPNATRUBRICA>COD de-para natureza_rubrica, @vigencia_carga
-RPEVENTOESOC	ID_FPRUBRICAIRRF		chave_origem			L8-02: não carregada: natureza_rubrica_id NOT NULL é catálogo oficial do eSocial (tabela 03) sem de-para no conector (depara.CATALOGOS não tem natureza_rubrica nem codigo_incidencia_rubrica): catalogo_oficial_faltante, pedido em saida/L8-02.json; declaração pronta: evento ref:RPEVENTO, natureza ref:FPNATRUBRICA>COD de-para natureza_rubrica, @vigencia_carga
-RPLANEVE	ID_RPLANEVE		chave_origem			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	EMPRESA		inteiro			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	TIPO		codigo_char			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	COD_PRESTADOR		inteiro			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	DATA		data			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	ID_RPEVENTO		chave_origem			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE	VALOR		decimal			L8-02: não carregada: lancamento_repasse.favorecido_repasse_id NOT NULL sem fonte (nenhuma tabela carrega favorecido_repasse antes do lançamento); decisão de modelo (F4-decisoes-destino.md): favorecido nulo no lançamento migrado, com tipo_favorecido e profissional; pedido em saida/L8-02.json
-RPLANEVE_COMPOSICAOBASE	ID		chave_origem			L8-02: não carregada: pai lançamento (RPLANEVE) aguarda a decisão de modelo do favorecido
-RPLANEVE_COMPOSICAOBASE	ID_RPLANEVE		chave_origem			L8-02: não carregada: pai lançamento (RPLANEVE) aguarda a decisão de modelo do favorecido
 RPLANRPA	ID_RPRPA		chave_origem			L8-02: não carregada: pai lançamento (RPLANEVE) aguarda a decisão de modelo do favorecido
 RPLANRPA	ID_RPLANEVE		chave_origem			L8-02: não carregada: pai lançamento (RPLANEVE) aguarda a decisão de modelo do favorecido
-SIREFCON	EXAME		texto			L8-02: não carregada: equivalencia_item_fonte_pagadora exige item faturável ou grupo (CHECK) e a origem dá o exame (ATO, EXAME), cujo item faturável não tem caminho pela origem; decisão de modelo: alvo exame_id na equivalência por fonte pagadora; pedido em saida/L8-02.json
-SIREFCON	CONV		inteiro			L8-02: não carregada: equivalencia_item_fonte_pagadora exige item faturável ou grupo (CHECK) e a origem dá o exame (ATO, EXAME), cujo item faturável não tem caminho pela origem; decisão de modelo: alvo exame_id na equivalência por fonte pagadora; pedido em saida/L8-02.json
-SIREFCON	CODAMB		inteiro			L8-02: não carregada: equivalencia_item_fonte_pagadora exige item faturável ou grupo (CHECK) e a origem dá o exame (ATO, EXAME), cujo item faturável não tem caminho pela origem; decisão de modelo: alvo exame_id na equivalência por fonte pagadora; pedido em saida/L8-02.json
-SIREFCON	ATO		inteiro			L8-02: não carregada: equivalencia_item_fonte_pagadora exige item faturável ou grupo (CHECK) e a origem dá o exame (ATO, EXAME), cujo item faturável não tem caminho pela origem; decisão de modelo: alvo exame_id na equivalência por fonte pagadora; pedido em saida/L8-02.json
-SIREFCON	TIPO_CTA		codigo_char			L8-02: não carregada: equivalencia_item_fonte_pagadora exige item faturável ou grupo (CHECK) e a origem dá o exame (ATO, EXAME), cujo item faturável não tem caminho pela origem; decisão de modelo: alvo exame_id na equivalência por fonte pagadora; pedido em saida/L8-02.json
+#SIREFCON	CONV	equivalencia_item_fonte_pagadora.fonte_pagadora_id			ref:TBCONVEN	L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: fonte pagadora (TBCONVEN); inexistente: NOT NULL recusa (dependência SIREFCON -> TBCONVEN pedida)
+#SIREFCON	EXAME	equivalencia_item_fonte_pagadora.item_faturavel_id			ref:SITABPRO(ATO,EXAME)@item_faturavel_id	L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: item faturável do exame (setor + código): cópia de exame.item_faturavel_id da linha que SITABPRO gravou; exame sem item: o CHECK do alvo recusa (4025, visível) até o vínculo exame -> item faturável (pedido)
+#SIREFCON	CODAMB	equivalencia_item_fonte_pagadora.codigo_cobranca	inteiro_zero_nulo			L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: código do exame na fonte pagadora; 0 = sem código: NOT NULL recusa
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	codigo_char	valores		L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: tipo de conta -> tipo de atendimento (valores.d/L8-02.tsv: I internacao, A ambulatorial, E externo, U urgencia, T todos); outro: valor_fora_do_dominio e o padrão (todos)
+#SIREFCON	@vigencia_carga	equivalencia_item_fonte_pagadora.vigencia_inicio				L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: a origem não tem início de vigência: data da carga com vigencia_sem_fonte
+#SIREFCON	ATO		inteiro			L8-02 r3 (revisão): declaração pronta, comentada: pai não carregado: o item faturável do exame (exame.item_faturavel_id) não tem carga (vínculo exame -> item faturável pedido à L7-03 em saida/L8-02.json); sem ele toda equivalência seria recusada. SIREFCON bloqueada em sem_carga.tsv | L8-02 r3: setor do exame: parte da chave, lido pela referência composta ao exame
+TBCOOPER	NOME	cooperativa_medica.nome	texto_nome			L8-02 r3: nome de exibição; vazio recusa (NOT NULL)
+TBCOOPER	@id:pessoa_juridica	cooperativa_medica.pessoa_juridica_id				L8-02 r3: a pessoa jurídica gravada ou adotada antes da cooperativa (CNPJ único)
+TBCOOPER	REPASSE	cooperativa_medica.percentual_repasse	faixa:0,100			L8-02 r3: percentual de repasse
+TBCOOPER	BANCO	cooperativa_medica.banco_id	inteiro	banco		L8-02 r3: banco pelo código de compensação (catálogo oficial); ausente: catalogo_codigo_*
+TBCOOPER	AGENCIA	cooperativa_medica.agencia	texto			L8-02 r3: agência
+TBCOOPER	DG_AGENCIA	cooperativa_medica.agencia_digito	texto			L8-02 r3: dígito da agência
+TBCOOPER	CONTA	cooperativa_medica.conta	texto			L8-02 r3: conta
+TBCOOPER	DG_CONTA	cooperativa_medica.conta_digito	texto			L8-02 r3: dígito da conta
+TBCOOPER	TP_CONTA	cooperativa_medica.tipo_conta_bancaria	codigo_char	valores		L8-02 r3: C corrente, P poupança (valores.d/L8-02.tsv); outro: valor_fora_do_dominio e NULL
+TBCOOPER	RETER_IR	cooperativa_medica.retem_ir	booleano_sn			L8-02 r3: retém IR (S/N)
+TBCOOPER	ALIQUOTA_IR	cooperativa_medica.aliquota_ir	faixa:0,100			L8-02 r3: alíquota de IR
+TBCOOPER	P_ISS	cooperativa_medica.aliquota_iss	faixa:0,100			L8-02 r3: alíquota de ISS
+TBCOOPER	P_CSLL	cooperativa_medica.aliquota_csll	faixa:0,100			L8-02 r3: alíquota de CSLL
+TBCOOPER	P_PIS	cooperativa_medica.aliquota_pis	faixa:0,100			L8-02 r3: alíquota de PIS
+TBCOOPER	P_COFINS	cooperativa_medica.aliquota_cofins	faixa:0,100			L8-02 r3: alíquota de COFINS
+TBCOOPER	ALIQUOTA_CBS	cooperativa_medica.aliquota_cbs	faixa:0,100			L8-02 r3: alíquota de CBS
+TBCOOPER	ALIQUOTA_IBS	cooperativa_medica.aliquota_ibs	faixa:0,100			L8-02 r3: alíquota de IBS
+TBCOOPER	ALIQUOTA_AGREGADO	cooperativa_medica.aliquota_agregado	faixa:0,100			L8-02 r3: retenção sobre o agregado
+TBCOOPER	DESC_P	cooperativa_medica.percentual_desconto	faixa:0,100			L8-02 r3: percentual de desconto
+TBCOOPER	OPT_SIMPLES	cooperativa_medica.optante_simples	booleano_sn			L8-02 r3: optante do Simples
+TBCOOPER	BASE_CALCULO_REDUZIDA	cooperativa_medica.base_calculo_reduzida	booleano_sn			L8-02 r3: base de cálculo reduzida
+TBCOOPER	PERCENTUAL_FIXO	cooperativa_medica.aliquota_fixa	booleano_sn			L8-02 r3: alíquotas fixas do cadastro
+TBCOOPER	IMPOSTOS10REAIS	cooperativa_medica.dispensa_retencao_minima	booleano_sn			L8-02 r3: não retém tributo abaixo do mínimo legal (R$ 10)
+TBCOOPER	DIGITARIMPOSTOS	cooperativa_medica.digita_impostos	booleano_sn			L8-02 r3: impostos informados à mão no repasse
+TBCOOPER	ATIVO	cooperativa_medica.ativo	booleano_sn			L8-02 r3: situação; vazio fica com o padrão (ativa)
+TBCOOPER	CGC	pessoa_juridica.cnpj	cnpj		pessoa_juridica;antes;adotar:cnpj	L8-02 r3: pessoa jurídica da cooperativa gravada ANTES dela e adotada pelo CNPJ se já existir; sem CNPJ válido o CHECK recusa a linha
+TBCOOPER	NOME	pessoa_juridica.razao_social	texto_nome		pessoa_juridica	L8-02 r3: razão social
+TBCOOPER	CNES	pessoa_juridica.cnes	inteiro_zeros_esquerda:7		pessoa_juridica	L8-02 r3: CNES
+TBCOOPER	CEP	pessoa_juridica.cep	inteiro_zeros_esquerda:8		pessoa_juridica	L8-02 r3: CEP
+TBCOOPER	LOCAL	pessoa_juridica.logradouro	texto		pessoa_juridica	L8-02 r3: logradouro
+TBCOOPER	NUM	pessoa_juridica.numero_endereco	texto		pessoa_juridica	L8-02 r3: número
+TBCOOPER	COMPL	pessoa_juridica.complemento	texto		pessoa_juridica	L8-02 r3: complemento
+TBCOOPER	BAIRRO	pessoa_juridica.bairro	texto		pessoa_juridica	L8-02 r3: bairro
+TBCOOPER	IBGE	pessoa_juridica.municipio_ibge_id	inteiro	ibge_municipio	pessoa_juridica	L8-02 r3: município pelo código IBGE (catálogo oficial); ausente: catalogo_codigo_*
+TBCOOPER	FONE	pessoa_juridica.telefone	texto		pessoa_juridica	L8-02 r3: telefone
+TBCOOPER	COD		inteiro			L8-02 r3: chave da origem (conector_origem); o cadastro usa o id
+TBCOOPER	UF		texto			L8-02 r3: não migrada: duplicada do município IBGE (a UF vem do município)
+TBCOOPER	CIDADE		texto			L8-02 r3: não migrada: duplicada do município IBGE
+TBCOOPER	CODCON		texto			L8-02 r3: não migrada: código da cooperativa no plano contábil antigo; a integração contábil do produto usa a conta do cadastro financeiro
+TBCOOPER	P_R_CO		decimal			L8-02 r3 (revisão): não carregada, aguarda modelo (pedido em saida/L8-02.json à trilha F2.2: cooperativa_medica.percentual_repasse_consulta/_procedimento/_exame/_internacao): percentual de repasse da cooperativa por tipo de conta, dado financeiro em uso; TBREPGER é outro cadastro (regras com COOP como critério) e não o repete. Não é descarte (consulta)
+TBCOOPER	P_R_PR		decimal			L8-02 r3 (revisão): não carregada, aguarda modelo (pedido em saida/L8-02.json à trilha F2.2: cooperativa_medica.percentual_repasse_consulta/_procedimento/_exame/_internacao): percentual de repasse da cooperativa por tipo de conta, dado financeiro em uso; TBREPGER é outro cadastro (regras com COOP como critério) e não o repete. Não é descarte (procedimento)
+TBCOOPER	P_R_EX		decimal			L8-02 r3 (revisão): não carregada, aguarda modelo (pedido em saida/L8-02.json à trilha F2.2: cooperativa_medica.percentual_repasse_consulta/_procedimento/_exame/_internacao): percentual de repasse da cooperativa por tipo de conta, dado financeiro em uso; TBREPGER é outro cadastro (regras com COOP como critério) e não o repete. Não é descarte (exame)
+TBCOOPER	P_R_IN		decimal			L8-02 r3 (revisão): não carregada, aguarda modelo (pedido em saida/L8-02.json à trilha F2.2: cooperativa_medica.percentual_repasse_consulta/_procedimento/_exame/_internacao): percentual de repasse da cooperativa por tipo de conta, dado financeiro em uso; TBREPGER é outro cadastro (regras com COOP como critério) e não o repete. Não é descarte (internação)
+TBCOOPER	EQUIV_PLANO		inteiro			L8-02 r3: não migrada: equivalência com o plano de contas antigo, sem uso no produto
+TBCOOPER	INFO_ISEN_IMUN		inteiro			L8-02 r3: não migrada: indicador de isenção/imunidade da EFD-Reinf sem cadastro no modelo; a retenção segue as alíquotas e a dispensa (pedido de modelo)
+TBCOOPER	LOCAL_AGE		texto			L8-02 r3: não migrada: endereço da agência bancária; a agência é identificada pelo banco e número
+TBCOOPER	NUMERO_AGE		inteiro			L8-02 r3: idem LOCAL_AGE
+TBCOOPER	BAIRRO_AGE		texto			L8-02 r3: idem LOCAL_AGE
+TBCOOPER	CIDADE_AGE		texto			L8-02 r3: idem LOCAL_AGE
+TBCOOPER	UF_AGE		texto			L8-02 r3: idem LOCAL_AGE
+TBCOOPER	CEP_AGE		inteiro			L8-02 r3: idem LOCAL_AGE
+TBCOOPER	FONE_AGE		texto			L8-02 r3: idem LOCAL_AGE
+TBINDPRO	CONV	valor_indice_item.fonte_pagadora_id			ref:TBCONVEN	L8-02 r3: fonte pagadora (TBCONVEN); inexistente: NOT NULL recusa (dependência TBINDPRO -> TBCONVEN pedida)
+TBINDPRO	PROCTO	valor_indice_item.item_faturavel_id			ref:TBPROCTO.COD_PROCEDIMENTO	L8-02 r3 (revisão): procedimento pelo CÓDIGO (chave alternativa TBPROCTO.COD_PROCEDIMENTO), como TBESPPRO, FCORCPAD, FCORLAME e CCAGENDA: na origem a coluna PROCTO é o código e a ligação pelo id chama-se ID_TBPROCTO (FCLANEXT, TBTABTHM); código em mais de uma tabela de honorários: pai_ambiguo e o NOT NULL recusa (visível); inexistente: pai_inexistente (dependência TBINDPRO -> TBPROCTO pedida)
+TBINDPRO	DATA	valor_indice_item.vigencia_inicio	data			L8-02 r3: início da vigência do valor
+TBINDPRO	VALOR	valor_indice_item.valor_indice	decimal_nao_negativo			L8-02 r3: valor do índice do procedimento (índice principal do acordo: indice_cobranca_id nulo); vazio ou negativo recusa
+FCPORANE	TAB	valor_porte_anestesico.tabela_preco_id			ref:TBCTRTHM	L8-02 r3: tabela de honorários pela chave (TBCTRTHM.COD)
+FCPORANE	PORTE	valor_porte_anestesico.porte_anestesico	texto			L8-02 r3: porte anestésico da tabela (0 a 8)
+FCPORANE	DATA_PORTE	valor_porte_anestesico.vigencia_inicio	data			L8-02 r3: início de vigência do valor
+FCPORANE	DATA_PORTE	valor_porte_anestesico.ocorrido_em	data			L8-02 r3: a origem só guarda a vigência: a inclusão é registrada nela (DATE em DATETIME pelo tipar)
+FCPORANE	VALOR	valor_porte_anestesico.valor	decimal_nao_negativo			L8-02 r3: valor do porte (4 casas); negativo ou vazio recusa (NOT NULL)
+FCPORANE	#retrato:*	valor_porte_anestesico.dados				L8-02 r3: retrato da linha (JSON): guarda a equivalência ao porte médico (PMEDICO, QTDE) até o catálogo de portes do produto (porte_procedimento) ter carga
+FCPORANE	QTDE		flutuante			L8-02 r3: equivalência ao porte médico: no retrato; porte_procedimento_id e quantidade_porte_equivalente ficam NULL (o CHECK exige os dois) até o catálogo de portes ter carga (TBPORMED)
+FCPORANE	PMEDICO		texto			L8-02 r3: idem QTDE

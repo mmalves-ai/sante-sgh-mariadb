@@ -22,12 +22,12 @@ class PlanoL601(unittest.TestCase):
 
     def test_so_as_declaradas_entram_na_carga(self):
         self.assertEqual(len(FATIA), 19)
-        self.assertEqual((len(l6_01.CARREGADAS), len(l6_01.DESCARTADAS), len(l6_01.SEM_CARGA)), (12, 4, 3))
+        self.assertEqual((len(l6_01.CARREGADAS), len(l6_01.DESCARTADAS), len(l6_01.SEM_CARGA)), (15, 4, 0))
         self.assertEqual(set(self.plano), set(l6_01.CARREGADAS))
 
     def test_ordem_do_mapa_pai_antes(self):
         ordem = [p["tabela"] for p in carga_mapa.planejar(self.m, FATIA)]
-        for filho in ("RECONFIC", "REESPFIC", "REUNIFIC", "REGRPFIC"):
+        for filho in ("RECONFIC", "REESPFIC", "REUNIFIC", "REGRPFIC", "RETITFIC"):
             self.assertLess(ordem.index("REMODFIC"), ordem.index(filho))
 
     def test_criterio_da_regra_carrega_depois_do_pai(self):
@@ -49,6 +49,17 @@ class PlanoL601(unittest.TestCase):
             self.assertEqual((cs[dc]["coluna"], cs[dc]["referencia"], cs[dc]["regra"]), (col, pai, "chave_origem"))
             self.assertEqual(cs["selecionada_padrao"]["regra"], "booleano_sn")
 
+    def test_criterio_sem_pai_deixa_a_regra_inativa(self):
+        # NULL no critério quer dizer 'todos': sem o pai na origem, a regra não pode entrar ativa
+        for t, col, pai in [("RECONFIC", "CONV", "TBCONVEN"), ("REESPFIC", "ESP", "TBESPEC"),
+                            ("REUNIFIC", "UNID", "TBUNIDAD")]:
+            at = [c for c in self.plano[t]["colunas"]["regra_impressao_ficha"] if c["destino"] == "ativo"]
+            self.assertEqual([c["coluna"] for c in at], [col, "=0"], t)
+            self.assertEqual(at[0]["regra"], "preenchido")
+            self.assertEqual(at[0]["passos"][0]["tabela"], pai)
+            self.assertEqual(at[0]["passos"][-1].get("coluna"), "COD")
+        self.assertEqual(sentinela.aplicar("preenchido", 9), (True, None))
+
     def test_modelo_entra_inativo_com_aviso(self):
         cs = self.cols("REMODFIC", "modelo_ficha_impressa")
         self.assertEqual(cs["ativo"]["coluna"], "=0")
@@ -67,7 +78,18 @@ class PlanoL601(unittest.TestCase):
     def test_procedencia_por_depara_de_valores(self):
         cs = self.cols("TBPROCED", "procedencia")
         self.assertEqual(cs["ativo"]["valores"], {"S": "1", "A": "1", "N": "0", "I": "0"})
-        self.assertEqual(cs["tipo_padrao"]["valores"], {"": ""})
+        tp = cs["tipo_padrao"]
+        self.assertEqual((tp["regra"], tp["passos"][0]["tabela"], tp["passos"][-1].get("coluna")),
+                         ("texto_nome", "TBPROCEDPADRAO", "NOME"))
+        v = tp["valores"]
+        self.assertEqual(v[""], "")
+        for nome, tipo in [("Residência", "residencia"), ("RESIDENCIA", "residencia"), ("Retorno", "retorno"),
+                           ("DEMANDA ESPONTÂNEA", "demanda_espontanea"), ("Encaminhado", "referenciada"),
+                           ("Via pública", "via_publica"), ("Judicial", "judicial"), ("Outros", "outro")]:
+            self.assertEqual(v[nome], tipo, nome)
+        dominio = {"residencia", "retorno", "demanda_espontanea", "referenciada", "via_publica", "judicial", "outro"}
+        self.assertEqual(set(v.values()) - {""}, dominio)
+        self.assertNotIn("Reconhecido", v)
 
     def test_codigos_numericos_viram_texto(self):
         for t, dt, col in [("PNTIPO", "tipo_painel", "ID"), ("REMODFIC", "modelo_ficha_impressa", "COD"),
@@ -92,22 +114,44 @@ class PlanoL601(unittest.TestCase):
         for t, causa in causas.items():
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
             self.assertTrue(sc[t]["motivo"], t)
-        for t in l6_01.SEM_CARGA:  # decisão tomada; só falta regra genérica no motor (pedidos no L6-01.json)
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "regra_faltante"), t)
+        self.assertFalse(set(l6_01.SEM_CARGA) & set(sc))
 
-    def test_sem_carga_tem_declaracao_pronta_comentada(self):
-        prontas = {}
-        arq = mapa.DIR_PACOTE / "declarado/colunas.d/L6-01.tsv"
-        for linha in arq.read_text(encoding="utf-8").splitlines()[1:]:
-            t, col, destino, _, _, via, _ = linha.split("\t")
-            if t.startswith("#"):
-                prontas.setdefault(t[1:], {})[col] = {"destino": destino, "via": via}
-        self.assertEqual(prontas["REEXCATE"]["=exclusao"]["destino"], "trilha_auditoria.acao")
-        self.assertEqual(prontas["REEXCATE"]["#retrato"]["destino"], "trilha_auditoria.dados_antes")
-        itens = prontas["REPARATE"]["#item"]["via"]
-        self.assertEqual(len(itens.split(":", 1)[1].split(",")), 23)
-        self.assertIn("complementa", prontas["RETITFIC"]["COD"]["via"])
-        self.assertIn("ref:REMODFIC(COD,GRAFICA)", prontas["RETITFIC"]["COD"]["via"])
+    def test_exclusao_de_atendimento_vai_para_a_trilha(self):
+        cs = self.cols("REEXCATE", "trilha_auditoria")
+        self.assertEqual((cs["acao"]["coluna"], cs["entidade"]["coluna"]), ("=exclusao", "=atendimento"))
+        self.assertNotIn("entidade_id", cs)
+        self.assertEqual(cs["ocorrido_em"]["coluna"], "#data_hora:DTCANCEL,HRCANCEL")
+        self.assertEqual(cs["dados_antes"]["coluna"], "#retrato:*")
+        self.assertEqual((cs["usuario_id"]["referencia"], cs["usuario_id"]["regra"]), ("TBUSERS", "chave_origem"))
+        self.assertEqual(cs["motivo"]["coluna"], "JUSTIF")
+
+    def test_heranca_desdobrada_no_principal_com_falso(self):
+        cs = self.cols("REPARATE", "regra_heranca_campo")
+        self.assertEqual((cs["herda"]["coluna"], cs["herda"]["regra"]), ("#item", "booleano_sn"))
+        self.assertEqual(cs["campo"]["coluna"], "#rotulo")
+        op = self.plano["REPARATE"]["opcoes"]["regra_heranca_campo"]
+        self.assertTrue(op.get("com_falso"))
+        pares = dict(op["desdobrar"])
+        self.assertEqual(len(pares), 23)
+        self.assertEqual(set(pares), {c for c in l6_01.HERANCA if c != "POR_USUARIO"})
+        self.assertEqual(len(set(pares.values())), 23)
+
+    def test_titulo_impresso_prevalece_sobre_o_nome(self):
+        tit = [c for c in self.plano["REMODFIC"]["colunas"]["modelo_ficha_impressa"] if c["destino"] == "titulo"]
+        self.assertEqual([c["coluna"] for c in tit], ["COD", "NOME"])
+        self.assertEqual(tit[0]["passos"][0], {"tabela": "RETITFIC", "modo": "composta", "arg": ["COD", "GRAFICA"]})
+        self.assertEqual(tit[0]["passos"][1].get("coluna"), "NOME")
+        self.assertEqual({c["regra"] for c in tit}, {"texto_nome"})
+
+    def test_titulo_impresso_completa_o_modelo(self):
+        # diferencial próprio: título alterado na origem fica para o Sincronizar (a origem vence)
+        cs = self.plano["RETITFIC"]["colunas"]["modelo_ficha_impressa"]
+        self.assertTrue(self.plano["RETITFIC"]["opcoes"]["modelo_ficha_impressa"]["complementa"])
+        idc = next(c for c in cs if c["destino"] == "id")
+        self.assertEqual(idc["passos"], [{"tabela": "REMODFIC", "modo": "composta", "arg": ["COD", "GRAFICA"]}])
+        tit = [c for c in cs if c["destino"] == "titulo"]
+        self.assertEqual([c["coluna"] for c in tit], ["NOME", "COD"])
+        self.assertEqual(tit[1]["passos"][-1].get("coluna"), "NOME")
 
     def test_nao_carregadas_sem_destino_e_com_motivo(self):
         decl = {}

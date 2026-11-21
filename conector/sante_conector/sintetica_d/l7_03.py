@@ -1,12 +1,15 @@
 """Fatia L7-03 (SADT e suprimentos, módulo SADT): tabelas da origem com dados 100% falsos e as anomalias.
 
-Carregadas (14): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
+Carregadas (15): respostas padrão dos grupos, recipientes de coleta, situações da amostra (autorreferência em duas
 fases), analitos (com o analito no exame pela chave alternativa CODALF e a unidade do cliente adotada pelo código),
 exames (inativo com desativação na data da carga), resultados padrão (exame pela chave composta ATO,EXAME, depois do
 exame pela aresta de ordem), grandezas do laudo, modelos de comunicação, perfis do portal de resultados com
 modalidades, usuários e parâmetros (complementa o perfil), modelos de impressão de laudo e visualizadores de imagem
-(endereço e ativo presumidos). Descartes (5, `declarado/sem_carga.tsv`) e bloqueadas (2: SITPEQV pelo modelo e SITBEXHP
-pelo apoio que vem dela; pedidos em `docs/obra/fatias/f4/saida/L7-03.json`) entram na imagem para provar que não geram
+(endereço e ativo presumidos) e variáveis de fórmula (fórmula do exame pela chave alternativa composta ATO,EXAME
+da SIFORMUL, pai externo: a SIFORMUL é da L7-02 e entra aqui só como forma, com as MESMAS linhas da imagem da L7-02).
+A unidade do cliente é gravada antes do analito e ligada a ele; o resultado padrão sem HTML leva o texto antigo
+(colunas concorrentes). Descartes (3, `declarado/sem_carga.tsv`) e bloqueadas (2: SITPEQV e SITBEXHP
+pelo DDL do alvo da interface e do apoio inativo, declaração pronta e comentada; pedidos em `docs/obra/fatias/f4/saida/L7-03.json`) entram na imagem para provar que não geram
 carga.
 Anomalias: descrição vazia ou só espaços em destino NOT NULL, espaços repetidos, CP1252 acentuado, S/N e A/I fora do
 domínio, referência zero (ausência), pai inexistente (nulo com pendência; em NOT NULL recusa), pai recusado
@@ -40,6 +43,8 @@ TABELAS = [
      'ID SMALLINT, NOME VARCHAR(10)'),
     ('SITPEQV_SITPEQVMODELO', 'ID',
      'ID SMALLINT, ID_SITPEQV SMALLINT, ID_SITPEQVMODELO SMALLINT'),
+    ('SIFORMUL', 'ATO,CODELE,EXAME',
+     'ATO INTEGER, CODELE INTEGER, EXAME VARCHAR(4), FORMULA BLOB SUB_TYPE 1'),
     ('SIVARFORMULA', 'CODIGO',
      'ATO INTEGER, CODIGO INTEGER, EXAME VARCHAR(4), IDENTIFICACAO VARCHAR(4), DESCRICAO VARCHAR(50)'),
     ('SIWEBCADPERFIL', 'ID',
@@ -75,14 +80,17 @@ def _ddl():
 DDL = _ddl()
 COLUNAS = {t: [c.split(" ", 1)[0] for c in cols.split(", ")] for t, _, cols in TABELAS}
 PAIS_EXTERNOS = {"SICTRPSR": ["1", "2"], "SIMETODO": ["1", "2"], "SIESPEC": ["1", "2"], "SIPACSMODALID": ["1", "2"],
-                 "SIMODULO": ["1", "2"], "TBUSERS": ["usuario.exemplo1", "usuario.exemplo2"]}
+                 "SIMODULO": ["1", "2"], "TBUSERS": ["usuario.exemplo1", "usuario.exemplo2"],
+                 # fórmulas da L7-02 (descartadas lá até a reabertura pedida): dadas como já carregadas
+                 "SIFORMUL": ["1|10|GLI", "1|11|CRE"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único do cliente de exemplo vem daqui
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " nome VARCHAR(40) NOT NULL); INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo')")
 CARREGADAS = ("SIPOSRES", "SIRECIPI", "SISTATUS_AMOSTRA", "SITABELE", "SITABPRO", "SIRESPAD", "SITBGRAN",
               "SITPEQVMODELO", "SIWEBCADPERFIL", "SIWEBCADPERFIL_SIPACSMODALID", "SIWEBCADPERFIL_TBUSERS",
-              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG")
-DESCARTADAS = ("SITPEQV_SITPEQVMODELO", "SIVARFORMULA", "SIWEBPARDATA", "SIWEBPARTPATU")
+              "SIWEBPARLAUDO", "SIWEBPARPERFIL", "SIWEBVISULIMG", "SIVARFORMULA")
+DESCARTADAS = ("SITPEQV_SITPEQVMODELO", "SIWEBPARDATA", "SIWEBPARTPATU")
+FORMA_SO = ("SIFORMUL",)  # pai de outra fatia (L7-02), só a forma e as mesmas linhas de lá: nunca carregado aqui
 BLOQUEADAS = ("SITPEQV", "SITBEXHP") + DESCARTADAS
 D = decimal.Decimal
 
@@ -200,7 +208,15 @@ def linhas(r, ins):
     for i, eqv, mod in [(1, 1, 1), (2, 1, 2)]:
         linha("SITPEQV_SITPEQVMODELO", ID=i, ID_SITPEQV=eqv, ID_SITPEQVMODELO=mod)
     linha("SITBEXHP", COD=1, TIPO=1, COD_EXAME="APX1", EXAME_NOME="Exame do apoio")
-    linha("SIVARFORMULA", ATO=1, CODIGO=1, EXAME="GLI", IDENTIFICACAO="A", DESCRICAO="Variável exemplo")
+    # fórmulas (as mesmas linhas da imagem da L7-02: na imagem conjunta vale a primeira fatia que cria a tabela)
+    for x in [(1, 10, "GLI", "(A+B)/2"), (1, 11, "CRE", None)]:
+        linha("SIFORMUL", ATO=x[0], CODELE=x[1], EXAME=x[2], FORMULA=None if x[3] is None else x[3].encode("cp1252"))
+    # variáveis: 1 e 4 completas; 2 sem descrição (o identificador vira a descrição); 3 sem identificador (1048);
+    # 5 exame sem fórmula no ato 2 (pai_inexistente e 1048); fonte 'digitado' presumida em toda linha avaliada
+    for cod, ato, exa, ide, desc in [(1, 1, "GLI", "A", "Glicemia  basal"), (2, 1, "GLI", "B", None),
+                                     (3, 1, "GLI", None, "Sem identificador"), (4, 1, "CRE", "CR", "Creatinina"),
+                                     (5, 2, "GLI", "Z", "Outro ato")]:
+        linha("SIVARFORMULA", ATO=ato, CODIGO=cod, EXAME=exa, IDENTIFICACAO=ide, DESCRICAO=desc)
     for i, nome in [(1, "Hoje"), (2, "Últimos 7 dias")]:
         linha("SIWEBPARDATA", ID=i, NOME=nome)
         linha("SIWEBPARTPATU", ID=i, NOME="Atualização %d" % i)
@@ -230,4 +246,6 @@ def linhas(r, ins):
                                                    "restricao_destino_1048": 2}},
         "SIWEBPARPERFIL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
         "SIWEBVISULIMG": {"gravados": 2, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1}},
+        "SIVARFORMULA": {"gravados": 3, "pendencias": {"valor_presumido": 5, "restricao_destino_1048": 2,
+                                                       "pai_inexistente": 1}},
     }

@@ -8,13 +8,13 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l5_05
 
 # na ordem do mapa
-CARREGADAS = ["TBGENERO_SOCIAL", "TBGERSEQ", "TBGRAU_INST", "TBGRUCONVEN", "TBORGAOEMIS", "TBPARENTE",
+CARREGADAS = ["TBGENERO_SOCIAL", "TBGERSEQ", "TBGRAU_INST", "TBGRUCONVEN", "TBMEDSOL", "TBMUIBGE", "TBORGAOEMIS", "TBPARENTE",
               "TBPESQUIPLANO", "TBRELIG", "TBSEXO", "TBTIPOATEUNIDADE", "TBTIPOTELEFONE", "TBTPDOCUMENTO", "TBUNIDAD",
               "TBUNID_IDADE", "TBVULNERABILIDADE_SOCIAL", "TBEMPHOS", "TBCBOPRO_TBUNIDAD"]  # lotação depois de TBPROFIS
 # descarte com motivo de produto (declarado/sem_carga.tsv)
-DESCARTE = {"TBMUIBGE": "catalogo_oficial", "TBPESSOA": "duplicado"}
-# declaradas e comentadas até o motor ter o mecanismo (pedidos em docs/obra/fatias/f4/saida/L5-05.json)
-AGUARDAM = ["TBMEDSOL"]
+DESCARTE = {"TBPESSOA": "duplicado", "TBEMPHOSLOGO": "mecanismo_do_produto"}
+# declaradas e comentadas até o motor ter o mecanismo: nenhuma desde a rodada 3 (conselho_classe em depara.CATALOGOS)
+AGUARDAM = []
 
 
 def _mapa():
@@ -44,10 +44,15 @@ class Plano(unittest.TestCase):
     def test_um_destino_por_tabela_e_literal_fora_da_leitura(self):
         por = {p["tabela"]: p for p in self.plano}
         for p in self.plano:
-            self.assertEqual(len(p["destinos"]), 1, p["tabela"])
-        # empresa: só a pessoa jurídica (adotada pelo CNPJ) até a mantenedora ter o principal pessoa_juridica
-        self.assertEqual(por["TBEMPHOS"]["destinos"], ["pessoa_juridica"])
+            if p["tabela"] != "TBEMPHOS":
+                self.assertEqual(len(p["destinos"]), 1, p["tabela"])
+        # empresa: mantenedora (principal) e a pessoa jurídica dela gravada ANTES (adotada pelo CNPJ), ligada por @id
+        self.assertEqual(por["TBEMPHOS"]["destinos"], ["mantenedora", "pessoa_juridica", "pessoa_fisica",
+                                                       "trilha_auditoria"])
+        self.assertTrue(por["TBEMPHOS"]["opcoes"]["pessoa_juridica"].get("antes"))
         self.assertEqual(por["TBEMPHOS"]["opcoes"]["pessoa_juridica"]["adotar"], ["cnpj"])
+        self.assertIn("@id:pessoa_juridica",
+                      [c["coluna"] for c in por["TBEMPHOS"]["colunas"]["mantenedora"]])
         perfil = por["TBTIPOATEUNIDADE"]
         self.assertNotIn("=~outro", perfil["lidas"])
         self.assertIn({"coluna": "=~outro", "destino": "categoria", "regra": "", "depara": "", "referencia": "",
@@ -77,6 +82,40 @@ class Plano(unittest.TestCase):
         self.assertEqual(cols["inscricao_conselho_id"]["passos"], [{"tabela": "TBCBOPRO", "modo": "alt", "arg": "ID"}])
         un = {c["destino"]: c for c in por["TBUNIDAD"]["colunas"]["unidade_assistencial"]}
         self.assertEqual(un["farmaceutico_profissional_id"]["passos"][-1]["tabela"], "TBPROFIS")
+
+    def test_diretor_e_autorizador_pelo_profissional(self):
+        """CPF e, de reserva, CNS do profissional (chave alternativa), concorrentes na mesma coluna do destino."""
+        por = {p["tabela"]: p for p in self.plano}
+        cols = [c for c in por["TBUNIDAD"]["colunas"]["unidade_assistencial"]
+                if c["destino"] in ("diretor_profissional_id", "autorizador_profissional_id")]
+        self.assertEqual([(c["destino"], c["coluna"], c["passos"]) for c in cols], [
+            ("diretor_profissional_id", "CPF_DIR", [{"tabela": "TBPROFIS", "modo": "alt", "arg": "CPF"}]),
+            ("diretor_profissional_id", "CNS_DIR", [{"tabela": "TBPROFIS", "modo": "alt", "arg": "CNS"}]),
+            ("autorizador_profissional_id", "CPF_AUT", [{"tabela": "TBPROFIS", "modo": "alt", "arg": "CPF"}]),
+            ("autorizador_profissional_id", "CNS_AUT", [{"tabela": "TBPROFIS", "modo": "alt", "arg": "CNS"}])])
+
+    def test_mantenedora_responsavel_dmed_e_retrato_fiscal(self):
+        p = {p["tabela"]: p for p in self.plano}["TBEMPHOS"]
+        self.assertTrue(p["opcoes"]["pessoa_fisica"].get("antes"))
+        self.assertTrue(p["opcoes"]["pessoa_fisica"].get("opcional"))
+        self.assertEqual(p["opcoes"]["pessoa_fisica"]["adotar"], ["cpf"])
+        man = {c["destino"]: c for c in p["colunas"]["mantenedora"]}
+        self.assertEqual(man["responsavel_pessoa_fisica_id"]["coluna"], "@id:pessoa_fisica")
+        self.assertEqual(man["tipo_declarante_dmed"]["valores"],
+                         {"1": "prestador_saude", "2": "operadora", "3": "prestador_e_operadora"})
+        tr = {c["destino"]: c["coluna"] for c in p["colunas"]["trilha_auditoria"]}
+        self.assertEqual(tr["dados_depois"], "#retrato:*")
+        self.assertEqual(tr["entidade_id"], "@id")
+
+    def test_municipio_parte_fiscal_na_trilha(self):
+        """A parte oficial do município nunca é gravada; a configuração fiscal do cliente vai para a trilha."""
+        p = {p["tabela"]: p for p in self.plano}["TBMUIBGE"]
+        self.assertEqual(p["destinos"], ["trilha_auditoria"])
+        tr = {c["destino"]: c for c in p["colunas"]["trilha_auditoria"]}
+        self.assertEqual(tr["entidade_id"]["depara"], "ibge_municipio")
+        self.assertTrue(tr["dados_depois"]["coluna"].startswith("#retrato:VALOR_MIN_RETENCAO_ISS,"))
+        for c in ("NOME", "UF", "MUNICIPIO_TOM"):
+            self.assertNotIn(c, p["lidas"])
 
     def test_unidade_de_idade_pelo_nome(self):
         por = {p["tabela"]: p for p in self.plano}
@@ -129,6 +168,29 @@ class Plano(unittest.TestCase):
                     self.assertIn(x[0], decl, "%s.%s" % (dt, x[0]))
 
 
+class SolicitanteExterno(unittest.TestCase):
+    def setUp(self):
+        m = _mapa()
+        if m is None:
+            self.skipTest("mapa do conector ausente")
+        self.p = {p["tabela"]: p for p in carga_mapa.planejar(m, {"TBMEDSOL"})}["TBMEDSOL"]
+
+    def test_conselho_uf_e_ocupacao_pelos_catalogos_oficiais(self):
+        cols = {c["destino"]: c for c in self.p["colunas"]["solicitante_externo"]}
+        self.assertEqual(self.p["destinos"], ["solicitante_externo"])
+        self.assertEqual(cols["conselho_classe_id"]["depara"], "conselho_classe")
+        self.assertEqual(cols["conselho_unidade_federativa_id"]["depara"], "ibge_uf")
+        self.assertEqual(cols["ocupacao_cbo_id"]["depara"], "cbo")
+        self.assertEqual(cols["numero_conselho"]["regra"], "texto")
+        self.assertNotIn("COD_CONVENIO", self.p["lidas"])
+
+    def test_sigla_do_conselho_normalizada(self):
+        from sante_conector import depara
+        self.assertEqual(depara.norm_conselho(b" CRM "), "CRM")
+        self.assertEqual(depara.norm_conselho("C.R.M"), "CRM")
+        self.assertIsNone(depara.norm_conselho("1"))
+
+
 class Regras(unittest.TestCase):
     def test_regras_da_fatia(self):
         a = sentinela.aplicar
@@ -161,9 +223,13 @@ class Sintetica(unittest.TestCase):
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in AGUARDAM + list(DESCARTE):
             self.assertNotIn("CREATE TABLE %s " % t, l5_05.DDL)
+        self.assertEqual(l5_05.AUXILIARES, ["TBCONSPROF"])
+        self.assertNotIn("TBCONSPROF", esp)
         self.assertEqual(set(l5_05.PAIS_EXTERNOS), {"TBPROFIS", "TBCBOPRO"})
         self.assertEqual(sentinela.aplicar("cnpj", int(l5_05.CNPJ_NOVO)), (l5_05.CNPJ_NOVO, None))
         self.assertEqual(sentinela.aplicar("cnpj", int(l5_05.CNPJ_EXISTENTE)), (l5_05.CNPJ_EXISTENTE, None))
+        for c in (l5_05.CPF_RESP_NOVO, l5_05.CPF_RESP_EXISTENTE, l5_05.CPF_PROF_100, l5_05.CPF_SEM_PROF):
+            self.assertEqual(sentinela.aplicar("cpf", int(c)), (c, None))
 
     def test_destino_do_l3_preparado(self):
         """As linhas que o L3 cria estão guardadas para a conferência da adoção pela chave natural."""

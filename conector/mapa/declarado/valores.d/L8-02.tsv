@@ -13,3 +13,10 @@ RPEVENTO	TIPO_EVENTO	evento_repasse.tipo_lancamento	F	credito	L8-02: cadastro de
 RPEVENTO	TIPO_EVENTO	evento_repasse.tipo_lancamento	D	debito	L8-02: cadastro de eventos do sistema antigo (rótulos V 'Vencimento (crédito)', F 'Fixo', D 'Desconto')
 RPRPA	STATUS	rpa.situacao	G	emitido	L8-02: G (gerado) é a situação gravada pela emissão do RPA no sistema antigo
 RPRPA	METODO_ENVIO	rpa.metodo_envio	E	esocial	L8-02: E é o envio pelo eSocial gravado pela emissão do RPA no sistema antigo
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	I	internacao	L8-02 r3: conta de internação
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	A	ambulatorial	L8-02 r3: conta ambulatorial
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	E	externo	L8-02 r3: conta externa
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	U	urgencia	L8-02 r3: conta de pronto atendimento
+#SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	T	todos	L8-02 r3: todas as contas
+TBCOOPER	TP_CONTA	cooperativa_medica.tipo_conta_bancaria	C	corrente	L8-02 r3: conta corrente
+TBCOOPER	TP_CONTA	cooperativa_medica.tipo_conta_bancaria	P	poupanca	L8-02 r3: conta poupança

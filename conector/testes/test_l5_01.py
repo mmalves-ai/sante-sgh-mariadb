@@ -6,11 +6,14 @@ from sante_conector import carga_mapa, mapa, sentinela
 
 CARREGADAS = ["TBGRUUSU", "PREMAILCFG", "PREMAILMODULO", "PRLOCPACDEFAULT", "PRTERMOCAD", "PRTERMOACEITE",
               "PRTIPO_JUSTIF_EXPORTACAO", "PRTPNOTIFEMAIL", "RPMATRIZ_GUT_TIPO", "RPMATRIZ_GUT_DESCRICAO", "TBCENARIO",
-              "TBCFGLOGIN", "TBDICIONARIO_TBUSERS"]
+              "TBCFGLOGIN", "TBDICIONARIO_TBUSERS", "DIPERMPS", "TBCTRPRTUSU", "TBAGEUSE"]
 # descarte de produto em declarado/sem_carga.tsv (decisões em docs/obra/passagens/F4-decisoes-destino.md)
-DESCARTADAS = ["FPCON", "TBAGEUSE", "TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO"]
-# bloqueio explícito ao dono: restrições de acesso em uso que pedem mecanismo no motor (pedido em saida/L5-01.json)
-AGUARDAM = ["DIPERMPS", "TBCTRPRTUSU"]
+DESCARTADAS = ["FPCON", "TBDIGITAR", "TBDIGITAR_CNSCADPAC", "TBDIGITAR_FILIACAO"]
+# rodada 3: nenhuma tabela bloqueada (DIPERMPS e TBCTRPRTUSU carregam pelos mecanismos da rodada 2)
+AGUARDAM = []
+# colunas da origem das tabelas carregadas que ficam fora da declaração (nenhuma: toda coluna sem destino é declarada
+# com o motivo); colunas de chave contam como lidas
+SEM_DECLARACAO_ACEITA = []
 
 
 class PlanoL501(unittest.TestCase):
@@ -60,10 +63,76 @@ class PlanoL501(unittest.TestCase):
         pol = self._cols("TBCFGLOGIN", "politica_senha")
         self.assertEqual(pol["tamanho_minimo"]["regra"], "piso:8")
         self.assertEqual(pol["inatividade_sessao_minutos"]["regra"], "minutos_em_timestamp")
-        # o aceite periódico vem da origem (nunca desligado na virada); só o período é presumido
+        # o aceite periódico e o período vêm da origem (quantidade x unidade em dias), nunca presumidos
         self.assertEqual(pol["exige_aceite_periodico"]["coluna"], "SOLIC_TERMO_ACEITE_PERIODICO")
         self.assertEqual(pol["exige_aceite_periodico"]["regra"], "booleano_sn")
-        self.assertEqual(pol["periodicidade_aceite_dias"]["coluna"], "=~30")
+        self.assertEqual(pol["periodicidade_aceite_dias"]["coluna"],
+                         "#dias:QTDE_PERIODO_TERMO_ACEITE,TIPO_PERIODO_TERMO_ACEITE")
+        self.assertEqual(sentinela.periodo_em_dias(6, sentinela.unidade_periodo("M"))[0], 180)
+        self.assertEqual(sentinela.periodo_em_dias(15, sentinela.unidade_periodo("D")), (15, None))
+
+    def test_nenhuma_coluna_da_origem_sem_declaracao(self):
+        # toda coluna da origem das tabelas carregadas está declarada (com destino ou com o motivo de não ter):
+        # nada some em silêncio (permissões de prontuário, política de senha, hora UTC)
+        decl = {(c["tabela"], c["coluna"]) for c in self.m["colunas_decl"]}
+        usadas = {(t, n) for t, n in decl}
+        for t, n in list(decl):
+            for pre in ("#codigo_derivado:", "#sha256:", "#cofre:", "#dias:"):
+                if n.startswith(pre):
+                    for x in n[len(pre):].split(":")[0].split(","):
+                        usadas.add((t, x))
+        chave = {r["tabela"]: r["chave"].split(",") for r in self.m["tabelas"]}
+        faltam = [(r["tabela"], r["coluna"]) for r in mapa.ler_tsv(mapa.DIR_PACOTE / "colunas.tsv")
+                  if r["tabela"] in CARREGADAS and (r["tabela"], r["coluna"]) not in usadas
+                  and r["coluna"] not in chave.get(r["tabela"], [])]
+        self.assertEqual(sorted(faltam), sorted(SEM_DECLARACAO_ACEITA))
+
+    def test_hora_local_em_coluna_utc_marcada_por_linha(self):
+        # coluna UTC que recebe a hora local: o literal presumido concorrente deixa valor_presumido em cada linha
+        for t, dt, dc in [("PRTERMOACEITE", "aceite_termo_uso", "ocorrido_em"),
+                          ("PRTERMOCAD", "termo_uso_versao", "vigencia_inicio")]:
+            cs = [c["coluna"] for c in self.plano[t]["colunas"][dt] if c["destino"] == dc]
+            self.assertEqual(cs[-1], "=~hora_local", (t, dc))
+            self.assertEqual(len(cs), 2, (t, dc))
+
+    def test_tipo_de_agenda_do_usuario_carrega(self):
+        self.assertEqual(self.plano["TBAGEUSE"]["destinos"], ["usuario_tipo_agenda", "categoria_agenda"])
+        op = self.plano["TBAGEUSE"]["opcoes"]["categoria_agenda"]
+        self.assertTrue(op.get("antes"))
+        self.assertEqual(op.get("adotar"), ["codigo"])
+        uta = self._cols("TBAGEUSE", "usuario_tipo_agenda")
+        self.assertEqual(uta["categoria_agenda_id"]["coluna"], "@id:categoria_agenda")
+        self.assertEqual(uta["usuario_id"]["referencia"], "TBUSERS")
+        cat = self._cols("TBAGEUSE", "categoria_agenda")
+        self.assertEqual(cat["codigo"]["coluna"], "#codigo_derivado:TPAGE:30:tipo_agenda_")
+        self.assertEqual(cat["ativo"]["coluna"], "=0")
+        self.assertEqual(carga_mapa.codigo_derivado("0", 30, "tipo_agenda_"), ("tipo_agenda_0", False))
+
+    def test_restricoes_de_acesso_carregam(self):
+        # recorte por prestador de serviço: tipo de escopo gravado antes (adotado pelo código) e ligado por @id
+        self.assertEqual(self.plano["DIPERMPS"]["destinos"], ["usuario_escopo", "tipo_escopo_acesso"])
+        self.assertTrue(self.plano["DIPERMPS"]["opcoes"]["tipo_escopo_acesso"].get("antes"))
+        self.assertEqual(self.plano["DIPERMPS"]["opcoes"]["tipo_escopo_acesso"].get("adotar"), ["codigo"])
+        esc = self._cols("DIPERMPS", "usuario_escopo")
+        self.assertEqual(esc["tipo_escopo_acesso_id"]["coluna"], "@id:tipo_escopo_acesso")
+        self.assertEqual(esc["usuario_id"]["referencia"], "TBUSERS")
+        passo = esc["entidade_id"]["passos"][0]  # ref:TBPRESER.(ATO,COD,MODULO)=(ATO,PS,MODULO)
+        self.assertEqual((passo["modo"], passo["tabela"]), ("alt_composta", "TBPRESER"))
+        self.assertEqual((esc["pode_operar"]["coluna"], esc["pode_operar"]["regra"]), ("PERM_GRA", "booleano_sn"))
+        self.assertEqual(esc["vigencia_inicio"]["coluna"], "@vigencia_carga")
+        tipo = self._cols("DIPERMPS", "tipo_escopo_acesso")
+        self.assertEqual((tipo["codigo"]["coluna"], tipo["entidade"]["coluna"]),
+                         ("=prestador_servico", "=prestador_terceiro"))
+        # tipos de prontuário: a letra vira um tipo de documento clínico (criado inativo uma vez, adotado depois)
+        self.assertEqual(self.plano["TBCTRPRTUSU"]["destinos"], ["usuario_tipo_prontuario", "tipo_documento_clinico"])
+        self.assertTrue(self.plano["TBCTRPRTUSU"]["opcoes"]["tipo_documento_clinico"].get("antes"))
+        utp = self._cols("TBCTRPRTUSU", "usuario_tipo_prontuario")
+        self.assertEqual(utp["tipo_documento_clinico_id"]["coluna"], "@id:tipo_documento_clinico")
+        self.assertEqual((utp["pode_ler"]["coluna"], utp["pode_escrever"]["coluna"]), ("=1", "=1"))
+        doc = self._cols("TBCTRPRTUSU", "tipo_documento_clinico")
+        self.assertEqual(doc["codigo"]["coluna"], "#codigo_derivado:OPCAO:30:prontuario_")
+        self.assertEqual((doc["categoria"]["coluna"], doc["ativo"]["coluna"]), ("=outro", "=0"))
+        self.assertEqual(carga_mapa.codigo_derivado("D", 30, "prontuario_"), ("prontuario_D", False))
 
     def test_nenhuma_credencial_gravada_em_claro(self):
         decl = [c for c in self.m["colunas_decl"] if c.get("_arquivo", "").endswith("L5-01.tsv")]
@@ -110,6 +179,45 @@ class ConferenciaL501(unittest.TestCase):
         self.assertNotIn("canal_notificacao", e)
         self.assertNotIn("configuracao_setor_prontuario", e)
         self.assertEqual(r["segunda"]["pendencias_por_regra"].get("cenario_alerta:edicao_no_destino:media"), 1)
+        # tipos de prontuário: 5 concessões (A criado uma vez e adotado 2 vezes; B e C criados), 2 recusadas
+        self.assertEqual((e["usuario_tipo_prontuario"]["registros_destino"],
+                          e["usuario_tipo_prontuario"]["recusados"]), (5, 2))
+        # tipos de agenda: 4 concessões (tipo 0 criado uma vez e adotado 2 vezes; 2 criado), login inexistente recusado
+        self.assertEqual((e["usuario_tipo_agenda"]["registros_destino"], e["usuario_tipo_agenda"]["recusados"]),
+                         (4, 1))
+
+    def _cenario(self, externo=False, pai_antes=False):
+        """Conferência da fatia com o mapa ajustado: `externo` dá o prestador como já carregado (fora do plano);
+        `pai_antes` simula a aresta de ordem DIPERMPS -> TBPRESER pedida no L5-01.json."""
+        import copy
+        from sante_conector import conferencia, sintetica
+        mod = sintetica.modulo_fatia("L5-01")
+        original, ext, flag = mapa.carregar_execucao, mod.PAIS_EXTERNOS, mod.PRESTADOR_JA_CARREGADO
+        m = copy.deepcopy(original())
+        ordem = {r["tabela"]: r for r in m["tabelas"]}
+        if externo:
+            ordem["TBPRESER"]["tabelas_destino"] = ""
+            mod.PAIS_EXTERNOS, mod.PRESTADOR_JA_CARREGADO = dict(ext, TBPRESER=["1", "2", "3", "4"]), True
+        if pai_antes:
+            ordem["DIPERMPS"]["ordem"] = str(int(ordem["TBPRESER"]["ordem"]) + 1)
+        mapa.carregar_execucao = lambda d=None: m
+        try:
+            return conferencia.conferir("L5-01")
+        finally:
+            mapa.carregar_execucao, mod.PAIS_EXTERNOS, mod.PRESTADOR_JA_CARREGADO = original, ext, flag
+
+    def test_recorte_por_prestador_ja_carregado(self):
+        r = self._cenario(externo=True)
+        self.assertEqual(r["erros"], [])
+        e = r["entidades"]
+        # 4 recortes gravados (1 cria o tipo de escopo, 3 adotam); ambíguo, inexistente e login inexistente recusados
+        self.assertEqual((e["usuario_escopo"]["registros_destino"], e["usuario_escopo"]["recusados"]), (4, 3))
+        self.assertNotIn("prestador_terceiro", e)
+
+    def test_recorte_com_a_aresta_de_ordem(self):
+        r = self._cenario(pai_antes=True)
+        self.assertEqual(r["erros"], [])
+        self.assertEqual(r["entidades"]["usuario_escopo"]["recusados"], 7)
 
 
 if __name__ == "__main__":

@@ -3,9 +3,10 @@
 Carregadas pelo mapa (colunas.d/L5-12.tsv): PEJUSTIF, TBTPTRIBUTO (tipo pelo de-para de valores), FPRESP
 (responsável legal), FPREMESSA (competência da folha), FPPARAM (cadastro do empregador, classificação tributária,
 construtora e cooperativa pela empresa: referência encadeada a TBEMPHOS e de-para oficial/de valores), FPPARAMVIG
-(versões do cadastro na trilha, com retrato). Declaradas mas recusadas por coluna NOT NULL que aguarda mecanismo do motor
-ou modelo (1364, pedidos em saida/L5-12.json): FPEVENTO (natureza da rubrica), FPLOTTRIBCAD (FPAS), FPREMESSA (abertura
-DATETIME), FPTPEVENTOAUT_TBEMPHOS (rubrica) e as quatro incidências (pai_pendente: a rubrica foi recusada). Fora da carga
+(versões do cadastro na trilha, com retrato), FPEVENTO (natureza pelo código no catálogo oficial do destino, cod:),
+FPLOTTRIBCAD (FPAS pelo código, cod:), FPREMESSA (abertura e fechamento pelas datas da apuração, tipar). Declaradas mas
+recusadas por coluna NOT NULL que aguarda mecanismo ou modelo (1364, pedidos em saida/L5-12.json):
+FPTPEVENTOAUT_TBEMPHOS (rubrica) e as quatro incidências (código de incidência por tributo e código). Fora da carga
 (só a forma, 2 linhas): os 5 catálogos oficiais ST*, a tabela legal TBTABIRR (catálogo oficial) e as listas
 TBTPCONSTRUT/TBTPCOOPERAT (descartes pedidos em saida/L5-12.json).
 Anomalias: data sentinela, faixa invertida, NOT NULL sem valor, código repetido entre empresas, CPF inválido, UF sem
@@ -149,15 +150,27 @@ PAIS_EXTERNOS = {"FPTP_EVENTO": ["P", "D"], "FPTP_REFER": ["H", "V"], "FPTP_FOLH
 PREPARO_PROPRIO = (
     "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
     " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
-    "INSERT INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES"
+    "INSERT IGNORE INTO tabela_esocial (fonte, codigo_oficial, descricao, versao_fonte, criado_em) VALUES"
     " ('esocial', '08', 'Classificacao tributaria', 'teste', UTC_TIMESTAMP(3)),"
     " ('esocial', '10', 'Tipo de lotacao tributaria', 'teste', UTC_TIMESTAMP(3));"
-    "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '99',"
+    "INSERT IGNORE INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '99',"
     " 'Pessoa juridica exemplo', UTC_TIMESTAMP(3) FROM tabela_esocial WHERE codigo_oficial = '08';"
-    "INSERT INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '01',"
+    "INSERT IGNORE INTO codigo_esocial (tabela_esocial_id, codigo_esocial, descricao, criado_em) SELECT id, '01',"
     " 'Lotacao exemplo', UTC_TIMESTAMP(3) FROM tabela_esocial WHERE codigo_oficial = '10';"
-    "INSERT INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
-    " ('35', 'SP', 'Estado exemplo', 1, UTC_TIMESTAMP(3));")
+    "INSERT IGNORE INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
+    " ('35', 'SP', 'Estado exemplo', 1, UTC_TIMESTAMP(3));"
+    # catálogos oficiais (só leitura pelo cod:): natureza 1000; 1200 com duas vigências (pai_ambiguo); FPAS 515
+    # (o cod: só LÊ o catálogo; a conferência cria só os destinos do plano: aqui a forma mínima do catálogo)
+    "CREATE TABLE IF NOT EXISTS natureza_rubrica (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo_esocial"
+    " VARCHAR(4) NOT NULL, descricao VARCHAR(150) NOT NULL, vigencia_inicio DATE NOT NULL, versao_fonte VARCHAR(30) NOT"
+    " NULL, criado_em DATETIME(3) NOT NULL, UNIQUE KEY (codigo_esocial, vigencia_inicio));"
+    "CREATE TABLE IF NOT EXISTS fpas (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo_fpas CHAR(3) NOT NULL,"
+    " descricao VARCHAR(255) NOT NULL, criado_em DATETIME(3) NOT NULL, UNIQUE KEY (codigo_fpas));"
+    "INSERT IGNORE INTO natureza_rubrica (codigo_esocial, descricao, vigencia_inicio, versao_fonte, criado_em) VALUES"
+    " ('1000', 'Natureza exemplo', '2018-01-01', 'teste', UTC_TIMESTAMP(3)),"
+    " ('1200', 'Natureza exemplo antiga', '2018-01-01', 'teste', UTC_TIMESTAMP(3)),"
+    " ('1200', 'Natureza exemplo nova', '2021-01-01', 'teste', UTC_TIMESTAMP(3));"
+    "INSERT IGNORE INTO fpas (codigo_fpas, descricao, criado_em) VALUES ('515', 'FPAS exemplo', UTC_TIMESTAMP(3));")
 
 
 def _dono(tabela):
@@ -272,25 +285,27 @@ def linhas(r, ins):
     for i, nome in [(1, "Previdência exemplo"), (2, "Fundo exemplo"), (3, "Imposto exemplo"),
                     (4, "Contribuição   sobre   folha"), (5, "Sindical exemplo"), (6, "   ")]:
         _ins(ins, "TBTPTRIBUTO", ID=i, NOME=nome)
-    # rubricas: válidas, mas a natureza (catálogo oficial sem de-para no motor) falta: todas recusadas com 1364
-    for i, (tp, rf) in enumerate([("P", "H"), ("D", "V"), ("P", "V")], 1):
+    # rubricas: natureza pelo código no catálogo oficial do destino: 1 e 2 existentes (2 inativa); 3 natureza fora do
+    # catálogo (codigo_inexistente_destino, NOT NULL recusa); 4 natureza com duas vigências (pai_ambiguo, recusa)
+    for i, (tp, rf, nat) in enumerate([("P", "H", 1000), ("D", "V", 1000), ("P", "V", 9999), ("D", "H", 1200)], 1):
         _ins(ins, "FPEVENTO", **_obrig("FPEVENTO", ID_EVENTO=i, COD_EMP=1, COD_EVENTO=100 + i, NOME="Rubrica %d" % i,
                                        TP_EVENTO=tp, TP_REFER=rf, PERC_INC=decimal.Decimal("50.00"), PRIORIDADE=10,
-                                       SITUACAO="I" if i == 3 else "A",
+                                       SITUACAO="I" if i == 2 else "A", ID_FPNATRUBRICA=nat,
                                        FORMULA=b"SALARIO * 0.5" if i == 1 else None, FOLHA="S", FERIAS="N"))
-    # incidências: a rubrica foi recusada: pai_pendente
+    # incidências: rubricas 1 e 2 gravadas; o código de incidência aguarda o mecanismo (pedido 14): recusa 1364
     for t in INCIDENCIAS:
         for i in (1, 2):
             _ins(ins, t, **_obrig(t, ID_FPEVENTO=i))
-    # lotação tributária: tipo oficial existente, mas o FPAS (catálogo sem de-para no motor) falta: 1364
-    for i in (1, 2):
+    # lotação tributária: 1 FPAS 515 no catálogo; 2 FPAS fora do catálogo (codigo_inexistente_destino, NOT NULL recusa)
+    for i, fpas in ((1, 515), (2, 999)):
         _ins(ins, "FPLOTTRIBCAD", ID=i, NOME="Lotacao %d" % i, DATA_VIGENCIA_INICIAL=D(2020, 1, i),
-             ID_FPLOTACAOTRIB="01", ID_FPFPAS=515, ID_TBEMPHOS=1)
-    # lançamento automático: tipo pelo de-para de valores (outro); sem rubrica na origem: 1364
+             ID_FPLOTACAOTRIB="01", ID_FPFPAS=fpas, ID_TBEMPHOS=1)
+    # lançamento automático: gatilho presumido =~outro (valor_presumido); sem rubrica na origem: 1364
     for i in (1, 2):
         _ins(ins, "FPTPEVENTOAUT_TBEMPHOS", ID_FPTPEVENTOAUT=i, ID_TBEMPHOS=1, LANCAR_TP_EVENTO_AUTOM_FOLHA="S")
     # competência: 1 fechada, 2 aberta, 3 mês 13 (CHECK), 4 tipo de folha inexistente (pai_inexistente, NOT NULL),
-    # 5 situação fora do domínio (padrão aberta), 6 sem fim de apuração (NOT NULL)
+    # 5 situação fora do domínio (padrão aberta), 6 sem fim de apuração (NOT NULL); abertura e fechamento pelas datas
+    # da apuração às 00:00 (tipar)
     for i, mes, tp, fim, fech in [(1, 1, 1, D(2025, 1, 31), "S"), (2, 2, 1, D(2025, 2, 28), "N"),
                                   (3, 13, 1, D(2025, 3, 31), "N"), (4, 4, 9, D(2025, 4, 30), "N"),
                                   (5, 5, 2, D(2025, 5, 31), "X"), (6, 6, 1, None, "N")]:
@@ -329,12 +344,13 @@ def linhas(r, ins):
     esperado = {
         "PEJUSTIF": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1}},
         "TBTPTRIBUTO": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
-        "FPEVENTO": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 3, "restricao_destino_1364": 3}},
-        "FPLOTTRIBCAD": {"gravados": 0, "pendencias": {"restricao_destino_1364": 2}},
-        "FPTPEVENTOAUT_TBEMPHOS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 2,
+        "FPEVENTO": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 4, "codigo_inexistente_destino": 1,
+                                                  "pai_ambiguo": 1, "restricao_destino_1048": 2}},
+        "FPLOTTRIBCAD": {"gravados": 1, "pendencias": {"codigo_inexistente_destino": 1, "restricao_destino_1048": 1}},
+        "FPTPEVENTOAUT_TBEMPHOS": {"gravados": 0, "pendencias": {"vigencia_sem_fonte": 2, "valor_presumido": 2,
                                                                 "restricao_destino_1364": 2}},
-        "FPREMESSA": {"gravados": 0, "pendencias": {"restricao_destino_1364": 6, "pai_inexistente": 1,
-                                                   "valor_fora_do_dominio": 1}},
+        "FPREMESSA": {"gravados": 3, "pendencias": {"restricao_destino_4025": 1, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 2, "valor_fora_do_dominio": 1}},
         "FPRESP": {"gravados": 2, "pendencias": {"valor_presumido": 4, "catalogo_codigo_inexistente": 1,
                                                 "documento_invalido": 1, "restricao_destino_1048": 2}},
         "FPPARAM": {"gravados": 1, "pendencias": {"vigencia_sem_fonte": 2, "valor_fora_do_dominio": 1,
@@ -342,8 +358,10 @@ def linhas(r, ins):
                                                  "pai_pendente": 1}},
         "FPPARAMVIG": {"gravados": 3, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
     }
-    for t in INCIDENCIAS:
-        esperado[t] = {"gravados": 0, "pendencias": {"pai_pendente": 2}}
+    for t in INCIDENCIAS:  # o tributo é procurado antes de TBTPTRIBUTO carregar (ordem pedida: pedido 15)
+        esperado[t] = {"gravados": 0, "pendencias": {"restricao_destino_1364": 2, "vigencia_sem_fonte": 2}}
+        if t != "FPRUBRICASIND_FPEVENTO":
+            esperado[t]["pendencias"]["codigo_inexistente_destino"] = 2
     if DONO_EMPRESA:  # o esperado de TBEMPHOS é o da dona (lido dela, sem inserir nada) mais as 3 empresas desta fatia
         dono = MOD_DONO.linhas(random.Random(0), lambda t, v: None).get("TBEMPHOS", {"gravados": 0, "pendencias": {}})
         esperado["TBEMPHOS"] = {"gravados": dono["gravados"] + len(empresas), "pendencias": dict(dono["pendencias"])}

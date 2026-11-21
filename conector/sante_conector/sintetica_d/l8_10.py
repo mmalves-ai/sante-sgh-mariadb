@@ -1,7 +1,7 @@
 """Fatia L8-10 (patrimônio, financeiro, nota de serviço e escrituração: restantes do módulo FIN; 21 tabelas): tabelas
 da origem com a forma do dicionário e dados 100% falsos.
 
-CARREGADAS (9): os 4 cadastros simples (origem_bem, tipo_responsavel_bem, tipo_credor, tipo_cobranca), os 4 contextos
+CARREGADAS (10): os 4 cadastros simples (origem_bem, tipo_responsavel_bem, tipo_credor, tipo_cobranca), os 4 contextos
 de trabalho do usuário por módulo (contexto_trabalho_usuario: usuário pelo login, estabelecimento único, competência de
 ano e mês, adoção do mesmo usuário e módulo) e os dados fiscais do item (dado_fiscal_item: NCM com zeros à esquerda,
 tipo presumido, vigência da carga, CST de PIS e COFINS, gênero e natureza do crédito pela referência encadeada ao
@@ -9,7 +9,9 @@ código dos catálogos fiscais da origem). Anomalias: descrição vazia (1048), 
 código repetido (1062), login e item inexistentes (pai_inexistente), mês inválido, competência vazia, período invertido
 (CHECK 4025), NCM grande demais, ID de catálogo fiscal sem linha (pai_inexistente), código fiscal de 3 dígitos
 (valor_fora_do_dominio) e valores presumidos (=~).
-DESCARTADAS (10, declarado/sem_carga.tsv) e SEM_MECANISMO (2, pedido em saida/L8-10.json): só a forma (2 linhas).
+SDGELANNFS (rodada 3) completa o item da nota de entrada já gravado com o CFOP (de-para oficial cfop pelo código da
+tabela de CFOP da origem). DESCARTADAS (9, declarado/sem_carga.tsv) e SEM_MECANISMO (2: MFLANGSI, pedido A, e
+MFCABECLANC, pedidos C e D, em saida/L8-10.json): só a forma (2 linhas).
 """
 import datetime
 import decimal
@@ -149,19 +151,19 @@ FORMAS = {
 }
 
 CARREGADAS = ("GPORIGEM", "GPTP_RESPONSAVEL", "MFTIPOLANC", "MFTPCOBRANCA",
-              "GPPARAMU", "MFPARUSU", "NFSEPARUSU", "PEPARAM_USUARIO", "SDGEITENS")
+              "GPPARAMU", "MFPARUSU", "NFSEPARUSU", "PEPARAM_USUARIO", "SDGEITENS", "SDGELANNFS")
 # descarte de produto (declarado/sem_carga.tsv): só a forma, nada carregado
 DESCARTADAS = {"MFCABECRENEGO": "sem_valor", "MFTIPOLANC_TBOPCOES": "mecanismo_do_produto",
                "MFTPAPURACAO": "mecanismo_do_produto", "MOPARAM": "mecanismo_do_produto",
                "NFSEEMPDESENT": "sem_valor", "NFSEEMPDESENV": "sem_valor",
                "SDNATRECEITA": "mecanismo_do_produto", "SDPARAM": "mecanismo_do_produto",
-               "MFCABECLANC": "sem_valor", "MFTPCONTRIBUICAO": "mecanismo_do_produto"}
+               "MFTPCONTRIBUICAO": "mecanismo_do_produto"}
 # sem mecanismo no motor: pedido em saida/L8-10.json (letra do pedido)
-SEM_MECANISMO = {"MFLANGSI": "A", "SDGELANNFS": "B"}
+SEM_MECANISMO = {"MFLANGSI": "A", "MFCABECLANC": "C"}
 # catálogos fiscais da origem (fora da fatia, carga de referência, nunca gravados: regra 7): só lidos pela referência
 # encadeada `ref:<T>>CODIGO` de SDGEITENS (forma do dicionário: ID e CODIGO SMALLINT); IDs diferentes do código
 CATALOGOS_ORIGEM = {t: ('ID', [('ID', 'SMALLINT', True), ('CODIGO', 'SMALLINT', True)])
-                    for t in ('SDCSTPIS', 'SDCSTCOFINS', 'SDGENERO', 'SDNATCREDITO')}
+                    for t in ('SDCSTPIS', 'SDCSTCOFINS', 'SDGENERO', 'SDNATCREDITO', 'SDCFOP')}
 COLUNAS = {t: cols for t, (_, cols) in list(FORMAS.items()) + list(CATALOGOS_ORIGEM.items())}
 
 
@@ -178,10 +180,20 @@ def _ddl():
 DDL = _ddl()
 # pais de fora da fatia, como já carregados: usuários (login, chave de TBUSERS) e itens (COD de GEITENS); ZECA e o
 # item 9 não existem (pai_inexistente)
-PAIS_EXTERNOS = {"TBUSERS": ["ANA.PAULA", "BRUNO", "CARLA"], "GEITENS": [1, 2, 3]}
+# itens da nota de entrada (GELANNFS, L7-07) 1 a 4: na ordem dos pais (GEITENS 1-3 recebem os ids 1 a 3), os ids 4 a
+# 7 do destino; o item 9 não existe (pai_inexistente)
+PAIS_EXTERNOS = {"TBUSERS": ["ANA.PAULA", "BRUNO", "CARLA"], "GEITENS": [1, 2, 3], "GELANNFS": [1, 2, 3, 4]}
 # um estabelecimento só no cliente de exemplo (@estabelecimento)
+# o CFOP 1102 do carregador oficial (catálogo nunca gravado pela carga) e os itens da nota de entrada já gravados
+# pela L7-07 (ids 4 a 7, sem CFOP), que SDGELANNFS completa por UPDATE
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
-                   "INSERT INTO estabelecimento () VALUES ();")
+                   "INSERT INTO estabelecimento () VALUES ();"
+                   "INSERT INTO cfop (id, codigo_cfop, descricao, sentido, abrangencia, versao_fonte, criado_em) VALUES"
+                   " (11, '1102', 'Compra para comercialização', 'entrada', 'estadual', 'exemplo', UTC_TIMESTAMP(3));"
+                   "INSERT INTO nota_entrada_item (id, nota_entrada_id, sequencia, insumo_id, unidade_medida_id,"
+                   " quantidade, quantidade_estoque, valor_unitario, custo_unitario, criado_em) VALUES"
+                   " (4, 1, 1, 1, 1, 2, 2, 1.5, 1.5, UTC_TIMESTAMP(3)), (5, 1, 2, 2, 1, 1, 1, 3, 3, UTC_TIMESTAMP(3)),"
+                   " (6, 1, 3, 3, 1, 4, 4, 2, 2, UTC_TIMESTAMP(3)), (7, 2, 1, 1, 1, 1, 1, 9, 9, UTC_TIMESTAMP(3));")
 
 
 def _falso(tipo, i):
@@ -268,6 +280,14 @@ def linhas(r, ins):
                                               (9, 30049099, None, 31, 4, 7, 8)]:
         _ins(ins, "SDGEITENS", ID_GEITENS=item, NCM=ncm, CODIGO_EX_TIPI=ex, ID_SDGENERO=gen, ID_SDNATCREDITO=nat,
              ID_SDCSTCOFINS=cof, ID_SDCSTPIS=pis)
+    # CFOP da origem (o ID não é o código): 1102 no catálogo; 1949 válido e fora do catálogo; 9102 inválido (1.º dígito)
+    for i, cod in [(1, 1102), (2, 1949), (3, 9102)]:
+        _ins(ins, "SDCFOP", ID=i, CODIGO=cod)
+    # CFOP do item da nota (UPDATE do item já gravado): 1 grava o 1102; 2 fora do catálogo (catalogo_codigo_inexistente,
+    # NULL); 3 inválido (catalogo_codigo_invalido, NULL); 4 ID de CFOP sem linha (pai_inexistente, NULL) e 5 sem
+    # CFOP (vazio, sem pendência): o item continua como estava; 9 item inexistente (pai_inexistente, recusa)
+    for item, cfop in [(1, 1), (2, 2), (3, 3), (4, 77), (9, 1)]:
+        _ins(ins, "SDGELANNFS", ID_GELANNFS=item, ID_SDCFOP=cfop)
     return ESPERADO
 
 
@@ -289,4 +309,6 @@ ESPERADO = {
     "SDGEITENS": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 4, "valor_presumido": 4,
                                                 "valor_fora_do_dominio": 2, "pai_inexistente": 2,
                                                 "restricao_destino_4025": 1}},
+    "SDGELANNFS": {"gravados": 4, "pendencias": {"catalogo_codigo_inexistente": 1, "catalogo_codigo_invalido": 1,
+                                                 "pai_inexistente": 2}},
 }

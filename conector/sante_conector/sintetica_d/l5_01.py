@@ -1,14 +1,19 @@
 """Fatia L5-01 (cadastros e administração): tabelas da origem com a forma do dicionário e dados 100% falsos.
 
-Cobertura total: carregam 13 tabelas; FPCON, TBAGEUSE e as três TBDIGITAR* são descarte de produto
-(`declarado/sem_carga.tsv`); DIPERMPS e TBCTRPRTUSU são bloqueio explícito ao dono (restrições de acesso em uso que pedem
-mecanismo no motor; pedido em docs/obra/fatias/f4/saida/L5-01.json) e ficam fora desta imagem.
+Cobertura total: carregam 16 tabelas; FPCON e as três TBDIGITAR* são descarte de produto
+(`declarado/sem_carga.tsv`). Revisão da rodada 3: TBAGEUSE carrega (tipo de agenda do usuário pelo código numérico,
+categoria criada inativa e adotada); período do aceite periódico pela quantidade e unidade da origem (`#dias`); a hora
+local gravada em coluna UTC leva a marca valor_presumido por linha (literal `=~hora_local` concorrente). Rodada 3: DIPERMPS (recorte do usuário por prestador de serviço, em usuario_escopo) e
+TBCTRPRTUSU (tipos de prontuário do usuário) carregam: o tipo de escopo e o tipo de documento são destinos secundários
+gravados antes (`antes;adotar:codigo`) e ligados por `@id:`; o prestador vem pela chave alternativa composta de
+TBPRESER (pai de fora da fatia, só com as colunas lidas e dado como já carregado).
 Anomalias: nome com espaços repetidos, código acima do tamanho do destino (codigo_derivado), colisão de caixa na
 unicidade do destino, S/N inválido, vazio em coluna obrigatória do destino, pai recusado (pai_pendente), pai
 inexistente, CHECK do destino, duplicidade na unicidade, segredo que nunca é gravado (segredo_aguarda_cofre), porta e
 tentativas fora da faixa, mínimo de senha elevado a 8, data sentinela em termo publicado, aceite repetido,
 duração guardada como hora (minutos), literal presumido (valor_presumido), letra sem par no de-para de valores,
-aceite periódico exigido na origem que continua exigido no destino (período presumido) e servidor de e-mail inativo.
+aceite periódico exigido na origem que continua exigido no destino (período da origem em dias, mês aproximado) e
+servidor de e-mail inativo.
 """
 import datetime as _dt
 
@@ -44,10 +49,48 @@ CREATE TABLE TBCFGLOGIN (ID_TBHOSPIT SMALLINT NOT NULL PRIMARY KEY, PERIOD_TROCA
   CARACTERE_NUMERICO CHAR(1), CARACTERE_ESPECIAL CHAR(1), LETRA_MINUSCULA CHAR(1), LETRA_MAIUSCULA CHAR(1));
 CREATE TABLE TBDICIONARIO_TBUSERS (USUARIO VARCHAR(31) NOT NULL, PALAVRA VARCHAR(50) NOT NULL,
   FONETICA VARCHAR(50) NOT NULL, PRIMARY KEY (USUARIO, PALAVRA));
+CREATE TABLE DIPERMPS (USUARIO VARCHAR(31) NOT NULL, ATO SMALLINT NOT NULL, PS SMALLINT NOT NULL, MODULO CHAR(1) NOT NULL,
+  NOME VARCHAR(70), PERM_GRA VARCHAR(1), PERM_EXC VARCHAR(1), PRIMARY KEY (USUARIO, ATO, PS, MODULO));
+CREATE TABLE TBCTRPRTUSU (USUARIO VARCHAR(31) NOT NULL, OPCAO VARCHAR(1) NOT NULL, PRIMARY KEY (USUARIO, OPCAO));
+CREATE TABLE TBAGEUSE (USUARIO VARCHAR(31) NOT NULL, TPAGE SMALLINT NOT NULL, PRIMARY KEY (USUARIO, TPAGE));
 """
+
+# TBPRESER (fatia L8-04) é lida pela chave alternativa composta de DIPERMPS: entra com a forma do dicionário (todas as
+# colunas, na ordem de mapa/colunas.tsv, para casar com a das outras fatias quando as imagens se juntam)
+import csv as _csv
+from pathlib import Path as _Path
+
+with open(_Path(__file__).resolve().parents[2] / "mapa" / "colunas.tsv", encoding="utf-8") as _f:
+    _PRESER = [(r["coluna"], r["forma"]) for r in _csv.DictReader(_f, delimiter="\t") if r["tabela"] == "TBPRESER"]
+DDL += "CREATE TABLE TBPRESER (%s, PRIMARY KEY (ID));\n" % ", ".join(
+    "%s %s%s" % (c, "DOUBLE PRECISION" if f == "DOUBLE" else f, " NOT NULL" if c == "ID" else "") for c, f in _PRESER)
+_COLS_PRESER = [c for c, _ in _PRESER]
 
 # pais de fora da fatia (L3), dados como já carregados: logins falsos e o estabelecimento 1
 PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia", "caio"], "TBHOSPIT": ["1"]}
+
+# Cenário do prestador (pai de DIPERMPS, fatia L8-04, ordem 864, depois de DIPERMPS até a aresta pedida no L5-01.json):
+# - "pai_depois" (hoje): TBPRESER entra na imagem como origem e carrega na mesma execução, DEPOIS: a referência fica
+#   pai_inexistente (ou pai_ambiguo) e a linha é recusada (NOT NULL);
+# - "pai_antes" (com a aresta DIPERMPS -> TBPRESER): TBPRESER carrega antes; as linhas sintéticas dele são recusadas
+#   pelas regras da L8-04 (documento em ponto flutuante), então a referência fica pai_pendente;
+# - "externo" (teste test_l5_01, prova do caminho feliz): TBPRESER dado como já carregado (PAIS_EXTERNOS) e fora do
+#   plano; o recorte grava pelo prestador achado pela chave alternativa composta.
+PRESTADOR_JA_CARREGADO = False
+
+
+def _cenario_prestador():
+    if PRESTADOR_JA_CARREGADO:
+        return "externo"
+    from sante_conector import mapa
+    ordem = {r["tabela"]: int(r["ordem"]) for r in mapa.carregar_execucao()["tabelas"]
+             if r["tabela"] in ("DIPERMPS", "TBPRESER")}
+    return "pai_antes" if ordem["TBPRESER"] < ordem["DIPERMPS"] else "pai_depois"
+
+# o recorte de acesso é do único estabelecimento do cliente (@estabelecimento)
+PREPARO_DESTINO = (
+    "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
+    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);")
 
 
 def _ts(s):
@@ -66,6 +109,18 @@ class _Hora:
 
 def _h(s):
     return _Hora(s)
+
+
+# recorte por prestador: esperado por cenário (ver _cenario_prestador)
+_ESPERADO_DIPERMPS = {
+    "externo": {"gravados": 4, "pendencias": {"adotado_existente": 3, "pai_ambiguo": 1, "pai_inexistente": 2,
+                                              "restricao_destino_1048": 3, "valor_fora_do_dominio": 1,
+                                              "vigencia_sem_fonte": 7}},
+    "pai_depois": {"gravados": 0, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 7, "restricao_destino_1048": 7,
+                                                "valor_fora_do_dominio": 1, "vigencia_sem_fonte": 7}},
+    "pai_antes": {"gravados": 0, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 1, "pai_pendente": 5,
+                                                "restricao_destino_1048": 2, "vigencia_sem_fonte": 2}},
+}
 
 
 def linhas(r, ins):
@@ -121,7 +176,8 @@ def linhas(r, ins):
     for i, nome in [(1, "Exames liberados"), (2, "  Laudo   disponivel "), (3, "")]:
         ins("PRTPNOTIFEMAIL", [i, nome])
     # política: 1 tentativas 0 (fora de 1..50: padrão), mínimo 6 (elevado a 8), 20 e 2 minutos, aceite periódico
-    # exigido (T, 6 meses): exigido no destino com período presumido de 30 dias (valor_presumido); 2 estabelecimento inexistente (pai_inexistente + NOT NULL)
+    # exigido (T, 6 meses): exigido no destino com 180 dias (periodo_aproximado); 2 estabelecimento inexistente
+    # (pai_inexistente + NOT NULL)
     ins("TBCFGLOGIN", [1, 90, 180, 10, 0, _ts("1899-12-30 00:20"), "exemplo.test", "T", "T", 6, "M",
                        _ts("1899-12-30 00:02"), 6, "T", "T", "F", "F", "T"])
     ins("TBCFGLOGIN", [2, 0, None, None, 5, _ts("1899-12-30 00:30"), None, None, "F", None, None, None, 10,
@@ -130,6 +186,24 @@ def linhas(r, ins):
     for u, p, f in [("ana", "hemograma", "EMGRM"), ("ana", "dipirona", "DPRN"), ("bia", "hemograma", "EMGRM"),
                     ("ana", "Dipirona", "DPRN"), ("zeca", "teste", "TST")]:
         ins("TBDICIONARIO_TBUSERS", [u, p, f])
+    # prestadores (pai externo, só as colunas da chave alternativa): 3 e 4 repetem setor, código e módulo (ambíguo)
+    for i, ato, cod, mod in [(1, 1, 10, "L"), (2, 2, 10, "L"), (3, 3, 30, "I"), (4, 3, 30, "I")]:
+        ins("TBPRESER", [{"ID": i, "ATO": ato, "COD": cod, "MODULO": mod}.get(c) for c in _COLS_PRESER])
+    # recorte por prestador: 1 cria o tipo de escopo; 2, 3 e 7 adotam; 4 prestador ambíguo; 5 prestador inexistente;
+    # 6 login inexistente (os três recusados: NOT NULL); 7 permissão de gravar fora do domínio (padrão: só consulta)
+    for u, ato, ps, mod, gra, exc in [("ana", 1, 10, "L", "S", "S"), ("bia", 1, 10, "L", "N", "N"),
+                                      ("ana", 2, 10, "L", "S", "N"), ("caio", 3, 30, "I", "S", "S"),
+                                      ("ana", 9, 99, "L", "S", "S"), ("zeca", 1, 10, "L", "S", "S"),
+                                      ("bia", 2, 10, "L", "X", None)]:
+        ins("DIPERMPS", [u, ato, ps, mod, "Usuario de exemplo", gra, exc])
+    # tipos de prontuário por usuário: A criado uma vez e adotado; B e C criados; login inexistente (NOT NULL);
+    # letra em branco (código NULL no tipo: recusa)
+    for u, op in [("ana", "A"), ("bia", "A"), ("caio", "A"), ("ana", "B"), ("bia", "C"), ("zeca", "A"),
+                  ("caio", " ")]:
+        ins("TBCTRPRTUSU", [u, op])
+    # tipos de agenda por usuário (código numérico): 0 criado uma vez e adotado; 2 criado; login inexistente (NOT NULL)
+    for u, tp in [("ana", 0), ("bia", 0), ("caio", 0), ("ana", 2), ("zeca", 0)]:
+        ins("TBAGEUSE", [u, tp])
     return {
         "TBGRUUSU": {"gravados": 8, "pendencias": {"codigo_derivado": 1, "restricao_destino_1062": 1,
                                                    "valor_fora_do_dominio": 1}},
@@ -146,14 +220,20 @@ def linhas(r, ins):
                                                      "restricao_destino_1048": 1}},
         "PRLOCPACDEFAULT": {"gravados": 3, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1062": 1,
                                                           "pai_inexistente": 1, "restricao_destino_1048": 1}},
-        "PRTERMOCAD": {"gravados": 3, "pendencias": {"data_sentinela": 2, "restricao_destino_4025": 1,
+        "PRTERMOCAD": {"gravados": 3, "pendencias": {"valor_presumido": 4, "valor_fora_do_dominio": 1,
+                                                     "data_sentinela": 2, "restricao_destino_4025": 1,
                                                      "pai_inexistente": 1}},
-        "PRTERMOACEITE": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "pai_pendente": 1,
+        "PRTERMOACEITE": {"gravados": 3, "pendencias": {"valor_presumido": 5, "restricao_destino_1062": 1, "pai_pendente": 1,
                                                         "pai_inexistente": 1, "restricao_destino_1048": 1}},
         "PRTPNOTIFEMAIL": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
-        "TBCFGLOGIN": {"gravados": 1, "pendencias": {"valor_presumido": 2, "valor_fora_do_dominio": 1,
+        "TBCFGLOGIN": {"gravados": 1, "pendencias": {"periodo_aproximado": 1, "valor_fora_do_dominio": 1,
                                                      "valor_elevado_ao_minimo": 1, "pai_inexistente": 1,
                                                      "restricao_destino_1048": 1}},
         "TBDICIONARIO_TBUSERS": {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 1,
                                                                "restricao_destino_1048": 1}},
+        "TBAGEUSE": {"gravados": 4, "pendencias": {"adotado_existente": 2, "pai_inexistente": 1,
+                                                   "restricao_destino_1048": 1}},
+        "DIPERMPS": _ESPERADO_DIPERMPS[_cenario_prestador()],
+        "TBCTRPRTUSU": {"gravados": 5, "pendencias": {"adotado_existente": 2, "pai_inexistente": 1,
+                                                      "restricao_destino_1048": 2}},
     }

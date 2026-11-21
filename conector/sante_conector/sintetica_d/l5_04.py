@@ -3,11 +3,14 @@
 Carregadas pelo mapa: complexidade e porte do estabelecimento, finalidade do endereço, tipo de telefone, capacidade
 civil, classe da fonte pagadora, escolaridade, clínica (situação A/I, natureza presumida), estado civil da folha
 (código com prefixo de domínio) e do cadastro (variantes por sexo adotadas num id só), credor pessoa física com a conta
-(só quando há banco), técnico do SADT como pessoa física (adotada pelo CPF), pré-cadastro das agendas (paciente e
+(só quando há banco), técnicos do laboratório e da hemoterapia como PROFISSIONAL (principal) da pessoa física
+gravada antes (adotada pelo CPF; profissional da mesma pessoa adotado), situação A/I e S/N (inativo sem data recusado
+pelo CHECK), fonte do recurso das compras (origem_recurso_compra), pré-cadastro das agendas (paciente e
 situação pelo prontuário), titular da cobertura (tipo, CNPJ e parentesco) e o complemento do solicitante externo (CNS).
-Fora (NAO_CARREGADAS, com o motivo; pedidos em docs/obra/fatias/f4/saida/L5-04.json): descartes declarados em
-declarado/sem_carga.tsv (marcador sem dado, fonte pagadora sem referência), inscrição no conselho (de-para oficial do
-conselho), especialidade x procedimento (referência ao item faturável) e feriado (regra de recorrência).
+Fora (NAO_CARREGADAS): nenhuma. A linha marcadora sem pessoa do cadastro de técnicos cai por linha (1048).
+Rodada 3: inscrição no conselho (conselho e UF por de-para oficial, ocupação pelo CBO da tabela de CBO, sequência por
+profissional, situação, competências), especialidade x procedimento (procedimento pelo código, ambíguo entre tabelas
+de honorários recusado com pai_ambiguo) e feriado (ano 9999 = anual com dia e mês; abrangência do estabelecimento).
 Anomalias: descrição nula, colisão de caixa em código de 1 caractere, nome com espaços repetidos, código eSocial fora da
 faixa, CPF inválido e repetido (adoção), banco fora do catálogo, CEP zero, município ausente, convênio inexistente,
 data de nascimento sentinela, pais de outras fatias ausentes da imagem (referência encadeada: pai_inexistente),
@@ -84,11 +87,34 @@ CREATE TABLE TBCBOPRO (ID INTEGER NOT NULL PRIMARY KEY, ID_TBCBOSUS INTEGER NOT 
   AXREG_ID_ANESTHESIOLOGISTS BIGINT, ID_DIGITAL VARCHAR(36));
 CREATE TABLE TBESPPRO (PROCTO INTEGER NOT NULL, ESP SMALLINT NOT NULL, PRIMARY KEY (PROCTO, ESP));
 CREATE TABLE TBFONTE_PAGADORA (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(60), ID_DIGITAL VARCHAR(36));
+CREATE TABLE TBCBOSUS (ID INTEGER NOT NULL PRIMARY KEY, COD VARCHAR(6));
+CREATE TABLE TBPROCTO (ID INTEGER NOT NULL PRIMARY KEY, ID_TBCTRTHM SMALLINT NOT NULL, COD_PROCEDIMENTO BIGINT NOT NULL,
+  NOME VARCHAR(100), TP_MODULO CHAR(1));
 """
 
 # pais de outras fatias (convênio) registrados como já carregados; os da referência encadeada (atendimento, paciente,
 # cobertura, solicitante) ficam AUSENTES da imagem: a carga prova o caminho pai_inexistente sem inventar a origem deles
-PAIS_EXTERNOS = {"TBCONVEN": ["1"]}
+# TBCBOSUS (fora do mapa) e TBPROCTO (código do procedimento) só são LIDOS pela referência encadeada/alternativa;
+# o profissional, a especialidade e o procedimento (item faturável) entram como já carregados
+PAIS_EXTERNOS = {"TBCONVEN": ["1"], "TBPROFIS": ["1", "2", "4"], "TBESPEC": ["1", "2"],
+                 "TBPROCTO": ["11", "12", "13"]}
+# pais de outras fatias que estão na imagem só para serem LIDOS (chave alternativa, encadeada): não são carregados
+# na conferência desta fatia (a declaração deles é da fatia dona: TBPROCTO é da L8-03). Sem isso a carga regravaria o
+# pai externo (alteracao_aguarda_sincronizar) e a conciliação de item_faturavel e grupo_faturamento entraria aqui.
+SO_LIDOS = ("TBPROCTO", "TBCBOSUS")
+
+
+def _mapa_teste():
+    from sante_conector import mapa
+    m = mapa.carregar_execucao()
+    m["colunas_decl"] = [c for c in m.get("colunas_decl", []) if c["tabela"] not in SO_LIDOS]
+    return m
+
+
+def __getattr__(nome):  # MAPA_TESTE preguiçoso: o mapa só é lido quando a conferência pede
+    if nome == "MAPA_TESTE":
+        return _mapa_teste()
+    raise AttributeError(nome)
 PREPARO_DESTINO = (
     "CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
     " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
@@ -96,21 +122,16 @@ PREPARO_DESTINO = (
     " ('001', '00000001', 'Banco exemplo um', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3)),"
     " ('237', '00000237', 'Banco exemplo dois', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));"
     " INSERT INTO municipio_ibge (codigo_ibge, nome, unidade_federativa_id, criado_em) VALUES"
-    " ('3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3))")
+    " ('3550308', 'Municipio exemplo', 1, UTC_TIMESTAMP(3));"
+    " INSERT IGNORE INTO unidade_federativa (codigo_ibge, sigla, descricao, pais_referencia_id, criado_em) VALUES"
+    " ('35', 'SP', 'Unidade exemplo SP', 1, UTC_TIMESTAMP(3));"
+    " INSERT IGNORE INTO conselho_classe (codigo_tiss, sigla, descricao, criado_em) VALUES"
+    " ('06', 'CRM', 'Conselho exemplo um', UTC_TIMESTAMP(3)), ('07', 'COREN', 'Conselho exemplo dois', UTC_TIMESTAMP(3));"
+    " INSERT IGNORE INTO ocupacao_cbo (codigo_cbo, descricao, criado_em) VALUES"
+    " ('225125', 'Ocupacao exemplo', UTC_TIMESTAMP(3))")
 
 # tabelas da fatia fora da carga, com o motivo (pedidos ao integrador em docs/obra/fatias/f4/saida/L5-04.json)
-NAO_CARREGADAS = {
-    "SHTECNIC": "marcador sem dado (uma linha na referência): descarte sem_valor em declarado/sem_carga.tsv; os "
-                "técnicos reais vêm de SITECNIC e do cadastro de profissionais",
-    "TBFONTE_PAGADORA": "nenhuma coluna da origem a referencia: descarte sem_valor em declarado/sem_carga.tsv; as classes "
-                        "da fonte pagadora vêm de TBCLASSC",
-    "TBCBOPRO": "inscrição exige o conselho (catálogo oficial conselho_classe): falta de-para oficial do conselho pela "
-                "sigla (pedido)",
-    "TBESPPRO": "o procedimento é item faturável gravado como destino SECUNDÁRIO das tabelas de preço: falta referência "
-                "a destino secundário do pai (pedido)",
-    "TBFERIAD": "ano 9999 = todo ano (recorrência anual com dia e mês): falta regra de recorrência (pedido); gravar "
-                "tudo como data única tornaria o feriado fixo dia útil",
-}
+NAO_CARREGADAS = {}
 
 
 def linhas(r, ins):
@@ -149,7 +170,7 @@ def linhas(r, ins):
     for x in [(1, "Solteiro", 1), (2, "Casado", 2), (3, "Divorciado", 3), (4, "Viúvo", 9), (5, None, 5)]:
         ins("FPECIV", list(x))
     for x in [(1, "Particular", None), (2, "Convênio  SUS", None), (3, None, None)]:
-        ins("TBFONTE_PAGADORA", list(x))  # descartada: a carga não a lê
+        ins("TBFONTE_PAGADORA", list(x))  # fonte do recurso da compra; descrição nula recusa (1048)
 
     def credor(i, nome, cpf, inss, banco, ag, conta, dig):
         ins("GETABFUN", [i, 1, 100 + i, nome, 1, 10, None, None, None, None, inss, None, cpf, "A", None, None, None,
@@ -159,8 +180,13 @@ def linhas(r, ins):
     credor(3, "Prestador Tres", CPF_A, None, 237, "0001", 555, None)      # mesmo CPF: pessoa adotada, conta nova
     credor(4, "Prestador Quatro", 123, None, 999, "1", 2, None)          # CPF inválido, banco fora do catálogo
     credor(5, None, None, None, None, None, None, None)                  # sem nome: recusa
-    for x in [(101, CPF_C, "Tecnico Um", "Tec  Um"), (102, CPF_A, "Tecnico Dois", None), (103, 123, "Tecnico Tres", None)]:
-        ins("SITECNIC", list(x) + [None] * 11)
+    # técnico do laboratório: 101 mesma pessoa do técnico da hemoterapia (pessoa e profissional adotados, se o CPF em
+    # DOUBLE já é lido); 102 pessoa do credor (adotada); 103 CPF inválido e inativo sem data (4025); 104 situação fora
+    for crm, cpf, nome, apel, fone, ativo in [(101, CPF_C, "Tecnico Um", "Tec  Um", "1133334444", "S"),
+                                              (102, CPF_A, "Tecnico Dois", None, None, None),
+                                              (103, 123, "Tecnico Tres", None, None, "N"),
+                                              (104, CPF_D, "Tecnico Quatro", None, None, "X")]:
+        ins("SITECNIC", [crm, cpf, nome, apel, None, None, None, None, None, None, None, fone, "11999990000", None, ativo])
     d = datetime.date
 
     def agenda(pac, cep, ibge, conv, cpf, num, obs, nasc, pront=None):
@@ -180,9 +206,28 @@ def linhas(r, ins):
                         nasc, 1, None, cnpj, tipo])
     for cpf, crm in [(float(CPF_B), 1234), (float(CPF_C), None)]:
         ins("FAMEDSOL", [cpf, "Solicitante SUS", 700000000000005.0, crm])
-    ins("SHTECNIC", [1, None, None, None, None, None, None, None, None, None, None, None, None, None, "A"])
-    ins("TBCBOPRO", [1, 225125, "SP", 12345, 1, "S", "CRM", "S", None, 202001, None, "S", None, None, 1, None, None, None])
-    ins("TBESPPRO", [1, 1])
+    # técnico da hemoterapia: 1 linha marcadora sem pessoa (1048 só nela); 2 pessoa nova (CPF em DOUBLE); 3 inativo sem
+    # data (4025); 4 CPF inválido e situação fora do domínio (padrão ativo)
+    for crm, nome, cpf, sit in [(1, None, None, "A"), (2, "Tecnico Hemo Um", float(CPF_C), "A"),
+                                (3, "Tecnico Hemo Dois", None, "I"), (4, "Tecnico  Hemo Tres", 123.0, "Z")]:
+        ins("SHTECNIC", [crm, nome, cpf, None, None, None, None, None, "SP", "1133335555", None, None, 6, 1000 + crm, sit])
+    # CBO da origem: 10 no catálogo, 11 fora do catálogo; 999 (ausente) é pai_inexistente
+    ins("TBCBOSUS", [10, "225125"])
+    ins("TBCBOSUS", [11, "999999"])
+    for x in [(1, 10, "SP", 12345, 1, "S", "CRM", "S", None, 202001, 202312, "S", "7", None, 1),
+              (2, 10, "SP", 54321, 1, "N", "COREN", "N", None, 202013, None, "N", None, None, 2),   # competência inválida
+              (3, 10, "SP", 11111, 2, "S", "CRF", "S", None, None, None, None, None, None, None),   # conselho fora
+              (4, 10, "SP", 22222, 3, "S", "CRM", "S", None, None, None, None, None, None, None),   # profissional ausente
+              (5, 10, "SP", 33333, 2, "S", None, None, None, None, None, None, None, None, 1),     # sem sigla
+              (6, 11, "XX", 44444, 1, "S", "CRM", "X", None, None, None, None, None, None, None),   # UF e CBO fora
+              (7, 999, "SP", 55555, 4, "N", "CRM", "S", None, 202201, 202105, "S", None, None, None)]:  # fim < início
+        ins("TBCBOPRO", list(x) + [None, None, None])
+    # procedimento por código: 101 numa tabela só; 102 em duas tabelas de honorários (ambíguo); 103 ausente
+    for x in [(11, 1, 101, "Procedimento exemplo um"), (12, 1, 102, "Procedimento exemplo dois"),
+              (13, 2, 102, "Procedimento exemplo dois")]:
+        ins("TBPROCTO", list(x) + [None])
+    for x in [(101, 1), (101, 2), (102, 1), (103, 1), (101, 99)]:
+        ins("TBESPPRO", list(x))
     # pendência por coluna: o prontuário sem paciente conta no paciente, na situação e na conversão (3); o titular
     # sem cobertura conta na cobertura e no parentesco (TBPARENTE fora da imagem)
     doc = {} if MOTOR_CPF_DOUBLE else {"documento_invalido": 2}  # CPF (REG 2) e CNPJ (REG 3) em DOUBLE
@@ -202,11 +247,31 @@ def linhas(r, ins):
         "GETABFUN": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "adotado_existente": 1,
                                                     "documento_invalido": 2, "catalogo_codigo_inexistente": 1,
                                                     "restricao_destino_1048": 1}},
-        "SITECNIC": {"gravados": 3, "pendencias": {"adotado_existente": 1, "documento_invalido": 1}},
+        # técnico: tipo presumido em toda linha lida (4); 101 adota a pessoa e o profissional do técnico da hemoterapia
+        # só quando o CPF em DOUBLE já é lido (pedido); 103 inativo sem data recusado pelo CHECK (4025)
+        "SITECNIC": {"gravados": 3, "pendencias": {"adotado_existente": 3 if MOTOR_CPF_DOUBLE else 1,
+                                                    "documento_invalido": 1, "valor_fora_do_dominio": 1,
+                                                    "valor_presumido": 4, "restricao_destino_4025": 1}},
+        # marcador sem pessoa recusa só a linha (1048); inativo sem data (4025); CPF em DOUBLE e CPF inválido
+        "SHTECNIC": {"gravados": 2, "pendencias": {"documento_invalido": 1 if MOTOR_CPF_DOUBLE else 2,
+                                                    "valor_fora_do_dominio": 1, "valor_presumido": 4,
+                                                    "restricao_destino_1048": 1, "restricao_destino_4025": 1}},
+        "TBFONTE_PAGADORA": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
         "REPACAGN": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "catalogo_codigo_inexistente": 1,
                                                     "pai_inexistente": 4, "data_sentinela": 1, "documento_invalido": 1,
                                                     "restricao_destino_1048": 1}},
         "SIPACAGN": {"gravados": 0, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2}},
         "RESEGUR": {"gravados": 0, "pendencias": dict({"pai_inexistente": 6, "restricao_destino_1048": 3}, **doc)},
         "FAMEDSOL": {"gravados": 0, "pendencias": {"pai_inexistente": 2}},
+        # inscrição: 1 e 2 gravam (2 com competência inválida); conselho fora (CRF), UF fora (XX) e CBO fora: catálogo
+        # inexistente; sem sigla e profissional ausente: recusa 1048; competência final antes da inicial: 4025
+        "TBCBOPRO": {"gravados": 2, "pendencias": {"catalogo_codigo_inexistente": 3, "pai_inexistente": 2,
+                                                   "valor_fora_do_dominio": 2, "restricao_destino_1048": 4,
+                                                   "restricao_destino_4025": 1}},
+        # código em duas tabelas de honorários: pai_ambiguo; código e especialidade ausentes: pai_inexistente
+        "TBESPPRO": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 5, "pai_ambiguo": 1, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 3}},
+        # data sentinela conta nas quatro declarações da DATA (recorrência, dia, mês, data) e recusa a linha
+        "TBFERIAD": {"gravados": 6, "pendencias": {"data_sentinela": 4, "valor_fora_do_dominio": 1,
+                                                   "restricao_destino_1048": 2}},
     }

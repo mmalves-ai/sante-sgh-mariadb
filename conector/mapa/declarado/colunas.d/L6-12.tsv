@@ -56,7 +56,7 @@ PRCABEVOL	ID_TBCBOPRO_EVOLUCAO	registro_assistencial.autor_usuario_id			ref:TBCB
 PRCABEVOL	ID_PRLOCAL_ASSISTENCIA	registro_assistencial.local_assistencia_id				local de assistência
 PRCABEVOL	DATA_HORA_EVOLUCAO	registro_assistencial.data_hora_clinica	data_hora			data clínica
 PRCABEVOL	DATA_HORA_LANCAMENTO	registro_assistencial.data_hora_lancamento	data_hora			lançamento
-PRCABEVOL	=~e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	registro_assistencial.impressao_digital				decisão (F4-decisoes-destino, L6-12): marca PRESUMIDA (valor_presumido por linha): a origem não guarda a representação exibida na finalização; o SHA-256 do texto migrado (PRCONTEVOL, #sha256:EVOLUCAO, declaração pronta abaixo, comentada) espera o motor tirar do resumo do pai a coluna regravada pelo complemento (pedido)
+PRCABEVOL	=~0000000000000000000000000000000000000000000000000000000000000000	registro_assistencial.impressao_digital				decisão (F4-decisoes-destino, L6-12, rodada 3): impressão NÃO CALCULADA, marca de zeros (valor_presumido por linha), nunca um hash que pareça válido (o SHA-256 do vazio afirmaria texto vazio): o CHECK exige 64 hex e a origem não guarda a representação exibida na finalização; o SHA-256 do texto migrado (#sha256:EVOLUCAO em PRCONTEVOL, comentada) espera o motor tirar do resumo do pai a coluna regravada pelo complemento (pedido em saida/L6-12.json)
 PRCABEVOL	JUSTIFICATIVA_LANC_RETROATIVO	registro_assistencial.justificativa_retroativo	texto			justificativa
 PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.suspenso_em	data_hora			suspensão
 PRCABEVOL	DATA_HORA_SUSPENSAO	registro_assistencial.situacao	preenchido	valores		decisão (F4-decisoes-destino, L6-12): suspenso na origem = situacao suspenso (valores.d/L6-12.tsv), com suspenso_em, quem suspendeu e justificativa (o CHECK exige os três; na referência os 26.622 suspensos têm os três); nunca exclusão lógica: o registro suspenso continua no prontuário legal
@@ -114,8 +114,9 @@ PRASSINATURA_DOC	ID_TBCBOPRO	documento_prontuario_evento.profissional_id			ref:T
 PRASSINATURA_DOC	DATA_HORA_EVENTO	documento_prontuario_evento.evento_em	data_hora			momento do evento; nulo recusa (NOT NULL)
 PRASSINATURA_DOC	DATA_HORA_GRAVACAO	documento_prontuario_evento.ocorrido_em	data_hora			gravação do evento
 PRASSINATURA_DOC	ID_PRTPDOCUMENTO		chave_origem			não aproveitada: o tipo do documento já está no documento do prontuário (documento_prontuario, L6-11)
-PRASSINATURA_DOC	DOCUMENTO_ORIGINAL		texto_longo			decisão (F4-decisoes-destino, L6-12): documento assinado é arquivo (arquivo_id); o conector não grava arquivos (pedido do mecanismo de arquivo)
-PRASSINATURA_DOC	DOCUMENTO_XML_IMPRESSAO		texto_longo			mesmo motivo de DOCUMENTO_ORIGINAL
+PRASSINATURA_DOC	DOCUMENTO_ORIGINAL		texto_longo			decisão (F4-decisoes-destino, L6-12, rodada 3): documento assinado (prova legal) vai SEM PERDA no retrato do evento (documento_prontuario_evento.dados, #retrato abaixo) até o mecanismo de arquivo (#arquivo, M4) gravar arquivo_id, assinatura_documento e documento_assinado (NOT NULL arquivo_id e hash): pendência alta registrada
+PRASSINATURA_DOC	DOCUMENTO_XML_IMPRESSAO		texto_longo			mesmo motivo de DOCUMENTO_ORIGINAL: entra no retrato do evento (dados) até o #arquivo (M4)
+PRASSINATURA_DOC	#retrato:DOCUMENTO_ORIGINAL,DOCUMENTO_XML_IMPRESSAO	documento_prontuario_evento.dados				L6-12 (rodada 3): retrato JSON do evento com o documento assinado e o XML de impressão (texto, sem perda) até o #arquivo (M4)
 PRPRESCHEMO	ID_PRLANGERAL	prescricao_item_hemocomponente.prescricao_item_id				item da prescrição (mesma fatia); item recusado: pai_pendente
 PRPRESCHEMO	CODALF_SITABPRO	prescricao_item_hemocomponente.hemocomponente_id			ref:PRHEMOTLAN.CODALF	hemocomponente pela sigla (chave alternativa, como SHBOLSA); sigla sem cadastro: pai_inexistente e recusa (NOT NULL). Na referência 0 de 910 casam (o cadastro tem 1 sigla): o cliente cadastra os hemocomponentes e sincroniza
 PRPRESCHEMO	ATO_SITABPRO		inteiro			não aproveitada: o ato do procedimento não identifica o hemocomponente
@@ -180,5 +181,21 @@ PREVOLPAC	AUTOPREENCHIDO	registro_assistencial_resposta.autopreenchido	booleano_
 PREVOLPAC	ID_HTPROCTO		chave_origem			não aproveitada: procedimento da resposta sem coluna no destino (pedido F2.2)
 PREVOLPAC	TAB		inteiro			não aproveitada: posição de tela
 PREVOLPAC	ORDEM		texto			não aproveitada: ordem de layout; a sequência é a da chave
-#PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id				BLOQUEADA por catálogo oficial sem de-para: principio_ativo é catálogo oficial (DCB) e o princípio da origem (TBPRINC) só chega a ele pelo COD_DCB (ref:TBPRINC>COD_DCB com de-para oficial dcb, que depara.py não tem; pedido em saida/L6-12.json, o mesmo da L7-07)
-#PRALERGIAPAC_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id		dcb	ref:TBPRINC>COD_DCB	aguarda o de-para oficial dcb (pedido)
+PRALERGIAPAC_TBPRINC	ID_PRALERGIAPAC	alergia_paciente_principio.alergia_paciente_id	chave_origem		ref:PRALERGIAPAC	alerta de alergia do paciente (mesma fatia); alerta recusado: pai_pendente
+PRALERGIAPAC_TBPRINC	ID_TBPRINC	alergia_paciente_principio.principio_ativo_id	inteiro_zeros_esquerda:5		ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb	decisão (F4-decisoes-destino, L6-12, rodada 3): princípio ativo é o catálogo oficial DCB (regra 7, nunca gravado): o código DCB guardado no princípio da origem (encadeada terminada em coluna, 5 dígitos com zeros à esquerda) acha o id no catálogo já carregado (cod:); código ausente no catálogo: codigo_inexistente_destino e a linha recusa (NOT NULL) até o carregador oficial trazê-lo; princípio sem código DCB: NULL e recusa
+#--- PRGEDIMP (BLOQUEADA, regra_faltante #arquivo/M4): declaração pronta; anexo_prontuario.arquivo_id NOT NULL espera o mecanismo de arquivo
+#PRGEDIMP	@estabelecimento	anexo_prontuario.estabelecimento_id				único estabelecimento
+#PRGEDIMP	ID_RICADPAC	anexo_prontuario.paciente_id				paciente (chave do cadastro)
+#PRGEDIMP	ID_ATCABECATEND	anexo_prontuario.atendimento_id				atendimento (opcional)
+#PRGEDIMP	ID_PRTIPODOCANEXO	anexo_prontuario.tipo_anexo_id				tipo de anexo; sem tipo recusa (NOT NULL)
+#PRGEDIMP	#arquivo:DOCUMENTO	anexo_prontuario.arquivo_id				binário do anexo (DOCUMENTO; IMAGEM quando houver) no armazenamento: mecanismo #arquivo (M4)
+#PRGEDIMP	NOME_DOCUMENTO	anexo_prontuario.titulo	texto_nome			nome do documento; sem nome recusa (NOT NULL)
+#PRGEDIMP	REFERENCIA	anexo_prontuario.referencia_em	data			data do documento original
+#PRGEDIMP	DATA_HORA_EVENTO	anexo_prontuario.evento_em	data_hora			evento clínico
+#PRGEDIMP	JUSTIFICATIVA_EVENTO_RETROATIVO	anexo_prontuario.justificativa_retroativo	texto			justificativa
+#PRGEDIMP	LOCAL_ORIGEM	anexo_prontuario.local_origem	texto			serviço de origem
+#PRGEDIMP	DATA_HORA_IMPORTACAO	anexo_prontuario.importado_em	data_hora			importação
+#PRGEDIMP	ID_TBCBOPRO_IMPORTACAO	anexo_prontuario.importado_profissional_id			ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	quem importou
+#PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.suspenso_em	data_hora			suspensão
+#PRGEDIMP	JUSTIFICATIVA_SUSPENSAO	anexo_prontuario.justificativa_suspensao	texto			justificativa da suspensão
+#PRGEDIMP	DATA_HORA_SUSPENSAO	anexo_prontuario.situacao	preenchido	valores		suspenso / ativo (pares em valores.d ao ativar)

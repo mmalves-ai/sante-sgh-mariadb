@@ -1,6 +1,6 @@
 """Fatia L8-10 (patrimônio, financeiro, nota de serviço e escrituração; módulo FIN): declarações, plano, de-para de
-valores e imagem sintética, na rodada de cobertura total. Sem banco; só valores inventados. 9 tabelas carregam, 10
-são descartadas com causa de produto (declarado/sem_carga.tsv) e 2 esperam regra nova do motor (pedidos A e B em
+valores e imagem sintética, na rodada de cobertura total. Sem banco; só valores inventados. 10 tabelas carregam, 10
+são descartadas com causa de produto (declarado/sem_carga.tsv) e 1 espera regra nova do motor (pedido A em
 saida/L8-10.json). A conciliação na imagem SINTÉTICA roda em `conector.sh conferir-fatia L8-10`."""
 import random
 import unittest
@@ -14,7 +14,9 @@ CTX = "contexto_trabalho_usuario"
 DESTINO = {"GPORIGEM": ["origem_bem"], "GPTP_RESPONSAVEL": ["tipo_responsavel_bem"], "MFTIPOLANC": ["tipo_credor"],
            "MFTPCOBRANCA": ["tipo_cobranca"], "GPPARAMU": [CTX],
            "MFPARUSU": [CTX], "NFSEPARUSU": [CTX], "PEPARAM_USUARIO": [CTX],
-           "SDGEITENS": ["dado_fiscal_item"]}
+           "SDGEITENS": ["dado_fiscal_item"], "SDGELANNFS": ["nota_entrada_item"]}
+# complemento sem o item da nota (pai_inexistente): recusa sem restrição do destino
+RECUSA_SEM_PAI = {"SDGELANNFS": 1}
 MODULO = {"GPPARAMU": "=patrimonio", "MFPARUSU": "=financeiro", "NFSEPARUSU": "=nota_servico",
           "PEPARAM_USUARIO": "=ponto"}
 
@@ -96,9 +98,26 @@ class FatiaL810(unittest.TestCase):
             self.assertEqual(mapa.passos_ref(c["via"][4:]), [{"tabela": pai, "modo": "chave", "arg": None},
                                                              {"coluna": "CODIGO"}])
 
+    def test_cfop_do_item_da_nota_por_complemento(self):
+        dest = {c["destino"]: c for c in self.decl if c["tabela"] == "SDGELANNFS" and c.get("destino")}
+        self.assertEqual(set(dest), {"nota_entrada_item.id", "nota_entrada_item.cfop_id"})
+        self.assertEqual(dest["nota_entrada_item.id"]["via"], "ref:GELANNFS;complementa;nota_entrada_item")
+        c = dest["nota_entrada_item.cfop_id"]
+        self.assertEqual((c["coluna"], c["regra"], c["depara"]), ("ID_SDCFOP", "inteiro", "cfop"))
+        self.assertEqual(c["via"], "ref:SDCFOP>CODIGO;nota_entrada_item")
+        # a escrituração do item é gerada pelo produto: nada vai para escrituracao_item_entrada
+        self.assertFalse([x for x in self.decl if (x.get("destino") or "").startswith("escrituracao_item_entrada.")])
+        self.assertIn("SDCFOP", l8_10.CATALOGOS_ORIGEM)
+        self.assertIn("INSERT INTO cfop", l8_10.PREPARO_DESTINO)
+
     def test_descartes_revistos_na_cobertura(self):
-        # agrupador só com o ID e tipo de contribuição sindical: descarte, nenhuma linha gravada
-        self.assertIn("só um ID", self.sem_carga["MFCABECLANC"]["motivo"])
+        # tipo de contribuição sindical: descarte; o agrupador da operação (MFCABECLANC) deixou de ser descarte e
+        # espera a regra do agregado dos filhos (pedido C) e o vínculo no modelo (pedido D)
+        self.assertNotIn("MFCABECLANC", self.sem_carga)
+        (c,) = self._decl("MFCABECLANC", "ID")
+        self.assertFalse(c.get("destino"))
+        self.assertIn("grupo_lancamento_financeiro", c["motivo"])
+        self.assertIn("pedido D", c["motivo"])
         self.assertIn("SINDICAL", self.sem_carga["MFTPCONTRIBUICAO"]["motivo"])
         for t in ("NFSEEMPDESENT", "NFSEEMPDESENV", "SDNATRECEITA"):
             self.assertNotEqual(self.sem_carga[t]["causa"], "catalogo_oficial", t)
@@ -161,8 +180,9 @@ class FatiaL810(unittest.TestCase):
         self.assertFalse(set(l8_10.CATALOGOS_ORIGEM) & set(FATIA))
         for t, e in esp.items():  # lidas = gravadas + recusadas (as recusas são de restrição do destino)
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
+            recusas += RECUSA_SEM_PAI.get(t, 0)
             self.assertEqual(por[t], e["gravados"] + recusas, t)
-        self.assertEqual(set(l8_10.PAIS_EXTERNOS), {"TBUSERS", "GEITENS"})
+        self.assertEqual(set(l8_10.PAIS_EXTERNOS), {"TBUSERS", "GEITENS", "GELANNFS"})
         self.assertIn("CREATE TABLE MOPARAM (ANO SMALLINT", l8_10.DDL)
         self.assertIn("CREATE TABLE SDPARAM (", l8_10.DDL)
         self.assertIn("PRIMARY KEY (EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM)", l8_10.DDL)

@@ -1,69 +1,68 @@
 {
+ "fatia": "L6-04",
+ "rodada": 3,
  "pedidos": [
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (+ mapa._ESPECIAIS, verificar_mapa.py)",
-   "mudanca": "coluna especial '@dominio:<tabela>.<coluna>=<valor>' (e '@dominio~:', presumida com valor_presumido): id da ÚNICA linha do destino em que a coluna tem o valor do PRODUTO (ex.: categoria_agenda.natureza=exame, canal_marcacao.codigo, tipo_marcacao.natureza); nenhuma ou várias linhas: NULL com pendência 'dominio_indefinido' (média). Nunca id fixo, nunca valor do cliente",
-   "motivo": "SIAGENDA (agenda_servico.categoria_agenda_id NOT NULL: a agenda de exames não tem categoria na origem) e SIPACAGD/REPACAGD (marcacao_horario.tipo_marcacao_id, canal_marcacao_id e situacao_marcacao_id NOT NULL sem coluna equivalente). Sem isso, as três tabelas ficam fora"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py e sentinela.py",
-   "mudanca": "(0) hora_hhmm aceita o texto CRU da origem (bytes CP1252 de VARCHAR/CHAR), não só str: hoje 'HHMM' lido do Firebird dá hora_invalida em toda linha (provado na conferência sintética da L6-04); (a) coluna especial '#data_hora:<COL_DATA>,<COL_HORA>' (DATE + texto HHMM ou HH:MM vira DATETIME; hora inválida: hora_invalida; data sentinela: data_sentinela); (b) regra 'minutos_hhmm' (duração em texto 'HHMM' vira minutos inteiros; '0000' vira NULL); (c) regra 'hora_hhmm_zero_nulo' (como hora_hhmm, mas '0000' vira NULL: intervalo sem pausa); (d) tipar: valor DATE em coluna DATETIME do destino vira DATETIME 00:00 antes da soma (hoje só a conferência sintética dirá se a soma casa)",
-   "motivo": "SIPACAGI (horario_agenda.inicio_em e fim_em NOT NULL de DATA + HORA), SIAGENDA (duracao_horario_minutos NOT NULL de DURACAO 'HHMM'), SICTRAGE (intervalo '0000' = sem pausa, hoje fora da carga; duração da faixa), SICANAGE (ocorrido_em hoje só a data DT_CAN; com (a) entra DT_CAN + HR_CAN), SIPACAGD/REPACAGD (duracao_minutos)"
+   "mudanca": "especial '#data_hora_mais:<DATA>,<HORA>,<MINUTOS>': data + hora HHMM (como '#data_hora') somadas de MINUTOS; MINUTOS é uma coluna desta linha (pela regra declarada, ex. minutos_hhmm) ou vem de outra tabela pela via (ex.: 'ref:SIAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos', a duração que a agenda referenciada gravou); sem minutos: NULL com 'duracao_ausente'; mesma virada de dia; entra na soma de controle como DATETIME",
+   "motivo": "SIPACAGI (70576 horários de exame) e REPACAGI (L6-03): horario_agenda.fim_em é NOT NULL (CHECK fim > início) e a origem só guarda o início; a duração é a da agenda. Sem isso SIPACAGI, SIPACAGD (50116 marcações de exame) e REPACAGD (122602 marcações de consulta) ficam bloqueadas"
   },
   {
    "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (agenda_servico)",
-   "mudanca": "o CHECK ck_agenda_servico_dono exige profissional, recurso ou setor: a agenda de exames do sistema antigo (SIAGENDA, 40 agendas) não tem nenhum dos três (CRM 0; a categoria é o grupo de atos, ID_TBTABATO). Proposta: coluna grupo_ato_id (FK grupo_ato) aceita como dono da agenda de serviço/exame no CHECK, ou setor executante obrigatório preenchido pelo cliente na implantação (a carga grava sem dono e a linha fica pendente)",
-   "motivo": "sem dono válido, toda linha de SIAGENDA seria recusada pela restrição; SIAGENDA_TBCONVEN, SICTRAGE e SIPACAGI dependem dela"
+   "mudanca": "ck_agenda_servico_dono aceita agenda com origem='migracao' sem profissional, recurso nem setor (o cliente vincula o dono no painel, pendência por linha), como pedido pela L6-03 para REAGENDA",
+   "motivo": "SIAGENDA: a agenda de exames com CRM 0 não tem dono na origem (o setor executante não existe no mapa); hoje é recusada com restricao_destino_4025 e, em cadeia, a grade, os convênios, os horários e as marcações dela"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa) ou carga_mapa.py (mapa.passos_ref)",
-   "mudanca": "chave de SIPACAGI no mapa = NOME,CRM,DATA,HORA (a tabela física é única sem o EXAME, evidência do código de leitura do new-sgh) OU referência composta por PREFIXO da chave do pai ('ref:SIPACAGI(NOME,CRM,DATA,HORA)' casando as 4 primeiras colunas; repetido: pai_ambiguo)",
-   "motivo": "SIPACAGD não tem a coluna EXAME: sem isso a marcação de exame não acha o horário (marcacao_horario.horario_agenda_id NOT NULL)"
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (regerar tabelas.tsv e fatias)",
+   "mudanca": "aresta SIPACAGI -> SIAGENDA (horário de exame depois da agenda de exames; hoje ordem 266 antes de 665) e retirar RECANAGE -> REPACAGD (RECANAGE não referencia a marcação); destinos do mapa: RECANAGE -> registro_excluido e REPACAGD_EXCLUSAO -> registro_excluido (tabelas.tsv ainda diz cancelamento_marcacao)",
+   "motivo": "a declaração pronta de SIPACAGI referencia SIAGENDA pela chave composta; com a ordem atual toda linha teria pai_inexistente na primeira carga e entraria na segunda (não idempotente). RECANAGE e REPACAGD_EXCLUSAO são cópias de registro apagado (decisão L6-04, rodada 3)"
   },
   {
-   "arquivo": "decisão de integração (fatia dona de REPACAGI)",
-   "mudanca": "REPACAGD (122602 marcações de consulta) precisa do horário de REPACAGI carregado (horario_agenda) e referência composta 'ref:REPACAGI(NOME,CRM,DATA,HORA)'; com os pedidos 1 e 2 a fatia declara REPACAGD",
-   "motivo": "a maior tabela da fatia; hoje comentada em colunas.d/L6-04.tsv"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (planejar: lidas e retrato)",
-   "mudanca": "'#retrato' inclui também as colunas da tabela declaradas SEM destino (aproveitadas só no retrato), ou forma '#retrato:C1,C2,...' com as colunas listadas; segredo (#cofre) continua fora",
-   "motivo": "SICANAGE e REPACAGD_EXCLUSAO vão para trilha_auditoria com retrato só da chave e das colunas usadas: paciente, telefone, fonte pagadora e usuários da marcação ficam fora do retrato até isso (o diferencial então as mostra como alteradas, para o Sincronizar)"
-  },
-  {
-   "arquivo": "conector/sante_conector/carga_mapa.py (_converter, de-para de valores)",
-   "mudanca": "opção genérica 'valor sem par fica com o literal presumido' no de-para de valores (ex.: depara 'valores~aguardando'): grava o literal com valor_presumido (gravidade alta) em vez de NULL + recusa pelo NOT NULL",
-   "motivo": "TBSITAGE já carrega o significado pelo de-para por código (valores.d/L6-04.tsv, 15 pares com evidência pelo nome); um código de outro cliente sem par hoje é recusado (valor_fora_do_dominio + 1048) em vez de entrar presumido para revisão"
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ verificar_mapa.py)",
+   "mudanca": "opção de coluna condicional na via: 'quando:<COLUNA>=<valor>[|<valor>]' (a coluna declarada só grava quando a coluna da origem tem um dos valores; senão NULL sem pendência)",
+   "motivo": "SIAGECRI/REAGECRI: a linha 'E' (reversão) precisa de revertida_em e reversao_usuario_id (CHECK do destino) e as concluídas não podem tê-los; hoje a linha E é recusada com restricao_destino_4025"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
-   "mudanca": "coluna especial de arquivo ('#arquivo:<COL_BLOB>,<COL_EXTENSAO>'): grava o BLOB no armazenamento de arquivos do cliente e põe o id em <x>_arquivo_id",
-   "motivo": "TBSITAGE.ICONE/EXTENSAO -> situacao_marcacao.icone_arquivo_id (hoje sem destino)"
+   "mudanca": "duração da marcação pelo horário referenciado: especial '#minutos_entre:<col_inicio>,<col_fim>' lido do DESTINO que o pai gravou (via 'ref:SIPACAGI.(NOME,CRM,DATA,HORA)=(NOME,CRM,DATA,HORA)'), ou cópia em dois saltos ('@agenda_servico_id>duracao_horario_minutos')",
+   "motivo": "SIPACAGD/REPACAGD: marcacao_horario.duracao_minutos é NOT NULL e a marcação da origem não tem duração própria"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_converter, de-para de valores)",
+   "mudanca": "(mantido) valor sem par no de-para de valores fica com um literal presumido (ex.: 'sem_par:=~aguardando'), pendência valor_presumido",
+   "motivo": "TBSITAGE: código de outro cliente sem par hoje é recusado (valor_fora_do_dominio + 1048)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "(mantido) especial de arquivo '#arquivo:<COL_BLOB>,<COL_EXTENSAO>' para <x>_arquivo_id",
+   "motivo": "TBSITAGE.ICONE/EXTENSAO -> situacao_marcacao.icone_arquivo_id"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes)",
-   "mudanca": "a detecção de colisão de caixa (codigo_colisao_caixa, recusa de TODO o grupo) vale também para '#codigo_derivado:C:n:prefixo' com regra codigo_char em coluna de chave única sem caixa (hoje só coluna simples)",
-   "motivo": "TBSITAGE passou a gravar o código com prefixo 'exame_' (separa do domínio da agenda de consultas, RESITAGE, na mesma chave única); uma colisão de caixa dentro do cadastro hoje viraria 1062 na segunda linha (a primeira vence pela ordem de leitura)"
+   "mudanca": "(mantido) colisão de caixa também para '#codigo_derivado:C:n:prefixo' com regra codigo_char em chave única sem caixa",
+   "motivo": "TBSITAGE grava o código com prefixo 'exame_'; colisão de caixa viraria 1062 na segunda linha"
   },
   {
-   "arquivo": "integração depois dos pedidos 2 e 6",
-   "mudanca": "descomentar em colunas.d/L6-04.tsv as declarações prontas de SIAGENDA_TBCONVEN (quando SIAGENDA carregar), SICTRAGE (agenda_escala; com a regra (0) do pedido 2 e SIAGENDA carregada) e SICANAGE (trilha_auditoria; com (a) trocar DT_CAN por '#data_hora:DT_CAN,HR_CAN' ou com (d) manter DT_CAN), e passar as entradas SICONV, ESC e CAN de ESPERADO_PRONTO para o esperado da imagem sintética (com SIAGENDA em PAIS_EXTERNOS ou carregada na fatia)",
-   "motivo": "evita refazer a fatia: a imagem sintética já tem as linhas e as anomalias dessas tabelas, com o esperado anotado"
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-03.tsv (fatia L5-03)",
+   "mudanca": "SIPACAGD_EXCLUSAO: trocar '#retrato' por '#retrato:*' em registro_excluido.dados, como REPACAGD_EXCLUSAO (L6-04)",
+   "motivo": "decisão única das *_EXCLUSAO (F4-decisoes-destino.md): a cópia do registro excluído serve para consulta e reversão só com o retrato completo; '#retrato' guarda só as colunas lidas e perde agenda, data, hora, convênio e observação"
   },
   {
-   "arquivo": "tools/obra/cobertura_conector.py (avaliar)",
-   "mudanca": "tabela com plano cujo pai de `pais` (dependência sem quebra) está BLOQUEADA também fica BLOQUEADA, causa pai_nao_carregado:<pai> (ordem topológica ou segunda passada)",
-   "motivo": "SIAGENDA_TBCONVEN contava como CARREGA com o pai SIAGENDA bloqueado (toda linha real recusaria com pai_inexistente); a L6-04 a comentou até SIAGENDA carregar, mas a ferramenta deve pegar o caso em qualquer fatia"
+   "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (cancelamento_marcacao) + conector (declaração da L6-04)",
+   "mudanca": "histórico de cancelamento de consulta e de exame (RECANAGE, SICANAGE) também em cancelamento_marcacao, sem ligar à marcação viva: ou (a) marcacao_horario_id aceita NULL quando origem='migracao', com agenda_servico_id e horario_inicio_em próprios para os relatórios por agenda e período, ou (b) o conector cria a marcação cancelada (situação de significado 'cancelada', destino secundário 'antes', horário pela chave NOME,CRM,DATA,HORA) quando os pedidos 1 e 5 existirem; motivo de operação presumido (=~ 'outro', valor_presumido) com o texto MOTIVO em complemento, solicitante =~paciente, cancelado_em por #data_hora:DT_CAN,HR_CAN, responsável por USU_CAN",
+   "motivo": "os relatórios de cancelamento por motivo, agenda e período leem cancelamento_marcacao (F4-decisoes-destino.md, SICANAGE); hoje RECANAGE carrega só a cópia em registro_excluido, e agenda, data e hora do cancelado ficam só no JSON do retrato. A tabela exige marcacao_horario_id NOT NULL e única, e a marcação foi apagada na origem. Revisar com o dono qual das duas"
   },
   {
-   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
-   "mudanca": "alinhar os destinos: REPACAGD_EXCLUSAO -> registro_excluido (hoje cancelamento_marcacao;registro_excluido) e SICANAGE -> trilha_auditoria interino (hoje cancelamento_marcacao; definitivo proposto em F4-decisoes-destino.md)",
-   "motivo": "decisão única das cópias *_EXCLUSAO (registro_excluido, como SIPACAGD_EXCLUSAO e CCCADCIR_EXCLUSAO) e carga interina do cancelamento de exame"
-  },
-  {
-   "arquivo": "conferência com a imagem de referência (só contagens)",
-   "mudanca": "contar os valores distintos de TBSITAGE.INT_AGENDA_ONLINE e os códigos em comum entre RESITAGE.COD e TBSITAGE.COD",
-   "motivo": "a fatia nunca leu a imagem: o domínio S/N de INT_AGENDA_ONLINE vem da legenda do código de leitura (outro valor dá valor_fora_do_dominio por linha); a separação por prefixo 'exame_' vale com ou sem códigos em comum"
+   "arquivo": "(medição na carga real, sem mudança de código por ora)",
+   "mudanca": "contar, na imagem de referência, agendas de exame (SIAGENDA) cujo NOME coincide com o de uma agenda de consultas (REAGENDA) e NOME+CRM repetidos na própria SIAGENDA (só contagens); se houver, regra de nome único com sufixo (ex.: '#texto_composto:NOME,= (exames)') e pendência para o cliente revisar",
+   "motivo": "agenda_servico tem UNIQUE (estabelecimento, nome) para consultas e exames juntos; a colisão recusa a agenda com 1062 e, em cadeia, grade, convênios, horários e marcações dela. O código de leitura do new-sgh, medido na cópia, junta agenda, grade e horários de exame só por NOME+CRM (CRM 0): o nome é a identidade da agenda de exames"
   }
+ ],
+ "atendidos_da_rodada_anterior": [
+  "cod:<tabela>.<coluna> (substitui @dominio)",
+  "hora_hhmm com texto cru, #data_hora, minutos_hhmm, tipar",
+  "chave alternativa composta ref:T.(K..)=(C..)",
+  "#retrato:* e #retrato:A,B",
+  "cobertura: pai_nao_carregado por referência obrigatória"
  ]
 }

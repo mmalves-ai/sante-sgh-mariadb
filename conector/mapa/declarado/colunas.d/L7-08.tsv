@@ -17,38 +17,37 @@ GEUSERS_TBCENCUS	@vigencia_carga	usuario_estoque_centro_custo.vigencia_inicio			
 PRPARINTEGEST	@estabelecimento	regra_integracao_prescricao.estabelecimento_id				L7-08: único estabelecimento do cliente
 PRPARINTEGEST	ID_TBCENCUS	regra_integracao_prescricao.centro_custo_id	chave_origem		ref:TBCENCUS.ID	L7-08: escopo da regra: centro de custo pela coluna ID de TBCENCUS (chave alternativa)
 PRPARINTEGEST	ID_TBCENCUS	regra_integracao_prescricao.atendente_local_estoque_id	chave_origem		ref:TBCENCUS.ID>LOCARM>GELOCARM	L7-08: local que atende = armazém do centro de custo na origem (encadeada a partir de TBCENCUS.ID); sem armazém: NOT NULL recusa
-PRPARINTEGEST	=~requisicao_automatica	regra_integracao_prescricao.tipo_integracao				L7-08: TP_INTEGRACAO sem evidência do significado dos códigos: presumido com valor_presumido; a regra entra INATIVA
-PRPARINTEGEST	=~na_prescricao	regra_integracao_prescricao.momento_integracao				L7-08: MOMENTO_INTEGRACAO sem evidência: presumido com valor_presumido; a regra entra INATIVA
+PRPARINTEGEST	TP_INTEGRACAO	regra_integracao_prescricao.tipo_integracao	inteiro	valores		L7-08 (rodada 3, revisão): tipo pelo código da origem (CHECK da origem: 1 ou 2), de-para em valores.d/L7-08.tsv (1 requisicao_automatica, 2 dispensacao_direta; leitura da ordem das opções, a confirmar pelo cliente: a regra entra INATIVA). Medido: 4 linhas com 1, 1 com 2
+PRPARINTEGEST	=~requisicao_automatica	regra_integracao_prescricao.tipo_integracao				L7-08: reserva (coluna concorrente) só para código fora do de-para, com valor_presumido; a regra entra INATIVA
+PRPARINTEGEST	MOMENTO_INTEGRACAO	regra_integracao_prescricao.momento_integracao	inteiro	valores		L7-08 (rodada 3, revisão): momento pelo código da origem (CHECK da origem: 1 ou 2), de-para em valores.d/L7-08.tsv (1 na_prescricao, 2 no_aprazamento; a confirmar pelo cliente: a regra entra INATIVA). Medido: 5 de 5 linhas com 1
+PRPARINTEGEST	=~na_prescricao	regra_integracao_prescricao.momento_integracao				L7-08: reserva (coluna concorrente) só para código fora do de-para, com valor_presumido; a regra entra INATIVA
 PRPARINTEGEST	=~dose_individualizada	regra_integracao_prescricao.forma_dispensacao				L7-08: a origem não diz a forma de dispensar: presumida com valor_presumido; a regra entra INATIVA
 PRPARINTEGEST	=0	regra_integracao_prescricao.ativo				L7-08 (decisão): regra com campos presumidos e escopo incompleto (TP_PRESCRICAO sem de-para) nunca age sozinha: entra inativa, o cliente revisa e ativa no painel
 PRPARINTEGEST	GERAR_DADOS_AUTORIZ_MANIPUL	regra_integracao_prescricao.gera_autorizacao_manipulacao	booleano_01			L7-08: 0/1; nulo fica com o padrão FALSE
 PRPARINTEGEST	ID_TBTP_ENV_LISTA_AVAL_FARM	regra_integracao_prescricao.regra_envio_avaliacao_farmaceutica_id	chave_origem			L7-08: regra de envio à avaliação farmacêutica
 PRPARINTEGEST	TP_PRESCRICAO		inteiro			L7-08: não carregada: tipo de prescrição sem evidência do significado; fica na chave (conector_origem). Como a regra entra inativa, duas linhas do mesmo centro de custo não agem com o mesmo escopo
-PRPARINTEGEST	TP_INTEGRACAO		inteiro			L7-08: não carregada: código sem evidência; o destino recebe o presumido (lida no hash: mudança aparece no Sincronizar)
-PRPARINTEGEST	MOMENTO_INTEGRACAO		inteiro			L7-08: não carregada: código sem evidência; destino presumido
 GECADSAI	#codigo_derivado:ID:18:1	documento_estoque.numero	inteiro			L7-08: número do documento = prefixo de domínio 1 + ID (1 saída, 2 devolução: não colide entre as tabelas no uq por estabelecimento)
 GECADSAI	@estabelecimento	documento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
-GECADSAI	=~saida_setor	documento_estoque.tipo				L7-08: saída de estoque; tipo presumido saida_setor com valor_presumido (ORIGEM e DOC_DISP sem evidência do significado)
+GECADSAI	DEST	documento_estoque.tipo	inteiro	valores		L7-08 (rodada 3, revisão): tipo pelo destino da saída (de-para em valores.d/L7-08.tsv): 1 paciente internado e 3 paciente em atendimento = saida_paciente, 2 setor = saida_setor, 5 venda externa = venda. Medido na referência: 1 504.292 (396.510 com paciente; PAC casa com o registro de internação em 504.291), 2 69.884 (nenhum com paciente), 3 65.396 (PAC casa com o atendimento em 65.378), 5 206 (todos com terceiro e com o complemento de venda externa); nenhum outro código. Código fora do de-para: valor_fora_do_dominio e recusa (1048), visível
 GECADSAI	ARM	documento_estoque.origem_local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém pelo código (chave COD do pai); nunca visto: NOT NULL recusa
 GECADSAI	CDC	documento_estoque.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo CÓDIGO (CDC guarda o código, chave COD do pai)
 GECADSAI	ID_RICADPAC	documento_estoque.paciente_id	chave_origem			L7-08: paciente
-GECADSAI	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão; nulo: NOT NULL recusa. A data do documento (DATA) é a preferida quando a regra DATE em DATETIME existir (pedido 3: coalescência DATA_HORA_INCLUSAO ou DATA à meia-noite; contagem de nulos na referência pedida)
-GECADSAI	DATA		data			L7-08: não carregada por ora: data sem hora; entra pela coalescência do pedido 3
+GECADSAI	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão (1ª fonte, concorrente). Medido: 0 de 639.778 nulos
+GECADSAI	DATA	documento_estoque.movimentado_em	data			L7-08 (rodada 3, decisão aplicada): sem a inclusão, a data do documento à meia-noite (2ª fonte, tipar); sem as duas: NOT NULL recusa
 GECADSAI	CONSOL	documento_estoque.consolidado	booleano_sn			L7-08: já lançado no saldo; nulo fica FALSE (padrão)
 GECADSAI	CONSOL	documento_estoque.situacao	codigo_char	valores		L7-08 (decisão): situação derivada da consolidação: S concluido, N ou vazio aberto (não lançado no saldo); fora do domínio: padrão aberto com pendência
 GECADSAI	OBS	documento_estoque.observacao	texto			L7-08: observação
 GECADSAI	USUARIO	documento_estoque.criado_por			ref:TBUSERS	L7-08: usuário que gravou o documento, pelo login
 GECADSAI	USU_CONS	documento_estoque.concluido_usuario_id			ref:TBUSERS	L7-08: usuário que consolidou (lançou no saldo), pelo login; concluido_em sem fonte (NULL)
 GECADSAI	TERCEIRO	documento_estoque.destinatario_terceiro	texto			L7-08: destinatário sem cadastro
-GECADSAI	PAC		inteiro			L7-08: não carregada: não há evidência se é o atendimento ou o prontuário; o paciente vem de ID_RICADPAC
+GECADSAI	PAC	documento_estoque.atendimento_id	chave_origem		ref:RICADINT>ID_ATCABECATEND>ATCABECATEND	L7-08 (rodada 3, revisão): atendimento da saída a paciente internado (destino 1: PAC é o registro da internação; medido 504.291 de 504.292 casam com a internação, todas com atendimento) -> internação > atendimento. 1ª fonte (concorrente); 0 = sem paciente. Exigido pelo CHECK da saída a paciente
 GECADSAI	REQ		inteiro			L7-08: não carregada: requisição não é registro próprio na origem (requisicao_material não é destino)
 GECADSAI	MED_SOL		texto			L7-08: não carregada: nome livre do médico solicitante sem campo no documento de estoque
 GECADSAI	ANO		inteiro			L7-08: não carregada por ora: número original ANO/MES/DOC (o que o usuário conhece) pede a coluna numero_origem no documento (pedido 10); o numero do produto é o ID com prefixo
 GECADSAI	MES		inteiro			L7-08: não carregada por ora: ver ANO (pedido 10)
 GECADSAI	DOC		inteiro			L7-08: não carregada por ora: ver ANO (pedido 10)
-GECADSAI	DEST		inteiro			L7-08: não carregada: código de destino sem evidência do significado (sem tabela de domínio na origem)
 GECADSAI	EMIT		codigo_char			L7-08: não carregada: marca de impressão do documento (estado de tela)
-GECADSAI	CONTA		inteiro			L7-08: não carregada: conta de faturamento do paciente; o lançamento na conta é do faturamento, e o paciente vem de ID_RICADPAC
+GECADSAI	CONTA	documento_estoque.atendimento_id	chave_origem		ref:RECADATE	L7-08 (rodada 3, revisão): 2ª fonte do atendimento: saída a paciente em atendimento (destino 3: CONTA guarda o registro do atendimento, igual a PAC em 65.394 de 65.396; casa com o atendimento em 65.376). Medido: nenhum PAC do destino 1 casa com atendimento, nenhum do destino 3 com internação, CONTA 0 nos destinos 2 e 5. No destino 1 CONTA é o número da conta, não carregado (o lançamento na conta é do faturamento): a fonte que não casa deixa pai_inexistente até o pedido 15
 GECADSAI	CONS		inteiro			L7-08: não carregada: local de consumo; setor_funcional não é carregado (decisão do pedido 5)
 GECADSAI	CONV		inteiro			L7-08: não carregada: convênio do paciente na saída; pertence à conta (faturamento)
 GECADSAI	EMP		inteiro			L7-08: não carregada: empresa; o banco é de um cliente com um estabelecimento
@@ -77,8 +76,8 @@ GECADDEV	=devolucao_interna	documento_estoque.tipo				L7-08: devolução interna
 GECADDEV	ARM	documento_estoque.origem_local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém pelo código (chave COD do pai); nunca visto: NOT NULL recusa
 GECADDEV	CDC	documento_estoque.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo CÓDIGO (chave COD do pai)
 GECADDEV	ID_RICADPAC	documento_estoque.paciente_id	chave_origem			L7-08: paciente
-GECADDEV	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão; nulo: NOT NULL recusa (DATA entra pela coalescência do pedido 3)
-GECADDEV	DATA		data			L7-08: não carregada por ora: data sem hora; entra pela coalescência do pedido 3
+GECADDEV	DATA_HORA_INCLUSAO	documento_estoque.movimentado_em	data_hora			L7-08: momento da inclusão (1ª fonte, concorrente). Medido: 0 de 67.192 nulos
+GECADDEV	DATA	documento_estoque.movimentado_em	data			L7-08 (rodada 3, decisão aplicada): sem a inclusão, a data do documento à meia-noite (2ª fonte, tipar); sem as duas: NOT NULL recusa
 GECADDEV	CONSOL	documento_estoque.consolidado	booleano_sn			L7-08: já lançado no saldo; nulo fica FALSE (padrão)
 GECADDEV	CONSOL	documento_estoque.situacao	codigo_char	valores		L7-08 (decisão): S concluido, N ou vazio aberto; fora do domínio: padrão aberto com pendência
 GECADDEV	OBS	documento_estoque.observacao	texto			L7-08: observação
@@ -119,10 +118,8 @@ GELANDEV	VALIDADE	documento_estoque_item.data_validade	data			L7-08: validade do
 GELANDEV	VLRMED	documento_estoque_item.valor_total	decimal			L7-08: valor da linha ao custo médio (escala 2)
 GELANDEV	LOTE		texto			L7-08: não carregada: o lote da devolução vem de GERASVALDEVLOTE (lote por movimento)
 GELANDEV	ID_GELANSAI		chave_origem			L7-08: não carregada por ora: a saída devolvida liga ao movimento de estoque, que aguarda GELANSAI (pedidos 2 e 4)
-GELANDEV	OLD_ANO		inteiro			L7-08: não carregada: número antigo do documento (substituído por ID_GECADDEV)
 GELANDEV	OLD_MES		inteiro			L7-08: não carregada: ver OLD_ANO
 GELANDEV	OLD_DOC		inteiro			L7-08: não carregada: ver OLD_ANO
-GELANDEV	DATA		data			L7-08: não carregada: data do documento (é a do cabeçalho GECADDEV)
 GELANDEV	LOCAL		inteiro			L7-08: não carregada: local do documento (é o do cabeçalho GECADDEV)
 GELANDEV	CONSOL		codigo_char			L7-08: não carregada: consolidação (é a do cabeçalho GECADDEV)
 GELANDEV	NOC		inteiro			L7-08: não carregada: código sem evidência do significado
@@ -133,7 +130,6 @@ GELANDEV	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem ev
 GELANDEV	VALOR_MANUAL		codigo_char			L7-08: não carregada: marca de valor digitado (o valor vem em VLRMED)
 GELANDEV	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7), fica no de-para do cliente
 GELANDEV	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADDEV
-GELANDEV	DATA_HORA_INCLUSAO		data_hora			L7-08: não carregada no item: o momento é o do cabeçalho; lida pela origem no kit (GEITEMKITRAS_GELANDEV)
 GELANDEV	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-08: não carregada: coluna de alteração do diferencial
 GEITEMKITRAS_GELANSAI	ID_GEITEMKITRAS	movimento_kit_rastreavel.kit_rastreavel_id	chave_origem		ref:GEITEMKITRAS>ID_GEKITRAS>GEKITRAS	L7-08: kit do item (encadeada); sem kit: NOT NULL recusa
 GEITEMKITRAS_GELANSAI	ID_GEITEMKITRAS	movimento_kit_rastreavel.kit_rastreavel_item_id	chave_origem			L7-08: item do kit consumido
@@ -182,3 +178,222 @@ PRINTEGRACAOESTOQUE	QTDE_DOSE		decimal			L7-08: não carregada: a quantidade pre
 PRINTEGRACAOESTOQUE	ID_GELANSAI		chave_origem			L7-08: não carregada por ora: a saída liga pelo movimento (aguarda GELANSAI)
 PRINTEGRACAOESTOQUE	ID_GELANPAC		chave_origem			L7-08: não carregada: lançamento ao paciente já ligado ao horário pela dispensação (duplicado do caminho por ID_GEDISPHOR)
 PRINTEGRACAOESTOQUE	ID_TBUNICON		texto			L7-08: não carregada: unidade da dose é a do horário prescrito
+GELANSAI	@estabelecimento	movimento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
+GELANSAI	DOC	movimento_estoque.documento_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)	L7-08: documento de saída (GECADSAI) pela chave alternativa composta ANO, MES, DOC; repetida: pai_ambiguo
+GELANSAI	ANO	movimento_estoque.local_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM>GELOCARM	L7-08: local que baixou = armazém do documento (encadeada); sem armazém: NOT NULL recusa
+GELANSAI	DATA_HORA_INCLUSAO	movimento_estoque.ocorrido_em	data_hora			L7-08: momento da saída (1ª fonte)
+GELANSAI	MES	movimento_estoque.ocorrido_em	data_hora		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA_HORA_INCLUSAO	L7-08: sem momento no item: o do documento (2ª fonte, coluna concorrente)
+GELANSAI	SEQ	movimento_estoque.ocorrido_em	data		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA	L7-08: sem momento no item nem no documento: a data do documento à meia-noite (3ª fonte, tipar)
+GELANSAI	#data:ANO,MES	movimento_estoque.competencia				L7-08: competência do documento (dia 1)
+GELANSAI	=migracao_saida	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-08: a origem não tem tipo de movimento: tipo NATIVO de migração (semente 11_SUP/07), verdade e não presunção
+GELANSAI	=saida	movimento_estoque.natureza				L7-08: saída do estoque
+GELANSAI	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANSAI	ITEM	movimento_estoque.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo (encadeada); sem unidade: NOT NULL recusa
+GELANSAI	QTDE	movimento_estoque.quantidade	decimal			L7-08: quantidade baixada; zero ou negativa: CHECK recusa
+GELANSAI	QTDE	movimento_estoque.quantidade_estoque	decimal			L7-08: a quantidade já está na unidade de estoque
+GELANSAI	VLR_UNI	movimento_estoque.custo_unitario	decimal			L7-08: custo unitário da saída
+GELANSAI	VLRMED	movimento_estoque.valor_total	decimal			L7-08: valor da saída ao custo médio
+GELANSAI	DOC	movimento_estoque.usuario_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>USUARIO>TBUSERS	L7-08: quem lançou = usuário do documento; sem usuário: NOT NULL recusa
+GELANSAI	DOC	movimento_estoque.centro_custo_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>CDC>TBCENCUS	L7-08: centro de custo do documento (pelo código)
+GELANSAI	DOC	movimento_estoque.paciente_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ID_RICADPAC>RICADPAC	L7-08: paciente do documento
+GELANSAI	ID_TBCBOPRO_MAT_MED_CONTROLADO	movimento_estoque.solicitante_profissional_id	chave_origem		ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L7-08: prescritor do medicamento controlado (0 = sem prescritor, sem pendência)
+GELANSAI	DOC	documento_estoque_item.documento_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC);documento_estoque_item	L7-08: item do documento de saída (como GELANDEV na devolução)
+GELANSAI	SEQ	documento_estoque_item.sequencia	inteiro		documento_estoque_item	L7-08: linha do documento na origem; repetida no documento: 1062 recusa
+GELANSAI	ITEM	documento_estoque_item.insumo_id	chave_origem		ref:GEITENS;documento_estoque_item	L7-08: insumo pelo código
+GELANSAI	ITEM	documento_estoque_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON;documento_estoque_item	L7-08: unidade de estoque do insumo
+GELANSAI	QTDE	documento_estoque_item.quantidade	decimal		documento_estoque_item	L7-08: quantidade do item
+GELANSAI	VLR_UNI	documento_estoque_item.custo_unitario	decimal		documento_estoque_item	L7-08: custo unitário
+GELANSAI	VLRMED	documento_estoque_item.valor_total	decimal		documento_estoque_item	L7-08: valor da linha ao custo médio
+GELANSAI	@id	documento_estoque_item.movimento_estoque_id			documento_estoque_item	L7-08: o item aponta o movimento que o baixou
+GELANSAI	CONSOL		codigo_char			L7-08: não carregada: consolidação (é a do documento GECADSAI)
+GELANSAI	HM		inteiro			L7-08: não carregada: horário da prescrição atendida: o horário vem por GEDISPHOR/PRINTEGRACAOESTOQUE
+GELANSAI	COD_NOC		inteiro			L7-08: não carregada: código sem evidência do significado
+GELANSAI	ETIQ		inteiro			L7-08: não carregada: número da etiqueta impressa (a etiqueta não é destino)
+GELANSAI	KIT		inteiro			L7-08: não carregada: o kit da saída vem de GEITEMKITRAS_GELANSAI
+GELANSAI	VIA		texto			L7-08: não carregada: via de administração da prescrição (é a do item prescrito)
+GELANSAI	DOSE1		texto			L7-08: não carregada: hora da primeira dose da prescrição (é do horário prescrito)
+GELANSAI	ORIGINAL		inteiro			L7-08: não carregada: item original antes de troca: a troca vem de PREXTRATOITEM_SUBST
+GELANSAI	TIPO_ANT		codigo_char			L7-08: não carregada: marca sem evidência do significado
+GELANSAI	PAGO		codigo_char			L7-08: não carregada: marca de faturamento da conta (o faturamento é da conta hospitalar)
+GELANSAI	STATUS		codigo_char			L7-08: não carregada: situação sem evidência do significado
+GELANSAI	FORN		inteiro			L7-08: não carregada: fornecedor do consignado sem evidência de uso no item (fica no hash)
+GELANSAI	QTDE_REQ		decimal			L7-08: não carregada: quantidade requisitada: vem da requisição (GELANSAIREQ)
+GELANSAI	MOT_INC		inteiro			L7-08: não carregada: motivo sem cadastro identificado na origem
+GELANSAI	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem evidência
+GELANSAI	RET_DIAS		inteiro			L7-08: não carregada: retorno em dias sem evidência do significado
+GELANSAI	TRANSICAO		codigo_char			L7-08: não carregada: marca de transição do sistema antigo
+GELANSAI	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7), fica no de-para do cliente
+GELANSAI	CRM_MAT_MED_CONT		inteiro			L7-08: não carregada: número do conselho repetido do prescritor (vem por ID_TBCBOPRO_MAT_MED_CONTROLADO)
+GELANSAI	STATUSPEP		codigo_char			L7-08: não carregada: marca de integração com o prontuário antigo
+GELANSAI	PROCESSADO		codigo_char			L7-08: não carregada: marca de processamento do sistema antigo
+GELANSAI	OBS		texto			L7-08: não carregada: o movimento e o item do documento não têm observação (a do documento vem de GECADSAI)
+GELANSAI	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-08: não carregada: coluna de alteração do diferencial
+GELANSAI	ID_GEANTIMI		chave_origem			L7-08: não carregada: liberação de antimicrobiano (GEANTIMI aguarda o modelo, pedido 6)
+GELANSAI	JUSTIFICA_ITEM_NAO_PRESC		texto			L7-08: não carregada: justificativa do item não prescrito: fica na dispensação (GELANDISPENSACAO)
+GELANSAI	JUSTIFICA_QTDE_PRESC_X_DISP		texto			L7-08: não carregada: justificativa da diferença prescrito x dispensado sem campo no movimento (fica no hash)
+GELANSAIREQ	@id:requisicao_material	requisicao_material_item.requisicao_material_id				L7-08: requisição do documento (cabeçalho agrupado por ANO, MES, DOC)
+GELANSAIREQ	#grupo_seq	requisicao_material_item.sequencia				L7-08: posição do item na requisição (ordem da chave)
+GELANSAIREQ	ITEM	requisicao_material_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANSAIREQ	ITEM	requisicao_material_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: NOT NULL recusa
+GELANSAIREQ	QTDE_REQ	requisicao_material_item.quantidade_solicitada	decimal_zero_nulo			L7-08: quantidade pedida (1ª fonte; 0 = não informada)
+GELANSAIREQ	QTDE	requisicao_material_item.quantidade_solicitada	decimal_zero_nulo			L7-08: sem quantidade pedida: a atendida (2ª fonte, coluna concorrente); nenhuma: NOT NULL recusa
+GELANSAIREQ	QTDE	requisicao_material_item.quantidade_atendida	decimal			L7-08: quantidade entregue; nula: padrão 0
+GELANSAIREQ	OBS	requisicao_material_item.observacao	texto			L7-08: observação do item
+GELANSAIREQ	@estabelecimento	requisicao_material.estabelecimento_id			antes;agrupar:ANO,MES,DOC;requisicao_material	L7-08: uma requisição por documento ANO, MES, DOC (cabeçalho agrupado, sem pendência nas linhas seguintes); único estabelecimento do cliente
+GELANSAIREQ	DOC	requisicao_material.numero	inteiro		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ID;requisicao_material	L7-08: número da requisição = número do documento de saída (ID de GECADSAI, único); sem documento: NOT NULL recusa
+GELANSAIREQ	=setor	requisicao_material.tipo			requisicao_material	L7-08: requisição da origem é por centro de custo (CDC do documento): tipo setor
+GELANSAIREQ	ANO	requisicao_material.centro_custo_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>CDC>TBCENCUS;requisicao_material	L7-08: centro de custo do documento (pelo código); CHECK do tipo setor
+GELANSAIREQ	MES	requisicao_material.atendente_local_estoque_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>ARM>GELOCARM;requisicao_material	L7-08: armazém que atendeu (documento)
+GELANSAIREQ	SEQ	requisicao_material.solicitante_usuario_id	chave_origem		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>USUARIO>TBUSERS;requisicao_material	L7-08: usuário do documento
+GELANSAIREQ	DATA_HORA_INCLUSAO	requisicao_material.solicitado_em	data_hora		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA_HORA_INCLUSAO;requisicao_material	L7-08: momento do documento (1ª fonte)
+GELANSAIREQ	DATA_HORA_ULTIMA_ATUALIZACAO	requisicao_material.solicitado_em	data		ref:GECADSAI.(ANO,MES,DOC)=(ANO,MES,DOC)>DATA;requisicao_material	L7-08: sem momento: a data do documento à meia-noite (2ª fonte, concorrente)
+GELANSAIREQ	=atendida	requisicao_material.situacao			requisicao_material	L7-08: a requisição da origem só existe com o documento de saída que a atendeu
+GELANSAIREQ	HM		inteiro			L7-08: não carregada: horário da prescrição (vem por GEDISPHOR)
+GELANSAIREQ	COD_NOC		inteiro			L7-08: não carregada: código sem evidência do significado
+GELANSAIREQ	ETIQ		inteiro			L7-08: não carregada: número da etiqueta impressa
+GELANSAIREQ	KIT		inteiro			L7-08: não carregada: kit sem evidência no item requisitado
+GELANSAIREQ	VIA		texto			L7-08: não carregada: via da prescrição (é a do item prescrito)
+GELANSAIREQ	DOSE1		texto			L7-08: não carregada: hora da primeira dose (é do horário prescrito)
+GELANSAIREQ	ORIGINAL		inteiro			L7-08: não carregada: item original sem evidência
+GELANSAIREQ	TIPO_ANT		codigo_char			L7-08: não carregada: marca sem evidência
+GELANSAIREQ	PAGO		codigo_char			L7-08: não carregada: marca de faturamento da conta
+GELANSAIREQ	VLRMED		decimal			L7-08: não carregada: valor ao custo médio: é do movimento (GELANSAI)
+GELANSAIREQ	STATUS		codigo_char			L7-08: não carregada: situação sem evidência do significado
+GELANSAIREQ	FORN		inteiro			L7-08: não carregada: fornecedor sem evidência de uso no item requisitado
+GELANSAIREQ	VLR_UNI		decimal			L7-08: não carregada: custo unitário: é do movimento (GELANSAI)
+GELANSAIREQ	MOT_INC		inteiro			L7-08: não carregada: motivo sem cadastro identificado
+GELANSAIREQ	PREPARADO		codigo_char			L7-08: não carregada: marca de preparo sem evidência
+GELANSAIREQ	RET_DIAS		inteiro			L7-08: não carregada: retorno em dias sem evidência
+GELANSAIREQ	TRANSICAO		codigo_char			L7-08: não carregada: marca de transição do sistema antigo
+GELANSAIREQ	ID_NOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7)
+GELANSAIREQ	CRM_MAT_MED_CONT		inteiro			L7-08: não carregada: número do conselho do prescritor (o movimento o leva)
+GELANSAIREQ	ID_TBCBOPRO_MAT_MED_CONTROLADO		chave_origem			L7-08: não carregada: prescritor do controlado: vai no movimento (GELANSAI)
+GELANSAIREQ	STATUSPEP		codigo_char			L7-08: não carregada: marca de integração com o prontuário antigo
+GELANSAIREQ	PROCESSADO		codigo_char			L7-08: não carregada: marca de processamento do sistema antigo
+GELANSAIREQ	ID_GELANSAI_SUBSTITUIDO		chave_origem			L7-08: não carregada: saída que substituiu o item pedido: a ligação item pedido x atendido não tem destino próprio (atendimento_requisicao exige quantidade, local e usuário da saída; fica no hash)
+GELANDEV	@estabelecimento	movimento_estoque.estabelecimento_id				L7-08: único estabelecimento do cliente
+GELANDEV	ID_GECADDEV	movimento_estoque.local_estoque_id	chave_origem		ref:GECADDEV>ARM>GELOCARM	L7-08: local que recebeu = armazém do documento de devolução
+GELANDEV	DATA_HORA_INCLUSAO	movimento_estoque.ocorrido_em	data_hora			L7-08: momento da devolução (1ª fonte)
+GELANDEV	DATA	movimento_estoque.ocorrido_em	data			L7-08: sem momento: a data do item à meia-noite (2ª fonte, concorrente, tipar)
+GELANDEV	DATA	movimento_estoque.competencia	data_primeiro_dia_mes			L7-08: competência = mês da data do item da devolução (dia 1)
+GELANDEV	OLD_ANO		inteiro			L7-08: não carregada: número antigo do documento (substituído por ID_GECADDEV)
+GELANDEV	=migracao_entrada	movimento_estoque.tipo_movimento_estoque_id			cod:tipo_movimento_estoque.codigo	L7-08: tipo NATIVO de migração (semente 11_SUP/07): a origem não tem tipo
+GELANDEV	=entrada	movimento_estoque.natureza				L7-08: devolução volta ao estoque
+GELANDEV	ITEM	movimento_estoque.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANDEV	ITEM	movimento_estoque.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo
+GELANDEV	QTDE	movimento_estoque.quantidade	decimal			L7-08: quantidade devolvida
+GELANDEV	QTDE	movimento_estoque.quantidade_estoque	decimal			L7-08: já na unidade de estoque
+GELANDEV	VLRMED	movimento_estoque.valor_total	decimal			L7-08: valor ao custo médio
+GELANDEV	ID_GECADDEV	movimento_estoque.documento_estoque_id	chave_origem			L7-08: documento de devolução
+GELANDEV	@id	movimento_estoque.documento_estoque_item_id				L7-08: item do documento que o movimento lança
+GELANDEV	ID_GECADDEV	movimento_estoque.usuario_id	chave_origem		ref:GECADDEV>USUARIO>TBUSERS	L7-08: usuário do documento; sem usuário: NOT NULL recusa
+GELANDEV	ID_GECADDEV	movimento_estoque.centro_custo_id	chave_origem		ref:GECADDEV>CDC>TBCENCUS	L7-08: centro de custo do documento
+GELANDEV	ID_GECADDEV	movimento_estoque.paciente_id	chave_origem		ref:GECADDEV>ID_RICADPAC>RICADPAC	L7-08: paciente do documento
+GERASVALDEVLOTE	ID_GELANDEV	movimento_lote.movimento_estoque_id	chave_origem		ref:GELANDEV/movimento_estoque	L7-08: movimento de entrada da devolução (destino secundário de GELANDEV); sem devolução: NOT NULL recusa
+GERASVALDEVLOTE	#seq:ID_GELANDEV	movimento_lote.sequencia				L7-08: ordem do lote no movimento
+GERASVALDEVLOTE	ID_GEVALMEM	movimento_lote.lote_insumo_id	chave_origem			L7-08: lote devolvido; sem lote: NOT NULL recusa
+GERASVALDEVLOTE	QTDE	movimento_lote.quantidade	decimal			L7-08: quantidade devolvida no lote; zero ou negativa: CHECK recusa
+GERASVALDEVLOTE	ID_GERASVALSAIDLOTE		chave_origem			L7-08: não carregada: lote da saída devolvida: o mesmo lote vem por ID_GEVALMEM
+GERASVALDEVLOTE	DATA		data			L7-08: não carregada: validade repetida do cadastro do lote
+GERASVALDEVLOTE	LOTE		texto			L7-08: não carregada: número do lote repetido do cadastro
+GERASVALDEVLOTE	ID_GERASVALFINAL		chave_origem			L7-08: não carregada: saldo vigente do lote (não é dado do movimento)
+GERASVALDEVLOTE	ID_TBLABORA		chave_origem			L7-08: não carregada: fabricante repetido do cadastro do lote
+GECADDISPENSACAO	@estabelecimento	dispensacao.estabelecimento_id				L7-08: único estabelecimento do cliente
+GECADDISPENSACAO	ID	dispensacao.numero	inteiro			L7-08: número da dispensação = ID da origem (único)
+GECADDISPENSACAO	=horario	dispensacao.tipo				L7-08: dispensação por prescrição (COD_PRESCRI obrigatório na origem): tipo horario; sem prescrição carregada: CHECK recusa
+GECADDISPENSACAO	REG	dispensacao.atendimento_id	chave_origem		ref:RECADATE	L7-08: atendimento; inexistente: NOT NULL recusa
+GECADDISPENSACAO	ID_RICADPAC	dispensacao.paciente_id	chave_origem			L7-08: paciente
+GECADDISPENSACAO	COD_PRESCRI	dispensacao.prescricao_id	chave_origem		ref:PRPRESC	L7-08: prescrição atendida
+GECADDISPENSACAO	LOC_ARM	dispensacao.local_estoque_id	chave_origem		ref:GELOCARM	L7-08: armazém que dispensou
+GECADDISPENSACAO	@id:setor_funcional	dispensacao.setor_funcional_id				L7-08: setor funcional do local de consumo (cabeçalho agrupado por LOC_CONS)
+GECADDISPENSACAO	CDC	dispensacao.centro_custo_id	chave_origem		ref:TBCENCUS	L7-08: centro de custo pelo código (1ª fonte)
+GECADDISPENSACAO	LOC_CONS	dispensacao.centro_custo_id	chave_origem		ref:TBLOCCON>CDC>TBCENCUS	L7-08: sem centro de custo na dispensação: o do local de consumo (2ª fonte, concorrente)
+GECADDISPENSACAO	DATA	dispensacao.dispensado_em	data_hora			L7-08: momento da dispensação
+GECADDISPENSACAO	USUARIO	dispensacao.dispensado_usuario_id			ref:TBUSERS	L7-08: quem dispensou; sem usuário: NOT NULL recusa
+GECADDISPENSACAO	ID_TBCBOPRO	dispensacao.solicitante_profissional_id	chave_origem		ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS	L7-08: profissional da prescrição
+GECADDISPENSACAO	=dispensada	dispensacao.situacao				L7-08: registro histórico da dispensação feita
+GECADDISPENSACAO	LOC_CONS	setor_funcional.codigo	inteiro		antes;agrupar:LOC_CONS;setor_funcional	L7-08: decisão: um setor funcional por local de consumo da origem (código = LOC_CONS), criado pela primeira dispensação do local e usado pelas outras (agrupamento); entrega ao setor (GECTRLENTREGADOCSAIDA) o acha pelo código
+GECADDISPENSACAO	@estabelecimento	setor_funcional.estabelecimento_id			setor_funcional	L7-08: único estabelecimento do cliente
+GECADDISPENSACAO	LOC_CONS	setor_funcional.nome	texto_nome		ref:TBLOCCON>NOME;setor_funcional	L7-08: nome do local de consumo (TBLOCCON, encadeada terminada em coluna; 1ª fonte)
+GECADDISPENSACAO	#codigo_derivado:LOC_CONS:150:local_consumo_	setor_funcional.nome			setor_funcional	L7-08: local sem cadastro: nome derivado do código (2ª fonte, concorrente)
+GECADDISPENSACAO	=assistencial	setor_funcional.tipo			setor_funcional	L7-08: local de consumo que recebe dispensação de paciente é assistencial; o cliente reclassifica no painel
+GECADDISPENSACAO	LOC_CONS	setor_funcional.centro_custo_id	chave_origem		ref:TBLOCCON>CDC>TBCENCUS;setor_funcional	L7-08: centro de custo do local de consumo
+GECADDISPENSACAO	DOC		inteiro			L7-08: não carregada: número antigo ANO/MES/DOC (o número do produto é o ID; pedido 10 vale também aqui)
+GECADDISPENSACAO	MES		inteiro			L7-08: não carregada: ver DOC
+GECADDISPENSACAO	ANO		inteiro			L7-08: não carregada: ver DOC
+GECADDISPENSACAO	TIPO_CONTA		inteiro			L7-08: não carregada: tipo da conta sem evidência do significado (a conta vem pelo atendimento)
+GECADDISPENSACAO	CONTA		inteiro			L7-08: não carregada: conta hospitalar: a cobrança vem pela conta do atendimento (faturamento)
+GECADDISPENSACAO	CONV		inteiro			L7-08: não carregada: convênio: vem do atendimento
+GECADDISPENSACAO	OLD_ID_PRPRESC		inteiro			L7-08: não carregada: prescrição do modelo antigo da origem (substituída por COD_PRESCRI)
+GECADDISPENSACAO	CDC_BK		inteiro			L7-08: não carregada: cópia de CDC
+GECADDISPENSACAO	DATA_CADASTRO		data_hora			L7-08: não carregada: momento de digitação (o momento da dispensação é DATA)
+GELANDISPENSACAO	ID_GECADDISPENSACAO	dispensacao_item.dispensacao_id	chave_origem			L7-08: dispensação; sem dispensação: NOT NULL recusa
+GELANDISPENSACAO	#seq:ID_GECADDISPENSACAO	dispensacao_item.sequencia				L7-08: linha da dispensação (ordem da chave)
+GELANDISPENSACAO	ITEM	dispensacao_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANDISPENSACAO	ITEM	dispensacao_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: NOT NULL recusa
+GELANDISPENSACAO	QTDE	dispensacao_item.quantidade	decimal			L7-08: quantidade dispensada; nula: NOT NULL recusa; zero: CHECK recusa
+GELANDISPENSACAO	PRIMEIRA_DOSE_REF	dispensacao_item.primeira_dose	booleano_sn			L7-08: primeira dose (S/N)
+GELANDISPENSACAO	VIA	dispensacao_item.via_de_uso_id	chave_origem		ref:GETABVIA	L7-08: via de uso pelo código (como GEVIASITEM)
+GELANDISPENSACAO	JUSTIFICA_ITEM_NAO_PRESC	dispensacao_item.justificativa_nao_prescrito	texto			L7-08: justificativa do item não prescrito (1ª fonte)
+GELANDISPENSACAO	=sem vínculo com o item prescrito na origem	dispensacao_item.justificativa_nao_prescrito				L7-08: a origem não liga o item dispensado ao item prescrito: o fato é registrado (2ª fonte, concorrente; CHECK prescrito ou justificativa)
+GELANDISPENSACAO	=dispensado	dispensacao_item.situacao				L7-08: registro histórico do item dispensado
+GELANDISPENSACAO	HM		inteiro			L7-08: não carregada: horário: as doses vêm de GEDISPHOR
+GELANDISPENSACAO	DOSE		data_hora			L7-08: não carregada: momento da dose: vem de GEDISPHOR
+GELANDISPENSACAO	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADDISPENSACAO
+GECTRLENTREGADOCSAIDA	@estabelecimento	entrega_setor.estabelecimento_id				L7-08: único estabelecimento do cliente
+GECTRLENTREGADOCSAIDA	ID_GECADSAI	entrega_setor.setor_funcional_id	inteiro		ref:GECADSAI>CONS;cod:setor_funcional.codigo	L7-08: setor = local de consumo do documento de saída, achado pelo código no setor funcional (criado pela dispensação); ausente: codigo_inexistente_destino e NOT NULL recusa
+GECTRLENTREGADOCSAIDA	ID_GECADSAI	entrega_setor.origem_local_estoque_id	chave_origem		ref:GECADSAI>ARM>GELOCARM	L7-08: armazém do documento (1ª fonte)
+GECTRLENTREGADOCSAIDA	ID_GELANPAC	entrega_setor.origem_local_estoque_id	chave_origem		ref:GELANPAC>LOCAL>GELOCARM	L7-08: lançamento ao paciente: o local dele (2ª fonte, concorrente; lido na origem)
+GECTRLENTREGADOCSAIDA	ID_TBSITUACAOFARMACIA	entrega_setor.situacao_farmaceutica_id	chave_origem			L7-08: situação farmacêutica da entrega
+GECTRLENTREGADOCSAIDA	ID_TBUSERS	entrega_setor.entregador_usuario_id			ref:TBUSERS	L7-08: quem registrou a entrega
+GECTRLENTREGADOCSAIDA	DATA_HORA	entrega_setor.saida_em	data_hora			L7-08: momento da entrega
+GECTRLENTREGADOCSAIDA	MOTIVO_ESTORNO	entrega_setor.motivo_estorno	texto_longo			L7-08: motivo do estorno (a situação vem da situação farmacêutica; estornada exige momento do estorno, que a origem não tem)
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.dispensacao_item_id	chave_origem		ref:GEDISPHOR.ID_PRCHKGERAL>ID_GELANDISPENSACAO>GELANDISPENSACAO	L7-08: item dispensado no horário (dose dispensada do horário, chave alternativa); várias doses: pai_ambiguo; nenhuma: NOT NULL recusa
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.prescricao_item_id	chave_origem		ref:PRCHKGERAL>ID_PRLANGERAL>PRLANGERAL	L7-08: item prescrito do horário
+PREXTRATOITEM_SUBST	ID_PRCHKGERAL	substituicao_dispensacao.anterior_insumo_id	chave_origem		ref:PRCHKGERAL>ID_PRPRESCMED>PRPRESCMED>ID_GEITENS>GEITENS	L7-08: insumo prescrito (medicamento do horário, encadeada); sem ele: NOT NULL recusa
+PREXTRATOITEM_SUBST	ID_GEITENS	substituicao_dispensacao.novo_insumo_id	chave_origem			L7-08: insumo que substituiu; igual ao prescrito: CHECK recusa
+PREXTRATOITEM_SUBST	QTDE_DOSE	substituicao_dispensacao.quantidade_dose	decimal			L7-08: dose do substituto
+PREXTRATOITEM_SUBST	ID_TBUNICON_UNI_PRESC	substituicao_dispensacao.unidade_medida_id	chave_origem		ref:TBUNICON	L7-08: unidade da dose
+PREXTRATOITEM_SUBST	=sem motivo registrado na origem	substituicao_dispensacao.motivo				L7-08: a origem não guarda o motivo da troca: o fato é registrado, sem presumir motivo
+PREXTRATOITEM_SUBST	DATA_HORA_HISTORICO	substituicao_dispensacao.ocorrido_em	data_hora			L7-08: momento da troca
+PREXTRATOITEM_SUBST	ID_TBUSERS	substituicao_dispensacao.usuario_id			ref:TBUSERS	L7-08: quem trocou
+PREXTRATOITEM_SUBST	ID_GENOMCOM		chave_origem			L7-08: não carregada: nome comercial é catálogo licenciado (regra 7)
+PREXTRATOITEM_SUBST	DATA_HORA_HISTORICO_UTC		texto			L7-08: não carregada: mesma hora em texto UTC (redundante)
+PREXTRATOITEM_SUBST	FUSO_HORARIO_HISTORICO		inteiro			L7-08: não carregada: fuso do registro (a hora local já vem)
+GELANPED	ID_GECADPED	pedido_compra_item.pedido_compra_id	chave_origem			L7-08: pedido de compra (GECADPED, L7-07); cabeçalho que não virou pedido (cotação, licitação): pai_inexistente e NOT NULL recusa
+GELANPED	#seq:ID_GECADPED	pedido_compra_item.sequencia				L7-08: linha do pedido (ordem da chave)
+GELANPED	ITEM	pedido_compra_item.insumo_id	chave_origem		ref:GEITENS	L7-08: insumo pelo código
+GELANPED	ITEM	pedido_compra_item.unidade_medida_id	texto		ref:GEITENS>UNI_ARM>TBUNICON	L7-08: unidade de estoque do insumo; sem unidade: CHECK recusa
+GELANPED	FATOR	pedido_compra_item.fator_conversao	decimal_zero_nulo			L7-08: fator da unidade de compra; vazio ou 0: padrão do destino
+GELANPED	QTDE	pedido_compra_item.quantidade	decimal			L7-08: quantidade pedida; zero: CHECK recusa
+GELANPED	VLR_UNI	pedido_compra_item.valor_unitario	decimal			L7-08: valor unitário
+GELANPED	PER_DES	pedido_compra_item.percentual_desconto	decimal			L7-08: percentual de desconto
+GELANPED	VLR_DES	pedido_compra_item.valor_desconto	decimal			L7-08: valor de desconto
+GELANPED	PER_IPI	pedido_compra_item.percentual_ipi	decimal			L7-08: percentual de IPI
+GELANPED	VLR_IPI	pedido_compra_item.valor_ipi	decimal			L7-08: valor de IPI
+GELANPED	VLR_TOT	pedido_compra_item.valor_total	decimal			L7-08: valor total do item
+GELANPED	MARCA	pedido_compra_item.marca	texto			L7-08: marca ofertada
+GELANPED	ENTREGA	pedido_compra_item.data_prevista_entrega	data			L7-08: entrega prevista (as programadas vêm de GELANPEDENTREGA)
+GELANPED	VENCEDOR	pedido_compra_item.adjudicado	booleano_sn			L7-08: item adjudicado ao fornecedor (S/N)
+GELANPED	OBS	pedido_compra_item.observacao	texto			L7-08: observação do item
+GELANPED	OQUE		codigo_char			L7-08: não carregada: natureza do cabeçalho (pedido, cotação, licitação) é do GECADPED
+GELANPED	ANO		inteiro			L7-08: não carregada: número antigo do pedido (vem por ID_GECADPED)
+GELANPED	DOC		inteiro			L7-08: não carregada: ver ANO
+GELANPED	SEQ		inteiro			L7-08: não carregada: a sequência do produto vem de #seq:ID_GECADPED
+GELANPED	FORN		inteiro			L7-08: não carregada: fornecedor do pedido é do cabeçalho (GECADPED)
+GELANPED	TIPO		codigo_char			L7-08: não carregada: tipo sem evidência do significado
+GELANPED	CONDI		inteiro			L7-08: não carregada: condição de pagamento é do cabeçalho
+GELANPED	CONDICAO		texto			L7-08: não carregada: ver CONDI
+GELANPED	COMPRADA		decimal			L7-08: não carregada: quantidade comprada na cotação sem evidência (o recebido vem das notas de entrada)
+GELANPED	QTDE1		decimal			L7-08: não carregada: quantidades por proposta da cotação (sem destino no item do pedido)
+GELANPED	QTDE2		decimal			L7-08: não carregada: ver QTDE1
+GELANPED	QTDE3		decimal			L7-08: não carregada: ver QTDE1
+GELANPED	REG_MS		texto			L7-08: não carregada: registro sanitário em texto: o cadastro do registro vem do insumo
+GELANPED	APRES		texto			L7-08: não carregada: apresentação ofertada em texto (sem cadastro)
+GELANPED	QTDE_ARM		decimal			L7-08: não carregada: quantidade na unidade de estoque: derivada de QTDE x FATOR
+GELANPED	VLR_ARM		decimal			L7-08: não carregada: valor na unidade de estoque: derivado
+GELANPED	VLR_MAX_SUG		flutuante			L7-08: não carregada: valor máximo sugerido é da cotação
+GELANPED	DATA1		data			L7-08: não carregada: datas das propostas da cotação
+GELANPED	DATA2		data			L7-08: não carregada: ver DATA1
+GELANPED	DATA3		data			L7-08: não carregada: ver DATA1
+GELANPED	ITEM_AUTORIZADO_ORCAMENTO		codigo_char			L7-08: não carregada: marca de autorização de orçamento sem destino no item

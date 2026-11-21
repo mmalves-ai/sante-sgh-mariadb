@@ -1,7 +1,8 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
-As 18 tabelas carregadas pela carga dirigida pelo mapa (das outras 6 da fatia, 5 são descarte de produto em
-declarado/sem_carga.tsv e PRDADOSENVIOOPERADORA aguarda o motor, com a declaração pronta comentada). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
+As 19 tabelas carregadas pela carga dirigida pelo mapa (3 da fatia são descarte de produto em declarado/sem_carga.tsv;
+GECADANTIMI e PRFICHAREL têm a declaração pronta, comentada, à espera do modelo e do motor). PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
+pela primeira linha, adotado pelas seguintes). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
 de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
 colisão de caixa (codigo_colisao_caixa nas duas linhas), S/N fora do domínio (padrão do destino), pai recusado
 (pai_pendente), pai nunca visto (pai_inexistente + 1048), chave única repetida (1062), fórmula migrada
@@ -44,6 +45,7 @@ CREATE TABLE PRLOCPACDEFAULT (ID INTEGER NOT NULL PRIMARY KEY, USUARIO VARCHAR(3
   PERMITE_SOMENTE_SALVAR VARCHAR(1), PERMITE_AVALIAR VARCHAR(1), ALERTAR_EXAMES_LIBERADOS VARCHAR(1),
   ALERTAR_EXAMES_LIB_PERIODO TIME, ALERTAR_PEND_AVAL_PRESC_O_PROF VARCHAR(1), PERMITE_CRIAR_EXCL_PRESC_FUTURA CHAR(1),
   ALE_EXA_REP_D4H_CON CHAR(1));
+CREATE TABLE PRDADOSENVIOOPERADORA (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(80));
 CREATE TABLE PRFAVORITO_EXIBIR (ID INTEGER NOT NULL PRIMARY KEY, LOCPACDEFAULT INTEGER NOT NULL,
   CAMPOSLOCALIZACAOPACIENTE SMALLINT NOT NULL, ORDEM SMALLINT, EXIBIR CHAR(1));
 """
@@ -87,8 +89,12 @@ DADOS = [
      {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1}}),
     ("PRCAB_IDENTIFIC_PAC", [[1, "Dados atuais do paciente", "S"], [2, "Dados da emissão", "S"], [3, None, "N"]],
      {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}}),
-    ("PRCAMPOSLOCALIZACAOPACIENTE", [[1, "Leito"], [2, "Dias de internação"], [3, "Alergia"]],
-     {"gravados": 3, "pendencias": {}}),
+    # chave do atributo do produto pelo nome (valores.d): 4 sem par recusa (nunca grava o id); 6 é a mesma chave da 3
+    # (alergias) e recusa pela chave única
+    ("PRCAMPOSLOCALIZACAOPACIENTE", [[1, "Leito"], [2, "Dias de internação"], [3, "Alergia"], [4, "Coluna exemplo"],
+                                     [5, "MÉDICO"], [6, "Alergias"]],
+     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1,
+                                    "restricao_destino_1062": 1}}),
     ("PRFA_UTILIZACAO", [[1, "Medicamento", "S"], [2, "Uso em bomba de infusão", "S"], [3, "Material", "N"]],
      {"gravados": 3, "pendencias": {}}),
     ("PRFILTROCLASSIF", [[1, "Classificação exemplo"]], {"gravados": 1, "pendencias": {}}),
@@ -127,10 +133,17 @@ DADOS = [
                       [6, 2, "   ", 1, H(1899, 12, 30, 8, 0)], [7, 1, "Repetida", 2, H(1899, 12, 30, 9, 0)]],
      {"gravados": 3, "pendencias": {"hora_com_data": 1, "pai_pendente": 1, "pai_inexistente": 1,
                                     "restricao_destino_1048": 2, "restricao_destino_1062": 1}}),
-    # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio
+    # informação enviada à operadora: grupo padrão criado pela 1, adotado por 2 e 4 (adotado_existente); a 3, de
+    # descrição vazia, é recusada (1048) e não deixa adoção
+    ("PRDADOSENVIOOPERADORA", [[1, "Indicação clínica"], [2, "  Estadiamento   do tumor "], [3, "   "],
+                               [4, "Peso exemplo"]],
+     {"gravados": 3, "pendencias": {"adotado_existente": 2, "restricao_destino_1048": 1}}),
+    # usuário pela preferência (10, 20) e o login dela; 30 tem login nunca visto; 99 não existe; 4 S/N fora do domínio;
+    # coluna da tela = chave do atributo gravada pela coluna do painel; 7 aponta a coluna 4, recusada (pai_pendente)
     ("PRFAVORITO_EXIBIR", [[1, 10, 1, 1, "S"], [2, 10, 2, 2, "N"], [3, 20, 1, 1, "S"], [4, 20, 3, None, "X"],
-                           [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"]],
-     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2}}),
+                           [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"], [7, 10, 4, 3, "S"]],
+     {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2,
+                                    "pai_pendente": 1}}),
 ]
 # pai de fora da fatia (L5-01) presente na imagem só para a ref: encadeada; o esperado dele não é desta fatia
 PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")]

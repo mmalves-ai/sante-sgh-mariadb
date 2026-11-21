@@ -16,14 +16,18 @@ Dados 100% falsos (descrições e logins inventados). Anomalias cobertas:
 - evento da senha (TBFLUXOATEND): ação casada pela letra exata (chave alternativa; 'c' e 'C' são ações distintas),
   ação recusada na L6-01 (pai_pendente), letra nunca vista, senha e local recusados, senha vazia, momento vazio ou
   sentinela (NOT NULL recusa), login nunca visto (anulável: grava);
-- histórico do atendimento (HTATENDIMENTO) como trilha de auditoria com retrato JSON: atendimento nunca visto
-  (entidade_id anulável: grava com pai_inexistente) e momento sentinela (NOT NULL recusa).
+- histórico do atendimento (HTATENDIMENTO) como trilha de auditoria com retrato JSON COMPLETO (`#retrato:*`):
+  atendimento nunca visto (entidade_id anulável: grava com pai_inexistente) e momento sentinela (NOT NULL recusa);
+- horário do local (TBLOCALHORA, pares início/fim no destino principal): um horário por dia com hora, feriado como dia
+  não útil, local sem nenhum dia (sem_item_a_gravar), fim antes do início (a linha inteira é recusada pelo CHECK),
+  local recusado (pai_pendente) e local nunca visto (NOT NULL recusa).
 PREPARO_DESTINO cria o estabelecimento único do cliente de exemplo (no cliente real ele vem do L3).
 REQUER a L6-01: a ação do evento casa pela letra na ORIGEM de TBACAOFLUXOSENHA (chave alternativa), que é tabela da
 L6-01 (o tipo de painel também vem de lá, não mais como pai externo).
-Fora da imagem: descartes da fatia (TBREFCANCMODTP, TBSTATUSGUICHE, REPARAM e TBTIPO_ATENDIMENTO; motivos em
-sem_carga.tsv, pedido no L6-02.json), TBLOCALHORA (regra genérica faltante: item em par de colunas, pedido no json) e
-ATCONTA (espera atendimento_conta como destino secundário das contas na L8-06, pedido no json).
+- contadores de numeração da linha única de parâmetros (REPARAM, desdobrados em sequencia_negocio inativa): quatro
+  contadores com valor (um deles zero) e três vazios (sem item); competência e opções não carregam.
+Fora da imagem: descartes da fatia (TBREFCANCMODTP, TBSTATUSGUICHE, TBTIPO_ATENDIMENTO; motivos em sem_carga.tsv) e
+ATCONTA, BLOQUEADA até atendimento_conta nascer da carga das contas (pedido às L8-05 e L8-06).
 Situação 'S' (suspensa) vira 'suspensa': o esperado supõe o CHECK do modelo com 'suspensa' (pedido de ler_ddl).
 """
 import datetime
@@ -31,6 +35,10 @@ import datetime
 DDL = """
 CREATE TABLE TBRECEPCAO (ID SMALLINT NOT NULL PRIMARY KEY, DESCRICAO VARCHAR(40) NOT NULL, TEXTOIMP BLOB SUB_TYPE 1,
   IMPRESSORA_MODO_GRAFICO CHAR(1), QTDE_CHAM_SUGES_CANC_SENHA SMALLINT);
+CREATE TABLE TBLOCALHORA (ID_TBLOCAL SMALLINT NOT NULL PRIMARY KEY, SEGUNDA_INICIO TIME, SEGUNDA_FINAL TIME,
+  TERCA_INICIO TIME, TERCA_FINAL TIME, QUARTA_INICIO TIME, QUARTA_FINAL TIME, QUINTA_INICIO TIME, QUINTA_FINAL TIME,
+  SEXTA_INICIO TIME, SEXTA_FINAL TIME, SABADO_INICIO TIME, SABADO_FINAL TIME, DOMINGO_INICIO TIME, DOMINGO_FINAL TIME,
+  FERIADO_INICIO TIME, FERIADO_FINAL TIME);
 CREATE TABLE TBGUICHE (NUMERO_GUICHE SMALLINT NOT NULL, ID_TBRECEPCAO SMALLINT NOT NULL,
   CONSTRAINT PK_TBGUICHE PRIMARY KEY (NUMERO_GUICHE, ID_TBRECEPCAO));
 CREATE TABLE TBLOCAL (ID SMALLINT NOT NULL PRIMARY KEY, ID_TBRECEPCAO SMALLINT NOT NULL, COD SMALLINT NOT NULL,
@@ -58,6 +66,8 @@ CREATE TABLE TBFLUXOATEND (ID INTEGER NOT NULL PRIMARY KEY, ID_TBSENHAATEND INTE
 CREATE TABLE HTATENDIMENTO (ID BIGINT NOT NULL PRIMARY KEY, ID_ATCABECATEND BIGINT NOT NULL,
   DATA_HORA_HISTORICO TIMESTAMP NOT NULL, DATA_HORA_ENTRADA TIMESTAMP NOT NULL, ID_HTCONVEN SMALLINT NOT NULL,
   MATRICULA VARCHAR(24), JUSTIFICATIVA_ALTA_RETROATIVA VARCHAR(255));
+CREATE TABLE REPARAM (INSC_M VARCHAR(14), MESPRO SMALLINT, ANOPRO SMALLINT, ULTPRONT INTEGER, ULTREG INTEGER,
+  ULTPRTFAM INTEGER, PRT_OTMU INTEGER, CTR_PAG_REG INTEGER, PRTA_OTMU INTEGER, PRTANT INTEGER);
 """
 REQUER = ["L6-01"]
 PAIS_EXTERNOS = {"TBUSERS": ["RECEP01", "RECEP02"], "ATCABECATEND": [str(i) for i in range(1, 7)],
@@ -65,11 +75,12 @@ PAIS_EXTERNOS = {"TBUSERS": ["RECEP01", "RECEP02"], "ATCABECATEND": [str(i) for 
                  "REPACAGD": ["1", "2"], "SIPACAGD": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento)")
-CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALPESATE",
+CARREGADAS = ("TBRECEPCAO", "TBGUICHE", "TBLOCAL", "PNCONFIG", "TBLOCALENCATE", "TBLOCALHORA", "TBLOCALPESATE",
               "TBGERASENHA", "TBSENHAATEND", "ATCABECATEND_TBSENHAATEND", "TBSENHAATEND_REPACAGD",
-              "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO")
-DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "REPARAM", "TBTIPO_ATENDIMENTO")
-BLOQUEADAS = ("TBLOCALHORA", "ATCONTA")  # regra genérica faltante; ATCONTA espera atendimento_conta da L8-06 (pedidos no L6-02.json)
+              "TBSENHAATEND_SIPACAGD", "TBFLUXOATEND", "HTATENDIMENTO", "REPARAM")
+DESCARTADAS = ("TBREFCANCMODTP", "TBSTATUSGUICHE", "TBTIPO_ATENDIMENTO")
+BLOQUEADAS = ("ATCONTA",)   # sem declaração: aguarda atendimento_conta pela carga das contas (L8-05, L8-06)
+DESDOBRADAS = {"TBLOCALHORA": 2, "REPARAM": 1}   # linhas da origem que gravam itens (o esperado "gravados" conta itens)
 
 
 def linhas(r, ins):
@@ -93,6 +104,16 @@ def linhas(r, ins):
         ins("PNCONFIG", list(p))
     for e in [(1, 2), (2, 1), (1, 1), (3, 4)]:          # (1, 1) CHECK distinto; (3, 4) pai recusado
         ins("TBLOCALENCATE", list(e))
+    # horários (pares início/fim): 1 seg a sex, sábado e feriado (7 itens); 2 só domingo (1 item); 3 nenhum dia
+    # (sem_item_a_gravar); 7 fim antes do início na segunda (CHECK recusa a linha); 4 local recusado; 50 nunca visto
+    def h(hh, mm):        # TIME da origem como literal (a imagem é gerada por isql)
+        return "%02d:%02d:00" % (hh, mm)
+
+    semana = [h(7, 0), h(19, 0)] * 5 + [h(7, 0), h(12, 0), None, None, h(8, 0), h(12, 0)]
+    for loc, hs in [(1, semana), (2, [None] * 12 + [h(8, 0), h(14, 0), None, None]), (3, [None] * 16),
+                    (7, [h(13, 0), h(12, 0)] + [None] * 14), (4, [h(8, 0), h(12, 0)] + [None] * 14),
+                    (50, [h(8, 0), h(12, 0)] + [None] * 14)]:
+        ins("TBLOCALHORA", [loc] + hs)
     for v in [(1, 2), (1, 3), (2, 3), (3, 1), (7, 1), (8, 1)]:  # (8, 1) pai recusado
         ins("TBLOCALPESATE", list(v))
     # geradores: 4 prefixo repetido; 5 sem letra; 6 tipo sem par; 7 recepção recusada; 9 agenda sem alvo (CHECK);
@@ -157,6 +178,9 @@ def linhas(r, ins):
         hist = sent if i == 5 else datetime.datetime(2026, 3, 1 + i, 9, 30)
         ins("HTATENDIMENTO", [i, cab, hist, datetime.datetime(2026, 3, 1, 7, 0), 1, "MAT-%04d" % i,
                               "Alta registrada depois" if i == 2 else None])
+    # parâmetros (linha única): ULTPRONT, ULTREG, PRTANT (zero) e CTR_PAG_REG com valor; ULTPRTFAM, PRT_OTMU e
+    # PRTA_OTMU vazios (sem item); inscrição e competência lidas só pelo DDL (não carregam)
+    ins("REPARAM", ["0001234", 10, 2026, 1500, 3200, None, None, 12, None, 0])
     return {
         "TBRECEPCAO": {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "restricao_destino_1048": 1}},
         "TBGUICHE": {"gravados": 4, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}},
@@ -165,6 +189,9 @@ def linhas(r, ins):
         "PNCONFIG": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1, "restricao_destino_1048": 1,
                                                    "valor_presumido": 3}},
         "TBLOCALENCATE": {"gravados": 2, "pendencias": {"restricao_destino_4025": 1, "pai_pendente": 1}},
+        "TBLOCALHORA": {"gravados": 8, "pendencias": {"sem_item_a_gravar": 1, "restricao_destino_4025": 1,
+                                                      "pai_pendente": 1, "pai_inexistente": 1,
+                                                      "restricao_destino_1048": 1}},
         "TBLOCALPESATE": {"gravados": 5, "pendencias": {"pai_pendente": 1}},
         "TBGERASENHA": {"gravados": 6, "pendencias": {"valor_presumido": 9, "valor_fora_do_dominio": 2,
                                                       "restricao_destino_1062": 1, "restricao_destino_1048": 1,
@@ -181,4 +208,5 @@ def linhas(r, ins):
                                                        "pai_inexistente": 3, "data_sentinela": 1}},
         "HTATENDIMENTO": {"gravados": 5, "pendencias": {"pai_inexistente": 1, "data_sentinela": 1,
                                                         "restricao_destino_1048": 1}},
+        "REPARAM": {"gravados": 4, "pendencias": {"valor_presumido": 1}},
     }

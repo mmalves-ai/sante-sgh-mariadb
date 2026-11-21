@@ -13,8 +13,10 @@ DESTINOS = {"TBTIPPLANO": ["plano_fonte_pagadora"], "TBTABDTH": ["preco_diaria_t
             "TBTPPROFPROC": ["funcao_equipe_cobranca"], "TBCODATI": ["codigo_prestador_fonte_pagadora"],
             "TBCODATI_TBUSERS": ["usuario_codigo_prestador"], "TBCONVEN_TBTISSPARDEF": ["valor_padrao_campo_tiss"],
             "TBEMIREF": ["referencia_emissao_matmed"], "TBENTCON": ["calendario_entrega_fatura"],
-            "TBSEGUIA": ["sequencial_guia"], "TBVLRTHM": ["preco_procedimento_valor"],
-            "TBINTCRC": ["depara_conta_externa"]}
+            "TBVLRTHM": ["preco_procedimento_valor"], "TBTIPPLCONV": ["diaria_por_plano_local"],
+            "TBTISS": ["regra_apresentacao_tiss", "configuracao_tiss_fonte_pagadora"],
+            "TBVLRDTH": ["preco_diaria_taxa_valor"], "FCCTAEXT": ["conta_hospitalar"],
+            "FCDIAEXT": ["conta_hospitalar_segurado"]}
 OBRIGATORIAS = {
     "TBTIPPLANO": {"fonte_pagadora_id", "codigo", "descricao"},
     "TBTABDTH": {"tabela_preco_id", "sequencia", "codigo", "nome", "tipo_item"},
@@ -24,9 +26,13 @@ OBRIGATORIAS = {
     "TBCONVEN_TBTISSPARDEF": {"fonte_pagadora_id", "campo_tiss", "valor_padrao", "vigencia_inicio"},
     "TBEMIREF": {"fonte_pagadora_id", "classificacao_despesa_id"},
     "TBENTCON": {"estabelecimento_id", "fonte_pagadora_id", "competencia", "entrega_inicio", "entrega_fim"},
-    "TBSEGUIA": {"estabelecimento_id", "fonte_pagadora_id", "tipo_guia"},
     "TBVLRTHM": {"preco_procedimento_id", "ocorrido_em", "vigencia_inicio"},
-    "TBINTCRC": {"estabelecimento_id", "tipo_origem", "fonte_pagadora_id", "codigo_conta_externa"},
+    "TBTIPPLCONV": {"fonte_pagadora_id", "preco_diaria_taxa_id", "vigencia_inicio"},
+    "TBTISS": {"estabelecimento_id", "fonte_pagadora_id", "versao_padrao_tiss_id"},
+    "TBVLRDTH": {"preco_diaria_taxa_id", "ocorrido_em", "vigencia_inicio", "valor"},
+    "FCCTAEXT": {"estabelecimento_id", "numero", "atendimento_id", "paciente_id", "fonte_pagadora_id",
+                 "tipo_conta_id", "natureza", "competencia", "inicio_em"},
+    "FCDIAEXT": {"conta_hospitalar_id", "numero_carteira"},
 }
 
 
@@ -61,10 +67,8 @@ class Plano(unittest.TestCase):
                     ("TBCONVEN_TBTISSPARDEF", "fonte_pagadora_id"): "TBCONVEN",
                     ("TBCONVEN_TBTISSPARDEF", "campo_tiss"): "TBTISSPARDEF>NOME",
                     ("TBEMIREF", "classificacao_despesa_id"): "TBCLASSI",
-                    ("TBENTCON", "fonte_pagadora_id"): "TBCONVEN", ("TBSEGUIA", "fonte_pagadora_id"): "TBCONVEN",
-                    ("TBVLRTHM", "preco_procedimento_id"): "TBTABTHM(TAB,COD)",
-                    ("TBINTCRC", "fonte_pagadora_id"): "TBCONVEN",
-                    ("TBINTCRC", "natureza_financeira_id"): "TBITEDES(GRUPO,SUBGRUPO,ITEM)"}
+                    ("TBENTCON", "fonte_pagadora_id"): "TBCONVEN",
+                    ("TBVLRTHM", "preco_procedimento_id"): "TBTABTHM(TAB,COD)"}
         for (t, dc), ref in esperado.items():
             self.assertEqual(self.cols(t)[dc]["referencia"], ref, (t, dc))
         # a chave composta do pai é a do mapa (TAB,COD), na mesma ordem
@@ -76,9 +80,10 @@ class Plano(unittest.TestCase):
             for cs in self.plano[t]["colunas"].values():
                 for c in cs:
                     if c.get("referencia"):
-                        refs.add(c["referencia"].split(">")[0].split("(")[0].split(".")[0])
-        # o parâmetro TISS só é lido da origem (referência encadeada): não está na imagem desta fatia
-        self.assertEqual(refs - TABELAS - {"TBTISSPARDEF"}, set(l8_05.PAIS_EXTERNOS))
+                        refs.add(c["referencia"].split(">")[0].split("(")[0].split(".")[0].split("@")[0])
+        # o parâmetro TISS só é lido da origem (referência encadeada): não está na imagem desta fatia; o cadastro de
+        # versões TISS está na imagem só como origem (catálogo oficial, nunca gravado)
+        self.assertEqual(refs - TABELAS - {"TBTISSPARDEF"} - set(l8_05.SO_ORIGEM), set(l8_05.PAIS_EXTERNOS))
 
     def test_pais_externos_carregados_ou_dependencia_registrada(self):
         """Pai dado como carregado na conferência precisa carregar (destino em colunas.d ou carga do L3); senão a
@@ -108,7 +113,7 @@ class Plano(unittest.TestCase):
     def test_vigencia_e_estabelecimento(self):
         for t in ("TBCODATI", "TBCONVEN_TBTISSPARDEF"):
             self.assertEqual(self.cols(t)["vigencia_inicio"]["coluna"], "@vigencia_carga", t)
-        for t in ("TBCODATI", "TBENTCON", "TBSEGUIA"):
+        for t in ("TBCODATI", "TBENTCON"):
             self.assertEqual(self.cols(t)["estabelecimento_id"]["coluna"], "@estabelecimento", t)
 
     def test_competencia_e_janela_da_entrega(self):
@@ -121,16 +126,31 @@ class Plano(unittest.TestCase):
         self.assertEqual(c["origem_codigo"]["valores"], {"S": "referencia", "N": "proprio"})
         self.assertEqual(c["origem_descricao"]["valores"], {"S": "referencia", "N": "proprio"})
         self.assertEqual(c["preco_base"]["valores"], {"S": "preco_fabrica", "N": "preco_maximo_consumidor"})
-        tg = self.cols("TBSEGUIA")["tipo_guia"]["valores"]
-        # só os tipos com evidência no código antigo; 0 (contador geral do lote) e 8 (recurso) esperam o modelo
-        self.assertEqual(tg, {"1": "consulta", "2": "sp_sadt", "3": "resumo_internacao", "4": "honorario"})
 
-    def test_depara_conta_externa(self):
-        c = self.cols("TBINTCRC")
-        self.assertEqual((c["tipo_origem"]["coluna"], c["lado"]["coluna"]), ("=fonte_pagadora", "=credito"))
-        self.assertEqual(c["codigo_conta_externa"]["regra"], "inteiro_zero_nulo")
-        self.assertEqual(sentinela.aplicar("inteiro_zero_nulo", 0), (None, None))
-        self.assertEqual(carga_mapa.tipar(3101, "varchar"), "3101")
+    def test_comentadas_bloqueadas_sem_gravar_errado(self):
+        """Correção da rodada 3: contador do último número (TBSEGUIA), de-para sem as dimensões da chave (TBINTCRC),
+        auditoria com total zero presumido e conclusão sem condição (FCCTAAUD) e acordo de mat/med (TBPERMEM,
+        TBEMIREFMATMED) ficam com a declaração pronta e COMENTADA: nada delas é gravado nem contado como carregado."""
+        com = _comentadas()
+        ativas = {c["tabela"] for c in self.mapa["colunas_decl"]}
+        sc = {r["tabela"] for r in mapa.ler_tsv(Path(mapa.DIR_PACOTE) / "declarado/sem_carga.tsv")}
+        for t in l8_05.COMENTADAS:
+            self.assertIn(t, com, t)
+            self.assertNotIn(t, ativas, t)
+            self.assertNotIn(t, TABELAS, t)
+            self.assertNotIn(t, sc, t)  # bloqueio visível, nunca descarte
+            self.assertTrue(all("BLOQUEADA" in m[-1] or "NÃO é descarte" in m[-1] for m in com[t]), t)
+        # o total da cópia nunca entra como zero presumido; a conclusão não sai da data da gravação
+        aud = {(m[1], m[2]) for m in com["FCCTAAUD"]}
+        self.assertFalse({x for x in aud if x[0].startswith("=~") and "valor" in x[1]})
+        self.assertFalse({x for x in aud if x[1] in ("auditoria_conta.concluida_em", "auditoria_conta.resultado",
+                                                     "auditoria_conta_versao.valor_total_conta")})
+        # acordo de mat/med: item pelo item faturável que TBMATMED gravar, valor, percentual e quantidade da origem
+        pm = {m[2]: m[5] for m in com["TBPERMEM"] if m[2]}
+        self.assertEqual(pm["preco_negociado_matmed.item_faturavel_id"], "ref:TBMATMED/item_faturavel")
+        self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
+        self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
+                         "preco_negociado_matmed.quantidade_fixa", "preco_negociado_matmed.vigencia_inicio"} <= set(pm))
 
     def test_tbtabdth_mantida(self):
         c = self.cols("TBTABDTH")
@@ -151,7 +171,37 @@ class Plano(unittest.TestCase):
     def test_nao_carregadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
         self.assertFalse(com_destino & set(l8_05.BLOQUEADAS))
-        self.assertEqual(set(l8_05.BLOQUEADAS), set(l8_05.DESCARTES) | set(l8_05.SEM_MECANISMO))
+        self.assertEqual(set(l8_05.BLOQUEADAS), set(l8_05.DESCARTES) | set(l8_05.COMENTADAS))
+
+    def test_diaria_por_plano_e_valor_da_diaria(self):
+        c = self.cols("TBTIPPLCONV")
+        self.assertEqual(c["plano_fonte_pagadora_id"]["referencia"], "TBTIPPLANO")
+        self.assertNotIn("contrato_fonte_pagadora_id", c)  # nulo = qualquer acordo da fonte (modelo 12_FAT/11)
+        self.assertNotIn("categoria_acomodacao_id", c)
+        v = self.cols("TBVLRDTH")["preco_diaria_taxa_id"]
+        self.assertEqual((v["passos"][0]["modo"], v["passos"][0]["arg"], v["passos"][0]["cols"]),
+                         ("alt_composta", ["TAB", "OPE"], ["TAB", "OPE"]))
+
+    def test_tiss_versao_pelo_catalogo_oficial_e_segredo_fora(self):
+        for dt in DESTINOS["TBTISS"]:
+            c = self.cols("TBTISS", dt)["versao_padrao_tiss_id"]
+            self.assertEqual((c["depara"], c["referencia"]), ("versao_tiss", "TBVERSAOTISS>COD_VERSAO_TISS"))
+        for d in self.decl("TBTISS"):
+            if "SENHA" in d["coluna"] or "CERTIFICADO" in d["coluna"]:
+                self.assertFalse(d["destino"], d["coluna"])
+
+    def test_conta_auditoria_e_segurado(self):
+        c = self.cols("FCCTAEXT")
+        self.assertEqual(c["tipo_conta_id"]["cod"], ("tipo_conta", "codigo"))
+        self.assertEqual(c["tipo_conta_id"]["valores"],
+                         {"A": "ambulatorial", "E": "externa", "U": "urgencia", "I": "internacao"})
+        self.assertEqual(set(c["natureza"]["valores"].values()) - {"ambulatorial", "externo", "pronto_atendimento",
+                                                                   "internacao", "domiciliar"}, set())
+        self.assertEqual(c["paciente_id"]["passos"][0].get("coluna_destino"), "paciente_id")
+        self.assertEqual(c["atendimento_id"]["referencia"], "RECADATE")
+        s = self.cols("FCDIAEXT")
+        self.assertEqual(s["numero_carteira"]["passos"][-1], {"coluna": "MATRICULA"})
+        self.assertEqual(s["conta_hospitalar_id"]["passos"][0]["arg"], ["ANOPRO", "MESPRO", "COD"])
 
 
 class Regras(unittest.TestCase):
@@ -166,6 +216,16 @@ class Regras(unittest.TestCase):
         self.assertEqual(a("data_primeiro_dia_mes", datetime.date(2025, 2, 10)), (datetime.date(2025, 2, 1), None))
 
 
+def _comentadas():
+    """{tabela: [campos]} das declarações comentadas desta fatia."""
+    saida = {}
+    for l in (Path(mapa.DIR_PACOTE) / "declarado/colunas.d/L8-05.tsv").read_text(encoding="utf-8").splitlines():
+        if l.startswith("#") and "\t" in l:
+            p = l[1:].split("\t")
+            saida.setdefault(p[0], []).append(p)
+    return saida
+
+
 class Sintetica(unittest.TestCase):
     def test_esperado_coerente_com_as_linhas(self):
         cont = {}
@@ -175,13 +235,24 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith("restricao_destino_") or k == "pai_pendente")
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
-        for t in l8_05.BLOQUEADAS:  # presença na imagem, nada esperado no destino
-            self.assertEqual(cont[t], 2, t)
+        for t in l8_05.BLOQUEADAS + l8_05.SO_ORIGEM:  # presença na imagem, nada esperado no destino
+            self.assertEqual(cont[t], 2, t) if t not in l8_05.COM_LINHAS else self.assertGreater(cont[t], 2, t)
+
+    def test_cada_carregada_prova_linhas_gravadas(self):
+        """Toda tabela contada como carregada afirma linhas GRAVADAS no destino (a conciliação da conferência compara
+        com o que o banco tem). Exceção registrada: o campo TISS do valor padrão é lido de TBTISSPARDEF, que está só na
+        imagem da L8-04; aqui as 2 linhas provam a recusa visível (pai_inexistente + 1048)."""
+        esp = l8_05.linhas(random.Random(1), lambda t, v: None)
+        for t, e in esp.items():
+            if t == "TBCONVEN_TBTISSPARDEF":
+                self.assertEqual((e["gravados"], e["pendencias"]["pai_inexistente"]), (0, 2))
+                continue
+            self.assertGreater(e["gravados"], 0, t)
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, TABELAS | set(l8_05.BLOQUEADAS))
-        self.assertEqual(len(criadas), 23)
+        self.assertEqual(criadas, TABELAS | set(l8_05.BLOQUEADAS) | set(l8_05.SO_ORIGEM))
+        self.assertEqual(len(criadas), 26)
         self.assertNotIn("TBTISSPARDEF", criadas)  # DDL da L8-04 (imagem conjunta dos lotes)
 
     def test_colunas_das_linhas_batem_com_a_forma(self):
