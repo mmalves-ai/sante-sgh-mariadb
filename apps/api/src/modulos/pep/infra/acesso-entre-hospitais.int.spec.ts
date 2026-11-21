@@ -1,359 +1,260 @@
-// Integração do aviso e do acesso cruzado entre os estabelecimentos da rede nas DUAS cópias (M57, etapa 2; ficha,
-// seção 4 e regras 6 e 7), sempre em transações DESFEITAS, uma por banco (nenhuma cruza os bancos). A cópia 3351 é o
-// `pc` e a 3352, o estabelecimento sintético `sx` (D-COPIAS-57: o cadastro X de um é a mesma pessoa do X do outro):
-//   - o aviso "tem atendimentos em outro estabelecimento" lê o vínculo no banco da sessão e, no outro, só a contagem e as
-//     datas (RECADATE e RICADINT pelo prontuário): igual à contagem direta, p95 < 500 ms;
-//   - regra 6: com a regra da DP-42 desligada no outro estabelecimento, o acesso cruzado é recusado ANTES de qualquer
-//     leitura do prontuário e de qualquer trilha (nada escrito lá); sem vínculo ativo, 404; depois de desfeito, 404;
-//   - regra 7: com a regra ligada, a leitura vai à trilha DO BANCO ONDE O REGISTRO ESTÁ (o `sx`) pela operação de
-//     auditoria do M15 (Consulta do RES, opção 5146: SGH_TRILHA e TBCABTRILHA/TBLANTRILHASGH lá), antes da linha do
-//     tempo; no `pc`, só as tabelas do índice e a SGH_TRILHA do vínculo (nenhuma tabela do cadastro).
-// Nenhum dado de pessoa sai daqui: o login de um usuário com papel e o cadastro de amostra ficam só em memória; o log e
-// as evidências levam contagens e tempos.
-// Rodar: flock …/copia.lock flock …/copia2/copia.lock env FB_PC_PORTA=3351 SGH_INT_REDE_PORTA2=3352 ./pnpm exec vitest
-//        run --config apps/api/vitest.integracao.config.ts src/modulos/pep/infra
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import {
-  cadastroAtivoDeAmostraRede,
-  contarAtendimentosRede,
-  type Escritor,
-  escritasDaTransacao,
-  Executor,
-  gravarTrilha,
-  somenteSgh,
-  usuarioComPapelDeAmostraRede,
-} from '@sgh/legado';
+// Integração do acesso cruzado ao prontuário entre os estabelecimentos da rede (M57, etapa 2; ficha, seção 4 e regras
+// 6 e 7) sobre o banco PRÓPRIO do cliente (um banco por cliente: os estabelecimentos da rede moram no mesmo banco).
+// Cliente de teste f22_o4; massa SINTÉTICA do lote (estabelecimentos l0402r e l0402s, pessoas fictícias), montada no
+// beforeAll e apagada no afterAll. O MPI é a porta própria da rede (o vínculo é a unificação efetivada dos cadastros) e
+// a trilha é a própria (trilha_auditoria); o prontuário do outro estabelecimento (linha do tempo do M23) ainda não tem
+// adaptador próprio e entra como dublê que registra a ordem das chamadas:
+//   - regra 6: com o acesso cruzado desligado no outro estabelecimento, a recusa vem ANTES de qualquer leitura do
+//     prontuário e de qualquer trilha (nada gravado); sem vínculo ativo (ou com a unificação revertida), 404;
+//   - regra 7: com a regra ligada, a leitura vai à trilha NO ESTABELECIMENTO DO REGISTRO, antes da linha do tempo; sem
+//     trilha, sem dado (503).
+// Nenhum dado de pessoa: só contagens e ids sintéticos. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+import type { PedidoProntuarioRede } from '@sgh/contratos';
+import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import { type Escritor, NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RegistradorTrilhaLegado } from '../../../autorizacao/trilha-legado.js';
-import { ErroProblema } from '../../../problema.filter.js';
-import { ServicoMpiRede, type SessaoRede } from '../../rede/aplicacao/servico.js';
-import {
-  type AmbienteDuasCopias,
-  ambienteDuasCopias,
-  DUAS_COPIAS,
-  SEGUNDO,
-} from '../../rede/infra/duas-copias.spec-util.js';
-import { portaRedeNasTransacoes } from '../../rede/porta-legado.js';
-import { AcessoProntuarioRede } from '../acesso-rede.js';
-import { portaDocumentosLegado } from '../documentos-porta-legado.js';
-import { ServicoDocumentos } from '../documentos-servico.js';
+import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
+import { RegistradorTrilhaPropria } from '../../../autorizacao/trilha-propria.js';
+import { PortaRedePropria } from '../../rede/porta-propria.js';
+import { AcessoProntuarioRede, type SessaoAcessoRede } from '../acesso-rede.js';
+import type { ServicoDocumentos } from '../documentos-servico.js';
 
-const PEDIDO = { motivo: 'assistencia' as const, justificativa: 'Integração sintética do M57.2', pagina: 1 };
+const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
+const CLIENTE = 'f22_o4';
+const REDE = 'rede-l0402';
+const P = 'l0402';
+const AQUI = `${P}r`;
+const LA = `${P}s`;
+const PRONT = 904_022_000;
+const PEDIDO: PedidoProntuarioRede = { motivo: 'assistencia', justificativa: 'Integração sintética do M57.2', pagina: 1 };
 
-async function tabelasEscritas(e: Escritor): Promise<string[]> {
-  return [...new Set((await escritasDaTransacao(e)).map((w) => w.tabela))].sort();
+interface Massa {
+  estAqui: number;
+  estLa: number;
+  usuario: number;
+  pa: number;
+  pb: number;
+  pc: number;
+  pd: number;
+  pe: number;
 }
 
-function p95(ms: readonly number[]): number {
-  const o = [...ms].sort((a, b) => a - b);
-  return o[Math.min(o.length - 1, Math.ceil(o.length * 0.95) - 1)] ?? 0;
+async function limpar(e: Escritor): Promise<void> {
+  const est = '(SELECT id FROM estabelecimento WHERE codigo IN (?, ?))';
+  const cods = [AQUI, LA];
+  await e.executar(
+    `DELETE FROM unificacao_cadastro WHERE mantido_paciente_id IN (SELECT id FROM paciente WHERE cadastro_estabelecimento_id IN ${est})
+        OR absorvido_paciente_id IN (SELECT id FROM paciente WHERE cadastro_estabelecimento_id IN ${est})`,
+    [...cods, ...cods],
+  );
+  await e.executar(`DELETE FROM paciente WHERE cadastro_estabelecimento_id IN ${est}`, cods);
+  await e.executar('DELETE FROM pessoa_fisica WHERE nome LIKE ?', [`Pessoa sintética ${P}%`]);
+  await e.executar(`DELETE FROM trilha_auditoria WHERE estabelecimento_id IN ${est}`, cods);
+  await e.executar('DELETE FROM usuario WHERE login LIKE ?', [`${P}.%`]);
+  await e.executar('DELETE FROM estabelecimento WHERE codigo IN (?, ?)', cods);
 }
 
-describe.skipIf(!DUAS_COPIAS)('aviso e acesso cruzado nas duas cópias (transações desfeitas)', () => {
-  let a: AmbienteDuasCopias;
+describe.skipIf(SEM_BANCO)('acesso cruzado entre os estabelecimentos da rede (banco próprio, f22_o4)', () => {
+  let nucleo: NucleoProprio;
+  let m: Massa;
+  let rede: PortaRedePropria;
+  let ordem: string[];
+  let ligadas: Set<string>;
+  let trilhaFalha: boolean;
+  let acesso: AcessoProntuarioRede;
+
+  const sessao = (): SessaoAcessoRede => ({
+    rede: REDE,
+    hospital: AQUI,
+    porta: { cliente: CLIENTE, estabelecimento: m.estAqui, usuario: null, correlacao: `c-${P}`, rede: REDE, hospital: AQUI },
+    login: `${P}.medico`,
+    estacao: 'estacao-sintetica',
+    correlacao: `c-${P}`,
+  });
+  const trilhasLa = async (): Promise<number> =>
+    nucleo.lerSomente({ cliente: CLIENTE, correlacao: `conta-${P}` }, async (l) =>
+      Number((await l.uma('SELECT COUNT(*) AS n FROM trilha_auditoria WHERE estabelecimento_id = ?', [m.estLa]))?.['n']),
+    );
+
   beforeAll(async () => {
-    a = await ambienteDuasCopias();
-  }, 900_000);
+    nucleo = new NucleoProprio();
+    expect((await nucleo.cliente(CLIENTE)).banco).toBe('cliente_f22_o4');
+    m = await nucleo.escrever({ cliente: CLIENTE, correlacao: `preparo-${P}` }, async (e) => {
+      await limpar(e);
+      const agora = new Date();
+      const est = (codigo: string) =>
+        e.inserir('INSERT INTO estabelecimento (codigo, nome_fantasia, razao_social, criado_em) VALUES (?, ?, ?, ?)', [
+          codigo,
+          `Hospital sintético ${codigo}`,
+          `Hospital sintético ${codigo} (fictício)`,
+          agora,
+        ]);
+      const estAqui = await est(AQUI);
+      const estLa = await est(LA);
+      const usuario = await e.inserir('INSERT INTO usuario (login, nome, tipo_conta, criado_em) VALUES (?, ?, ?, ?)', [
+        `${P}.unificador`,
+        'Conta de serviço sintética',
+        'servico',
+        agora,
+      ]);
+      let n = 0;
+      const paciente = async (estab: number) => {
+        const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+          `Pessoa sintética ${P} ${++n}`,
+          agora,
+        ]);
+        return e.inserir(
+          `INSERT INTO paciente (pessoa_fisica_id, numero_prontuario, cadastro_estabelecimento_id, situacao, criado_em)
+           VALUES (?, ?, ?, 'ativo', ?)`,
+          [pf, PRONT + n, estab, agora],
+        );
+      };
+      const [pa, pb, pc, pd, pe] = [
+        await paciente(estAqui),
+        await paciente(estLa),
+        await paciente(estAqui),
+        await paciente(estAqui),
+        await paciente(estLa),
+      ];
+      await e.inserir(
+        `INSERT INTO unificacao_cadastro (mantido_paciente_id, absorvido_paciente_id, unificado_em, unificado_por_usuario_id,
+           justificativa, situacao, criado_em) VALUES (?, ?, ?, ?, ?, 'efetivada', ?)`,
+        [pa, pb, agora, usuario, 'Mesma pessoa sintética', agora],
+      );
+      await e.inserir(
+        `INSERT INTO unificacao_cadastro (mantido_paciente_id, absorvido_paciente_id, unificado_em, unificado_por_usuario_id,
+           justificativa, situacao, revertido_em, revertido_por_usuario_id, motivo_reversao, criado_em)
+         VALUES (?, ?, ?, ?, ?, 'revertida', ?, ?, ?, ?)`,
+        [pd, pe, agora, usuario, 'Mesma pessoa sintética', agora, usuario, 'Pessoas diferentes (sintético)', agora],
+      );
+      return { estAqui, estLa, usuario, pa, pb, pc, pd, pe };
+    });
+    rede = new PortaRedePropria(nucleo, CLIENTE, REDE, undefined, () => undefined);
+    await rede.carregar();
+    const trilhaPropria = new RegistradorTrilhaPropria(nucleo, CLIENTE);
+    const trilha: RegistradorTrilha = {
+      registrar: async (e) => {
+        ordem.push(`trilha:${e.hospital}`);
+        if (trilhaFalha) throw new Error('trilha fora do ar (simulada)');
+        return trilhaPropria.registrar(e);
+      },
+    };
+    const documentos = {
+      exigirPaciente: async (c: { hospital: string }, id: number) => {
+        ordem.push(`exigir:${c.hospital}:${id}`);
+      },
+      linhaTempo: async (c: { hospital: string }, id: number) => {
+        ordem.push(`linha:${c.hospital}:${id}`);
+        return {
+          eventos: [
+            {
+              chave: 'evento-sintetico',
+              tipo: 'registro',
+              quando: '2026-11-20T10:00:00',
+              titulo: 'Evolução sintética',
+              detalhe: null,
+              profissional: null,
+              situacao: null,
+              suspenso: false,
+              sigilo: false,
+            },
+          ],
+          pagina: 1,
+          temMais: false,
+        };
+      },
+    } as unknown as Pick<ServicoDocumentos, 'linhaTempo' | 'exigirPaciente'>;
+    acesso = new AcessoProntuarioRede({
+      rede,
+      documentos,
+      trilha,
+      ligadaNoEstabelecimento: async (_rede, hospital) => ligadas.has(hospital),
+    });
+  }, 120_000);
   afterAll(async () => {
-    await a?.nucleo.encerrar();
+    if (nucleo) {
+      await nucleo.escrever({ cliente: CLIENTE, correlacao: `limpeza-${P}` }, limpar);
+      await nucleo.encerrar();
+    }
   });
 
-  it('aviso só com contagens (p95 < 500 ms); regra 6 recusa antes de ler; regra 7 grava a trilha no banco do registro', async () => {
-    const r = await a.nucleo.desfazendoNaCopia(
-      { rede: a.rede, hospital: 'pc', traceId: 'int-m57-2-pc' },
-      (e1) =>
-        a.nucleo.desfazendoNaCopia(
-          { rede: a.rede, hospital: SEGUNDO, traceId: 'int-m57-2-sx' },
-          async (e2) => {
-            const brutos = new Map<string, Escritor>([
-              ['pc', e1],
-              [SEGUNDO, e2],
-            ]);
-            const porta = portaRedeNasTransacoes(
-              a.rede,
-              new Map([
-                ['pc', somenteSgh(e1)],
-                [SEGUNDO, somenteSgh(e2)],
-              ]),
-            );
-            // Correção do M57.2: com CPF no cadastro de usuários (a prova de que é a mesma pessoa nos dois bancos).
-            const login = await usuarioComPapelDeAmostraRede(e1, { comCpf: true });
-            if (!login) throw new Error('A cópia não tem usuário com papel ativo e CPF.');
-            const s: SessaoRede = {
-              rede: a.rede,
-              hospital: 'pc',
-              login,
-              trilha: (evento, operacao, alvo) => ({
-                rede: a.rede,
-                hospital: 'pc',
-                usuario: login,
-                evento,
-                recurso: 'rede.mpi',
-                operacao,
-                tabelaAlvo: 'SGH_REDE_VINCULO',
-                idAlvo: alvo.id ?? null,
-                chaveNaturalAlvo: alvo.chave,
-                resultado: 'sucesso',
-                estacao: 'SGH-TESTE:int-m57-2',
-                correlacao: 'int-m57-2',
-              }),
-            };
-            let n = 0;
-            const servico = new ServicoMpiRede(porta, {
-              novaPessoa: () => `int-m57-2-${Date.now().toString(36)}-${++n}`,
-            });
-            const x = await cadastroAtivoDeAmostraRede(e1);
-            if (!x) throw new Error('A cópia não tem cadastro ativo.');
-            const chave = `pc:${x.id}|${SEGUNDO}:${x.id}`;
-
-            // 0. Sem vínculo: o aviso não lê o outro banco.
-            const semVinculo = await servico.avisoDoPaciente(s, x.id, async () => ({
-              pode: false,
-              motivo: null,
-            }));
-
-            // 1. O par "é a mesma pessoa" nos dois bancos (como a fila da etapa 1 deixa).
-            for (const [est, outro] of [
-              ['pc', SEGUNDO],
-              [SEGUNDO, 'pc'],
-            ] as const)
-              await porta.gravar(
-                { rede: a.rede, hospital: est },
-                (g) =>
-                  g.candidatos([
-                    {
-                      chave,
-                      idLocal: x.id,
-                      prontuarioLocal: x.prontuario,
-                      estabelecimentoRemoto: outro,
-                      idRemoto: x.id,
-                      prontuarioRemoto: x.prontuario,
-                      pontuacao: 90,
-                      criterios: ['cpf', 'nome', 'nascimento'],
-                      divergencias: [],
-                      situacao: 'aberto',
-                      por: login,
-                      em: new Date().toISOString(),
-                    },
-                  ]),
-                null,
-              );
-            await servico.decidir(s, chave, { decisao: 'mesma_pessoa' });
-
-            // 2. O aviso (20 leituras; a primeira aquece) e a contagem direta no outro banco.
-            const tempos: number[] = [];
-            let aviso = await servico.avisoDoPaciente(s, x.id, async () => ({
-              pode: false,
-              motivo: 'DP-42',
-            }));
-            for (let i = 0; i < 20; i++) {
-              const t0 = performance.now();
-              aviso = await servico.avisoDoPaciente(s, x.id, async () => ({ pode: false, motivo: 'DP-42' }));
-              tempos.push(performance.now() - t0);
-            }
-            const direta = await contarAtendimentosRede(e2, x.prontuario);
-
-            // 3. O acesso cruzado: a trilha do outro banco pela operação de auditoria do M15, na transação desfeita dele.
-            const executor = new Executor({
-              ambiente: 'dev',
-              catalogo: { estado: () => 'verde' },
-              schema: { bloqueada: () => false },
-              ler: () => Promise.reject(new Error('não usado (escritor de quem chama)')),
-              escrever: () => Promise.reject(new Error('não usado (escritor de quem chama)')),
-            });
-            // As estatísticas de MON$ são um retrato fixo por transação (o primeiro acesso): as escritas só são lidas no fim;
-            // até lá, quem conta os registros na trilha é este invólucro.
-            const registros: string[] = [];
-            const proprias: { hospital: string; usuario: string }[] = [];
-            const trilha = new RegistradorTrilhaLegado(
-              {
-                registrarTrilhaPropria: async (ctx, linha) => {
-                  proprias.push({ hospital: ctx.hospital, usuario: linha.usuario });
-                  return { id: (await gravarTrilha(brutos.get(ctx.hospital)!, linha)).id };
-                },
-              },
-              {
-                executar: (op, hospital, entrada, ctx) => {
-                  registros.push(hospital);
-                  return executor.executar(op, hospital, entrada, ctx, { escritor: brutos.get(hospital)! });
-                },
-              },
-            );
-            let linhasLidas = 0;
-            const documentos = new ServicoDocumentos(
-              portaDocumentosLegado(a.nucleo, { estado: () => 'verde' }),
-            );
-            const ligada = { valor: false };
-            const acessoDocs = {
-              exigirPaciente: (c: Parameters<ServicoDocumentos['exigirPaciente']>[0], p: number) =>
-                documentos.exigirPaciente(c, p),
-              linhaTempo: async (...args: Parameters<ServicoDocumentos['linhaTempo']>) => {
-                linhasLidas++;
-                return documentos.linhaTempo(...args);
-              },
-            };
-            const acesso = new AcessoProntuarioRede({
-              rede: porta,
-              documentos: acessoDocs,
-              trilha,
-              ligadaNoEstabelecimento: async () => ligada.valor,
-            });
-            const sa = {
-              rede: a.rede,
-              hospital: 'pc',
-              login,
-              estacao: 'SGH-TESTE:int-m57-2',
-              correlacao: 'int-m57-2',
-            };
-            let recusa: string | null = null;
-            await acesso.abrir(sa, x.id, SEGUNDO, PEDIDO, null).catch((err: unknown) => {
-              recusa = err instanceof ErroProblema ? String(err.extras?.['codigo'] ?? err.tipo) : String(err);
-            });
-            const registrosNaRecusa = registros.length;
-            const lidasNaRecusa = linhasLidas;
-            ligada.valor = true;
-            const t0 = performance.now();
-            const aberto = await acesso.abrir(sa, x.id, SEGUNDO, PEDIDO, null);
-            const msAbrir = performance.now() - t0;
-            const registrosAoAbrir = registros.slice(registrosNaRecusa);
-            // Outro estabelecimento que não é da rede e o mesmo da sessão: recusados.
-            const foraDaRede = await acesso
-              .abrir(sa, x.id, 'zz', PEDIDO, null)
-              .then(() => null)
-              .catch((err: unknown) =>
-                err instanceof ErroProblema ? String(err.extras?.['codigo']) : 'outro',
-              );
-            const mesmo = await acesso
-              .abrir(sa, x.id, 'pc', PEDIDO, null)
-              .then(() => null)
-              .catch((err: unknown) =>
-                err instanceof ErroProblema ? String(err.extras?.['codigo']) : 'outro',
-              );
-
-            // 3b. D-TRILHA-REMOTA-57: o mesmo login como OUTRA pessoa no outro banco (CPF diferente lá, simulado na
-            // leitura): a leitura abre, mas nada vai ao executor de lá (a trilha do outro sistema); só a SGH_TRILHA lá.
-            const outraPessoa = new AcessoProntuarioRede({
-              rede: {
-                ...porta,
-                cpfDoLogin: async (c, l) => (c.hospital === SEGUNDO ? '99999999999' : porta.cpfDoLogin(c, l)),
-              },
-              documentos: { exigirPaciente: acessoDocs.exigirPaciente, linhaTempo: acessoDocs.linhaTempo },
-              trilha,
-              ligadaNoEstabelecimento: async () => true,
-            });
-            const registrosAntesOutra = registros.length;
-            const propriasAntesOutra = proprias.length;
-            await outraPessoa.abrir(sa, x.id, SEGUNDO, PEDIDO, null);
-            const registrosOutraPessoa = registros.length - registrosAntesOutra;
-            const trilhaSxOutraPessoa = proprias.slice(propriasAntesOutra);
-
-            // 4. Desfeito o vínculo: o aviso some e o acesso cruzado não acha o cadastro de lá.
-            await servico.desfazer(s, chave, {
-              justificativa: 'Integração sintética do M57.2',
-              reabrir: false,
-            });
-            const avisoDepois = await servico.avisoDoPaciente(s, x.id, async () => ({
-              pode: true,
-              motivo: null,
-            }));
-            const semVinculoDepois = await acesso
-              .abrir(sa, x.id, SEGUNDO, PEDIDO, null)
-              .then(() => null)
-              .catch((err: unknown) =>
-                err instanceof ErroProblema ? String(err.extras?.['codigo']) : 'outro',
-              );
-            return {
-              semVinculo,
-              aviso,
-              direta,
-              tempos,
-              recusa,
-              registrosNaRecusa,
-              registrosAoAbrir,
-              registrosOutraPessoa,
-              trilhaSxOutraPessoa,
-              lidasNaRecusa,
-              aberto: {
-                eventos: aberto.eventos.length,
-                idRemoto: aberto.idRemoto,
-                est: aberto.estabelecimento,
-              },
-              msAbrir,
-              escritasSx: await escritasDaTransacao(e2),
-              foraDaRede,
-              mesmo,
-              avisoDepois,
-              semVinculoDepois,
-              idAmostra: x.id,
-              escritasPc: await tabelasEscritas(e1),
-            };
-          },
-        ),
+  const recusa = (p: Promise<unknown>) =>
+    p.then(
+      () => null,
+      (e: { getStatus(): number; extras?: { codigo?: string } }) => ({ status: e.getStatus(), codigo: e.extras?.codigo }),
     );
 
-    const ms = p95(r.tempos);
-    const seguro = (v: number) => (v > 0 && v < 5 ? '<5' : String(v));
-    const trilhaSx = r.escritasSx
-      .filter((w) => /TRILHA/.test(w.tabela))
-      .map((w) => w.tabela)
-      .sort();
-    const pasta = resolve(import.meta.dirname, '../../../../../../.tmp');
-    mkdirSync(pasta, { recursive: true });
-    writeFileSync(
-      resolve(pasta, 'int-m57-2-aviso.json'),
-      `${JSON.stringify(
-        {
-          avisoP95Ms: Math.round(ms),
-          avisoMaxMs: Math.round(Math.max(...r.tempos)),
-          abrirMs: Math.round(r.msAbrir),
-          atendimentos: seguro(r.direta.atendimentos),
-          internacoes: seguro(r.direta.internacoes),
-          eventosLinhaDoTempo: seguro(r.aberto.eventos),
-          trilhaNoBancoDoRegistro: trilhaSx,
-          escritasPc: r.escritasPc,
-        },
-        null,
-        2,
-      )}\n`,
-    );
-    console.log(
-      `[int-m57-2] aviso p95 ${Math.round(ms)} ms; abrir ${Math.round(r.msAbrir)} ms; trilha no banco do registro: ${trilhaSx.join(', ')}`,
-    );
-
-    expect(r.semVinculo.situacao).toBe('sem-vinculo');
-    expect(r.aviso.estabelecimentos).toHaveLength(1);
-    expect(r.aviso.estabelecimentos[0]).toMatchObject({
-      estabelecimento: SEGUNDO,
-      idRemoto: r.idAmostra,
-      disponivel: true,
-      atendimentos: r.direta.atendimentos,
-      internacoes: r.direta.internacoes,
-      ultimoAtendimento: r.direta.ultimoAtendimento,
-      ultimaInternacao: r.direta.ultimaInternacao,
-      podeAbrir: false,
+  it('regra 6: desligado no outro estabelecimento, recusa antes de ler e de gravar a trilha', async () => {
+    ordem = [];
+    ligadas = new Set([AQUI]);
+    trilhaFalha = false;
+    const antes = await trilhasLa();
+    expect(await recusa(acesso.abrir(sessao(), m.pa, LA, PEDIDO, null))).toEqual({
+      status: 403,
+      codigo: 'recurso-desligado',
     });
-    expect(r.aviso.situacao).toBe(
-      r.direta.atendimentos + r.direta.internacoes > 0 ? 'com-atendimentos' : 'sem-atendimentos',
+    expect(ordem).toEqual([]);
+    expect(await trilhasLa()).toBe(antes);
+  });
+
+  it('fora da rede (o próprio estabelecimento ou código inexistente): 403 antes de qualquer leitura', async () => {
+    ordem = [];
+    ligadas = new Set([AQUI, LA]);
+    expect(await recusa(acesso.abrir(sessao(), m.pa, AQUI, PEDIDO, null))).toEqual({ status: 403, codigo: 'fora-da-rede' });
+    expect(await recusa(acesso.abrir(sessao(), m.pa, `${P}zz`, PEDIDO, null))).toEqual({
+      status: 403,
+      codigo: 'fora-da-rede',
+    });
+    expect(ordem).toEqual([]);
+  });
+
+  it('sem vínculo ativo (nenhuma unificação, ou a revertida): 404 e nada gravado', async () => {
+    ordem = [];
+    ligadas = new Set([AQUI, LA]);
+    const antes = await trilhasLa();
+    expect(await recusa(acesso.abrir(sessao(), m.pc, LA, PEDIDO, null))).toEqual({
+      status: 404,
+      codigo: 'sem-vinculo-rede',
+    });
+    expect(await recusa(acesso.abrir(sessao(), m.pd, LA, PEDIDO, null))).toEqual({
+      status: 404,
+      codigo: 'sem-vinculo-rede',
+    });
+    expect(ordem).toEqual([]);
+    expect(await trilhasLa()).toBe(antes);
+  });
+
+  it('regra 7: a leitura vai à trilha no estabelecimento do registro, antes da linha do tempo', async () => {
+    ordem = [];
+    ligadas = new Set([AQUI, LA]);
+    trilhaFalha = false;
+    const antes = await trilhasLa();
+    const r = await acesso.abrir(sessao(), m.pa, LA, PEDIDO, null);
+    expect(r).toMatchObject({ estabelecimento: LA, idRemoto: m.pb, pagina: 1, temMais: false });
+    expect(r.eventos).toHaveLength(1);
+    expect(ordem).toEqual([`exigir:${LA}:${m.pb}`, `trilha:${LA}`, `linha:${LA}:${m.pb}`]);
+    expect(await trilhasLa()).toBe(antes + 1);
+    const t = await nucleo.lerSomente({ cliente: CLIENTE, correlacao: `conta-${P}` }, (l) =>
+      l.uma<{ entidade_id: unknown; usuario_id: unknown; evento: unknown }>(
+        `SELECT entidade_id, usuario_id, JSON_VALUE(dados_depois, '$.evento') AS evento
+           FROM trilha_auditoria WHERE estabelecimento_id = ? ORDER BY id DESC LIMIT 1`,
+        [m.estLa],
+      ),
     );
-    expect(ms).toBeLessThan(500);
-    // Regra 6: desligada lá → recusa antes de ler o prontuário e de gravar a trilha lá.
-    expect(r.recusa).toBe('recurso-desligado');
-    expect(r.lidasNaRecusa).toBe(0);
-    expect(r.registrosNaRecusa).toBe(0);
-    expect(r.foraDaRede).toBe('fora-da-rede');
-    expect(r.mesmo).toBe('fora-da-rede');
-    // Regra 7: a leitura na trilha do banco onde o registro está (dupla: a própria e a do outro sistema).
-    expect(r.aberto).toMatchObject({ idRemoto: r.idAmostra, est: SEGUNDO });
-    expect(r.registrosAoAbrir).toEqual([SEGUNDO]);
-    expect(trilhaSx).toEqual(expect.arrayContaining(['SGH_TRILHA', 'TBCABTRILHA']));
-    // D-TRILHA-REMOTA-57: outra pessoa com o mesmo login lá → nada pelo executor de lá; uma linha da SGH_TRILHA lá.
-    expect(r.registrosOutraPessoa).toBe(0);
-    expect(r.trilhaSxOutraPessoa).toEqual([{ hospital: SEGUNDO, usuario: '(desconhecido)' }]);
-    // Nenhuma tabela do cadastro em nenhum dos bancos (regra 1).
-    for (const t of [...r.escritasPc, ...r.escritasSx.map((w) => w.tabela)])
-      expect(t).toMatch(/^(SGH_|TBCABTRILHA$|TBLANTRILHASGH$)/);
-    expect(r.avisoDepois.situacao).toBe('sem-vinculo');
-    expect(r.semVinculoDepois).toBe('sem-vinculo-rede');
-  }, 900_000);
+    // O login da sessão não é provadamente a mesma pessoa lá: a trilha fica sem usuário (falha fechada).
+    expect({ entidade: Number(t?.entidade_id), usuario: t?.usuario_id ?? null, evento: t?.evento }).toEqual({
+      entidade: m.pb,
+      usuario: null,
+      evento: EVENTOS_AUDITAVEIS.prontuarioRedeLido.codigo,
+    });
+  });
+
+  it('regra 7: sem trilha, sem dado (503 e a linha do tempo não é lida)', async () => {
+    ordem = [];
+    ligadas = new Set([AQUI, LA]);
+    trilhaFalha = true;
+    expect(await recusa(acesso.abrir(sessao(), m.pa, LA, PEDIDO, null))).toMatchObject({ status: 503 });
+    expect(ordem).toEqual([`exigir:${LA}:${m.pb}`, `trilha:${LA}`]);
+    trilhaFalha = false;
+  });
 });

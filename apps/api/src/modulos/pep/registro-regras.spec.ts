@@ -17,7 +17,6 @@ import {
   type RespostaRegistro,
 } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
-import type { ProfissionalDoRegistro } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import type { ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -33,9 +32,10 @@ import { RegistroClinicoController } from './registro.controller.js';
 import { PortaRegistroMemoria } from './registro-porta-memoria.js';
 import { motivoDoFormulario, ServicoRegistro } from './registro-servico.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
+import type { ProfissionalDoRegistro } from './tipos-pep.js';
 
 const PERMISSOES = ['pep.evolucao.ler', 'pep.evolucao.criar', 'pep.evolucao.suspender'];
-const C = { rede: 'rede-teste', hospital: 'aa' };
+const C = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'rede-teste', hospital: 'aa' };
 
 const texto = (vinculo: number, t: string): RespostaRegistro => ({
   vinculo,
@@ -355,6 +355,7 @@ describe('liberação por modelo e cache da representação', () => {
       tipoComposicao: 2,
       nomeTipoComposicao: 'Evolução',
       especialidades: [],
+      aposentado: false,
       usoRecente: 1,
     };
     const alergia = { tipo: 'alergias', itens: [] } as unknown as CampoRegistro;
@@ -376,15 +377,15 @@ describe('liberação por modelo e cache da representação', () => {
   it('a representação em cache é separada por rede (o mesmo estabelecimento, modelo e selo)', async () => {
     let lidas = 0;
     class Contadora extends PortaRegistroMemoria {
-      override async definicao(c: { rede: string; hospital: string }, modelo: number) {
+      override async definicao(c: Parameters<PortaRegistroMemoria['definicao']>[0], modelo: number) {
         lidas++;
         return super.definicao(c, modelo);
       }
     }
     const servico = new ServicoRegistro(new Contadora());
-    await servico.representacao({ rede: 'r1', hospital: 'aa' }, 61);
-    await servico.representacao({ rede: 'r1', hospital: 'aa' }, 61);
-    await servico.representacao({ rede: 'r2', hospital: 'aa' }, 61);
+    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r1', hospital: 'aa' }, 61);
+    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r1', hospital: 'aa' }, 61);
+    await servico.representacao({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r2', hospital: 'aa' }, 61);
     expect(lidas).toBe(2);
   });
 });

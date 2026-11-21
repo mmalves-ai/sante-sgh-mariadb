@@ -2,11 +2,10 @@
 // gestão documental com revisão e ciência, os indicadores da competência com a análise crítica, a auditoria por checklist,
 // a comissão e a reunião, o risco GUT, a não conformidade, a ouvidoria com o NPS e os envios com o resumo SHA-256; a
 // chave de liberação, as permissões e a trilha sem relato, manifestante nem conteúdo.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -133,7 +132,7 @@ async function montar(o: { semChave?: boolean } = {}) {
       })
     : undefined;
   const porta = new PortaGestaoMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppQualidade(env, {
     trilha,
     gestao: porta,
     ccih: ccihDeSetembro(),

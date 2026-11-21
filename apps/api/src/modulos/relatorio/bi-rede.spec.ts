@@ -9,7 +9,10 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { FonteInternacaoMemoria } from '../internacao/fonte-memoria.js';
+import { modulo as moduloInternacao } from '../internacao/modulo.js';
+import { moduloRede } from '../rede/modulo.js';
 import { PortaServicosRedeMemoria } from '../rede/servicos/porta-memoria.js';
+import { moduloRelatorio } from './modulo.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
@@ -17,10 +20,15 @@ const servicos = new PortaServicosRedeMemoria();
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  const comModulos = { ...env, API_MODULOS: 'relatorio,rede,internacao' };
+  const fonte = new FonteInternacaoMemoria({ variantes: { bb: { semente: 2057, fator: 0.6 } } });
+  app = await criarApp(lerConfiguracao(comModulos), null, comModulos, {
     trilha,
-    internacao: new FonteInternacaoMemoria({ variantes: { bb: { semente: 2057, fator: 0.6 } } }),
-    servicosRede: servicos,
+    registro: {
+      relatorio: async () => ({ modulo: (ctx) => moduloRelatorio(ctx) }),
+      rede: async () => ({ modulo: (ctx) => moduloRede(ctx, { servicos }) }),
+      internacao: async () => ({ modulo: (ctx) => moduloInternacao(ctx, { fonte, vigia: null }) }),
+    },
   });
   await app.init();
 });
@@ -60,7 +68,7 @@ describe('BI consolidado da Rede (HTTP)', () => {
     diretoria = await entrar('SINT.DIRETORIA');
   });
 
-  it('regra 10: a diretoria da Rede tem o BI e nenhuma permissão do prontuário; o prontuário responde 403', async () => {
+  it('regra 10: a diretoria da Rede tem o BI e nenhuma permissão do prontuário; o prontuário nunca abre', async () => {
     const s = (await get(rede, '/api/sessao')).json() as { permissoes: string[] };
     expect(s.permissoes).toEqual(
       expect.arrayContaining(['relatorio.biRede.acessar', 'rede.servico.registrar']),
@@ -68,7 +76,8 @@ describe('BI consolidado da Rede (HTTP)', () => {
     expect(s.permissoes.filter((p) => p.startsWith('pep.'))).toEqual([]);
     expect(s.permissoes).not.toContain('cadastro.paciente.ler');
     for (const url of ['/api/pep/paciente/1/cabecalho', '/api/pep/paciente/1/linha-do-tempo'])
-      expect((await get(rede, url)).statusCode).toBe(403);
+      // 403 com o módulo do prontuário montado; nesta app (só relatorio, rede e internacao), a rota nem existe (404).
+      expect([403, 404]).toContain((await get(rede, url)).statusCode);
   });
 
   it('o consolidado: os dois estabelecimentos, a soma dos numeradores sobre a dos denominadores e a conta', async () => {

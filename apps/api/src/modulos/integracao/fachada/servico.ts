@@ -1,8 +1,8 @@
 // M58-F4 (ficha do M58, seção 7 e regras 8 e 9; cap-12, Decisão): o serviço da fachada da API de integração da Hal-AI.
 // Recebe o pedido no caminho da API original, confere o token da superfície, decide o modo da operação (servida,
 // repassada ou desligada) pela configuração do estabelecimento e responde no contrato de erro da API original. As
-// rotas servidas leem pelo @sgh/legado; a ação de situação do convênio passa pelo motor de dois tempos e grava pelo
-// executor, assinada por hal-ai. O painel mostra o estado sem nunca mostrar o token.
+// rotas servidas leem pela porta da fachada; a ação de situação do convênio passa pelo motor de dois tempos e grava
+// pelo Executor, assinada por hal-ai. O painel mostra o estado sem nunca mostrar o token.
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -140,7 +140,7 @@ export const repassarPorFetch: Repassador = async (p) => {
 export interface DependenciasFachada {
   readonly porta: PortaFachada;
   readonly tokens: TokensFachada;
-  /** Os valores de parâmetro do estabelecimento (SGH_CFG_PARAMETRO); null: só os padrões. */
+  /** Os valores de parâmetro do estabelecimento (configuração); null: só os padrões. */
   readonly valores: ((rede: string, hospital: string) => Promise<readonly ValorParametro[]>) | null;
   readonly repassar?: Repassador;
   /** docs/marcos/M58 (o relatório do ensaio do UTF-8 por hospital: <h>/utf8.json). */

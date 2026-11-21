@@ -58,7 +58,9 @@ import {
   propostaDeClassificacao,
   type RecusaFluxo,
 } from '@sgh/dominio-qualidade';
-import type { LinhaTrilha, NotificacaoSghLida } from '@sgh/legado';
+import type { NotificacaoRegistrada } from './tipos.js';
+import { comAto } from '../enfermagem/gravacao-direta.js';
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { REGISTRADOR_TRILHA } from '../../autorizacao/simbolos.js';
@@ -91,7 +93,7 @@ import { inicioDoTurno, RESUMO_SUGESTAO, type ResumoSugestao } from './servico-s
 /** A chave da funcionalidade (recursos de liberação do M08; ficha, seção 12). */
 export const CHAVE_QUALIDADE_NOTIFICACAO = 'qualidade.notificacao';
 const E = EVENTOS_AUDITAVEIS;
-const TABELA = 'SGH_QUA_NOTIFICACAO';
+const TABELA = 'notificacao_incidente';
 const POR_PAGINA = 50;
 const CHAVE = /^[A-Za-z0-9._:-]{8,80}$/;
 /** Tentativas de acompanhamento por sessão e minuto (o código não se adivinha por força bruta). */
@@ -174,7 +176,7 @@ export class NotificacaoController {
     return calendario(await this.porta.feriados(s.porta, de, ate), anos);
   }
 
-  private async notificacaoOu404(s: SessaoCadastro, id: number): Promise<NotificacaoSghLida> {
+  private async notificacaoOu404(s: SessaoCadastro, id: number): Promise<NotificacaoRegistrada> {
     const n = await this.porta.notificacao(s.porta, id);
     if (!n) throw naoEncontrada();
     return n;
@@ -198,7 +200,7 @@ export class NotificacaoController {
     s: SessaoCadastro,
     evento: string,
     recurso: string,
-    n: NotificacaoSghLida,
+    n: NotificacaoRegistrada,
     fn: (g: GravadorQualidade) => Promise<T>,
   ): Promise<T> {
     return this.apoio.sgh(s, evento, recurso, { tabela: TABELA, id: String(n.id), chave: n.protocolo }, fn);
@@ -230,7 +232,7 @@ export class NotificacaoController {
   @HttpCode(201)
   @Permissao(P.notificacaoCriar)
   @AuditadoNoHandler(
-    'qualidade.notificarIncidente: SGH_QUA_NOTIFICACAO e o evento recebida com a SGH_TRILHA na mesma transação (anônima por anonimo, sem estação)',
+    'qualidade.notificarIncidente: notificacao_incidente e o evento recebida com a trilha_auditoria na mesma transação (anônima por anonimo, sem estação)',
   )
   async notificar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -268,32 +270,28 @@ export class NotificacaoController {
     const classificacao = propostaDeClassificacao(e.chegouAoPaciente, e.danoPercebido);
     const evento = E.qualidadeIncidenteNotificado.codigo;
     const operacao = 'qualidade.notificarIncidente';
-    const trilhaDe = (r: { id: number; protocolo: string }): LinhaTrilha =>
-      e.anonima
+    // Regra de anonimato: a trilha da anônima vai sem a conta e sem a estação (só o evento, o alvo e o protocolo).
+    const trilhaDe = (r: { id: number; protocolo: string }): TrilhaDaGravacao => {
+      const l = linhaTrilha(s, evento, P.notificacaoCriar, operacao, { tabela: TABELA, id: String(r.id), chave: r.protocolo });
+      return e.anonima
         ? {
-            rede: s.rede,
-            hospital: s.hospital,
-            usuario: ATOR_ANONIMO,
-            evento,
-            recurso: P.notificacaoCriar,
-            operacao,
-            tabelaAlvo: TABELA,
-            idAlvo: String(r.id),
-            chaveNaturalAlvo: r.protocolo,
-            resultado: 'sucesso',
-            estacao: null,
+            ...l,
+            usuario: null,
             correlacao: 'notificacao',
-            idPaciente: null,
+            dadosDepois: { evento, recurso: P.notificacaoCriar, operacao, chave: r.protocolo },
           }
-        : linhaTrilha(s, evento, P.notificacaoCriar, operacao, {
-            tabela: TABELA,
-            id: String(r.id),
-            chave: r.protocolo,
-          });
+        : l;
+    };
     // Etapa 2 (regra 4 e regra 1): a sugestão de onde o diálogo veio fica resolvida pelo resumo (origem + login, sem
     // ligar a pessoa à notificação), e a anônima guarda só a fonte da sugestão (sem o ID do registro de origem).
     const sugestao = e.origem.sugestao && lerOrigem(e.origem.sugestao) ? e.origem.sugestao : null;
-    const r = await this.porta.gravarSgh(s.porta, trilhaDe, async (g) => {
+    // Regra de anonimato: a gravação anônima vai sem a conta E sem a correlação da requisição (o cabeçalho poderia ligar
+    // a linha da trilha às outras requisições da mesma pessoa); a correlação é a fixa `notificacao`.
+    // O reenvio pela mesma chave do diálogo é o mesmo ato (idempotência do Executor: o resultado guardado, sem trilha nova);
+    // o ato guarda só o resumo da chave, nunca a chave crua.
+    const semAto = e.anonima ? { ...s.porta, usuario: null, correlacao: 'notificacao' } : s.porta;
+    const contextoGravacao = chave ? comAto(semAto, resumoDaChave(s.hospital, chave), e) : semAto;
+    const r = await this.porta.gravarSgh(contextoGravacao, trilhaDe, async (g) => {
       const x = await g.notificar({
         agora,
         protocoloDe: formatarProtocolo,
@@ -304,7 +302,6 @@ export class NotificacaoController {
         ocorridoEm: e.anonima && sugestao !== null ? inicioDoTurno(e.ocorridoEm) : e.ocorridoEm,
         atendimento: ctx?.atendimento ?? null,
         paciente: ctx?.paciente ?? null,
-        registro: ctx?.registro ?? null,
         unidade,
         leito: ctx?.leito ?? null,
         local: e.local,
@@ -332,9 +329,9 @@ export class NotificacaoController {
         evento,
         rede: s.rede,
         hospital: s.hospital,
-        usuario: l.usuario,
-        estacao: l.estacao ?? '',
-        correlacao: l.correlacao,
+        usuario: e.anonima ? ATOR_ANONIMO : s.login,
+        estacao: '',
+        correlacao: l.correlacao ?? 'notificacao',
         recurso: P.notificacaoCriar,
         resultado: 'sucesso',
         tabelaAlvo: 'MEMORIA',
@@ -440,7 +437,7 @@ export class NotificacaoController {
     const s = sessaoDe(req);
     const r = await this.porta.lista(s.porta, { situacao: 'recebida', pagina: 1, porPagina: 500 });
     const graves = r.itens.filter((n) => exigeAtencaoImediata(n.dano as GrauDano, n.neverEvent));
-    const maisAntiga = (xs: readonly NotificacaoSghLida[]) =>
+    const maisAntiga = (xs: readonly NotificacaoRegistrada[]) =>
       [...xs].sort((a, b) => a.notificadaEm.localeCompare(b.notificadaEm) || a.id - b.id)[0] ?? null;
     const n = maisAntiga(graves) ?? maisAntiga(r.itens);
     req.sghAlvo = { tabelaAlvo: TABELA, ...(n ? { idAlvo: String(n.id) } : { chaveNaturalAlvo: 'nenhuma' }) };
@@ -530,7 +527,7 @@ export class NotificacaoController {
   @Post('nsp/notificacoes/:id/triar')
   @HttpCode(200)
   @Permissao(P.notificacaoTriar)
-  @AuditadoNoHandler('qualidade.triarNotificacao: SGH_QUA_NOTIFICACAO e a linha do tempo com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.triarNotificacao: notificacao_incidente e a linha do tempo com a trilha_auditoria')
   async triar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaTriarNotificacao, { ...(b as object), notificacao: idDaRota(id) });
@@ -575,7 +572,7 @@ export class NotificacaoController {
   @HttpCode(200)
   @Permissao(P.notificacaoTriar)
   @AuditadoNoHandler(
-    'qualidade.triarNotificacao (descartada): SGH_QUA_NOTIFICACAO e a linha do tempo com a SGH_TRILHA',
+    'qualidade.triarNotificacao (descartada): notificacao_incidente e a linha do tempo com a trilha_auditoria',
   )
   async descartar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -607,7 +604,7 @@ export class NotificacaoController {
   @HttpCode(200)
   @Permissao(P.notificacaoTriar)
   @AuditadoNoHandler(
-    'qualidade.distribuirNotificacao: SGH_QUA_NOTIFICACAO e a linha do tempo com a SGH_TRILHA',
+    'qualidade.distribuirNotificacao: notificacao_incidente e a linha do tempo com a trilha_auditoria',
   )
   async distribuir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -648,7 +645,7 @@ export class NotificacaoController {
   @Post('nsp/notificacoes/:id/devolutiva')
   @HttpCode(200)
   @Permissao(P.notificacaoTriar)
-  @AuditadoNoHandler('qualidade.devolverAoNotificador: a linha do tempo com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.devolverAoNotificador: a linha do tempo com a trilha_auditoria')
   async devolutiva(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaDevolverAoNotificador, { ...(b as object), notificacao: idDaRota(id) });
@@ -699,7 +696,7 @@ export class NotificacaoController {
   @HttpCode(200)
   @Permissao(P.notivisaExportar)
   @AuditadoNoHandler(
-    'os campos do Notivisa: NOTIVISA_EXPORTADA_EM e o evento notivisaExportada (uma vez) com a SGH_TRILHA',
+    'os campos do Notivisa: NOTIVISA_EXPORTADA_EM e o evento notivisaExportada (uma vez) com a trilha_auditoria',
   )
   async camposNotivisa(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -741,7 +738,7 @@ export class NotificacaoController {
   @HttpCode(200)
   @Permissao(P.notivisaExportar)
   @AuditadoNoHandler(
-    'qualidade.registrarTranscricaoNotivisa: SGH_QUA_NOTIFICACAO e a linha do tempo com a SGH_TRILHA',
+    'qualidade.registrarTranscricaoNotivisa: notificacao_incidente e a linha do tempo com a trilha_auditoria',
   )
   async transcricao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);

@@ -1,23 +1,9 @@
-// Porta da notificação compulsória (M48, etapa 4; ADR 0031): as leituras do outro sistema (cadastro de CID notificável,
-// atendimentos com CID, óbitos, resultados reagentes, paciente, unidade, modelos e perguntas da ficha) e das SGH_ (a
-// declaração de óbito do M23, os casos e os gatilhos de exame do 0484), e as gravações só do novo (SGH_QUA_AGRAVO_*)
-// numa transação SGH_ com a SGH_TRILHA junto. Duas implementações: sobre o núcleo do legado (a cópia) e em memória
-// (dev/ci e os testes; dados sintéticos).
-import type {
-  AtendimentoComCidLido,
-  AtendimentoParaAgravo,
-  CasoAgravoSgh,
-  CasoAgravoSghLido,
-  CidNotificavelLido,
-  ExameParaAgravo,
-  FiltroCasosAgravoSgh,
-  GatilhoExameSghLido,
-  ObitoComCidLido,
-  PacienteAgravoLido,
-  ResultadoCandidatoLido,
-  UnidadeAgravoLida,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+// Porta da notificação compulsória (M48, etapa 4): o cadastro de CID notificável, os atendimentos com CID, os óbitos, os
+// resultados reagentes, o paciente, a unidade, os modelos e perguntas da ficha, os casos e os gatilhos de exame, com as
+// gravações numa transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente
+// (porta-agravo-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
+import type { AtendimentoComCid, AtendimentoParaAgravo, CasoAgravoNovo, CasoAgravoRegistrado, CidNotificavelCadastro, ExameParaAgravo, FiltroCasosAgravo, GatilhoExameRegistrado, ObitoComCid, PacienteDoAgravo, ResultadoCandidato, UnidadeDoAgravo } from './tipos.js';
+import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_AGRAVO = Symbol('PORTA_AGRAVO');
 
@@ -26,7 +12,7 @@ type SemHospital<T> = Omit<T, 'hospital'>;
 
 /** Gravações só do novo (as regras puras conferidas antes, na API). */
 export interface GravadorAgravo {
-  abrirCaso(c: SemHospital<CasoAgravoSgh>): Promise<{ id: number }>;
+  abrirCaso(c: SemHospital<CasoAgravoNovo>): Promise<{ id: number }>;
   registrarNotificacao(r: {
     readonly id: number;
     readonly versao: number;
@@ -63,25 +49,25 @@ type C = ContextoAgravo;
 export interface PortaAgravo extends PortaGravacaoM18<GravadorAgravo> {
   /** O relógio do banco do estabelecimento (instante local `AAAA-MM-DDTHH:mm:ss`). */
   relogio(c: C): Promise<string>;
-  cidsNotificaveis(c: C): Promise<CidNotificavelLido[]>;
+  cidsNotificaveis(c: C): Promise<CidNotificavelCadastro[]>;
   cidDoCadastro(c: C, cid: string): Promise<{ cid: string; nome: string; codigoCadastro: number } | null>;
-  atendimentosComCid(c: C, desde: string): Promise<{ itens: AtendimentoComCidLido[]; cortado: boolean }>;
-  obitos(c: C, desde: string): Promise<ObitoComCidLido[]>;
+  atendimentosComCid(c: C, desde: string): Promise<{ itens: AtendimentoComCid[]; cortado: boolean }>;
+  obitos(c: C, desde: string): Promise<ObitoComCid[]>;
   resultados(
     c: C,
     desde: string,
     padroes: readonly string[],
     termos: readonly string[],
-  ): Promise<{ itens: ResultadoCandidatoLido[]; cortado: boolean }>;
+  ): Promise<{ itens: ResultadoCandidato[]; cortado: boolean }>;
   atendimento(c: C, id: number): Promise<AtendimentoParaAgravo | null>;
   declaracaoObito(c: C, atendimento: number): Promise<string | null>;
   exame(c: C, id: number): Promise<ExameParaAgravo | null>;
-  pacientes(c: C, ids: readonly number[]): Promise<Map<number, PacienteAgravoLido>>;
-  unidades(c: C): Promise<Map<number, UnidadeAgravoLida>>;
+  pacientes(c: C, ids: readonly number[]): Promise<Map<number, PacienteDoAgravo>>;
+  unidades(c: C): Promise<Map<number, UnidadeDoAgravo>>;
   modelosFicha(c: C): Promise<{ id: number; nome: string }[]>;
   perguntasFicha(c: C, modelo: number): Promise<{ codigo: number; subcodigo: number; texto: string }[]>;
-  caso(c: C, id: number): Promise<CasoAgravoSghLido | null>;
-  casos(c: C, f: FiltroCasosAgravoSgh): Promise<{ itens: CasoAgravoSghLido[]; total: number }>;
+  caso(c: C, id: number): Promise<CasoAgravoRegistrado | null>;
+  casos(c: C, f: FiltroCasosAgravo): Promise<{ itens: CasoAgravoRegistrado[]; total: number }>;
   casosDesde(
     c: C,
     desde: string,
@@ -101,7 +87,7 @@ export interface PortaAgravo extends PortaGravacaoM18<GravadorAgravo> {
     agora: string,
     inicioDoMes: string,
   ): Promise<{ abertos: number; imediatosAbertos: number; vencidos: number; notificadosNoMes: number }>;
-  gatilhosExame(c: C): Promise<GatilhoExameSghLido[]>;
+  gatilhosExame(c: C): Promise<GatilhoExameRegistrado[]>;
 }
 
 /** Os métodos da porta (a porta indisponível recusa todos). */
@@ -128,3 +114,8 @@ export const METODOS_PORTA_AGRAVO: ReadonlySet<string> = new Set([
   'contagem',
   'gatilhosExame',
 ]);
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaAgravoIndisponivel(): PortaAgravo {
+  return portaIndisponivel<PortaAgravo>(METODOS_PORTA_AGRAVO);
+}

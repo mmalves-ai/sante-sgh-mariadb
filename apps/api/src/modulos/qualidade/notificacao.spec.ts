@@ -5,12 +5,11 @@
 // tentativas; o NSP lista, tria (reclassificar exige justificativa; a versão velha é recusada), descarta, distribui,
 // devolve e transcreve no Notivisa; a fila de prazos com o óbito em 72 h; os campos do Notivisa só com as iniciais; a
 // chave desligada deixa tudo em consulta.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { cifrarSenha } from '@sgh/dominio-acesso';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { ArmazemMemoria } from '../../sessao/armazem.js';
 import { envTeste, REDE, SENHA } from '../../sessao/teste.spec-util.js';
 import {
@@ -45,7 +44,7 @@ async function montar(o: { semChave?: boolean } = {}) {
         parametrosIniciais: parametrosIniciaisSinteticos,
       })
     : undefined;
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppQualidade(env, {
     trilha,
     qualidade: new PortaQualidadeMemoria({ agora }),
     vigiaEnfermagem: null,
@@ -505,10 +504,11 @@ describe('a sessão "como" do suporte (ADR 0021; D-COMO-48.1)', () => {
     const repo = RepositorioPlataformaMemoria.sintetico(REDE, ['aa', 'bb'], (x) =>
       cifrarSenha(x, { memoria: 8_192, passes: 1, paralelismo: 1 }),
     );
-    const app: NestFastifyApplication = await criarApp(lerConfiguracao(envComo), null, envComo, {
+    const app: NestFastifyApplication = await criarAppQualidade(envComo, {
       trilha,
       armazem: new ArmazemMemoria(),
-      plataforma: repo,
+      plataforma: repo as never,
+      suporte: true,
       qualidade: new PortaQualidadeMemoria({ agora }),
       vigiaEnfermagem: null,
       vigia: null,

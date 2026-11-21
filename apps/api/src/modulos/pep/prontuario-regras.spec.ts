@@ -13,12 +13,9 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { type CampoFormulario, contagemAgregada, type ItemResposta, tipoDoProblema } from '@sgh/contratos';
 import { criarAbility, regrasDeAcesso, VinculoSintetico } from '@sgh/dominio-acesso';
 import { ocultarDocumentosDasRespostas, ocultarDocumentosDosCampos, TETO_RTF } from '@sgh/dominio-pep';
-import type { RegistroProntuarioLido } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
@@ -28,6 +25,8 @@ import { PortaProntuarioMemoria } from './porta-memoria.js';
 import { ProntuarioController } from './prontuario.controller.js';
 import { EstadoProntuario } from './sessao-prontuario.js';
 import { ServicoProntuario } from './servico.js';
+import { criarAppPep } from './teste.spec-util.js';
+import type { RegistroProntuarioLido } from './tipos-pep.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
@@ -35,8 +34,9 @@ let app: NestFastifyApplication;
 let idem = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPep(env, {
     trilha,
+    comConfig: true,
     cadastro: new PortaCadastroMemoria(),
     prontuario: new PortaProntuarioMemoria(trilha),
   });
@@ -229,7 +229,7 @@ describe('texto formatado ilegível (regra 9)', () => {
       conteudo: async () => ({ rtf: `{\\rtf1 ${'x'.repeat(TETO_RTF + 1)}}`, xml: null, bytes: 0 }),
     } as unknown as PortaProntuario;
     const s = new ServicoProntuario(porta, new PortaCadastroMemoria());
-    const a = await s.aba({ rede: 'r', hospital: 'aa' }, 1, 1, 'texto', { mostrarDocumentos: true });
+    const a = await s.aba({ cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r', hospital: 'aa' }, 1, 1, 'texto', { mostrarDocumentos: true });
     expect(a.aba).toBe('texto');
     if (a.aba !== 'texto') return;
     expect(a.conteudo.paragrafos).toEqual([]);
@@ -299,7 +299,7 @@ describe('documentos pessoais no registro (D-DOC-1)', () => {
     };
     base.respostas = respostasOriginais;
     const s = new ServicoProntuario(porta, new PortaCadastroMemoria());
-    const c = { rede: 'r', hospital: 'aa' };
+    const c = { cliente: 'teste', estabelecimento: null, usuario: null, correlacao: 'teste', rede: 'r', hospital: 'aa' };
     const sem = await s.aba(c, 1003, 900_001, 'layout', { mostrarDocumentos: false });
     const com = await s.aba(c, 1003, 900_001, 'layout', { mostrarDocumentos: true });
     expect(JSON.stringify(sem)).not.toContain('00000000191');

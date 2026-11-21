@@ -7,6 +7,7 @@
 // `rede.bi` no estabelecimento da sessão (desligada: 403 `recurso-desligado` com o motivo) e, nos outros, conferida
 // estabelecimento a estabelecimento (o desligado fica fora do consolidado, com o motivo). Só agregados: nada de pessoa.
 import { Controller, Get, Inject, Optional, Param, Query, Req, Res } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import {
   type BiRede,
   CHAVE_LIBERACAO_BI_REDE,
@@ -47,19 +48,40 @@ function consulta(q: Record<string, string>): { de?: string; ate?: string } {
 
 @Controller('relatorios/bi/rede')
 export class BiRedeController {
-  readonly servico: ServicoBiRede;
+  private servicoPronto: ServicoBiRede | null = null;
   private readonly liberacao: LiberacaoPep;
 
+  // A lista da Rede e a internação moram nos módulos rede e internacao: resolvidas na primeira chamada, em qualquer
+  // módulo da aplicação (sem eles registrados, a tela responde 503 com o motivo).
   constructor(
-    @Inject(PORTA_REDE) porta: PortaRede,
-    @Inject(SERVICO_INTERNACAO) internacao: ServicoInternacao,
-    @Inject(CONFIGURACAO_M16) cfg: ConfiguracaoM16,
+    private readonly modulos: ModuleRef,
     @Optional() @Inject(FONTE_CONFIGURACAO) configuracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
   ) {
     this.liberacao = new LiberacaoPep(configuracao, cache);
+  }
+
+  get servico(): ServicoBiRede {
+    if (this.servicoPronto) return this.servicoPronto;
+    const achar = <T>(token: symbol | string): T | null => {
+      try {
+        return this.modulos.get<T>(token, { strict: false });
+      } catch {
+        return null;
+      }
+    };
+    const porta = achar<PortaRede>(PORTA_REDE);
+    const internacao = achar<ServicoInternacao>(SERVICO_INTERNACAO);
+    const cfg = achar<ConfiguracaoM16>(CONFIGURACAO_M16);
+    if (!porta || !internacao || !cfg)
+      throw new ErroProblema(
+        'indisponivel',
+        503,
+        'BI da Rede indisponível',
+        'O BI da Rede precisa dos módulos da Rede e da internação ligados nesta instalação.',
+      );
     const liberacao = this.liberacao;
-    this.servico = new ServicoBiRede({
+    this.servicoPronto = new ServicoBiRede({
       lista: porta,
       internacao,
       parametros: (rede, hospital) => cfg.parametros({ rede, hospital }),
@@ -68,6 +90,7 @@ export class BiRedeController {
       pseudonimoComum: (rede, hospital) =>
         liberacao.ligadaNoEstabelecimento(rede, hospital, CHAVE_PSEUDONIMO_COMUM_REDE),
     });
+    return this.servicoPronto;
   }
 
   private async entrar(req: RequisicaoAutorizada) {

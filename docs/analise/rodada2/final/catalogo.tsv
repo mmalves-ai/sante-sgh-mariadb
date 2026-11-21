@@ -3570,3 +3570,5 @@ avaliacao_nutricao_parenteral	PEP	principal	F3	Avaliação farmacêutica da nutr
 plano_refeicao_acompanhante	HOT	principal	F3	Refeições previstas do acompanhante pela nutrição: base legal, período e dieta	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	04	0
 plano_refeicao_acompanhante_refeicao	HOT	vinculo	F3	Refeições do dia a que o acompanhante tem direito no plano	F2.2 onda 3 (pedido do lote 03-04; db/migracoes)	04	0
 retorno_sus_item	SUS	item	F7	Linha do retorno do gestor (AIH ou BPA) com a situação, os valores e o tratamento	F2.2 onda 3 (pedido do lote 03-05; db/migracoes)	06	0
+visualizacao_resultado_exame	SADT	vinculo	F3	Primeira abertura de um resultado de exame por usuário, para a pendência de resultado novo da fila do médico	F2.2 onda 4 (pedido do lote 04-02; db/migracoes)	05	0
+pedido_relatorio	REL	principal	F3	Pedido de relatório novo à curadoria: o que, para quê, área, prazo, resposta e cancelamento com motivo	F2.2 onda 4 (pedido do lote 04-04; db/migracoes)	01	0

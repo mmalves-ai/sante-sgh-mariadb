@@ -1,11 +1,10 @@
 // API da notificação compulsória (M48, etapa 4) sobre a porta em memória (dados SINTÉTICOS): a fila de gatilhos por CID,
 // resultado reagente e óbito; o caso com o prazo da periodicidade; a ficha SINAN pré-preenchida; a notificação e o
 // descarte com a versão; os gatilhos de exame; a chave de liberação, as permissões e a trilha sem nome nem CID.
+import { criarAppQualidade, ctxTeste } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -34,7 +33,7 @@ async function montar(o: { semChave?: boolean } = {}) {
       })
     : undefined;
   const porta = new PortaAgravoMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppQualidade(env, {
     trilha,
     agravo: porta,
     vigiaEnfermagem: null,
@@ -170,7 +169,7 @@ describe('fila de gatilhos', () => {
       agora,
       cadastro: (_c, ids) => Promise.resolve(ids.includes(1001) ? [extra] : []),
     });
-    const ctx = { rede: 'sintetica', hospital: 'pc' };
+    const ctx = ctxTeste('pc');
     const m = await p.pacientes(ctx, [S.pacienteRaiva, 1001, 7]);
     expect([...m.keys()].sort()).toEqual([1001, S.pacienteRaiva].sort());
     expect((await new PortaAgravoMemoria({ agora }).pacientes(ctx, [1001])).size).toBe(0);

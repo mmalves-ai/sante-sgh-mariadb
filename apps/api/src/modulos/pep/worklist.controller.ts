@@ -1,8 +1,9 @@
 // Fila do médico na página inicial (M27; ficha, seções 4 e 7; regras 1 a 4):
 //   GET /api/pep/worklist/medico   os pacientes com vínculo assistencial do médico da sessão, com as pendências, na
 //                                  ordem de prioridade e prazo (auditado: lista com nomes de pacientes)
-// A chave `inicio.worklistMedico` (SGH_CFG_LIBERACAO) por estabelecimento, setor, grupo ou pessoa: desligada, 403
+// A chave `inicio.worklistMedico` (liberação por chave) por estabelecimento, setor, grupo ou pessoa: desligada, 403
 // `recurso-desligado` e a página inicial esconde o componente. Só leitura: as ações são as telas do prontuário.
+// Melhoria: a trilha da leitura aponta a entidade de negócio (`atendimento`), não uma tabela do sistema de origem.
 import { Controller, Get, Inject, Optional, Req } from '@nestjs/common';
 import { CHAVES_INICIO, EVENTOS_AUDITAVEIS, PERMISSOES_INICIO, type WorklistMedico } from '@sgh/contratos';
 import { Auditar, Permissao } from '../../autorizacao/decoradores.js';
@@ -46,7 +47,7 @@ export class WorklistMedicoController {
     const r = await this.servico.fila(s.porta, s.login).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
-    req.sghAlvo = { tabelaAlvo: 'ATCABECATEND', chaveNaturalAlvo: `worklist-medico;n:${r.total}` };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', chaveNaturalAlvo: `worklist-medico;n:${r.total}` };
     return r;
   }
 }

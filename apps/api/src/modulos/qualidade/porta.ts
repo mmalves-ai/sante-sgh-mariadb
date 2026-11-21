@@ -1,26 +1,10 @@
-// Porta da notificação de incidentes (M48, etapa 1; ADR 0031): as leituras do outro sistema (o contexto do atendimento
-// da tela de origem, as unidades, os feriados e o relógio do banco) e as gravações e leituras só do novo
-// (SGH_QUA_NOTIFICACAO, SGH_QUA_NOTIF_EVENTO, SGH_QUA_NOTIF_PROTOCOLO) numa transação SGH_ com a SGH_TRILHA junto.
-// Duas implementações: sobre o núcleo do legado (a cópia) e em memória (dev/ci e os testes; dados sintéticos).
+// Porta da notificação de incidentes e da segurança do paciente (M48, etapas 1 e 2): o contexto do atendimento da tela
+// de origem, as unidades, os feriados, o relógio do estabelecimento e as notificações, análises, planos de ação, queixas
+// técnicas e sugestões, com as gravações numa transação com a trilha junto. Três implementações: a própria sobre o
+// MariaDB do cliente (porta-propria.ts), em memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
 import type { ContextoNotificacaoLido, EstagioLpp, ExpostoAoLote, UnidadeNotificacao } from '@sgh/contratos';
-import type {
-  Acao5w2hSgh,
-  AcaoPlanoSghLida,
-  AnaliseSgh,
-  AnaliseSghLida,
-  ContagemNotificacoesSgh,
-  EventoQueixaSghLido,
-  ProtocoloPacienteLido,
-  QueixaTecnicaSgh,
-  QueixaTecnicaSghLida,
-  VersaoGerenciadoLida,
-  EventoNotificacaoSgh,
-  EventoNotificacaoSghLido,
-  FiltroNotificacoesSgh,
-  NotificacaoIncidenteSgh,
-  NotificacaoSghLida,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+import type { Acao5w2h, AcaoPlanoRegistrada, AnaliseNova, AnaliseRegistrada, ContagemNotificacoes, EventoQueixaRegistrado, ProtocoloDoPaciente, QueixaTecnicaNova, QueixaTecnicaRegistrada, VersaoProtocoloGerenciado, EventoNotificacaoNovo, EventoNotificacaoRegistrado, FiltroNotificacoes, NotificacaoIncidenteNova, NotificacaoRegistrada } from './tipos.js';
+import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_QUALIDADE = Symbol('PORTA_QUALIDADE');
 
@@ -34,13 +18,13 @@ interface BaseFluxo {
   readonly agora: string;
 }
 
-/** Gravações só do novo, numa transação com a SGH_TRILHA junto (as regras puras conferidas sobre a linha travada). */
+/** Gravações só do novo, numa transação com a trilha_auditoria junto (as regras puras conferidas sobre a linha travada). */
 export interface GravadorQualidade {
   notificar(
-    n: SemHospital<NotificacaoIncidenteSgh>,
+    n: SemHospital<NotificacaoIncidenteNova>,
   ): Promise<{ id: number; protocolo: string; repetida: boolean }>;
   /** A notificação travada (recusa 404 se não existe). */
-  travar(id: number): Promise<NotificacaoSghLida>;
+  travar(id: number): Promise<NotificacaoRegistrada>;
   triar(
     t: BaseFluxo & {
       readonly tipo: string;
@@ -77,20 +61,20 @@ export interface GravadorQualidade {
   ): Promise<{ versao: number }>;
   // ── Etapa 2: análise, plano de ação, sugestão resolvida e vigilância de produto ──
   /** A análise travada da notificação (a notificação travada antes; null: ainda não existe). */
-  travarAnalise(notificacao: number): Promise<AnaliseSghLida | null>;
+  travarAnalise(notificacao: number): Promise<AnaliseRegistrada | null>;
   /** As ações do plano lidas na transação (a conclusão conta as ativas). */
-  acoesNaTransacao(notificacao: number): Promise<AcaoPlanoSghLida[]>;
+  acoesNaTransacao(notificacao: number): Promise<AcaoPlanoRegistrada[]>;
   registrarAnalise(
-    a: SemHospital<AnaliseSgh>,
+    a: SemHospital<AnaliseNova>,
   ): Promise<{ id: number; versao: number; versaoNotificacao: number }>;
-  travarAcao(notificacao: number, id: number): Promise<AcaoPlanoSghLida>;
+  travarAcao(notificacao: number, id: number): Promise<AcaoPlanoRegistrada>;
   incluirAcao(a: {
     readonly notificacao: number;
     readonly usuario: string;
     readonly agora: string;
-    readonly acao: Acao5w2hSgh;
+    readonly acao: Acao5w2h;
   }): Promise<{ id: number; sequencia: number; versao: number }>;
-  alterarAcao(a: BaseAcao & { readonly acao: Acao5w2hSgh }): Promise<{ versao: number }>;
+  alterarAcao(a: BaseAcao & { readonly acao: Acao5w2h }): Promise<{ versao: number }>;
   situacaoAcao(
     a: BaseAcao & { readonly situacao: string; readonly encerra: boolean; readonly texto: string | null },
   ): Promise<{ versao: number }>;
@@ -99,8 +83,8 @@ export interface GravadorQualidade {
   ): Promise<{ versao: number }>;
   /** Marca a sugestão como resolvida pelo resumo (SHA-256 da origem com o login; regra 1). */
   resolverSugestao(r: { readonly resumo: string; readonly dia: string }): Promise<{ gravou: boolean }>;
-  abrirQueixa(q: SemHospital<QueixaTecnicaSgh>): Promise<{ id: number; versao: number }>;
-  travarQueixa(id: number): Promise<QueixaTecnicaSghLida>;
+  abrirQueixa(q: SemHospital<QueixaTecnicaNova>): Promise<{ id: number; versao: number }>;
+  travarQueixa(id: number): Promise<QueixaTecnicaRegistrada>;
   andamentoQueixa(a: {
     readonly id: number;
     readonly versao: number;
@@ -172,19 +156,19 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
   usuarioAtivo(c: ContextoQualidade, login: string): Promise<boolean>;
   /** Contas ativas e não bloqueadas cujo login ou nome contém o termo (a escolha do gestor da área; teto 20). */
   gestores(c: ContextoQualidade, termo: string): Promise<{ login: string; nome: string }[]>;
-  notificacao(c: ContextoQualidade, id: number): Promise<NotificacaoSghLida | null>;
-  porProtocolo(c: ContextoQualidade, protocolo: string): Promise<NotificacaoSghLida | null>;
-  eventos(c: ContextoQualidade, id: number): Promise<EventoNotificacaoSghLido[]>;
+  notificacao(c: ContextoQualidade, id: number): Promise<NotificacaoRegistrada | null>;
+  porProtocolo(c: ContextoQualidade, protocolo: string): Promise<NotificacaoRegistrada | null>;
+  eventos(c: ContextoQualidade, id: number): Promise<EventoNotificacaoRegistrado[]>;
   lista(
     c: ContextoQualidade,
-    f: SemHospital<FiltroNotificacoesSgh>,
-  ): Promise<{ itens: NotificacaoSghLida[]; temMais: boolean }>;
-  comPrazo(c: ContextoQualidade): Promise<{ itens: NotificacaoSghLida[]; cortada: boolean }>;
+    f: SemHospital<FiltroNotificacoes>,
+  ): Promise<{ itens: NotificacaoRegistrada[]; temMais: boolean }>;
+  comPrazo(c: ContextoQualidade): Promise<{ itens: NotificacaoRegistrada[]; cortada: boolean }>;
   // ── Etapa 2 ──
-  analise(c: ContextoQualidade, notificacao: number): Promise<AnaliseSghLida | null>;
-  acoes(c: ContextoQualidade, notificacao: number): Promise<AcaoPlanoSghLida[]>;
+  analise(c: ContextoQualidade, notificacao: number): Promise<AnaliseRegistrada | null>;
+  acoes(c: ContextoQualidade, notificacao: number): Promise<AcaoPlanoRegistrada[]>;
   /** As ações abertas de que o login é o responsável (teto 200). */
-  acoesDoResponsavel(c: ContextoQualidade, login: string): Promise<AcaoPlanoSghLida[]>;
+  acoesDoResponsavel(c: ContextoQualidade, login: string): Promise<AcaoPlanoRegistrada[]>;
   queixas(
     c: ContextoQualidade,
     f: {
@@ -193,9 +177,9 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
       readonly pagina: number;
       readonly porPagina: number;
     },
-  ): Promise<{ itens: QueixaTecnicaSghLida[]; temMais: boolean }>;
-  queixa(c: ContextoQualidade, id: number): Promise<QueixaTecnicaSghLida | null>;
-  eventosQueixa(c: ContextoQualidade, id: number): Promise<EventoQueixaSghLido[]>;
+  ): Promise<{ itens: QueixaTecnicaRegistrada[]; temMais: boolean }>;
+  queixa(c: ContextoQualidade, id: number): Promise<QueixaTecnicaRegistrada | null>;
+  eventosQueixa(c: ContextoQualidade, id: number): Promise<EventoQueixaRegistrado[]>;
   /** Dos resumos, os de sugestões já resolvidas. */
   resolvidas(c: ContextoQualidade, resumos: readonly string[]): Promise<Set<string>>;
   candidatos(c: ContextoQualidade, login: string, desde: string): Promise<CandidatosSugestao>;
@@ -203,7 +187,7 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
     c: ContextoQualidade,
     de: string,
     fimExclusivo: string,
-  ): Promise<ContagemNotificacoesSgh[]>;
+  ): Promise<ContagemNotificacoes[]>;
   painelAnalises(
     c: ContextoQualidade,
     de: string,
@@ -227,7 +211,7 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
     c: ContextoQualidade,
     inicio: string,
     fim: string,
-  ): Promise<{ versoes: VersaoGerenciadoLida[]; protocolos: ProtocoloPacienteLido[] }>;
+  ): Promise<{ versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] }>;
   /** Os pacientes expostos ao item e ao lote (as saídas do lote no estoque e os consumos em sala). */
   expostos(
     c: ContextoQualidade,
@@ -239,7 +223,7 @@ export interface PortaQualidade extends PortaGravacaoM18<GravadorQualidade> {
   nomesDosItens(c: ContextoQualidade, codigos: readonly number[]): Promise<Map<number, string>>;
 }
 
-export type { EventoNotificacaoSgh };
+export type { EventoNotificacaoNovo };
 
 export const METODOS_PORTA_QUALIDADE: ReadonlySet<string> = new Set([
   'podeGravar',
@@ -274,3 +258,8 @@ export const METODOS_PORTA_QUALIDADE: ReadonlySet<string> = new Set([
   'itens',
   'nomesDosItens',
 ]);
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaQualidadeIndisponivel(): PortaQualidade {
+  return portaIndisponivel<PortaQualidade>(METODOS_PORTA_QUALIDADE);
+}

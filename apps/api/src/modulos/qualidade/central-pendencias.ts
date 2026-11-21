@@ -29,7 +29,7 @@ export function avisoDePendencia(o: { login: string; prontuario: number; versao:
     evento: EVENTOS_AUDITAVEIS.qualidadeRevisaoPendenciaAvisada.codigo,
     titulo: TITULO_AVISO_PENDENCIA,
     link: LINK_MINHAS_PENDENCIAS,
-    objetoTabela: 'SGH_QUA_REV_PRONTUARIO',
+    objetoTabela: 'revisao_prontuario',
     objetoChave: `${String(o.prontuario)}:${String(o.versao)}`,
   };
 }

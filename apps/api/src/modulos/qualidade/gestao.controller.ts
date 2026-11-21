@@ -1,6 +1,6 @@
 // Gestão da qualidade (ONA) e envios regulatórios (M48, etapa 5; ficha, seções 4, 5, 7 e 8, regras 9, 10 e 11; cap-05b
 // §5.11; cap-07 §7.5.3; manual m17 "Indicadores e gestão da qualidade (ONA)" e m26 "Envios regulatórios"; DP-47.8 e
-// DP-47.9). Tudo só do novo (SGH_QUA_* do 0485 e do 0486 com a SGH_TRILHA na mesma transação); a chave
+// DP-47.9). Tudo só do novo (SGH_QUA_* do 0485 e do 0486 com a trilha_auditoria na mesma transação); a chave
 // `qualidade.gestao` liga as gravações (recolher = só consulta). Rotas:
 //   GET  /api/qualidade/gestao/resumo                         o cabeçalho e os cartões (documentos, riscos, NC, ouvidoria)
 //   GET  /api/qualidade/documentos[/:id[/ciencias]]           documentos (quem não publica vê só os vigentes)
@@ -18,6 +18,7 @@
 //   POST /api/relatorio/envios-regulatorios[/:id/transmissao] relatorio.gerarEnvioRegulatorio / registrarTransmissaoEnvio
 // Nenhum relato, manifestante, conteúdo de documento nem paciente vai à trilha no payload (só os IDs das linhas SGH_); a
 // leitura das manifestações é auditada (`qualidade.ouvidoria.lida`).
+import { TABELA_DO_REGISTRO } from './tipos.js';
 import { Body, Controller, Get, Inject, Optional, Param, Post, Query, Req, Res } from '@nestjs/common';
 import {
   PARAMETRO_CANAL_HALAI_OUVIDORIA,
@@ -29,7 +30,6 @@ import {
   esquemaCancelarRegistroQualidade,
   esquemaCorrigirManifestacao,
   esquemaRetificarAta,
-  REGISTROS_VERSIONADOS_QUALIDADE,
   type RegistroVersionadoQualidade,
   CODIGOS_TIPO_ENVIO_REGULATORIO,
   ESCALA_GUT,
@@ -342,7 +342,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/documentos')
   @Permissao(P.documentoPublicar)
   @AuditadoNoHandler(
-    'qualidade.publicarDocumento: SGH_QUA_DOCUMENTO (a revisão anterior obsoleta) e a SGH_TRILHA',
+    'qualidade.publicarDocumento: documento_qualidade (a revisão anterior obsoleta) e a trilha_auditoria',
   )
   async publicar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -371,7 +371,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeDocumentoPublicado.codigo,
       P.documentoPublicar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_DOCUMENTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'documento_qualidade', id: String(x.id) }),
       (gr) =>
         gr.publicarDocumento({
           codigo: e.codigo,
@@ -396,7 +396,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/documentos/:id/retirada')
   @Permissao(P.documentoPublicar)
-  @AuditadoNoHandler('qualidade.retirarDocumento: SGH_QUA_DOCUMENTO com a versão conferida e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.retirarDocumento: documento_qualidade com a versão conferida e a trilha_auditoria')
   async retirar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRetirarDocumento, { ...(b as object), documento: idDaRota(id) });
@@ -408,7 +408,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeDocumentoRetirado.codigo,
       P.documentoPublicar,
-      { tabela: 'SGH_QUA_DOCUMENTO', id: String(d.id) },
+      { tabela: 'documento_qualidade', id: String(d.id) },
       (g) =>
         g.retirarDocumento({ id: d.id, versao: e.versao, motivo: e.motivo.trim(), agora, usuario: s.login }),
     );
@@ -416,7 +416,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/documentos/:id/ciencia')
   @Permissao(P.documentoLer)
-  @AuditadoNoHandler('qualidade.registrarCiencia: SGH_QUA_DOC_CIENCIA (uma por usuário) e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarCiencia: documento_qualidade_ciencia (uma por usuário) e a trilha_auditoria')
   async ciencia(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarCiencia, { documento: idDaRota(id) });
@@ -429,7 +429,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeDocumentoCiencia.codigo,
       P.documentoLer,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_DOC_CIENCIA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'documento_qualidade_ciencia', id: String(x.id) }),
       (g) => g.registrarCiencia({ documento: d.id, agora, usuario: s.login }),
     );
   }
@@ -665,7 +665,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/indicadores/:codigo/analise')
   @Permissao(P.indicadorAnalisar)
-  @AuditadoNoHandler('qualidade.registrarAnaliseIndicador: SGH_QUA_IND_ANALISE e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarAnaliseIndicador: analise_critica_indicador e a trilha_auditoria')
   async analisar(@Param('codigo') codigo: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarAnaliseIndicador, { ...(b as object), indicador: codigo });
@@ -680,7 +680,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeIndicadorAnalisado.codigo,
       P.indicadorAnalisar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_IND_ANALISE', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'analise_critica_indicador', id: String(x.id) }),
       (g) =>
         g.registrarAnaliseIndicador({
           id: e.analise,
@@ -736,7 +736,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/auditorias')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.registrarAuditoria: SGH_QUA_AUDITORIA e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarAuditoria: auditoria_interna e a trilha_auditoria')
   async registrarAuditoria(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarAuditoria, b);
@@ -760,7 +760,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeAuditoriaRegistrada.codigo,
       P.gestaoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_AUDITORIA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'auditoria_interna', id: String(x.id) }),
       (gr) =>
         gr.registrarAuditoria({
           titulo: e.titulo.trim(),
@@ -802,7 +802,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/comissoes')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.registrarComissao: SGH_QUA_COMISSAO e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarComissao: comissao_hospitalar e a trilha_auditoria')
   async registrarComissao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarComissao, b);
@@ -817,13 +817,13 @@ export class GestaoQualidadeController {
     const conferirDependentes =
       atual !== null &&
       ((atual.ativa && !e.ativa) || (atual.tipo === 'prontuario' && e.tipo !== 'prontuario'));
-    if (conferirDependentes && atual) await this.semDependentes(s, 'SGH_QUA_COMISSAO', atual.id);
+    if (conferirDependentes && atual) await this.semDependentes(s, 'comissao_hospitalar', atual.id);
     const agora = await this.agora(s);
     return this.apoio.sgh(
       s,
       E.qualidadeComissaoRegistrada.codigo,
       P.gestaoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_COMISSAO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'comissao_hospitalar', id: String(x.id) }),
       (g) =>
         g.registrarComissao({
           id: e.comissao,
@@ -843,7 +843,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/comissoes/:id/reunioes')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.registrarReuniaoComissao: SGH_QUA_COMISSAO_REUNIAO e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarReuniaoComissao: reuniao_comissao e a trilha_auditoria')
   async registrarReuniao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarReuniaoComissao, { ...(b as object), comissao: idDaRota(id) });
@@ -860,7 +860,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeReuniaoRegistrada.codigo,
       P.gestaoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_COMISSAO_REUNIAO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'reuniao_comissao', id: String(x.id) }),
       (g) =>
         g.registrarReuniaoComissao({
           comissao: c.id,
@@ -904,7 +904,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/riscos')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.registrarRisco: SGH_QUA_RISCO e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarRisco: risco_institucional e a trilha_auditoria')
   async registrarRisco(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarRisco, b);
@@ -918,7 +918,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeRiscoRegistrado.codigo,
       P.gestaoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_RISCO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'risco_institucional', id: String(x.id) }),
       (g) =>
         g.registrarRisco({
           id: e.risco,
@@ -980,7 +980,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/nao-conformidades')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.registrarNaoConformidade: SGH_QUA_NAO_CONFORM e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarNaoConformidade: nao_conformidade_qualidade e a trilha_auditoria')
   async registrarNaoConformidade(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarNaoConformidade, b);
@@ -1005,7 +1005,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeNaoConformidadeRegistrada.codigo,
       P.gestaoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_NAO_CONFORM', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'nao_conformidade_qualidade', id: String(x.id) }),
       (g) =>
         g.registrarNaoConformidade({
           id: e.naoConformidade,
@@ -1170,7 +1170,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/ouvidoria/manifestacoes')
   @Permissao(P.ouvidoriaResponder)
-  @AuditadoNoHandler('qualidade.registrarManifestacao: SGH_QUA_OUVIDORIA e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarManifestacao: manifestacao_ouvidoria e a trilha_auditoria')
   async registrarManifestacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarManifestacao, b);
@@ -1202,7 +1202,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeManifestacaoRegistrada.codigo,
       P.ouvidoriaResponder,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_OUVIDORIA', id: String(x.id), paciente }),
+      (x: { id: number }) => ({ tabela: 'manifestacao_ouvidoria', id: String(x.id), paciente }),
       (g) =>
         g.registrarManifestacao({
           protocoloDe: (n) => protocoloManifestacao(e.recebidaEm, n),
@@ -1227,7 +1227,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/ouvidoria/manifestacoes/:id/encaminhamento')
   @Permissao(P.ouvidoriaResponder)
   @AuditadoNoHandler(
-    'qualidade.encaminharManifestacao: SGH_QUA_OUVIDORIA com a versão conferida e a SGH_TRILHA',
+    'qualidade.encaminharManifestacao: manifestacao_ouvidoria com a versão conferida e a trilha_auditoria',
   )
   async encaminhar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1240,7 +1240,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeManifestacaoEncaminhada.codigo,
       P.ouvidoriaResponder,
-      { tabela: 'SGH_QUA_OUVIDORIA', id: String(m.id), paciente: m.paciente },
+      { tabela: 'manifestacao_ouvidoria', id: String(m.id), paciente: m.paciente },
       (g) =>
         g.encaminharManifestacao({
           id: m.id,
@@ -1254,7 +1254,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/ouvidoria/manifestacoes/:id/resposta')
   @Permissao(P.ouvidoriaResponder)
   @AuditadoNoHandler(
-    'qualidade.responderManifestacao: SGH_QUA_OUVIDORIA com a versão conferida e a SGH_TRILHA',
+    'qualidade.responderManifestacao: manifestacao_ouvidoria com a versão conferida e a trilha_auditoria',
   )
   async responder(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1269,7 +1269,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeManifestacaoRespondida.codigo,
       P.ouvidoriaResponder,
-      { tabela: 'SGH_QUA_OUVIDORIA', id: String(m.id), paciente: m.paciente },
+      { tabela: 'manifestacao_ouvidoria', id: String(m.id), paciente: m.paciente },
       (g) =>
         g.responderManifestacao({
           id: m.id,
@@ -1359,7 +1359,7 @@ export class GestaoQualidadeController {
   @Post('relatorio/envios-regulatorios')
   @Permissao(P.envioGerar)
   @AuditadoNoHandler(
-    'relatorio.gerarEnvioRegulatorio: SGH_QUA_ENVIO_REG (a anterior substituída) e a SGH_TRILHA',
+    'relatorio.gerarEnvioRegulatorio: notificacao_iras_envio (a anterior substituída) e a trilha_auditoria',
   )
   async gerar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1382,7 +1382,7 @@ export class GestaoQualidadeController {
       s,
       E.relatorioEnvioGerado.codigo,
       P.envioGerar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_ENVIO_REG', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'notificacao_iras_envio', id: String(x.id) }),
       (g) =>
         g.gerarEnvioRegulatorio({
           tipo: e.tipo,
@@ -1401,7 +1401,7 @@ export class GestaoQualidadeController {
   @Post('relatorio/envios-regulatorios/:id/transmissao')
   @Permissao(P.envioGerar)
   @AuditadoNoHandler(
-    'relatorio.registrarTransmissaoEnvio: SGH_QUA_ENVIO_REG com a versão e o resumo, e a SGH_TRILHA',
+    'relatorio.registrarTransmissaoEnvio: notificacao_iras_envio com a versão e o resumo, e a trilha_auditoria',
   )
   async transmitir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1422,7 +1422,7 @@ export class GestaoQualidadeController {
       s,
       E.relatorioEnvioTransmitido.codigo,
       P.envioGerar,
-      { tabela: 'SGH_QUA_ENVIO_REG', id: String(env.id) },
+      { tabela: 'notificacao_iras_envio', id: String(env.id) },
       (g) =>
         g.registrarTransmissaoEnvio({
           id: env.id,
@@ -1468,7 +1468,7 @@ export class GestaoQualidadeController {
     @Req() req: RequisicaoAutorizada,
   ) {
     const s = sessaoDe(req);
-    const tabela = REGISTROS_VERSIONADOS_QUALIDADE[registro as RegistroVersionadoQualidade];
+    const tabela = TABELA_DO_REGISTRO[registro as RegistroVersionadoQualidade];
     if (
       !tabela ||
       !['auditoria', 'reuniao', 'nao-conformidade', 'manifestacao', 'comissao'].includes(registro)
@@ -1481,7 +1481,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/gestao/auditorias/:id/alteracao')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.alterarAuditoria: SGH_QUA_AUDITORIA (nova versão; a anterior na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.alterarAuditoria: auditoria_interna (nova versão; a anterior na trilha_auditoria) e a trilha_auditoria',
   )
   async alterarAuditoria(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1509,7 +1509,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_AUDITORIA', id: String(a.id) },
+      { tabela: 'auditoria_interna', id: String(a.id) },
       (g) =>
         g.alterarAuditoria({
           id: a.id,
@@ -1531,7 +1531,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/gestao/auditorias/:id/cancelamento')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarAuditoria: SGH_QUA_AUDITORIA (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarAuditoria: auditoria_interna (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarAuditoria(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1540,13 +1540,13 @@ export class GestaoQualidadeController {
     const a = await this.porta.auditoria(s.porta, idDaRota(id));
     if (!a) throw naoEncontrado('Auditoria');
     if (a.canceladaEm) throw recusaCorrecaoGestao('registro-cancelado');
-    await this.semDependentes(s, 'SGH_QUA_AUDITORIA', a.id);
+    await this.semDependentes(s, 'auditoria_interna', a.id);
     const agora = await this.agora(s);
     return this.apoio.sgh(
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_AUDITORIA', id: String(a.id) },
+      { tabela: 'auditoria_interna', id: String(a.id) },
       (g) =>
         g.cancelarAuditoria({
           id: a.id,
@@ -1561,7 +1561,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/gestao/reunioes/:id/retificacao')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.retificarAta: SGH_QUA_COMISSAO_REUNIAO (nova versão; a anterior na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.retificarAta: reuniao_comissao (nova versão; a anterior na trilha_auditoria) e a trilha_auditoria',
   )
   async retificarAta(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1585,7 +1585,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_COMISSAO_REUNIAO', id: String(r.id) },
+      { tabela: 'reuniao_comissao', id: String(r.id) },
       (g) =>
         g.retificarAta({
           id: r.id,
@@ -1606,7 +1606,7 @@ export class GestaoQualidadeController {
 
   @Post('qualidade/gestao/reunioes/:id/assinatura')
   @Permissao(P.gestaoRegistrar)
-  @AuditadoNoHandler('qualidade.assinarAta: SGH_QUA_COMISSAO_REUNIAO (marca da assinatura) e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.assinarAta: reuniao_comissao (marca da assinatura) e a trilha_auditoria')
   async assinarAta(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaAssinarAta, await this.reautenticado(req, b));
@@ -1620,7 +1620,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeAtaAssinada.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_COMISSAO_REUNIAO', id: String(r.id) },
+      { tabela: 'reuniao_comissao', id: String(r.id) },
       (g) => g.assinarAta({ id: r.id, versao: e.versao, agora, usuario: s.login }),
     );
   }
@@ -1628,7 +1628,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/gestao/reunioes/:id/cancelamento')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarReuniao: SGH_QUA_COMISSAO_REUNIAO (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarReuniao: reuniao_comissao (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarReuniao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1643,7 +1643,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_COMISSAO_REUNIAO', id: String(r.id) },
+      { tabela: 'reuniao_comissao', id: String(r.id) },
       (g) =>
         g.cancelarReuniao({
           id: r.id,
@@ -1658,7 +1658,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/gestao/nao-conformidades/:id/cancelamento')
   @Permissao(P.gestaoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarNaoConformidade: SGH_QUA_NAO_CONFORM (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarNaoConformidade: nao_conformidade_qualidade (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarNaoConformidade(
     @Param('id') id: string,
@@ -1676,13 +1676,13 @@ export class GestaoQualidadeController {
         : await this.porta.naoConformidade(s.porta, e.duplicadaDe);
     const problema = conferirCancelamentoNaoConformidade(n, original, e.duplicadaDe);
     if (problema) throw recusaCorrecaoGestao(problema, [], problema === 'registro-cancelado' ? 409 : 422);
-    await this.semDependentes(s, 'SGH_QUA_NAO_CONFORM', n.id);
+    await this.semDependentes(s, 'nao_conformidade_qualidade', n.id);
     const agora = await this.agora(s);
     return this.apoio.sgh(
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.gestaoRegistrar,
-      { tabela: 'SGH_QUA_NAO_CONFORM', id: String(n.id) },
+      { tabela: 'nao_conformidade_qualidade', id: String(n.id) },
       (g) =>
         g.cancelarNaoConformidade({
           id: n.id,
@@ -1698,7 +1698,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/ouvidoria/manifestacoes/:id/correcao')
   @Permissao(P.ouvidoriaResponder)
   @AuditadoNoHandler(
-    'qualidade.corrigirManifestacao: SGH_QUA_OUVIDORIA (nova versão; a anterior na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.corrigirManifestacao: manifestacao_ouvidoria (nova versão; a anterior na trilha_auditoria) e a trilha_auditoria',
   )
   async corrigirManifestacao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1712,7 +1712,7 @@ export class GestaoQualidadeController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.ouvidoriaResponder,
-      { tabela: 'SGH_QUA_OUVIDORIA', id: String(m.id), paciente: m.paciente },
+      { tabela: 'manifestacao_ouvidoria', id: String(m.id), paciente: m.paciente },
       (g) =>
         g.corrigirManifestacao({
           id: m.id,
@@ -1730,7 +1730,7 @@ export class GestaoQualidadeController {
   @Post('qualidade/ouvidoria/manifestacoes/:id/cancelamento')
   @Permissao(P.ouvidoriaResponder)
   @AuditadoNoHandler(
-    'qualidade.cancelarManifestacao: SGH_QUA_OUVIDORIA (cancelamento lógico; retrato na SGH_QUA_VERSAO) e a SGH_TRILHA',
+    'qualidade.cancelarManifestacao: manifestacao_ouvidoria (cancelamento lógico; retrato na trilha_auditoria) e a trilha_auditoria',
   )
   async cancelarManifestacao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1738,13 +1738,13 @@ export class GestaoQualidadeController {
     await this.apoio.exigirLiberacao(s);
     const m = await this.manifestacaoOu404(s, idDaRota(id));
     if (m.canceladaEm) throw recusaCorrecaoGestao('registro-cancelado');
-    await this.semDependentes(s, 'SGH_QUA_OUVIDORIA', m.id);
+    await this.semDependentes(s, 'manifestacao_ouvidoria', m.id);
     const agora = await this.agora(s);
     return this.apoio.sgh(
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.ouvidoriaResponder,
-      { tabela: 'SGH_QUA_OUVIDORIA', id: String(m.id), paciente: m.paciente },
+      { tabela: 'manifestacao_ouvidoria', id: String(m.id), paciente: m.paciente },
       (g) =>
         g.cancelarManifestacao({
           id: m.id,

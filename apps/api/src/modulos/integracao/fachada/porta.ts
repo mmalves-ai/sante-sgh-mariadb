@@ -1,6 +1,6 @@
-// M58-F4: a porta da fachada da API de integração da Hal-AI. As leituras das rotas servidas (READ ONLY pelo
-// @sgh/legado), o estado das operações equivalentes no catálogo e a gravação da ação de situação do convênio pela
-// receita `convenio.alterarSituacao` do executor, assinada pelo usuário de integração (hal-ai).
+// M58-F4: a porta da fachada da API de integração da Hal-AI. As leituras das rotas servidas (somente leitura no
+// banco do cliente), o estado das operações servidas e a gravação da ação de situação do convênio pela
+// operação do Executor, assinada pelo usuário de integração (hal-ai).
 import type {
   DiariaAcompanhante,
   ImpactoConvenio,
@@ -30,7 +30,7 @@ export interface GravacaoSituacaoFachada {
 }
 
 export interface PortaFachada {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   /** O estado da operação no catálogo do estabelecimento (null: fora do catálogo). */
   estado(operacao: string, hospital: string): string | null;
   convenios(c: ContextoFachada): Promise<LinhaConvenioFachada[]>;
@@ -40,7 +40,7 @@ export interface PortaFachada {
   diariaConvenio(c: ContextoFachada, cod: number): Promise<DiariaAcompanhante>;
   impactoConvenio(c: ContextoFachada, cod: number): Promise<ImpactoConvenio>;
   /**
-   * Grava pela receita (executor; SGH_TRILHA e autoria na mesma transação) e devolve a situação relida. As recusas
+   * Grava pelo Executor (trilha e autoria na mesma transação) e devolve a situação relida. As recusas
    * do executor chegam já no contrato de erro da fachada (ErroHttpFachada), sem texto do banco.
    */
   gravarSituacaoConvenio(c: ContextoFachada, g: GravacaoSituacaoFachada): Promise<string | null>;

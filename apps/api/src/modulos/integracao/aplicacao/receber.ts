@@ -132,20 +132,23 @@ export class ServicoEntrada {
           'A mensagem não foi aceita: tente de novo (a mesma chave não entra duas vezes).',
         );
       });
-    const r = await this.porta.gravarSgh(
+    const r = await this.porta.gravar(
       c,
+      // A trilha do parceiro: processo automático (sem usuário), com o parceiro, a chave e o resumo (nunca o conteúdo).
       (x: { recebida: { id: string }; repetida: boolean }) => ({
-        rede: p.rede,
-        hospital: p.hospital,
-        usuario: `INTG.${registro.codigo}`.slice(0, 31),
-        evento: EVENTOS_AUDITAVEIS.integracaoMensagemRecebida.codigo,
-        recurso: 'integracao.entrada',
-        operacao: x.repetida ? 'repetida' : situacao,
-        tabelaAlvo: 'SGH_INTG_RECEBIDA',
-        idAlvo: x.recebida.id,
-        chaveNaturalAlvo: chave.slice(0, 60),
-        resultado: 'sucesso',
-        estacao: p.estacao.slice(0, 80),
+        estabelecimento: null,
+        usuario: null,
+        acao: 'operacao',
+        entidade: 'mensagem_integracao_entrada',
+        entidadeId: /^\d{1,15}$/.test(x.recebida.id) ? Number(x.recebida.id) : null,
+        dadosDepois: {
+          evento: EVENTOS_AUDITAVEIS.integracaoMensagemRecebida.codigo,
+          recurso: 'integracao.entrada',
+          operacao: x.repetida ? 'repetida' : situacao,
+          parceiro: registro.codigo,
+          chave: chave.slice(0, 60),
+          estacao: p.estacao.slice(0, 80),
+        },
         correlacao: resumo.slice(0, 64),
       }),
       (g) =>
@@ -158,7 +161,7 @@ export class ServicoEntrada {
           tamanho: Buffer.byteLength(m.data.conteudo, 'utf8'),
           situacao,
           detalhe,
-          tabelaObjeto: pedido ? 'SILANEXA' : null,
+          tabelaObjeto: pedido ? 'exame_item' : null,
           idObjeto: pedido ? String(pedido) : null,
         }),
     );

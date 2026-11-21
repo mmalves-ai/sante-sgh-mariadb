@@ -98,7 +98,7 @@ export class CatalogoRelatoriosController {
   @Post('catalogo/:codigo/executar')
   @HttpCode(200)
   @Permissao(P.catalogoLer)
-  @AuditadoNoHandler('emissão em SGH_REL_EXECUCAO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('emissão em execucao_relatorio com a trilha na mesma transação')
   executar(
     @Param('codigo') codigo: string,
     @Body() b: unknown,
@@ -110,7 +110,7 @@ export class CatalogoRelatoriosController {
   @Post('catalogo/:codigo/exportar')
   @HttpCode(200)
   @Permissao(P.catalogoLer)
-  @AuditadoNoHandler('exportação em SGH_REL_EXECUCAO (com a justificativa) e a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('exportação em execucao_relatorio (com a justificativa) e a trilha na mesma transação')
   async exportar(
     @Param('codigo') codigo: string,
     @Body() b: unknown,
@@ -156,7 +156,7 @@ export class CatalogoRelatoriosController {
   @Post('triagem/:id')
   @HttpCode(200)
   @Permissao(P.triagemDecidir)
-  @AuditadoNoHandler('decisão em SGH_REL_TRIAGEM com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('decisão em triagem_relatorio_legado com a trilha na mesma transação')
   decidir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -178,7 +178,7 @@ export class CatalogoRelatoriosController {
   @Post('pedidos')
   @HttpCode(201)
   @Permissao(P.pedidoCriar)
-  @AuditadoNoHandler('pedido em SGH_REL_PEDIDO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pedido em pedido_relatorio com a trilha na mesma transação')
   criarPedido(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<{ id: string }> {
     return this.gestao.criarPedido(sessaoDe(req), b);
   }
@@ -186,7 +186,7 @@ export class CatalogoRelatoriosController {
   @Post('pedidos/:id/resposta')
   @HttpCode(200)
   @Permissao(P.pedidoPublicar)
-  @AuditadoNoHandler('resposta em SGH_REL_PEDIDO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('resposta em pedido_relatorio com a trilha na mesma transação')
   responder(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -198,7 +198,7 @@ export class CatalogoRelatoriosController {
   @Post('pedidos/:id')
   @HttpCode(200)
   @Permissao(P.pedidoCriar)
-  @AuditadoNoHandler('pedido em SGH_REL_PEDIDO e SGH_REL_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('pedido em pedido_relatorio e trilha de auditoria com a trilha na mesma transação')
   alterarPedido(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -210,7 +210,7 @@ export class CatalogoRelatoriosController {
   @Post('pedidos/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.pedidoCriar)
-  @AuditadoNoHandler('cancelamento em SGH_REL_PEDIDO e SGH_REL_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('cancelamento em pedido_relatorio e trilha de auditoria com a trilha na mesma transação')
   cancelarPedido(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -223,7 +223,7 @@ export class CatalogoRelatoriosController {
   @HttpCode(200)
   @Permissao(P.pedidoCriar)
   @AuditadoNoHandler(
-    'exclusão em SGH_REL_PEDIDO com o log em SGH_REL_EVENTO e a SGH_TRILHA na mesma transação',
+    'exclusão em pedido_relatorio com o log em trilha de auditoria e a trilha na mesma transação',
   )
   excluirPedido(
     @Param('id') id: string,
@@ -258,7 +258,7 @@ export class CatalogoRelatoriosController {
   @Post('agendamentos')
   @HttpCode(201)
   @Permissao(P.agendamentoEditar)
-  @AuditadoNoHandler('agendamento em SGH_REL_AGENDAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('agendamento em agendamento_relatorio com a trilha na mesma transação')
   criarAgendamento(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -269,7 +269,7 @@ export class CatalogoRelatoriosController {
   @Post('agendamentos/:id')
   @HttpCode(200)
   @Permissao(P.agendamentoEditar)
-  @AuditadoNoHandler('agendamento em SGH_REL_AGENDAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('agendamento em agendamento_relatorio com a trilha na mesma transação')
   alterarAgendamento(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -281,7 +281,7 @@ export class CatalogoRelatoriosController {
   @Post('agendamentos/:id/ativo')
   @HttpCode(200)
   @Permissao(P.agendamentoEditar)
-  @AuditadoNoHandler('agendamento em SGH_REL_AGENDAMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('agendamento em agendamento_relatorio com a trilha na mesma transação')
   ativar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -294,7 +294,7 @@ export class CatalogoRelatoriosController {
   @HttpCode(200)
   @Permissao(P.agendamentoEditar)
   @AuditadoNoHandler(
-    'exclusão em SGH_REL_AGENDAMENTO com o log em SGH_REL_EVENTO e a SGH_TRILHA na mesma transação',
+    'exclusão em agendamento_relatorio com o log em trilha de auditoria e a trilha na mesma transação',
   )
   excluirAgendamento(
     @Param('id') id: string,
@@ -316,7 +316,7 @@ export class CatalogoRelatoriosController {
   @Post('agendamentos/:id/enviar')
   @HttpCode(200)
   @Permissao(P.agendamentoEditar)
-  @AuditadoNoHandler('envio em SGH_REL_EXECUCAO com a SGH_TRILHA na mesma transação; o e-mail pelo worker')
+  @AuditadoNoHandler('envio em execucao_relatorio com a trilha na mesma transação; o e-mail pelo worker')
   enviar(
     @Param('id') id: string,
     @Req() req: RequisicaoAutorizada,

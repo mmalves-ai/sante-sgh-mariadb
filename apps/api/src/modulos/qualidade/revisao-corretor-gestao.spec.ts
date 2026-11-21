@@ -9,11 +9,10 @@
 //   - o sorteio com o universo cortado pelo teto é recusado; a conferência devolve `cortada`;
 //   - a pendência ao médico é avisada na central (sino) e a do médico sem usuário volta como sem destinatário;
 //   - o indicador da ouvidoria por área junta "UTI", "uti" e "U.T.I.".
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { avisoDePendencia, avisarPendenciaNaCentral, LINK_MINHAS_PENDENCIAS } from './central-pendencias.js';
 import { PortaCcihMemoria } from './porta-ccih-memoria.js';
@@ -72,12 +71,21 @@ const ALTAS = Array.from({ length: 12 }, (_, i) => ({
   medicoNome: i % 2 ? 'MEDICO SEM USUARIO' : 'MEDICO SINTETICO',
 }));
 
+const avisados: string[] = [];
+
 beforeAll(async () => {
   porta = new PortaGestaoMemoria({ agora });
   porta.altasSint.set('2026-09', ALTAS);
   porta.loginsSint.set(601, 'SINT.MEDICO');
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha: new RegistradorTrilhaMemoria(),
+    // A central de avisos de teste (o sino): guarda o login de cada aviso emitido.
+    centralAvisos: {
+      emitir: (_c, _a, novo) => {
+        avisados.push(novo.login);
+        return Promise.resolve(avisados.length);
+      },
+    },
     gestao: porta,
     ccih: new PortaCcihMemoria({ agora }),
     vigiaEnfermagem: null,
@@ -363,6 +371,7 @@ describe('revisão do W0-04: comissão de revisão de prontuários', () => {
     const r1 = await post(qu, `${B}/prontuarios/${String(comUsuario.id)}/revisao`, naoConforme);
     expect(r1.statusCode, r1.body).toBe(201);
     expect(json(r1)).toMatchObject({ avisado: true, semDestinatario: false });
+    expect(avisados).toEqual(['SINT.MEDICO']);
     const r2 = await post(qu, `${B}/prontuarios/${String(semUsuario.id)}/revisao`, naoConforme);
     expect(r2.statusCode, r2.body).toBe(201);
     expect(json(r2)).toMatchObject({ avisado: false, semDestinatario: true });

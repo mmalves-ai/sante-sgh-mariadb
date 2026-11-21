@@ -28,14 +28,7 @@ import {
   semeDaSugestaoResolvida,
 } from '@sgh/dominio-qualidade';
 import { adesaoDasMetas, conteudoCanonico, nomeDoTipo } from '@sgh/dominio-recepcao';
-import type {
-  AcaoPlanoSghLida,
-  AnaliseSghLida,
-  ContagemNotificacoesSgh,
-  ProtocoloPacienteLido,
-  QueixaTecnicaSghLida,
-  VersaoGerenciadoLida,
-} from '@sgh/legado';
+import type { AcaoPlanoRegistrada, AnaliseRegistrada, ContagemNotificacoes, ProtocoloDoPaciente, QueixaTecnicaRegistrada, VersaoProtocoloGerenciado } from './tipos.js';
 import type { ContagensAdesaoLidas } from './porta.js';
 
 /** Provedor do resumo da sugestão resolvida (null: sem a chave, as sugestões ficam desligadas com o motivo). */
@@ -84,7 +77,7 @@ export function inicioDoTurno(ocorridoEm: string): string {
 }
 
 /** O conteúdo gravado conferido pelo esquema (um conteúdo que não confere vira um 5 porquês vazio, sinalizado). */
-export function conteudoDe(a: Pick<AnaliseSghLida, 'conteudo' | 'metodo'>): ConteudoAnalise {
+export function conteudoDe(a: Pick<AnaliseRegistrada, 'conteudo' | 'metodo'>): ConteudoAnalise {
   try {
     const r = esquemaConteudoAnalise.safeParse(JSON.parse(a.conteudo));
     if (r.success) return r.data;
@@ -94,7 +87,7 @@ export function conteudoDe(a: Pick<AnaliseSghLida, 'conteudo' | 'metodo'>): Cont
   return { metodo: 'cincoPorques', porques: ['(conteúdo ilegível: registre a análise de novo)'] };
 }
 
-export function analiseLida(a: AnaliseSghLida): AnaliseLida {
+export function analiseLida(a: AnaliseRegistrada): AnaliseLida {
   const conteudo = conteudoDe(a);
   return {
     id: a.id,
@@ -115,7 +108,7 @@ export function analiseLida(a: AnaliseSghLida): AnaliseLida {
   };
 }
 
-export function acaoLida(a: AcaoPlanoSghLida, hoje: string): AcaoPlanoLida {
+export function acaoLida(a: AcaoPlanoRegistrada, hoje: string): AcaoPlanoLida {
   const situacao = a.situacao as SituacaoAcao;
   return {
     id: a.id,
@@ -142,7 +135,7 @@ export function acaoLida(a: AcaoPlanoSghLida, hoje: string): AcaoPlanoLida {
   };
 }
 
-export function queixaLida(q: QueixaTecnicaSghLida): QueixaTecnicaLida {
+export function queixaLida(q: QueixaTecnicaRegistrada): QueixaTecnicaLida {
   return { ...q } as QueixaTecnicaLida;
 }
 
@@ -155,7 +148,7 @@ const impressao = (c: ConteudoGerenciado) =>
 
 /** As definições publicadas íntegras (o conteúdo confere com a impressão gravada), pelo ID da versão. */
 export function definicoesGerenciadas(
-  versoes: readonly VersaoGerenciadoLida[],
+  versoes: readonly VersaoProtocoloGerenciado[],
 ): Map<number, ConteudoGerenciado> {
   const porId = new Map<number, ConteudoGerenciado>();
   for (const v of versoes) {
@@ -167,8 +160,8 @@ export function definicoesGerenciadas(
 
 /** A adesão às metas dos protocolos gerenciados (M44) no período, meta a meta, com as parcelas. */
 export function adesaoProtocolosGerenciados(
-  versoes: readonly VersaoGerenciadoLida[],
-  protocolos: readonly ProtocoloPacienteLido[],
+  versoes: readonly VersaoProtocoloGerenciado[],
+  protocolos: readonly ProtocoloDoPaciente[],
 ): IndicadorPainel[] {
   const porId = definicoesGerenciadas(versoes);
   const linhas = adesaoDasMetas(
@@ -232,7 +225,7 @@ export interface PainelSegurancaPaciente {
 export function montarPainel(x: {
   readonly de: string;
   readonly ate: string;
-  readonly notificacoes: readonly ContagemNotificacoesSgh[];
+  readonly notificacoes: readonly ContagemNotificacoes[];
   readonly analises: { comPrazo: number; concluidas: number; noPrazo: number; vencidas: number };
   readonly acoes: readonly {
     situacao: string;
@@ -247,8 +240,8 @@ export function montarPainel(x: {
 }): PainelSegurancaPaciente {
   const validas = x.notificacoes.filter((n) => n.situacao !== 'descartada');
   const soma = (
-    f: (n: ContagemNotificacoesSgh) => boolean,
-    ls: readonly ContagemNotificacoesSgh[] = validas,
+    f: (n: ContagemNotificacoes) => boolean,
+    ls: readonly ContagemNotificacoes[] = validas,
   ) => ls.filter(f).reduce((t, n) => t + n.quantidade, 0);
   const somaA = (f: (a: (typeof x.acoes)[number]) => boolean) =>
     x.acoes.filter(f).reduce((t, a) => t + a.quantidade, 0);

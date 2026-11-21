@@ -30,6 +30,7 @@
 //   POST /api/qualidade/ccih/surtos                     qualidade.registrarSurto
 //   POST /api/qualidade/ccih/surtos/:id                 qualidade.registrarSurto (atualização e encerramento)
 // Tudo pela chave `qualidade.ccih` (POL-3). Regra 11: a trilha leva só os IDs (a linha SGH_ e o paciente).
+import { TABELA_DO_REGISTRO } from './tipos.js';
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type TipoDispositivoInvasivo,
@@ -42,7 +43,6 @@ import {
   esquemaCorrigirObservacaoMaos,
   esquemaFecharCompetenciaCcih,
   PERMISSOES_QUALIDADE,
-  REGISTROS_VERSIONADOS_QUALIDADE,
   type RegistroVersionadoQualidade,
   esquemaAtualizarSurto,
   esquemaCompetenciaCcih,
@@ -113,7 +113,7 @@ import {
   vizinhosParaBloquear,
 } from '@sgh/dominio-qualidade';
 import { VinculoSintetico, type VinculoAssistencialPort } from '@sgh/dominio-acesso';
-import type { InternadoCcihLido } from '@sgh/legado';
+import type { InternadoCcih } from './tipos.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { reautenticar } from '../../autorizacao/reautenticacao.js';
 import { RESOLVEDOR_SESSAO, type ResolvedorSessao } from '../../autorizacao/resolvedor-sessao.js';
@@ -252,7 +252,7 @@ export class CcihController {
     return prazoDaPolitica(await this.apoio.parametro(s, PARAMETRO_PRAZO_LIBERACAO).catch(() => 0));
   }
 
-  private async internacaoAberta(s: SessaoCadastro, reg: number): Promise<InternadoCcihLido> {
+  private async internacaoAberta(s: SessaoCadastro, reg: number): Promise<InternadoCcih> {
     const i = await this.porta.internacao(s.porta, reg);
     if (!i) throw naoEncontrado('Internação');
     if (!i.aberta) throw recusaCcih('internacao-encerrada');
@@ -754,7 +754,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarDispositivo: SGH_QUA_DISPOSITIVO com a SGH_TRILHA na mesma transação',
+    'qualidade.registrarDispositivo: dispositivo_invasivo_paciente com a trilha_auditoria na mesma transação',
   )
   async registrarDispositivo(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.registrarDispositivoPor(sessaoDe(req), b, P.ccihRegistrar);
@@ -783,7 +783,7 @@ export class CcihController {
       s,
       E.qualidadeDispositivoRegistrado.codigo,
       recurso,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_DISPOSITIVO', id: String(x.id), paciente: i.paciente }),
+      (x: { id: number }) => ({ tabela: 'dispositivo_invasivo_paciente', id: String(x.id), paciente: i.paciente }),
       (g) =>
         g.registrarDispositivo({
           reg: i.reg,
@@ -803,7 +803,7 @@ export class CcihController {
 
   @Post('dispositivos/:id/retirar')
   @Permissao(P.ccihRegistrar)
-  @AuditadoNoHandler('qualidade.retirarDispositivo: SGH_QUA_DISPOSITIVO (versão conferida) com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.retirarDispositivo: dispositivo_invasivo_paciente (versão conferida) com a trilha_auditoria')
   async retirarDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.retirarDispositivoPor(sessaoDe(req), id, b, P.ccihRegistrar);
   }
@@ -832,7 +832,7 @@ export class CcihController {
       s,
       E.qualidadeDispositivoRetirado.codigo,
       recurso,
-      { tabela: 'SGH_QUA_DISPOSITIVO', id: String(d.id), paciente: d.paciente },
+      { tabela: 'dispositivo_invasivo_paciente', id: String(d.id), paciente: d.paciente },
       (g) =>
         g.retirarDispositivo({
           id: d.id,
@@ -853,7 +853,7 @@ export class CcihController {
   @Post('iras')
   @HttpCode(201)
   @Permissao(P.irasRegistrar)
-  @AuditadoNoHandler('qualidade.registrarIras: SGH_QUA_IRAS com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('qualidade.registrarIras: caso_infeccao com a trilha_auditoria na mesma transação')
   async registrarIras(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarIras, b);
@@ -885,7 +885,7 @@ export class CcihController {
       s,
       E.qualidadeIrasRegistrada.codigo,
       P.irasRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_IRAS', id: String(x.id), paciente: i.paciente }),
+      (x: { id: number }) => ({ tabela: 'caso_infeccao', id: String(x.id), paciente: i.paciente }),
       (g) =>
         g.registrarIras({
           reg: i.reg,
@@ -910,7 +910,7 @@ export class CcihController {
 
   @Post('iras/:id/descartar')
   @Permissao(P.irasRegistrar)
-  @AuditadoNoHandler('qualidade.registrarIras (descarte): SGH_QUA_IRAS com a versão conferida e a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarIras (descarte): caso_infeccao com a versão conferida e a trilha_auditoria')
   async descartarIras(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaDescartarIras, { ...(b as object), iras: idDaRota(id) });
@@ -924,7 +924,7 @@ export class CcihController {
       s,
       E.qualidadeIrasDescartada.codigo,
       P.irasRegistrar,
-      { tabela: 'SGH_QUA_IRAS', id: String(x.id), paciente: x.paciente },
+      { tabela: 'caso_infeccao', id: String(x.id), paciente: x.paciente },
       (g) =>
         g.descartarIras({
           id: x.id,
@@ -940,7 +940,7 @@ export class CcihController {
 
   @Post('antimicrobianos/itens')
   @Permissao(P.antimicrobianoLiberar)
-  @AuditadoNoHandler('qualidade.configurarAntimicrobiano: SGH_QUA_ANTIMICRO_ITEM com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.configurarAntimicrobiano: antimicrobiano com a trilha_auditoria')
   async configurar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaConfigurarAntimicrobiano, b);
@@ -952,7 +952,7 @@ export class CcihController {
       s,
       E.qualidadeAntimicrobianoConfigurado.codigo,
       P.antimicrobianoLiberar,
-      { tabela: 'SGH_QUA_ANTIMICRO_ITEM', id: String(e.item) },
+      { tabela: 'antimicrobiano', id: String(e.item) },
       (g) => g.configurarAntimicrobiano({ ...e, agora, usuario: s.login }),
     );
   }
@@ -961,7 +961,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(P.antimicrobianoLiberar)
   @AuditadoNoHandler(
-    'qualidade.liberarAntimicrobiano: SGH_QUA_ANTIMICRO_LIB (uma decisão por item) com a SGH_TRILHA',
+    'qualidade.liberarAntimicrobiano: liberacao_antimicrobiano (uma decisão por item) com a trilha_auditoria',
   )
   async liberar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -996,7 +996,7 @@ export class CcihController {
       E.qualidadeAntimicrobianoLiberado.codigo,
       P.antimicrobianoLiberar,
       (x: { id: number }) => ({
-        tabela: 'SGH_QUA_ANTIMICRO_LIB',
+        tabela: 'liberacao_antimicrobiano',
         id: String(x.id),
         paciente: i?.paciente ?? null,
       }),
@@ -1024,7 +1024,7 @@ export class CcihController {
   @Post('antimicrobianos/liberacoes/:id/revisar')
   @Permissao(P.antimicrobianoLiberar)
   @AuditadoNoHandler(
-    'qualidade.revisarAntimicrobiano: SGH_QUA_ANTIMICRO_LIB (versão conferida) com a SGH_TRILHA',
+    'qualidade.revisarAntimicrobiano: liberacao_antimicrobiano (versão conferida) com a trilha_auditoria',
   )
   async revisar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1045,7 +1045,7 @@ export class CcihController {
       s,
       E.qualidadeAntimicrobianoRevisado.codigo,
       P.antimicrobianoLiberar,
-      { tabela: 'SGH_QUA_ANTIMICRO_LIB', id: String(l.id), paciente: l.paciente },
+      { tabela: 'liberacao_antimicrobiano', id: String(l.id), paciente: l.paciente },
       (g) =>
         g.revisarAntimicrobiano({
           id: l.id,
@@ -1065,7 +1065,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(P.precaucaoDefinir)
   @AuditadoNoHandler(
-    'qualidade.definirPrecaucao: SGH_QUA_PRECAUCAO e o estado do leito (SGH_INT_LEITO_ESTADO) com a SGH_TRILHA na mesma transação',
+    'qualidade.definirPrecaucao: isolamento_paciente e o estado do leito (leito) com a trilha_auditoria na mesma transação',
   )
   async definirPrecaucao(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1121,7 +1121,7 @@ export class CcihController {
       s,
       E.qualidadePrecaucaoDefinida.codigo,
       P.precaucaoDefinir,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_PRECAUCAO', id: String(x.id), paciente: i.paciente }),
+      (x: { id: number }) => ({ tabela: 'isolamento_paciente', id: String(x.id), paciente: i.paciente }),
       (g) =>
         g.definirPrecaucao({
           reg: i.reg,
@@ -1155,7 +1155,7 @@ export class CcihController {
   @Post('precaucoes/:id/encerrar')
   @Permissao(P.precaucaoDefinir)
   @AuditadoNoHandler(
-    'qualidade.definirPrecaucao (encerramento): SGH_QUA_PRECAUCAO e o leito com a SGH_TRILHA',
+    'qualidade.definirPrecaucao (encerramento): isolamento_paciente e o leito com a trilha_auditoria',
   )
   async encerrarPrecaucao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1176,7 +1176,7 @@ export class CcihController {
       s,
       E.qualidadePrecaucaoEncerrada.codigo,
       P.precaucaoDefinir,
-      { tabela: 'SGH_QUA_PRECAUCAO', id: String(p.id), paciente: p.paciente },
+      { tabela: 'isolamento_paciente', id: String(p.id), paciente: p.paciente },
       (g) =>
         g.encerrarPrecaucao({
           id: p.id,
@@ -1198,7 +1198,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarObservacaoMaos: SGH_QUA_HIGIENE_MAOS com a SGH_TRILHA (sem identificar o observado)',
+    'qualidade.registrarObservacaoMaos: observacao_higiene_maos com a trilha_auditoria (sem identificar o observado)',
   )
   async observacaoMaos(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1212,7 +1212,7 @@ export class CcihController {
       s,
       E.qualidadeHigieneMaosRegistrada.codigo,
       P.ccihRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_HIGIENE_MAOS', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'observacao_higiene_maos', id: String(x.id) }),
       (g) =>
         g.registrarObservacaoMaos({
           unidade: e.unidade,
@@ -1230,7 +1230,7 @@ export class CcihController {
 
   @Post('maos/consumo')
   @Permissao(P.ccihRegistrar)
-  @AuditadoNoHandler('qualidade.registrarObservacaoMaos (consumo): SGH_QUA_HIGIENE_MAOS com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarObservacaoMaos (consumo): observacao_higiene_maos com a trilha_auditoria')
   async consumoAlcool(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarConsumoAlcool, b);
@@ -1241,7 +1241,7 @@ export class CcihController {
       s,
       E.qualidadeHigieneMaosRegistrada.codigo,
       P.ccihRegistrar,
-      { tabela: 'SGH_QUA_HIGIENE_MAOS', chave: `${String(e.unidade)}|${e.setor ?? ''}|${e.competencia}` },
+      { tabela: 'observacao_higiene_maos', chave: `${String(e.unidade)}|${e.setor ?? ''}|${e.competencia}` },
       (g) => g.registrarConsumoAlcool({ ...e, usuario: s.login }),
     );
   }
@@ -1249,7 +1249,7 @@ export class CcihController {
   @Post('surtos')
   @HttpCode(201)
   @Permissao(P.ccihRegistrar)
-  @AuditadoNoHandler('qualidade.registrarSurto: SGH_QUA_SURTO com a SGH_TRILHA')
+  @AuditadoNoHandler('qualidade.registrarSurto: surto_infeccao com a trilha_auditoria')
   async registrarSurto(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaRegistrarSurto, b);
@@ -1267,7 +1267,7 @@ export class CcihController {
       s,
       E.qualidadeSurtoRegistrado.codigo,
       P.ccihRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_SURTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'surto_infeccao', id: String(x.id) }),
       (g) => g.registrarSurto({ ...e, usuario: s.login }),
     );
   }
@@ -1275,7 +1275,7 @@ export class CcihController {
   @Post('surtos/:id')
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarSurto (atualização): SGH_QUA_SURTO com a versão conferida e a SGH_TRILHA',
+    'qualidade.registrarSurto (atualização): surto_infeccao com a versão conferida e a trilha_auditoria',
   )
   async atualizarSurto(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1295,7 +1295,7 @@ export class CcihController {
       s,
       E.qualidadeSurtoRegistrado.codigo,
       P.ccihRegistrar,
-      { tabela: 'SGH_QUA_SURTO', id: String(x.id) },
+      { tabela: 'surto_infeccao', id: String(x.id) },
       (g) => g.atualizarSurto({ ...e, id: x.id, agora, usuario: s.login }),
     );
   }
@@ -1368,7 +1368,7 @@ export class CcihController {
   @Permissao(P.ccihLer)
   async dependentesDispositivo(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    const itens = await this.porta.dependentes(s.porta, 'SGH_QUA_DISPOSITIVO', idDaRota(id));
+    const itens = await this.porta.dependentes(s.porta, 'dispositivo_invasivo_paciente', idDaRota(id));
     return { itens, podeCancelar: itens.length === 0 };
   }
 
@@ -1381,7 +1381,7 @@ export class CcihController {
     @Req() req: RequisicaoAutorizada,
   ) {
     const s = sessaoDe(req);
-    const tabela = REGISTROS_VERSIONADOS_QUALIDADE[registro as RegistroVersionadoQualidade];
+    const tabela = TABELA_DO_REGISTRO[registro as RegistroVersionadoQualidade];
     if (
       !tabela ||
       !['dispositivo', 'iras', 'precaucao', 'observacao-maos', 'competencia', 'bundle'].includes(registro)
@@ -1421,7 +1421,7 @@ export class CcihController {
 
   @Post('competencias')
   @Permissao(PQ.competenciaFechar)
-  @AuditadoNoHandler('qualidade.fecharCompetencia: SGH_QUA_COMPETENCIA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('qualidade.fecharCompetencia: fechamento_vigilancia_iras com a trilha_auditoria na mesma transação')
   async fecharCompetencia(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaFecharCompetenciaCcih, b);
@@ -1439,7 +1439,7 @@ export class CcihController {
       s,
       E.qualidadeCompetenciaFechada.codigo,
       PQ.competenciaFechar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_COMPETENCIA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'fechamento_vigilancia_iras', id: String(x.id) }),
       (g) => g.fecharCompetencia({ competencia: e.competencia, agora, usuario: s.login }),
     );
   }
@@ -1447,7 +1447,7 @@ export class CcihController {
   @Post('competencias/:id/reabrir')
   @Permissao(PQ.competenciaReabrir)
   @AuditadoNoHandler(
-    'qualidade.reabrirCompetencia: SGH_QUA_COMPETENCIA (versão conferida, retrato na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.reabrirCompetencia: fechamento_vigilancia_iras (versão conferida, retrato na trilha_auditoria) com a trilha_auditoria',
   )
   async reabrirCompetencia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1461,7 +1461,7 @@ export class CcihController {
       s,
       E.qualidadeCompetenciaReaberta.codigo,
       PQ.competenciaReabrir,
-      { tabela: 'SGH_QUA_COMPETENCIA', id: String(c.id) },
+      { tabela: 'fechamento_vigilancia_iras', id: String(c.id) },
       (g) =>
         g.reabrirCompetencia({
           id: c.id,
@@ -1476,7 +1476,7 @@ export class CcihController {
   @Post('dispositivos/:id/correcao')
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.corrigirDispositivo: SGH_QUA_DISPOSITIVO (nova versão; a anterior na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.corrigirDispositivo: dispositivo_invasivo_paciente (nova versão; a anterior na trilha_auditoria) com a trilha_auditoria',
   )
   async corrigirDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.corrigirDispositivoPor(sessaoDe(req), req, id, b, P.ccihRegistrar);
@@ -1552,7 +1552,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       recurso,
-      { tabela: 'SGH_QUA_DISPOSITIVO', id: String(d.id), paciente: d.paciente },
+      { tabela: 'dispositivo_invasivo_paciente', id: String(d.id), paciente: d.paciente },
       (g) =>
         g.corrigirDispositivo({
           id: d.id,
@@ -1572,7 +1572,7 @@ export class CcihController {
   @Post('dispositivos/:id/cancelamento')
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarDispositivo: SGH_QUA_DISPOSITIVO (cancelamento lógico; retrato na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.cancelarDispositivo: dispositivo_invasivo_paciente (cancelamento lógico; retrato na trilha_auditoria) com a trilha_auditoria',
   )
   async cancelarDispositivo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.cancelarDispositivoPor(sessaoDe(req), req, id, b, P.ccihRegistrar);
@@ -1596,7 +1596,7 @@ export class CcihController {
     await this.apoio.exigirLiberacao(s);
     if (d.canceladoEm) throw recusaCorrecao('registro-cancelado');
     // D-CRUD-ORFAOS: a ficha de IRAS confirmada que usa o dispositivo como critério ficaria órfã.
-    const dependentes = await this.porta.dependentes(s.porta, 'SGH_QUA_DISPOSITIVO', d.id);
+    const dependentes = await this.porta.dependentes(s.porta, 'dispositivo_invasivo_paciente', d.id);
     if (dependentes.length) throw recusaCorrecao('dispositivo-com-iras', avisosDependentes(dependentes));
     const agora = await this.agora(s);
     await this.exigirCompetenciasAbertas(s, competenciasDoIntervalo(d.inseridoEm, d.retiradoEm, agora));
@@ -1604,7 +1604,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       recurso,
-      { tabela: 'SGH_QUA_DISPOSITIVO', id: String(d.id), paciente: d.paciente },
+      { tabela: 'dispositivo_invasivo_paciente', id: String(d.id), paciente: d.paciente },
       (g) =>
         g.cancelarDispositivo({
           id: d.id,
@@ -1619,7 +1619,7 @@ export class CcihController {
   @Post('iras/:id/correcao')
   @Permissao(P.irasRegistrar)
   @AuditadoNoHandler(
-    'qualidade.corrigirIras: SGH_QUA_IRAS (nova versão; a anterior na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.corrigirIras: caso_infeccao (nova versão; a anterior na trilha_auditoria) com a trilha_auditoria',
   )
   async corrigirIras(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1650,7 +1650,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.irasRegistrar,
-      { tabela: 'SGH_QUA_IRAS', id: String(x.id), paciente: x.paciente },
+      { tabela: 'caso_infeccao', id: String(x.id), paciente: x.paciente },
       (g) =>
         g.corrigirIras({
           id: x.id,
@@ -1672,7 +1672,7 @@ export class CcihController {
   @Post('precaucoes/:id/alteracao')
   @Permissao(P.precaucaoDefinir)
   @AuditadoNoHandler(
-    'qualidade.alterarPrecaucao: SGH_QUA_PRECAUCAO (nova versão), o leito e os vizinhos (SGH_INT_LEITO_ESTADO) com a SGH_TRILHA',
+    'qualidade.alterarPrecaucao: isolamento_paciente (nova versão), o leito e os vizinhos (leito) com a trilha_auditoria',
   )
   async alterarPrecaucao(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1725,7 +1725,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.precaucaoDefinir,
-      { tabela: 'SGH_QUA_PRECAUCAO', id: String(p.id), paciente: p.paciente },
+      { tabela: 'isolamento_paciente', id: String(p.id), paciente: p.paciente },
       (g) =>
         g.alterarPrecaucao({
           id: p.id,
@@ -1749,7 +1749,7 @@ export class CcihController {
   @Post('maos/observacoes/:id/correcao')
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.corrigirObservacaoMaos: SGH_QUA_HIGIENE_MAOS (nova versão; a anterior na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.corrigirObservacaoMaos: observacao_higiene_maos (nova versão; a anterior na trilha_auditoria) com a trilha_auditoria',
   )
   async corrigirObservacaoMaos(
     @Param('id') id: string,
@@ -1771,7 +1771,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       P.ccihRegistrar,
-      { tabela: 'SGH_QUA_HIGIENE_MAOS', id: String(o.id) },
+      { tabela: 'observacao_higiene_maos', id: String(o.id) },
       (g) =>
         g.corrigirObservacaoMaos({
           id: o.id,
@@ -1792,7 +1792,7 @@ export class CcihController {
   @Post('maos/observacoes/:id/estorno')
   @Permissao(P.ccihRegistrar)
   @AuditadoNoHandler(
-    'qualidade.estornarObservacaoMaos: SGH_QUA_HIGIENE_MAOS (estorno lógico; retrato na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.estornarObservacaoMaos: observacao_higiene_maos (estorno lógico; retrato na trilha_auditoria) com a trilha_auditoria',
   )
   async estornarObservacaoMaos(
     @Param('id') id: string,
@@ -1814,7 +1814,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       P.ccihRegistrar,
-      { tabela: 'SGH_QUA_HIGIENE_MAOS', id: String(o.id) },
+      { tabela: 'observacao_higiene_maos', id: String(o.id) },
       (g) =>
         g.estornarObservacaoMaos({
           id: o.id,
@@ -1900,7 +1900,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarDispositivo (aba do prontuário): SGH_QUA_DISPOSITIVO com a SGH_TRILHA na mesma transação',
+    'qualidade.registrarDispositivo (aba do prontuário): dispositivo_invasivo_paciente com a trilha_auditoria na mesma transação',
   )
   async registrarDispositivoEnfermagem(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.registrarDispositivoPor(sessaoDe(req), b, PQ.dispositivoInvasivoRegistrar, true);
@@ -1909,7 +1909,7 @@ export class CcihController {
   @Post('enfermagem/dispositivos/:id/retirar')
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.retirarDispositivo (aba do prontuário): SGH_QUA_DISPOSITIVO (versão conferida) com a SGH_TRILHA',
+    'qualidade.retirarDispositivo (aba do prontuário): dispositivo_invasivo_paciente (versão conferida) com a trilha_auditoria',
   )
   async retirarDispositivoEnfermagem(
     @Param('id') id: string,
@@ -1924,7 +1924,7 @@ export class CcihController {
   @Post('enfermagem/dispositivos/:id/correcao')
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.corrigirDispositivo (aba do prontuário): SGH_QUA_DISPOSITIVO (nova versão; a anterior na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.corrigirDispositivo (aba do prontuário): dispositivo_invasivo_paciente (nova versão; a anterior na trilha_auditoria) com a trilha_auditoria',
   )
   async corrigirDispositivoEnfermagem(
     @Param('id') id: string,
@@ -1937,7 +1937,7 @@ export class CcihController {
   @Post('enfermagem/dispositivos/:id/cancelamento')
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.cancelarDispositivo (aba do prontuário): SGH_QUA_DISPOSITIVO (cancelamento lógico; retrato na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.cancelarDispositivo (aba do prontuário): dispositivo_invasivo_paciente (cancelamento lógico; retrato na trilha_auditoria) com a trilha_auditoria',
   )
   async cancelarDispositivoEnfermagem(
     @Param('id') id: string,
@@ -1952,7 +1952,7 @@ export class CcihController {
   @Permissao(PQ.dispositivoInvasivoLer)
   async dependentesDispositivoEnfermagem(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
-    const itens = await this.porta.dependentes(s.porta, 'SGH_QUA_DISPOSITIVO', idDaRota(id));
+    const itens = await this.porta.dependentes(s.porta, 'dispositivo_invasivo_paciente', idDaRota(id));
     return { itens, podeCancelar: itens.length === 0 };
   }
 
@@ -1975,7 +1975,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.registrarBundleDispositivo: SGH_QUA_DISP_BUNDLE com a SGH_TRILHA (só inclusão)',
+    'qualidade.registrarBundleDispositivo: verificacao_bundle com a trilha_auditoria (só inclusão)',
   )
   async registrarBundle(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -2005,7 +2005,7 @@ export class CcihController {
       s,
       E.qualidadeBundleRegistrado.codigo,
       PQ.dispositivoInvasivoRegistrar,
-      (x: { id: number }) => ({ tabela: 'SGH_QUA_DISP_BUNDLE', id: String(x.id), paciente: d.paciente }),
+      (x: { id: number }) => ({ tabela: 'verificacao_bundle', id: String(x.id), paciente: d.paciente }),
       (g) =>
         g.registrarBundle({
           dispositivo: d.id,
@@ -2035,7 +2035,7 @@ export class CcihController {
   @Post('enfermagem/bundles/:id/correcao')
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.corrigirBundleDispositivo: SGH_QUA_DISP_BUNDLE (nova versão; a anterior na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.corrigirBundleDispositivo: verificacao_bundle (nova versão; a anterior na trilha_auditoria) com a trilha_auditoria',
   )
   async corrigirBundle(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -2070,7 +2070,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCorrigido.codigo,
       PQ.dispositivoInvasivoRegistrar,
-      { tabela: 'SGH_QUA_DISP_BUNDLE', id: String(x.id), paciente: d.paciente },
+      { tabela: 'verificacao_bundle', id: String(x.id), paciente: d.paciente },
       (g) =>
         g.corrigirBundle({
           id: x.id,
@@ -2089,7 +2089,7 @@ export class CcihController {
   @Post('enfermagem/bundles/:id/estorno')
   @Permissao(PQ.dispositivoInvasivoRegistrar)
   @AuditadoNoHandler(
-    'qualidade.estornarBundleDispositivo: SGH_QUA_DISP_BUNDLE (estorno lógico; retrato na SGH_QUA_VERSAO) com a SGH_TRILHA',
+    'qualidade.estornarBundleDispositivo: verificacao_bundle (estorno lógico; retrato na trilha_auditoria) com a trilha_auditoria',
   )
   async estornarBundle(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -2104,7 +2104,7 @@ export class CcihController {
       s,
       E.qualidadeRegistroCancelado.codigo,
       PQ.dispositivoInvasivoRegistrar,
-      { tabela: 'SGH_QUA_DISP_BUNDLE', id: String(x.id), paciente: d.paciente },
+      { tabela: 'verificacao_bundle', id: String(x.id), paciente: d.paciente },
       (g) =>
         g.estornarBundle({
           id: x.id,
@@ -2126,7 +2126,7 @@ export class CcihController {
   ) {
     const s = sessaoDe(req);
     if (registro !== 'bundle' && registro !== 'dispositivo') throw naoEncontrado('Registro');
-    const tabela = REGISTROS_VERSIONADOS_QUALIDADE[registro];
+    const tabela = TABELA_DO_REGISTRO[registro];
     return { itens: await this.porta.versoes(s.porta, tabela, idDaRota(id)) };
   }
 }

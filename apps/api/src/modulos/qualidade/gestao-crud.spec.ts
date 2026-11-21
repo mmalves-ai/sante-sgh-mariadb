@@ -2,11 +2,10 @@
 // fonte sintética e a porta EM MEMÓRIA (dados sintéticos): a auditoria alterada com versão e a cancelada (recusa de
 // órfão com a NC aberta dela); a ata retificada (a anterior acessível), assinada e a reunião com ata assinada que não se
 // cancela; a NC duplicada cancelada; a manifestação corrigida antes do encaminhamento e cancelada com motivo.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCcihMemoria } from './porta-ccih-memoria.js';
 import { PortaGestaoMemoria } from './porta-gestao-memoria.js';
@@ -53,7 +52,7 @@ const json = <T = Record<string, unknown>>(r: { body: string }) => JSON.parse(r.
 const codigo = (r: { body: string }) => json<{ codigo?: string }>(r).codigo;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppQualidade(env, {
     trilha: new RegistradorTrilhaMemoria(),
     gestao: new PortaGestaoMemoria({ agora }),
     ccih: new PortaCcihMemoria({ agora }),

@@ -3,11 +3,10 @@
 // dispositivo (um ativo por tipo); a ficha de IRAS com os critérios, o 3º dia e a associação ao CVC; os denominadores
 // com as parcelas; a fila do restrito, o alerta ao prescritor, a liberação única e as revisões; o consumo em DDD e DOT;
 // a precaução que reflete no leito e bloqueia o vizinho livre; higiene das mãos e surtos; permissão e chave desligada.
+import { criarAppQualidade } from './teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -41,7 +40,7 @@ async function montar(o: { semChave?: boolean } = {}) {
       })
     : undefined;
   const porta = new PortaCcihMemoria({ agora });
-  const app: NestFastifyApplication = await criarApp(lerConfiguracao(env), null, env, {
+  const app: NestFastifyApplication = await criarAppQualidade(env, {
     trilha,
     ccih: porta,
     vigiaEnfermagem: null,

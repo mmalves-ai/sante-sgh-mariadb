@@ -26,31 +26,22 @@ import {
   type RevisaoDevida,
   type SituacaoDaLiberacao,
 } from '@sgh/dominio-qualidade';
-import type {
-  AntimicrobianoPrescritoLido,
-  CulturaLida,
-  DispositivoInvasivoSghLido,
-  InternadoCcihLido,
-  IrasSghLida,
-  ItemAntimicrobianoSghLido,
-  LiberacaoSghLida,
-  PrecaucaoSghLida,
-} from '@sgh/legado';
+import type { AntimicrobianoPrescrito, CulturaDoPaciente, DispositivoInvasivoRegistrado, InternadoCcih, IrasRegistrada, ItemAntimicrobianoConfigurado, LiberacaoAntimicrobianoRegistrada, PrecaucaoRegistrada } from './tipos.js';
 
 /** O leito como a tela mostra. */
 export const textoLeito = (i: { bloco: string; acomodacao: string; leito: string }) =>
   [i.bloco, i.acomodacao, i.leito].filter(Boolean).join(' · ');
 
 /** O antimicrobiano em uso: vigente agora (não suspenso, vigência não terminada). */
-export function emUso(p: AntimicrobianoPrescritoLido, agora: string): boolean {
+export function emUso(p: AntimicrobianoPrescrito, agora: string): boolean {
   const fim = [p.fimVigencia, p.suspensoEm].filter((x): x is string => x !== null).sort()[0] ?? null;
   return p.inicioVigencia <= agora && (fim === null || fim > agora);
 }
 
 /** O início do tratamento: a vigência mais antiga do mesmo item na internação (entre as lidas). */
 export function inicioDoTratamento(
-  p: AntimicrobianoPrescritoLido,
-  todos: readonly AntimicrobianoPrescritoLido[],
+  p: AntimicrobianoPrescrito,
+  todos: readonly AntimicrobianoPrescrito[],
 ): string {
   return todos
     .filter((x) => x.reg === p.reg && x.item === p.item)
@@ -76,7 +67,7 @@ export interface ItemFilaAntimicrobiano {
     readonly decididoEm: string;
     readonly decididoPor: string;
     readonly versao: number;
-    readonly revisoes: LiberacaoSghLida['revisoes'];
+    readonly revisoes: LiberacaoAntimicrobianoRegistrada['revisoes'];
   } | null;
   readonly revisaoDevida: RevisaoDevida | null;
   readonly ficha: number | null;
@@ -84,9 +75,9 @@ export interface ItemFilaAntimicrobiano {
 
 /** A fila do antimicrobiano: os restritos em uso, com a situação, e os já decididos com a revisão devida. */
 export function filaAntimicrobianos(e: {
-  readonly prescritos: readonly AntimicrobianoPrescritoLido[];
-  readonly liberacoes: readonly LiberacaoSghLida[];
-  readonly itens: readonly ItemAntimicrobianoSghLido[];
+  readonly prescritos: readonly AntimicrobianoPrescrito[];
+  readonly liberacoes: readonly LiberacaoAntimicrobianoRegistrada[];
+  readonly itens: readonly ItemAntimicrobianoConfigurado[];
   readonly fichas: ReadonlyMap<number, number>;
   readonly agora: string;
   readonly prazoHoras: number;
@@ -166,15 +157,15 @@ export interface ItemVigilancia {
 
 /** A fila da vigilância ativa (só quem tem algum motivo), na ordem do peso. */
 export function montarVigilancia(e: {
-  readonly internados: readonly InternadoCcihLido[];
-  readonly dispositivos: readonly DispositivoInvasivoSghLido[];
+  readonly internados: readonly InternadoCcih[];
+  readonly dispositivos: readonly DispositivoInvasivoRegistrado[];
   readonly fila: readonly ItemFilaAntimicrobiano[];
-  readonly prescritos: readonly AntimicrobianoPrescritoLido[];
-  readonly culturas: readonly CulturaLida[];
+  readonly prescritos: readonly AntimicrobianoPrescrito[];
+  readonly culturas: readonly CulturaDoPaciente[];
   readonly cirurgias: readonly { reg: number; data: string }[];
   readonly temperaturas: readonly { paciente: number; valor: number; em: string }[];
-  readonly precaucoes: readonly PrecaucaoSghLida[];
-  readonly iras: readonly IrasSghLida[];
+  readonly precaucoes: readonly PrecaucaoRegistrada[];
+  readonly iras: readonly IrasRegistrada[];
   readonly agora: string;
 }): ItemVigilancia[] {
   const hoje = e.agora.slice(0, 10);
@@ -240,7 +231,7 @@ export function montarVigilancia(e: {
 /** A associação de cada ficha ao dispositivo (só as associadas entram na densidade). */
 export function associarIras(
   sitio: SitioIras,
-  dispositivos: readonly DispositivoInvasivoSghLido[],
+  dispositivos: readonly DispositivoInvasivoRegistrado[],
   dataInfeccao: string,
 ): number | null {
   return dispositivoAssociado(
@@ -255,8 +246,8 @@ export function montarDenominadores(e: {
   readonly competencia: string;
   readonly agora: string;
   readonly censo: readonly { setor: string; pacientesDia: number }[];
-  readonly dispositivos: readonly DispositivoInvasivoSghLido[];
-  readonly iras: readonly IrasSghLida[];
+  readonly dispositivos: readonly DispositivoInvasivoRegistrado[];
+  readonly iras: readonly IrasRegistrada[];
   readonly setor?: string;
 }): { setores: DenominadorSetor[]; todos: DenominadorSetor } {
   const nomes = [
@@ -289,8 +280,8 @@ export function montarDenominadores(e: {
 export function montarConsumo(e: {
   readonly competencia: string;
   readonly dispensado: readonly { item: number; nome: string; unidades: number }[];
-  readonly vigencias: readonly AntimicrobianoPrescritoLido[];
-  readonly itens: readonly ItemAntimicrobianoSghLido[];
+  readonly vigencias: readonly AntimicrobianoPrescrito[];
+  readonly itens: readonly ItemAntimicrobianoConfigurado[];
   readonly pacientesDia: number;
 }) {
   const cfg = new Map(e.itens.map((i) => [i.item, i]));

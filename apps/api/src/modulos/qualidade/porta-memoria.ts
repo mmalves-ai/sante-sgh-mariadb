@@ -3,24 +3,11 @@
 // a chave resumida única, a versão no UPDATE (o que passou ao mesmo tempo é recusado), a anônima sem notificador e a
 // linha do tempo só de inclusão. A transação desfaz tudo se a função falhar (como o ROLLBACK).
 import type { ContextoNotificacaoLido, ExpostoAoLote, UnidadeNotificacao } from '@sgh/contratos';
-import {
-  type AcaoPlanoSghLida,
-  type AnaliseSghLida,
-  type ContagemNotificacoesSgh,
-  type EventoQueixaSghLido,
-  type ProtocoloPacienteLido,
-  type QueixaTecnicaSghLida,
-  type VersaoGerenciadoLida,
-  type EventoNotificacaoSgh,
-  type EventoNotificacaoSghLido,
-  type FiltroNotificacoesSgh,
-  type LiberacaoConsultada,
-  marcaComoAtual,
-  type NotificacaoSghLida,
-  recusa,
-  recusaVersaoNotificacao,
-} from '@sgh/legado';
+import { type AcaoPlanoRegistrada, type AnaliseRegistrada, type ContagemNotificacoes, type EventoQueixaRegistrado, type ProtocoloDoPaciente, type QueixaTecnicaRegistrada, type VersaoProtocoloGerenciado, type EventoNotificacaoNovo, type EventoNotificacaoRegistrado, type FiltroNotificacoes, type NotificacaoRegistrada, recusaVersaoNotificacao } from './tipos.js';
+import { marcaComoAtual, recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { ErroProblema } from '../../problema.filter.js';
+
 import { CONTAS_SINTETICAS } from '../acesso/fonte-sintetica.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type {
@@ -30,6 +17,10 @@ import type {
   GravadorQualidade,
   PortaQualidade,
 } from './porta.js';
+
+/** A chave do estabelecimento da sessão na memória (o código da sessão, ou o id em texto). */
+const hospitalDe = (c: ContextoQualidade): string =>
+  (c as ContextoQualidade & { readonly hospital?: string }).hospital ?? String(c.estabelecimento ?? '');
 
 /** Produtos SINTÉTICOS do cadastro (a busca da vigilância de produto) e o lote com expostos. */
 export const ITENS_SINTETICOS_QUALIDADE: readonly { codigo: number; nome: string }[] = [
@@ -118,17 +109,17 @@ const FERIADOS = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15',
   }),
 );
 
-type Notificacao = { -readonly [K in keyof NotificacaoSghLida]: NotificacaoSghLida[K] } & {
+type Notificacao = { -readonly [K in keyof NotificacaoRegistrada]: NotificacaoRegistrada[K] } & {
   hospital: string;
   chaveResumo: string | null;
 };
-interface Evento extends EventoNotificacaoSghLido {
+interface Evento extends EventoNotificacaoRegistrado {
   readonly notificacao: number;
 }
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
-type Analise = Mutavel<AnaliseSghLida> & { hospital: string };
-type Acao = Mutavel<AcaoPlanoSghLida> & { hospital: string };
-type Queixa = Mutavel<QueixaTecnicaSghLida> & { hospital: string };
+type Analise = Mutavel<AnaliseRegistrada> & { hospital: string };
+type Acao = Mutavel<AcaoPlanoRegistrada> & { hospital: string };
+type Queixa = Mutavel<QueixaTecnicaRegistrada> & { hospital: string };
 interface Estado {
   protocolos: Map<string, number>;
   notificacoes: Notificacao[];
@@ -137,7 +128,7 @@ interface Estado {
   acoes: Acao[];
   resolvidas: Set<string>;
   queixas: Queixa[];
-  eventosQueixa: (EventoQueixaSghLido & { queixa: number })[];
+  eventosQueixa: (EventoQueixaRegistrado & { queixa: number })[];
   seq: number;
 }
 
@@ -183,7 +174,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     checklistsComPausa: 0,
     reavaliacoes: [],
   };
-  protocolosSinteticos: { versoes: VersaoGerenciadoLida[]; protocolos: ProtocoloPacienteLido[] } = {
+  protocolosSinteticos: { versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] } = {
     versoes: [],
     protocolos: [],
   };
@@ -229,27 +220,27 @@ export class PortaQualidadeMemoria implements PortaQualidade {
 
   // ── Etapa 2: leituras ──
 
-  analise(c: ContextoQualidade, notificacao: number): Promise<AnaliseSghLida | null> {
-    const a = this.estado.analises.find((x) => x.notificacao === notificacao && x.hospital === c.hospital);
+  analise(c: ContextoQualidade, notificacao: number): Promise<AnaliseRegistrada | null> {
+    const a = this.estado.analises.find((x) => x.notificacao === notificacao && x.hospital === hospitalDe(c));
     return Promise.resolve(a ? semHospital(a) : null);
   }
 
-  acoes(c: ContextoQualidade, notificacao: number): Promise<AcaoPlanoSghLida[]> {
+  acoes(c: ContextoQualidade, notificacao: number): Promise<AcaoPlanoRegistrada[]> {
     return Promise.resolve(
       this.estado.acoes
-        .filter((x) => x.notificacao === notificacao && x.hospital === c.hospital)
+        .filter((x) => x.notificacao === notificacao && x.hospital === hospitalDe(c))
         .sort((a, b) => a.sequencia - b.sequencia)
         .map(semHospital),
     );
   }
 
-  acoesDoResponsavel(c: ContextoQualidade, login: string): Promise<AcaoPlanoSghLida[]> {
+  acoesDoResponsavel(c: ContextoQualidade, login: string): Promise<AcaoPlanoRegistrada[]> {
     const u = login.trim().toUpperCase();
     return Promise.resolve(
       this.estado.acoes
         .filter(
           (x) =>
-            x.hospital === c.hospital &&
+            x.hospital === hospitalDe(c) &&
             x.quem === u &&
             (x.situacao === 'planejada' || x.situacao === 'emAndamento'),
         )
@@ -267,11 +258,11 @@ export class PortaQualidadeMemoria implements PortaQualidade {
       readonly pagina: number;
       readonly porPagina: number;
     },
-  ): Promise<{ itens: QueixaTecnicaSghLida[]; temMais: boolean }> {
+  ): Promise<{ itens: QueixaTecnicaRegistrada[]; temMais: boolean }> {
     const todas = this.estado.queixas
       .filter(
         (q) =>
-          q.hospital === c.hospital &&
+          q.hospital === hospitalDe(c) &&
           (!f.situacao || q.situacao === f.situacao) &&
           (!f.area || q.area === f.area),
       )
@@ -283,13 +274,13 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     });
   }
 
-  queixa(c: ContextoQualidade, id: number): Promise<QueixaTecnicaSghLida | null> {
-    const q = this.estado.queixas.find((x) => x.id === id && x.hospital === c.hospital);
+  queixa(c: ContextoQualidade, id: number): Promise<QueixaTecnicaRegistrada | null> {
+    const q = this.estado.queixas.find((x) => x.id === id && x.hospital === hospitalDe(c));
     return Promise.resolve(q ? semHospital(q) : null);
   }
 
-  eventosQueixa(c: ContextoQualidade, id: number): Promise<EventoQueixaSghLido[]> {
-    const q = this.estado.queixas.find((x) => x.id === id && x.hospital === c.hospital);
+  eventosQueixa(c: ContextoQualidade, id: number): Promise<EventoQueixaRegistrado[]> {
+    const q = this.estado.queixas.find((x) => x.id === id && x.hospital === hospitalDe(c));
     return Promise.resolve(
       q
         ? this.estado.eventosQueixa
@@ -300,7 +291,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
   }
 
   resolvidas(c: ContextoQualidade, resumos: readonly string[]): Promise<Set<string>> {
-    return Promise.resolve(new Set(resumos.filter((r) => this.estado.resolvidas.has(`${c.hospital}:${r}`))));
+    return Promise.resolve(new Set(resumos.filter((r) => this.estado.resolvidas.has(`${hospitalDe(c)}:${r}`))));
   }
 
   candidatos(_c: ContextoQualidade, login: string): Promise<CandidatosSugestao> {
@@ -309,10 +300,10 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     );
   }
 
-  painelNotificacoes(c: ContextoQualidade, de: string, fim: string): Promise<ContagemNotificacoesSgh[]> {
-    const m = new Map<string, ContagemNotificacoesSgh>();
+  painelNotificacoes(c: ContextoQualidade, de: string, fim: string): Promise<ContagemNotificacoes[]> {
+    const m = new Map<string, ContagemNotificacoes>();
     for (const n of this.estado.notificacoes) {
-      if (n.hospital !== c.hospital || n.ocorridoEm.slice(0, 10) < de || n.ocorridoEm.slice(0, 10) >= fim)
+      if (n.hospital !== hospitalDe(c) || n.ocorridoEm.slice(0, 10) < de || n.ocorridoEm.slice(0, 10) >= fim)
         continue;
       const k = [n.tipo, n.classificacao, n.dano, n.neverEvent, n.situacao, n.anonima].join('|');
       const x = m.get(k);
@@ -339,7 +330,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     for (const n of this.estado.notificacoes) {
       const d = n.ocorridoEm.slice(0, 10);
       if (
-        n.hospital !== c.hospital ||
+        n.hospital !== hospitalDe(c) ||
         d < de ||
         d >= fim ||
         n.prazoAnalise === null ||
@@ -364,7 +355,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
       { situacao: string; eficacia: string | null; vencida: boolean; quantidade: number }
     >();
     for (const a of this.estado.acoes) {
-      if (a.hospital !== c.hospital) continue;
+      if (a.hospital !== hospitalDe(c)) continue;
       const vencida = a.quando < hoje;
       const k = `${a.situacao}|${a.eficacia ?? ''}|${String(vencida)}`;
       const x = m.get(k) ?? { situacao: a.situacao, eficacia: a.eficacia, vencida, quantidade: 0 };
@@ -386,7 +377,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     ]);
   }
 
-  protocolosGerenciados(): Promise<{ versoes: VersaoGerenciadoLida[]; protocolos: ProtocoloPacienteLido[] }> {
+  protocolosGerenciados(): Promise<{ versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] }> {
     return Promise.resolve(this.protocolosSinteticos);
   }
 
@@ -421,7 +412,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     return relogioDoEstabelecimento(this.opcoes.agora?.() ?? new Date()).agora.slice(0, 19);
   }
 
-  podeGravar(): Promise<LiberacaoConsultada> {
+  podeGravar(): Promise<LiberacaoGravacao> {
     return Promise.resolve({ pode: true, codigo: null, motivo: null });
   }
 
@@ -462,25 +453,25 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     );
   }
 
-  private publica(n: Notificacao): NotificacaoSghLida {
+  private publica(n: Notificacao): NotificacaoRegistrada {
     const r: Partial<Notificacao> = { ...n };
     delete r.hospital;
     delete r.chaveResumo;
-    return { ...(r as NotificacaoSghLida), notificador: n.anonima ? null : n.notificador };
+    return { ...(r as NotificacaoRegistrada), notificador: n.anonima ? null : n.notificador };
   }
 
-  notificacao(c: ContextoQualidade, id: number): Promise<NotificacaoSghLida | null> {
-    const n = this.estado.notificacoes.find((x) => x.id === id && x.hospital === c.hospital);
+  notificacao(c: ContextoQualidade, id: number): Promise<NotificacaoRegistrada | null> {
+    const n = this.estado.notificacoes.find((x) => x.id === id && x.hospital === hospitalDe(c));
     return Promise.resolve(n ? this.publica(n) : null);
   }
 
-  porProtocolo(c: ContextoQualidade, protocolo: string): Promise<NotificacaoSghLida | null> {
-    const n = this.estado.notificacoes.find((x) => x.protocolo === protocolo && x.hospital === c.hospital);
+  porProtocolo(c: ContextoQualidade, protocolo: string): Promise<NotificacaoRegistrada | null> {
+    const n = this.estado.notificacoes.find((x) => x.protocolo === protocolo && x.hospital === hospitalDe(c));
     return Promise.resolve(n ? this.publica(n) : null);
   }
 
-  eventos(c: ContextoQualidade, id: number): Promise<EventoNotificacaoSghLido[]> {
-    const n = this.estado.notificacoes.find((x) => x.id === id && x.hospital === c.hospital);
+  eventos(c: ContextoQualidade, id: number): Promise<EventoNotificacaoRegistrado[]> {
+    const n = this.estado.notificacoes.find((x) => x.id === id && x.hospital === hospitalDe(c));
     return Promise.resolve(
       n
         ? this.estado.eventos
@@ -492,13 +483,13 @@ export class PortaQualidadeMemoria implements PortaQualidade {
 
   lista(
     c: ContextoQualidade,
-    f: Omit<FiltroNotificacoesSgh, 'hospital'>,
-  ): Promise<{ itens: NotificacaoSghLida[]; temMais: boolean }> {
+    f: Omit<FiltroNotificacoes, 'hospital'>,
+  ): Promise<{ itens: NotificacaoRegistrada[]; temMais: boolean }> {
     const ids = f.ids ? new Set(f.ids) : null;
     const todas = this.estado.notificacoes
       .filter(
         (n) =>
-          n.hospital === c.hospital &&
+          n.hospital === hospitalDe(c) &&
           (!f.situacao || n.situacao === f.situacao) &&
           (!f.situacoes || f.situacoes.includes(n.situacao)) &&
           (!f.tipo || n.tipo === f.tipo) &&
@@ -518,11 +509,11 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     });
   }
 
-  comPrazo(c: ContextoQualidade): Promise<{ itens: NotificacaoSghLida[]; cortada: boolean }> {
+  comPrazo(c: ContextoQualidade): Promise<{ itens: NotificacaoRegistrada[]; cortada: boolean }> {
     const itens = this.estado.notificacoes
       .filter(
         (n) =>
-          n.hospital === c.hospital &&
+          n.hospital === hospitalDe(c) &&
           n.situacao !== 'descartada' &&
           ((n.classificacao === 'eventoAdverso' && n.notivisaTranscritaEm === null) ||
             ((n.dano === 'obito' || n.neverEvent) && n.analiseConcluidaEm === null)),
@@ -541,7 +532,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
     const s = this.estado;
     // Sessão "como": a mesma marca `suporte` em DADOS que a porta do legado grava (ADR 0021, R1).
     const suporte = marcaComoAtual() !== null;
-    const evento = (id: number, em: string, evs: readonly EventoNotificacaoSgh[]) => {
+    const evento = (id: number, em: string, evs: readonly EventoNotificacaoNovo[]) => {
       for (const e0 of evs) {
         const e = suporte ? { ...e0, dados: { ...(e0.dados ?? {}), suporte: true } } : e0;
         s.eventos.push({
@@ -555,7 +546,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
       }
     };
     const linha = (id: number) => {
-      const n = s.notificacoes.find((x) => x.id === id && x.hospital === c.hospital);
+      const n = s.notificacoes.find((x) => x.id === id && x.hospital === hospitalDe(c));
       if (!n) throw new ErroProblema('nao-encontrado', 404, 'Notificação não encontrada');
       return n;
     };
@@ -570,7 +561,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
       a: { readonly id: number; readonly versao: number; readonly usuario: string; readonly agora: string },
       mudar: (x: Acao) => void,
     ) => {
-      const x = s.acoes.find((y) => y.id === a.id && y.hospital === c.hospital);
+      const x = s.acoes.find((y) => y.id === a.id && y.hospital === hospitalDe(c));
       if (!x || x.versao !== a.versao)
         throw recusa('versao-desatualizada', 'A ação mudou desde que você abriu a tela.');
       mudar(x);
@@ -584,7 +575,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
           if (ja) return Promise.resolve({ id: ja.id, protocolo: ja.protocolo, repetida: true });
         }
         const ano = Number(x.agora.slice(0, 4));
-        const k = `${c.hospital}:${ano}`;
+        const k = `${hospitalDe(c)}:${ano}`;
         const seq = (s.protocolos.get(k) ?? 0) + 1;
         if (seq > 999_999)
           throw recusa('protocolo-esgotado', 'O sequencial de notificações do ano chegou ao limite.');
@@ -593,7 +584,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
         const protocolo = x.protocoloDe(ano, seq);
         s.notificacoes.push({
           id,
-          hospital: c.hospital,
+          hospital: hospitalDe(c),
           protocolo,
           codigoResumo: x.codigoResumo,
           chaveResumo: x.chaveResumo,
@@ -601,7 +592,6 @@ export class PortaQualidadeMemoria implements PortaQualidade {
           ocorridoEm: x.ocorridoEm.length === 16 ? `${x.ocorridoEm}:00` : x.ocorridoEm.slice(0, 19),
           atendimento: x.atendimento,
           paciente: x.paciente,
-          registro: x.registro,
           unidade: x.unidade,
           leito: x.leito,
           local: x.local,
@@ -693,13 +683,13 @@ export class PortaQualidadeMemoria implements PortaQualidade {
         let id: number;
         let versao: number;
         if (a.atual === null) {
-          if (s.analises.some((x) => x.notificacao === a.notificacao && x.hospital === c.hospital))
+          if (s.analises.some((x) => x.notificacao === a.notificacao && x.hospital === hospitalDe(c)))
             throw recusa('versao-desatualizada', 'A análise mudou desde que você abriu a tela.');
           id = ++s.seq;
           versao = 1;
           s.analises.push({
             id,
-            hospital: c.hospital,
+            hospital: hospitalDe(c),
             notificacao: a.notificacao,
             metodo: a.metodo,
             conteudo: a.conteudo,
@@ -717,7 +707,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
           });
         } else {
           const atual = a.atual;
-          const x = s.analises.find((y) => y.id === atual.id && y.hospital === c.hospital);
+          const x = s.analises.find((y) => y.id === atual.id && y.hospital === hospitalDe(c));
           if (!x || x.versao !== atual.versao || x.situacao !== 'rascunho')
             throw recusa('versao-desatualizada', 'A análise mudou desde que você abriu a tela.');
           Object.assign(x, {
@@ -751,7 +741,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
         return Promise.resolve({ id, versao, versaoNotificacao });
       },
       travarAcao: (n, id) => {
-        const x = s.acoes.find((y) => y.id === id && y.notificacao === n && y.hospital === c.hospital);
+        const x = s.acoes.find((y) => y.id === id && y.notificacao === n && y.hospital === hospitalDe(c));
         if (!x) throw new ErroProblema('nao-encontrado', 404, 'A ação não encontrado');
         return Promise.resolve(semHospital(x));
       },
@@ -760,13 +750,13 @@ export class PortaQualidadeMemoria implements PortaQualidade {
           Math.max(
             0,
             ...s.acoes
-              .filter((x) => x.notificacao === a.notificacao && x.hospital === c.hospital)
+              .filter((x) => x.notificacao === a.notificacao && x.hospital === hospitalDe(c))
               .map((x) => x.sequencia),
           ) + 1;
         const id = ++s.seq;
         s.acoes.push({
           id,
-          hospital: c.hospital,
+          hospital: hospitalDe(c),
           notificacao: a.notificacao,
           sequencia,
           ...a.acao,
@@ -808,7 +798,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
           }),
         ),
       resolverSugestao: (r) => {
-        const k = `${c.hospital}:${r.resumo}`;
+        const k = `${hospitalDe(c)}:${r.resumo}`;
         if (s.resolvidas.has(k)) return Promise.resolve({ gravou: false });
         s.resolvidas.add(k);
         return Promise.resolve({ gravou: true });
@@ -817,7 +807,7 @@ export class PortaQualidadeMemoria implements PortaQualidade {
         const id = ++s.seq;
         s.queixas.push({
           id,
-          hospital: c.hospital,
+          hospital: hospitalDe(c),
           area: q.area,
           tipo: q.tipo,
           item: q.item,
@@ -849,12 +839,12 @@ export class PortaQualidadeMemoria implements PortaQualidade {
         return Promise.resolve({ id, versao: 1 });
       },
       travarQueixa: (id) => {
-        const q = s.queixas.find((x) => x.id === id && x.hospital === c.hospital);
+        const q = s.queixas.find((x) => x.id === id && x.hospital === hospitalDe(c));
         if (!q) throw new ErroProblema('nao-encontrado', 404, 'O registro não encontrado');
         return Promise.resolve(semHospital(q));
       },
       andamentoQueixa: (a) => {
-        const q = s.queixas.find((x) => x.id === a.id && x.hospital === c.hospital);
+        const q = s.queixas.find((x) => x.id === a.id && x.hospital === hospitalDe(c));
         if (!q || q.versao !== a.versao || q.situacao === 'encerrada')
           throw recusa('versao-desatualizada', 'O registro mudou desde que você abriu a tela.');
         Object.assign(q, {

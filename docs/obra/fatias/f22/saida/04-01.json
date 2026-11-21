@@ -1,0 +1,43 @@
+{
+  "lote": "04-01",
+  "registrar": [
+    "integracao: () => import('./integracao/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/integracao/aplicacao/credencial.ts",
+    "src/modulos/integracao/aplicacao/interpretacao-apoio.spec.ts",
+    "src/modulos/integracao/aplicacao/interpretacao-apoio.ts",
+    "src/modulos/integracao/aplicacao/receber.spec.ts",
+    "src/modulos/integracao/aplicacao/receber.ts",
+    "src/modulos/integracao/aplicacao/retorno-apoio.spec.ts",
+    "src/modulos/integracao/aplicacao/retorno-apoio.ts",
+    "src/modulos/integracao/aplicacao/servico.ts",
+    "src/modulos/integracao/fachada/contrato.spec.ts",
+    "src/modulos/integracao/fachada/fachada.controller.ts",
+    "src/modulos/integracao/fachada/fachada.int.spec.ts",
+    "src/modulos/integracao/fachada/fachada.spec.ts",
+    "src/modulos/integracao/fachada/porta-memoria.ts",
+    "src/modulos/integracao/fachada/porta-propria.ts",
+    "src/modulos/integracao/fachada/porta.ts",
+    "src/modulos/integracao/fachada/servico.spec.ts",
+    "src/modulos/integracao/fachada/servico.ts",
+    "src/modulos/integracao/infra/armazem-conteudo.ts",
+    "src/modulos/integracao/infra/massa-integracao.spec-util.ts",
+    "src/modulos/integracao/infra/outbox.int.spec.ts",
+    "src/modulos/integracao/integracao.controller.ts",
+    "src/modulos/integracao/modulo.ts",
+    "src/modulos/integracao/porta-memoria.ts",
+    "src/modulos/integracao/porta-propria.int.spec.ts",
+    "src/modulos/integracao/porta-propria.ts",
+    "src/modulos/integracao/porta.ts",
+    "src/modulos/integracao/public-api.ts"
+  ],
+  "pedidos": [
+    "Carga do produto no 'criar cliente' (tools/db/criar_cliente.py): os padrões de troca base em padrao_troca (codigos e familias: tiss/tiss, hl7v2/hl7v2, fhir/fhir, dicom/dicom, proprio/proprio, arquivo/arquivo, api/api). O ponto de entrada/saída do parceiro é criado na primeira mensagem com o padrão da família do tipo do parceiro; sem ele a porta recusa com 'modelo-pendente'. Os testes do lote semeiam f2241-* no cliente f22_o4.",
+    "Lote que migra sadt (pacs.controller.ts): a porta das integrações renomeou gravarSgh -> gravar, e a trilha passa a ser TrilhaIntegracao (LinhaTrilha do @sgh/nucleo sem ocorridoEm: estabelecimento, usuario id, acao, entidade, entidadeId, dadosDepois, correlacao) no lugar da linha antiga (rede/hospital/evento/tabelaAlvo). PortaIntegracao exporta-se de integracao/public-api.ts com moduloIntegracao.",
+    "Desmontagem do app.module.ts: integracao/public-api.ts não exporta mais portaIntegracaoLegado, portaIntegracaoNaTransacao nem portaFachadaLegado; o módulo é moduloIntegracao (modulo.ts) com PortaIntegracaoPropria/PortaFachadaPropria.",
+    "Worker (consumidor-idempotente.ts e vigia-fatos.ts ainda importam registrarEnvio/fatosResultadoLiberado do legado): a entrega por parceiro é GravadorIntegracao.registrarEnvio da porta própria (mensagem_integracao_saida, idempotente por ponto+chave), e os fatos chegam pelas mensagens de saída do Executor (integracao_mensagem), sem leitura incremental por gatilho.",
+    "Lote dos contratos (packages/contratos, integracao): o monitor ainda responde o campo 'legado' (agora as filas próprias) e a lista de parceiros os campos 'leemOBanco' e 'eventosDosGatilhos' (sempre vazios: sem visões e sem gatilho no banco próprio). Pedido: renomear 'legado' para 'filas' em MonitorIntegracoes e tirar 'leemOBanco', 'eventosDosGatilhos' e EVENTOS_DOS_GATILHOS (e o api-integracoes.ts da web). Pedido também: acrescentar a EVENTOS_INTEGRACAO os eventos de ADT que a outbox publica ('adt.admissao', 'adt.alta', 'adt.atualizacao'), para o parceiro poder assiná-los.",
+    "Lote que migra o sadt: o resultado do laboratório de apoio é gravado pela porta da integração (PortaIntegracaoPropria.registrarResultadoApoio) com a composição das regras do @sgh/dominio-sadt em apps/api/src/modulos/integracao/aplicacao/interpretacao-apoio.ts (faixaDoPaciente, foraDaReferencia, valorCritico → referência, interpretação, anormal, crítico e aviso). Pedido: levar interpretarValorApoio para o dominio-sadt (ex.: referencia/interpretacao.ts) e expor no sadt uma operação de gravação de resultado que a integração chame na mesma transação, para a digitação no setor e o retorno do apoio usarem um só caminho."
+  ]
+}

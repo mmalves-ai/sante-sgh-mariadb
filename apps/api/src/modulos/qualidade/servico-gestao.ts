@@ -66,17 +66,7 @@ import {
   temQuorum,
   valorPelasParcelas,
 } from '@sgh/dominio-qualidade';
-import type {
-  AnaliseIndicadorSghLida,
-  AuditoriaSghLida,
-  ComissaoSghLida,
-  DocumentoQualidadeSghLido,
-  EnvioRegulatorioSghLido,
-  ManifestacaoSghLida,
-  NaoConformidadeSghLida,
-  ReuniaoComissaoSghLida,
-  RiscoSghLido,
-} from '@sgh/legado';
+import type { AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, ManifestacaoRegistrada, NaoConformidadeRegistrada, ReuniaoComissaoRegistrada, RiscoRegistrado } from './tipos.js';
 import { z } from 'zod';
 import type { IncidenteParaNotivisaLido } from './porta-gestao.js';
 
@@ -100,7 +90,7 @@ const nomesPresentes = (texto: string): string[] => jsonLista(texto, z.string())
 // ── Documentos ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function documentoLido(
-  d: DocumentoQualidadeSghLido,
+  d: DocumentoQualidadeRegistrado,
   ciencia: { total: number; sessao: boolean } | undefined,
   hoje: string,
 ): DocumentoQualidadeLido {
@@ -133,7 +123,7 @@ export function documentoLido(
 
 // ── Indicadores ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-export function analiseLida(a: AnaliseIndicadorSghLida): AnaliseIndicadorLida {
+export function analiseLida(a: AnaliseIndicadorRegistrada): AnaliseIndicadorLida {
   return { ...a, situacaoMeta: a.situacaoMeta as SituacaoMetaQualidade };
 }
 
@@ -151,7 +141,7 @@ export function indicadorDaCompetencia(e: {
   readonly competencia: string;
   readonly valor: ValorApurado | null;
   readonly meta: number | null;
-  readonly analise: AnaliseIndicadorSghLida | null;
+  readonly analise: AnaliseIndicadorRegistrada | null;
   readonly agora: string;
 }): IndicadorDaCompetencia {
   const v = e.valor;
@@ -251,7 +241,7 @@ export function indicadoresDaCompetencia(e: {
   readonly censo: readonly IndicadorDoCenso[];
   readonly qualidade: ReadonlyMap<string, ValorApurado>;
   readonly metasQualidade: ReadonlyMap<string, number | null>;
-  readonly analises: readonly AnaliseIndicadorSghLida[];
+  readonly analises: readonly AnaliseIndicadorRegistrada[];
 }): IndicadorDaCompetencia[] {
   const analise = (codigo: string) => e.analises.find((a) => a.indicador === codigo) ?? null;
   const doCenso = e.censo.map((c) =>
@@ -281,7 +271,7 @@ export function indicadoresDaCompetencia(e: {
 
 // ── Auditorias, comissões, riscos e não conformidades ────────────────────────────────────────────────────────────
 
-export function auditoriaLida(a: AuditoriaSghLida, naoConformidades: number): AuditoriaLida {
+export function auditoriaLida(a: AuditoriaRegistrada, naoConformidades: number): AuditoriaLida {
   const itens = itensDoChecklist(a.itens);
   return {
     id: a.id,
@@ -302,7 +292,7 @@ export function auditoriaLida(a: AuditoriaSghLida, naoConformidades: number): Au
   };
 }
 
-export function comissaoLida(c: ComissaoSghLida, hoje: string): ComissaoLida {
+export function comissaoLida(c: ComissaoRegistrada, hoje: string): ComissaoLida {
   const periodicidade = c.periodicidade as PeriodicidadeComissao;
   return {
     id: c.id,
@@ -324,7 +314,7 @@ export function comissaoLida(c: ComissaoSghLida, hoje: string): ComissaoLida {
   };
 }
 
-export function reuniaoLida(r: ReuniaoComissaoSghLida): ReuniaoComissaoLida {
+export function reuniaoLida(r: ReuniaoComissaoRegistrada): ReuniaoComissaoLida {
   return {
     id: r.id,
     comissao: r.comissao,
@@ -350,7 +340,7 @@ export function reuniaoLida(r: ReuniaoComissaoSghLida): ReuniaoComissaoLida {
   };
 }
 
-export function riscoLido(r: RiscoSghLido, hoje: string): RiscoLido {
+export function riscoLido(r: RiscoRegistrado, hoje: string): RiscoLido {
   return {
     ...r,
     categoria: r.categoria as CategoriaRisco,
@@ -360,7 +350,7 @@ export function riscoLido(r: RiscoSghLido, hoje: string): RiscoLido {
   };
 }
 
-export function naoConformidadeLida(n: NaoConformidadeSghLida, hoje: string): NaoConformidadeLida {
+export function naoConformidadeLida(n: NaoConformidadeRegistrada, hoje: string): NaoConformidadeLida {
   const situacao = n.situacao as NaoConformidadeLida['situacao'];
   return {
     ...n,
@@ -375,7 +365,7 @@ export function naoConformidadeLida(n: NaoConformidadeSghLida, hoje: string): Na
 // ── Ouvidoria ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function manifestacaoLida(
-  m: ManifestacaoSghLida,
+  m: ManifestacaoRegistrada,
   nomePaciente: string | null,
   agora: string,
 ): ManifestacaoLida {
@@ -415,7 +405,7 @@ export function manifestacaoLida(
 
 // ── Envios regulatórios ──────────────────────────────────────────────────────────────────────────────────────────
 
-export function envioLido(e: EnvioRegulatorioSghLido): EnvioRegulatorioLido {
+export function envioLido(e: EnvioRegulatorioRegistrado): EnvioRegulatorioLido {
   let resumo: Record<string, number> = {};
   try {
     const r = z.record(z.string(), z.number()).safeParse(JSON.parse(e.resumo));

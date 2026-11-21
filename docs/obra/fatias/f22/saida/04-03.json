@@ -1,0 +1,89 @@
+{
+  "lote": "04-03",
+  "registrar": [
+    "qualidade"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/qualidade/agravo.controller.ts",
+    "src/modulos/qualidade/agravo.int.spec.ts",
+    "src/modulos/qualidade/agravo.spec.ts",
+    "src/modulos/qualidade/apoio-propria.ts",
+    "src/modulos/qualidade/ccih-crud.spec.ts",
+    "src/modulos/qualidade/ccih-reconciliacao.spec.ts",
+    "src/modulos/qualidade/ccih.controller.ts",
+    "src/modulos/qualidade/ccih.int.spec.ts",
+    "src/modulos/qualidade/ccih.spec.ts",
+    "src/modulos/qualidade/central-pendencias.ts",
+    "src/modulos/qualidade/gestao-crud.spec.ts",
+    "src/modulos/qualidade/gestao.controller.ts",
+    "src/modulos/qualidade/gestao.int.spec.ts",
+    "src/modulos/qualidade/gestao.spec.ts",
+    "src/modulos/qualidade/massa.spec-util.ts",
+    "src/modulos/qualidade/modulo.ts",
+    "src/modulos/qualidade/notificacao.autorizacao.int.spec.ts",
+    "src/modulos/qualidade/notificacao.controller.ts",
+    "src/modulos/qualidade/notificacao.spec.ts",
+    "src/modulos/qualidade/porta-agravo-memoria.ts",
+    "src/modulos/qualidade/porta-agravo-propria.ts",
+    "src/modulos/qualidade/porta-agravo.ts",
+    "src/modulos/qualidade/porta-ccih-memoria.ts",
+    "src/modulos/qualidade/porta-ccih-propria.ts",
+    "src/modulos/qualidade/porta-ccih.ts",
+    "src/modulos/qualidade/porta-gestao-memoria.ts",
+    "src/modulos/qualidade/porta-gestao-propria.ts",
+    "src/modulos/qualidade/porta-gestao.ts",
+    "src/modulos/qualidade/porta-memoria.ts",
+    "src/modulos/qualidade/porta-propria.int.spec.ts",
+    "src/modulos/qualidade/porta-propria.ts",
+    "src/modulos/qualidade/porta.ts",
+    "src/modulos/qualidade/public-api.ts",
+    "src/modulos/qualidade/revisao-corretor-ccih.spec.ts",
+    "src/modulos/qualidade/revisao-corretor-gestao.spec.ts",
+    "src/modulos/qualidade/revisao-prontuario.controller.ts",
+    "src/modulos/qualidade/revisao-prontuario.spec.ts",
+    "src/modulos/qualidade/seguranca.controller.ts",
+    "src/modulos/qualidade/seguranca.int.spec.ts",
+    "src/modulos/qualidade/seguranca.spec.ts",
+    "src/modulos/qualidade/servico-agravo.ts",
+    "src/modulos/qualidade/servico-ccih.ts",
+    "src/modulos/qualidade/servico-gestao.ts",
+    "src/modulos/qualidade/servico-seguranca.ts",
+    "src/modulos/qualidade/servico.ts",
+    "src/modulos/qualidade/teste.spec-util.ts",
+    "src/modulos/qualidade/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "carga",
+      "tabela": "tipo_incidente, classificacao_incidente, grau_dano",
+      "motivo": "A porta própria da notificação busca os cadastros pelo código (vocabulário do contrato em snake_case: TIPOS_INCIDENTE, CLASSIFICACOES_OMS, GRAUS_DANO). Num cliente novo estão vazios e a notificação recusa com cadastro-pendente. Pede-se a carga versionada desses cadastros no 'criar novo cliente' (a massa de teste os garante)."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/qualidade/crud.ts",
+      "motivo": "REGISTROS_VERSIONADOS_QUALIDADE tem valores com nomes de tabela da origem (SGH_QUA_*). O módulo já usa TABELA_DO_REGISTRO (tipos.ts) com as tabelas próprias; trocar os valores do contrato pelas chaves neutras ou removê-los."
+    },
+    {
+      "tipo": "mapeamento",
+      "motivo": "Pendentes de SQL próprio (hoje leituras vazias e gravações modelo-pendente): etapa 2 da notificação (analise_incidente, plano_acao_qualidade + acao_plano_qualidade(+_evento), queixa_tecnica_produto(+_evento), sugestao_notificacao_incidente que exige gatilho_notificacao_incidente_id); PortaAgravoPropria inteira (notificacao_agravo, agravo_notificavel(_cid), agravo_pergunta); PortaCcihPropria (dispositivo_invasivo_paciente, caso_infeccao, liberacao_antimicrobiano, isolamento_paciente, observacao_higiene_maos, surto_infeccao, verificacao_bundle, fechamento_vigilancia_iras e as leituras assistenciais); PortaGestaoPropria (documento_qualidade e satélites, analise_critica_indicador, auditoria_interna, comissao_hospitalar/reuniao_comissao, risco_institucional, nao_conformidade_qualidade, manifestacao_ouvidoria, notificacao_iras_envio, sorteio_revisao_prontuario, revisao_prontuario, pendencia_prontuario)."
+    },
+    {
+      "tipo": "modulo",
+      "motivo": "A central de avisos (CENTRAL_AVISOS_QUALIDADE: a pendência de prontuário ao médico no sino) não chega ao módulo da qualidade em produção: o Início precisa exportá-la (o spec da revisão já usa uma central de teste). A internação (índice do censo) já é montada pelo próprio módulo da qualidade com fonteDaInternacao, como o atendimento."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/qualidade/notificacao.ts",
+      "motivo": "ContextoNotificacaoLido.registro (o número do atendimento da origem) não existe no modelo próprio: a porta própria o devolve nulo e os tipos de negócio da notificação já não o têm; remover o campo do contrato (e o 'RICADPAC/ATCABECATEND' dos comentários)."
+    },
+    {
+      "tipo": "nucleo",
+      "arquivo": "packages/nucleo/src/erros.ts",
+      "motivo": "O MariaDB 12 roda com isolamento por instantâneo: a leitura travada de linha mudada por outra transação depois do instantâneo dá errno 1020 (ER_CHECKREAD), que o núcleo traduz como erro-interno. Pede-se tratar 1020 como trava ocupada (ehTravaOcupada → registro-em-edicao) e, de preferência, refazer a operação no Executor. Afeta todo proximoNumero concorrente; a porta da notificação já refaz a gravação (até 3 vezes) por conta própria."
+    },
+    {
+      "tipo": "tela",
+      "motivo": "GET /qualidade/nsp/painel devolve `indisponiveis` (adesao, protocolos, historico) quando a parte aguarda o mapeamento: a tela deve mostrar 'indisponível' nessas partes, não zero. As demais leituras sem mapeamento (CCIH, notificação compulsória, gestão, candidatos à sugestão e itens da tecnovigilância) respondem 503 modelo-pendente."
+    }
+  ]
+}

@@ -1,97 +1,138 @@
-// Regra 2 do M27 sobre a cópia (só leitura): a fila do médico mostra só os pacientes com vínculo assistencial — o
-// atendimento é de um CBO do médico, ele registrou no episódio ou aceitou parecer dele; fora disso, nada aparece; quem
-// não está no cadastro de profissionais não tem fila. Com o médico de mais internados abertos da cópia (login e
-// pacientes só em memória), cada linha é conferida contra o banco e o tempo vai à saída (meta: p95 < 1,5 s para 100
-// pacientes). Só contagens.
+// Fila do médico com as pendências lidas pela porta PRÓPRIA da fila (cliente de teste f22_o4, massa sintética do lote,
+// prefixo l0402w): previsão de alta, resultado novo e prescrição a renovar vêm do banco; o resto da fila é dublê.
+// O QUE ESTE TESTE NÃO PROVA: a regra 2 do M27 (só pacientes com vínculo assistencial: CBO do atendimento, registro no
+// episódio, parecer aceito). O recorte "meus" do painel do M23 ainda não tem adaptador próprio e entra como dublê que
+// devolve as linhas sempre que o profissional tem ocupação; o vínculo não é conferido contra o banco. Também não mede o
+// p95 < 1,5 s da ficha (o painel, a parte cara, é dublê): o tempo abaixo é só a leitura das pendências. Ambas ficam
+// PENDENTES até a porta própria dos documentos/painel e não contam como evidência no fechamento do marco.
+// Prova aqui: sem profissional cadastrado o serviço não consulta o painel (fila vazia). Só contagens; nenhum dado de pessoa.
+import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { condicaoLoginDoProfissional, fonteCatalogoArquivo, loginsComProfissional } from '@sgh/legado';
-import {
-  type AmbienteM27,
-  ambienteM27,
-  caminhoCatalogo,
-  NA_COPIA,
-  percentil,
-} from '../../acesso/aplicacao/copia.spec-util.js';
-import { portaDocumentosLegado } from '../documentos-porta-legado.js';
+import type { PortaDocumentos } from '../documentos-porta.js';
 import { ServicoDocumentos } from '../documentos-servico.js';
-import { portaPrescricaoLegado } from '../prescricao-porta-legado.js';
-import { portaWorklistLegado } from '../worklist-porta.js';
+import { dataHora } from '../registro-porta-propria.js';
+import {
+  CLIENTE_F22_O4,
+  limparMassaWorklist,
+  type MassaWorklist,
+  montarMassaWorklist,
+} from '../worklist-massa.spec-util.js';
+import { PortaWorklistPropria } from '../worklist-porta-propria.js';
 import { ServicoWorklistMedico } from './worklist-medico.js';
 
-describe.skipIf(!NA_COPIA)('fila do médico só com vínculo assistencial (cópia, só leitura)', () => {
-  let a: AmbienteM27;
+const SEM_BANCO = process.env['SGH_NUCLEO_SEM_BANCO'] === '1';
+const P = 'l0402w';
+const FUSO = 'America/Sao_Paulo';
+const DIA = 86_400_000;
+const LOGIN_MEDICO = `${P}.medico`;
+
+describe.skipIf(SEM_BANCO)('fila do médico: pendências lidas pela porta própria (f22_o4; vínculo do painel é dublê)', () => {
+  let nucleo: NucleoProprio;
+  let m: MassaWorklist;
+  let servico: ServicoWorklistMedico;
+  const recortes: unknown[] = [];
+
   beforeAll(async () => {
-    a = await ambienteM27();
-  });
+    nucleo = new NucleoProprio();
+    m = await montarMassaWorklist(nucleo, P, 904_021_000);
+    const agoraLocal = dataHora(m.agora, FUSO)!;
+    const entrada = dataHora(new Date(m.agora.getTime() - 2 * DIA), FUSO)!;
+    const linha = (paciente: number, atendimento: number, registro: number, tipo: 'internacao' | 'externo') => ({
+      paciente,
+      nome: `PACIENTE SINTETICO ${paciente}`,
+      nomeSocial: null,
+      nascimento: '1970-01-01',
+      sexo: 'F',
+      prontuario: paciente,
+      atendimento,
+      registro,
+      tipo,
+      entrada,
+      unidade: 'UNIDADE SINTETICA',
+      idUnidade: 1,
+      leito: tipo === 'internacao' ? '101A' : null,
+      convenio: null,
+      medico: null,
+      alergiasAtivas: 0,
+    });
+    // O painel do M23 (dublê): o recorte "meus" com ocupação devolve as linhas do vínculo; sem ocupação, nenhuma.
+    const docs = {
+      destino: 'proprio',
+      agora: async () => agoraLocal,
+      profissional: async (_c: unknown, login: string) =>
+        login === LOGIN_MEDICO
+          ? {
+              idUsuario: 1,
+              idProfissional: 1,
+              nome: 'MEDICO SINTETICO',
+              cbo: 77,
+              cbos: [77],
+              especialidades: [],
+              permiteRetroativo: false,
+              ocupacoes: [{ cbo: 77, codigo: '225125', conselhoAtivo: true }],
+            }
+          : null,
+      painel: async (_c: unknown, f: { meus?: { cbos: readonly number[] } }) => {
+        recortes.push(f);
+        return {
+          linhas: f.meus?.cbos.length
+            ? [linha(m.pac1, m.atd[0], m.int.a, 'internacao'), linha(m.pac2, m.atd[1], 0, 'externo')]
+            : [],
+          limitado: false,
+        };
+      },
+      pendencias: async () => [],
+      completudePainel: async () => ({
+        evolucoesMedicas: [{ atendimento: m.atd[0], em: agoraLocal }],
+        alergiasInformadas: [],
+        negas: [],
+        valores: [],
+        ciencias: [],
+        pareceres: [],
+      }),
+    } as unknown as PortaDocumentos;
+    servico = new ServicoWorklistMedico(new ServicoDocumentos(docs), null, new PortaWorklistPropria(nucleo, CLIENTE_F22_O4));
+  }, 120_000);
   afterAll(async () => {
-    await a?.nucleo.encerrar();
+    if (nucleo) {
+      await nucleo.escrever({ cliente: CLIENTE_F22_O4, correlacao: `limpeza-${P}` }, (e) => limparMassaWorklist(e, P));
+      await nucleo.encerrar();
+    }
   });
 
-  it('a fila de cada médico é exatamente o conjunto com vínculo; sem cadastro de profissional, a fila é vazia', async () => {
-    const catalogo = fonteCatalogoArquivo(caminhoCatalogo);
-    const servico = new ServicoWorklistMedico(
-      new ServicoDocumentos(portaDocumentosLegado(a.nucleo, catalogo)),
-      portaPrescricaoLegado(a.nucleo, catalogo),
-      portaWorklistLegado(a.nucleo),
-    );
-    // Os logins ligados ao cadastro de profissionais (só em memória). A cópia neutralizada tem poucos logins ligados, e
-    // um login pode estar em vários cadastros: a fila usa o primeiro cadastro do login (como o registro clínico do M23).
-    const logins = await a.nucleo.lerSomente({ ...a.c, traceId: 'int-m27-wl' }, async (l) =>
-      (await loginsComProfissional(l, 20)).map((x) => String(x)),
-    );
-    expect(logins.length).toBeGreaterThan(0);
-    // O esperado, calculado à parte no banco: atendimentos abertos (internação sem alta médica ou externo das últimas
-    // 24 h) do CBO ativo do primeiro cadastro do login (no cabeçalho ou, na internação, como médico assistente), ou com
-    // evolução desse CBO no episódio, ou com parecer aceito.
-    const esperado = async (login: string) =>
-      a.nucleo.lerSomente({ ...a.c, traceId: 'int-m27-wl' }, async (l) =>
-        (
-          await l.consultar(
-            `SELECT FIRST 101 t.ID FROM ATCABECATEND t JOIN RICADPAC r ON r.ID = t.ID_RICADPAC
-              WHERE COALESCE(t.ATIVO, 'T') = 'T'
-                AND ((t.TP_ATENDIMENTO = 'I' AND t.DATA_HORA_ALTA_MEDICA IS NULL)
-                  OR (t.TP_ATENDIMENTO = 'E' AND t.DATA_HORA_ENTRADA >= DATEADD(-24 HOUR TO CURRENT_TIMESTAMP)))
-                AND (t.ID_TBCBOPRO_ATENDIMENTO IN (SELECT c.ID FROM TBCBOPRO c WHERE COALESCE(c.ATIVO, 'T') <> 'F'
-                       AND c.ID_TBPROFIS = (SELECT MIN(f.ID) FROM TBPROFIS f WHERE ${condicaoLoginDoProfissional('f')}))
-                  OR (t.TP_ATENDIMENTO = 'I' AND EXISTS (SELECT 1 FROM RICADINT i JOIN TBCBOPRO c ON c.ID = i.ID_TBCBOPRO_MEDASS
-                       WHERE i.REG = t.COD_ATENDIMENTO AND COALESCE(c.ATIVO, 'T') <> 'F'
-                         AND c.ID_TBPROFIS = (SELECT MIN(f.ID) FROM TBPROFIS f WHERE ${condicaoLoginDoProfissional('f')})))
-                  OR EXISTS (SELECT 1 FROM HTATENDIMENTO h JOIN PRCABEVOL e ON e.ID_HTATENDIMENTO = h.ID
-                              JOIN TBCBOPRO c ON c.ID = e.ID_TBCBOPRO_EVOLUCAO
-                             WHERE h.ID_ATCABECATEND = t.ID AND COALESCE(c.ATIVO, 'T') <> 'F'
-                               AND c.ID_TBPROFIS = (SELECT MIN(f.ID) FROM TBPROFIS f WHERE ${condicaoLoginDoProfissional('f')}))
-                  OR EXISTS (SELECT 1 FROM SGH_PEP_FLUXO x WHERE x.HOSPITAL = ? AND x.ID_ATCABECATEND = t.ID
-                               AND x.ACEITO_POR = ?))`,
-            [login, login, login, a.cod, login],
-            { teto: 101 },
-          )
-        ).map((x) => Number(x['ID'])),
-      );
+  const c = () => ({ cliente: CLIENTE_F22_O4, estabelecimento: m.estA, usuario: null, correlacao: P, rede: 'rede-teste', hospital: P });
+
+  it('as pendências da fila (previsão de alta, resultado novo, prescrição a renovar) vêm da porta própria; tempo só da leitura das pendências', async () => {
     const tempos: number[] = [];
-    let comFila = 0;
-    let linhas = 0;
-    let divergentes = 0;
-    for (const login of logins) {
+    let fila = await servico.fila(c(), LOGIN_MEDICO);
+    for (let i = 0; i < 5; i++) {
       const t0 = performance.now();
-      const fila = await servico.fila(a.c, login);
+      fila = await servico.fila(c(), LOGIN_MEDICO);
       tempos.push(performance.now() - t0);
-      expect(fila.pacientes.length).toBeLessThanOrEqual(100);
-      const obtido = fila.pacientes.map((p) => p.atendimento).sort((x, y) => x - y);
-      const certo = (await esperado(login)).slice(0, 100).sort((x, y) => x - y);
-      if (!fila.limitado && JSON.stringify(obtido) !== JSON.stringify(certo)) divergentes++;
-      if (fila.limitado && obtido.some((x) => !certo.includes(x))) divergentes++;
-      if (obtido.length > 0) comFila++;
-      linhas += obtido.length;
     }
-    expect(divergentes).toBe(0);
-    // Seção 4 da ficha: p95 < 1,5 s (100 pacientes).
-    expect(percentil(tempos, 95)).toBeLessThan(1500);
-    // Quem não está no cadastro de profissionais: nenhum vínculo.
-    const ninguem = await servico.fila(a.c, 'SGH.SEM.VINCULO.M27');
-    expect(ninguem).toMatchObject({ semVinculo: true, pacientes: [] });
-    const fmt = (x: number) => (x < 5 ? '<5' : String(x));
-    console.log(
-      `[int-m27] fila do médico: ${fmt(logins.length)} login(s) conferido(s), ${fmt(comFila)} com fila, ${fmt(linhas)} linha(s), 0 fora do vínculo; p95 ${Math.round(percentil(tempos, 95))} ms`,
+    expect(fila.semVinculo).toBe(false);
+    expect(fila.pacientes.map((p) => p.paciente).sort((a, b) => a - b)).toEqual([m.pac1, m.pac2].sort((a, b) => a - b));
+    const p1 = fila.pacientes.find((p) => p.paciente === m.pac1)!;
+    const tipos1 = p1.pendencias.map((x) => x.tipo).sort();
+    expect(tipos1).toEqual(['prescricao-a-renovar', 'resultado-novo']);
+    expect(p1.pendencias.find((x) => x.tipo === 'resultado-novo')?.quantidade).toBe(1);
+    expect(p1.pendencias.find((x) => x.tipo === 'prescricao-a-renovar')?.prazo).toBe(
+      dataHora(m.fimARenovar, FUSO)!.slice(0, 16),
     );
+    expect(p1.previsaoAlta).toBe('2026-12-01');
+    // O atendimento externo: o resultado novo conta; prescrição a renovar e previsão de alta são só da internação.
+    const p2 = fila.pacientes.find((p) => p.paciente === m.pac2)!;
+    expect(p2.pendencias.map((x) => x.tipo)).toEqual(['resultado-novo']);
+    expect(p2.previsaoAlta).toBeNull();
+    // Só a leitura das pendências sobre o banco (o painel é dublê): não é a prova do p95 da ficha.
+    tempos.sort((a, b) => a - b);
+    expect(tempos[Math.ceil(tempos.length * 0.95) - 1]!).toBeLessThan(1500);
+  });
+
+  it('sem cadastro de profissional: fila vazia e o painel nem é consultado', async () => {
+    recortes.length = 0;
+    const fila = await servico.fila(c(), `${P}.sem.vinculo`);
+    expect(fila).toMatchObject({ semVinculo: true, pacientes: [], total: 0 });
+    expect(recortes).toEqual([]);
   });
 });

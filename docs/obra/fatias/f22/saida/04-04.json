@@ -1,0 +1,70 @@
+{
+  "lote": "04-04",
+  "registrar": [
+    "relatorio"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/relatorio/aplicacao/bi-rede.spec.ts",
+    "src/modulos/relatorio/aplicacao/bi-rede.ts",
+    "src/modulos/relatorio/aplicacao/catalogo-w0-09.spec.ts",
+    "src/modulos/relatorio/aplicacao/configuracao.ts",
+    "src/modulos/relatorio/aplicacao/executar.spec.ts",
+    "src/modulos/relatorio/aplicacao/executar.ts",
+    "src/modulos/relatorio/aplicacao/exportar.spec.ts",
+    "src/modulos/relatorio/aplicacao/exportar.ts",
+    "src/modulos/relatorio/aplicacao/gestao-ciclo.spec.ts",
+    "src/modulos/relatorio/aplicacao/gestao.spec.ts",
+    "src/modulos/relatorio/aplicacao/gestao.ts",
+    "src/modulos/relatorio/bi-rede.controller.ts",
+    "src/modulos/relatorio/bi-rede.spec.ts",
+    "src/modulos/relatorio/infra/consultas-catalogo.ts",
+    "src/modulos/relatorio/infra/fila-envio.ts",
+    "src/modulos/relatorio/infra/fuso.ts",
+    "src/modulos/relatorio/modulo.ts",
+    "src/modulos/relatorio/porta-memoria.ts",
+    "src/modulos/relatorio/porta-propria.int.spec.ts",
+    "src/modulos/relatorio/porta-propria.ts",
+    "src/modulos/relatorio/porta.ts",
+    "src/modulos/relatorio/public-api.ts",
+    "src/modulos/relatorio/relatorio.controller.ts",
+    "src/modulos/relatorio/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_relatorio",
+      "motivo": "O pedido de relatório novo (tela Pedidos, M34 W0-09) não tem tabela no modelo; a porta própria e o teste de integração já a usam (o teste pula o pedido enquanto ela faltar).",
+      "ddl": "CREATE TABLE pedido_relatorio (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  solicitante_usuario_id BIGINT UNSIGNED NOT NULL,\n  titulo VARCHAR(120) NOT NULL,\n  descricao VARCHAR(2000) NOT NULL,\n  finalidade VARCHAR(300) NOT NULL COMMENT 'Para que o relatório serve',\n  area VARCHAR(60) NOT NULL COMMENT 'Área que vai usar o relatório',\n  prazo DATE NOT NULL,\n  situacao VARCHAR(30) NOT NULL DEFAULT 'aberto',\n  relatorio_id BIGINT UNSIGNED NULL COMMENT 'Relatório do catálogo que atende o pedido',\n  resposta VARCHAR(2000) NULL,\n  respondido_por_usuario_id BIGINT UNSIGNED NULL,\n  respondido_em DATETIME(3) NULL,\n  cancelado_em DATETIME(3) NULL,\n  cancelado_por_usuario_id BIGINT UNSIGNED NULL,\n  motivo_cancelamento VARCHAR(200) NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL,\n  criado_por BIGINT UNSIGNED NULL,\n  alterado_em DATETIME(3) NULL,\n  alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_pedido_relatorio_situacao CHECK (situacao IN ('aberto','em_analise','publicado','recusado')),\n  CONSTRAINT ck_pedido_relatorio_resposta CHECK (situacao = 'aberto' OR (resposta IS NOT NULL AND respondido_em IS NOT NULL AND respondido_por_usuario_id IS NOT NULL)),\n  CONSTRAINT ck_pedido_relatorio_publicado CHECK (situacao <> 'publicado' OR relatorio_id IS NOT NULL),\n  CONSTRAINT ck_pedido_relatorio_cancelamento CHECK ((cancelado_em IS NULL) = (motivo_cancelamento IS NULL) AND (cancelado_em IS NULL) = (cancelado_por_usuario_id IS NULL)),\n  CONSTRAINT ck_pedido_relatorio_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  KEY ix_pedido_relatorio_estabelecimento_situacao (estabelecimento_id, situacao),\n  KEY ix_pedido_relatorio_solicitante (solicitante_usuario_id),\n  KEY ix_pedido_relatorio_relatorio (relatorio_id),\n  KEY ix_pedido_relatorio_respondido_por (respondido_por_usuario_id),\n  KEY ix_pedido_relatorio_cancelado_por (cancelado_por_usuario_id)\n) COMMENT='Pedido de relatório novo à curadoria: o que, para quê, área, prazo, resposta e cancelamento com motivo';\nALTER TABLE pedido_relatorio\n  ADD CONSTRAINT fk_pedido_relatorio_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_pedido_relatorio_solicitante_usuario_id FOREIGN KEY (solicitante_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_pedido_relatorio_relatorio_id FOREIGN KEY (relatorio_id) REFERENCES relatorio (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_pedido_relatorio_respondido_por_usuario_id FOREIGN KEY (respondido_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_pedido_relatorio_cancelado_por_usuario_id FOREIGN KEY (cancelado_por_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "carga",
+      "tabela": "relatorio",
+      "motivo": "Os 19 relatórios do catálogo do produto (RELATORIOS_CATALOGO de @sgh/contratos) precisam estar em `relatorio` (estabelecimento_id NULL, codigo = código do catálogo, modulo_sistema_id do módulo de relatórios, consulta_definicao = 'apps/api/src/modulos/relatorio/infra/consultas-catalogo.ts') por carregador versionado do produto, chamado pelo comando 'criar novo cliente' (tools/db/criar_cliente.py). Sem a linha, executar (registrar a execução), agendar e decidir triagem para o catálogo recusam com 'relatorio-nao-cadastrado'. O teste de integração 04-04 monta essas 19 linhas na massa sintética. Até o carregador existir, o módulo pode ser registrado, mas a tela do catálogo num banco recém-criado recusa a execução."
+    },
+    {
+      "tipo": "aviso",
+      "assunto": "BI da Rede",
+      "motivo": "O BiRedeController resolve PORTA_REDE, SERVICO_INTERNACAO e CONFIGURACAO_M16 pelo ModuleRef (strict:false): a tela do BI só responde com os módulos rede e internacao também em API_MODULOS (sem eles, 503 com o motivo)."
+    },
+    {
+      "tipo": "contrato",
+      "assunto": "trava otimista na tela (packages/contratos/src/relatorio)",
+      "motivo": "A porta e a aplicação já recebem e conferem a versão (conflito-versao, 409) e a devolvem na leitura (campo `versao` em AgendamentoLido e PedidoLido, hoje como extensão do tipo). Falta o contrato: `versao: z.number().int().positive()` em AgendamentoLido e PedidoLido, e `versao` opcional (depois obrigatória) em esquemaNovoAgendamento (alteração), esquemaAlteracaoPedido, esquemaMotivoGestaoRelatorio (cancelamento) e esquemaRespostaPedido; a tela web manda a versão lida. Hoje a aplicação aceita `versao` no corpo e a retira antes do Zod do contrato."
+    },
+    {
+      "tipo": "contrato",
+      "assunto": "aceite da triagem separado da decisão",
+      "motivo": "triagem_relatorio_legado separa decidido_* (quem decidiu o destino) de aceito_* (quem da área aceitou). A porta grava assim: a área que só aceita o destino proposto preenche só aceito_*; se muda o destino, a decisão nova também é dela. O contrato TriagemLida só tem decididoPor/decididoEm (hoje = o aceite, ou a decisão quando ainda proposta). Pedido: acrescentar aceitoPor/aceitoEm a TriagemLida e mostrar os dois na tela."
+    },
+    {
+      "tipo": "dominio",
+      "assunto": "regra do aceite da triagem e da curva ABC no dominio-relatorio",
+      "motivo": "A regra 'mudou o destino = decisão nova da área; senão só aceite' está na porta própria e na de memória (mesma regra); a curva ABC e as vagas da escala estão como funções puras em infra/consultas-catalogo.ts (curvaAbc, vagasDaEscala), com teste. Levar as três ao packages/dominio-relatorio (fora da lista do lote)."
+    },
+    {
+      "tipo": "aviso",
+      "assunto": "parâmetros inteiros do catálogo são ids",
+      "motivo": "Nos relatórios do catálogo, convênio, local de estoque e setor do SAME são o id da linha (fonte_pagadora, local_estoque, setor_funcional), como o convênio já era em atendimentosPorConvenio. O rótulo do contrato ainda diz 'código'."
+    }
+  ]
+}

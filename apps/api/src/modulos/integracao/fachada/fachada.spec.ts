@@ -8,17 +8,26 @@ import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { moduloIntegracao } from '../modulo.js';
 import { PortaFachadaMemoria } from './porta-memoria.js';
 
 const TOKEN = 't'.repeat(40);
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', FACHADA_API_TOKEN: TOKEN };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  FACHADA_API_TOKEN: TOKEN,
+  API_MODULOS: 'integracao',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaFachadaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, fachada: porta });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { integracao: async () => ({ modulo: (ctx) => moduloIntegracao(ctx, { fachada: porta }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

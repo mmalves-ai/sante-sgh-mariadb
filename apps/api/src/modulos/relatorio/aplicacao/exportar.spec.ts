@@ -6,6 +6,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { relatorioDoCatalogo } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
+import { moduloRelatorio } from '../modulo.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
@@ -19,7 +20,15 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, relatorio, vigia: null });
+  app = await criarApp(
+    lerConfiguracao({ ...env, API_MODULOS: 'relatorio' }),
+    null,
+    { ...env, API_MODULOS: 'relatorio' },
+    {
+      trilha,
+      registro: { relatorio: async () => ({ modulo: (ctx) => moduloRelatorio(ctx, { porta: relatorio }) }) },
+    },
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

@@ -2,34 +2,10 @@
 // real): três respostas da pesquisa do portal e dois incidentes no mês anterior ao do relógio, um paciente do cadastro e
 // os feriados nacionais fixos. As gravações seguem as travas do banco (versão, chaves únicas, a revisão vigente
 // substituída, a geração que substitui a anterior, a transmissão só com o mesmo resumo).
-import type {
-  AnaliseIndicadorSghLida,
-  AuditoriaSghLida,
-  ComissaoSghLida,
-  DocumentoQualidadeSghLido,
-  EnvioRegulatorioSghLido,
-  LiberacaoConsultada,
-  ManifestacaoSghLida,
-  NaoConformidadeSghLida,
-  PesquisaSatisfacaoLida,
-  ProtocoloPacienteLido,
-  ReuniaoComissaoSghLida,
-  RiscoSghLido,
-  VersaoGerenciadoLida,
-  AltaParaRevisao,
-  ChecklistRevisaoSghLido,
-  PendenciaRevisaoSghLida,
-  ProntuarioRevisaoSghLido,
-  SorteioRevisaoSghLido,
-} from '@sgh/legado';
-import {
-  type DependentesQua,
-  PROTOCOLO_OUVIDORIA,
-  recusa,
-  recusaVersaoGestao,
-  type TabelaCorrigivelQua,
-  type VersaoQuaLida,
-} from '@sgh/legado';
+import type { AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, ManifestacaoRegistrada, NaoConformidadeRegistrada, PesquisaSatisfacaoRespondida, ProtocoloDoPaciente, ReuniaoComissaoRegistrada, RiscoRegistrado, VersaoProtocoloGerenciado, AltaParaRevisao, ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado, SorteioRevisaoRegistrado } from './tipos.js';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { type DependentesRegistro, PROTOCOLO_OUVIDORIA, recusaVersaoGestao, type TabelaCorrigivel, type VersaoRegistro } from './tipos.js';
+import { recusa } from '@sgh/nucleo';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type {
   ContextoGestao,
@@ -47,30 +23,30 @@ export const GESTAO_SINTETICA = {
 } as const;
 
 /** A busca da ouvidoria como no repositório: o protocolo igual, ou o trecho no protocolo, na área ou no relato. */
-function buscaManifestacao(m: ManifestacaoSghLida, busca: string): boolean {
+function buscaManifestacao(m: ManifestacaoRegistrada, busca: string): boolean {
   const b = busca.trim().toUpperCase();
   if (PROTOCOLO_OUVIDORIA.test(b)) return m.protocolo === b;
   return [m.protocolo, m.area, m.relato].some((x) => x.toUpperCase().includes(b));
 }
 
 interface Estado {
-  documentos: (DocumentoQualidadeSghLido & { conteudo: string })[];
+  documentos: (DocumentoQualidadeRegistrado & { conteudo: string })[];
   ciencias: { id: number; documento: number; usuario: string; cienteEm: string }[];
-  analises: AnaliseIndicadorSghLida[];
-  auditorias: AuditoriaSghLida[];
-  comissoes: ComissaoSghLida[];
-  reunioes: ReuniaoComissaoSghLida[];
-  riscos: RiscoSghLido[];
-  ncs: NaoConformidadeSghLida[];
-  manifestacoes: ManifestacaoSghLida[];
-  envios: EnvioRegulatorioSghLido[];
+  analises: AnaliseIndicadorRegistrada[];
+  auditorias: AuditoriaRegistrada[];
+  comissoes: ComissaoRegistrada[];
+  reunioes: ReuniaoComissaoRegistrada[];
+  riscos: RiscoRegistrado[];
+  ncs: NaoConformidadeRegistrada[];
+  manifestacoes: ManifestacaoRegistrada[];
+  envios: EnvioRegulatorioRegistrado[];
   /** W0-04: as versões anteriores (tabela|id → versões). */
-  versoes: Map<string, VersaoQuaLida[]>;
+  versoes: Map<string, VersaoRegistro[]>;
   /** W0-04 (M5): a comissão de revisão de prontuários. */
-  checklistsRev: ChecklistRevisaoSghLido[];
-  sorteiosRev: Omit<SorteioRevisaoSghLido, 'revisados' | 'checklistRevisao'>[];
-  prontuariosRev: ProntuarioRevisaoSghLido[];
-  pendenciasRev: PendenciaRevisaoSghLida[];
+  checklistsRev: ChecklistRevisaoRegistrado[];
+  sorteiosRev: Omit<SorteioRevisaoRegistrado, 'revisados' | 'checklistRevisao'>[];
+  prontuariosRev: ProntuarioRevisaoRegistrado[];
+  pendenciasRev: PendenciaRevisaoRegistrada[];
   seq: number;
 }
 
@@ -108,14 +84,14 @@ export class PortaGestaoMemoria implements PortaGestao {
   loginsSint = new Map<number, string>();
   /** Revisão do W0-04: simula a leitura das altas cortada pelo teto (o sorteio recusa). */
   cortadaSint = false;
-  private readonly pesquisasSint: PesquisaSatisfacaoLida[];
+  private readonly pesquisasSint: PesquisaSatisfacaoRespondida[];
   private readonly incidentesSint: IncidenteParaNotivisaLido[];
   /**
    * W0-04 (M2): notificações por tipo além dos incidentes sintéticos do Notivisa (os testes definem; cada uma com a
    * data do incidente). W0-04 (M3): os protocolos gerenciados (os testes definem as versões e as inclusões).
    */
   notificacoesSint: { ocorridoEm: string; tipo: string; classificacao: string }[] = [];
-  protocolosSint: { versoes: VersaoGerenciadoLida[]; protocolos: ProtocoloPacienteLido[] } = {
+  protocolosSint: { versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] } = {
     versoes: [],
     protocolos: [],
   };
@@ -131,7 +107,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       d: number,
       nota: number,
       comentario: string | null,
-    ): PesquisaSatisfacaoLida => ({
+    ): PesquisaSatisfacaoRespondida => ({
       id,
       paciente: GESTAO_SINTETICA.paciente,
       tipo: 'consulta',
@@ -189,7 +165,7 @@ export class PortaGestaoMemoria implements PortaGestao {
     return relogioDoEstabelecimento(this.opcoes.agora?.() ?? new Date()).agora.slice(0, 19);
   }
 
-  podeGravar(): Promise<LiberacaoConsultada> {
+  podeGravar(): Promise<LiberacaoGravacao> {
     return Promise.resolve({ pode: true, codigo: null, motivo: null });
   }
   executar(_c: ContextoGestao, op: string): Promise<never> {
@@ -279,9 +255,9 @@ export class PortaGestaoMemoria implements PortaGestao {
         m.set(n.idOrigem, (m.get(n.idOrigem) ?? 0) + 1);
     return Promise.resolve(m);
   }
-  private comUltimas(c: ComissaoSghLida): ComissaoSghLida {
+  private comUltimas(c: ComissaoRegistrada): ComissaoRegistrada {
     const rs = this.estado.reunioes.filter((r) => r.comissao === c.id);
-    const max = (xs: readonly ReuniaoComissaoSghLida[]) =>
+    const max = (xs: readonly ReuniaoComissaoRegistrada[]) =>
       xs.length
         ? xs
             .map((r) => r.realizadaEm)
@@ -421,46 +397,46 @@ export class PortaGestaoMemoria implements PortaGestao {
   reuniao(_c: ContextoGestao, id: number) {
     return Promise.resolve(this.estado.reunioes.find((r) => r.id === id) ?? null);
   }
-  versoes(_c: ContextoGestao, tabela: TabelaCorrigivelQua, id: number) {
+  versoes(_c: ContextoGestao, tabela: TabelaCorrigivel, id: number) {
     return Promise.resolve([...(this.estado.versoes.get(`${tabela}|${id}`) ?? [])].reverse());
   }
   /** O mapa de dependências (MAPA_DEPENDENCIAS_QUALIDADE) sobre o estado em memória. */
-  dependentes(_c: ContextoGestao, tabela: string, id: number): Promise<DependentesQua[]> {
+  dependentes(_c: ContextoGestao, tabela: string, id: number): Promise<DependentesRegistro[]> {
     const ativas = this.estado.ncs.filter((n) => !n.canceladaEm);
-    const grupo = (g: string, dependente: string, ids: number[]): DependentesQua[] =>
+    const grupo = (g: string, dependente: string, ids: number[]): DependentesRegistro[] =>
       ids.length ? [{ grupo: g, dependente, quantidade: ids.length, ids }] : [];
     const porOrigem = (origem: string, g: string) =>
       grupo(
         g,
-        'SGH_QUA_NAO_CONFORM',
+        'nao_conformidade_qualidade',
         ativas.filter((n) => n.origem === origem && n.idOrigem === id).map((n) => n.id),
       );
-    if (tabela === 'SGH_QUA_AUDITORIA')
+    if (tabela === 'auditoria_interna')
       return Promise.resolve(porOrigem('auditoria', 'Não conformidades da auditoria'));
-    if (tabela === 'SGH_QUA_OUVIDORIA')
+    if (tabela === 'manifestacao_ouvidoria')
       return Promise.resolve(porOrigem('ouvidoria', 'Não conformidades da manifestação'));
-    if (tabela === 'SGH_QUA_RISCO') return Promise.resolve(porOrigem('risco', 'Não conformidades do risco'));
-    if (tabela === 'SGH_QUA_NAO_CONFORM')
+    if (tabela === 'risco_institucional') return Promise.resolve(porOrigem('risco', 'Não conformidades do risco'));
+    if (tabela === 'nao_conformidade_qualidade')
       return Promise.resolve(
         grupo(
           'Não conformidades marcadas como duplicadas desta',
-          'SGH_QUA_NAO_CONFORM',
+          'nao_conformidade_qualidade',
           this.estado.ncs.filter((n) => n.duplicadaDe === id).map((n) => n.id),
         ),
       );
     // Revisão do W0-04: a comissão (inativação ou troca do tipo) com o checklist vigente e os sorteios em andamento.
-    if (tabela === 'SGH_QUA_COMISSAO')
+    if (tabela === 'comissao_hospitalar')
       return Promise.resolve([
         ...grupo(
           'Checklist vigente da revisão de prontuários (inative-o antes)',
-          'SGH_QUA_REV_CHECKLIST',
+          'modelo_checklist_qualidade_versao',
           this.estado.checklistsRev
             .filter((c) => c.comissao === id && c.situacao === 'vigente')
             .map((c) => c.id),
         ),
         ...grupo(
           'Sorteios de prontuários em andamento (com prontuário sem o aval)',
-          'SGH_QUA_REV_SORTEIO',
+          'sorteio_revisao_prontuario',
           this.estado.sorteiosRev
             .filter(
               (so) =>
@@ -471,11 +447,11 @@ export class PortaGestaoMemoria implements PortaGestao {
             .map((so) => so.id),
         ),
       ]);
-    if (tabela === 'SGH_QUA_REV_SORTEIO')
+    if (tabela === 'sorteio_revisao_prontuario')
       return Promise.resolve(
         grupo(
           'Prontuários já revisados do sorteio',
-          'SGH_QUA_REV_PRONTUARIO',
+          'revisao_prontuario',
           this.estado.prontuariosRev
             .filter((p) => p.sorteio === id && p.situacao !== 'aRevisar')
             .map((p) => p.id),
@@ -503,8 +479,8 @@ export class PortaGestaoMemoria implements PortaGestao {
     return Promise.resolve(new Map(registros.map((r) => [r, this.loginsSint.get(r) ?? ''])));
   }
   private sorteioLido(
-    x: Omit<SorteioRevisaoSghLido, 'revisados' | 'checklistRevisao'>,
-  ): SorteioRevisaoSghLido {
+    x: Omit<SorteioRevisaoRegistrado, 'revisados' | 'checklistRevisao'>,
+  ): SorteioRevisaoRegistrado {
     return {
       ...x,
       checklistRevisao: this.estado.checklistsRev.find((c) => c.id === x.checklist)?.revisao ?? 0,
@@ -597,9 +573,9 @@ export class PortaGestaoMemoria implements PortaGestao {
 
   /**
    * W0-10 (M1): a ouvidoria interna em memória recebe as manifestações do portal do paciente em memória (canal
-   * "portal", identificada com o paciente da sessão), como a SGH_QUA_OUVIDORIA na cópia: a manifestação aparece na
+   * "portal", identificada com o paciente da sessão), como a manifestacao_ouvidoria na cópia: a manifestação aparece na
    * tela da ouvidoria e a resposta dada nela volta ao portal (dev/ci e o E2E). Revisão do W0-10: cada manifestação
-   * guarda o estabelecimento da sessão do portal e o portal só lê as do próprio hospital (a SGH_QUA_OUVIDORIA tem a
+   * guarda o estabelecimento da sessão do portal e o portal só lê as do próprio hospital (a manifestacao_ouvidoria tem a
    * coluna HOSPITAL): o paciente 1001 do hospital B não vê a do paciente 1001 do hospital A.
    */
   ouvidoriaDoPortal() {
@@ -639,7 +615,7 @@ export class PortaGestaoMemoria implements PortaGestao {
         hospitalDe.set(r.id, hospital);
         return r;
       },
-      doPaciente: (paciente: number, hospital: string): Promise<ManifestacaoSghLida[]> =>
+      doPaciente: (paciente: number, hospital: string): Promise<ManifestacaoRegistrada[]> =>
         Promise.resolve(
           this.estado.manifestacoes
             .filter(
@@ -672,9 +648,9 @@ export class PortaGestaoMemoria implements PortaGestao {
     const troca = <X extends { id: number }>(xs: X[], novo: X) =>
       xs.map((y) => (y.id === novo.id ? novo : y));
     const versionar = (
-      tabela: TabelaCorrigivelQua,
+      tabela: TabelaCorrigivel,
       x: { id: number; versao?: number },
-      acao: VersaoQuaLida['acao'],
+      acao: VersaoRegistro['acao'],
       motivo: string,
       usuario: string,
       agora: string,
@@ -715,7 +691,7 @@ export class PortaGestaoMemoria implements PortaGestao {
             'O checklist',
           );
           versionar(
-            'SGH_QUA_REV_CHECKLIST',
+            'modelo_checklist_qualidade_versao',
             v,
             'correcao',
             p.motivo ?? 'Substituída pela revisão seguinte',
@@ -745,7 +721,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       inativarChecklistRevisao: async (m) => {
         const x = conferida(s.checklistsRev, m.id, m.versao, (y) => y.situacao === 'vigente', 'O checklist');
-        versionar('SGH_QUA_REV_CHECKLIST', x, 'cancelamento', m.motivo, m.usuario, m.agora);
+        versionar('modelo_checklist_qualidade_versao', x, 'cancelamento', m.motivo, m.usuario, m.agora);
         s.checklistsRev = troca(s.checklistsRev, {
           ...x,
           situacao: 'inativa',
@@ -801,7 +777,7 @@ export class PortaGestaoMemoria implements PortaGestao {
         if (s.prontuariosRev.some((p) => p.sorteio === m.id && p.situacao !== 'aRevisar'))
           throw recusaVersaoGestao('O sorteio');
         const x = conferida(s.sorteiosRev, m.id, m.versao, (y) => !y.canceladoEm, 'O sorteio');
-        versionar('SGH_QUA_REV_SORTEIO', x, 'cancelamento', m.motivo, m.usuario, m.agora);
+        versionar('sorteio_revisao_prontuario', x, 'cancelamento', m.motivo, m.usuario, m.agora);
         s.sorteiosRev = troca(s.sorteiosRev, {
           ...x,
           canceladoEm: segundos(m.agora),
@@ -814,7 +790,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       revisarProntuario: async (r) => {
         const x = conferida(s.prontuariosRev, r.id, r.versao, (y) => !y.avalEm, 'O prontuário');
         if (r.justificativa !== null)
-          versionar('SGH_QUA_REV_PRONTUARIO', x, 'correcao', r.justificativa, r.usuario, r.agora);
+          versionar('revisao_prontuario', x, 'correcao', r.justificativa, r.usuario, r.agora);
         s.prontuariosRev = troca(s.prontuariosRev, {
           ...x,
           situacao: r.situacao,
@@ -851,7 +827,7 @@ export class PortaGestaoMemoria implements PortaGestao {
             });
           else if (ja.situacao === 'cancelada') {
             versionar(
-              'SGH_QUA_REV_PENDENCIA',
+              'pendencia_prontuario',
               ja,
               'reabertura',
               r.justificativa ?? 'Reaberta.',
@@ -873,7 +849,7 @@ export class PortaGestaoMemoria implements PortaGestao {
         for (const e of existentes)
           if (e.situacao === 'aberta' && !itens.has(e.item)) {
             const motivo = `Revisão corrigida: ${r.justificativa ?? ''}`.slice(0, 500);
-            versionar('SGH_QUA_REV_PENDENCIA', e, 'cancelamento', motivo, r.usuario, r.agora);
+            versionar('pendencia_prontuario', e, 'cancelamento', motivo, r.usuario, r.agora);
             s.pendenciasRev = troca(s.pendenciasRev, {
               ...e,
               situacao: 'cancelada',
@@ -917,7 +893,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       cancelarPendenciaRevisao: async (m) => {
         const x = conferida(s.pendenciasRev, m.id, m.versao, (y) => y.situacao === 'aberta', 'A pendência');
-        versionar('SGH_QUA_REV_PENDENCIA', x, 'cancelamento', m.motivo, m.usuario, m.agora);
+        versionar('pendencia_prontuario', x, 'cancelamento', m.motivo, m.usuario, m.agora);
         s.pendenciasRev = troca(s.pendenciasRev, {
           ...x,
           situacao: 'cancelada',
@@ -930,7 +906,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       alterarAuditoria: async (a) => {
         const x = conferida(s.auditorias, a.id, a.versao, (y) => !y.canceladaEm, 'A auditoria');
-        versionar('SGH_QUA_AUDITORIA', x, 'correcao', a.justificativa, a.usuario, a.agora);
+        versionar('auditoria_interna', x, 'correcao', a.justificativa, a.usuario, a.agora);
         s.auditorias = troca(s.auditorias, {
           ...x,
           titulo: a.titulo,
@@ -946,14 +922,14 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       cancelarAuditoria: async (a) => {
         const x = conferida(s.auditorias, a.id, a.versao, (y) => !y.canceladaEm, 'A auditoria');
-        versionar('SGH_QUA_AUDITORIA', x, 'cancelamento', a.justificativa, a.usuario, a.agora);
+        versionar('auditoria_interna', x, 'cancelamento', a.justificativa, a.usuario, a.agora);
         s.auditorias = troca(s.auditorias, {
           ...x,
           canceladaEm: segundos(a.agora),
           motivoCancelamento: a.justificativa,
           versao: a.versao + 1,
         });
-        if ((await this.dependentes(_c, 'SGH_QUA_AUDITORIA', x.id)).length)
+        if ((await this.dependentes(_c, 'auditoria_interna', x.id)).length)
           throw recusa(
             'com-dependentes',
             'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.',
@@ -963,7 +939,7 @@ export class PortaGestaoMemoria implements PortaGestao {
       retificarAta: async (r) => {
         const x = conferida(s.reunioes, r.id, r.versao, (y) => !y.canceladaEm, 'A reunião');
         if (!!r.assinaturaAtual !== !!x.ataAssinadaEm) throw recusaVersaoGestao('A reunião');
-        versionar('SGH_QUA_COMISSAO_REUNIAO', x, 'retificacao', r.justificativa, r.usuario, r.agora);
+        versionar('reuniao_comissao', x, 'retificacao', r.justificativa, r.usuario, r.agora);
         s.reunioes = troca(s.reunioes, {
           ...x,
           ...(r.assinaturaAtual
@@ -1008,7 +984,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           (y) => !y.canceladaEm && !y.ataAssinadaEm && !y.assinaturaAnteriorEm,
           'A reunião',
         );
-        versionar('SGH_QUA_COMISSAO_REUNIAO', x, 'cancelamento', r.justificativa, r.usuario, r.agora);
+        versionar('reuniao_comissao', x, 'cancelamento', r.justificativa, r.usuario, r.agora);
         s.reunioes = troca(s.reunioes, {
           ...x,
           canceladaEm: segundos(r.agora),
@@ -1025,7 +1001,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           (y) => !y.canceladaEm && y.situacao === 'aberta',
           'A não conformidade',
         );
-        versionar('SGH_QUA_NAO_CONFORM', x, 'cancelamento', n.justificativa, n.usuario, n.agora);
+        versionar('nao_conformidade_qualidade', x, 'cancelamento', n.justificativa, n.usuario, n.agora);
         s.ncs = troca(s.ncs, {
           ...x,
           canceladaEm: segundos(n.agora),
@@ -1033,7 +1009,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           duplicadaDe: n.duplicadaDe,
           versao: n.versao + 1,
         });
-        if ((await this.dependentes(_c, 'SGH_QUA_NAO_CONFORM', x.id)).length)
+        if ((await this.dependentes(_c, 'nao_conformidade_qualidade', x.id)).length)
           throw recusa(
             'com-dependentes',
             'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.',
@@ -1048,7 +1024,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           (y) => !y.canceladaEm && y.situacao === 'aberta',
           'A manifestação',
         );
-        versionar('SGH_QUA_OUVIDORIA', x, 'correcao', m.justificativa, m.usuario, m.agora);
+        versionar('manifestacao_ouvidoria', x, 'correcao', m.justificativa, m.usuario, m.agora);
         s.manifestacoes = troca(s.manifestacoes, {
           ...x,
           tipo: m.tipo,
@@ -1060,14 +1036,14 @@ export class PortaGestaoMemoria implements PortaGestao {
       },
       cancelarManifestacao: async (m) => {
         const x = conferida(s.manifestacoes, m.id, m.versao, (y) => !y.canceladaEm, 'A manifestação');
-        versionar('SGH_QUA_OUVIDORIA', x, 'cancelamento', m.justificativa, m.usuario, m.agora);
+        versionar('manifestacao_ouvidoria', x, 'cancelamento', m.justificativa, m.usuario, m.agora);
         s.manifestacoes = troca(s.manifestacoes, {
           ...x,
           canceladaEm: segundos(m.agora),
           motivoCancelamento: m.justificativa,
           versao: m.versao + 1,
         });
-        if ((await this.dependentes(_c, 'SGH_QUA_OUVIDORIA', x.id)).length)
+        if ((await this.dependentes(_c, 'manifestacao_ouvidoria', x.id)).length)
           throw recusa(
             'com-dependentes',
             'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.',
@@ -1221,7 +1197,7 @@ export class PortaGestaoMemoria implements PortaGestao {
         }
         const v = versao(s.comissoes, c.id, c.versao, 'A comissão');
         versionar(
-          'SGH_QUA_COMISSAO',
+          'comissao_hospitalar',
           v,
           c.ativa ? 'correcao' : 'cancelamento',
           c.justificativa ?? 'Alteração da comissão',
@@ -1229,7 +1205,7 @@ export class PortaGestaoMemoria implements PortaGestao {
           c.agora,
         );
         s.comissoes = troca(s.comissoes, { ...v, ...dados, versao: v.versao + 1 });
-        if (c.conferirDependentes && (await this.dependentes(_c, 'SGH_QUA_COMISSAO', c.id)).length)
+        if (c.conferirDependentes && (await this.dependentes(_c, 'comissao_hospitalar', c.id)).length)
           throw recusa(
             'com-dependentes',
             'Há registros ativos que dependem deste: o cancelamento deixaria órfãos.',

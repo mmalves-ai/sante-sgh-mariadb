@@ -5,8 +5,8 @@
 //   - parâmetros tipados pelo Zod do relatório (os relativos, como "mês anterior", resolvidos no dia do banco);
 //   - teto de linhas e tempo por relatório (parâmetro do sistema): acima, o driver cancela e a mensagem é em português;
 //   - coluna com dado de pessoa sai mascarada sem `relatorio.dadoPessoal.ver`; exportar o que sai sem máscara exige a
-//     justificativa, gravada na execução e na trilha; toda emissão e exportação fica em SGH_REL_EXECUCAO (só o resumo
-//     SHA-256 dos parâmetros, nunca os valores) com a SGH_TRILHA na mesma transação.
+//     justificativa, gravada na execução e na trilha; toda emissão e exportação fica em execucao_relatorio (só o resumo
+//     SHA-256 dos parâmetros, nunca os valores) com a trilha na mesma transação.
 import {
   EVENTOS_AUDITAVEIS,
   esquemaParametrosRelatorio,
@@ -31,7 +31,7 @@ import {
   textoCanonicoParametros,
   totaisDasLinhas,
 } from '@sgh/dominio-relatorio';
-import { ErroRelatorio, type LinhaRelatorio } from '@sgh/legado';
+import { ErroRelatorio, type LinhaRelatorio } from '../tipos.js';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { exigir, linhaTrilha, type SessaoCadastro } from '../../cadastro/comum.js';
@@ -173,7 +173,7 @@ export class ServicoExecucao {
       s.porta,
       (id: string) =>
         linhaTrilha(s, evento, `relatorio.${r.codigo}`, `${x.tipo}:${x.formato}:${x.situacao}`, {
-          tabela: 'SGH_REL_EXECUCAO',
+          tabela: 'execucao_relatorio',
           id,
           chave: r.codigo,
         }),

@@ -9,10 +9,11 @@ import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { moduloIntegracao } from '../modulo.js';
 import { ArmazemConteudoMemoria, chaveDoConteudo, resumoSha256 } from '../infra/armazem-conteudo.js';
 import { EXAME_SINTETICO_APOIO, PortaIntegracaoMemoria } from '../porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'integracao' };
 const trilha = new RegistradorTrilhaMemoria();
 const armazem = new ArmazemConteudoMemoria();
 const integracao = new PortaIntegracaoMemoria(armazem, trilha);
@@ -22,9 +23,9 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    integracao,
-    armazemConteudo: armazem,
-    vigia: null,
+    registro: {
+      integracao: async () => ({ modulo: (ctx) => moduloIntegracao(ctx, { porta: integracao, armazem }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -112,7 +113,7 @@ describe('retorno do laboratório de apoio (regra 13)', () => {
     const resumo = resumoSha256(conteudo);
     const k = chaveDoConteudo('aa', 'lab-apoio-sintetico', 'entrada', resumo);
     await armazem.gravar('x', k, conteudo);
-    await integracao.gravarSgh({ rede: 'x', hospital: 'aa' }, {} as never, (g) =>
+    await integracao.gravar({ rede: 'x', hospital: 'aa' }, {} as never, (g) =>
       g.registrarRecebida({
         parceiro: 'lab-apoio-sintetico',
         tipo: 'ORU^R01',
@@ -122,7 +123,7 @@ describe('retorno do laboratório de apoio (regra 13)', () => {
         tamanho: conteudo.length,
         situacao: 'conferir',
         detalhe: null,
-        tabelaObjeto: 'SILANEXA',
+        tabelaObjeto: 'exame_item',
         idObjeto: String(EXAME_SINTETICO_APOIO),
       }),
     );

@@ -55,6 +55,8 @@ export const TABELA_CP1252: string = new TextDecoder('windows-1252').decode(
 );
 
 export const PARA_BYTE = new Map<number, number>();
+// A tabela inversa (caractere → byte): sem ela, todo texto fora do ASCII seria recusado.
+for (let i = 0; i < 256; i++) PARA_BYTE.set(TABELA_CP1252.charCodeAt(i), i);
 
 export class ErroCp1252 extends Error {
   override readonly name = 'ErroCp1252';
@@ -1873,6 +1875,9 @@ export interface CabecalhoDocumentoLido {
   readonly situacao: string | null;
 }
 
-/** Quem opera, para os registros em memória (dev/ci): o id do usuário da sessão (null: processo automático). */
-export const loginDaOperacao = (ctx: { readonly usuario: number | null }): string =>
-  ctx.usuario === null ? 'sistema' : String(ctx.usuario);
+/**
+ * Quem opera, para os registros em memória (dev/ci): o login da sessão quando o contexto da gravação o traz (a sessão
+ * sintética não tem id numérico de usuário); senão, o id do usuário (null: processo automático).
+ */
+export const loginDaOperacao = (ctx: { readonly usuario: number | null; readonly login?: string | null }): string =>
+  ctx.login || (ctx.usuario === null ? 'sistema' : String(ctx.usuario));

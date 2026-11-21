@@ -1,42 +1,9 @@
-// Porta da gestão da qualidade e dos envios regulatórios (M48, etapa 5; ADR 0031): as leituras SGH_ (documentos e
-// ciências, análises dos indicadores, auditorias, comissões e reuniões, riscos, não conformidades, manifestações,
-// envios; a pesquisa do portal do M50 e os incidentes do M48.1), as do outro sistema que a etapa usa (relógio,
-// feriados, o nome do paciente da manifestação identificada) e as gravações só do novo (SGH_QUA_* do 0485 e do 0486)
-// numa transação SGH_ com a SGH_TRILHA junto. Duas implementações: sobre o núcleo do legado (a cópia) e em memória
-// (dev/ci e os testes; dados sintéticos).
-import type {
-  DependentesQua,
-  TabelaCorrigivelQua,
-  VersaoQuaLida,
-  AnaliseIndicadorSgh,
-  AnaliseIndicadorSghLida,
-  AuditoriaSghLida,
-  ComissaoSghLida,
-  DocumentoQualidadeSgh,
-  DocumentoQualidadeSghLido,
-  EnvioRegulatorioSghLido,
-  FiltroDocumentosSgh,
-  ManifestacaoSgh,
-  ManifestacaoSghLida,
-  NaoConformidadeSgh,
-  NaoConformidadeSghLida,
-  PaginaGestaoSgh,
-  PesquisaSatisfacaoLida,
-  ProtocoloPacienteLido,
-  ReuniaoComissaoSghLida,
-  RiscoSgh,
-  RiscoSghLido,
-  VersaoGerenciadoLida,
-  AltaParaRevisao,
-  ChecklistRevisaoSghLido,
-  PendenciaRevisaoSghLida,
-  ProntuarioRevisaoSghLido,
-  PublicacaoChecklistSgh,
-  RevisaoSgh,
-  SorteioRevisaoSghLido,
-  SorteioSgh,
-} from '@sgh/legado';
-import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
+// Porta da gestão da qualidade (M48, etapa 5) e da revisão de prontuários (W0-04): documentos, indicadores, auditorias,
+// comissões, riscos, não conformidades, ouvidoria, envios regulatórios e a comissão de revisão, com as gravações numa
+// transação com a trilha junto. Três implementações: a própria sobre o MariaDB do cliente (porta-gestao-propria.ts), em
+// memória (dev/ci e os testes; dados sintéticos) e a indisponível (503).
+import type { DependentesRegistro, TabelaCorrigivel, VersaoRegistro, AnaliseIndicadorNova, AnaliseIndicadorRegistrada, AuditoriaRegistrada, ComissaoRegistrada, DocumentoQualidadeNovo, DocumentoQualidadeRegistrado, EnvioRegulatorioRegistrado, FiltroDocumentos, ManifestacaoNova, ManifestacaoRegistrada, NaoConformidadeNova, NaoConformidadeRegistrada, PaginaGestao, PesquisaSatisfacaoRespondida, ProtocoloDoPaciente, ReuniaoComissaoRegistrada, RiscoNovo, RiscoRegistrado, VersaoProtocoloGerenciado, AltaParaRevisao, ChecklistRevisaoRegistrado, PendenciaRevisaoRegistrada, ProntuarioRevisaoRegistrado, PublicacaoChecklist, RevisaoNova, SorteioRevisaoRegistrado, SorteioNovo } from './tipos.js';
+import { type ContextoPortaM18, type PortaGravacaoM18, portaIndisponivel } from '../exames/public-api.js';
 
 export const PORTA_GESTAO = Symbol('PORTA_GESTAO');
 
@@ -58,7 +25,7 @@ export interface IncidenteParaNotivisaLido {
 
 /** Gravações só do novo (as regras puras conferidas antes, na API). */
 export interface GravadorGestao {
-  publicarDocumento(d: SemHospital<DocumentoQualidadeSgh>): Promise<{ id: number }>;
+  publicarDocumento(d: SemHospital<DocumentoQualidadeNovo>): Promise<{ id: number }>;
   retirarDocumento(r: {
     readonly id: number;
     readonly versao: number;
@@ -72,7 +39,7 @@ export interface GravadorGestao {
     readonly usuario: string;
   }): Promise<{ id: number }>;
   registrarAnaliseIndicador(
-    a: SemHospital<AnaliseIndicadorSgh>,
+    a: SemHospital<AnaliseIndicadorNova>,
   ): Promise<{ id: number; versao: number; criada: boolean }>;
   registrarAuditoria(a: {
     readonly titulo: string;
@@ -118,11 +85,11 @@ export interface GravadorGestao {
     readonly agora: string;
     readonly usuario: string;
   }): Promise<{ id: number }>;
-  registrarRisco(r: SemHospital<RiscoSgh>): Promise<{ id: number; versao: number; criado: boolean }>;
+  registrarRisco(r: SemHospital<RiscoNovo>): Promise<{ id: number; versao: number; criado: boolean }>;
   registrarNaoConformidade(
-    n: SemHospital<NaoConformidadeSgh>,
+    n: SemHospital<NaoConformidadeNova>,
   ): Promise<{ id: number; versao: number; criada: boolean }>;
-  registrarManifestacao(m: SemHospital<ManifestacaoSgh>): Promise<{ id: number; protocolo: string }>;
+  registrarManifestacao(m: SemHospital<ManifestacaoNova>): Promise<{ id: number; protocolo: string }>;
   encaminharManifestacao(r: {
     readonly id: number;
     readonly versao: number;
@@ -155,7 +122,7 @@ export interface GravadorGestao {
     readonly protocolo: string;
     readonly usuario: string;
   }): Promise<{ versao: number }>;
-  // W0-04: correção por versão e cancelamento com motivo (a versão anterior vai à SGH_QUA_VERSAO).
+  // W0-04: correção por versão e cancelamento com motivo (a versão anterior vai à trilha_auditoria).
   alterarAuditoria(
     a: MudancaGestao & {
       readonly titulo: string;
@@ -195,11 +162,11 @@ export interface GravadorGestao {
   ): Promise<{ versao: number }>;
   cancelarManifestacao(m: MudancaGestao): Promise<{ versao: number }>;
   // W0-04 (M5): a comissão de revisão de prontuários (script 1025).
-  publicarChecklistRevisao(p: SemHospital<PublicacaoChecklistSgh>): Promise<{ id: number; revisao: number }>;
+  publicarChecklistRevisao(p: SemHospital<PublicacaoChecklist>): Promise<{ id: number; revisao: number }>;
   inativarChecklistRevisao(p: MudancaRevisao): Promise<{ versao: number }>;
-  sortearRevisao(s: SemHospital<SorteioSgh>): Promise<{ id: number }>;
+  sortearRevisao(s: SemHospital<SorteioNovo>): Promise<{ id: number }>;
   cancelarSorteioRevisao(p: MudancaRevisao): Promise<{ versao: number }>;
-  revisarProntuario(r: SemHospital<RevisaoSgh>): Promise<{ versao: number }>;
+  revisarProntuario(r: SemHospital<RevisaoNova>): Promise<{ versao: number }>;
   avalRevisao(a: { id: number; versao: number; agora: string; usuario: string }): Promise<{ versao: number }>;
   responderPendenciaRevisao(p: {
     id: number;
@@ -236,25 +203,25 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
   feriados(c: C, de: string, ate: string): Promise<{ readonly data: string }[]>;
   /** O nome do paciente do cadastro (a manifestação identificada; nunca na trilha). */
   nomesPacientes(c: C, ids: readonly number[]): Promise<Map<number, string>>;
-  documentos(c: C, f: FiltroDocumentosSgh): Promise<PaginaGestaoSgh<DocumentoQualidadeSghLido>>;
-  documento(c: C, id: number): Promise<DocumentoQualidadeSghLido | null>;
-  documentosDoCodigo(c: C, codigo: string): Promise<DocumentoQualidadeSghLido[]>;
+  documentos(c: C, f: FiltroDocumentos): Promise<PaginaGestao<DocumentoQualidadeRegistrado>>;
+  documento(c: C, id: number): Promise<DocumentoQualidadeRegistrado | null>;
+  documentosDoCodigo(c: C, codigo: string): Promise<DocumentoQualidadeRegistrado[]>;
   ciencias(
     c: C,
     documentos: readonly number[],
     usuario: string,
   ): Promise<Map<number, { total: number; sessao: boolean }>>;
   cientes(c: C, documento: number): Promise<{ usuario: string; cienteEm: string }[]>;
-  analises(c: C, competencia: string): Promise<AnaliseIndicadorSghLida[]>;
-  historicoAnalises(c: C, indicador: string): Promise<AnaliseIndicadorSghLida[]>;
-  auditorias(c: C, f: Pg): Promise<PaginaGestaoSgh<AuditoriaSghLida>>;
-  auditoria(c: C, id: number): Promise<AuditoriaSghLida | null>;
+  analises(c: C, competencia: string): Promise<AnaliseIndicadorRegistrada[]>;
+  historicoAnalises(c: C, indicador: string): Promise<AnaliseIndicadorRegistrada[]>;
+  auditorias(c: C, f: Pg): Promise<PaginaGestao<AuditoriaRegistrada>>;
+  auditoria(c: C, id: number): Promise<AuditoriaRegistrada | null>;
   naoConformidadesPorOrigem(c: C, origem: string, ids: readonly number[]): Promise<Map<number, number>>;
-  comissoes(c: C): Promise<ComissaoSghLida[]>;
-  comissao(c: C, id: number): Promise<ComissaoSghLida | null>;
-  reunioes(c: C, comissao: number): Promise<ReuniaoComissaoSghLida[]>;
-  riscos(c: C, f: Pg & { readonly situacao?: string | undefined }): Promise<PaginaGestaoSgh<RiscoSghLido>>;
-  risco(c: C, id: number): Promise<RiscoSghLido | null>;
+  comissoes(c: C): Promise<ComissaoRegistrada[]>;
+  comissao(c: C, id: number): Promise<ComissaoRegistrada | null>;
+  reunioes(c: C, comissao: number): Promise<ReuniaoComissaoRegistrada[]>;
+  riscos(c: C, f: Pg & { readonly situacao?: string | undefined }): Promise<PaginaGestao<RiscoRegistrado>>;
+  risco(c: C, id: number): Promise<RiscoRegistrado | null>;
   naoConformidades(
     c: C,
     f: Pg & {
@@ -262,8 +229,8 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
       readonly origem?: string | undefined;
       readonly idOrigem?: number | undefined;
     },
-  ): Promise<PaginaGestaoSgh<NaoConformidadeSghLida>>;
-  naoConformidade(c: C, id: number): Promise<NaoConformidadeSghLida | null>;
+  ): Promise<PaginaGestao<NaoConformidadeRegistrada>>;
+  naoConformidade(c: C, id: number): Promise<NaoConformidadeRegistrada | null>;
   manifestacoes(
     c: C,
     f: Pg & {
@@ -274,9 +241,9 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
       readonly recebidaDe?: string | undefined;
       readonly recebidaAntes?: string | undefined;
     },
-  ): Promise<PaginaGestaoSgh<ManifestacaoSghLida>>;
-  manifestacao(c: C, id: number): Promise<ManifestacaoSghLida | null>;
-  pesquisas(c: C, de: string, ate: string): Promise<{ itens: PesquisaSatisfacaoLida[]; cortada: boolean }>;
+  ): Promise<PaginaGestao<ManifestacaoRegistrada>>;
+  manifestacao(c: C, id: number): Promise<ManifestacaoRegistrada | null>;
+  pesquisas(c: C, de: string, ate: string): Promise<{ itens: PesquisaSatisfacaoRespondida[]; cortada: boolean }>;
   pesquisa(
     c: C,
     id: number,
@@ -301,8 +268,8 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
     manifestacoesAbertas: number;
     manifestacoesVencidas: number;
   }>;
-  envios(c: C, desdeCompetencia: string): Promise<EnvioRegulatorioSghLido[]>;
-  envio(c: C, id: number): Promise<EnvioRegulatorioSghLido | null>;
+  envios(c: C, desdeCompetencia: string): Promise<EnvioRegulatorioRegistrado[]>;
+  envio(c: C, id: number): Promise<EnvioRegulatorioRegistrado | null>;
   /** Os incidentes da competência para o Notivisa (`de` inclusivo, `ate` exclusivo; AAAA-MM-DD). */
   incidentesNotivisa(
     c: C,
@@ -312,9 +279,9 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
   /** A notificação de incidente do NSP existe no hospital (a origem da não conformidade; nada dela é lido). */
   notificacaoExiste(c: C, id: number): Promise<boolean>;
   // W0-04
-  reuniao(c: C, id: number): Promise<ReuniaoComissaoSghLida | null>;
-  versoes(c: C, tabela: TabelaCorrigivelQua, id: number): Promise<VersaoQuaLida[]>;
-  dependentes(c: C, tabela: string, id: number): Promise<DependentesQua[]>;
+  reuniao(c: C, id: number): Promise<ReuniaoComissaoRegistrada | null>;
+  versoes(c: C, tabela: TabelaCorrigivel, id: number): Promise<VersaoRegistro[]>;
+  dependentes(c: C, tabela: string, id: number): Promise<DependentesRegistro[]>;
   /** W0-04 (M2): as notificações do período por tipo e classificação, sem as descartadas (`ate` exclusivo). */
   notificacoesPorTipo(
     c: C,
@@ -326,23 +293,23 @@ export interface PortaGestao extends PortaGravacaoM18<GravadorGestao> {
     c: C,
     inicio: string,
     fim: string,
-  ): Promise<{ versoes: VersaoGerenciadoLida[]; protocolos: ProtocoloPacienteLido[] }>;
+  ): Promise<{ versoes: VersaoProtocoloGerenciado[]; protocolos: ProtocoloDoPaciente[] }>;
   // W0-04 (M5): a comissão de revisão de prontuários.
-  checklistsRevisao(c: C, comissao: number): Promise<ChecklistRevisaoSghLido[]>;
-  checklistRevisao(c: C, id: number): Promise<ChecklistRevisaoSghLido | null>;
+  checklistsRevisao(c: C, comissao: number): Promise<ChecklistRevisaoRegistrado[]>;
+  checklistRevisao(c: C, id: number): Promise<ChecklistRevisaoRegistrado | null>;
   /** As altas do período (`ate` exclusivo) com a clínica e o médico assistente (só leitura do outro sistema). */
   altasParaRevisao(c: C, de: string, ate: string): Promise<{ itens: AltaParaRevisao[]; cortada: boolean }>;
   /** O login de cada médico assistente (o papel Operador ativo; '' sem login). */
   loginsDosMedicos(c: C, registros: readonly number[]): Promise<Map<number, string>>;
-  sorteiosRevisao(c: C, comissao: number): Promise<SorteioRevisaoSghLido[]>;
-  sorteioRevisao(c: C, id: number): Promise<SorteioRevisaoSghLido | null>;
-  prontuariosDoSorteio(c: C, sorteio: number): Promise<ProntuarioRevisaoSghLido[]>;
-  prontuarioRevisao(c: C, id: number): Promise<ProntuarioRevisaoSghLido | null>;
-  pendenciasDosProntuarios(c: C, ids: readonly number[]): Promise<PendenciaRevisaoSghLida[]>;
-  pendenciaRevisao(c: C, id: number): Promise<PendenciaRevisaoSghLida | null>;
-  pendenciasDoLogin(c: C, login: string): Promise<PendenciaRevisaoSghLida[]>;
-  revisoesDaCompetencia(c: C, comissao: number, competencia: string): Promise<ProntuarioRevisaoSghLido[]>;
-  revisoesDaInternacao(c: C, reg: number): Promise<ProntuarioRevisaoSghLido[]>;
+  sorteiosRevisao(c: C, comissao: number): Promise<SorteioRevisaoRegistrado[]>;
+  sorteioRevisao(c: C, id: number): Promise<SorteioRevisaoRegistrado | null>;
+  prontuariosDoSorteio(c: C, sorteio: number): Promise<ProntuarioRevisaoRegistrado[]>;
+  prontuarioRevisao(c: C, id: number): Promise<ProntuarioRevisaoRegistrado | null>;
+  pendenciasDosProntuarios(c: C, ids: readonly number[]): Promise<PendenciaRevisaoRegistrada[]>;
+  pendenciaRevisao(c: C, id: number): Promise<PendenciaRevisaoRegistrada | null>;
+  pendenciasDoLogin(c: C, login: string): Promise<PendenciaRevisaoRegistrada[]>;
+  revisoesDaCompetencia(c: C, comissao: number, competencia: string): Promise<ProntuarioRevisaoRegistrado[]>;
+  revisoesDaInternacao(c: C, reg: number): Promise<ProntuarioRevisaoRegistrado[]>;
 }
 
 /** Os métodos da porta (a porta indisponível recusa todos). */
@@ -398,3 +365,8 @@ export const METODOS_PORTA_GESTAO: ReadonlySet<string> = new Set([
   'revisoesDaCompetencia',
   'revisoesDaInternacao',
 ]);
+
+/** Fora de dev/ci sem o núcleo: toda chamada responde 503 (nada lido nem gravado). */
+export function portaGestaoIndisponivel(): PortaGestao {
+  return portaIndisponivel<PortaGestao>(METODOS_PORTA_GESTAO);
+}

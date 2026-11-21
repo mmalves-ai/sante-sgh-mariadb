@@ -7,19 +7,18 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
 import { PortaPrescricaoMemoria } from './prescricao-porta-memoria.js';
+import { criarAppPep } from './teste.spec-util.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPep(env, {
     trilha,
     cadastro: new PortaCadastroMemoria(),
     prescricao: new PortaPrescricaoMemoria(trilha),

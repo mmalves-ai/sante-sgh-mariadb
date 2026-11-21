@@ -8,9 +8,7 @@ import { CHAVE_PONTE_FORMULARIO_NOVO } from '@sgh/contratos';
 import { CASOS_FORMULARIO_NOVO_SINTETICO, FORMULARIO_NOVO_SINTETICO } from '@sgh/dominio-pep';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import {
   chavesIniciaisSinteticas,
@@ -18,6 +16,7 @@ import {
   prerequisitosIniciaisSinteticos,
 } from '../config/public-api.js';
 import { PortaFormularioNovoMemoria } from './formulario-novo-porta-memoria.js';
+import { criarAppPep } from './teste.spec-util.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
@@ -26,7 +25,7 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, formularioNovo, vigia: null });
+  app = await criarAppPep(env, { trilha, formularioNovo });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -371,11 +370,10 @@ describe('publicar com a ponte ligada e o executor recusando (operação especif
         },
       ],
     });
-    app2 = await criarApp(lerConfiguracao(env), null, env, {
+    app2 = await criarAppPep(env, {
       trilha: trilha2,
       formularioNovo: new PortaExecutorRecusa(),
       configuracao,
-      vigia: null,
     });
     await app2.init();
     await app2.getHttpAdapter().getInstance().ready();

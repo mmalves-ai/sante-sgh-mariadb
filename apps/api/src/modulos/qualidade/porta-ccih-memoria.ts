@@ -3,26 +3,9 @@
 // não confere sozinha: a versão no UPDATE, a decisão única por item prescrito, o estado do leito (um "precaução" e um
 // "bloqueio" abertos por leito) e o consumo por setor e competência. A transação desfaz tudo se a função falhar.
 import type { ChaveLeito, UnidadeNotificacao } from '@sgh/contratos';
-import {
-  type BundleSghLido,
-  type CompetenciaQuaLida,
-  type DependentesQua,
-  type TabelaCorrigivelQua,
-  type VersaoQuaLida,
-  type AntimicrobianoPrescritoLido,
-  type CulturaLida,
-  type DispositivoInvasivoSghLido,
-  type InternadoCcihLido,
-  type IrasSghLida,
-  type ItemAntimicrobianoSghLido,
-  type LiberacaoConsultada,
-  type LiberacaoSghLida,
-  type ObservacaoMaosSghLida,
-  type PrecaucaoSghLida,
-  recusa,
-  recusaVersaoCcih,
-  type SurtoSghLido,
-} from '@sgh/legado';
+import { type BundleRegistrado, type CompetenciaFechada, type DependentesRegistro, type TabelaCorrigivel, type VersaoRegistro, type AntimicrobianoPrescrito, type CulturaDoPaciente, type DispositivoInvasivoRegistrado, type InternadoCcih, type IrasRegistrada, type ItemAntimicrobianoConfigurado, type LiberacaoAntimicrobianoRegistrada, type ObservacaoMaosRegistrada, type PrecaucaoRegistrada, recusaVersaoCcih, type SurtoRegistrado } from './tipos.js';
+import { recusa } from '@sgh/nucleo';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { ContextoCcih, GravadorCcih, PortaCcih } from './porta-ccih.js';
 
@@ -61,19 +44,19 @@ const LEITOS: readonly ChaveLeito[] = [
 ];
 
 interface Estado {
-  dispositivos: DispositivoInvasivoSghLido[];
-  iras: IrasSghLida[];
-  itens: ItemAntimicrobianoSghLido[];
-  liberacoes: LiberacaoSghLida[];
-  precaucoes: PrecaucaoSghLida[];
-  maos: (ObservacaoMaosSghLida & { tipo: 'observacao' })[];
+  dispositivos: DispositivoInvasivoRegistrado[];
+  iras: IrasRegistrada[];
+  itens: ItemAntimicrobianoConfigurado[];
+  liberacoes: LiberacaoAntimicrobianoRegistrada[];
+  precaucoes: PrecaucaoRegistrada[];
+  maos: (ObservacaoMaosRegistrada & { tipo: 'observacao' })[];
   /** W0-04: as versões anteriores (tabela|id → versões) e as competências fechadas. */
-  versoes: Map<string, VersaoQuaLida[]>;
-  competencias: CompetenciaQuaLida[];
+  versoes: Map<string, VersaoRegistro[]>;
+  competencias: CompetenciaFechada[];
   /** W0-04 (M1): os checklists do bundle por turno. */
-  bundles: BundleSghLido[];
+  bundles: BundleRegistrado[];
   consumo: { unidade: number; setor: string | null; competencia: string; mililitros: number }[];
-  surtos: SurtoSghLido[];
+  surtos: SurtoRegistrado[];
   /** Estados abertos do leito (M21): chave do leito → estado → tipo da precaução. */
   leitos: Map<string, Map<string, string | null>>;
   seq: number;
@@ -155,7 +138,7 @@ export class PortaCcihMemoria implements PortaCcih {
   }
 
   /** Os internados de agora: os sintéticos menos as altas, com as transferências aplicadas. */
-  private get internadosSinteticos(): InternadoCcihLido[] {
+  private get internadosSinteticos(): InternadoCcih[] {
     return this.todosSinteticos.flatMap((i) => {
       const f = this.foraDoSante.get(i.reg);
       if (!f) return [i];
@@ -165,7 +148,7 @@ export class PortaCcihMemoria implements PortaCcih {
   }
 
   /** Os internados SINTÉTICOS (o 4801 na UTI com o restrito; o 4802 vizinho; o 4803 em pós-operatório). */
-  private get todosSinteticos(): InternadoCcihLido[] {
+  private get todosSinteticos(): InternadoCcih[] {
     const base = { aberta: true, pront: 0 };
     return [
       {
@@ -207,7 +190,7 @@ export class PortaCcihMemoria implements PortaCcih {
     ];
   }
 
-  private get prescritos(): AntimicrobianoPrescritoLido[] {
+  private get prescritos(): AntimicrobianoPrescrito[] {
     return [
       {
         reg: 4801,
@@ -234,7 +217,7 @@ export class PortaCcihMemoria implements PortaCcih {
     ];
   }
 
-  podeGravar(): Promise<LiberacaoConsultada> {
+  podeGravar(): Promise<LiberacaoGravacao> {
     return Promise.resolve({ pode: true, codigo: null, motivo: null });
   }
   executar(_c: ContextoCcih, op: string): Promise<never> {
@@ -246,10 +229,10 @@ export class PortaCcihMemoria implements PortaCcih {
   unidades(): Promise<UnidadeNotificacao[]> {
     return Promise.resolve([...UNIDADES]);
   }
-  internados(): Promise<{ itens: InternadoCcihLido[]; cortada: boolean }> {
+  internados(): Promise<{ itens: InternadoCcih[]; cortada: boolean }> {
     return Promise.resolve({ itens: this.internadosSinteticos, cortada: false });
   }
-  internacao(_c: ContextoCcih, reg: number): Promise<InternadoCcihLido | null> {
+  internacao(_c: ContextoCcih, reg: number): Promise<InternadoCcih | null> {
     const i = this.internadosSinteticos.find((x) => x.reg === reg);
     if (i) return Promise.resolve(i);
     const saiu = this.todosSinteticos.find((x) => x.reg === reg);
@@ -314,7 +297,7 @@ export class PortaCcihMemoria implements PortaCcih {
   fichas() {
     return Promise.resolve(new Map<number, number>());
   }
-  private get culturasSinteticas(): CulturaLida[] {
+  private get culturasSinteticas(): CulturaDoPaciente[] {
     return [
       { id: 480_000_000_001, reg: 4801, exame: 'HEMOCULTURA SINTETICA', data: this.dia(-2), liberado: true },
     ];
@@ -418,7 +401,7 @@ export class PortaCcihMemoria implements PortaCcih {
   observacaoMaos(_c: ContextoCcih, id: number) {
     return Promise.resolve(this.estado.maos.find((o) => o.id === id) ?? null);
   }
-  versoes(_c: ContextoCcih, tabela: TabelaCorrigivelQua, id: number) {
+  versoes(_c: ContextoCcih, tabela: TabelaCorrigivel, id: number) {
     return Promise.resolve([...(this.estado.versoes.get(`${tabela}|${id}`) ?? [])].reverse());
   }
   competencias(_c: ContextoCcih, comps?: readonly string[]) {
@@ -428,7 +411,7 @@ export class PortaCcihMemoria implements PortaCcih {
         .map((x) => ({ ...x })),
     );
   }
-  bundles(_c: ContextoCcih, ids: readonly number[]): Promise<BundleSghLido[]> {
+  bundles(_c: ContextoCcih, ids: readonly number[]): Promise<BundleRegistrado[]> {
     return Promise.resolve(
       this.estado.bundles
         .filter((b) => ids.includes(b.dispositivo))
@@ -436,7 +419,7 @@ export class PortaCcihMemoria implements PortaCcih {
         .map((b) => ({ ...b, itens: { ...b.itens } })),
     );
   }
-  bundle(_c: ContextoCcih, id: number): Promise<BundleSghLido | null> {
+  bundle(_c: ContextoCcih, id: number): Promise<BundleRegistrado | null> {
     const b = this.estado.bundles.find((x) => x.id === id);
     return Promise.resolve(b ? { ...b, itens: { ...b.itens } } : null);
   }
@@ -456,14 +439,14 @@ export class PortaCcihMemoria implements PortaCcih {
   profissionaisPorRegistro(_c: ContextoCcih, ids: readonly number[]) {
     return Promise.resolve(PortaCcihMemoria.PROFISSIONAIS.filter((p) => ids.includes(p.id)));
   }
-  dependentes(_c: ContextoCcih, tabela: string, id: number): Promise<DependentesQua[]> {
-    if (tabela !== 'SGH_QUA_DISPOSITIVO') return Promise.resolve([]);
+  dependentes(_c: ContextoCcih, tabela: string, id: number): Promise<DependentesRegistro[]> {
+    if (tabela !== 'dispositivo_invasivo_paciente') return Promise.resolve([]);
     const ids = this.estado.iras
       .filter((i) => i.dispositivo === id && i.situacao === 'confirmada')
       .map((i) => i.id);
     return Promise.resolve(
       ids.length
-        ? [{ grupo: 'Fichas de IRAS confirmadas', dependente: 'SGH_QUA_IRAS', quantidade: ids.length, ids }]
+        ? [{ grupo: 'Fichas de IRAS confirmadas', dependente: 'caso_infeccao', quantidade: ids.length, ids }]
         : [],
     );
   }
@@ -519,11 +502,11 @@ export class PortaCcihMemoria implements PortaCcih {
       m.set('precaucao', tipo);
       return atual === undefined ? 'abriu' : 'trocou';
     };
-    /** O retrato da versão anterior (como a SGH_QUA_VERSAO guarda) e a versão nova. */
+    /** O retrato da versão anterior (como a trilha_auditoria guarda) e a versão nova. */
     const versionar = <X extends { id: number; versao?: number }>(
-      tabela: TabelaCorrigivelQua,
+      tabela: TabelaCorrigivel,
       x: X,
-      acao: VersaoQuaLida['acao'],
+      acao: VersaoRegistro['acao'],
       motivo: string,
       usuario: string,
     ) => {
@@ -574,7 +557,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       corrigirBundle: async (c) => {
         const x = versao(s.bundles, c.id, c.versao, (y) => !y.estornadoEm);
-        versionar('SGH_QUA_DISP_BUNDLE', x, 'correcao', c.justificativa, c.usuario);
+        versionar('verificacao_bundle', x, 'correcao', c.justificativa, c.usuario);
         const novo = {
           ...x,
           itens: { ...c.itens },
@@ -588,7 +571,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       estornarBundle: async (c) => {
         const x = versao(s.bundles, c.id, c.versao, (y) => !y.estornadoEm);
-        versionar('SGH_QUA_DISP_BUNDLE', x, 'estorno', c.justificativa, c.usuario);
+        versionar('verificacao_bundle', x, 'estorno', c.justificativa, c.usuario);
         const novo = {
           ...x,
           estornadoEm: seg(c.agora.slice(0, 19)),
@@ -601,7 +584,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       corrigirDispositivo: async (c) => {
         const x = versao(s.dispositivos, c.id, c.versao, (y) => !y.canceladoEm);
-        versionar('SGH_QUA_DISPOSITIVO', x, 'correcao', c.justificativa, c.usuario);
+        versionar('dispositivo_invasivo_paciente', x, 'correcao', c.justificativa, c.usuario);
         Object.assign(x, {
           tipo: c.tipo,
           sitio: c.sitio,
@@ -614,7 +597,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       cancelarDispositivo: async (c) => {
         const x = versao(s.dispositivos, c.id, c.versao, (y) => !y.canceladoEm);
-        versionar('SGH_QUA_DISPOSITIVO', x, 'cancelamento', c.justificativa, c.usuario);
+        versionar('dispositivo_invasivo_paciente', x, 'cancelamento', c.justificativa, c.usuario);
         Object.assign(x, { canceladoEm: c.agora, motivoCancelamento: c.justificativa, versao: x.versao + 1 });
         // A mesma conferência dos dependentes dentro da transação (exigirSemDependentesQua no banco).
         if (s.iras.some((i) => i.dispositivo === c.id && i.situacao === 'confirmada'))
@@ -626,7 +609,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       corrigirIras: async (c) => {
         const x = versao(s.iras, c.id, c.versao, (y) => y.situacao === 'confirmada');
-        versionar('SGH_QUA_IRAS', x, 'correcao', c.justificativa, c.usuario);
+        versionar('caso_infeccao', x, 'correcao', c.justificativa, c.usuario);
         Object.assign(x, {
           dataInfeccao: c.dataInfeccao,
           criterios: [...new Set(c.criterios)],
@@ -640,7 +623,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       alterarPrecaucao: async (c) => {
         const x = versao(s.precaucoes, c.id, c.versao, (y) => y.fimEm === null);
-        versionar('SGH_QUA_PRECAUCAO', x, 'correcao', c.justificativa, c.usuario);
+        versionar('isolamento_paciente', x, 'correcao', c.justificativa, c.usuario);
         const bloqueados: ChaveLeito[] = [];
         for (const v of c.bloquear) {
           const m = estados(v);
@@ -667,7 +650,7 @@ export class PortaCcihMemoria implements PortaCcih {
       corrigirObservacaoMaos: async (c) => {
         const x = s.maos.find((y) => y.id === c.id);
         if (!x || (x.versao ?? 1) !== c.versao || x.estornadoEm) throw recusaVersaoCcih();
-        versionar('SGH_QUA_HIGIENE_MAOS', x, 'correcao', c.justificativa, c.usuario);
+        versionar('observacao_higiene_maos', x, 'correcao', c.justificativa, c.usuario);
         Object.assign(x, {
           observadoEm: seg(c.observadoEm),
           categoria: c.categoria,
@@ -682,7 +665,7 @@ export class PortaCcihMemoria implements PortaCcih {
       estornarObservacaoMaos: async (c) => {
         const x = s.maos.find((y) => y.id === c.id);
         if (!x || (x.versao ?? 1) !== c.versao || x.estornadoEm) throw recusaVersaoCcih();
-        versionar('SGH_QUA_HIGIENE_MAOS', x, 'estorno', c.justificativa, c.usuario);
+        versionar('observacao_higiene_maos', x, 'estorno', c.justificativa, c.usuario);
         Object.assign(x, { estornadoEm: c.agora, motivoEstorno: c.justificativa, versao: c.versao + 1 });
         return { versao: c.versao + 1 };
       },
@@ -705,7 +688,7 @@ export class PortaCcihMemoria implements PortaCcih {
           return { id: n, versao: 1 };
         }
         if (x.situacao === 'fechada') throw recusa('competencia-fechada', 'A competência já está fechada.');
-        versionar('SGH_QUA_COMPETENCIA', x, 'fechamento', 'Fechamento depois da reabertura', c.usuario);
+        versionar('fechamento_vigilancia_iras', x, 'fechamento', 'Fechamento depois da reabertura', c.usuario);
         Object.assign(x, {
           situacao: 'fechada',
           fechadaPor: c.usuario,
@@ -719,7 +702,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       reabrirCompetencia: async (c) => {
         const x = versao(s.competencias, c.id, c.versao, (y) => y.situacao === 'fechada');
-        versionar('SGH_QUA_COMPETENCIA', x, 'reabertura', c.justificativa, c.usuario);
+        versionar('fechamento_vigilancia_iras', x, 'reabertura', c.justificativa, c.usuario);
         Object.assign(x, {
           situacao: 'reaberta',
           reabertaPor: c.usuario,
@@ -798,7 +781,7 @@ export class PortaCcihMemoria implements PortaCcih {
       },
       configurarAntimicrobiano: async (c) => {
         const x = s.itens.find((y) => y.item === c.item);
-        const linha: ItemAntimicrobianoSghLido = {
+        const linha: ItemAntimicrobianoConfigurado = {
           item: c.item,
           restrito: c.restrito,
           atc: c.atc,

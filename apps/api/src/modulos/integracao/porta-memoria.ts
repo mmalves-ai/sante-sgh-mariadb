@@ -1,28 +1,27 @@
 // Porta das integrações em memória (M34): a sessão sintética de dev/ci (E2E). Parceiros SINTÉTICOS (o laboratório de
 // apoio, a RNDS em homologação e o motor de integração), mensagens de saída com uma na fila de mortos há mais de 4 h
 // (o alerta da regra 10 aparece), um retorno do laboratório de apoio a conferir sobre um exame sintético e as
-// leituras agregadas do legado sintéticas. Mesmas regras do domínio (retentativa, tratamento, idempotência). Nada vai
-// à cópia; o resultado aprovado é "gravado" no exame sintético (o executor do legado não roda aqui).
+// as filas sintéticas. Mesmas regras do domínio (retentativa, tratamento, idempotência); o resultado aprovado é
+// "gravado" no exame sintético.
 import { aplicarTratamento, chaveDeOrdem, chaveEventoFato } from '@sgh/dominio-integracao';
-import type {
-  ContextoOperacao,
-  EnvioLidoBanco,
-  EnvioNovo,
-  LinhaTrilha,
-  ParceiroLidoBanco,
-  RecebidaLidaBanco,
-  ResultadoOperacao,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { registrarNaTrilha } from '../../autorizacao/trilha-memoria.js';
 import type { ArmazemConteudoMemoria } from './infra/armazem-conteudo.js';
 import { resumoSha256 } from './infra/armazem-conteudo.js';
+import type { ContextoGravacao } from '../cadastro/tipos.js';
 import type {
   ContextoIntegracao,
+  EnvioIntegracao,
   ExameDoRetorno,
-  GravadorSghIntegracao,
+  GravadorIntegracao,
+  NovoEnvio,
+  ParceiroIntegracao,
   PortaIntegracao,
+  RecebidaIntegracao,
+  ResultadoApoio,
+  SaudeFilas,
+  TrilhaIntegracao,
   VinculoResponsavel,
 } from './porta.js';
 
@@ -39,25 +38,21 @@ export const ORU_SINTETICO = [
 ].join('\r');
 
 /** O parceiro como a porta devolve (o resumo do segredo nunca sai da memória). */
-function semResumo(x: ParceiroLidoBanco & { resumo: string | null }): ParceiroLidoBanco {
-  const p: Partial<ParceiroLidoBanco & { resumo: string | null }> = { ...x };
+function semResumo(x: ParceiroIntegracao & { resumo: string | null }): ParceiroIntegracao {
+  const p: Partial<ParceiroIntegracao & { resumo: string | null }> = { ...x };
   delete p.resumo;
-  return p as ParceiroLidoBanco;
+  return p as ParceiroIntegracao;
 }
 
 export class PortaIntegracaoMemoria implements PortaIntegracao {
   readonly destino = 'memoria' as const;
   private readonly parceirosPorH = new Map<
     string,
-    Map<string, ParceiroLidoBanco & { resumo: string | null }>
+    Map<string, ParceiroIntegracao & { resumo: string | null }>
   >();
-  private readonly enviosPorH = new Map<string, Map<string, EnvioLidoBanco>>();
-  private readonly recebidasPorH = new Map<string, Map<string, RecebidaLidaBanco>>();
+  private readonly enviosPorH = new Map<string, Map<string, EnvioIntegracao>>();
+  private readonly recebidasPorH = new Map<string, Map<string, RecebidaIntegracao>>();
   private readonly outboxPorH = new Map<string, { tipo: string; chave: string; situacao: string }[]>();
-  private readonly marcas = new Map<
-    string,
-    { ultimoId: string; ultimoCarimbo: Date | null; lidos: number }
-  >();
   private readonly resultados = new Map<number, { elementos: number; emissor: number | null }>();
   private seq = 1000;
 
@@ -69,7 +64,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
   private semear(h: string): void {
     if (this.parceirosPorH.has(h)) return;
     const agora = new Date();
-    const p = (x: Partial<ParceiroLidoBanco> & Pick<ParceiroLidoBanco, 'codigo' | 'nome' | 'tipo'>) => ({
+    const p = (x: Partial<ParceiroIntegracao> & Pick<ParceiroIntegracao, 'codigo' | 'nome' | 'tipo'>) => ({
       id: String(++this.seq),
       canal: null,
       clienteId: null,
@@ -117,7 +112,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
         ].map((x) => [x.codigo, x]),
       ),
     );
-    const e = (x: Partial<EnvioLidoBanco> & Pick<EnvioLidoBanco, 'situacao'>): EnvioLidoBanco => {
+    const e = (x: Partial<EnvioIntegracao> & Pick<EnvioIntegracao, 'situacao'>): EnvioIntegracao => {
       const id = String(++this.seq);
       return {
         id,
@@ -126,7 +121,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
         tipoEvento: 'fato.exame.apoio',
         parceiro: 'lab-apoio-sintetico',
         chaveOrdem: chaveDeOrdem('paciente', 900000 + Number(id)),
-        tabelaFato: 'SILANEXA',
+        tabelaFato: 'exame_item',
         idFato: String(EXAME_SINTETICO_APOIO),
         tentativas: 0,
         proximaTentativaEm: null,
@@ -180,7 +175,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
             tamanho: ORU_SINTETICO.length,
             situacao: 'conferir',
             detalhe: null,
-            tabelaObjeto: 'SILANEXA',
+            tabelaObjeto: 'exame_item',
             idObjeto: String(EXAME_SINTETICO_APOIO),
             conferidoPor: null,
             conferidoEm: null,
@@ -212,7 +207,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
     return new Date();
   }
 
-  async parceiros(c: ContextoIntegracao): Promise<ParceiroLidoBanco[]> {
+  async parceiros(c: ContextoIntegracao): Promise<ParceiroIntegracao[]> {
     return [...this.parceirosDe(c.hospital).values()].map((x) => semResumo(x));
   }
 
@@ -289,25 +284,16 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
     return this.recebidasDe(c.hospital).get(id) ?? null;
   }
 
-  async saudeLegado() {
+  async saudeFilas(): Promise<SaudeFilas> {
     return {
       filas: [
-        { fila: 'OUT_ADT_A03', direcao: 'saida' as const, quantidade: 0, maisAntiga: null },
-        { fila: 'OUT_ADT_A04', direcao: 'saida' as const, quantidade: 0, maisAntiga: null },
-        { fila: 'OUT_ADT_A08', direcao: 'saida' as const, quantidade: 0, maisAntiga: null },
-        { fila: 'IN_ADT_A02', direcao: 'entrada' as const, quantidade: 0, maisAntiga: null },
+        { fila: 'parceiro.lab-apoio-sintetico.saida', direcao: 'saida' as const, quantidade: 1, maisAntiga: null },
+        { fila: 'parceiro.oie-classificacao.saida', direcao: 'saida' as const, quantidade: 0, maisAntiga: null },
+        { fila: 'parceiro.lab-apoio-sintetico.entrada', direcao: 'entrada' as const, quantidade: 1, maisAntiga: null },
       ],
       bi: { pendentes: 12, maisAntiga: null },
       examesApoio: { marcados: '<5', exportados: 37, pendentes: '<5', maisAntigo: null },
     };
-  }
-
-  async visoes() {
-    return [
-      { visao: 'V_EPIMED_INTERNACAO', existe: true, linhas: 120 },
-      { visao: 'V_FIRST_LEITO', existe: true, linhas: 61 },
-      { visao: 'V_MEDIA_PLUS_AGENDAMENTO', existe: true, linhas: null },
-    ];
   }
 
   async identificacao() {
@@ -334,17 +320,18 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
     return {
       id,
       paciente: 900001,
-      ato: 15,
+      atendimento: 15,
       exame: 'GLI',
       exameNome: 'Glicose',
       liberado: false,
       digitado: this.resultados.has(id),
       elementos: [{ elemento: 0, nome: 'GLICOSE' }],
+      laboratorio: null,
     };
   }
 
   async exameLido(_c: ContextoIntegracao, id: number) {
-    return id === EXAME_SINTETICO_APOIO ? { id, chave: { sintetico: true }, versao: null } : null;
+    return id === EXAME_SINTETICO_APOIO ? { id, versao: 1 } : null;
   }
 
   async vinculos(_c: ContextoIntegracao, login: string): Promise<VinculoResponsavel[]> {
@@ -353,40 +340,41 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
       : [];
   }
 
-  async marca(c: ContextoIntegracao, fato: string) {
-    return this.marcas.get(`${c.hospital}|${fato}`) ?? { ultimoId: '0', ultimoCarimbo: null, lidos: 0 };
-  }
-
-  async fatosResultadoLiberado() {
-    return [];
-  }
-
-  async podeGravar() {
-    return { pode: true, codigo: null, motivo: null };
-  }
-
-  async executar(
-    _c: ContextoIntegracao,
-    op: string,
-    entrada: unknown,
-    octx: ContextoOperacao,
-  ): Promise<{ resultado: ResultadoOperacao; repetida: boolean }> {
-    if (op !== 'sadt.registrarResultado' || !octx.idempotencyKey)
-      throw new ErroProblema('operacao-bloqueada', 409, 'Operação não disponível na sessão sintética');
-    const e = entrada as { exame: { id: number }; elementos: unknown[]; emissor?: number };
-    if (this.resultados.has(e.exame.id))
-      throw new ErroProblema('recusa-de-negocio', 409, 'Resultado já digitado', 'O exame já tem resultado.');
-    this.resultados.set(e.exame.id, { elementos: e.elementos.length, emissor: e.emissor ?? null });
-    return { resultado: { exame: e.exame.id, resultados: e.elementos.length }, repetida: false };
-  }
-
-  async gravarSgh<T>(
+  async registrarResultadoApoio(
     c: ContextoIntegracao,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
-    fn: (g: GravadorSghIntegracao) => Promise<T>,
+    r: ResultadoApoio,
+    octx: ContextoGravacao,
+  ): Promise<{ resultado: number; repetida: boolean }> {
+    if (!octx.chaveIdempotencia)
+      throw new ErroProblema('operacao-bloqueada', 409, 'Operação não disponível na sessão sintética');
+    if (this.resultados.has(r.exame))
+      throw new ErroProblema('recusa-de-negocio', 409, 'Resultado já digitado', 'O exame já tem resultado.');
+    // O resultado e o fechamento da mensagem juntos (no banco, a mesma transação).
+    const m = this.recebidasDe(c.hospital);
+    const msg = r.recebida === null ? null : m.get(r.recebida);
+    if (r.recebida !== null && (!msg || msg.situacao !== 'conferir'))
+      throw new ErroProblema('recusa-de-negocio', 409, 'O retorno mudou', 'O retorno não está mais na fila de conferência.');
+    this.resultados.set(r.exame, { elementos: r.elementos.length, emissor: r.conferente });
+    if (msg)
+      m.set(msg.id, {
+        ...msg,
+        situacao: 'processada',
+        detalhe: `${r.elementos.length} elemento(s) gravado(s)`,
+        tabelaObjeto: 'resultado_exame',
+        idObjeto: String(r.exame),
+        conferidoPor: octx.login,
+        conferidoEm: new Date(),
+      });
+    return { resultado: r.exame, repetida: false };
+  }
+
+  async gravar<T>(
+    c: ContextoIntegracao,
+    trilha: TrilhaIntegracao | ((r: T) => TrilhaIntegracao),
+    fn: (g: GravadorIntegracao) => Promise<T>,
   ): Promise<T> {
     const h = c.hospital;
-    const g: GravadorSghIntegracao = {
+    const g: GravadorIntegracao = {
       criarParceiro: async (p, u) => {
         const m = this.parceirosDe(h);
         if (m.has(p.codigo))
@@ -451,7 +439,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
         );
         if (ja) return { recebida: ja, repetida: true };
         const id = String(++this.seq);
-        const nova: RecebidaLidaBanco = {
+        const nova: RecebidaIntegracao = {
           ...r,
           id,
           conferidoPor: null,
@@ -476,7 +464,7 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
         });
         return 1;
       },
-      registrarEnvio: async (n: EnvioNovo) => {
+      registrarEnvio: async (n: NovoEnvio) => {
         const m = this.enviosDe(h);
         if ([...m.values()].some((x) => x.chaveEvento === n.chaveEvento && x.parceiro === n.parceiro))
           return false;
@@ -506,7 +494,20 @@ export class PortaIntegracaoMemoria implements PortaIntegracao {
       },
     };
     const r = await fn(g);
-    await registrarNaTrilha(this.trilha, typeof trilha === 'function' ? trilha(r) : trilha);
+    const l = typeof trilha === 'function' ? trilha(r) : trilha;
+    const d = (l?.dadosDepois ?? {}) as Record<string, unknown>;
+    if (typeof d['evento'] === 'string')
+      await registrarNaTrilha(this.trilha, {
+        evento: d['evento'],
+        rede: c.rede,
+        hospital: h,
+        usuario: typeof d['login'] === 'string' ? d['login'] : String(l.usuario ?? 'processo'),
+        estacao: typeof d['estacao'] === 'string' ? d['estacao'] : null,
+        correlacao: l.correlacao ?? '',
+        recurso: typeof d['recurso'] === 'string' ? d['recurso'] : 'integracao',
+        tabelaAlvo: l.entidade,
+        idAlvo: l.entidadeId === null ? null : String(l.entidadeId),
+      });
     return r;
   }
 }

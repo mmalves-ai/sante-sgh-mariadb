@@ -1,18 +1,10 @@
 // A porta da notificação compulsória em memória (M48, etapa 4): dev/ci e os testes, com dados SINTÉTICOS (nenhum
 // paciente real): quatro atendimentos (dengue, raiva, pneumonia e um óbito com dengue), dois resultados (VDRL reagente e
 // IgG da dengue, que não é gatilho), o cadastro de CID notificável reduzido e três modelos de ficha com perguntas.
-import type {
-  AtendimentoParaAgravo,
-  CasoAgravoSghLido,
-  CidNotificavelLido,
-  ExameParaAgravo,
-  FiltroCasosAgravoSgh,
-  GatilhoExameSghLido,
-  LiberacaoConsultada,
-  PacienteAgravoLido,
-  UnidadeAgravoLida,
-} from '@sgh/legado';
-import { recusa, recusaVersaoAgravo } from '@sgh/legado';
+import type { AtendimentoParaAgravo, CasoAgravoRegistrado, CidNotificavelCadastro, ExameParaAgravo, FiltroCasosAgravo, GatilhoExameRegistrado, PacienteDoAgravo, UnidadeDoAgravo } from './tipos.js';
+import type { LiberacaoGravacao } from '../exames/public-api.js';
+import { recusaVersaoAgravo } from './tipos.js';
+import { recusa } from '@sgh/nucleo';
 import { relogioDoEstabelecimento } from '../recepcao/porta-memoria.js';
 import type { ContextoAgravo, GravadorAgravo, PortaAgravo } from './porta-agravo.js';
 
@@ -36,7 +28,7 @@ export const AGRAVO_SINTETICO = {
 } as const;
 const S = AGRAVO_SINTETICO;
 
-const CADASTRO: readonly CidNotificavelLido[] = [
+const CADASTRO: readonly CidNotificavelCadastro[] = [
   { cid: 'A90', nome: 'DENGUE [DENGUE CLASSICO]', codigoCadastro: 1 },
   { cid: 'A150', nome: 'TUBERCULOSE PULMONAR (SINTETICO)', codigoCadastro: 1 },
   { cid: 'A820', nome: 'RAIVA SILVESTRE', codigoCadastro: 2 },
@@ -66,7 +58,7 @@ const PERGUNTAS_BASE = [
   [10, 2, 'Idade unidade'],
   [11, 0, 'Sexo'],
 ] as const;
-const UNIDADE: UnidadeAgravoLida = {
+const UNIDADE: UnidadeDoAgravo = {
   codigo: 1,
   nome: 'UNIDADE SINTETICA',
   cnes: '0000000',
@@ -75,8 +67,8 @@ const UNIDADE: UnidadeAgravoLida = {
 };
 
 interface Estado {
-  casos: CasoAgravoSghLido[];
-  gatilhos: GatilhoExameSghLido[];
+  casos: CasoAgravoRegistrado[];
+  gatilhos: GatilhoExameRegistrado[];
   seq: number;
 }
 
@@ -84,7 +76,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
   readonly destino = 'memoria' as const;
   private estado: Estado = { casos: [], gatilhos: [], seq: 0 };
   private readonly t0: number;
-  private readonly pacientesSint: Map<number, PacienteAgravoLido>;
+  private readonly pacientesSint: Map<number, PacienteDoAgravo>;
   private readonly atendimentosSint: AtendimentoParaAgravo[];
   private readonly examesSint: (ExameParaAgravo & { liberadoEm: string })[];
 
@@ -95,11 +87,11 @@ export class PortaAgravoMemoria implements PortaAgravo {
        * Na sessão sintética, os pacientes do cadastro em memória (o caso aberto sem sugestão escolhe o paciente pela
        * busca do cadastro; D-BUSCA-48.4). Sem ela, só os quatro pacientes sintéticos dos gatilhos.
        */
-      cadastro?: (c: ContextoAgravo, ids: readonly number[]) => Promise<readonly PacienteAgravoLido[]>;
+      cadastro?: (c: ContextoAgravo, ids: readonly number[]) => Promise<readonly PacienteDoAgravo[]>;
     } = {},
   ) {
     this.t0 = msDe(this.agoraLocal());
-    const pac = (id: number, nome: string, nascimento: string, sexo: 'M' | 'F'): PacienteAgravoLido => ({
+    const pac = (id: number, nome: string, nascimento: string, sexo: 'M' | 'F'): PacienteDoAgravo => ({
       id,
       nome,
       prontuario: id - 9_000_000,
@@ -162,7 +154,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
     return relogioDoEstabelecimento(this.opcoes.agora?.() ?? new Date()).agora.slice(0, 19);
   }
 
-  podeGravar(): Promise<LiberacaoConsultada> {
+  podeGravar(): Promise<LiberacaoGravacao> {
     return Promise.resolve({ pode: true, codigo: null, motivo: null });
   }
   executar(_c: ContextoAgravo, op: string): Promise<never> {
@@ -171,7 +163,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
   relogio(): Promise<string> {
     return Promise.resolve(this.agoraLocal());
   }
-  cidsNotificaveis(): Promise<CidNotificavelLido[]> {
+  cidsNotificaveis(): Promise<CidNotificavelCadastro[]> {
     return Promise.resolve([...CADASTRO]);
   }
   cidDoCadastro(_c: ContextoAgravo, cid: string) {
@@ -243,7 +235,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
     });
   }
   async pacientes(c: ContextoAgravo, ids: readonly number[]) {
-    const r = new Map<number, PacienteAgravoLido>();
+    const r = new Map<number, PacienteDoAgravo>();
     for (const i of ids) {
       const p = this.pacientesSint.get(i);
       if (p) r.set(i, p);
@@ -268,7 +260,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
   caso(_c: ContextoAgravo, id: number) {
     return Promise.resolve(this.estado.casos.find((x) => x.id === id) ?? null);
   }
-  casos(_c: ContextoAgravo, f: FiltroCasosAgravoSgh) {
+  casos(_c: ContextoAgravo, f: FiltroCasosAgravo) {
     const xs = this.estado.casos
       .filter((x) => !f.situacao || x.situacao === f.situacao)
       .filter((x) => !f.periodicidade || x.periodicidade === f.periodicidade)
@@ -331,7 +323,7 @@ export class PortaAgravoMemoria implements PortaAgravo {
       if (!x || x.versao !== versao || x.situacao !== 'aberto') throw recusaVersaoAgravo();
       return x;
     };
-    const trocar = (x: CasoAgravoSghLido, novo: CasoAgravoSghLido) => {
+    const trocar = (x: CasoAgravoRegistrado, novo: CasoAgravoRegistrado) => {
       s.casos = s.casos.map((c) => (c.id === x.id ? novo : c));
     };
     const g: GravadorAgravo = {

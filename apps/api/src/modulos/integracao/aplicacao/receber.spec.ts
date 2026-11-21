@@ -9,12 +9,13 @@ import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import { moduloIntegracao } from '../modulo.js';
 import { ArmazemConteudoMemoria } from '../infra/armazem-conteudo.js';
 import { PortaIntegracaoMemoria } from '../porta-memoria.js';
 import { chaveDoParceiro, escopoDoTipo } from './receber.js';
 import { lerAutorizacaoBasica, novaCredencial, resumoDoSegredo, segredoConfere } from './credencial.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'integracao' };
 const trilha = new RegistradorTrilhaMemoria();
 const armazem = new ArmazemConteudoMemoria();
 const integracao = new PortaIntegracaoMemoria(armazem, trilha);
@@ -24,9 +25,9 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    integracao,
-    armazemConteudo: armazem,
-    vigia: null,
+    registro: {
+      integracao: async () => ({ modulo: (ctx) => moduloIntegracao(ctx, { porta: integracao, armazem }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -86,7 +87,7 @@ describe('credencial do cliente (seção 6: segredo só como resumo)', () => {
   it('o resumo confere o segredo e só ele; o Basic fora do formato é recusado', () => {
     const c = novaCredencial('lab-x');
     const r = resumoDoSegredo(c.segredo);
-    expect(r).toMatch(/^scrypt\$/);
+    expect(r).toMatch(/^[0-9a-f]{64}$/);
     expect(r).not.toContain(c.segredo);
     expect(segredoConfere(c.segredo, r)).toBe(true);
     expect(segredoConfere(`${c.segredo}x`, r)).toBe(false);
@@ -158,7 +159,7 @@ describe('monitor e fila de mortos (regras 9 e 10)', () => {
     expect(m.mortos).toHaveLength(1);
     expect(m.alertas[0]).toMatchObject({ parceiro: 'lab-apoio-sintetico' });
     expect(m.alertas[0].minutos).toBeGreaterThan(240);
-    expect(m.legado.filas.map((f: { fila: string }) => f.fila)).toContain('OUT_ADT_A04');
+    expect(m.legado.filas.map((f: { fila: string }) => f.fila)).toContain('parceiro.lab-apoio-sintetico.saida');
     const id = m.mortos[0].id as string;
     expect(
       (await post(ti, `/integracoes/envios/${id}/tratar`, { acao: 'reprocessar', motivo: '' })).statusCode,

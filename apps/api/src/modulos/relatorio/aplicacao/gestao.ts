@@ -31,7 +31,7 @@ import {
   SITUACOES_TRIAGEM,
 } from '@sgh/contratos';
 import { linkDoRelatorio, proximoEnvio } from '@sgh/dominio-relatorio';
-import type { AgendamentoLidoBanco, EventoRelatorio, PedidoLidoBanco, TriagemLinha } from '@sgh/legado';
+import type { AgendamentoRelatorio, EventoRelatorio, PedidoRelatorio, ItemTriagem } from '../tipos.js';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { exigir, linhaTrilha, type SessaoCadastro } from '../../cadastro/comum.js';
@@ -57,7 +57,7 @@ export interface FilaEnvioRelatorio {
   encerrar?(): Promise<void>;
 }
 
-const triagemLida = (t: TriagemLinha): TriagemLida => ({
+const triagemLida = (t: ItemTriagem): TriagemLida => ({
   id: t.id,
   nome: t.nome,
   area: t.artefato,
@@ -69,14 +69,34 @@ const triagemLida = (t: TriagemLinha): TriagemLida => ({
   situacao: t.situacao as TriagemLida['situacao'],
   regra: t.regra,
   motivo: t.motivo,
-  decididoPor: t.decididoPor,
-  decididoEm: t.decididoEm,
+  // A tela mostra quem confirmou por último: o aceite da área, ou a decisão quando ainda é só proposta (o contrato
+  // ainda não separa os dois; pedido do lote 04-04).
+  decididoPor: t.aceitoPor ?? t.decididoPor,
+  decididoEm: t.aceitoEm ?? t.decididoEm,
   parametros: t.parametros,
   acessoRestrito: t.acessoRestrito,
 });
 
-function agendamentoLido(a: AgendamentoLidoBanco): AgendamentoLido {
+/**
+ * A versão que a tela leu, para a trava otimista (conflito-versao quando outra pessoa gravou antes). Opcional enquanto
+ * o contrato da tela não a leva em todo corpo (pedido do lote 04-04); sem ela, vale a lida na transação.
+ */
+export function versaoDaTela(corpo: unknown): number | undefined {
+  const v = corpo && typeof corpo === 'object' ? (corpo as Record<string, unknown>)['versao'] : undefined;
+  return typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : undefined;
+}
+
+/** O corpo sem a versão (os esquemas do contrato validam só os campos de negócio). */
+function semVersao(corpo: unknown): unknown {
+  if (!corpo || typeof corpo !== 'object' || Array.isArray(corpo)) return corpo;
+  const r = { ...(corpo as Record<string, unknown>) };
+  delete r['versao'];
+  return r;
+}
+
+function agendamentoLido(a: AgendamentoRelatorio): AgendamentoLido & { readonly versao?: number } {
   return {
+    ...(a.versao !== undefined ? { versao: a.versao } : {}),
     id: a.id,
     relatorio: a.relatorio,
     titulo: a.titulo,
@@ -98,8 +118,8 @@ function agendamentoLido(a: AgendamentoLidoBanco): AgendamentoLido {
   };
 }
 
-/** O valor anterior do pedido (a linha inteira; vai ao SGH_REL_EVENTO, nunca à trilha). */
-const retratoPedido = (p: PedidoLidoBanco) => ({
+/** O valor anterior do pedido (a linha inteira; vai ao trilha de auditoria, nunca à trilha). */
+const retratoPedido = (p: PedidoRelatorio) => ({
   titulo: p.titulo,
   descricao: p.descricao,
   finalidade: p.finalidade,
@@ -110,8 +130,8 @@ const retratoPedido = (p: PedidoLidoBanco) => ({
   criadoEm: iso(p.criadoEm),
 });
 
-/** O valor anterior do envio (a linha inteira, os endereços inclusive: SGH_REL_EVENTO tem a mesma guarda da tabela). */
-const retratoAgendamento = (a: AgendamentoLidoBanco) => ({
+/** O valor anterior do envio (a linha inteira, os endereços inclusive: trilha de auditoria tem a mesma guarda da tabela). */
+const retratoAgendamento = (a: AgendamentoRelatorio) => ({
   relatorio: a.relatorio,
   titulo: a.titulo,
   parametros: a.parametros,
@@ -211,7 +231,7 @@ export class ServicoGestaoRelatorios {
         EVENTOS_AUDITAVEIS.relatorioTriagemDecidida.codigo,
         'relatorio.triagem',
         `decidir:${d.data.destino}`,
-        { tabela: 'SGH_REL_TRIAGEM', id: String(id), chave: d.data.marco ?? 'descartado' },
+        { tabela: 'triagem_relatorio_legado', id: String(id), chave: d.data.marco ?? 'descartado' },
       ),
       (g) => g.decidirTriagem(id, d.data, s.login),
     );
@@ -234,11 +254,16 @@ export class ServicoGestaoRelatorios {
     return l.map((p) => this.pedidoLido(s, p, hoje));
   }
 
-  private pedidoLido(s: SessaoCadastro, p: PedidoLidoBanco, hoje: string): PedidoLido {
+  private pedidoLido(
+    s: SessaoCadastro,
+    p: PedidoRelatorio,
+    hoje: string,
+  ): PedidoLido & { readonly versao?: number } {
     const cancelado = p.canceladoEm !== null;
     const meu = p.solicitante === s.login || s.pode(P.pedidoPublicar);
     const aberto = !cancelado && p.situacao === 'aberto' && p.respondidoEm === null;
     return {
+      ...(p.versao !== undefined ? { versao: p.versao } : {}),
       id: p.id,
       titulo: p.titulo,
       descricao: p.descricao,
@@ -265,7 +290,7 @@ export class ServicoGestaoRelatorios {
   // ── W0-09: ciclo do pedido (editar enquanto aberto, cancelar com motivo, excluir só o nunca atendido) ──────
 
   /** O pedido do estabelecimento que a sessão pode mexer: o solicitante ou o curador. */
-  private async pedidoMeu(s: SessaoCadastro, id: string): Promise<PedidoLidoBanco> {
+  private async pedidoMeu(s: SessaoCadastro, id: string): Promise<PedidoRelatorio> {
     const p = /^\d{1,20}$/.test(id) ? await this.porta.pedido(s.porta, id) : null;
     if (!p || (p.solicitante !== s.login && !s.pode(P.pedidoPublicar)))
       throw new ErroProblema('nao-encontrado', 404, 'Pedido não encontrado');
@@ -274,14 +299,15 @@ export class ServicoGestaoRelatorios {
 
   private trilhaPedido(s: SessaoCadastro, operacao: string, id: string) {
     return linhaTrilha(s, EVENTOS_AUDITAVEIS.relatorioPedidoRegistrado.codigo, 'relatorio.pedido', operacao, {
-      tabela: 'SGH_REL_PEDIDO',
+      tabela: 'pedido_relatorio',
       id,
     });
   }
 
   async alterarPedido(s: SessaoCadastro, id: string, corpo: unknown): Promise<{ ok: true }> {
     const atual = await this.pedidoMeu(s, id);
-    const p = esquemaAlteracaoPedido.safeParse(corpo);
+    const versao = versaoDaTela(corpo);
+    const p = esquemaAlteracaoPedido.safeParse(semVersao(corpo));
     if (!p.success) throw invalido(p.error.issues);
     const { hoje } = await this.porta.relogio(s.porta);
     if (p.data.prazo < hoje)
@@ -289,7 +315,7 @@ export class ServicoGestaoRelatorios {
     const { motivo, ...novo } = p.data;
     const n = await this.porta.gravarSgh(s.porta, this.trilhaPedido(s, 'alterar', id), async (g) => {
       const antes = (await g.lerPedidoTravado(id)) ?? atual;
-      const k = await g.alterarPedido(id, novo, s.login);
+      const k = await g.alterarPedido(id, novo, s.login, versao);
       if (k === 1)
         await g.registrarEvento(
           { alvo: 'pedido', id, evento: 'alteracao', antes: retratoPedido(antes), motivo },
@@ -310,11 +336,12 @@ export class ServicoGestaoRelatorios {
 
   async cancelarPedido(s: SessaoCadastro, id: string, corpo: unknown): Promise<{ ok: true }> {
     const atual = await this.pedidoMeu(s, id);
-    const m = esquemaMotivoGestaoRelatorio.safeParse(corpo);
+    const versao = versaoDaTela(corpo);
+    const m = esquemaMotivoGestaoRelatorio.safeParse(semVersao(corpo));
     if (!m.success) throw invalido(m.error.issues);
     const n = await this.porta.gravarSgh(s.porta, this.trilhaPedido(s, 'cancelar', id), async (g) => {
       const antes = (await g.lerPedidoTravado(id)) ?? atual;
-      const k = await g.cancelarPedido(id, m.data.motivo, s.login);
+      const k = await g.cancelarPedido(id, m.data.motivo, s.login, versao);
       if (k === 1)
         await g.registrarEvento(
           { alvo: 'pedido', id, evento: 'cancelamento', antes: retratoPedido(antes), motivo: m.data.motivo },
@@ -379,7 +406,7 @@ export class ServicoGestaoRelatorios {
       s.porta,
       (x: string) =>
         linhaTrilha(s, EVENTOS_AUDITAVEIS.relatorioPedidoRegistrado.codigo, 'relatorio.pedido', 'criar', {
-          tabela: 'SGH_REL_PEDIDO',
+          tabela: 'pedido_relatorio',
           id: x,
         }),
       (g) => g.criarPedido(p.data, s.login),
@@ -389,7 +416,8 @@ export class ServicoGestaoRelatorios {
 
   async responderPedido(s: SessaoCadastro, id: string, corpo: unknown): Promise<{ ok: true }> {
     if (!/^\d{1,20}$/.test(id)) throw new ErroProblema('nao-encontrado', 404, 'Pedido não encontrado');
-    const r = esquemaRespostaPedido.safeParse(corpo);
+    const versao = versaoDaTela(corpo);
+    const r = esquemaRespostaPedido.safeParse(semVersao(corpo));
     if (!r.success) throw invalido(r.error.issues);
     if (r.data.situacao === 'publicado' && !relatorioDoCatalogo(r.data.relatorio ?? ''))
       throw invalido([{ message: 'O relatório publicado precisa estar no catálogo.', path: ['relatorio'] }]);
@@ -400,9 +428,9 @@ export class ServicoGestaoRelatorios {
         EVENTOS_AUDITAVEIS.relatorioPedidoRegistrado.codigo,
         'relatorio.pedido',
         `responder:${r.data.situacao}`,
-        { tabela: 'SGH_REL_PEDIDO', id },
+        { tabela: 'pedido_relatorio', id },
       ),
-      (g) => g.responderPedido(id, r.data, s.login),
+      (g) => g.responderPedido(id, r.data, s.login, versao),
     );
     if (n !== 1)
       throw new ErroProblema(
@@ -472,7 +500,7 @@ export class ServicoGestaoRelatorios {
           'relatorio.agendamento',
           'criar',
           {
-            tabela: 'SGH_REL_AGENDAMENTO',
+            tabela: 'agendamento_relatorio',
             id: x,
             chave: a.relatorio,
           },
@@ -489,6 +517,8 @@ export class ServicoGestaoRelatorios {
     delete resto['ativo'];
     delete resto['motivo'];
     delete resto['manterEnderecos'];
+    delete resto['versao'];
+    const versao = versaoDaTela(c);
     // W0-09: os endereços gravados não voltam à tela (só mascarados): "manter" os reaproveita sem redigitar.
     if (c['manterEnderecos'] === true) resto['enderecos'] = [...atual.enderecos];
     const motivo = esquemaMotivoRelatorio.safeParse(c['motivo']);
@@ -506,7 +536,7 @@ export class ServicoGestaoRelatorios {
         EVENTOS_AUDITAVEIS.relatorioAgendamentoAlterado.codigo,
         'relatorio.agendamento',
         ligado ? 'alterar' : 'desativar',
-        { tabela: 'SGH_REL_AGENDAMENTO', id, chave: a.relatorio },
+        { tabela: 'agendamento_relatorio', id, chave: a.relatorio },
       ),
       async (g) => {
         const antes = await g.lerAgendamentoTravado(id);
@@ -516,6 +546,7 @@ export class ServicoGestaoRelatorios {
           { ...a, ativo: ligado },
           s.login,
           ligado ? proximoEnvio(a, agora) : null,
+          versao,
         );
         if (k === 1)
           await g.registrarEvento(
@@ -551,7 +582,7 @@ export class ServicoGestaoRelatorios {
         EVENTOS_AUDITAVEIS.relatorioAgendamentoAlterado.codigo,
         'relatorio.agendamento',
         ativo ? 'ativar' : 'desativar',
-        { tabela: 'SGH_REL_AGENDAMENTO', id, chave: lido.relatorio },
+        { tabela: 'agendamento_relatorio', id, chave: lido.relatorio },
       ),
       async (g) => {
         // W0-09 revisão: o envio relido na transação, com trava: o resto da linha e o "antes" são os vigentes.
@@ -576,6 +607,7 @@ export class ServicoGestaoRelatorios {
           },
           s.login,
           ativo ? proximoEnvio(agenda, agora) : null,
+          versaoDaTela(c),
         );
         if (k === 1)
           await g.registrarEvento(
@@ -623,7 +655,7 @@ export class ServicoGestaoRelatorios {
         EVENTOS_AUDITAVEIS.relatorioAgendamentoAlterado.codigo,
         'relatorio.agendamento',
         'excluir',
-        { tabela: 'SGH_REL_AGENDAMENTO', id, chave: a.relatorio },
+        { tabela: 'agendamento_relatorio', id, chave: a.relatorio },
       ),
       async (g) => {
         await g.registrarEvento(
@@ -648,7 +680,7 @@ export class ServicoGestaoRelatorios {
     return (await this.porta.eventos(s.porta, 'agendamento', id)).map(eventoLido);
   }
 
-  private async agendamentoOu404(s: SessaoCadastro, id: string): Promise<AgendamentoLidoBanco> {
+  private async agendamentoOu404(s: SessaoCadastro, id: string): Promise<AgendamentoRelatorio> {
     const a = /^\d{1,20}$/.test(id) ? await this.porta.agendamento(s.porta, id) : null;
     if (!a) throw new ErroProblema('nao-encontrado', 404, 'Envio agendado não encontrado');
     return a;
@@ -678,7 +710,7 @@ export class ServicoGestaoRelatorios {
           enderecos: [...a.enderecos],
           grupos: [...a.grupos],
           dono: a.dono.slice(0, 31),
-          registrar: this.porta.destino === 'legado',
+          registrar: this.porta.destino === 'banco',
         })
       : 'sem-fila';
     await this.porta.gravarSgh(
@@ -689,7 +721,7 @@ export class ServicoGestaoRelatorios {
         'relatorio.agendamento',
         `enviar:${situacao}`,
         {
-          tabela: 'SGH_REL_AGENDAMENTO',
+          tabela: 'agendamento_relatorio',
           id,
           chave: a.relatorio,
         },
