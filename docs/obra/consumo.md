@@ -16,3 +16,12 @@ trabalho (8.867 + 1.503 tabelas, tabela a tabela) é cerca de 20 vezes maior que
 **Lições da rodada 2:** cada um dos 45 agentes de mapeamento leu o catálogo compacto inteiro (regra 9 nova).
 Na próxima rodada, a pré-classificação por módulo deve cortar mais. A conferência por script pegou o que os 9
 verificadores adversariais não pegaram: as 150 tabelas fora da paridade estrutural.
+
+**2026-11-20, sessão nova (regras 15 a 19 aplicadas):** carregador do SIGTAP e F2.1 (núcleo), em 2 trilhas,
+cada uma com construir, revisão adversarial e correção.
+- **Execução:** 6 agentes, 657 mil tokens de subagentes, 21,7 minutos.
+- **Custo médio:** 110 mil tokens por agente, contra 134 mil no DDL.
+- **Qualidade:**
+  - **SIGTAP:** 5 achados médios, todos corrigidos.
+  - **Núcleo:** 0 altos e 4 médios, corrigidos.
+  - **Conferência final independente:** 72 testes e banco com 0 erros.

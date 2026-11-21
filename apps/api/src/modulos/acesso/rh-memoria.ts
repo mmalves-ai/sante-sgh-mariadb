@@ -2,17 +2,17 @@
 // legado/acesso/gravacao/provisionamento-rh-sgh.ts: mapa cargo -> perfil só por linha nova (igual recusado, retirar
 // sem sugestão recusado) e resolução imutável (uma por tarefa; a regra do domínio por callback sobre os dados do
 // momento). Vínculos, mudanças e afastamentos são sintéticos (nenhum dado real); os testes os semeiam.
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   type AfastamentoRhLido,
   type DadosRhLidos,
-  ErroOperacao,
   type MudancaRhLida,
   type NovaResolucaoRh,
   type NovoPerfilCargoRh,
   type PerfilCargoRhLido,
   type ResolucaoRhSghLida,
   type VinculoRhLido,
-} from '@sgh/legado';
+} from './tipos-gestao-acesso.js';
 
 const recusa = (codigo: string, detalhe: string, campos: string[] = []) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe, { campos });

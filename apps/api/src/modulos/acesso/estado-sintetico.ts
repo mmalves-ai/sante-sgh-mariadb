@@ -5,9 +5,9 @@
 // muda as permissões efetivas da conta sintética, sem tocar a cópia. Um estado por processo (as duas
 // instâncias da fonte sintética da API o compartilham). Nenhum dado real.
 import type { ConcessoesLegado, PerfilConcedido, PermissaoDoPerfil } from '@sgh/dominio-acesso';
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   diferencaPoliticaSenha,
-  ErroOperacao,
   normalizarSenhasProibidas,
   type NovaPoliticaSenha,
   type PoliticaSenhaVigenteLida,
@@ -27,7 +27,7 @@ import {
   type DecisaoMapaLida,
   ErroMotivoMapa,
   mapaMudaDecisao,
-} from '@sgh/legado';
+} from './tipos-gestao-acesso.js';
 import { PedidoAcessoMemoria } from './pedido-acesso-memoria.js';
 import { RecertificacaoMemoria } from './recertificacao-memoria.js';
 import { RhMemoria } from './rh-memoria.js';

@@ -33,6 +33,28 @@ Atualizado em: 2026-11-20, 19:25. **PAUSADO** para a troca de conta da LLM: reto
 - **ADR 0001** (aceito em 2026-11-20): banco próprio em MariaDB 12.3, modelo base do `new-sgh` trazido para
   cá, conector diferencial, operação dia 0, dia 1 e dia 2+n.
 
+## Pendência registrada do F2-L (login pelo navegador)
+
+- **Decisão (b) ligada** (revisão do lote 5, 2026-11-20): o administrador da plataforma entra pelo
+  `POST /api/sessao/plataforma` (opção "Sou administrador da plataforma" na tela de entrada), com a credencial
+  argon2id do banco plataforma (`db/plataforma/0002`) e todas as permissões só no cliente desta API.
+  - O `@sgh/nucleo` ganhou `lerPlataforma`/`escreverPlataforma` (`PoolsPorCliente.fontePlataforma`).
+  - O login da plataforma é só ASCII minúsculo (`[a-z0-9._-]`), no contrato e no CHECK. As senhas erradas
+    contam pela credencial no banco plataforma: no limite (5), `bloqueado_ate` fica armado por 15 min, e o
+    login certo zera a contagem.
+  - A sessão relê a credencial a cada 3 minutos. Administrador inativo, removido ou com outra senha perde a
+    sessão. O bloqueio por tentativas não derruba sessões vivas: impede só entradas novas.
+  - Na troca de senha, o evento vai para `cliente_evento` na mesma transação e para a trilha do cliente, e as
+    outras sessões do administrador são encerradas.
+  - A sessão traz `usuario.ator = 'plataforma'` e um `usuario.id` não numérico (`plataforma:<id>`). A quebra de
+    vidro recusa esse ator.
+  - Os logins de usuário do cliente não podem ter `:` (`esquemaLogin` e `ck_usuario_login_sem_dois_pontos`). Os
+    bancos de cliente já criados não recebem esse CHECK sozinhos, e o conector precisa tratar como pendência um
+    login de origem que tenha `:`.
+- **Falta, por decisão do dono: segundo fator do administrador da plataforma.** A sessão dele abre só com a senha,
+  sem TOTP, embora seja a conta que pode tudo em qualquer cliente. O dono precisa escolher entre exigir o TOTP
+  (segredo no banco plataforma e `codigoSegundoFator` no contrato) e dispensá-lo, com registro.
+
 ## Decisões pendentes (do dono)
 
 1. **"Vetorização de-para":** confirmar que é sugestão por similaridade com aprovação humana.

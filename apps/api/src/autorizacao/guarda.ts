@@ -2,12 +2,12 @@
 // tela (regrasDeAcesso de @sgh/dominio-acesso). Rota sem @Permissao nem @Publica é recusada (falha fechada).
 // Os passos seguintes (escopo, categoria, vínculo) são do handler, pela `decidir` sobre o registro.
 // Com a sessão real, todo método que muda estado exige o CSRF por token duplo (M05). A tentativa negada
-// (sessão válida sem a permissão) vai só à SGH_TRILHA, com resultado "falha" (o Delphi não registra).
+// (sessão válida sem a permissão) vai à trilha própria, com resultado "falha".
 import { type CanActivate, type ExecutionContext, Inject, Injectable, Optional } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { EVENTOS_AUDITAVEIS, type Sessao } from '@sgh/contratos';
 import { type AbilitySgh, criarAbility, pode, regrasDeAcesso } from '@sgh/dominio-acesso';
-import { executarComo } from '@sgh/legado';
+import { executarComo } from './como.js';
 import { ErroProblema } from '../problema.filter.js';
 import { CHAVE_PERMISSAO, CHAVE_PERMISSAO_OU, CHAVE_PUBLICA } from './decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from './estacao.js';
@@ -81,7 +81,7 @@ export class GuardaPermissao implements CanActivate {
       req.sghComo = r.como;
       const c = r.como;
       try {
-        // Marcada como o interceptor marca o handler: a negação gravada aqui vai à SGH_TRILHA com a ORIGEM
+        // Marcada como o interceptor marca o handler: a negação gravada aqui vai à trilha com a origem
         // do ator real (conta e sessão de suporte), não só com o alvo.
         return await executarComo(
           { sessao: c.sessao, atorTipo: c.atorTipo, idConta: c.idConta, alvo: c.alvoLogin, acao: null },

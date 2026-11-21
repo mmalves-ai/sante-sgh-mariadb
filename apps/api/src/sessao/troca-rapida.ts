@@ -7,7 +7,12 @@
 //   bloqueia no teto; o certo abre a sessão nova pelo ServicoSessao e a anterior da estação fica bloqueada.
 // Toda recusa da troca responde com a MESMA mensagem genérica (não revela se a conta existe nem por que falhou); o
 // código fica só na trilha própria. Nunca o PIN nem o hash em mensagem, log ou trilha.
-import { definicaoParametro, EVENTOS_AUDITAVEIS, type SituacaoPinTela } from '@sgh/contratos';
+import {
+  definicaoParametro,
+  EVENTOS_AUDITAVEIS,
+  type SituacaoPinTela,
+  type ValorParametro,
+} from '@sgh/contratos';
 import {
   tetoFalhasPin,
   avaliarTrocaRapida,
@@ -18,10 +23,9 @@ import {
   validarNovoPin,
 } from '@sgh/dominio-acesso';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import { ErroOperacao, type TrilhaPin } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import type { RegistradorTrilha } from '../autorizacao/trilha.js';
-import type { FonteConfiguracao } from '../modulos/config/configuracao-fonte.js';
-import type { PortaPin } from './porta-pin.js';
+import type { PortaPin, TrilhaPin } from './porta-pin.js';
 import {
   diaCivilSessao,
   ErroSessao,
@@ -29,6 +33,11 @@ import {
   type ResultadoLogin,
   type ServicoSessao,
 } from './servico-sessao.js';
+
+/** O que a troca rápida lê da configuração: os valores dos parâmetros do estabelecimento (sem o módulo inteiro). */
+export interface FonteParametrosTrocaRapida {
+  valoresParametro(rede: string, hospital: string): Promise<readonly ValorParametro[]>;
+}
 
 export const PARAMETROS_TROCA_RAPIDA = {
   ligada: 'acesso.trocaRapida.ligada',
@@ -44,7 +53,7 @@ const INDISPONIVEL = 'A troca rápida está indisponível no momento.';
 
 /** Os quatro parâmetros do estabelecimento, cada um caindo no padrão quando não resolve. */
 export function parametrosTrocaRapidaPelaConfiguracao(
-  fonte: () => Pick<FonteConfiguracao, 'valoresParametro'> | null,
+  fonte: () => FonteParametrosTrocaRapida | null,
   agora: () => number = () => Date.now(),
 ): (rede: string, hospital: string) => Promise<ParametrosTrocaRapida> {
   return async (rede, hospital) => {
@@ -152,7 +161,7 @@ export class ServicoTrocaRapida {
     };
   }
 
-  /** Erro da porta: recusa do legado vira recusa do PIN; o resto, indisponível. */
+  /** Erro da porta: recusa da gravação (409) vira recusa do PIN; o resto, indisponível. */
   private traduzir(e: unknown): never {
     if (e instanceof ErroSessao) throw e;
     if (e instanceof ErroOperacao && e.problema.status === 409)
@@ -201,7 +210,7 @@ export class ServicoTrocaRapida {
         r.rede,
         r.estabelecimento,
         {
-          idTbusers: Number(r.idUsuario),
+          idUsuario: Number(r.idUsuario),
           login: r.login,
           hashPhc,
           por: r.login,

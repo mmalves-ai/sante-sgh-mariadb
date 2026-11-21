@@ -1,8 +1,8 @@
 // Respostas de erro em Problem Details (RFC 9457), em português claro, com identificador de correlação.
 // Nenhum detalhe técnico (pilha, SQL, nome de tabela) vai ao cliente.
-import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException } from '@nestjs/common';
 import { type CampoAlterado, type Problema, type TipoProblema, urnProblema } from '@sgh/contratos';
-import { problemaDoLegado } from '@sgh/legado';
+import { problemaDoBanco, type ProblemDetails } from '@sgh/nucleo';
 import { randomUUID } from 'node:crypto';
 import { logger } from './logger.js';
 
@@ -74,6 +74,48 @@ function statusDoFastify(erro: unknown): number | null {
   return typeof s === 'number' && Number.isInteger(s) && s >= 400 && s < 500 ? s : null;
 }
 
+/**
+ * Problem Details do núcleo (type próprio, `codigo`) → o contrato da tela (URN do tipo conhecido). O `codigo` do
+ * núcleo segue no corpo; o erro interno sai genérico, sem detalhe.
+ */
+export function problemaDoNucleo(p: ProblemDetails): Problema {
+  if (p.status >= 500 && p.codigo !== 'banco-indisponivel' && p.codigo !== 'tempo-esgotado')
+    return {
+      type: urnProblema('erro-interno'),
+      title: tituloPadrao('erro-interno'),
+      status: p.status === 503 ? 503 : 500,
+      codigo: 'erro-interno',
+    };
+  const tipo: TipoProblema = TIPO_POR_CODIGO_NUCLEO[p.codigo ?? ''] ?? tipoDoStatusNucleo(p.status);
+  return {
+    type: urnProblema(tipo),
+    title: p.title,
+    status: p.status,
+    detail: p.detail,
+    ...(p.codigo ? { codigo: p.codigo } : {}),
+    ...(p.campos ? { campos: [...p.campos] } : p.colunas ? { campos: [...p.colunas] } : {}),
+  };
+}
+
+/** Códigos do núcleo com tipo próprio no contrato. */
+const TIPO_POR_CODIGO_NUCLEO: Partial<Record<string, TipoProblema>> = {
+  'conflito-versao': 'conflito-de-versao',
+  'registro-em-edicao': 'registro-em-edicao',
+  'reautenticacao-necessaria': 'reautenticacao-necessaria',
+  'operacao-nao-liberada': 'operacao-bloqueada',
+  'registro-inexistente': 'nao-encontrado',
+  'entrada-invalida': 'entrada-invalida',
+  'contexto-invalido': 'entrada-invalida',
+  'banco-indisponivel': 'indisponivel',
+  'tempo-esgotado': 'indisponivel',
+};
+
+/** Recusa de negócio do núcleo (409 com código próprio, 422 de referência ou regra) é recusa-de-negocio. */
+function tipoDoStatusNucleo(status: number): TipoProblema {
+  if (status === 409 || status === 422) return 'recusa-de-negocio';
+  return tipoPorStatus(status);
+}
+
 export function correlacaoDe(req: Requisicao): string {
   const h = req.headers['x-correlacao'];
   return typeof h === 'string' && /^[\w-]{8,64}$/.test(h) ? h : randomUUID();
@@ -116,28 +158,13 @@ export class ProblemaFilter implements ExceptionFilter {
       const tipo = tipoPorStatus(status);
       corpo = { type: urnProblema(tipo), title: tituloPadrao(tipo), status, correlacao };
     } else {
-      // Erro do legado (M02): validação, CHECK e exceção de trigger viram 409 em português; o resto, 500
-      // genérico. O log leva só o gdscode e a mensagem sanitizada (sem valor de coluna, sem literal).
-      const { problema, log } = problemaDoLegado(erro);
-      logger.error(
-        {
-          correlacao,
-          erro: erro instanceof Error ? erro.name : typeof erro,
-          gdscode: log.gdscode,
-          mensagem: log.mensagem,
-        },
-        'erro não tratado',
-      );
-      corpo =
-        problema.status === HttpStatus.CONFLICT
-          ? { ...problema, correlacao }
-          : {
-              type: urnProblema('erro-interno'),
-              title: tituloPadrao('erro-interno'),
-              status: HttpStatus.INTERNAL_SERVER_ERROR,
-              codigo: 'erro-interno',
-              correlacao,
-            };
+      // Erro do núcleo (ErroOperacao) ou do banco do cliente: o núcleo traduz em Problem Details sem dado (só
+      // códigos e nomes de restrição). O 5xx genérico não leva nem o código; o log leva errno, código e restrição.
+      const { problema, log } = problemaDoBanco(erro);
+      const campos = { correlacao, ...log, problema: problema.codigo ?? null };
+      if (problema.status >= 500) logger.error(campos, 'erro não tratado');
+      else logger.warn(campos, 'recusa do núcleo');
+      corpo = { ...problemaDoNucleo(problema), correlacao };
     }
     void res
       .status(corpo.status ?? 500)

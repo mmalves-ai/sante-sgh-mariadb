@@ -5,7 +5,19 @@
 // loopback (localhost, 127.0.0.1, ::1) e os endereços próprios da máquina de dev listados em `DEV_ENDERECOS`
 // (regra do dono, 23/10/2026: o dev também atende na porta externa da VM) = REDE_PADRAO. Endereço desconhecido: null (a API recusa), em
 // qualquer ambiente — nunca "cai" na rede padrão.
-import { FORMATO_REDE, lerRedePadrao, type Ambiente } from '@sgh/legado';
+import type { Ambiente } from '@sgh/nucleo';
+
+/** Código de rede: letras minúsculas, dígitos e hífen (até 63 caracteres; serve de rótulo de subdomínio). */
+export const FORMATO_REDE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+/** A rede padrão do ambiente (REDE_PADRAO); null quando ausente. Formato inválido recusa a partida. */
+export function lerRedePadrao(env: Ambiente): string | null {
+  const rede = env['REDE_PADRAO']?.trim() ?? '';
+  if (rede === '') return null;
+  if (!FORMATO_REDE.test(rede))
+    throw new Error('REDE_PADRAO: use letras minúsculas, dígitos e hífen (até 63 caracteres).');
+  return rede;
+}
 
 export interface ResolvedorRede {
   /** Código da rede do endereço; null quando o endereço não pertence a nenhuma rede conhecida. */
@@ -50,7 +62,7 @@ export class ResolvedorRedeConfigurado implements ResolvedorRede {
     this.enderecos = lerEnderecos(env['REDE_ENDERECOS']);
     this.dominioBase = env['DOMINIO_BASE']?.trim().toLowerCase().replace(/^\./, '') || null;
     const ambiente = env['AMBIENTE']?.trim() ?? '';
-    this.padraoLoopback = AMBIENTES_LOOPBACK.has(ambiente) ? (lerRedePadrao(env) ?? null) : null;
+    this.padraoLoopback = AMBIENTES_LOOPBACK.has(ambiente) ? lerRedePadrao(env) : null;
     // Só vale junto com o loopback (dev/ci): em produção a lista é ignorada.
     this.locais = new Set(
       (env['DEV_ENDERECOS'] ?? '')

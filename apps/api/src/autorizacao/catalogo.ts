@@ -31,3 +31,38 @@ export function indiceDoCatalogo(mapa: readonly PermissaoDoPerfil[] = []): Indic
   }
   return i;
 }
+
+const doCliente = new Map<string, IndiceCatalogo>();
+
+/**
+ * F2-L (fonte própria): índice com o que cada perfil do banco do cliente concede direto (perfil_acao × acao_sistema).
+ * Só código que existe no catálogo do produto (o resto é ignorado: falha fechada). As concessões gerais do catálogo
+ * (as de toda pessoa) e as categorias seguem as do produto; opções e flags do banco de origem não existem aqui.
+ */
+export function indiceDoCliente(acoes: readonly PermissaoDoPerfil[]): IndiceCatalogo {
+  const chave = acoes
+    .map((m) => `${m.perfil}\u0000${m.permissao}`)
+    .sort()
+    .join('\u0001');
+  let i = doCliente.get(chave);
+  if (!i) {
+    const base = indiceDoCatalogo();
+    const porPerfil = new Map<string, string[]>();
+    for (const a of acoes) {
+      if (!base.categorias.has(a.permissao)) continue;
+      const l = porPerfil.get(a.perfil) ?? [];
+      if (!l.includes(a.permissao)) l.push(a.permissao);
+      porPerfil.set(a.perfil, l);
+    }
+    i = {
+      porOpcao: new Map(),
+      porFlag: new Map(),
+      porPerfil,
+      todosOsPerfisDePessoa: base.todosOsPerfisDePessoa,
+      categorias: base.categorias,
+    };
+    if (doCliente.size > 16) doCliente.clear();
+    doCliente.set(chave, i);
+  }
+  return i;
+}

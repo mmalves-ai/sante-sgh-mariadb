@@ -59,3 +59,6 @@ catalogos/cache/
 
 # Permissões locais do Claude Code
 .claude/settings.local.json
+
+# Certificado de dev do web em https (cópia de obra-sgh/certs; chave privada local)
+/certs/

@@ -2,7 +2,6 @@ import { esquemaSaude, esquemaVersao } from '@sgh/contratos';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { criarApp } from './app.js';
-import { aplicarArquivoAmbiente } from '@sgh/legado';
 import { lerConfiguracao } from './configuracao.js';
 
 let app: NestFastifyApplication;
@@ -33,10 +32,6 @@ describe('rotas públicas do M00', () => {
 });
 
 describe('configuração', () => {
-  it('recusa ler o .env da raiz (é do legado), pelo carregador único de @sgh/legado', () => {
-    expect(() => aplicarArquivoAmbiente('/qualquer/.env', {})).toThrow(/legado/);
-  });
-
   it('sem PRODUTO_NOME usa nome técnico neutro, nunca uma marca', () => {
     expect(lerConfiguracao({}).produtoNome).toBe('SGH');
   });

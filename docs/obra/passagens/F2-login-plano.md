@@ -141,8 +141,19 @@ entrar com usuário e senha guardados no banco `cliente_<codigo>` (MariaDB `127.
   - Decisão pendente: isso é do semeador ou do `criar_cliente.py`?
 - **Administrador da plataforma sem credencial na plataforma:** `plataforma.administrador_plataforma` não tem
   senha. Na F2-L, ele entra por um usuário-espelho no banco de cada cliente.
-  - O login da plataforma, sem cliente, pede a migração `db/plataforma/0002`, com `credencial_administrador`.
-    Decisão do dono.
+  - O login da plataforma, sem cliente, pede a migração `db/plataforma/0002` (criada na revisão do lote 4:
+    `credencial_administrador_plataforma`, argon2id). Decisão do dono; falta a ligação (ver ESTADO.md).
+  - **Pendência registrada na revisão do lote 3 (2026-11-20):** a decisão (b) do dono ainda não está ligada.
+    `autorizacaoDoAtorPlataforma` (em `autorizacao/servico-autorizacao.ts`) só é usada no teste
+    `servico-autorizacao-cliente.spec.ts`; não existem a `db/plataforma/0002` (credencial argon2id), a fonte de
+    autenticação da plataforma com a escolha do cliente nem a ligação no `ServicoSessao`. Hoje o dono entra com uma
+    conta do banco do cliente, e o acesso total vem do perfil `administrador` do cliente. Fica para o lote que fizer
+    o login da plataforma (escolha de cliente, F2.2), com teste de ponta a ponta do login do ator da plataforma.
+  - **Lote 5 (2026-11-20): ligada.** `sessao/fonte-plataforma.ts` (`FontePlataformaPropria`, banco plataforma) +
+    `ServicoSessao.entrarPlataforma` + `POST /api/sessao/plataforma` (contrato `esquemaEntrarAdministradorPlataforma`):
+    senha argon2id da 0002, cliente escolhido (ou o único da API), todas as permissões, troca obrigatória da senha
+    inicial, reautenticação e troca pela senha da plataforma. Falta: `NucleoProprio.lerPlataforma/escreverPlataforma`
+    no `@sgh/nucleo` (sem eles a rota responde 503) e a opção na tela de login do web.
 - **`ServicoAutorizacao` amarrado ao legado:** ele traz `CATALOGO_LEGADO_ORIGEM.estabelecimento` (falha fechada
   HS-1) e as flags do legado.
   - Na fonte própria, troque o filtro por "estabelecimento do cliente".

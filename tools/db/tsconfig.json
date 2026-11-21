@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": [
+    "*.ts"
+  ],
+  "exclude": [
+    "semear-acesso.ts",
+    "semear-acesso.spec.ts"
+  ]
+}

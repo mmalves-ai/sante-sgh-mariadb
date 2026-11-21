@@ -2,7 +2,7 @@
 // o padrão) recusa a sessão excedente; "Minhas sessões" lista as da própria pessoa sem id nem token e encerra as
 // outras (ou uma), cada uma na trilha. Fonte sintética e armazém em memória; sem dado pessoal.
 import { describe, expect, it, vi } from 'vitest';
-import type { ConfigLogin } from '@sgh/legado';
+import type { ConfigLogin } from './fonte-acesso.js';
 import { descreverDispositivo } from './dispositivo.js';
 import { ErroSessao, type OrigemPedido } from './servico-sessao.js';
 import { REDE, entrada, envTeste, montar } from './teste.spec-util.js';

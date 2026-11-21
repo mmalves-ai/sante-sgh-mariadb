@@ -93,6 +93,7 @@ CREATE TABLE usuario (
   CONSTRAINT ck_usuario_cpf_pessoa CHECK (tipo_conta <> 'pessoa' OR cpf IS NOT NULL OR dispensa_cpf),
   CONSTRAINT ck_usuario_bloqueio CHECK (situacao <> 'bloqueado' OR bloqueado_em IS NOT NULL),
   CONSTRAINT ck_usuario_origem CHECK (origem IN ('sistema','migracao','integracao')),
+  CONSTRAINT ck_usuario_login_sem_dois_pontos CHECK (login NOT LIKE '%:%'),
   UNIQUE KEY uq_usuario_login (login),
   UNIQUE KEY uq_usuario_cpf (cpf),
   KEY ix_usuario_nome (nome),

@@ -3,6 +3,7 @@
 // trava otimista, números de negócio, auditoria automática e neutralização fora de produção.
 export * from './ambiente.js';
 export * from './configuracao.js';
+export * from './como.js';
 export * from './contexto.js';
 export * from './erros.js';
 export * from './executor.js';

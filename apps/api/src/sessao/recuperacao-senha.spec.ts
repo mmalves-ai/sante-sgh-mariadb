@@ -59,13 +59,11 @@ function cenario(o: { ligada?: boolean; existe?: (e: string, l: string) => boole
     agora: relogio,
     armazem,
     config: {
-      trocaSenhaPeloNovo: true,
       identidade,
-      senhaLegado: {
-        combinacao: base.combinacao,
+      senha: {
         reuso: (h, l, s, d) => base.reuso(h, l, s, d),
         async gravar(h, l, s, ctx, tipo) {
-          gravadas.push({ login: l, tipo, autor: ctx.usuarioLegado ?? '' });
+          gravadas.push({ login: l, tipo, autor: ctx.autor });
           await base.gravar(h, l, s, ctx, tipo);
           return 77;
         },

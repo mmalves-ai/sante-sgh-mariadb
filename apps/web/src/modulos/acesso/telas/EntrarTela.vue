@@ -20,6 +20,7 @@ import {
   disponibilidadeCertificado,
   disponibilidadeRecuperacao,
   entrar,
+  entrarAdministradorPlataforma,
   entrarComCertificado,
   escolherUnidade,
 } from '../../../api.js';
@@ -44,6 +45,8 @@ const escolhido = ref('');
 const login = ref('');
 const senha = ref('');
 const segundoFator = ref('');
+/** Decisão do dono (2026-11-20, b): entrada do administrador da plataforma (credencial do banco plataforma). */
+const comoPlataforma = ref(false);
 /** O servidor pediu o código do segundo fator (M59-F2): o campo vira obrigatório e recebe o foco. */
 const pedeCodigo = ref(false);
 const campoCodigo = ref<HTMLInputElement | null>(null);
@@ -84,6 +87,17 @@ async function enviar(): Promise<void> {
   try {
     // Conta da plataforma ou do suporte (e-mail) também entra por aqui: a mesma porta, sem o usuário
     // precisar saber do endereço /plataforma/entrar. Com segundo fator pendente, segue na tela própria.
+    if (comoPlataforma.value) {
+      const sessao = await entrarAdministradorPlataforma({
+        estabelecimento: escolhido.value,
+        login: login.value.trim(),
+        senha: senha.value,
+      });
+      lembrarEscolha(escolhido.value);
+      senha.value = '';
+      await seguir(sessao);
+      return;
+    }
     if (login.value.includes('@')) {
       const r = await entrarPlataforma({
         email: login.value.trim(),
@@ -290,6 +304,11 @@ async function confirmarUnidade(): Promise<void> {
           <small>{{ t('entrar.segundoFatorAjuda') }}</small>
         </label>
 
+        <label class="entrar__opcao">
+          <input v-model="comoPlataforma" type="checkbox" name="plataforma" data-testid="opcao-plataforma" />
+          <span>{{ t('entrar.comoPlataforma') }}</span>
+        </label>
+
         <p v-if="erro" role="alert" class="entrar__erro" data-testid="erro-entrar">{{ erro }}</p>
 
         <SanteBotao
@@ -374,5 +393,10 @@ async function confirmarUnidade(): Promise<void> {
 .entrar :focus-visible {
   outline: 2px solid var(--sgh-foco);
   outline-offset: 2px;
+}
+.entrar__opcao {
+  display: flex;
+  gap: var(--espaco-2, 0.5rem);
+  align-items: center;
 }
 </style>

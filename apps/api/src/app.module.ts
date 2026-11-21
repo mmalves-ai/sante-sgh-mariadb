@@ -17,11 +17,8 @@ import { InterceptadorAuditoria, REGISTRADOR_TRILHA } from './autorizacao/audito
 import { GuardaPermissao } from './autorizacao/guarda.js';
 import { GuardaChaveDeTela } from './modulos/config/guarda-chave-de-tela.js';
 import { RESOLVEDOR_SESSAO, ResolvedorSessao } from './autorizacao/resolvedor-sessao.js';
-import {
-  type RegistradorTrilha,
-  RegistradorTrilhaLegado,
-  RegistradorTrilhaMemoria,
-} from './autorizacao/trilha.js';
+import { type RegistradorTrilha, RegistradorTrilhaMemoria } from './autorizacao/trilha.js';
+import { RegistradorTrilhaLegado } from './autorizacao/trilha-legado.js';
 import { ALERTA_AUDITOR, AlertaPorFila, AlertaSemFila, type AlertaAuditor } from './modulos/acesso/alerta.js';
 import { ConsultaAcessoController } from './modulos/acesso/consulta.controller.js';
 import { GestaoAcessoController } from './modulos/acesso/gestao.controller.js';
@@ -54,7 +51,7 @@ import { contingenciaPelaConfiguracao } from './modulos/acesso/identidade/contin
 import { portaIdentidadeDoNucleo } from './modulos/acesso/identidade/porta-identidade-legado.js';
 import { portaIdentidadeSintetica } from './modulos/acesso/identidade/porta-identidade-sintetica.js';
 import { ServicoIdentidade } from './modulos/acesso/identidade/servico-identidade.js';
-import { portaSenhaDoNucleo, portaSenhaMemoria } from './modulos/acesso/senha/porta-senha.js';
+import { portaSenhaDoNucleo, portaSenhaMemoria } from './modulos/acesso/senha/porta-senha-legado.js';
 import { administradoresMaximoPelaConfiguracao } from './modulos/acesso/saneamento/parametro.js';
 import { portaSaneamentoDoNucleo } from './modulos/acesso/saneamento/porta-legado.js';
 import { PortaSaneamentoSintetica } from './modulos/acesso/saneamento/porta-sintetica.js';
@@ -112,12 +109,8 @@ import {
 import { PinGestaoController } from './modulos/acesso/pin-gestao.controller.js';
 import { ConselhoGestaoController } from './modulos/acesso/conselho-gestao.controller.js';
 import { UsuarioModeloController } from './modulos/acesso/usuario-modelo.controller.js';
-import {
-  portaPinDoNucleo,
-  portaPinIndisponivel,
-  portaPinMemoria,
-  type PortaPin,
-} from './sessao/porta-pin.js';
+import { portaPinIndisponivel, portaPinMemoria, type PortaPin } from './sessao/porta-pin.js';
+import { portaPinDoNucleo } from './sessao/porta-pin-legado.js';
 import { parametrosTrocaRapidaPelaConfiguracao, ServicoTrocaRapida } from './sessao/troca-rapida.js';
 import { parametrosConselhoPelaConfiguracao } from './autorizacao/conselho.js';
 import { SessaoSintetica } from './modulos/acesso/sessao-sintetica.js';

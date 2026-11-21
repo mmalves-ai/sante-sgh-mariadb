@@ -1,21 +1,55 @@
-// W1-01 (parte 11b2): a PORTA do PIN da troca rápida (SGH_ACESSO_PIN, migração 1209). Núcleo real: leitura READ ONLY e
-// gravação na transação SGH_ com a trilha (legado/acesso/gravacao/pin-sgh.ts); dev/ci: memória com as mesmas regras
-// (uma linha viva por usuário, encerrada sem o hash); sem núcleo: indisponível. Só o hash Argon2id (PHC, feito pelo
-// servidor) passa por aqui; o PIN em claro nunca.
-import {
-  definirPin,
-  lerPinVivo,
-  lerSituacaoPin,
-  type NovoPin,
-  type NucleoLegado,
-  type PinVivoLido,
-  recusa,
-  registrarConferenciaPin,
-  type ResultadoConferenciaPin,
-  retirarPin,
-  type SituacaoPinLida,
-  type TrilhaPin,
-} from '@sgh/legado';
+// W1-01 (parte 11b2): a PORTA do PIN da troca rápida. Tipos neutros e as portas sem banco: memória (dev/ci, com as
+// mesmas regras: uma linha viva por usuário, encerrada sem o hash) e indisponível. A gravação sobre o banco do cliente
+// entra com o módulo da troca rápida (F2.2); a versão sobre o banco de origem ficou em porta-pin-legado.ts, fora do
+// boot. Só o hash Argon2id (PHC, feito pelo servidor) passa por aqui; o PIN em claro nunca.
+import { recusa } from '@sgh/nucleo';
+
+/** Linha da trilha de um evento do PIN (quem, onde, o quê), sem a tabela-alvo nem a diferença. */
+export interface TrilhaPin {
+  readonly rede: string;
+  readonly hospital: string;
+  readonly usuario: string;
+  readonly evento: string;
+  readonly recurso: string;
+  readonly operacao: string;
+  readonly resultado: string;
+  readonly estacao: string | null;
+  readonly correlacao: string;
+}
+
+/** Situação do PIN para tela e regra (sem o hash). */
+export interface SituacaoPinLida {
+  readonly definido: boolean;
+  readonly bloqueado: boolean;
+  readonly falhas: number;
+  readonly criadoEm: Date | null;
+  readonly bloqueadoEm: Date | null;
+}
+
+/** O PIN vivo com o hash, só para a conferência no servidor. */
+export interface PinVivoLido extends SituacaoPinLida {
+  readonly id: string;
+  readonly hashPhc: string;
+}
+
+export interface NovoPin {
+  /** usuario.id */
+  readonly idUsuario: number;
+  readonly login: string;
+  /** O hash Argon2id em formato PHC (feito pelo servidor). O PIN em claro nunca chega aqui. */
+  readonly hashPhc: string;
+  readonly por: string;
+  readonly motivo: string;
+}
+
+export interface ResultadoConferenciaPin {
+  /** Certo e o PIN ainda livre: a troca pode seguir. */
+  readonly aceito: boolean;
+  /** Falhas seguidas depois desta conferência (null: o PIN já estava bloqueado ou encerrado). */
+  readonly falhas: number | null;
+  /** Esta falha atingiu o teto e bloqueou o PIN agora. */
+  readonly bloqueouAgora: boolean;
+}
 
 export interface ConferenciaPin {
   readonly id: string;
@@ -26,7 +60,8 @@ export interface ConferenciaPin {
 }
 
 export interface PortaPin {
-  readonly destino: 'legado' | 'memoria' | 'indisponivel';
+  /** banco: gravação no banco (a do cliente, na F2.2; a de origem, em porta-pin-legado.ts). */
+  readonly destino: 'banco' | 'memoria' | 'indisponivel';
   situacao(rede: string, hospital: string, login: string): Promise<SituacaoPinLida>;
   /** O vivo COM o hash: só para a conferência no servidor. */
   vivo(rede: string, hospital: string, login: string): Promise<PinVivoLido | null>;
@@ -49,19 +84,6 @@ export interface PortaPin {
     p: ConferenciaPin,
     t: TrilhaPin,
   ): Promise<ResultadoConferenciaPin>;
-}
-
-export function portaPinDoNucleo(nucleo: Pick<NucleoLegado, 'lerSomente' | 'gravarSgh'>): PortaPin {
-  const ctx = (rede: string, hospital: string, traceId = 'acesso-pin') => ({ rede, hospital, traceId });
-  return {
-    destino: 'legado',
-    situacao: (rede, h, login) => nucleo.lerSomente(ctx(rede, h), (l) => lerSituacaoPin(l, login)),
-    vivo: (rede, h, login) => nucleo.lerSomente(ctx(rede, h), (l) => lerPinVivo(l, login)),
-    definir: (rede, h, p, t) => nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => definirPin(e, p, t)),
-    retirar: (rede, h, p, t) => nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => retirarPin(e, p, t)),
-    conferencia: (rede, h, p, t) =>
-      nucleo.gravarSgh(ctx(rede, h, t.correlacao), (e) => registrarConferenciaPin(e, p, t)),
-  };
 }
 
 interface LinhaPin {

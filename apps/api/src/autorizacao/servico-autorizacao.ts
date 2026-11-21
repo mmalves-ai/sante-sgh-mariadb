@@ -1,7 +1,6 @@
-// Autorização do usuário no servidor (ficha do M06, regras 1, 3 e 9; seção 4): as concessões do legado
-// (grupo em TBPERUSU, papéis em TBPAPEL_TBOPCOES, flags), os escopos e o parâmetro de vínculo, lidos ao
-// vivo, com cache de 3 min no armazém (Valkey) por rede, estabelecimento e login: quem perde a opção no
-// legado perde a permissão no novo dentro do prazo do cache. As regras são de @sgh/dominio-acesso; o
+// Autorização do usuário no servidor (ficha do M06, regras 1, 3 e 9; seção 4): as concessões (perfis e ações do
+// perfil, flags), os escopos e o parâmetro de vínculo, lidos ao vivo pela fonte de acesso, com cache de 3 min no
+// armazém (Valkey) por cliente, rede, estabelecimento e login: quem perde a ação perde a permissão dentro do prazo do cache. As regras são de @sgh/dominio-acesso; o
 // adaptador só lê. Nenhum dado pessoal vai ao cache além do login (chave) e dos códigos.
 import {
   ESCOPOS_SEM_RESTRICAO,
@@ -21,18 +20,22 @@ import {
   type ResultadoConcessao,
 } from '@sgh/dominio-acesso';
 import type { ArmazemSessao } from '../sessao/armazem.js';
-import { FLAGS_DECLARADAS, indiceDoCatalogo } from './catalogo.js';
+import type { AtorPlataforma } from '../sessao/tipos-acesso.js';
+import { FLAGS_DECLARADAS, indiceDoCatalogo, indiceDoCliente } from './catalogo.js';
 import { hojeNoEstabelecimento, type RegraConselho } from './conselho.js';
 
 /** Validade do cache das permissões efetivas (ficha do M06, seção 4: 3 min). */
 export const CACHE_AUTORIZACAO_SEGUNDOS = 180;
 
-/** Escopos como o adaptador devolve (listas só de leitura). */
-export type EscoposLegado = { readonly [K in keyof EscoposSessao]: readonly string[] };
+/** Escopos como a fonte devolve (listas só de leitura). */
+export type EscoposAcesso = { readonly [K in keyof EscoposSessao]: readonly string[] };
+/** @deprecated nome antigo de EscoposAcesso (módulos ainda não migrados). */
+export type EscoposLegado = EscoposAcesso;
 
-export interface DadosAutorizacaoLegado {
+/** O que a fonte de acesso lê para calcular as permissões (a forma de @sgh/dominio-acesso, `conceder`). */
+export interface DadosAutorizacao {
   readonly concessoes: ConcessoesLegado;
-  readonly escopos: EscoposLegado;
+  readonly escopos: EscoposAcesso;
   readonly restricaoVinculo: boolean;
   readonly perfisConcedidos: readonly PerfilConcedido[];
   readonly mapaPerfis: readonly PermissaoDoPerfil[];
@@ -43,17 +46,31 @@ export interface DadosAutorizacaoLegado {
    * conferência não muda nada). Só vem quando a concessão tem conselho.
    */
   readonly registrosConselho?: readonly RegistroConselhoAvaliar[];
+  /**
+   * F2-L (fonte própria): o que cada perfil do banco do cliente concede direto (perfil_acao × acao_sistema.codigo).
+   * Presente, as permissões vêm só disto (pelos perfis vigentes de perfisConcedidos) e das concessões gerais do
+   * catálogo, com a segregação de sempre; opções e flags do banco de origem não contam. Ausente: o cálculo antigo.
+   */
+  readonly acoesDoPerfil?: readonly PermissaoDoPerfil[];
+  /**
+   * F2-L (fonte própria): ações negadas explicitamente (perfil_acao.permitido falso) ou retiradas por recorte de
+   * acesso que a sessão não sabe aplicar (falha fechada). Prevalecem sobre qualquer origem, inclusive as concessões
+   * gerais do catálogo e o perfil administrador do cliente.
+   */
+  readonly acoesNegadas?: readonly string[];
 }
+/** @deprecated nome antigo de DadosAutorizacao (módulos ainda não migrados). */
+export type DadosAutorizacaoLegado = DadosAutorizacao;
 
 /**
  * W1-01 (parte 11d; D-W101-46): a categoria com conselho depois da conferência, pelo parâmetro do bloqueio dos atos
  * privativos. Sem a regra (testes, fonte sintética sem parâmetros), os dados voltam como vieram.
  */
 export function comConselhoConferido(
-  d: DadosAutorizacaoLegado,
+  d: DadosAutorizacao,
   p: ParametrosConselho | null,
   hoje: string,
-): { dados: DadosAutorizacaoLegado; motivo: string | null } {
+): { dados: DadosAutorizacao; motivo: string | null } {
   if (!p) return { dados: d, motivo: null };
   const r = conselhoEfetivo(d.concessoes.conselho, d.registrosConselho, p, hoje);
   if (r.conselho === d.concessoes.conselho) return { dados: d, motivo: null };
@@ -61,11 +78,7 @@ export function comConselhoConferido(
 }
 
 export interface FonteAutorizacao {
-  dadosDeAutorizacao(
-    codigo: string,
-    login: string,
-    flags: readonly FlagLegado[],
-  ): Promise<DadosAutorizacaoLegado>;
+  dadosDeAutorizacao(codigo: string, login: string, flags: readonly FlagLegado[]): Promise<DadosAutorizacao>;
 }
 
 export interface Autorizacao {
@@ -76,13 +89,24 @@ export interface Autorizacao {
   readonly conselho: boolean;
   /** W1-01 (parte 11d): por que a conferência do conselho retirou os atos privativos (ausente: não retirou). */
   readonly conselhoBloqueio?: string;
-  /** M38 (regra 3): grupo do legado, para o escopo `grupo` das chaves de liberação. */
+  /** M38 (regra 3): grupo (perfil principal), para o escopo `grupo` das chaves de liberação. */
   readonly grupo: string | null;
   readonly calculadaEm: number;
 }
 
 /** A concessão com as origens (a tela "Perfis e permissões" mostra; a sessão guarda só as permissões). */
-export function concessaoDe(d: DadosAutorizacaoLegado, agora: number): ResultadoConcessao {
+export function concessaoDe(d: DadosAutorizacao, agora: number): ResultadoConcessao {
+  const r = concederDados(d, agora);
+  if (!d.acoesNegadas || d.acoesNegadas.length === 0) return r;
+  const negadas = new Set(d.acoesNegadas);
+  return {
+    ...r,
+    permissoes: new Set([...r.permissoes].filter((p) => !negadas.has(p))),
+    origens: new Map([...r.origens].filter(([p]) => !negadas.has(p))),
+  };
+}
+
+function concederDados(d: DadosAutorizacao, agora: number): ResultadoConcessao {
   return conceder({
     legado: d.concessoes,
     catalogo: [],
@@ -91,15 +115,15 @@ export function concessaoDe(d: DadosAutorizacaoLegado, agora: number): Resultado
       inicio: new Date(p.inicio),
       fim: p.fim ? new Date(p.fim) : null,
     })),
-    indice: indiceDoCatalogo(d.mapaPerfis),
+    indice: d.acoesDoPerfil ? indiceDoCliente(d.acoesDoPerfil) : indiceDoCatalogo(d.mapaPerfis),
     perfisDoGrupo: d.perfisDoGrupo ?? [],
     agora: new Date(agora),
   });
 }
 
 /**
- * ADR 0022: acesso total da plataforma. TODAS as permissões do catálogo (geradas das opções do legado e
- * declaradas), sem segregação, sem restrição de escopo nem de vínculo. Não lê nada do legado.
+ * ADR 0022: acesso total da plataforma (o administrador da plataforma pode tudo). TODAS as permissões do catálogo,
+ * sem segregação, sem restrição de escopo nem de vínculo. Não lê nada da fonte.
  */
 export function autorizacaoAcessoTotal(agora: number): Autorizacao {
   const r = concederAcessoTotal(indiceDoCatalogo());
@@ -115,7 +139,7 @@ export function autorizacaoAcessoTotal(agora: number): Autorizacao {
 }
 
 /** Cálculo puro (o mesmo para a sessão real e a sintética dos testes). */
-export function calcularAutorizacao(d: DadosAutorizacaoLegado, agora: number): Autorizacao {
+export function calcularAutorizacao(d: DadosAutorizacao, agora: number): Autorizacao {
   const r = concessaoDe(d, agora);
   const destino = r.destino;
   return {
@@ -144,6 +168,20 @@ export function calcularAutorizacao(d: DadosAutorizacaoLegado, agora: number): A
   };
 }
 
+/**
+ * Decisão do dono (2026-11-20, b): o acesso total vem SÓ do ator da plataforma (autenticado no banco plataforma),
+ * e só no cliente que ele escolheu no login. Nenhuma coluna do banco do cliente concede isto.
+ */
+export function autorizacaoDoAtorPlataforma(
+  ator: AtorPlataforma,
+  cliente: string,
+  agora: number,
+): Autorizacao {
+  if (ator.tipo !== 'plataforma' || ator.cliente !== cliente)
+    throw new Error('Ator da plataforma fora do cliente escolhido no login.');
+  return autorizacaoAcessoTotal(agora);
+}
+
 /** O catálogo (opção → permissão) foi gerado da árvore de outro estabelecimento: falha fechada. */
 export class ErroCatalogoDeOutroEstabelecimento extends Error {
   constructor(estabelecimento: string) {
@@ -154,7 +192,7 @@ export class ErroCatalogoDeOutroEstabelecimento extends Error {
 
 export class ServicoAutorizacao {
   /**
-   * @param catalogoDe estabelecimentos cuja árvore TBOPCOES gerou o catálogo (os IDs de opção são do banco de
+   * @param catalogoDe estabelecimentos cuja árvore de ações gerou o catálogo (os IDs de opção são do banco de
    * cada um). Com o núcleo real, qualquer outro é recusado (falha fechada, revisão do M06): ninguém recebe
    * permissão por ID de opção de outro banco. null (fonte sintética dos testes): sem conferência.
    */
@@ -163,7 +201,18 @@ export class ServicoAutorizacao {
     private readonly armazem: ArmazemSessao,
     private readonly agora: () => number = () => Date.now(),
     private readonly catalogoDe: ReadonlySet<string> | null = null,
+    /**
+     * Cliente (banco) cuja fonte este serviço lê: entra em todas as chaves do armazém. Um banco por cliente, e os
+     * códigos de estabelecimento e os logins se repetem entre clientes (o ADMIN do semeador em todos): sem o
+     * cliente, dois clientes da mesma rede dividiriam o cache e a invalidação. null só na fonte sintética.
+     */
+    private readonly cliente: string | null = null,
   ) {}
+
+  /** Prefixo das chaves: cliente e rede. */
+  private prefixo(rede: string): string {
+    return `${this.cliente ?? '-'}:${rede}`;
+  }
 
   private regraConselho: RegraConselho | null = null;
 
@@ -180,15 +229,15 @@ export class ServicoAutorizacao {
   private async conferido(
     rede: string,
     estabelecimento: string,
-    d: DadosAutorizacaoLegado,
-  ): Promise<{ dados: DadosAutorizacaoLegado; motivo: string | null }> {
+    d: DadosAutorizacao,
+  ): Promise<{ dados: DadosAutorizacao; motivo: string | null }> {
     if (!this.regraConselho || !d.concessoes.conselho) return { dados: d, motivo: null };
     const p = await this.regraConselho(rede, estabelecimento);
     return comConselhoConferido(d, p, hojeNoEstabelecimento(this.agora()));
   }
 
   private chave(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:autorizacao:${estabelecimento}:${Buffer.from(login, 'utf8').toString('base64url')}`;
+    return `${this.prefixo(rede)}:autorizacao:${estabelecimento}:${Buffer.from(login, 'utf8').toString('base64url')}`;
   }
 
   /**
@@ -197,16 +246,16 @@ export class ServicoAutorizacao {
    * calculado antes deixa de valer na hora, em todos os processos.
    */
   private chaveGeracao(rede: string, estabelecimento: string): string {
-    return `${rede}:autorizacao-geracao:${estabelecimento}`;
+    return `${this.prefixo(rede)}:autorizacao-geracao:${estabelecimento}`;
   }
 
   /**
    * Geração do usuário: a invalidação de um login troca este valor (não só apaga o cache). Um cálculo que leu
-   * o legado ANTES da gravação e grava o cache DEPOIS da invalidação leva a geração antiga e é descartado na
+   * a fonte ANTES da gravação e grava o cache DEPOIS da invalidação leva a geração antiga e é descartado na
    * leitura seguinte (sem a corrida que devolvia a permissão revogada por até 3 min).
    */
   private chaveGeracaoUsuario(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:autorizacao-geracao:${estabelecimento}:${Buffer.from(login, 'utf8').toString('base64url')}`;
+    return `${this.prefixo(rede)}:autorizacao-geracao:${estabelecimento}:${Buffer.from(login, 'utf8').toString('base64url')}`;
   }
 
   private async geracao(rede: string, estabelecimento: string, login: string): Promise<string> {
@@ -221,12 +270,12 @@ export class ServicoAutorizacao {
     return `${this.agora().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  /** Permissões efetivas (cache de 3 min; frio: lê o legado ao vivo). */
+  /** Permissões efetivas (cache de 3 min; frio: lê a fonte ao vivo). */
   async obter(rede: string, estabelecimento: string, login: string): Promise<Autorizacao> {
     if (this.catalogoDe && !this.catalogoDe.has(estabelecimento))
       throw new ErroCatalogoDeOutroEstabelecimento(estabelecimento);
     const chave = this.chave(rede, estabelecimento, login);
-    // As gerações são lidas ANTES do cálculo: uma invalidação durante a leitura do legado vence.
+    // As gerações são lidas ANTES do cálculo: uma invalidação durante a leitura da fonte vence.
     const geracao = await this.geracao(rede, estabelecimento, login);
     const guardada = await this.armazem.obter(chave);
     if (guardada) {
@@ -262,7 +311,7 @@ export class ServicoAutorizacao {
     return { ...concessaoDe(dados, agora), calculadaEm: agora };
   }
 
-  /** Invalidação (troca de grupo pela tela do M10, saída da sessão): a próxima leitura vai ao legado. */
+  /** Invalidação (troca de grupo pela tela do M10, saída da sessão): a próxima leitura vai à fonte. */
   async invalidar(rede: string, estabelecimento: string, login: string): Promise<void> {
     await this.armazem.gravar(
       this.chaveGeracaoUsuario(rede, estabelecimento, login),

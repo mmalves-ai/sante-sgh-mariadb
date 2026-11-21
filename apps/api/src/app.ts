@@ -1,17 +1,16 @@
+// Montagem da aplicação Nest sobre o Fastify (F2-L): recebe o módulo raiz. O padrão é o boot mínimo (app-base.module,
+// com os módulos migrados de API_MODULOS); o app.module.ts antigo fica fora do grafo do build, como referência.
 import 'reflect-metadata';
+import type { DynamicModule } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { loggerNest } from '@sgh/contratos';
+import type { NucleoProprio } from '@sgh/nucleo';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
-import { AppModule } from './app.module.js';
+import { AppBaseModule, type OpcoesAppBase } from './app-base.module.js';
 import type { Configuracao } from './configuracao.js';
-import type { FonteCoexistencia } from './modulos/config/public-api.js';
-import type { FonteAcesso } from './sessao/fonte-acesso.js';
-import type { OpcoesApp } from './app.module.js';
 import { logger } from './logger.js';
 import { ProblemaFilter } from './problema.filter.js';
 import { registrarResposta } from './telemetria.js';
-import { MEDIDOR_TAREFAS } from './modulos/coexistencia/aplicacao/medidor-tarefas.js';
-import type { AutorizacaoDaRequisicao } from './autorizacao/guarda.js';
 
 const LOOPBACK = /^(?:127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1|::ffff:127\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
 
@@ -25,18 +24,22 @@ export const confiarNoProxy = (endereco: string, salto: number): boolean =>
   salto === 0 && LOOPBACK.test(endereco);
 
 /**
- * `fonte`: o núcleo do legado (M02 coexistência + M05 fonte de acesso), null quando não configurado.
- * `armazem`/`servico`: sessão (M05); sem eles, o módulo monta um serviço pelo ambiente (memória + fonte
- * sintética em dev/ci), que é o que os testes usam. `assinaturas`: painel de assinaturas (M03).
+ * A app com o boot mínimo: `nucleo` é o NucleoProprio (null em dev/ci sem banco e nos testes, que usam a fonte
+ * sintética). `opcoes`: armazém, serviço de sessão, fonte de acesso e trilha (testes), registro dos módulos.
  */
 export async function criarApp(
   configuracao: Configuracao,
-  fonte: (FonteCoexistencia & Partial<FonteAcesso>) | null = null,
+  nucleo: NucleoProprio | null = null,
   env: NodeJS.ProcessEnv = process.env,
-  opcoes: OpcoesApp = {},
+  opcoes: OpcoesAppBase = {},
 ): Promise<NestFastifyApplication> {
+  return criarAppComModulo(await AppBaseModule.com(configuracao, nucleo, env, opcoes));
+}
+
+/** A app Nest sobre o Fastify com o módulo raiz dado (prefixo /api, confiança no proxy, métricas e Problem Details). */
+export async function criarAppComModulo(modulo: DynamicModule): Promise<NestFastifyApplication> {
   const app = await NestFactory.create<NestFastifyApplication>(
-    AppModule.com(configuracao, fonte, env, opcoes),
+    modulo,
     new FastifyAdapter({ trustProxy: confiarNoProxy }),
     // Logs do próprio Nest pelo pino com redação (nunca o ConsoleLogger sem máscara).
     { bufferLogs: true },
@@ -53,18 +56,6 @@ export async function criarApp(
         req.method,
         resposta.statusCode,
         resposta.elapsedTime / 1000,
-      );
-      // M37: o tempo das tarefas-chave do dia (painel de indicadores da migração gradual).
-      // Por estabelecimento: o da sessão da requisição (sem ele, a amostra não entra).
-      const sessao = (req as { sgh?: AutorizacaoDaRequisicao }).sgh?.sessao;
-      MEDIDOR_TAREFAS.registrar(
-        sessao?.estabelecimentoAtivo
-          ? { rede: sessao.rede ?? '', hospital: sessao.estabelecimentoAtivo }
-          : null,
-        req.routeOptions.url ?? '',
-        req.method,
-        resposta.statusCode,
-        resposta.elapsedTime,
       );
       pronto();
     });

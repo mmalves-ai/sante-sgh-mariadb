@@ -76,6 +76,22 @@ export async function entrar(c: CredenciaisEntrada, buscar: typeof fetch = fetch
   return lerJson(r, esquemaSessao);
 }
 
+/**
+ * POST /api/sessao/plataforma (decisão do dono 2026-11-20, b): o administrador da plataforma entra com a credencial do
+ * banco plataforma, com todas as permissões no cliente deste endereço. Mesmo cookie da entrada comum.
+ */
+export async function entrarAdministradorPlataforma(
+  c: { estabelecimento: string; login: string; senha: string; cliente?: string },
+  buscar: typeof fetch = fetch,
+): Promise<Sessao> {
+  const r = await buscar('/api/sessao/plataforma', {
+    method: 'POST',
+    headers: { ...JSON_ACEITO, 'content-type': 'application/json' },
+    body: JSON.stringify(c),
+  });
+  return lerJson(r, esquemaSessao);
+}
+
 // ── W1-01 (parte 7): "Esqueci a senha" (chave acesso.recuperacaoSenha e o servidor de e-mail institucional) ──
 
 /** O "Esqueci a senha" está liberado no estabelecimento? (o link só aparece com ele) */

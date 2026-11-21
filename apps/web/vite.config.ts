@@ -20,6 +20,31 @@ const chave = process.env['WEB_HTTPS_CHAVE'];
 const https =
   certificado && chave ? { cert: readFileSync(certificado), key: readFileSync(chave) } : undefined;
 const raiz = resolve(import.meta.dirname, '../..');
+// Fora do loopback (rede local), o servidor de desenvolvimento não pode entregar o repositório pelo /@fs/ (regras 5 e
+// 8): só o web, os pacotes e as dependências; o resto (dump/, referencias/, docs/, .tmp/, certs/, tools/, *.sql) é
+// recusado. O caminho preferido pela rede é o bundle construído (vite preview), que só serve o dist (subir-login.sh).
+const loopback = ['127.0.0.1', 'localhost', '::1'].includes(hostWeb);
+const fsRede = {
+  strict: true,
+  allow: [import.meta.dirname, resolve(raiz, 'packages'), resolve(raiz, 'node_modules')],
+  deny: [
+    // padrão do Vite (repetido porque a lista substitui a padrão)
+    '.env',
+    '.env.*',
+    '*.{crt,pem}',
+    '**/.git/**',
+    // material interno e dados fora do git
+    '*.key',
+    '*.sql',
+    '*.dmp',
+    '**/dump/**',
+    '**/referencias/**',
+    '**/docs/**',
+    '**/.tmp/**',
+    '**/certs/**',
+    '**/tools/**',
+  ],
+};
 const versaoDe = (arquivo: string) =>
   (JSON.parse(readFileSync(resolve(raiz, arquivo), 'utf8')) as { version: string }).version;
 
@@ -46,7 +71,15 @@ export default defineConfig({
     __SGH_OPENVUE__: JSON.stringify(versaoDe('node_modules/openvue/package.json')),
     __SGH_VUE__: JSON.stringify(versaoDe('node_modules/vue/package.json')),
   },
-  server: { host: hostWeb, port: portaWeb, strictPort: true, proxy: api, ...(https ? { https } : {}) },
-  preview: { host: '127.0.0.1', port: portaWeb, strictPort: true, proxy: api },
+  server: {
+    host: hostWeb,
+    port: portaWeb,
+    strictPort: true,
+    proxy: api,
+    ...(https ? { https } : {}),
+    ...(loopback ? {} : { fs: fsRede }),
+  },
+  // O preview só serve o bundle (dist): é o modo usado pela rede (subir-login.sh, WEB_MODO=preview).
+  preview: { host: hostWeb, port: portaWeb, strictPort: true, proxy: api, ...(https ? { https } : {}) },
   build: { outDir: 'dist', emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 1500 },
 });

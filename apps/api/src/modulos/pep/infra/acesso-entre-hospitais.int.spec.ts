@@ -25,7 +25,7 @@ import {
   usuarioComPapelDeAmostraRede,
 } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RegistradorTrilhaLegado } from '../../../autorizacao/trilha.js';
+import { RegistradorTrilhaLegado } from '../../../autorizacao/trilha-legado.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import { ServicoMpiRede, type SessaoRede } from '../../rede/aplicacao/servico.js';
 import {

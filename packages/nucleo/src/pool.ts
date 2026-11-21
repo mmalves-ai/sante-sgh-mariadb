@@ -137,6 +137,16 @@ export class PoolsPorCliente {
     };
   }
 
+  /**
+   * Fonte das conexões do banco plataforma (credencial do administrador da plataforma e lista de clientes; decisão
+   * do dono 2026-11-20, b). O "cliente" desta fonte é o nome do banco plataforma: nenhum contexto de cliente a usa.
+   */
+  fontePlataforma(): FonteConexoes {
+    const pool = this.poolDaPlataforma();
+    const banco = this.config.bancoPlataforma;
+    return { cliente: banco, banco, obter: async () => conexaoDoDriver(await pool.getConnection()) };
+  }
+
   /** Esquece o cliente (mudou de banco ou de situação): a próxima chamada relê a plataforma. */
   esquecer(codigo: string): void {
     this.clientes.delete(codigo);

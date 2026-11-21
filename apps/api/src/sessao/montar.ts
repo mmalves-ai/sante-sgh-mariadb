@@ -1,11 +1,9 @@
-// Monta o serviço de sessão (M05): escolhe a fonte de acesso pelo ambiente e o armazém. Fonte SINTÉTICA só
-// com AMBIENTE explícito igual a dev ou ci (ausente ou desconhecido nunca vale dev: as senhas sintéticas
-// estão no repositório); em homolog, treino e produção, o núcleo do legado (login real), e só com a
-// combinação do spike fixada (ACESSO_COMBINACAO_SENHA). O armazém padrão é em memória (testes); o servidor
+// Monta o serviço de sessão (M05): escolhe a fonte de acesso pelo ambiente e o armazém. A fonte de execução é a
+// PRÓPRIA (banco do cliente pelo @sgh/nucleo). A SINTÉTICA (senhas no repositório) só vale com AMBIENTE explícito
+// igual a dev ou ci (ausente ou desconhecido nunca vale dev). O armazém padrão é em memória (testes); o servidor
 // passa o Valkey (main.ts exige VALKEY_URL fora de dev/ci).
-import { CATALOGO_LEGADO_ORIGEM } from '@sgh/contratos/catalogo-legado';
 import { BLOQUEIO_PORTA_PADRAO_MINUTOS } from '@sgh/dominio-acesso';
-import { combinacaoDoAmbiente, type Ambiente } from '@sgh/legado';
+import { type Ambiente, FORMATO_CLIENTE } from '@sgh/nucleo';
 import { ArmazemMemoria, type ArmazemSessao } from './armazem.js';
 import type { FonteAcesso } from './fonte-acesso.js';
 import { type ConfigServicoSessao, ServicoSessao } from './servico-sessao.js';
@@ -34,64 +32,102 @@ export function ambienteSintetico(env: Ambiente): boolean {
   return a !== null && AMBIENTES_SINTETICOS.has(a);
 }
 
-/**
- * ADR 0021: em AMBIENTE=dev, ACESSO_FONTE_DEV=copia faz o login dos usuários do SPDATA e a lista de alvos do
- * "login como" usarem o TBUSERS REAL da cópia (READ ONLY; a trilha continua em memória: nada grava na cópia
- * no login). Padrão: a fonte sintética. Só vale em dev (ci, homolog, treino e produção recusam a chave).
- */
-export function fonteDevDaCopia(env: Ambiente): boolean {
-  return ambienteDeclarado(env) === 'dev' && (env['ACESSO_FONTE_DEV'] ?? '').trim() === 'copia';
+/** Valores de ACESSO_FONTE_DEV: `propria` (o banco do cliente) ou `sintetica` (só dev/ci). */
+export const FONTES_ACESSO = ['propria', 'sintetica'] as const;
+export type NomeFonteAcesso = (typeof FONTES_ACESSO)[number];
+
+/** ACESSO_FONTE_DEV declarado (null: ausente; o padrão depende do ambiente e do núcleo). */
+export function fonteAcessoDeclarada(env: Ambiente): NomeFonteAcesso | null {
+  const v = (env['ACESSO_FONTE_DEV'] ?? '').trim();
+  return (FONTES_ACESSO as readonly string[]).includes(v) ? (v as NomeFonteAcesso) : null;
 }
 
 /**
- * Pedido do dono (17/11/2026; liberação full, ADR 0034): o dev sobre a cópia GRAVA. Com DEV_GRAVA_COPIA=sim (e só com
- * AMBIENTE=dev e ACESSO_FONTE_DEV=copia), a API troca as fontes em memória pelas de produção: executor, trilha,
- * configuração e chaves de liberação lidas e gravadas no banco da cópia, com as permissões de cada login. Os dados
- * originais voltam da matriz (banco-dev/scripts/restaurar.sh). Sem a chave, o dev segue como antes (memória).
+ * A fonte que o login usa. Declarada: a declarada. Sem declaração: ci usa a sintética; dev usa a própria quando o
+ * núcleo está configurado (senão a sintética); homolog, treino e produção, sempre a própria.
  */
-export function devGravaCopia(env: Ambiente): boolean {
-  return fonteDevDaCopia(env) && (env['DEV_GRAVA_COPIA'] ?? '').trim() === 'sim';
+export function fonteAcessoEfetiva(env: Ambiente, nucleoConfigurado: boolean): NomeFonteAcesso {
+  const declarada = fonteAcessoDeclarada(env);
+  if (declarada) return declarada;
+  const a = ambienteDeclarado(env);
+  if (a === 'ci') return 'sintetica';
+  if (a === 'dev') return nucleoConfigurado ? 'propria' : 'sintetica';
+  return 'propria';
 }
 
-/** As fontes de dados do app em memória (dev/ci sintéticos), salvo o dev que grava na cópia. */
-export function fontesSinteticas(env: Ambiente): boolean {
-  return ambienteSintetico(env) && !devGravaCopia(env);
+/** As fontes de dados do app em memória (a fonte de acesso sintética). */
+export function fontesSinteticas(env: Ambiente, nucleoConfigurado = false): boolean {
+  return ambienteSintetico(env) && fonteAcessoEfetiva(env, nucleoConfigurado) === 'sintetica';
 }
 
 /**
- * Motivo de recusa da partida pela configuração de acesso (null: pode subir). Fora de dev/ci, sem a
- * combinação do spike a API não sobe: com todas as candidatas valendo, uma senha guardada em maiúsculas
- * aceitaria qualquer caixa.
+ * @deprecated Só para o app.module de referência (fora do boot da F2-L): a fonte de acesso sobre a cópia do banco de
+ * origem não existe neste produto. Sempre falso.
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura mantida para o app.module de referência
+export function fonteDevDaCopia(_env: Ambiente): boolean {
+  return false;
+}
+
+/** @deprecated Só para o app.module de referência (fora do boot da F2-L). Sempre falso. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura mantida para o app.module de referência
+export function devGravaCopia(_env: Ambiente): boolean {
+  return false;
+}
+
+/** Motivo de recusa da partida pela configuração de acesso (null: pode subir). */
 export function recusaDoAcesso(env: Ambiente): string | null {
   const a = ambienteDeclarado(env);
   if (!a) return 'AMBIENTE ausente ou desconhecido: use dev, ci, homolog, treino ou producao.';
-  const fonteDev = (env['ACESSO_FONTE_DEV'] ?? '').trim();
-  if (fonteDev && !['sintetica', 'copia'].includes(fonteDev))
-    return 'ACESSO_FONTE_DEV inválido: use sintetica (padrão) ou copia.';
-  if (fonteDev === 'copia' && a !== 'dev') return 'ACESSO_FONTE_DEV=copia só vale em AMBIENTE=dev.';
-  try {
-    const fixa = combinacaoDoAmbiente(env);
-    if (!AMBIENTES_SINTETICOS.has(a) && !fixa) {
-      return 'ACESSO_COMBINACAO_SENHA ausente: fora de dev/ci o login exige a combinação confirmada pelo spike.';
-    }
-  } catch (e) {
-    return e instanceof Error ? e.message : String(e);
-  }
+  const fonte = (env['ACESSO_FONTE_DEV'] ?? '').trim();
+  if (fonte === 'copia')
+    return 'ACESSO_FONTE_DEV=copia não existe mais: use propria (o banco do cliente) ou sintetica (dev/ci).';
+  if (fonte && !fonteAcessoDeclarada(env))
+    return 'ACESSO_FONTE_DEV inválido: use propria (o banco do cliente) ou sintetica (dev/ci).';
+  if (fonte === 'sintetica' && !AMBIENTES_SINTETICOS.has(a))
+    return 'ACESSO_FONTE_DEV=sintetica só vale em AMBIENTE=dev ou ci.';
   return null;
 }
 
+/** A fonte do login (null: recusada pela configuração, ou a própria sem o núcleo, e a API responde 503). */
 export function escolherFonteAcesso(env: Ambiente, real: FonteAcesso | null): FonteAcesso | null {
   if (recusaDoAcesso(env)) return null;
-  // ACESSO_FONTE_DEV=copia sem o núcleo configurado: sem fonte (503), nunca cai calada na sintética.
-  if (fonteDevDaCopia(env)) return real;
-  if (ambienteSintetico(env)) return new FonteAcessoSintetica(env);
+  // A própria sem o núcleo configurado: sem fonte (503), nunca cai calada na sintética.
+  if (fonteAcessoEfetiva(env, real !== null) === 'sintetica') return new FonteAcessoSintetica(env);
   return real;
 }
 
 function minutosBloqueio(env: Ambiente): number {
   const n = Number(env['ACESSO_BLOQUEIO_PORTA_MINUTOS'] ?? '');
   return Number.isInteger(n) && n > 0 ? n : BLOQUEIO_PORTA_PADRAO_MINUTOS;
+}
+
+/**
+ * Os estabelecimentos do cliente da fonte, lidos a cada consulta (a lista da fonte pode ser recarregada): o catálogo
+ * de ações (acao_sistema) é do banco do cliente e vale para todos os seus estabelecimentos; outro código é recusado
+ * pela autorização (falha fechada).
+ */
+class EstabelecimentosDaFonte extends Set<string> {
+  constructor(private readonly fonte: FonteAcesso) {
+    super();
+  }
+  override has(codigo: string): boolean {
+    return this.fonte.estabelecimentos.some((e) => e.codigo === codigo);
+  }
+}
+
+/**
+ * O cliente das chaves da sessão (CLIENTE_PADRAO). Com a fonte própria é obrigatório e no formato do núcleo: sem ele,
+ * a partida é recusada (o cookie de um cliente não pode valer na API de outro que divida o armazém). Na sintética,
+ * opcional (null).
+ */
+export function clienteDaSessao(env: Ambiente, fontePropria: boolean): string | null {
+  const cliente = env['CLIENTE_PADRAO']?.trim() || null;
+  if (cliente !== null && !FORMATO_CLIENTE.test(cliente))
+    throw new Error('CLIENTE_PADRAO inválido: use o código do cliente na plataforma.');
+  if (fontePropria && cliente === null)
+    throw new Error('CLIENTE_PADRAO ausente: a fonte própria exige o cliente (as chaves da sessão o levam).');
+  return cliente;
 }
 
 export function montarServicoSessao(
@@ -102,23 +138,25 @@ export function montarServicoSessao(
   aviso?: (mensagem: string, campos: Record<string, unknown>) => void,
   como: Pick<
     ConfigServicoSessao,
-    'guardaComo' | 'reautenticarAtor' | 'aoEncerrarComo' | 'identidade' | 'senhaLegado'
+    'guardaComo' | 'reautenticarAtor' | 'aoEncerrarComo' | 'identidade' | 'senha' | 'plataforma'
   > = {},
 ): ServicoSessao | null {
   const fonte = escolherFonteAcesso(env, real);
   if (!fonte) return null;
-  const trocaSenhaPeloNovo = (env['ACESSO_TROCA_SENHA_PELO_NOVO'] ?? '').trim() === 'sim';
+  const cliente = clienteDaSessao(env, fonte === real);
   return new ServicoSessao(fonte, armazem, () => Date.now(), {
-    trocaSenhaPeloNovo,
-    combinacao: combinacaoDoAmbiente(env),
+    // Todas as chaves do armazém levam o cliente (um banco por cliente; o Valkey pode ser comum).
+    cliente,
     bloqueioPortaSegundos: minutosBloqueio(env) * 60,
-    // M06: permissões do legado (cache de 3 min no mesmo armazém) e a trilha dupla dos eventos de sessão.
-    // Com o núcleo real, só o estabelecimento cuja árvore gerou o catálogo (falha fechada; HS-1).
+    // M06: permissões (cache de 3 min no mesmo armazém) e a trilha dos eventos de sessão. Com a fonte própria, só
+    // os estabelecimentos do cliente da fonte (falha fechada).
     autorizacao: new ServicoAutorizacao(
       fonte,
       armazem,
       () => Date.now(),
-      fonte === real ? new Set([CATALOGO_LEGADO_ORIGEM.estabelecimento]) : null,
+      fonte === real ? new EstabelecimentosDaFonte(fonte) : null,
+      // O cliente da fonte entra nas chaves do cache (um banco por cliente).
+      cliente,
     ),
     ...(trilha ? { trilha } : {}),
     ...(aviso ? { aviso } : {}),

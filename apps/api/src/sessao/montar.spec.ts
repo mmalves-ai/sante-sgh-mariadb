@@ -1,30 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { ambienteSintetico, devGravaCopia, fonteDevDaCopia, fontesSinteticas } from './montar.js';
+import {
+  ambienteSintetico,
+  devGravaCopia,
+  fonteAcessoEfetiva,
+  fonteDevDaCopia,
+  fontesSinteticas,
+  recusaDoAcesso,
+} from './montar.js';
 
-// Pedido do dono (17/11/2026): o dev sobre a cópia grava com DEV_GRAVA_COPIA=sim; nenhum outro ambiente muda.
-describe('dev que grava na cópia (DEV_GRAVA_COPIA)', () => {
-  const dev = { AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'copia' };
-
-  it('sem a chave, o dev sobre a cópia segue com as fontes em memória', () => {
-    expect(fonteDevDaCopia(dev)).toBe(true);
-    expect(devGravaCopia(dev)).toBe(false);
-    expect(fontesSinteticas(dev)).toBe(true);
+// F2-L: a fonte do login é a PRÓPRIA (banco do cliente); a sintética só vale em dev/ci.
+describe('fonte de acesso (ACESSO_FONTE_DEV)', () => {
+  it('sem declaração: ci sintética; dev própria com o núcleo (senão sintética); demais, sempre a própria', () => {
+    expect(fonteAcessoEfetiva({ AMBIENTE: 'ci' }, true)).toBe('sintetica');
+    expect(fonteAcessoEfetiva({ AMBIENTE: 'dev' }, true)).toBe('propria');
+    expect(fonteAcessoEfetiva({ AMBIENTE: 'dev' }, false)).toBe('sintetica');
+    for (const AMBIENTE of ['homolog', 'treino', 'producao'])
+      expect(fonteAcessoEfetiva({ AMBIENTE }, false)).toBe('propria');
   });
 
-  it('com DEV_GRAVA_COPIA=sim, as fontes de produção (o login continua o do dev)', () => {
-    const env = { ...dev, DEV_GRAVA_COPIA: 'sim' };
-    expect(devGravaCopia(env)).toBe(true);
-    expect(fontesSinteticas(env)).toBe(false);
-    expect(ambienteSintetico(env)).toBe(true);
+  it('a declarada vale: propria em dev/ci, sintetica só em dev/ci', () => {
+    expect(fonteAcessoEfetiva({ AMBIENTE: 'ci', ACESSO_FONTE_DEV: 'propria' }, true)).toBe('propria');
+    expect(fonteAcessoEfetiva({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'sintetica' }, true)).toBe('sintetica');
+    expect(recusaDoAcesso({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'propria' })).toBeNull();
+    expect(recusaDoAcesso({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'sintetica' })).toBeNull();
+    expect(recusaDoAcesso({ AMBIENTE: 'producao', ACESSO_FONTE_DEV: 'sintetica' })).toMatch(/só vale/);
+    expect(recusaDoAcesso({ AMBIENTE: 'homolog', ACESSO_FONTE_DEV: 'propria' })).toBeNull();
   });
 
-  it('a chave não vale sem a fonte da cópia nem fora do dev', () => {
-    expect(devGravaCopia({ AMBIENTE: 'dev', DEV_GRAVA_COPIA: 'sim' })).toBe(false);
-    expect(fontesSinteticas({ AMBIENTE: 'dev', DEV_GRAVA_COPIA: 'sim' })).toBe(true);
-    expect(devGravaCopia({ AMBIENTE: 'ci', ACESSO_FONTE_DEV: 'copia', DEV_GRAVA_COPIA: 'sim' })).toBe(false);
-    expect(fontesSinteticas({ AMBIENTE: 'ci', ACESSO_FONTE_DEV: 'copia', DEV_GRAVA_COPIA: 'sim' })).toBe(
-      true,
-    );
-    expect(devGravaCopia({ ...dev, DEV_GRAVA_COPIA: 'nao' })).toBe(false);
+  it('recusa a partida: AMBIENTE ausente ou desconhecido, valor inválido e a antiga fonte da cópia', () => {
+    expect(recusaDoAcesso({})).toMatch(/AMBIENTE/);
+    expect(recusaDoAcesso({ AMBIENTE: 'teste' })).toMatch(/AMBIENTE/);
+    expect(recusaDoAcesso({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'outra' })).toMatch(/inválido/);
+    expect(recusaDoAcesso({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'copia' })).toMatch(/não existe mais/);
+    // Sem combinação de cifra antiga: produção sobe só com AMBIENTE.
+    expect(recusaDoAcesso({ AMBIENTE: 'producao' })).toBeNull();
+  });
+
+  it('fontes em memória só em dev/ci com a fonte sintética; a cópia não existe mais', () => {
+    expect(fontesSinteticas({ AMBIENTE: 'ci' })).toBe(true);
+    expect(fontesSinteticas({ AMBIENTE: 'dev' }, true)).toBe(false);
+    expect(fontesSinteticas({ AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'sintetica' }, true)).toBe(true);
+    expect(fontesSinteticas({ AMBIENTE: 'producao', ACESSO_FONTE_DEV: 'sintetica' })).toBe(false);
+    expect(ambienteSintetico({ AMBIENTE: 'dev' })).toBe(true);
+    const copia = { AMBIENTE: 'dev', ACESSO_FONTE_DEV: 'copia', DEV_GRAVA_COPIA: 'sim' };
+    expect(fonteDevDaCopia(copia)).toBe(false);
+    expect(devGravaCopia(copia)).toBe(false);
   });
 });

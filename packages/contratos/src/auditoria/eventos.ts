@@ -707,6 +707,12 @@ export const EVENTOS_AUDITAVEIS = {
     descricao: 'Troca rápida de usuário por PIN na estação (a sessão anterior fica bloqueada)',
     legado: null,
   },
+  // Decisão do dono (2026-11-20, b): troca da senha do administrador da plataforma (credencial do banco plataforma).
+  senhaPlataformaTrocada: {
+    codigo: 'plataforma.senha.trocada',
+    descricao: 'Senha do administrador da plataforma trocada (as outras sessões dele são encerradas)',
+    legado: null,
+  },
   // W1-01 (parte 7): "Esqueci a senha" (o pedido; a senha provisória entra pelo executor acesso.redefinirSenha).
   senhaRecuperacaoPedida: {
     codigo: 'acesso.senha.recuperacao-pedida',

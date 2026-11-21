@@ -14,7 +14,7 @@ import {
   type NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { executarComo } from '@sgh/legado';
+import { executarComo } from './como.js';
 import { Observable } from 'rxjs';
 import { ErroProblema } from '../problema.filter.js';
 import { caminhoAuditado, type ServicoComo } from '../modulos/suporte/servico-como.js';

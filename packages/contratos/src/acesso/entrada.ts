@@ -11,9 +11,13 @@ export const TAMANHO_LOGIN = 31;
 export const TAMANHO_SENHA = 100;
 
 /** Login exato do legado (TBUSERS.NOME): sem espaço nas pontas, maiúsculas contam. */
-export const esquemaLogin = textoCp1252(TAMANHO_LOGIN).refine((l) => l.length > 0 && l.trim() === l, {
-  message: 'Informe o login sem espaços nas pontas.',
-});
+export const esquemaLogin = textoCp1252(TAMANHO_LOGIN)
+  .refine((l) => l.length > 0 && l.trim() === l, {
+    message: 'Informe o login sem espaços nas pontas.',
+  })
+  // ':' é reservado: separa o espaço das chaves da sessão do administrador da plataforma ('plataforma:<login>'); o
+  // banco garante o mesmo (ck_usuario_login_sem_dois_pontos).
+  .refine((l) => !l.includes(':'), { message: 'O login não pode ter dois-pontos (:).' });
 
 /** Senha digitada: sem normalização; só caracteres do CP1252. */
 export const esquemaSenhaDigitada = z
@@ -35,6 +39,33 @@ export const esquemaEntrar = z.object({
   codigoSegundoFator: esquemaCodigoSegundoFator.optional(),
 });
 export type Entrar = z.infer<typeof esquemaEntrar>;
+
+/** Login do administrador da plataforma (credencial_administrador_plataforma.login, VARCHAR(80)). */
+export const TAMANHO_LOGIN_PLATAFORMA = 80;
+/** Forma do login da plataforma (sem distinguir maiúsculas; guardado em minúsculas: ck_credencial_adm_plataforma_login). */
+export const FORMATO_LOGIN_PLATAFORMA = /^[A-Za-z0-9._-]{1,80}$/;
+
+/**
+ * POST /api/sessao/plataforma: entrada do administrador da plataforma (decisão do dono 2026-11-20, b). A credencial é
+ * a do banco plataforma; `cliente` é o código do cliente escolhido (ausente: o único que o endereço atende).
+ */
+export const esquemaEntrarAdministradorPlataforma = z.object({
+  estabelecimento: esquemaCodigoEstabelecimento,
+  // Só ASCII (letras, dígitos, '.', '_' e '-'), guardado em minúsculas: a colação do banco plataforma ignora
+  // caracteres invisíveis e acentos, e um login com eles daria outra grafia para a mesma credencial (ck da 0002).
+  login: z
+    .string()
+    .min(1, 'Informe o login.')
+    .max(TAMANHO_LOGIN_PLATAFORMA)
+    .regex(FORMATO_LOGIN_PLATAFORMA, 'Login da plataforma: só letras sem acento, dígitos, ponto, hífen e sublinhado.')
+    .transform((l) => l.toLowerCase()),
+  senha: esquemaSenhaDigitada,
+  cliente: z
+    .string()
+    .regex(/^[a-z][a-z0-9_]{1,39}$/, 'Código de cliente inválido.')
+    .optional(),
+});
+export type EntrarAdministradorPlataforma = z.infer<typeof esquemaEntrarAdministradorPlataforma>;
 
 /** POST /api/sessao/reautenticar e desbloqueio da tela. */
 /** W1-01 (parte 8): uma sessão da própria pessoa ("Minhas sessões"); `ref` é opaca e só serve para encerrar. */

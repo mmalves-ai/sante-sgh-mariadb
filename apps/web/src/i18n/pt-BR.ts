@@ -187,6 +187,7 @@ export const mensagensWeb = {
     senha: 'Senha',
     segundoFator: 'Código do aplicativo (segundo fator)',
     segundoFatorAjuda: 'Só se você cadastrou o segundo fator.',
+    comoPlataforma: 'Sou administrador da plataforma',
     segundoFatorPedido: 'Digite o código de 6 dígitos do aplicativo autenticador e entre de novo.',
     segundoFatorInvalido: 'O código do aplicativo não conferiu. Digite o código atual.',
     segundoFatorCadastro:

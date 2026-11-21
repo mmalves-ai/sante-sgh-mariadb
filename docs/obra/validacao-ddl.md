@@ -13,6 +13,7 @@
 | colunas_id_sem_fk | 19 |
 | fks | 13506 |
 | gatilhos | 0 |
+| plataforma_erros | 0 |
 | total_erros | 0 |
 
 ## Erros por arquivo (até 5 por arquivo)

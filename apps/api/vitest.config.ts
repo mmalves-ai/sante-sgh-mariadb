@@ -1,13 +1,17 @@
 import { defineConfig } from 'vitest/config';
+import { FORA, SUITE_BASE } from './suite-base.js';
 
 export default defineConfig({
   root: import.meta.dirname,
   envDir: false,
   resolve: { tsconfigPaths: true },
   test: {
-    include: ['src/**/*.spec.ts'],
+    name: 'api',
+    // F2-L: só a base do boot (fecho do login) e os módulos registrados (suite-base.ts). O código não migrado fica fora
+    // por configuração, como no boot (API_MODULOS), e roda pelo projeto api-pendente (vitest.pendente.config.ts).
     // Integração (Gotenberg, S3, Valkey, cópia): `./pnpm testes:integracao` (vitest.integracao.config.ts).
-    exclude: ['src/**/*.int.spec.ts', '**/node_modules/**'],
+    include: SUITE_BASE,
+    exclude: FORA,
     environment: 'node',
     env: { TZ: 'UTC' },
     // M41: os testes pela HTTP (app inteira em memória) levam 1 s isolados e passavam de 5 s sob a carga do

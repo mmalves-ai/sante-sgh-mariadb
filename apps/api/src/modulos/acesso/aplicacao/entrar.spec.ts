@@ -28,14 +28,17 @@ describe('entrar', () => {
     }
   });
 
-  it('conta sem cifra com senha em texto puro: confere a senha e vai à troca obrigatória (regra 3)', async () => {
+  // Divergência intencional (F2-L, banco próprio): não existe mais o desfecho 'senha-sem-cifra'. A credencial só é
+  // guardada em argon2id (credencial_usuario.algoritmo); a conta que precisa trocar a senha está marcada com
+  // troca_obrigatoria e entra só para trocar ('senha-provisoria'); a troca pelo novo segue a porta de senha montada.
+  it('conta com troca obrigatória (a de texto puro da fonte sintética): confere a senha e vai à troca', async () => {
     const { servico } = montar();
     await expect(servico.entrar(entrada('SINT.TEXTOPURO', 'errada'), REDE)).rejects.toMatchObject({
       tipo: 'credencial-invalida',
     });
     const r = await servico.entrar(entrada('SINT.TEXTOPURO', 'Textopuro#2026'), REDE);
-    expect(r.sessao.trocaSenha).toBe('senha-sem-cifra');
-    expect(r.sessao.trocaSenhaPeloNovo).toBe(false);
+    expect(r.sessao.trocaSenha).toBe('senha-provisoria');
+    expect(r.sessao.trocaSenhaPeloNovo).toBe(servico.trocaSenhaDisponivel);
   });
 
   it('estabelecimento fora da configuração é recusado', async () => {

@@ -1,25 +1,39 @@
-// O que o serviço de sessão precisa do núcleo do legado (M02 + M05). NucleoLegado implementa; os testes
-// usam a fonte sintética, sem banco. Mantém a leitura READ ONLY do adaptador.
+// O que o serviço de sessão precisa da fonte de acesso: a fonte própria (MariaDB do cliente, pelo Leitor de
+// @sgh/nucleo) em execução; a sintética nos testes, sem banco. Só leitura: as gravações do login (tentativas,
+// troca de senha) passam pelo Executor do núcleo.
+import type { FonteAutorizacao } from '../autorizacao/servico-autorizacao.js';
 import type {
   Autenticacao,
-  Combinacao,
   ConfigLogin,
   ContaAlvo,
   DadosSessao,
   SaudeEstabelecimento,
-} from '@sgh/legado';
-import type { FonteAutorizacao } from '../autorizacao/servico-autorizacao.js';
+} from './tipos-acesso.js';
 
-/** M06: também lê as concessões, os escopos e o vínculo do legado (FonteAutorizacao). */
+export type {
+  AtorPlataforma,
+  Autenticacao,
+  AutenticacaoPlataforma,
+  ConfigLogin,
+  ContaAcesso,
+  ContaAlvo,
+  DadosSessao,
+  FontePlataforma,
+  SituacaoAdministradorPlataforma,
+  SaudeEstabelecimento,
+  SituacaoTermoAcesso,
+} from './tipos-acesso.js';
+
+/** M06: também lê as concessões, os escopos e o vínculo (FonteAutorizacao). */
 export interface FonteAcesso extends FonteAutorizacao {
   readonly rede: string;
   readonly estabelecimentos: readonly { readonly codigo: string }[];
   saude(): SaudeEstabelecimento[];
-  autenticar(codigo: string, login: string, senha: string, fixa?: Combinacao): Promise<Autenticacao>;
-  /** Política (TBCFGLOGIN); o serviço guarda em cache por 5 min. */
+  autenticar(codigo: string, login: string, senha: string): Promise<Autenticacao>;
+  /** Política de senha e de sessão; o serviço guarda em cache por 5 min. */
   configLogin(codigo: string): Promise<ConfigLogin>;
   dadosDeSessao(codigo: string, login: string, config?: ConfigLogin): Promise<DadosSessao>;
-  /** ADR 0021: a conta-alvo do "login como", sem nada de credencial (READ ONLY). */
+  /** ADR 0021: a conta-alvo do "login como", sem nada de credencial (só leitura). */
   contaAlvo?(codigo: string, login: string): Promise<ContaAlvo | null>;
 }
 

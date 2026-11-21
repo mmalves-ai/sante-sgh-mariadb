@@ -1,36 +1,39 @@
 // W1-01 (parte 2): POST /api/sessao/senha pelo serviço de sessão. A senha atual conferida vale como reautenticação;
-// a nova passa pela política e pelo reuso; a porta recebe só o resumo e o sal (nunca a senha) e grava pela receita
-// acesso.trocarSenha; sem a combinação confirmada, a troca fica indisponível.
+// a nova passa pela política e pelo reuso; a porta recebe só o resumo argon2id (nunca a senha) e grava pela
+// operação do Executor; sem a porta, a troca fica indisponível.
 import { describe, expect, it } from 'vitest';
-import { cifrarSenhaLegado, type ContextoOperacao, type SenhaLegado, verificarSenha } from '@sgh/legado';
+import { conferirSenha } from '@sgh/dominio-acesso';
 import { estadoAcessoSintetico, reiniciarEstadoAcessoSintetico } from '../modulos/acesso/fonte-sintetica.js';
-import { type PortaSenhaLegado, portaSenhaMemoria } from '../modulos/acesso/senha/porta-senha.js';
+import {
+  type ContextoSenha,
+  type PortaSenha,
+  portaSenhaMemoria,
+  resumoArgon2id,
+} from '../modulos/acesso/senha/porta-senha.js';
 import { REDE, SENHA, entrada, montar } from './teste.spec-util.js';
 
 const NOVA = 'Trocada#2026x';
 
 function portaEspia(base = portaSenhaMemoria()) {
-  const gravadas: { login: string; senha: SenhaLegado; ctx: ContextoOperacao }[] = [];
-  const porta: PortaSenhaLegado = {
-    combinacao: base.combinacao,
+  const gravadas: { login: string; resumo: string; ctx: ContextoSenha }[] = [];
+  const porta: PortaSenha = {
     reuso: (h, l, s, d) => base.reuso(h, l, s, d),
     nascimento: (h, l) => base.nascimento!(h, l),
     async gravar(h, l, s, ctx, tipo) {
-      gravadas.push({ login: l, senha: s, ctx });
+      gravadas.push({ login: l, resumo: s, ctx });
       return base.gravar(h, l, s, ctx, tipo);
     },
   };
   return { porta, gravadas, base };
 }
 
-async function sessaoCom(porta: PortaSenhaLegado | undefined, trocaSenhaPeloNovo = true) {
+async function sessaoCom(porta: PortaSenha | undefined) {
   let t = 1_000_000;
   const avisos: unknown[] = [];
   const m = montar({
     agora: () => t,
     config: {
-      trocaSenhaPeloNovo,
-      ...(porta ? { senhaLegado: porta } : {}),
+      ...(porta ? { senha: porta } : {}),
       aviso: (msg, campos) => avisos.push({ msg, campos }),
     },
   });
@@ -38,8 +41,8 @@ async function sessaoCom(porta: PortaSenhaLegado | undefined, trocaSenhaPeloNovo
   return { ...m, id: r.idSessao, avisos, avancar: (ms: number) => (t += ms) };
 }
 
-describe('troca de senha pelo novo (acesso.trocarSenha)', () => {
-  it('grava pela porta só o resumo de 40 hex e o sal de 20, com a combinação fixada, e limpa a troca pendente', async () => {
+describe('troca de senha (acesso.trocar-senha)', () => {
+  it('grava pela porta só o resumo argon2id da senha nova e limpa a troca pendente', async () => {
     const { porta, gravadas } = portaEspia();
     const { servico, id } = await sessaoCom(porta);
     const s = await servico.trocarSenha(id, REDE, { senhaAtual: SENHA, senhaNova: NOVA });
@@ -47,17 +50,11 @@ describe('troca de senha pelo novo (acesso.trocarSenha)', () => {
     expect(gravadas).toHaveLength(1);
     const g = gravadas[0]!;
     expect(g.login).toBe('SINT.USUARIO');
-    expect(g.senha.resumo).toMatch(/^[0-9A-F]{40}$/);
-    expect(g.senha.sal).toMatch(/^[0-9A-Z]{20}$/);
-    // O resumo confere com a senha nova pela combinação fixada (o legado entra com ela).
-    expect(
-      verificarSenha(
-        NOVA,
-        { senha: g.senha.resumo, salt: g.senha.sal, criptografada: true },
-        porta.combinacao!,
-      ).confere,
-    ).toBe(true);
-    expect(g.ctx.usuarioLegado).toBe('SINT.USUARIO');
+    expect(resumoArgon2id(g.resumo)).toBe(true);
+    expect(g.resumo).not.toContain(NOVA);
+    // O resumo confere com a senha nova (argon2id).
+    expect(await conferirSenha(NOVA, g.resumo)).toBe(true);
+    expect(g.ctx.autor).toBe('SINT.USUARIO');
     expect(g.ctx.reautenticadoEm).toBeTypeOf('number');
     // Varredura: a senha digitada nunca chega ao contexto da receita.
     expect(JSON.stringify(g.ctx)).not.toContain(NOVA);
@@ -90,7 +87,7 @@ describe('troca de senha pelo novo (acesso.trocarSenha)', () => {
       const base = portaSenhaMemoria();
       const lidas: string[] = [];
       const { porta, gravadas } = portaEspia(base);
-      const comData: PortaSenhaLegado = {
+      const comData: PortaSenha = {
         ...porta,
         nascimento: (_h, l) => {
           lidas.push(l);
@@ -198,26 +195,31 @@ describe('troca de senha pelo novo (acesso.trocarSenha)', () => {
     );
   });
 
-  it('sem a combinação confirmada, sem a porta ou com a chave desligada: troca indisponível', async () => {
-    const semComb: PortaSenhaLegado = { ...portaSenhaMemoria(), combinacao: null };
-    for (const [porta, ligada] of [
-      [semComb, true],
-      [undefined, true],
-      [portaSenhaMemoria(), false],
-    ] as const) {
-      const { servico, id } = await sessaoCom(porta, ligada);
-      const s = await servico.ler(id, REDE);
-      expect(s?.sessao.trocaSenhaPeloNovo).toBe(false);
-      await expect(
-        servico.trocarSenha(id, REDE, { senhaAtual: SENHA, senhaNova: NOVA }),
-      ).rejects.toMatchObject({ tipo: 'troca-indisponivel' });
-    }
-    const { servico, id } = await sessaoCom(portaSenhaMemoria());
-    expect((await servico.ler(id, REDE))?.sessao.trocaSenhaPeloNovo).toBe(true);
+  it('sem a porta de senha: troca indisponível', async () => {
+    const { servico, id } = await sessaoCom(undefined);
+    const s = await servico.ler(id, REDE);
+    expect(s?.sessao.trocaSenhaPeloNovo).toBe(false);
+    await expect(servico.trocarSenha(id, REDE, { senhaAtual: SENHA, senhaNova: NOVA })).rejects.toMatchObject(
+      { tipo: 'troca-indisponivel' },
+    );
+    const com = await sessaoCom(portaSenhaMemoria());
+    expect((await com.servico.ler(com.id, REDE))?.sessao.trocaSenhaPeloNovo).toBe(true);
   });
 
-  it('cifrarSenhaLegado nunca grava texto puro', () => {
-    expect(() => cifrarSenhaLegado(NOVA, 'texto-puro')).toThrow();
-    expect(() => cifrarSenhaLegado(NOVA, null)).toThrow();
+  it('a porta em memória recusa resumo fora do argon2id (nada de texto puro)', async () => {
+    const porta = portaSenhaMemoria();
+    const ctx: ContextoSenha = {
+      rede: REDE,
+      estabelecimento: 'aa',
+      autor: 'SINT.USUARIO',
+      correlacao: 'teste',
+      chaveIdempotencia: 'k',
+      estacao: 'teste',
+      reautenticadoEm: 0,
+    };
+    await expect(porta.gravar('aa', 'SINT.USUARIO', NOVA, ctx)).rejects.toMatchObject({
+      problema: { codigo: 'senha-sem-cifra' },
+    });
+    expect(porta.trocas('aa', 'SINT.USUARIO')).toBe(0);
   });
 });

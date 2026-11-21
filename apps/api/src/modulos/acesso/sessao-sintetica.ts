@@ -3,7 +3,9 @@
 // Com o núcleo real (a cópia, que tem dados reais) em AMBIENTE=dev, só com a marca explícita
 // SESSAO_SINTETICA=sim (o E2E passa): o `pnpm dev` contra a cópia pede login (revisão do M06).
 import { ESCOPOS_SEM_RESTRICAO, type Sessao } from '@sgh/contratos';
-import { lerEstabelecimentos, lerRedePadrao, type Ambiente, type NomeAmbiente } from '@sgh/legado';
+import type { Ambiente, NomeAmbiente } from '@sgh/nucleo';
+import { lerRedePadrao } from '../../sessao/rede.js';
+import { lerEstabelecimentosSinteticos } from './estabelecimentos-sinteticos.js';
 import { calcularAutorizacao } from '../../autorizacao/servico-autorizacao.js';
 import { CONCESSOES_VAZIAS } from './fonte-sintetica.js';
 
@@ -43,7 +45,7 @@ export class SessaoSintetica {
   }
 
   private estabelecimentos() {
-    return lerEstabelecimentos(this.env).map((e) => ({ codigo: e.codigo, nome: e.nome }));
+    return lerEstabelecimentosSinteticos(this.env).map((e) => ({ codigo: e.codigo, nome: e.nome }));
   }
 
   atual(): Sessao {

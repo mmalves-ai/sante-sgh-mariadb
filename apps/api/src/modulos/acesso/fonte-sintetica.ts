@@ -10,13 +10,25 @@ import type {
   Autenticacao,
   ConfigLogin,
   ContaAlvo,
-  ContaLegado,
+  ContaAcesso,
   DadosSessao,
-  GrupoAlvo,
   SaudeEstabelecimento,
-  UsuarioAlvo,
-} from '@sgh/legado';
-import { lerEstabelecimentos, lerRedePadrao, type Ambiente } from '@sgh/legado';
+} from '../../sessao/tipos-acesso.js';
+
+/** Perfil do "login como" com a contagem de logins não bloqueados (ADR 0021). */
+export interface GrupoAlvo {
+  readonly grupo: string;
+  readonly usuarios: number;
+}
+
+/** Login de um perfil do "login como". */
+export interface UsuarioAlvo {
+  readonly login: string;
+  readonly nome: string;
+}
+import type { Ambiente } from '@sgh/nucleo';
+import { lerRedePadrao } from '../../sessao/rede.js';
+import { lerEstabelecimentosSinteticos } from './estabelecimentos-sinteticos.js';
 import {
   DOMINIOS_DECLARADOS,
   ESCOPOS_SEM_RESTRICAO,
@@ -3186,10 +3198,6 @@ function saudeSintetica(codigo: string, nome: string, disponivel: boolean): Saud
     disponivel,
     motivo: disponivel ? null : 'sem conexão (estabelecimento sintético fora do ar)',
     conectado: disponivel,
-    nomeConfere: disponivel ? true : null,
-    identificacao: null,
-    sysdbaDev: false,
-    schema: null,
   };
 }
 
@@ -3200,7 +3208,7 @@ export class FonteAcessoSintetica implements FonteAcesso {
 
   constructor(env: Ambiente) {
     this.rede = lerRedePadrao(env) ?? 'rede-sintetica';
-    const ests = lerEstabelecimentos(env);
+    const ests = lerEstabelecimentosSinteticos(env);
     this.estabelecimentos = ests.map((e) => ({ codigo: e.codigo }));
     this.lista = ests.map((e) => saudeSintetica(e.codigo, e.nome, true));
     const fora = env['ACESSO_SINTETICO_INDISPONIVEL']?.trim();
@@ -3224,25 +3232,22 @@ export class FonteAcessoSintetica implements FonteAcesso {
     const semCifra = !conta.criptografada && conta.senha === null;
     // M10: o bloqueio pela tela de usuários (em memória) vale no login.
     const bloqueado = estadoAcessoSintetico().bloqueio.get(login) ?? conta.bloqueado;
-    const base: ContaLegado = {
+    const base: ContaAcesso = {
       login,
       id: idSintetico(login),
       nomeExibicao: 'Usuário sintético (desenvolvimento)',
       ativo: conta.ativo,
       bloqueado,
-      criptografada: conta.criptografada,
-      doisFatoresLegado: false,
       senhaAlteradaEm: conta.senhaAlteradaEm,
       semCifra,
+      // Banco próprio: a senha só é guardada em argon2id e não há estado "sem cifra". A conta sintética com senha
+      // em texto puro faz o papel da credencial com troca obrigatória (troca_obrigatoria=1): confere e vai à troca.
+      trocaObrigatoria: !conta.criptografada,
     };
     if (!conta.ativo || bloqueado) return Promise.resolve({ desfecho: 'conta-impedida', conta: base });
     if (semCifra) return Promise.resolve({ desfecho: 'sem-cifra', conta: base });
     if (senha !== conta.senha) return Promise.resolve({ desfecho: 'credencial-invalida' });
-    return Promise.resolve({
-      desfecho: 'ok',
-      conta: base,
-      combinacao: conta.criptografada ? 'sha1-salt-senha' : 'texto-puro',
-    });
+    return Promise.resolve({ desfecho: 'ok', conta: base });
   }
 
   /**

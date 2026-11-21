@@ -2,7 +2,8 @@
 // a matriz perfil × rota, a trilha dupla dos eventos de sessão (em memória), "sem trilha, sem dado" e o
 // cache de 3 min das permissões (quem perde no legado perde no novo no prazo do cache). Só usuários
 // sintéticos; nenhuma conexão real.
-import { EVENTOS_AUDITAVEIS, esquemaSessao, tipoDoProblema } from '@sgh/contratos';
+import { Controller, Get, Module } from '@nestjs/common';
+import { EVENTOS_AUDITAVEIS, PERMISSOES_ACESSO, esquemaSessao, tipoDoProblema } from '@sgh/contratos';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../app.js';
@@ -17,13 +18,59 @@ import {
   type DadosAutorizacaoLegado,
 } from './servico-autorizacao.js';
 import { RegistradorTrilhaMemoria } from './trilha.js';
+import { Auditar, Permissao } from './decoradores.js';
+import { ErroProblema } from '../problema.filter.js';
 
-const env: Record<string, string> = { ...envTeste };
+// F2-L: os controladores de acesso e de configuração estão fora do boot mínimo. Para a matriz da guarda, rotas de teste
+// com as mesmas permissões e eventos entram como um módulo registrado (API_MODULOS); com a permissão, respondem 503.
+const sem = (): never => {
+  throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+};
+@Controller('acesso')
+class RotasAcessoTeste {
+  @Get('grupos')
+  @Permissao(PERMISSOES_ACESSO.grupoLer)
+  @Auditar(EVENTOS_AUDITAVEIS.grupoConsultado.codigo)
+  grupos(): never {
+    return sem();
+  }
+  @Get('mapa')
+  @Permissao(PERMISSOES_ACESSO.permissaoLer)
+  @Auditar(EVENTOS_AUDITAVEIS.mapaConsultado.codigo)
+  mapa(): never {
+    return sem();
+  }
+}
+@Controller('config')
+class RotasConfigTeste {
+  @Get('gravacao')
+  @Permissao('config.gravacao.ler')
+  gravacao(): never {
+    return sem();
+  }
+  @Get('conexoes')
+  @Permissao('config.conexao.ler')
+  conexoes(): never {
+    return sem();
+  }
+  @Get('assinaturas')
+  @Permissao('config.assinatura.ler')
+  assinaturas(): never {
+    return sem();
+  }
+}
+@Module({ controllers: [RotasAcessoTeste, RotasConfigTeste] })
+class ModuloRotasTeste {}
+const registro = {
+  'rotas-teste': () => Promise.resolve({ modulo: () => ({ module: ModuloRotasTeste }) }),
+};
+
+const env: Record<string, string> = { ...envTeste, API_MODULOS: 'sessao,autorizacao,sistema,rotas-teste' };
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

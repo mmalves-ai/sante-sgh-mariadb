@@ -1,5 +1,6 @@
 """Comando "criar novo cliente" (ADR 0002, item 9): cria o banco vazio do cliente, aplica as migrações e o
-registra no banco de controle da plataforma. A carga dos catálogos públicos é um passo seguinte
+registra no banco de controle da plataforma. O catálogo de ações do sistema (acao_sistema) é carregado aqui, dos
+contratos do produto (tools/db/carregar_acoes.py; decisão do dono 2026-11-20, a). A carga dos catálogos públicos é um passo seguinte
 (catalogos/carregar.py), e a importação do SPDATA é do conector (só para cliente com origem conector_spdata).
 
 uso: python3 -I tools/db/criar_cliente.py <codigo> "<nome>" [--origem vazio|conector_spdata] [--cnpj N]
@@ -7,6 +8,7 @@ uso: python3 -I tools/db/criar_cliente.py <codigo> "<nome>" [--origem vazio|cone
 
 O banco do cliente se chama cliente_<codigo>. O comando é idempotente: recusa se o cliente já existir.
 """
+import importlib.util
 import json
 import re
 import subprocess
@@ -48,6 +50,14 @@ def aplicar_migracoes(banco: str) -> tuple[int, list[str]]:
     return n, erros
 
 
+def carregador_de_acoes():
+    """tools/db/carregar_acoes.py (com -I, a pasta do script não entra no sys.path: carrega pelo caminho)."""
+    spec = importlib.util.spec_from_file_location("carregar_acoes", RAIZ / "tools/db/carregar_acoes.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def main():
     garantir_plataforma()
     if "--listar" in sys.argv:
@@ -72,6 +82,11 @@ def main():
     if erros:
         sql(None, None, "-e", f"DROP DATABASE {banco}")
         raise SystemExit("migrações com erro; banco removido:\n" + "\n".join(erros[:20]))
+    try:
+        acoes = carregador_de_acoes().carregar(banco)
+    except SystemExit as e:
+        sql(None, None, "-e", f"DROP DATABASE {banco}")
+        raise SystemExit(f"{e}; banco removido")
     tabelas = sql(None, None, "-N", "-e", f"select count(*) from information_schema.tables where table_schema={q(banco)}").stdout.strip()
     versao = sorted(p.parent.name + "/" + p.name for p in MIG.glob("*/*_chaves.sql"))[-1]
     agora = "UTC_TIMESTAMP(3)"
@@ -79,11 +94,12 @@ def main():
 INSERT INTO cliente (codigo, nome, documento_cnpj, situacao, banco_nome, versao_migracao, origem_dados, criado_em)
 VALUES ({q(codigo)}, {q(nome)}, {q(cnpj) if cnpj else 'NULL'}, 'implantacao', {q(banco)}, {q(versao)}, {q(origem)}, {agora});
 INSERT INTO cliente_evento (cliente_id, tipo, detalhe, ocorrido_em, criado_em)
-VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps({'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'origem': origem}))}, {agora}, {agora});
+VALUES (LAST_INSERT_ID(), 'criado', {q(json.dumps({'arquivos_migracao': n, 'tabelas': int(tabelas or 0), 'acoes_sistema': acoes['ativas'], 'origem': origem}))}, {agora}, {agora});
 """)
     if r.returncode:
         raise SystemExit(f"registro na plataforma falhou: {r.stderr[:400]}")
-    print(json.dumps({"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "origem": origem,
+    print(json.dumps({"cliente": codigo, "banco": banco, "tabelas": int(tabelas or 0), "acoes_sistema": acoes["ativas"],
+                      "origem": origem,
                       "proximo_passo": "catalogos/carregar.py " + codigo + (" e conector" if origem == "conector_spdata" else "")},
                      ensure_ascii=False))
 

@@ -1,7 +1,7 @@
 // W1-01 (parte 11d; D-W101-46): os parâmetros da conferência do conselho (acesso.conselho.*) pela fonte de
 // configuração, com a resolução por nível; sem ela, ou com erro de leitura, os padrões das definições. E o "hoje" no
 // fuso do estabelecimento para a validade da conferência. A regra é de @sgh/dominio-acesso (conselhoEfetivo).
-import { definicaoParametro } from '@sgh/contratos';
+import { definicaoParametro, type ValorParametro } from '@sgh/contratos';
 import {
   MODOS_BLOQUEIO_CONSELHO,
   type ModoBloqueioConselho,
@@ -9,7 +9,11 @@ import {
   type ParametrosConselho,
 } from '@sgh/dominio-acesso';
 import { resolverParametro, valorTipado } from '@sgh/dominio-config';
-import type { FonteConfiguracao } from '../modulos/config/configuracao-fonte.js';
+
+/** O que a regra do conselho lê da fonte de configuração (estrutural: a fonte de config. satisfaz). */
+export interface FonteValoresParametro {
+  valoresParametro(rede: string, hospital: string): Promise<ValorParametro[]>;
+}
 
 export const PARAMETROS_CONSELHO = {
   bloqueio: 'acesso.conselho.bloqueioAtosPrivativos',
@@ -25,7 +29,7 @@ export function hojeNoEstabelecimento(agora: number): string {
 }
 
 export function parametrosConselhoPelaConfiguracao(
-  fonte: () => Pick<FonteConfiguracao, 'valoresParametro'> | null,
+  fonte: () => FonteValoresParametro | null,
   agora: () => number = () => Date.now(),
 ): RegraConselho {
   return async (rede, hospital) => {

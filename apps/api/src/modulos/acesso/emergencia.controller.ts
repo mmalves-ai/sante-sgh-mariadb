@@ -197,6 +197,15 @@ export class EmergenciaController {
     });
     if (recusa)
       throw new ErroProblema('sem-permissao', 403, 'Quebra de vidro não permitida', `Motivo: ${recusa}.`);
+    // Decisão do dono (b): o administrador da plataforma não é usuário do cliente (não tem usuario.id numérico); a quebra
+    // de vidro grava o idUsuario e é pessoal: recusada a esse ator.
+    if (a.sessao.usuario.ator === 'plataforma')
+      throw new ErroProblema(
+        'sem-permissao',
+        403,
+        'Quebra de vidro não permitida',
+        'A quebra de vidro é de um usuário do cliente; o administrador da plataforma não a abre.',
+      );
     const login = a.sessao.usuario.login ?? a.sessao.usuario.id;
     const hospital = a.sessao.estabelecimentoAtivo ?? '';
     const rede = a.sessao.rede ?? '';

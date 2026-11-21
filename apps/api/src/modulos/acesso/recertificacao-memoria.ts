@@ -1,16 +1,16 @@
 // W1-01 (parte 9c2): a RECERTIFICAÇÃO na memória (dev/ci; E2E), como SGH_ACESSO_RECERT_CAMPANHA e _ITEM (SGH_ 1206)
 // com as mesmas travas e recusas de legado/acesso/gravacao/recertificacao-sgh.ts: abrir com os itens do retrato,
 // decidir uma vez só (com o validador do domínio), encerrar ou cancelar uma vez só. Nada se apaga. Nenhum dado real.
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   type CampanhaRecertLida,
   type DecisaoRecertGravar,
-  ErroOperacao,
   type FechamentoRecertGravar,
   ITENS_RECERT_MAXIMO,
   type ItemRecertLido,
   type NovaCampanhaRecertGravar,
   type ValidarDecisaoRecert,
-} from '@sgh/legado';
+} from './tipos-gestao-acesso.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);

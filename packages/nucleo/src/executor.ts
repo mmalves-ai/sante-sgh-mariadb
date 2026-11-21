@@ -9,6 +9,7 @@
 //   6. confirmado: os eventos seguem (aviso ao relay).
 // Sai do antigo: gravar como o sistema de origem, prova pós-escrita por gatilho, codec de caracteres.
 import type { ZodType } from 'zod';
+import { origemComoAtual } from './como.js';
 import { type ContextoNucleo, ErroContexto, conferirContexto } from './contexto.js';
 import {
   ErroOperacao,
@@ -387,6 +388,7 @@ export class Executor {
         const resultado = await op.gravar(tx, entrada, ctx);
         const alvo = op.alvo(entrada, resultado);
         const extras = op.trilha?.(entrada, resultado, ctx) ?? {};
+        const origem = origemComoAtual();
         const trilha = await gravarTrilha(e, {
           estabelecimento: ctx.estabelecimento,
           usuario: ctx.usuario,
@@ -399,6 +401,8 @@ export class Executor {
             resultado,
             escritas,
             ...(extras.dados !== undefined ? { dados: extras.dados } : {}),
+            // ADR 0021: numa sessão "como", o ator real vai junto com o alvo (o usuário do contexto).
+            ...(origem ? { origem } : {}),
           },
           motivo: extras.motivo ?? null,
           enderecoIp: ctx.enderecoIp ?? null,

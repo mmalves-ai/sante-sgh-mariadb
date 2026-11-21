@@ -2,15 +2,15 @@
 // travas e recusas de legado/acesso/gravacao/pedido-acesso-sgh.ts: pedir (sem repetir o perfil em andamento),
 // decidir o nível esperado (com o validador do domínio), anotar a concessão só do aprovado, cancelar só pelo
 // solicitante antes da concessão. Nada se apaga. Nenhum dado real.
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   type DecisaoPedidoAcessoGravar,
-  ErroOperacao,
   type FiltroPedidosAcesso,
   type NovoPedidoAcessoGravar,
   type PedidoAcessoGravado,
   type SituacaoPedidoAcesso,
   type ValidarPedidoAcesso,
-} from '@sgh/legado';
+} from './tipos-gestao-acesso.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);

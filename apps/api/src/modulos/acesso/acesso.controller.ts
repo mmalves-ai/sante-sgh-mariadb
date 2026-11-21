@@ -1,7 +1,9 @@
-// Porta de entrada (M05): seletor de estabelecimento, login no TBUSERS, sessão no servidor (cookie HttpOnly
-// + CSRF por token duplo), reautenticação e unidade. Troca de senha e segundo fator dependem do executor
-// (M04) e das tabelas SGH_ (sgh:aplicar, M04): ficam em Bloqueio e respondem Problem Details até lá.
+// Porta de entrada (M05): seletor de estabelecimento, login no banco do cliente, sessão no servidor (cookie HttpOnly
+// + CSRF por token duplo), reautenticação, unidade e troca de senha (pelo Executor do núcleo).
 // A sessão sintética (M07) só responde em dev/ci quando NÃO há sessão real (mantida para os testes).
+// F2-L: o controlador não importa os módulos de configuração, cadastro nem assinatura. A entrada com certificado, o
+// "Esqueci a senha" e a troca rápida chegam por portas opcionais; o que o boot não montou porque o módulo ainda não
+// foi migrado (SERVICOS_NAO_MIGRADOS) responde 501, e o que foi montado mas está sem serviço, 503.
 import {
   Body,
   Controller,
@@ -26,12 +28,15 @@ import {
   esquemaTrocaRapida,
   type SituacaoPinTela,
   esquemaEntrar,
+  esquemaEntrarAdministradorPlataforma,
   esquemaEscolherUnidade,
   esquemaReautenticar,
   esquemaTrocarSenha,
   esquemaPedirRecuperacaoSenha,
   esquemaUsarRecuperacaoSenha,
   type DisponibilidadeRecuperacaoSenha,
+  type PedirRecuperacaoSenha,
+  type RespostaAgenteLocal,
   type RespostaPedidoRecuperacaoSenha,
   type ResultadoRecuperacaoSenha,
   type EstabelecimentosEntrada,
@@ -41,7 +46,7 @@ import {
 } from '@sgh/contratos';
 import { CONFIGURACAO, type Configuracao } from '../../configuracao.js';
 import { ErroProblema, tipoPorStatus } from '../../problema.filter.js';
-import { ErroOperacao } from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import {
   CABECALHO_CSRF,
   COOKIE_CSRF,
@@ -61,8 +66,6 @@ import { AuditadoNoHandler, Permissao, Publica } from '../../autorizacao/decorad
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { descreverDispositivo } from '../../sessao/dispositivo.js';
 import { SessaoSintetica } from './sessao-sintetica.js';
-import type { ServicoLoginCertificado } from '../assinatura/aplicacao/login-certificado.js';
-import type { ServicoRecuperacaoSenha } from '../../sessao/recuperacao-senha.js';
 import type { ServicoTrocaRapida } from '../../sessao/troca-rapida.js';
 
 export const SERVICO_SESSAO = Symbol('SERVICO_SESSAO');
@@ -73,6 +76,37 @@ export const SERVICO_LOGIN_CERTIFICADO = Symbol('SERVICO_LOGIN_CERTIFICADO');
 export const SERVICO_RECUPERACAO_SENHA = Symbol('SERVICO_RECUPERACAO_SENHA');
 /** W1-01 (parte 11b2): troca rápida de usuário por PIN (D-W101-36). */
 export const SERVICO_TROCA_RAPIDA = Symbol('SERVICO_TROCA_RAPIDA');
+/** F2-L: os serviços opcionais que o boot não monta porque o módulo deles ainda não foi migrado (respondem 501). */
+export const SERVICOS_NAO_MIGRADOS = Symbol('SERVICOS_NAO_MIGRADOS');
+
+export type ServicoOpcionalAcesso = 'certificado' | 'recuperacao' | 'trocaRapida';
+
+/** O que o controlador usa da entrada com certificado (o serviço da assinatura; módulo fora do boot da F2-L). */
+export interface PortaLoginCertificado {
+  disponivel(rede: string, estabelecimento: string): Promise<DisponibilidadeLoginCertificado>;
+  desafio(
+    rede: string,
+    e: { estabelecimento: string; login: string },
+    ip?: string | null,
+  ): Promise<DesafioLoginCertificado>;
+  conferir(
+    rede: string,
+    r: RespostaAgenteLocal,
+    origem: OrigemPedido,
+  ): Promise<{ estabelecimento: string; login: string }>;
+}
+
+/** O que o controlador usa do "Esqueci a senha" (depende da configuração; módulo fora do boot da F2-L). */
+export interface PortaRecuperacaoSenha {
+  disponivel(rede: string, estabelecimento: string): Promise<DisponibilidadeRecuperacaoSenha>;
+  pedir(
+    rede: string,
+    p: PedirRecuperacaoSenha,
+    ip: string | null,
+    origem: OrigemPedido,
+  ): Promise<RespostaPedidoRecuperacaoSenha>;
+  usar(rede: string, token: string, origem: OrigemPedido): Promise<ResultadoRecuperacaoSenha>;
+}
 
 interface Req {
   readonly headers: Record<string, string | string[] | undefined>;
@@ -114,14 +148,29 @@ export class AcessoController {
     @Inject(RESOLVEDOR_REDE) private readonly resolvedor: ResolvedorRede,
     @Optional()
     @Inject(SERVICO_LOGIN_CERTIFICADO)
-    private readonly certificado: ServicoLoginCertificado | null = null,
+    private readonly certificado: PortaLoginCertificado | null = null,
     @Optional()
     @Inject(SERVICO_RECUPERACAO_SENHA)
-    private readonly recuperacao: ServicoRecuperacaoSenha | null = null,
+    private readonly recuperacao: PortaRecuperacaoSenha | null = null,
     @Optional()
     @Inject(SERVICO_TROCA_RAPIDA)
     private readonly trocaRapida: ServicoTrocaRapida | null = null,
+    @Optional()
+    @Inject(SERVICOS_NAO_MIGRADOS)
+    private readonly naoMigrados: ReadonlySet<ServicoOpcionalAcesso> | null = null,
   ) {}
+
+  /** Serviço opcional ausente: 501 se o módulo dele ainda não foi migrado (fora do boot); senão, 503. */
+  private ausente(servico: ServicoOpcionalAcesso): never {
+    if (this.naoMigrados?.has(servico))
+      throw new ErroProblema(
+        'recurso-desligado',
+        501,
+        'Módulo não migrado',
+        'Este recurso ainda não está disponível nesta versão do sistema.',
+      );
+    throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+  }
 
   /** Prefixo __Host- no nome do cookie: falha para o lado seguro (só dev e ci ficam sem ele). */
   private get prefixoHost(): boolean {
@@ -218,7 +267,7 @@ export class AcessoController {
   /** POST /api/sessao: entrar. Define o cookie da sessão e o cookie CSRF; o corpo não traz token. */
   @Post('sessao')
   @HttpCode(201)
-  @Publica('login: a própria entrada (senha conferida no legado)')
+  @Publica('login: a própria entrada (senha conferida no banco do cliente)')
   async entrar(
     @Body() corpo: unknown,
     @Req() req: Req,
@@ -237,6 +286,42 @@ export class AcessoController {
       // A sessão que o navegador ainda trazia é apagada no servidor (identificador novo a cada login).
       const posto = this.postoDaEntrada(req);
       const login = await servico.entrar(r.data, this.rede(req), this.idSessao(req), this.origem(req, posto));
+      const op = { maxIdadeSegundos: login.ttlSegundos, prefixoHost: this.prefixoHost };
+      res.header('set-cookie', [
+        cookieSessao(login.idSessao, op),
+        cookieCsrf(login.csrf, op),
+        cookiePosto(posto, this.prefixoHost),
+      ]);
+      return login.sessao;
+    } catch (e) {
+      this.erro(e);
+    }
+  }
+
+  /**
+   * POST /api/sessao/plataforma: entrada do administrador da plataforma (decisão do dono 2026-11-20, b). Credencial do
+   * banco plataforma; todas as permissões no cliente escolhido (ou no único deste endereço). Mesmos cookies da entrada.
+   */
+  @Post('sessao/plataforma')
+  @HttpCode(201)
+  @Publica('login do administrador da plataforma (senha conferida no banco plataforma)')
+  async entrarPlataforma(
+    @Body() corpo: unknown,
+    @Req() req: Req,
+    @Res({ passthrough: true }) res: Res,
+  ): Promise<Sessao> {
+    const servico = this.servicoOu503();
+    const r = esquemaEntrarAdministradorPlataforma.safeParse(corpo);
+    if (!r.success)
+      throw new ErroProblema(
+        'entrada-invalida',
+        400,
+        'Dados inválidos',
+        'Informe estabelecimento, login e senha (e o cliente, se houver mais de um).',
+      );
+    try {
+      const posto = this.postoDaEntrada(req);
+      const login = await servico.entrarPlataforma(r.data, this.rede(req), this.idSessao(req), this.origem(req, posto));
       const op = { maxIdadeSegundos: login.ttlSegundos, prefixoHost: this.prefixoHost };
       res.header('set-cookie', [
         cookieSessao(login.idSessao, op),
@@ -270,7 +355,7 @@ export class AcessoController {
     'acesso.senha.recuperacao-pedida na trilha depois da resposta (só o login; nunca o token)',
   )
   pedirRecuperacao(@Body() corpo: unknown, @Req() req: Req): Promise<RespostaPedidoRecuperacaoSenha> {
-    if (!this.recuperacao) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+    if (!this.recuperacao) this.ausente('recuperacao');
     const r = esquemaPedirRecuperacaoSenha.safeParse(corpo);
     if (!r.success)
       throw new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Informe estabelecimento e login.');
@@ -281,9 +366,9 @@ export class AcessoController {
   @Post('sessao/recuperacao/usar')
   @HttpCode(200)
   @Publica('o token de uso único do e-mail institucional é a prova de posse (consumido de forma atômica)')
-  @AuditadoNoHandler('executor: TBCABTRILHA e SGH_TRILHA na mesma transação da receita acesso.redefinirSenha')
+  @AuditadoNoHandler('executor: trilha_auditoria na mesma transação da operação acesso.redefinir-senha')
   async usarRecuperacao(@Body() corpo: unknown, @Req() req: Req): Promise<ResultadoRecuperacaoSenha> {
-    if (!this.recuperacao) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+    if (!this.recuperacao) this.ausente('recuperacao');
     const r = esquemaUsarRecuperacaoSenha.safeParse(corpo);
     if (!r.success)
       throw new ErroProblema(
@@ -311,8 +396,8 @@ export class AcessoController {
 
   // ── M49 (etapa 3): entrada com certificado ICP-Brasil A1/A3 pelo agente local (chave acesso.loginCertificado) ──
 
-  private servicoCertificado(): ServicoLoginCertificado {
-    if (!this.certificado) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+  private servicoCertificado(): PortaLoginCertificado {
+    if (!this.certificado) this.ausente('certificado');
     return this.certificado;
   }
 
@@ -507,10 +592,10 @@ export class AcessoController {
 
   /**
    * POST /api/sessao/senha: troca da própria senha (W1-01). A senha atual conferida vale como reautenticação; a
-   * gravação no legado é a receita acesso.trocarSenha pelo executor (TBCABTRILHA e SGH_TRILHA na mesma transação).
-   * Recusa da política: 422 com `falhas` (só códigos). Sem a combinação confirmada: 409 (troca indisponível).
+   * gravação é a operação acesso.trocar-senha pelo Executor do núcleo (credencial, histórico e trilha na mesma
+   * transação). Recusa da política: 422 com `falhas` (só códigos). Sem a porta de senha: 409 (troca indisponível).
    */
-  @AuditadoNoHandler('executor: TBCABTRILHA e SGH_TRILHA na mesma transação da receita acesso.trocarSenha')
+  @AuditadoNoHandler('executor: trilha_auditoria na mesma transação da operação acesso.trocar-senha')
   @Post('sessao/senha')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.senhaTrocar)
@@ -595,7 +680,7 @@ export class AcessoController {
   // ── W1-01 (parte 11b2): PIN da troca rápida (Preferências > Segurança) e a troca na estação ──
 
   private trocaOu503(): ServicoTrocaRapida {
-    if (!this.trocaRapida) throw new ErroProblema('indisponivel', 503, 'Serviço indisponível');
+    if (!this.trocaRapida) this.ausente('trocaRapida');
     return this.trocaRapida;
   }
 
@@ -624,9 +709,7 @@ export class AcessoController {
   }
 
   /** POST /api/sessao/pin: define ou troca o próprio PIN; a senha confere antes (reautenticação; CSRF). */
-  @AuditadoNoHandler(
-    'SGH_ACESSO_PIN e SGH_TRILHA (acesso.pin.definido, sem o PIN nem o hash) na mesma transação SGH_',
-  )
+  @AuditadoNoHandler('o PIN e a trilha (acesso.pin.definido, sem o PIN nem o hash) na mesma transação')
   @Post('sessao/pin')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.senhaTrocar)
@@ -644,9 +727,7 @@ export class AcessoController {
   }
 
   /** POST /api/sessao/pin/retirar: retira o próprio PIN, com a senha (CSRF). */
-  @AuditadoNoHandler(
-    'SGH_ACESSO_PIN e SGH_TRILHA (acesso.pin.retirado, com o motivo) na mesma transação SGH_',
-  )
+  @AuditadoNoHandler('o PIN e a trilha (acesso.pin.retirado, com o motivo) na mesma transação')
   @Post('sessao/pin/retirar')
   @HttpCode(200)
   @Permissao(PERMISSOES_ACESSO.senhaTrocar)

@@ -1,4 +1,4 @@
-// Serviço de sessão do BFF (ficha do M05): login no TBUSERS do estabelecimento escolhido, sessão no
+// Serviço de sessão do BFF (ficha do M05): login na conta (usuario) do cliente, no estabelecimento escolhido, sessão no
 // servidor (armazém Valkey) presa à rede do endereço (ARQ-2), cookie HttpOnly e CSRF por token duplo
 // conferido contra o token guardado na sessão, inatividade/duração pela política, reautenticação recente,
 // bloqueio da porta por tentativas (só no novo), termo e troca de senha. As regras são de
@@ -13,7 +13,9 @@ import {
   type UnidadeSessao,
 } from '@sgh/contratos';
 import {
+  type Alcance2fa,
   avaliarSenhaNova,
+  cifrarSenha,
   BLOQUEIO_PORTA_PADRAO_MINUTOS,
   inicioJanelaReutilizacao,
   JANELA_REAUTENTICACAO_PADRAO_SEGUNDOS,
@@ -28,29 +30,95 @@ import {
   termoPendente,
   type TempoSessao,
 } from '@sgh/dominio-acesso';
-import {
-  type Autenticacao,
-  cifrarSenhaLegado,
-  type Combinacao,
-  type ConfigLogin,
-  type ContaAlvo,
-  type DadosSessao,
-  limiteDoPerfil,
-} from '@sgh/legado';
-import type { PortaSenhaLegado } from '../modulos/acesso/senha/porta-senha.js';
-import { EVENTOS_AUDITAVEIS } from '@sgh/contratos';
+import type { PortaSenha } from '../modulos/acesso/senha/porta-senha.js';
+import { EVENTOS_AUDITAVEIS, type Exigencia2fa } from '@sgh/contratos';
 import {
   type Autorizacao,
   autorizacaoAcessoTotal,
+  autorizacaoDoAtorPlataforma,
   type ServicoAutorizacao,
 } from '../autorizacao/servico-autorizacao.js';
 import type { RegistradorTrilha } from '../autorizacao/trilha.js';
 import type { ArmazemSessao } from './armazem.js';
-import type { FonteAcesso } from './fonte-acesso.js';
 import type {
-  InfoSegundoFatorSessao,
-  ServicoIdentidade,
-} from '../modulos/acesso/identidade/servico-identidade.js';
+  Autenticacao,
+  ConfigLogin,
+  ContaAlvo,
+  DadosSessao,
+  FonteAcesso,
+  FontePlataforma,
+  SituacaoAdministradorPlataforma,
+} from './fonte-acesso.js';
+import { CONFIG_LOGIN_PADRAO } from './tipos-acesso.js';
+
+/** Perfil-padrão dos limites de sessões simultâneas (vale para o perfil sem limite próprio). */
+export const PERFIL_LIMITE_PADRAO = '*';
+
+/** Limite de sessões simultâneas do perfil (o próprio, senão o padrão '*'); null: sem limite. */
+export function limiteDoPerfil(
+  limites: Readonly<Record<string, number>> | undefined,
+  perfil: string | null | undefined,
+): number | null {
+  if (!limites) return null;
+  if (perfil && limites[perfil] !== undefined) return limites[perfil] ?? null;
+  return limites[PERFIL_LIMITE_PADRAO] ?? null;
+}
+
+/** O segundo fator na entrada (cadastrado, disponível, a exigência da política e o fim do prazo de adesão). */
+export interface InfoSegundoFatorSessao {
+  readonly cadastrado: boolean;
+  readonly disponivel: boolean;
+  readonly exigencia: Exigencia2fa;
+  readonly prazoAdesaoAte: string | null;
+}
+
+/** A conta que a credencial do serviço da identidade conferiu (sem nada de credencial). */
+export interface ContaIdentidadeSessao {
+  readonly login: string;
+  readonly id: number;
+  readonly nomeExibicao: string;
+  readonly ativo: boolean;
+  readonly bloqueado: boolean;
+  readonly senhaAlteradaEm: Date | null;
+}
+
+/** Desfecho da credencial do serviço da identidade; `legado`: sem credencial lá, a fonte de acesso decide. */
+export type DesfechoIdentidade =
+  | { readonly tipo: 'forte-ok'; readonly conta: ContaIdentidadeSessao; readonly provisoria?: boolean }
+  | { readonly tipo: 'forte-invalida' }
+  | { readonly tipo: 'legado' };
+
+export type Desfecho2faSessao =
+  | { readonly tipo: 'entrar'; readonly info: InfoSegundoFatorSessao }
+  | { readonly tipo: 'codigo-necessario' }
+  | { readonly tipo: 'codigo-invalido' }
+  | { readonly tipo: 'cadastro-obrigatorio' };
+
+export interface AtorIdentidadeSessao {
+  readonly rede: string;
+  readonly hospital: string;
+  readonly login: string;
+  readonly idUsuario: number;
+  readonly estacao: string | null;
+  readonly correlacao: string;
+}
+
+export type OrigemCredencialSessao = 'primeiro-login' | 'troca-senha' | 'senha-provisoria';
+
+/**
+ * O que o serviço de sessão usa do serviço da identidade (M59-F2): credencial e segundo fator. Tipo estrutural, sem
+ * importar o módulo da identidade (fora do boot da F2-L, entra na F2.2).
+ */
+export interface GanchoIdentidade {
+  autenticar(estabelecimento: string, login: string, senha: string): Promise<DesfechoIdentidade>;
+  regravar(a: AtorIdentidadeSessao, senha: string, origem?: OrigemCredencialSessao): Promise<boolean>;
+  segundoFatorNoLogin(
+    estabelecimento: string,
+    conta: { readonly login: string; readonly id: number },
+    alcance: Alcance2fa,
+    codigo: string | undefined,
+  ): Promise<Desfecho2faSessao>;
+}
 
 /** Erro de domínio da sessão; o controlador o traduz em Problem Details. */
 export class ErroSessao extends Error {
@@ -124,7 +192,33 @@ export interface Registro {
    * atribuição a cada leitura do registro (falha fechada).
    */
   como?: RegistroComo;
+  /**
+   * Sessão do ADMINISTRADOR DA PLATAFORMA (decisão do dono 2026-11-20, b): autenticado no banco plataforma, com todas
+   * as permissões só no cliente escolhido no login. O `login` do registro é o da plataforma com o prefixo
+   * PREFIXO_LOGIN_PLATAFORMA (nunca colide com uma conta do cliente nas chaves de contagem, índice e revogação).
+   */
+  plataforma?: RegistroPlataforma;
 }
+
+/** A marca da sessão do administrador da plataforma (no armazém). */
+export interface RegistroPlataforma {
+  /** administrador_plataforma.id no banco plataforma. */
+  readonly idAdministrador: number;
+  /** Cliente escolhido no login (plataforma.cliente.codigo). */
+  readonly cliente: string;
+  /** credencial.senha_alterada_em (ms) com que a sessão abriu: outra senha derruba a sessão (releitura com cache). */
+  senhaAlteradaEm?: number;
+}
+
+/** Prazo do cache da releitura da credencial da plataforma (o mesmo das permissões, 3 min). */
+const CACHE_SITUACAO_PLATAFORMA_MS = 180_000;
+
+/**
+ * Prefixo do login (e do id) da sessão da plataforma. Um usuário do cliente nunca tem ':' no login (esquemaLogin e
+ * ck_usuario_login_sem_dois_pontos), e o serviço recusa ':' nas portas do login comum e da gestão de usuários: os
+ * espaços das chaves de tentativas, índice, último acesso e revogação ficam separados.
+ */
+export const PREFIXO_LOGIN_PLATAFORMA = 'plataforma:';
 
 /** A marca interna da sessão "como" (no armazém; a casca recebe só `Sessao.como`). */
 export interface RegistroComo {
@@ -141,7 +235,7 @@ export interface RegistroComo {
   readonly credencial?: string;
   /**
    * ADR 0022: `acesso-total` (só a PLATAFORMA): todas as permissões do catálogo, sem segregação; o login do
-   * registro é o usuário do SPDATA "em nome de quem gravar". Ausente: `como` (a sessão do alvo).
+   * registro é o usuário do cliente "em nome de quem gravar". Ausente: `como` (a sessão do alvo).
    */
   readonly modo?: 'como' | 'acesso-total';
 }
@@ -151,10 +245,6 @@ export type GuardaComo = (como: RegistroComo, rede: string, estabelecimento: str
 
 export interface ConfigServicoSessao {
   readonly janelaReautenticacaoSegundos?: number;
-  /** A troca de senha pelo novo está liberada (plano A); falso = plano B (só no SPDATA), DP-40/ADR 0012. */
-  readonly trocaSenhaPeloNovo?: boolean;
-  /** Combinação confirmada pelo spike (ACESSO_COMBINACAO_SENHA); null só em dev/ci (testa as candidatas). */
-  readonly combinacao?: Combinacao | null;
   /** Prazo do bloqueio da porta (ACESSO_BLOQUEIO_PORTA_MINUTOS), em segundos. */
   readonly bloqueioPortaSegundos?: number;
   /** M06: permissões do legado (sem ela, só os recursos de toda pessoa: testes do M05). */
@@ -174,12 +264,43 @@ export interface ConfigServicoSessao {
    * ele, o login é o do M05.
    */
   readonly identidade?: GanchoIdentidade;
-  /** W1-01: troca de senha pelo novo (receita acesso.trocarSenha pelo executor). Sem ela, a troca fica indisponível. */
-  readonly senhaLegado?: PortaSenhaLegado;
+  /** Troca e redefinição de senha (argon2id, pelo Executor do núcleo). Sem ela, a troca fica indisponível. */
+  readonly senha?: PortaSenha;
+  /**
+   * Decisão do dono (2026-11-20, b): o login do administrador da plataforma (credencial no banco plataforma). Sem ela,
+   * a entrada da plataforma responde indisponível.
+   */
+  readonly plataforma?: FontePlataforma;
+  /**
+   * Cliente (banco) desta API: entra em todas as chaves do armazém, como no ServicoAutorizacao. Um banco por cliente;
+   * rede, estabelecimentos e logins se repetem entre clientes, e o armazém (Valkey) pode ser comum: sem o cliente,
+   * o cookie de um cliente valeria na API de outro. null só na fonte sintética (montar.ts recusa a própria sem ele).
+   */
+  readonly cliente?: string | null;
 }
 
-/** O que o serviço de sessão usa do serviço da identidade (M59-F2). */
-export type GanchoIdentidade = Pick<ServicoIdentidade, 'autenticar' | 'regravar' | 'segundoFatorNoLogin'>;
+/**
+ * Forma do login nas chaves de contagem, índice e revogação: a mesma igualdade da colação do banco do cliente
+ * (utf8mb4_uca1400_ai_ci: sem distinguir maiúsculas nem acentos, espaços à direita ignorados). Assim 'admin',
+ * 'Admin', 'ADMIN' e 'ádmin', que dão a mesma conta no banco, somam no mesmo contador. Compatibilidade (NFKD), sem
+ * marcas, letras com traço que a colação iguala à base e dobra de caixa (maiúsculas e depois minúsculas: 'ß' = 'ss').
+ */
+export function chaveDoLogin(login: string): string {
+  return login
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[øØ]/g, 'o')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[łŁ]/g, 'l')
+    .replace(/[ħĦ]/g, 'h')
+    .replace(/[ŧŦ]/g, 't')
+    .replace(/ı/g, 'i')
+    .replace(/[æÆ]/g, 'ae')
+    .replace(/[œŒ]/g, 'oe')
+    .toUpperCase()
+    .toLowerCase()
+    .replace(/\s+$/u, '');
+}
 
 /** Estação e correlação do pedido, para a trilha (MAQUINA_USUARIO "ESTACAO:origem"). */
 export interface OrigemPedido {
@@ -235,7 +356,7 @@ const LOGIN_FORTE_MAXIMO = 20;
 export function diaCivilSessao(ms: number): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(ms));
 }
-/** Cache da política (TBCFGLOGIN) por rede:estabelecimento (ficha §4: 5 min). */
+/** Cache da política (politica_senha) por rede:estabelecimento (ficha §4: 5 min). */
 const CACHE_POLITICA_SEGUNDOS = 5 * 60;
 /** Último acesso válido no novo: guardado por 400 dias (cobre a revisão anual de acessos). */
 const ULTIMO_ACESSO_SEGUNDOS = 400 * 24 * 3600;
@@ -250,8 +371,6 @@ const INDISPONIVEL = 'O serviço de autenticação está indisponível.';
 
 export class ServicoSessao {
   private readonly janela: number;
-  private readonly trocaPeloNovo: boolean;
-  private readonly combinacao: Combinacao | null;
   private readonly bloqueioPortaSegundos: number;
   private readonly autorizacao: ServicoAutorizacao | null;
   private readonly trilha: RegistradorTrilha | null;
@@ -260,7 +379,9 @@ export class ServicoSessao {
   private readonly reautenticarAtor: ConfigServicoSessao['reautenticarAtor'] | null;
   private readonly aoEncerrarComo: ConfigServicoSessao['aoEncerrarComo'] | null;
   private readonly identidade: GanchoIdentidade | null;
-  private readonly senhaLegado: PortaSenhaLegado | null;
+  private readonly portaSenha: PortaSenha | null;
+  private readonly cliente: string | null;
+  private readonly plataforma: FontePlataforma | null;
 
   constructor(
     private readonly fonte: FonteAcesso,
@@ -269,8 +390,6 @@ export class ServicoSessao {
     config: ConfigServicoSessao = {},
   ) {
     this.janela = config.janelaReautenticacaoSegundos ?? JANELA_REAUTENTICACAO_PADRAO_SEGUNDOS;
-    this.trocaPeloNovo = config.trocaSenhaPeloNovo ?? false;
-    this.combinacao = config.combinacao ?? null;
     this.bloqueioPortaSegundos = config.bloqueioPortaSegundos ?? BLOQUEIO_PORTA_PADRAO_MINUTOS * 60;
     this.autorizacao = config.autorizacao ?? null;
     this.trilha = config.trilha ?? null;
@@ -279,7 +398,9 @@ export class ServicoSessao {
     this.reautenticarAtor = config.reautenticarAtor ?? null;
     this.aoEncerrarComo = config.aoEncerrarComo ?? null;
     this.identidade = config.identidade ?? null;
-    this.senhaLegado = config.senhaLegado ?? null;
+    this.portaSenha = config.senha ?? null;
+    this.cliente = config.cliente ?? null;
+    this.plataforma = config.plataforma ?? null;
   }
 
   /** ADR 0022: o serviço de autorização (a tela "Perfis e permissões" explica e invalida o cache). */
@@ -294,10 +415,26 @@ export class ServicoSessao {
 
   /** Permissões efetivas (cache de 3 min); sem o serviço (testes do M05), null. */
   private async autorizacaoDe(
-    r: Pick<Registro, 'rede' | 'estabelecimento' | 'login'> & { como?: RegistroComo | undefined },
+    r: Pick<Registro, 'rede' | 'estabelecimento' | 'login'> & {
+      como?: RegistroComo | undefined;
+      plataforma?: RegistroPlataforma | undefined;
+    },
   ): Promise<Autorizacao | null> {
     // ADR 0022: acesso total da plataforma: todas as permissões, sem ler o legado do "em nome de".
     if (r.como?.modo === 'acesso-total') return autorizacaoAcessoTotal(this.agora());
+    // Decisão do dono (b): o administrador da plataforma pode tudo, só no cliente escolhido no login (que tem de ser o
+    // desta API; outro, ou API sem cliente: recusa, falha fechada).
+    if (r.plataforma) {
+      try {
+        return autorizacaoDoAtorPlataforma(
+          { tipo: 'plataforma', idAdministrador: r.plataforma.idAdministrador, nomeExibicao: '', cliente: r.plataforma.cliente },
+          this.cliente ?? '',
+          this.agora(),
+        );
+      } catch {
+        throw new ErroSessao('indisponivel', INDISPONIVEL);
+      }
+    }
     if (!this.autorizacao) return null;
     try {
       return await this.autorizacao.obter(r.rede, r.estabelecimento, r.login);
@@ -356,19 +493,31 @@ export class ServicoSessao {
     return rede;
   }
 
+  /** Prefixo de todas as chaves do armazém: cliente e rede (um cliente nunca lê a chave de outro). */
+  private pre(rede: string): string {
+    return `${this.cliente ?? '-'}:${rede}`;
+  }
+
   private chaveSessao(rede: string, id: string): string {
-    return `${rede}:${PREFIXO_SESSAO}:${id}`;
+    return `${this.pre(rede)}:${PREFIXO_SESSAO}:${id}`;
   }
-  /** M10: marca de revogação das sessões de um usuário (bloqueio pela tela de usuários). */
-  private chaveRevogacao(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:${PREFIXO_SESSAO}-revogadas:${estabelecimento}:${login}`;
+  /**
+   * M10: marca de revogação das sessões de uma conta (bloqueio, redefinição). Por conta no cliente inteiro: a
+   * credencial vale em todos os estabelecimentos do cliente.
+   */
+  private chaveRevogacao(rede: string, login: string): string {
+    return `${this.pre(rede)}:${PREFIXO_SESSAO}-revogadas:${chaveDoLogin(login)}`;
   }
-  /** M10: índice das sessões de um usuário (ficha do usuário: "sessões no sistema"). */
-  private chaveIndice(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:${PREFIXO_SESSAO}-usuario:${estabelecimento}:${login}`;
+  /** M10: índice das sessões de uma conta, em todos os estabelecimentos do cliente. */
+  private chaveIndice(rede: string, login: string): string {
+    return `${this.pre(rede)}:${PREFIXO_SESSAO}-usuario:${chaveDoLogin(login)}`;
   }
-  private chaveTentativas(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:${PREFIXO_TENTATIVAS}:${estabelecimento}:${login}`;
+  /**
+   * Tentativas por conta no cliente, sem o estabelecimento (a credencial é uma só para o cliente) e pela forma do
+   * login igual à da colação: nem outro estabelecimento nem outra grafia do login dão rodada nova.
+   */
+  private chaveTentativas(rede: string, login: string): string {
+    return `${this.pre(rede)}:${PREFIXO_TENTATIVAS}:${chaveDoLogin(login)}`;
   }
 
   private estabelecimentoDisponivel(codigo: string): boolean {
@@ -395,20 +544,20 @@ export class ServicoSessao {
    */
   async esquecerPolitica(rede: string, estabelecimento: string): Promise<void> {
     try {
-      await this.armazem.apagar(`${rede}:${PREFIXO_POLITICA}:${estabelecimento}`);
+      await this.armazem.apagar(`${this.pre(rede)}:${PREFIXO_POLITICA}:${estabelecimento}`);
     } catch {
       // o cache vence sozinho em 5 min
     }
   }
 
-  /** W1-01 (parte 5): a política lida (TBCFGLOGIN e a camada do Sante), para a tela da política. */
+  /** W1-01 (parte 5): a política lida (politica_senha e a camada complementar), para a tela da política. */
   configDoEstabelecimento(rede: string, estabelecimento: string): Promise<ConfigLogin> {
     return this.politica(rede, estabelecimento);
   }
 
-  /** Política (TBCFGLOGIN) com cache de 5 min no armazém, por rede:estabelecimento. */
+  /** Política (politica_senha) com cache de 5 min no armazém, por rede:estabelecimento. */
   private async politica(rede: string, estabelecimento: string): Promise<ConfigLogin> {
-    const chave = `${rede}:${PREFIXO_POLITICA}:${estabelecimento}`;
+    const chave = `${this.pre(rede)}:${PREFIXO_POLITICA}:${estabelecimento}`;
     try {
       const guardada = await this.armazem.obter(chave);
       if (guardada) return JSON.parse(guardada) as ConfigLogin;
@@ -455,17 +604,15 @@ export class ServicoSessao {
           return {
             auth: {
               desfecho: 'ok',
-              combinacao: null,
               conta: {
                 login: c.login,
                 id: c.id,
                 nomeExibicao: c.nomeExibicao,
                 ativo: c.ativo,
                 bloqueado: c.bloqueado,
-                criptografada: c.criptografada,
-                doisFatoresLegado: false,
                 senhaAlteradaEm: c.senhaAlteradaEm,
-                semCifra: !c.criptografada && !c.senhaPresente,
+                semCifra: false,
+                trocaObrigatoria: false,
               },
             },
             pelaForte: true,
@@ -473,7 +620,7 @@ export class ServicoSessao {
           };
         }
       }
-      const auth = await this.fonte.autenticar(estabelecimento, login, senha, this.combinacao ?? undefined);
+      const auth = await this.fonte.autenticar(estabelecimento, login, senha);
       return { auth, pelaForte: false };
     } catch {
       throw new ErroSessao('indisponivel', INDISPONIVEL);
@@ -497,12 +644,14 @@ export class ServicoSessao {
   ): Promise<ResultadoLogin> {
     const rede = this.conferirRede(redeDoEndereco);
     const { estabelecimento, login, senha } = entrada;
+    // ':' é do espaço da plataforma (nenhum usuário do cliente o tem): nem conta tentativa na chave de outro ator.
+    if (login.includes(':')) throw new ErroSessao('credencial-invalida', 'Usuário ou senha inválidos.');
     if (idAnterior) await this.descartarAnterior(rede, idAnterior);
     if (!this.estabelecimentoDisponivel(estabelecimento)) {
       throw new ErroSessao('estabelecimento-invalido', 'Escolha um estabelecimento disponível.');
     }
     const config = await this.politica(rede, estabelecimento);
-    const chaveTent = this.chaveTentativas(rede, estabelecimento, login);
+    const chaveTent = this.chaveTentativas(rede, login);
     const falhasAntes = await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
 
     const { auth, pelaForte, provisoria } = await this.autenticarComOrigem(estabelecimento, login, senha);
@@ -532,15 +681,10 @@ export class ServicoSessao {
     }
     const politica = politicaEfetiva(dados.config.senha, dados.config.sante);
     const expirada = senhaExpirada(conta.senhaAlteradaEm, new Date(this.agora()), politica.periodoTrocaDias);
-    // Regra 3: conta sem cifra (SENHA_CRIPTOGRAFADA='F'), qualquer que seja o valor guardado, vai à troca.
-    // W1-01: a senha provisória dada pelo gestor (credencial forte com origem senha-provisoria) também obriga a troca.
-    const trocaSenha: Sessao['trocaSenha'] = !conta.criptografada
-      ? 'senha-sem-cifra'
-      : provisoria
-        ? 'senha-provisoria'
-        : expirada
-          ? 'senha-expirada'
-          : null;
+    // A troca obrigatória da credencial (senha provisória dada pelo gestor, pela recuperação ou pelo semeador) abre a
+    // sessão só para trocar a senha; a do serviço da identidade (origem senha-provisoria) também.
+    const trocaSenha: Sessao['trocaSenha'] =
+      conta.trocaObrigatoria || provisoria ? 'senha-provisoria' : expirada ? 'senha-expirada' : null;
 
     // M59-F2: o segundo fator confere dentro da abertura (precisa do perfil); a tentativa só é apagada depois dele.
     const r = await this.abrirSessao(rede, estabelecimento, conta, dados, trocaSenha, falhasAntes, origem, {
@@ -561,6 +705,88 @@ export class ServicoSessao {
         senha,
       );
     }
+    return r;
+  }
+
+  /**
+   * Decisão do dono (2026-11-20, b): entrada do ADMINISTRADOR DA PLATAFORMA. A credencial é a do banco plataforma
+   * (argon2id); o cliente é o escolhido no login ou, sem escolha, o único que esta API atende. Esta API atende um
+   * cliente (CLIENTE_PADRAO): outro cliente é recusado (a escolha entre vários clientes no mesmo endereço é da F2.2).
+   * A sessão abre no estabelecimento escolhido, com todas as permissões; a senha inicial ou redefinida abre só para a
+   * troca. Mesma porta da entrada comum: contagem de tentativas, trilha obrigatória, identificador novo.
+   */
+  async entrarPlataforma(
+    entrada: { estabelecimento: string; login: string; senha: string; cliente?: string | undefined },
+    redeDoEndereco: string | null,
+    idAnterior: string | null = null,
+    origem: OrigemPedido = ORIGEM_SERVIDOR,
+  ): Promise<ResultadoLogin> {
+    const rede = this.conferirRede(redeDoEndereco);
+    const fonte = this.plataforma;
+    if (!fonte || !this.cliente)
+      throw new ErroSessao('indisponivel', 'A entrada da plataforma não está disponível neste endereço.');
+    const { estabelecimento, senha } = entrada;
+    // O contrato já recusa fora de [a-z0-9._-] e passa a minúsculas; aqui de novo (a porta não confia no chamador).
+    const loginPuro = entrada.login.toLowerCase();
+    if (!/^[a-z0-9._-]{1,80}$/.test(loginPuro))
+      throw new ErroSessao('credencial-invalida', 'Usuário ou senha inválidos.');
+    const login = `${PREFIXO_LOGIN_PLATAFORMA}${loginPuro}`;
+    if (idAnterior) await this.descartarAnterior(rede, idAnterior);
+    if (!this.estabelecimentoDisponivel(estabelecimento)) {
+      throw new ErroSessao('estabelecimento-invalido', 'Escolha um estabelecimento disponível.');
+    }
+    const config = await this.politica(rede, estabelecimento);
+    const chaveTent = this.chaveTentativas(rede, login);
+    const falhasAntes = await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
+    // Sem escolha: o cliente desta API ("há um só"). Escolha de outro cliente: recusada depois da senha conferida.
+    const cliente = entrada.cliente ?? this.cliente;
+    let auth: Awaited<ReturnType<FontePlataforma['autenticar']>>;
+    try {
+      auth = await fonte.autenticar(loginPuro, senha, cliente);
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+    if (auth.desfecho === 'credencial-invalida' || auth.desfecho === 'conta-impedida') {
+      await this.registrar(
+        EVENTOS_AUDITAVEIS.loginFalho.codigo,
+        { rede, estabelecimento, login },
+        origem,
+        false,
+        'falha',
+      );
+      throw new ErroSessao('credencial-invalida', 'Usuário ou senha inválidos.');
+    }
+    if (auth.desfecho === 'cliente-indisponivel' || auth.ator.cliente !== this.cliente) {
+      throw new ErroSessao(
+        'estabelecimento-invalido',
+        'O cliente escolhido não está disponível neste endereço.',
+      );
+    }
+    const ator = auth.ator;
+    const dados: DadosSessao = {
+      papeis: [],
+      unidades: [],
+      termo: { vigente: false, aceitoEm: null, periodico: false, quantidadePeriodo: null, tipoPeriodo: null },
+      config,
+    };
+    const r = await this.abrirSessao(
+      rede,
+      estabelecimento,
+      // O id não é numérico: nenhum consumidor de usuario.id o toma por um usuário do cliente.
+      { login, id: `${PREFIXO_LOGIN_PLATAFORMA}${ator.idAdministrador}`, nomeExibicao: ator.nomeExibicao },
+      dados,
+      ator.trocaObrigatoria ? 'senha-provisoria' : null,
+      falhasAntes,
+      origem,
+      undefined,
+      'forte',
+      {
+        idAdministrador: ator.idAdministrador,
+        cliente: ator.cliente,
+        ...(ator.senhaAlteradaEm !== undefined ? { senhaAlteradaEm: ator.senhaAlteradaEm } : {}),
+      },
+    );
+    await this.armazem.apagar(chaveTent);
     return r;
   }
 
@@ -601,8 +827,10 @@ export class ServicoSessao {
     segundoFator?: { readonly codigo: string | undefined },
     /** W1-01 (parte 11b2): 'forte' (senha ou certificado: conta para a troca rápida) ou 'pin' (troca rápida). */
     entradaPor: 'forte' | 'pin' = 'forte',
+    /** Decisão do dono (b): a sessão do administrador da plataforma (todas as permissões no cliente escolhido). */
+    plataforma?: RegistroPlataforma,
   ): Promise<ResultadoLogin> {
-    const chaveUltimo = `${rede}:${PREFIXO_ULTIMO_ACESSO}:${estabelecimento}:${conta.login}`;
+    const chaveUltimo = `${this.pre(rede)}:${PREFIXO_ULTIMO_ACESSO}:${estabelecimento}:${conta.login}`;
     const ultimo = await this.armazem.obter(chaveUltimo);
     const tempo = tempoSessao(dados.config.tempo);
     const t = this.agora();
@@ -631,6 +859,7 @@ export class ServicoSessao {
       ...(origem.dispositivo ? { dispositivo: origem.dispositivo } : {}),
       ...(entradaPor === 'pin' ? { trocaRapida: true as const } : {}),
       ...(origem.posto ? { posto: origem.posto } : {}),
+      ...(plataforma ? { plataforma } : {}),
     };
     const aut = await this.autorizacaoDe(registro);
     if (segundoFator && this.identidade) {
@@ -727,7 +956,7 @@ export class ServicoSessao {
   }
 
   private chaveLoginForte(rede: string, estabelecimento: string, login: string): string {
-    return `${rede}:${PREFIXO_LOGIN_FORTE}:${estabelecimento}:${login}`;
+    return `${this.pre(rede)}:${PREFIXO_LOGIN_FORTE}:${estabelecimento}:${login}`;
   }
 
   /** W1-01 (parte 11b2): anota o login forte (dia civil e estação); falha só avisa (a troca rápida fica recusada). */
@@ -841,10 +1070,16 @@ export class ServicoSessao {
       return null;
     }
     // M10: usuário bloqueado pela tela de usuários depois do login: as sessões dele caem na próxima requisição.
-    const revogadoEm = await this.armazem.obter(this.chaveRevogacao(r.rede, r.estabelecimento, r.login));
+    const revogadoEm = await this.armazem.obter(this.chaveRevogacao(r.rede, r.login));
     if (revogadoEm !== null && Number(revogadoEm) >= r.criadaMs) {
       await this.armazem.apagar(chave);
       if (r.como) await this.encerrarComo(r.como, 'revogada');
+      return null;
+    }
+    // Decisão do dono (b): a credencial da plataforma é relida (cache curto): administrador desativado, removido ou
+    // com outra senha (trocada em outra sessão ou redefinida) derruba a sessão. Erro de banco: 503, nunca libera.
+    if (r.plataforma && !(await this.plataformaVigente(r.plataforma))) {
+      await this.armazem.apagar(chave);
       return null;
     }
     if (r.como) {
@@ -932,8 +1167,8 @@ export class ServicoSessao {
     if (!r) throw new ErroSessao('sessao-encerrada', 'Sessão encerrada; entre de novo.');
     const config = await this.politica(rede, r.estabelecimento);
     const chaveTent = r.como
-      ? `${rede}:${PREFIXO_TENTATIVAS}:como:${r.como.idConta}`
-      : this.chaveTentativas(rede, r.estabelecimento, r.login);
+      ? `${this.pre(rede)}:${PREFIXO_TENTATIVAS}:como:${r.como.idConta}`
+      : this.chaveTentativas(rede, r.login);
     await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
     if (r.como) {
       // ADR 0021: no "como", a senha conferida é a do ATOR (a conta da plataforma), nunca a do alvo.
@@ -944,6 +1179,10 @@ export class ServicoSessao {
         throw new ErroSessao('indisponivel', INDISPONIVEL);
       }
       if (!ok) throw new ErroSessao('credencial-invalida', 'Senha inválida.');
+    } else if (r.plataforma) {
+      // Decisão do dono (b): a senha do administrador da plataforma (banco plataforma), nunca uma do cliente.
+      if (!(await this.conferirPlataforma(r.plataforma, senha)))
+        throw new ErroSessao('credencial-invalida', 'Senha inválida.');
     } else {
       const auth = await this.autenticar(r.estabelecimento, r.login, senha);
       // Só a senha conferida desbloqueia: "sem-cifra" (nada conferido) nunca vale.
@@ -962,17 +1201,16 @@ export class ServicoSessao {
     return this.montar(atual, true, await this.autorizacaoDe(atual));
   }
 
-  /** W1-01: a troca de senha pelo novo está disponível (chave ligada, porta montada e combinação confirmada). */
+  /** A troca de senha está disponível (porta de senha montada). */
   get trocaSenhaDisponivel(): boolean {
-    const c = this.senhaLegado?.combinacao ?? null;
-    return this.trocaPeloNovo && c !== null && c !== 'texto-puro';
+    return this.portaSenha !== null;
   }
 
   /**
    * W1-01: troca a própria senha. A senha atual conferida vale como reautenticação (conta no limite de tentativas);
-   * a nova passa pela política efetiva (TBCFGLOGIN + mínimos do novo) e pelo reuso (atual e TBHISTSENHA na janela);
-   * grava no legado pela receita acesso.trocarSenha (o gatilho do legado guarda o histórico) e regrava a credencial
-   * forte. Nenhuma senha, resumo ou sal sai daqui (só os códigos das falhas).
+   * a nova passa pela política efetiva (politica_senha + mínimos do produto) e pelo reuso (atual e historico_senha na
+   * janela); grava o resumo argon2id pela porta de senha (credencial_usuario e historico_senha na mesma transação do
+   * Executor, com a trilha) e regrava a credencial do serviço da identidade, quando houver. Nenhuma senha, resumo ou sal sai daqui (só os códigos das falhas).
    */
   async trocarSenha(
     id: string,
@@ -987,15 +1225,15 @@ export class ServicoSessao {
         'troca-indisponivel',
         'Nesta sessão a senha do usuário não se troca: use "Redefinir senha" na ficha do usuário.',
       );
-    const porta = this.senhaLegado;
-    const combinacao = porta?.combinacao ?? null;
-    if (!porta || !this.trocaSenhaDisponivel || combinacao === null)
+    if (r.plataforma) return this.trocarSenhaPlataforma(r, rede, id, entrada, origem);
+    const porta = this.portaSenha;
+    if (!porta)
       throw new ErroSessao(
         'troca-indisponivel',
         'A troca de senha ainda não está disponível neste estabelecimento. Procure o administrador do sistema.',
       );
     const config = await this.politica(rede, r.estabelecimento);
-    const chaveTent = this.chaveTentativas(rede, r.estabelecimento, r.login);
+    const chaveTent = this.chaveTentativas(rede, r.login);
     await this.contarTentativa(chaveTent, limiteTentativas(config.limiteTentativas));
     const auth = await this.autenticar(r.estabelecimento, r.login, entrada.senhaAtual);
     if (auth.desfecho !== 'ok') throw new ErroSessao('credencial-invalida', 'Senha atual inválida.');
@@ -1021,7 +1259,7 @@ export class ServicoSessao {
         politica.periodoReutilizacaoDias > 0
           ? inicioJanelaReutilizacao(new Date(this.agora()), politica.periodoReutilizacaoDias)
           : null;
-      let reuso: Awaited<ReturnType<PortaSenhaLegado['reuso']>>;
+      let reuso: Awaited<ReturnType<PortaSenha['reuso']>>;
       try {
         reuso = await porta.reuso(r.estabelecimento, r.login, entrada.senhaNova, desde);
       } catch {
@@ -1037,14 +1275,15 @@ export class ServicoSessao {
         falhas,
       );
 
-    const cifrada = cifrarSenhaLegado(entrada.senhaNova, combinacao);
+    const resumo = await cifrarSenha(entrada.senhaNova);
     const t = this.agora();
-    await porta.gravar(r.estabelecimento, r.login, cifrada, {
+    // Recusa da gravação (ErroOperacao do núcleo) sobe como está: o filtro de problemas a traduz.
+    await porta.gravar(r.estabelecimento, r.login, resumo, {
       rede,
-      hospital: r.estabelecimento,
-      traceId: origem.correlacao,
-      usuarioLegado: r.login,
-      idempotencyKey: randomUUID(),
+      estabelecimento: r.estabelecimento,
+      autor: r.login,
+      correlacao: origem.correlacao,
+      chaveIdempotencia: randomUUID(),
       estacao: origem.estacao.slice(0, 80),
       reautenticadoEm: t,
     });
@@ -1070,12 +1309,122 @@ export class ServicoSessao {
     return this.montar(atual, true, await this.autorizacaoDe(atual));
   }
 
+  /** Releitura da credencial da plataforma, com cache curto por administrador (o de 3 min das permissões). */
+  private readonly situacoesPlataforma = new Map<number, { situacao: SituacaoAdministradorPlataforma | null; ate: number }>();
+
+  private async plataformaVigente(p: RegistroPlataforma): Promise<boolean> {
+    if (!this.plataforma) return false;
+    const t = this.agora();
+    let c = this.situacoesPlataforma.get(p.idAdministrador);
+    if (!c || c.ate <= t) {
+      let situacao: SituacaoAdministradorPlataforma | null;
+      try {
+        situacao = await this.plataforma.situacao(p.idAdministrador);
+      } catch {
+        throw new ErroSessao('indisponivel', INDISPONIVEL);
+      }
+      c = { situacao, ate: t + CACHE_SITUACAO_PLATAFORMA_MS };
+      this.situacoesPlataforma.set(p.idAdministrador, c);
+    }
+    const s = c.situacao;
+    if (!s || !s.ativo) return false;
+    return p.senhaAlteradaEm === undefined || s.senhaAlteradaEm === p.senhaAlteradaEm;
+  }
+
+  /** Decisão do dono (b): confere a senha do administrador da plataforma (erro de banco: indisponível). */
+  private async conferirPlataforma(p: RegistroPlataforma, senha: string): Promise<boolean> {
+    if (!this.plataforma) return false;
+    try {
+      return await this.plataforma.conferir(p.idAdministrador, senha);
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+  }
+
+  /**
+   * Decisão do dono (b): troca da senha do administrador da plataforma (no banco plataforma). A política é a padrão do
+   * produto (a da plataforma; a do estabelecimento é dos usuários do cliente), sem reuso da atual.
+   */
+  private async trocarSenhaPlataforma(
+    r: Registro,
+    rede: string,
+    id: string,
+    entrada: Pick<TrocarSenha, 'senhaAtual' | 'senhaNova'>,
+    origem: OrigemPedido,
+  ): Promise<Sessao> {
+    const p = r.plataforma;
+    const fonte = this.plataforma;
+    if (!p || !fonte) throw new ErroSessao('troca-indisponivel', 'A troca de senha não está disponível.');
+    const chaveTent = this.chaveTentativas(rede, r.login);
+    await this.contarTentativa(chaveTent, limiteTentativas(CONFIG_LOGIN_PADRAO.limiteTentativas));
+    if (!(await this.conferirPlataforma(p, entrada.senhaAtual)))
+      throw new ErroSessao('credencial-invalida', 'Senha atual inválida.');
+    await this.armazem.apagar(chaveTent);
+    const politica = politicaEfetiva(CONFIG_LOGIN_PADRAO.senha, CONFIG_LOGIN_PADRAO.sante);
+    const loginPuro = r.login.slice(PREFIXO_LOGIN_PLATAFORMA.length);
+    const falhas = avaliarSenhaNova(entrada.senhaNova, loginPuro, politica, { nome: r.nome, nascimento: null });
+    if (entrada.senhaNova === entrada.senhaAtual) falhas.push('igual-atual');
+    if (falhas.length > 0)
+      throw new ErroSessao(
+        'senha-recusada',
+        'A senha nova não cumpre a política de senha.',
+        'senha-politica',
+        falhas,
+      );
+    const resumo = await cifrarSenha(entrada.senhaNova);
+    let senhaAlteradaEm: number;
+    try {
+      // Credencial e evento na linha do tempo do cliente (cliente_evento), na mesma transação do banco plataforma.
+      senhaAlteradaEm = await fonte.gravarSenha(p.idAdministrador, resumo, origem.correlacao, p.cliente);
+    } catch {
+      throw new ErroSessao('indisponivel', INDISPONIVEL);
+    }
+    this.situacoesPlataforma.delete(p.idAdministrador);
+    const t = this.agora();
+    const bruto = await this.armazem.obter(this.chaveSessao(rede, id));
+    const atual = bruto ? (JSON.parse(bruto) as Registro) : r;
+    atual.trocaSenha = null;
+    atual.autenticadoMs = t;
+    atual.ultimaAtividadeMs = t;
+    atual.plataforma = { ...p, senhaAlteradaEm };
+    await this.salvar(atual);
+    // Trilha do cliente (o ator vai como chave natural: o administrador não é usuário do cliente). Sem trilha, a troca
+    // já gravada segue (o evento ficou no banco plataforma) e o erro é avisado.
+    if (this.trilha) {
+      try {
+        await this.trilha.registrar({
+          evento: EVENTOS_AUDITAVEIS.senhaPlataformaTrocada.codigo,
+          rede,
+          hospital: atual.estabelecimento,
+          usuario: atual.login,
+          estacao: origem.estacao,
+          correlacao: origem.correlacao,
+          recurso: 'acesso.sessao',
+          resultado: 'sucesso',
+          chaveNaturalAlvo: `${PREFIXO_LOGIN_PLATAFORMA}${p.idAdministrador}`,
+        });
+      } catch (e) {
+        this.aviso('trilha: troca de senha da plataforma não registrada', {
+          erro: e instanceof Error ? e.name : 'erro',
+        });
+      }
+    }
+    // As outras sessões do administrador nesta API caem já; nas APIs de outros clientes, pela releitura da credencial
+    // (senha_alterada_em mudou).
+    for (const x of await this.sessoesVivas(rede, null, atual.login)) {
+      if (x.id === atual.id || x.plataforma?.idAdministrador !== p.idAdministrador) continue;
+      await this.armazem.apagar(this.chaveSessao(rede, x.id));
+      await this.registrar(EVENTOS_AUDITAVEIS.fimSessao.codigo, x, origem, false);
+    }
+    return this.montar(atual, true, await this.autorizacaoDe(atual));
+  }
+
   /**
    * W1-01 (parte 2b): acesso.redefinirSenha. O gestor de acessos (já reautenticado pelo chamador, com a segregação
    * conferida) dá ao usuário `alvo` uma senha PROVISÓRIA gerada aqui: cumpre a política efetiva do estabelecimento e
-   * não repete a atual nem o histórico; grava no legado pela receita acesso.redefinirSenha (o gatilho do legado guarda o
-   * histórico; a trilha do executor guarda o gestor) e regrava a credencial forte com origem `senha-provisoria`, o que
-   * obriga a troca no próximo acesso ao Sante. A senha volta só ao gestor, nesta resposta; nada dela vai a log ou trilha.
+   * não repete a atual nem o histórico; grava pela porta de senha com troca obrigatória (historico_senha na mesma
+   * transação; a trilha do executor guarda o gestor) e regrava a credencial do serviço da identidade com origem
+   * `senha-provisoria`, o que obriga a troca no próximo acesso. A senha volta só ao gestor, nesta resposta; nada dela vai a log ou trilha.
    */
   async redefinirSenha(
     gestor: { readonly rede: string; readonly estabelecimento: string; readonly login: string },
@@ -1111,9 +1460,8 @@ export class ServicoSessao {
     origem: OrigemPedido,
     reautenticadoEm: number,
   ): Promise<{ readonly senhaProvisoria: string; readonly trocaObrigatoria: boolean }> {
-    const porta = this.senhaLegado;
-    const combinacao = porta?.combinacao ?? null;
-    if (!porta || !this.trocaSenhaDisponivel || combinacao === null)
+    const porta = this.portaSenha;
+    if (!porta)
       throw new ErroSessao(
         'troca-indisponivel',
         'A redefinição de senha ainda não está disponível neste estabelecimento. Procure o administrador do sistema.',
@@ -1128,7 +1476,7 @@ export class ServicoSessao {
     let senha = '';
     for (let i = 0; i < 5 && !senha; i++) {
       const candidata = gerarSenhaProvisoria(politica, alvo, (n) => randomInt(n));
-      let reuso: Awaited<ReturnType<PortaSenhaLegado['reuso']>>;
+      let reuso: Awaited<ReturnType<PortaSenha['reuso']>>;
       try {
         reuso = await porta.reuso(estabelecimento, alvo, candidata, desde);
       } catch {
@@ -1137,17 +1485,17 @@ export class ServicoSessao {
       if (!reuso) senha = candidata;
     }
     if (!senha) throw new ErroSessao('indisponivel', INDISPONIVEL);
-    const cifrada = cifrarSenhaLegado(senha, combinacao);
+    const resumo = await cifrarSenha(senha);
     const idUsuario = await porta.gravar(
       estabelecimento,
       alvo,
-      cifrada,
+      resumo,
       {
         rede,
-        hospital: estabelecimento,
-        traceId: origem.correlacao,
-        usuarioLegado: gestor.login,
-        idempotencyKey: randomUUID(),
+        estabelecimento,
+        autor: gestor.login,
+        correlacao: origem.correlacao,
+        chaveIdempotencia: randomUUID(),
         estacao: origem.estacao.slice(0, 80),
         reautenticadoEm,
       },
@@ -1190,7 +1538,7 @@ export class ServicoSessao {
     if (r.login.trim().toUpperCase() === login.trim().toUpperCase())
       return { conferiu: false, permissoes: [] };
     const config = await this.politica(rede, r.estabelecimento);
-    const chave = this.chaveTentativas(rede, r.estabelecimento, login);
+    const chave = this.chaveTentativas(rede, login);
     await this.contarTentativa(chave, limiteTentativas(config.limiteTentativas));
     const auth = await this.autenticar(r.estabelecimento, login, senha);
     if (auth.desfecho !== 'ok') return { conferiu: false, permissoes: [] };
@@ -1231,12 +1579,23 @@ export class ServicoSessao {
    * prazo máximo da sessão. O cache das permissões do usuário é invalidado.
    */
   async revogarSessoesDoUsuario(rede: string, estabelecimento: string, login: string): Promise<void> {
+    // Login com ':' não é de usuário do cliente (é o espaço da plataforma): a gestão do cliente não o alcança.
+    if (login.includes(':')) return;
+    // A credencial e o bloqueio valem para o cliente inteiro: a revogação cai em todos os estabelecimentos e o cache
+    // das permissões é invalidado em cada um (com o login como veio e com o login de cada sessão viva).
+    const vivas = await this.sessoesVivas(rede, null, login);
     await this.armazem.gravar(
-      this.chaveRevogacao(rede, estabelecimento, login),
+      this.chaveRevogacao(rede, login),
       String(this.agora()),
       DURACAO_REVOGACAO_SEGUNDOS,
     );
-    await this.autorizacao?.invalidar(rede, estabelecimento, login).catch(() => undefined);
+    const alvos = new Map<string, { estabelecimento: string; login: string }>();
+    const codigos = new Set([estabelecimento, ...this.fonte.estabelecimentos.map((e) => e.codigo)]);
+    for (const codigo of codigos) alvos.set(`${codigo}:${login}`, { estabelecimento: codigo, login });
+    for (const x of vivas)
+      alvos.set(`${x.estabelecimento}:${x.login}`, { estabelecimento: x.estabelecimento, login: x.login });
+    for (const a of alvos.values())
+      await this.autorizacao?.invalidar(rede, a.estabelecimento, a.login).catch(() => undefined);
   }
 
   /**
@@ -1244,7 +1603,7 @@ export class ServicoSessao {
    * mesmo tempo podem perder um id no índice, nunca a sessão; as expiradas saem na leitura.
    */
   private async indexar(r: Registro, ttlSegundos: number): Promise<void> {
-    const chave = this.chaveIndice(r.rede, r.estabelecimento, r.login);
+    const chave = this.chaveIndice(r.rede, r.login);
     const ids = new Set<string>(JSON.parse((await this.armazem.obter(chave)) ?? '[]') as string[]);
     ids.add(r.id);
     await this.armazem.gravar(chave, JSON.stringify([...ids].slice(-50)), ttlSegundos);
@@ -1262,6 +1621,7 @@ export class ServicoSessao {
   ): Promise<
     { inicio: string; ultimoUso: string; estabelecimento: string; bloqueada: boolean; como: boolean }[]
   > {
+    if (login.includes(':')) return [];
     return (await this.sessoesVivas(rede, estabelecimento, login)).map((r) => ({
       inicio: new Date(r.criadaMs).toISOString(),
       ultimoUso: new Date(r.ultimaAtividadeMs).toISOString(),
@@ -1272,19 +1632,24 @@ export class ServicoSessao {
   }
 
   /** As sessões vivas do usuário pelo índice (a mais usada primeiro); limpa do índice as que caíram. */
-  private async sessoesVivas(rede: string, estabelecimento: string, login: string): Promise<Registro[]> {
-    const chave = this.chaveIndice(rede, estabelecimento, login);
+  private async sessoesVivas(
+    rede: string,
+    estabelecimento: string | null,
+    login: string,
+  ): Promise<Registro[]> {
+    const chave = this.chaveIndice(rede, login);
     const ids = JSON.parse((await this.armazem.obter(chave)) ?? '[]') as string[];
-    const revogadoEm = Number(
-      (await this.armazem.obter(this.chaveRevogacao(rede, estabelecimento, login))) ?? 0,
-    );
+    const revogadoEm = Number((await this.armazem.obter(this.chaveRevogacao(rede, login))) ?? 0);
+    const conta = chaveDoLogin(login);
     const t = this.agora();
     const vivas: Registro[] = [];
     for (const id of ids) {
       const bruto = await this.armazem.obter(this.chaveSessao(rede, id));
       if (!bruto) continue;
       const r = JSON.parse(bruto) as Registro;
-      if (r.login !== login || r.estabelecimento !== estabelecimento) continue;
+      if (chaveDoLogin(r.login) !== conta) continue;
+      // Sessão da plataforma só no índice da plataforma, e vice-versa (defesa além do ':' proibido).
+      if (Boolean(r.plataforma) !== login.startsWith(PREFIXO_LOGIN_PLATAFORMA)) continue;
       if (revogadoEm && r.criadaMs <= revogadoEm) continue;
       if (t - r.criadaMs >= this.tempoDoRegistro(r).duracaoMaximaSegundos * 1000) continue;
       vivas.push(r);
@@ -1299,7 +1664,10 @@ export class ServicoSessao {
       if (vivas.length === 0) await this.armazem.apagar(chave);
       else await this.armazem.gravar(chave, JSON.stringify(vivas.map((r) => r.id)), ttl);
     }
-    return vivas.sort((a, b) => b.ultimaAtividadeMs - a.ultimaAtividadeMs);
+    // O índice é da conta no cliente inteiro; o filtro do estabelecimento é só da resposta.
+    return vivas
+      .filter((r) => estabelecimento === null || r.estabelecimento === estabelecimento)
+      .sort((a, b) => b.ultimaAtividadeMs - a.ultimaAtividadeMs);
   }
 
   /** W1-01 (parte 8): referência opaca da sessão (nunca o id, que é a credencial do cookie). */
@@ -1414,7 +1782,7 @@ export class ServicoSessao {
    */
   /**
    * A conta-alvo do "como" (ADR 0021), conferida com a MESMA regra do modal: existe, ativa, não bloqueada e de
-   * um grupo ATIVO do TBGRUUSU. Quem chama confere ANTES de registrar a sessão de suporte (login fora da regra
+   * um perfil ATIVO. Quem chama confere ANTES de registrar a sessão de suporte (login fora da regra
    * não gera sessão nem aviso ao Auditor).
    */
   async conferirAlvoComo(
@@ -1500,7 +1868,7 @@ export class ServicoSessao {
   private montar(r: Registro, reautRecente: boolean, aut: Autorizacao | null = null): Sessao {
     const t = this.agora();
     return {
-      usuario: { id: r.idUsuario, nome: r.nome, login: r.login },
+      usuario: { id: r.idUsuario, nome: r.nome, login: r.login, ...(r.plataforma ? { ator: 'plataforma' as const } : {}) },
       rede: r.rede,
       // Para a troca (novo login): só os disponíveis agora.
       estabelecimentos: this.fonte
@@ -1528,14 +1896,14 @@ export class ServicoSessao {
       avisoInatividadeSegundos: r.avisoInatividadeSegundos,
       bloqueada: r.bloqueada,
       expiraEm: new Date(r.criadaMs + this.tempoDoRegistro(r).duracaoMaximaSegundos * 1000).toISOString(),
-      // Último acesso válido e falhas desde então NO NOVO (o do SPDATA, TBCABTRILHA evento 6, é do M15).
+      // Último acesso válido e falhas desde então neste produto (o histórico importado pelo conector é do M15).
       ultimoAcesso: {
         em: r.ultimoAcessoMs === null ? null : new Date(r.ultimoAcessoMs).toISOString(),
         falhasDesde: r.falhasDesde,
       },
       termoPendente: r.termoPendente,
       trocaSenha: r.trocaSenha,
-      trocaSenhaPeloNovo: this.trocaSenhaDisponivel,
+      trocaSenhaPeloNovo: r.plataforma ? this.plataforma !== null : this.trocaSenhaDisponivel,
       segundoFator: r.segundoFator
         ? {
             cadastrado: r.segundoFator.cadastrado,

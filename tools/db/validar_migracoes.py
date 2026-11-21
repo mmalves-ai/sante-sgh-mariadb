@@ -8,6 +8,8 @@ uso: python3 -I tools/db/validar_migracoes.py [--banco validacao] [--manter]
    tabela do catálogo ausente; tabela fora do catálogo; PK id BIGINT UNSIGNED AUTO_INCREMENT; colunas de
    auditoria; comentário da tabela; nomes (snake_case, sem prefixo críptico de origem); gatilhos;
    colunas *_id sem FK (aviso).
+3. Banco plataforma: aplica db/plataforma/*.sql DUAS vezes num banco de validação (idempotência) e confere PK,
+   auditoria, comentário, nomes e gatilhos (erros em "plataforma").
 Saídas: docs/obra/validacao-ddl.md (resumo) e docs/obra/validacao-ddl.json (erros por arquivo e por tabela).
 Sai com 1 se houver erro.
 """
@@ -44,6 +46,36 @@ def consulta(q: str) -> list[list[str]]:
     if r.returncode != 0:
         raise SystemExit(f"consulta falhou: {r.stderr[:500]}")
     return [ln.split("\t") for ln in r.stdout.splitlines() if ln]
+
+
+def validar_plataforma() -> list[str]:
+    """db/plataforma/*.sql num banco vazio, duas vezes (idempotente), com as mesmas regras estruturais."""
+    banco = f"{BANCO}_plataforma"
+    sql(None, None, "-e", f"DROP DATABASE IF EXISTS {banco}; CREATE DATABASE {banco}")
+    erros = []
+    for rodada in (1, 2):
+        for arq in sorted((RAIZ / "db/plataforma").glob("*.sql")):
+            r = sql(banco, arq.read_text(encoding="utf-8"), "--force")
+            erros += [f"{arq.name} (rodada {rodada}): {ln.strip()[:200]}" for ln in r.stderr.splitlines() if ln.strip()]
+    tabelas = consulta(f"select table_name, table_comment from information_schema.tables where table_schema='{banco}'")
+    cols = defaultdict(dict)
+    for tb, c, tipo, extra, chave in consulta(
+            f"select table_name, column_name, column_type, extra, column_key from information_schema.columns "
+            f"where table_schema='{banco}'"):
+        cols[tb][c] = (tipo, extra, chave)
+    for tb, comentario in tabelas:
+        c = cols[tb]
+        if "id" not in c or "unsigned" not in c["id"][0] or "auto_increment" not in c["id"][1] or c["id"][2] != "PRI":
+            erros.append(f"{tb}: PK id BIGINT UNSIGNED AUTO_INCREMENT ausente ou errada")
+        erros += [f"{tb}: coluna de auditoria ausente: {a}" for a in AUDIT if a not in c]
+        if not comentario.strip():
+            erros.append(f"{tb}: tabela sem COMMENT")
+        erros += [f"{tb}: nome inválido: {n}" for n in [tb, *c] if not NOME.match(n) or PROIBIDO.search(n)]
+    if consulta(f"select trigger_name from information_schema.triggers where trigger_schema='{banco}'"):
+        erros.append("gatilhos no banco plataforma")
+    if not MANTER:
+        sql(None, None, "-e", f"DROP DATABASE IF EXISTS {banco}")
+    return erros
 
 
 def main() -> int:
@@ -98,17 +130,20 @@ def main() -> int:
     if gatilhos:
         erros_tab["(banco)"].append(f"gatilhos encontrados: {[g[0] for g in gatilhos]}")
 
-    total_erros = sum(len(v) for v in erros_arq.values()) + sum(len(v) for v in erros_tab.values()) + len(faltam)
+    erros_plataforma = validar_plataforma()
+    total_erros = sum(len(v) for v in erros_arq.values()) + sum(len(v) for v in erros_tab.values()) + len(faltam) \
+        + len(erros_plataforma)
     resumo = {
         "banco": BANCO, "tabelas_criadas": len(tabelas), "catalogo": len(cat), "faltam": len(faltam),
         "fora_catalogo": len(sobram), "arquivos_com_erro": len(erros_arq),
         "erros_sql": sum(len(v) for v in erros_arq.values()), "tabelas_com_erro": len(erros_tab),
         "colunas_id_sem_fk": sum(len(v) for v in avisos_tab.values()),
-        "fks": sum(len(v) for v in fks.values()), "gatilhos": len(gatilhos), "total_erros": total_erros,
+        "fks": sum(len(v) for v in fks.values()), "gatilhos": len(gatilhos),
+        "plataforma_erros": len(erros_plataforma), "total_erros": total_erros,
     }
     (RAIZ / "docs/obra").mkdir(parents=True, exist_ok=True)
     (RAIZ / "docs/obra/validacao-ddl.json").write_text(json.dumps({
-        "resumo": resumo, "faltam": faltam, "erros_arquivo": erros_arq, "erros_tabela": erros_tab,
+        "resumo": resumo, "faltam": faltam, "plataforma": erros_plataforma, "erros_arquivo": erros_arq, "erros_tabela": erros_tab,
         "avisos_tabela": avisos_tab}, ensure_ascii=False, indent=1), encoding="utf-8")
     L = ["# Validação do DDL", "", "| Item | Valor |", "|---|---:|"] + [f"| {k} | {v} |" for k, v in resumo.items()]
     L += ["", "## Erros por arquivo (até 5 por arquivo)", ""]

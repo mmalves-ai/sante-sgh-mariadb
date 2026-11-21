@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { executarComo, marcaComoAtual } from './como.js';
 import { BancoDuble, CONFIG_TESTE, erroDoBanco } from './duble-banco.spec-util.js';
 import { ErroOperacao, erroNaoLiberada } from './erros.js';
 import {
@@ -126,6 +127,33 @@ describe('Executor: protocolo da operação', () => {
     expect(idem[6]).toBe(101);
     expect(aoConfirmar).toHaveBeenCalledWith('teste_duble', [102]);
     expect(metricas.contagem('teste.tipo_x.incluir', 'sucesso')).toBe(1);
+  });
+
+  it('sessão "como" (ADR 0021): a trilha da mesma transação guarda o ator real e o alvo', async () => {
+    const b = banco();
+    const ex = new Executor(b.dependencias());
+    const marca = { sessao: '41', acao: '9', atorTipo: 'plataforma' as const, idConta: '5', alvo: 'alvo.teste' };
+    expect(marcaComoAtual()).toBeNull();
+    await executarComo(marca, () => ex.executar(incluir, 'teste_duble', { descricao: 'Alcool' }, CTX));
+    expect(marcaComoAtual()).toBeNull();
+    const trilha = b.que(/^INSERT INTO trilha_auditoria/)[0]?.parametros ?? [];
+    // usuario_id é o alvo (o usuário do contexto); a origem leva o ator real.
+    expect(trilha[1]).toBe(3);
+    expect(JSON.parse(String(trilha[7])).origem).toEqual({
+      sessao: '41',
+      acao: '9',
+      atorTipo: 'plataforma',
+      atorConta: '5',
+      alvo: 'alvo.teste',
+    });
+    // Fora do "como", nada de origem.
+    const b2 = banco();
+    await new Executor(b2.dependencias()).executar(incluir, 'teste_duble', { descricao: 'Alcool' }, {
+      ...CTX,
+      chaveIdempotencia: 'chave-0002',
+    });
+    const t2 = b2.que(/^INSERT INTO trilha_auditoria/)[0]?.parametros ?? [];
+    expect(JSON.parse(String(t2[7]))).not.toHaveProperty('origem');
   });
 
   it('desfazer: tudo é desfeito e nada segue ao relay', async () => {

@@ -3,8 +3,8 @@
 
 CREATE TABLE acao_sistema (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-  codigo VARCHAR(30) NOT NULL,
-  descricao VARCHAR(150) NOT NULL,
+  codigo VARCHAR(120) NOT NULL COMMENT 'Código da permissão no contrato do produto (ex.: modulo.recurso.acao); carregado pelo comando criar novo cliente',
+  descricao VARCHAR(255) NOT NULL,
   ativo BOOLEAN NOT NULL DEFAULT TRUE,
   modulo_sistema_id BIGINT UNSIGNED NULL,
   tela_sistema_id BIGINT UNSIGNED NULL COMMENT 'Tela onde a ação existe (nulo para ação do módulo inteiro)',

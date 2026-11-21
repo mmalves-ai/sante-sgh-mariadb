@@ -1,0 +1,101 @@
+// Registro dos módulos de negócio da API (F2-L): o boot monta a base (sessão, autorização e sistema) e, por cima, os
+// módulos pedidos em API_MODULOS que já foram migrados para o banco próprio. Cada módulo migrado entra aqui com um
+// carregador preguiçoso (import dinâmico), para que o grafo do build só junte o que está registrado.
+//
+// API_MODULOS: lista separada por vírgula. Padrão "sessao,autorizacao,sistema" (só a base). "todos": a base e todos os
+// registrados. Nome desconhecido ou de módulo ainda não migrado recusa a partida, com a mensagem.
+import type { DynamicModule } from '@nestjs/common';
+import type { Ambiente, NucleoProprio } from '@sgh/nucleo';
+import type { RegistradorTrilha } from '../autorizacao/trilha.js';
+import type { Configuracao } from '../configuracao.js';
+import type { ArmazemSessao } from '../sessao/armazem.js';
+import type { ServicoSessao } from '../sessao/servico-sessao.js';
+
+/** Partes da base, sempre montadas (o app-base.module). */
+export const MODULOS_BASE = ['sessao', 'autorizacao', 'sistema'] as const;
+export const API_MODULOS_PADRAO = MODULOS_BASE.join(',');
+
+/** O que a base entrega a um módulo registrado ao montá-lo. */
+export interface ContextoModulo {
+  readonly configuracao: Configuracao;
+  readonly nucleo: NucleoProprio | null;
+  readonly env: Ambiente;
+  readonly armazem: ArmazemSessao;
+  readonly servico: ServicoSessao | null;
+  readonly trilha: RegistradorTrilha;
+}
+
+/** O que o arquivo de um módulo migrado exporta (`modulo.ts`). */
+export interface ModuloApi {
+  modulo(contexto: ContextoModulo): DynamicModule | Promise<DynamicModule>;
+}
+
+export type CarregadorModulo = () => Promise<ModuloApi>;
+
+/**
+ * Módulos migrados: nome → carregador. Vazio na F2-L; a F2.2/F2.3 inclui cada módulo migrado, por exemplo
+ * `cadastro: () => import('./cadastro/modulo.js')`.
+ */
+export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Object.freeze({});
+
+export class ErroModulos extends Error {
+  override readonly name = 'ErroModulos';
+}
+
+/** Os módulos registrados que API_MODULOS pede (a base fica de fora). Lança ErroModulos com a mensagem. */
+export function modulosPedidos(
+  env: Ambiente,
+  registro: Readonly<Record<string, CarregadorModulo>> = REGISTRO_MODULOS,
+): string[] {
+  const bruto = env['API_MODULOS']?.trim() || API_MODULOS_PADRAO;
+  const nomes = [
+    ...new Set(
+      bruto
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const registrados = Object.keys(registro).sort();
+  if (nomes.includes('todos')) {
+    if (nomes.length > 1) throw new ErroModulos('API_MODULOS: "todos" não se combina com outros nomes.');
+    return registrados;
+  }
+  const base: readonly string[] = MODULOS_BASE;
+  const recusados = nomes.filter((n) => !base.includes(n) && !Object.hasOwn(registro, n));
+  if (recusados.length > 0)
+    throw new ErroModulos(
+      `API_MODULOS: módulo desconhecido ou ainda não migrado: ${recusados.join(', ')}. ` +
+        `Base: ${MODULOS_BASE.join(', ')}. Migrados: ${registrados.length ? registrados.join(', ') : 'nenhum'}.`,
+    );
+  return nomes.filter((n) => !base.includes(n));
+}
+
+/** Motivo de recusa da partida por API_MODULOS (null: pode subir). */
+export function recusaDosModulos(
+  env: Ambiente,
+  registro: Readonly<Record<string, CarregadorModulo>> = REGISTRO_MODULOS,
+): string | null {
+  try {
+    modulosPedidos(env, registro);
+    return null;
+  } catch (e) {
+    if (e instanceof ErroModulos) return e.message;
+    throw e;
+  }
+}
+
+/** Carrega e monta os módulos pedidos, na ordem pedida. */
+export async function carregarModulos(
+  contexto: ContextoModulo,
+  registro: Readonly<Record<string, CarregadorModulo>> = REGISTRO_MODULOS,
+): Promise<DynamicModule[]> {
+  const nomes = modulosPedidos(contexto.env, registro);
+  const modulos: DynamicModule[] = [];
+  for (const nome of nomes) {
+    const carregar = registro[nome];
+    if (!carregar) throw new ErroModulos(`API_MODULOS: módulo ${nome} sem carregador.`);
+    modulos.push(await (await carregar()).modulo(contexto));
+  }
+  return modulos;
+}

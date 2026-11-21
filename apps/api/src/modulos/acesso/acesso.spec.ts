@@ -368,7 +368,7 @@ describe('GET /api/marca (pública; DP-49)', () => {
 });
 
 describe('troca de senha (W1-01) e segundo fator', () => {
-  it('sem sessão: 401; entrada incompleta: 400; sem a chave ACESSO_TROCA_SENHA_PELO_NOVO: troca indisponível (409)', async () => {
+  it('sem sessão: 401; entrada incompleta: 400; senha atual errada: 401 sem eco da senha nova', async () => {
     const semSessao = await app.inject({ method: 'POST', url: '/api/sessao/senha', payload: {} });
     expect(semSessao.statusCode).toBe(401);
     const { cookie, csrf } = await entrarHttp();
@@ -385,16 +385,17 @@ describe('troca de senha (W1-01) e segundo fator', () => {
       headers: { cookie, 'x-csrf': csrf },
       payload: { senhaAtual: 'qualquer-1', senhaNova: 'Nova#2026x', confirmacao: 'Nova#2026x' },
     });
-    expect(r.statusCode).toBe(409);
-    expect(tipoDoProblema(esquemaProblema.parse(r.json()))).toBe('operacao-bloqueada');
+    // F2-L: a porta de senha em memória (fonte sintética) confere a senha atual antes de tudo.
+    expect(r.statusCode).toBe(401);
+    expect(tipoDoProblema(esquemaProblema.parse(r.json()))).toBe('nao-autenticado');
     expect(JSON.stringify(r.json())).not.toContain('Nova#2026x');
-    // M59-F2: o segundo fator saiu do Bloqueio; para conta que a identidade sintética não conhece, indisponível.
+    // O segundo fator é do módulo de identidade, fora do boot mínimo da F2-L: a rota não existe.
     const f = await app.inject({
       method: 'POST',
       url: '/api/sessao/segundo-fator',
       headers: { cookie, 'x-csrf': csrf },
       payload: {},
     });
-    expect(f.statusCode).toBe(503);
+    expect(f.statusCode).toBe(404);
   });
 });

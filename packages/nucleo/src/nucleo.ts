@@ -74,6 +74,18 @@ export class NucleoProprio {
     return escreverTransacao(fonte, this.configuracao, contexto, fn, confirmar);
   }
 
+  /** Leitura somente leitura no banco plataforma (login do administrador da plataforma, clientes ativos). */
+  async lerPlataforma<T>(correlacao: string, fn: (l: Leitor) => Promise<T>): Promise<T> {
+    const fonte = this.pools.fontePlataforma();
+    return lerSomente(fonte, this.configuracao, { cliente: fonte.cliente, correlacao }, fn);
+  }
+
+  /** Escrita numa transação no banco plataforma (credencial do administrador da plataforma). */
+  async escreverPlataforma<T>(correlacao: string, fn: (e: Escritor) => Promise<T>, confirmar = true): Promise<T> {
+    const fonte = this.pools.fontePlataforma();
+    return escreverTransacao(fonte, this.configuracao, { cliente: fonte.cliente, correlacao }, fn, confirmar);
+  }
+
   criarExecutor(opcoes: OpcoesExecutorNucleo = {}): Executor {
     return new Executor({
       metricas: opcoes.metricas ?? new MetricasExecutor(),

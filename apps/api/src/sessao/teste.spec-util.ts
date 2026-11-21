@@ -13,16 +13,8 @@ export const envTeste = {
   PRODUTO_NOME: 'Produto de teste',
   REDE_PADRAO: REDE,
   ESTABELECIMENTOS: 'aa,bb',
-  FB_AA_HOST: '127.0.0.1',
-  FB_AA_PORTA: '1',
-  FB_AA_BANCO: '/x/aa.fdb',
-  FB_AA_USUARIO: 'U',
-  FB_AA_NOME: 'Estabelecimento A (teste)',
-  FB_BB_HOST: '127.0.0.1',
-  FB_BB_PORTA: '2',
-  FB_BB_BANCO: '/x/bb.fdb',
-  FB_BB_USUARIO: 'U',
-  FB_BB_NOME: 'Estabelecimento B (teste)',
+  ESTABELECIMENTO_AA_NOME: 'Estabelecimento A (teste)',
+  ESTABELECIMENTO_BB_NOME: 'Estabelecimento B (teste)',
 };
 
 export function montar(

@@ -1,0 +1,12 @@
+{
+  "//": "Semeador do acesso: importa @sgh/nucleo (propriedades de parâmetro); roda com node --experimental-transform-types.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "erasableSyntaxOnly": false
+  },
+  "include": [
+    "semear-acesso.ts",
+    "semear-acesso.spec.ts"
+  ],
+  "exclude": []
+}

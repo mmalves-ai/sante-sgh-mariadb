@@ -70,6 +70,12 @@ export const esquemaSessao = z.object({
     nome: z.string().min(1),
     /** Login exato (TBUSERS.NOME, maiúsculas contam): é o que o executor grava nas colunas USUARIO*. */
     login: z.string().optional(),
+    /**
+     * Decisão do dono (2026-11-20, b): 'plataforma' na sessão do administrador da plataforma, que não é usuário do
+     * cliente: o `id` não é numérico ('plataforma:<id do administrador>') e quem grava idUsuario tem de recusar ou
+     * tratar esse ator. Ausente: usuário do cliente.
+     */
+    ator: z.literal('plataforma').optional(),
   }),
   /** Código da rede, resolvida pelo endereço de acesso (ARQ-2). */
   rede: z.string().nullable(),
