@@ -1,0 +1,21 @@
+# lote 03-02 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: digitalizacao
+# pastas: apps/api/src apps/api/src/autorizacao apps/api/src/modulos/digitalizacao apps/api/src/sessao
+apps/api/src/autorizacao/interceptor-como.ts
+apps/api/src/autorizacao/trilha-legado.spec.ts
+apps/api/src/autorizacao/trilha-legado.ts
+apps/api/src/autorizacao/trilha-memoria.ts
+apps/api/src/sessao/fonte-plataforma.int.spec.ts
+apps/api/src/sessao/porta-pin-legado.ts
+apps/api/src/sessao/recuperacao-senha.spec.ts
+apps/api/src/sessao/recuperacao-senha.ts
+apps/api/src/sessao/sessao.int.spec.ts
+apps/api/src/telemetria.int.spec.ts
+apps/api/src/modulos/digitalizacao/armazem.ts
+apps/api/src/modulos/digitalizacao/assinatura.ts
+apps/api/src/modulos/digitalizacao/digitalizacao.controller.ts
+apps/api/src/modulos/digitalizacao/digitalizacao.spec.ts
+apps/api/src/modulos/digitalizacao/porta-legado.ts
+apps/api/src/modulos/digitalizacao/porta-memoria.ts
+apps/api/src/modulos/digitalizacao/porta.ts
+apps/api/src/modulos/digitalizacao/public-api.ts

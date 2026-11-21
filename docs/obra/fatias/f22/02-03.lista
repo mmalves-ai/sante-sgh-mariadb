@@ -1,0 +1,27 @@
+# lote 02-03 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: consultas contratualizacao custos
+# pastas: apps/api/src/modulos/consultas apps/api/src/modulos/contratualizacao apps/api/src/modulos/custos
+apps/api/src/modulos/consultas/consultas.controller.ts
+apps/api/src/modulos/consultas/consultas.spec.ts
+apps/api/src/modulos/consultas/fonte.ts
+apps/api/src/modulos/consultas/matriz.controller.ts
+apps/api/src/modulos/contratualizacao/contratualizacao.controller.ts
+apps/api/src/modulos/contratualizacao/contratualizacao.spec.ts
+apps/api/src/modulos/contratualizacao/porta-legado.ts
+apps/api/src/modulos/contratualizacao/porta-memoria.ts
+apps/api/src/modulos/contratualizacao/porta.ts
+apps/api/src/modulos/contratualizacao/public-api.ts
+apps/api/src/modulos/custos/apuracao-http.spec.ts
+apps/api/src/modulos/custos/apuracao.controller.ts
+apps/api/src/modulos/custos/apuracao.int.spec.ts
+apps/api/src/modulos/custos/custos-http.spec.ts
+apps/api/src/modulos/custos/custos.controller.ts
+apps/api/src/modulos/custos/custos.int.spec.ts
+apps/api/src/modulos/custos/porta-legado.ts
+apps/api/src/modulos/custos/porta-memoria.ts
+apps/api/src/modulos/custos/porta.ts
+apps/api/src/modulos/custos/public-api.ts
+apps/api/src/modulos/custos/relatorio-custos.spec.ts
+apps/api/src/modulos/custos/relatorio-custos.ts
+apps/api/src/modulos/custos/servico-apuracao.ts
+apps/api/src/modulos/custos/servico.ts

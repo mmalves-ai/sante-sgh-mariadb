@@ -1,0 +1,28 @@
+# lote 02-12 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: portaria precos
+# pastas: apps/api/src/modulos/portaria apps/api/src/modulos/portaria/aplicacao apps/api/src/modulos/precos
+apps/api/src/modulos/portaria/aplicacao/porteiro.autorizacao.int.spec.ts
+apps/api/src/modulos/portaria/fotos.ts
+apps/api/src/modulos/portaria/porta-legado.ts
+apps/api/src/modulos/portaria/porta-memoria.ts
+apps/api/src/modulos/portaria/porta.ts
+apps/api/src/modulos/portaria/portaria-revisao.spec.ts
+apps/api/src/modulos/portaria/portaria.controller.ts
+apps/api/src/modulos/portaria/portaria.spec-util.ts
+apps/api/src/modulos/portaria/portaria.spec.ts
+apps/api/src/modulos/portaria/public-api.ts
+apps/api/src/modulos/portaria/servico.ts
+apps/api/src/modulos/precos/base.ts
+apps/api/src/modulos/precos/convenios.controller.ts
+apps/api/src/modulos/precos/escopo.spec.ts
+apps/api/src/modulos/precos/fonte-copia.int.spec.ts
+apps/api/src/modulos/precos/fonte-memoria.ts
+apps/api/src/modulos/precos/fonte.ts
+apps/api/src/modulos/precos/importacoes.controller.ts
+apps/api/src/modulos/precos/motor.controller.ts
+apps/api/src/modulos/precos/precos-correcao.spec.ts
+apps/api/src/modulos/precos/precos.controller.ts
+apps/api/src/modulos/precos/precos.spec.ts
+apps/api/src/modulos/precos/public-api.ts
+apps/api/src/modulos/precos/servico.ts
+apps/api/src/modulos/precos/simbolos.ts

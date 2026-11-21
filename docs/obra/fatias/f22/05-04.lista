@@ -1,0 +1,35 @@
+# lote 05-04 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: coexistencia
+# pastas: apps/api/src/modulos/coexistencia apps/api/src/modulos/coexistencia/aplicacao
+apps/api/src/modulos/coexistencia/aplicacao/ciclo.ts
+apps/api/src/modulos/coexistencia/aplicacao/desligamento.ts
+apps/api/src/modulos/coexistencia/aplicacao/ensaio-firebird5.ts
+apps/api/src/modulos/coexistencia/aplicacao/ensaio-utf8.ts
+apps/api/src/modulos/coexistencia/aplicacao/fim.ts
+apps/api/src/modulos/coexistencia/aplicacao/janela.ts
+apps/api/src/modulos/coexistencia/aplicacao/medidor-tarefas.ts
+apps/api/src/modulos/coexistencia/aplicacao/registro.ts
+apps/api/src/modulos/coexistencia/aplicacao/retrocompatibilidade.ts
+apps/api/src/modulos/coexistencia/aplicacao/servico.ts
+apps/api/src/modulos/coexistencia/ciclo.int.spec.ts
+apps/api/src/modulos/coexistencia/ciclo.spec.ts
+apps/api/src/modulos/coexistencia/desligamento.controller.ts
+apps/api/src/modulos/coexistencia/desligamento.int.spec.ts
+apps/api/src/modulos/coexistencia/desligamento.spec.ts
+apps/api/src/modulos/coexistencia/ensaio-utf8.spec.ts
+apps/api/src/modulos/coexistencia/fim.controller.ts
+apps/api/src/modulos/coexistencia/fim.spec.ts
+apps/api/src/modulos/coexistencia/janela.spec.ts
+apps/api/src/modulos/coexistencia/migracao.controller.ts
+apps/api/src/modulos/coexistencia/migracao.spec.ts
+apps/api/src/modulos/coexistencia/onda1.spec.ts
+apps/api/src/modulos/coexistencia/onda2.spec.ts
+apps/api/src/modulos/coexistencia/porta-legado.ts
+apps/api/src/modulos/coexistencia/porta-memoria.ts
+apps/api/src/modulos/coexistencia/porta.ts
+apps/api/src/modulos/coexistencia/public-api.ts
+apps/api/src/modulos/coexistencia/registro.int.spec.ts
+apps/api/src/modulos/coexistencia/registro.spec.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.controller.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.int.spec.ts
+apps/api/src/modulos/coexistencia/retrocompatibilidade.spec.ts

@@ -1,0 +1,38 @@
+# lote 05-02 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: acesso
+# pastas: apps/api/src/modulos/acesso apps/api/src/modulos/acesso/aplicacao apps/api/src/modulos/acesso/saneamento apps/api/src/modulos/acesso/segredos apps/api/src/modulos/acesso/senha
+apps/api/src/modulos/acesso/mapa-2fa-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/mapa-ciclo.spec.ts
+apps/api/src/modulos/acesso/aplicacao/mensagem.int.spec.ts
+apps/api/src/modulos/acesso/pedido-acesso.controller.spec.ts
+apps/api/src/modulos/acesso/pedido-acesso.controller.ts
+apps/api/src/modulos/acesso/perfil-parametro-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/perfil-parametro-ciclo.spec.ts
+apps/api/src/modulos/acesso/pin-gestao.controller.ts
+apps/api/src/modulos/acesso/recertificacao.controller.spec.ts
+apps/api/src/modulos/acesso/recertificacao.controller.ts
+apps/api/src/modulos/acesso/aplicacao/rehash-primeiro-login.int.spec.ts
+apps/api/src/modulos/acesso/rh.controller.spec.ts
+apps/api/src/modulos/acesso/rh.controller.ts
+apps/api/src/modulos/acesso/saneamento/parametro.ts
+apps/api/src/modulos/acesso/saneamento/porta-legado.ts
+apps/api/src/modulos/acesso/saneamento/porta-memoria.ts
+apps/api/src/modulos/acesso/saneamento/porta-sintetica.spec.ts
+apps/api/src/modulos/acesso/saneamento/porta-sintetica.ts
+apps/api/src/modulos/acesso/saneamento/porta.ts
+apps/api/src/modulos/acesso/saneamento/saneamento.controller.spec.ts
+apps/api/src/modulos/acesso/saneamento/saneamento.controller.ts
+apps/api/src/modulos/acesso/saneamento/servico.spec.ts
+apps/api/src/modulos/acesso/saneamento/servico.ts
+apps/api/src/modulos/acesso/segredos/porta-legado.ts
+apps/api/src/modulos/acesso/segredos/porta-memoria.ts
+apps/api/src/modulos/acesso/segredos/porta.ts
+apps/api/src/modulos/acesso/segredos/segredos.controller.ts
+apps/api/src/modulos/acesso/segredos/segredos.spec.ts
+apps/api/src/modulos/acesso/segredos/servico.ts
+apps/api/src/modulos/acesso/senha/porta-senha-legado.ts
+apps/api/src/modulos/acesso/troca-rapida.controller.spec.ts
+apps/api/src/modulos/acesso/ultimo-gestor.spec.ts
+apps/api/src/modulos/acesso/ultimo-gestor.ts
+apps/api/src/modulos/acesso/usuario-modelo.controller.spec.ts
+apps/api/src/modulos/acesso/usuario-modelo.controller.ts

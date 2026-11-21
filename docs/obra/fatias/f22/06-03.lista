@@ -1,0 +1,43 @@
+# lote 06-03 (onda 6); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/pessoas/aplicacao apps/api/src/modulos/pessoas/escala apps/api/src/modulos/pessoas/esocial apps/api/src/modulos/pessoas/esocial/transmissor
+apps/api/src/modulos/pessoas/aplicacao/escala.int.spec.ts
+apps/api/src/modulos/pessoas/escala/crud-escala.spec.ts
+apps/api/src/modulos/pessoas/escala/crud-realizado.spec.ts
+apps/api/src/modulos/pessoas/escala/escala.controller.ts
+apps/api/src/modulos/pessoas/escala/escala.spec.ts
+apps/api/src/modulos/pessoas/escala/plantao.controller.ts
+apps/api/src/modulos/pessoas/escala/plantao.spec.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-legado.spec.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-legado.ts
+apps/api/src/modulos/pessoas/escala/porta-escala-memoria.ts
+apps/api/src/modulos/pessoas/escala/porta-escala.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado-legado.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado-memoria.ts
+apps/api/src/modulos/pessoas/escala/porta-realizado.ts
+apps/api/src/modulos/pessoas/escala/realizado.controller.ts
+apps/api/src/modulos/pessoas/escala/servico-escala.spec.ts
+apps/api/src/modulos/pessoas/escala/servico-escala.ts
+apps/api/src/modulos/pessoas/escala/servico-plantao.spec.ts
+apps/api/src/modulos/pessoas/escala/servico-plantao.ts
+apps/api/src/modulos/pessoas/escala/servico-realizado.ts
+apps/api/src/modulos/pessoas/aplicacao/esocial.int.spec.ts
+apps/api/src/modulos/pessoas/esocial/esocial-http.spec.ts
+apps/api/src/modulos/pessoas/esocial/esocial.controller.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-legado.spec.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-legado.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial-memoria.ts
+apps/api/src/modulos/pessoas/esocial/porta-esocial.ts
+apps/api/src/modulos/pessoas/esocial/servico-esocial.spec.ts
+apps/api/src/modulos/pessoas/esocial/servico-esocial.ts
+apps/api/src/modulos/pessoas/esocial/servico-periodicos.spec.ts
+apps/api/src/modulos/pessoas/esocial/servico-periodicos.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/certificado-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/simulador-esocial.spec-util.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/soap-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/transmissor-esocial.spec.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/transmissor-esocial.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/xml-leitura.ts
+apps/api/src/modulos/pessoas/esocial/transmissor/xmldsig.ts
+apps/api/src/modulos/pessoas/aplicacao/fechamento-periodicos.int.spec.ts
+apps/api/src/modulos/pessoas/aplicacao/ferias-decimo.int.spec.ts

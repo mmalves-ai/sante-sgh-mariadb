@@ -1,0 +1,18 @@
+# lote 08-06 (onda 8); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src packages/testes/src tools/contabil/src tools/formularios/src tools/implantacao/src tools/instalacao/src
+apps/api/src/app.module.ts
+packages/testes/src/reproducao.ts
+tools/contabil/src/reprocessar.ts
+tools/formularios/src/conferencia.ts
+tools/formularios/src/converter.ts
+tools/formularios/src/nucleo.ts
+tools/implantacao/src/ensaio.ts
+tools/implantacao/src/gerar-listas.ts
+tools/implantacao/src/listas.spec.ts
+tools/implantacao/src/listas.ts
+tools/implantacao/src/privilegios.spec.ts
+tools/implantacao/src/privilegios.ts
+tools/instalacao/src/empacotar.ts
+tools/instalacao/src/liberacao-ligar-tudo.ts
+tools/instalacao/src/variaveis.spec.ts

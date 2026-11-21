@@ -1,0 +1,27 @@
+# lote 01-02 (onda 1); gerado por tools/obra/fatiar_f22.py
+# registrar: atendimento cadastro
+# pastas: apps/api/src/modulos/atendimento apps/api/src/modulos/cadastro
+apps/api/src/modulos/cadastro/cadastro.spec.ts
+apps/api/src/modulos/cadastro/comum.ts
+apps/api/src/modulos/cadastro/pacientes.controller.ts
+apps/api/src/modulos/cadastro/porta-legado.ts
+apps/api/src/modulos/cadastro/porta-memoria.ts
+apps/api/src/modulos/cadastro/porta.ts
+apps/api/src/modulos/cadastro/profissionais-edicao.spec.ts
+apps/api/src/modulos/cadastro/profissionais-memoria.ts
+apps/api/src/modulos/cadastro/profissionais.controller.ts
+apps/api/src/modulos/cadastro/public-api.ts
+apps/api/src/modulos/cadastro/servico.ts
+apps/api/src/modulos/cadastro/unificacao-como.spec.ts
+apps/api/src/modulos/atendimento/atendimento.controller.ts
+apps/api/src/modulos/atendimento/atendimento.spec.ts
+apps/api/src/modulos/atendimento/avisos.ts
+apps/api/src/modulos/atendimento/escore-pa.ts
+apps/api/src/modulos/atendimento/pa-escore.spec.ts
+apps/api/src/modulos/atendimento/pa-transferencia.spec.ts
+apps/api/src/modulos/atendimento/pa.controller.ts
+apps/api/src/modulos/atendimento/porta-legado.ts
+apps/api/src/modulos/atendimento/porta-memoria.ts
+apps/api/src/modulos/atendimento/porta.ts
+apps/api/src/modulos/atendimento/public-api.ts
+apps/api/src/modulos/atendimento/servico.ts

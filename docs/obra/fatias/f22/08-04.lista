@@ -1,0 +1,20 @@
+# lote 08-04 (onda 8); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: packages/testes/src/massa
+packages/testes/src/massa/atendimento-outro-sistema.ts
+packages/testes/src/massa/bloco.ts
+packages/testes/src/massa/checagem-outro-sistema.ts
+packages/testes/src/massa/coexistencia-outro-sistema.ts
+packages/testes/src/massa/conta-outro-sistema.ts
+packages/testes/src/massa/contrato-sintetico.ts
+packages/testes/src/massa/crud-motor-w002.ts
+packages/testes/src/massa/dominios.ts
+packages/testes/src/massa/estoque-outro-sistema.ts
+packages/testes/src/massa/internacao-outro-sistema.ts
+packages/testes/src/massa/jornada-outro-sistema.ts
+packages/testes/src/massa/leitos.ts
+packages/testes/src/massa/onda1-outro-sistema.ts
+packages/testes/src/massa/precos.ts
+packages/testes/src/massa/profissional.ts
+packages/testes/src/massa/prontuario.ts
+packages/testes/src/massa/registro-clinico.ts

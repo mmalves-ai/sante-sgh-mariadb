@@ -1,0 +1,26 @@
+# lote 03-05 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: sus
+# pastas: apps/api/src/modulos/sus
+apps/api/src/modulos/sus/armazem.ts
+apps/api/src/modulos/sus/montagem-aih.ts
+apps/api/src/modulos/sus/montagem.ts
+apps/api/src/modulos/sus/porta-aih-legado.ts
+apps/api/src/modulos/sus/porta-aih-memoria.ts
+apps/api/src/modulos/sus/porta-aih.ts
+apps/api/src/modulos/sus/porta-legado.ts
+apps/api/src/modulos/sus/porta-memoria.ts
+apps/api/src/modulos/sus/porta.ts
+apps/api/src/modulos/sus/public-api.ts
+apps/api/src/modulos/sus/selo-solicitante.ts
+apps/api/src/modulos/sus/servico-aih.spec.ts
+apps/api/src/modulos/sus/servico-aih.ts
+apps/api/src/modulos/sus/servico-apac.spec.ts
+apps/api/src/modulos/sus/servico-bpa.spec.ts
+apps/api/src/modulos/sus/servico.spec.ts
+apps/api/src/modulos/sus/servico.ts
+apps/api/src/modulos/sus/sus-aih.controller.ts
+apps/api/src/modulos/sus/sus-aih.int.spec.ts
+apps/api/src/modulos/sus/sus-apac.int.spec.ts
+apps/api/src/modulos/sus/sus-bpa.int.spec.ts
+apps/api/src/modulos/sus/sus.controller.ts
+apps/api/src/modulos/sus/sus.int.spec.ts

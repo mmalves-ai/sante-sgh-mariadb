@@ -1,0 +1,22 @@
+# lote 03-03 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: manutencao
+# pastas: apps/api/src/modulos/manutencao
+apps/api/src/modulos/manutencao/aviso-parada.int.spec.ts
+apps/api/src/modulos/manutencao/ciclo-vida.int.spec.ts
+apps/api/src/modulos/manutencao/ciclo-vida.ts
+apps/api/src/modulos/manutencao/documentos-pdf.int.spec.ts
+apps/api/src/modulos/manutencao/documentos.spec-util.ts
+apps/api/src/modulos/manutencao/documentos.spec.ts
+apps/api/src/modulos/manutencao/documentos.ts
+apps/api/src/modulos/manutencao/manutencao.controller.ts
+apps/api/src/modulos/manutencao/manutencao.spec.ts
+apps/api/src/modulos/manutencao/pgts.spec.ts
+apps/api/src/modulos/manutencao/pmoc.spec.ts
+apps/api/src/modulos/manutencao/pmoc.ts
+apps/api/src/modulos/manutencao/porta-legado.ts
+apps/api/src/modulos/manutencao/porta-memoria.ts
+apps/api/src/modulos/manutencao/porta.ts
+apps/api/src/modulos/manutencao/public-api.ts
+apps/api/src/modulos/manutencao/servico.ts
+apps/api/src/modulos/manutencao/tecnovigilancia.int.spec.ts
+apps/api/src/modulos/manutencao/tecnovigilancia.ts

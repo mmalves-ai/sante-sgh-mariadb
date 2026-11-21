@@ -1,0 +1,29 @@
+# lote 08-07 (onda 8); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: tools/verificadores/src tools/verificadores/src/lgpd
+tools/verificadores/src/ambiente.ts
+tools/verificadores/src/compose.ts
+tools/verificadores/src/contas-banco.ts
+tools/verificadores/src/copia-leitura.ts
+tools/verificadores/src/copia.ts
+tools/verificadores/src/datamart-carga.ts
+tools/verificadores/src/datamart-carregar.ts
+tools/verificadores/src/faturamento-reproduzir.ts
+tools/verificadores/src/guardas-privilegios.ts
+tools/verificadores/src/imutabilidade-gerar.ts
+tools/verificadores/src/imutabilidade.ts
+tools/verificadores/src/indicadores-controle.ts
+tools/verificadores/src/infra.ts
+tools/verificadores/src/k6-homologacao-cli.ts
+tools/verificadores/src/k6-mon.ts
+tools/verificadores/src/k6.ts
+tools/verificadores/src/lgpd/datamart-rede.int.spec.ts
+tools/verificadores/src/permissoes-copia.ts
+tools/verificadores/src/permissoes-dados.ts
+tools/verificadores/src/privilegios-gerar.ts
+tools/verificadores/src/privilegios.spec.ts
+tools/verificadores/src/privilegios.ts
+tools/verificadores/src/relatorios-triagem.ts
+tools/verificadores/src/textos-de-produto.ts
+tools/verificadores/src/treino-cli.ts
+tools/verificadores/src/treino.ts

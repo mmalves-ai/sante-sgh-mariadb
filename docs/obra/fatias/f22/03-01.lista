@@ -1,0 +1,30 @@
+# lote 03-01 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: adt
+# pastas: apps/api/src/modulos/adt
+apps/api/src/modulos/adt/adt.spec.ts
+apps/api/src/modulos/adt/apoios.ts
+apps/api/src/modulos/adt/avisos-leitos.spec.ts
+apps/api/src/modulos/adt/fotos.ts
+apps/api/src/modulos/adt/higienizacao.controller.ts
+apps/api/src/modulos/adt/indicadores-giro.ts
+apps/api/src/modulos/adt/internacao.controller.ts
+apps/api/src/modulos/adt/leitos.controller.ts
+apps/api/src/modulos/adt/nir-crud.spec.ts
+apps/api/src/modulos/adt/nir-memoria.ts
+apps/api/src/modulos/adt/nir-porta-legado.ts
+apps/api/src/modulos/adt/nir-porta-memoria.ts
+apps/api/src/modulos/adt/nir-porta.ts
+apps/api/src/modulos/adt/nir-servico.ts
+apps/api/src/modulos/adt/nir.controller.ts
+apps/api/src/modulos/adt/nir.spec.ts
+apps/api/src/modulos/adt/os-leito.spec.ts
+apps/api/src/modulos/adt/os-leito.ts
+apps/api/src/modulos/adt/porta-legado.ts
+apps/api/src/modulos/adt/porta-memoria.ts
+apps/api/src/modulos/adt/porta.ts
+apps/api/src/modulos/adt/public-api.ts
+apps/api/src/modulos/adt/regulacao.controller.ts
+apps/api/src/modulos/adt/regulacao.spec.ts
+apps/api/src/modulos/adt/same.controller.ts
+apps/api/src/modulos/adt/servico.ts
+apps/api/src/modulos/adt/simbolos.ts

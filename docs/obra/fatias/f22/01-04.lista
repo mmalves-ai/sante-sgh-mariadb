@@ -1,0 +1,25 @@
+# lote 01-04 (onda 1); gerado por tools/obra/fatiar_f22.py
+# registrar: agenda
+# pastas: apps/api/src/modulos/acesso apps/api/src/modulos/acesso/aplicacao apps/api/src/modulos/agenda apps/api/src/modulos/documento apps/api/src/modulos/documento/aplicacao apps/api/src/modulos/documento/infra
+apps/api/src/modulos/agenda/agenda.spec.ts
+apps/api/src/modulos/agenda/agendas.controller.ts
+apps/api/src/modulos/agenda/apoio.controller.ts
+apps/api/src/modulos/agenda/apoio.ts
+apps/api/src/modulos/agenda/escopo.ts
+apps/api/src/modulos/agenda/marcacoes.controller.ts
+apps/api/src/modulos/agenda/porta-legado.ts
+apps/api/src/modulos/agenda/porta-memoria.ts
+apps/api/src/modulos/agenda/porta.ts
+apps/api/src/modulos/agenda/public-api.ts
+apps/api/src/modulos/agenda/servico.ts
+apps/api/src/modulos/acesso/alerta.ts
+apps/api/src/modulos/acesso/aplicacao/copia.spec-util.ts
+apps/api/src/modulos/acesso/emergencia.controller.ts
+apps/api/src/modulos/documento/aplicacao/emissao.service.ts
+apps/api/src/modulos/documento/documento.controller.ts
+apps/api/src/modulos/documento/fonte.ts
+apps/api/src/modulos/documento/infra/gotenberg.ts
+apps/api/src/modulos/documento/infra/registro.ts
+apps/api/src/modulos/documento/infra/s3.ts
+apps/api/src/modulos/documento/infra/valkey.ts
+apps/api/src/modulos/documento/public-api.ts

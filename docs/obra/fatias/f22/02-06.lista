@@ -1,0 +1,25 @@
+# lote 02-06 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: documento especialidades exames farmacia
+# pastas: apps/api/src/modulos/documento apps/api/src/modulos/documento/aplicacao apps/api/src/modulos/documento/infra apps/api/src/modulos/especialidades apps/api/src/modulos/exames apps/api/src/modulos/farmacia
+apps/api/src/modulos/documento/aplicacao/emissao.service.spec.ts
+apps/api/src/modulos/documento/documento.int.spec.ts
+apps/api/src/modulos/documento/infra/registro-sgh.ts
+apps/api/src/modulos/documento/infra/registro.spec.ts
+apps/api/src/modulos/documento/infra/valkey.spec.ts
+apps/api/src/modulos/documento/integracao.spec-util.ts
+apps/api/src/modulos/especialidades/especialidades-crud.spec.ts
+apps/api/src/modulos/especialidades/especialidades.controller.ts
+apps/api/src/modulos/especialidades/especialidades.spec.ts
+apps/api/src/modulos/especialidades/porta-legado.ts
+apps/api/src/modulos/especialidades/porta-memoria.ts
+apps/api/src/modulos/especialidades/porta.ts
+apps/api/src/modulos/especialidades/public-api.ts
+apps/api/src/modulos/exames/exames.spec.ts
+apps/api/src/modulos/farmacia/apoios.ts
+apps/api/src/modulos/farmacia/farmacia.controller.ts
+apps/api/src/modulos/farmacia/farmacia.spec.ts
+apps/api/src/modulos/farmacia/porta-legado.ts
+apps/api/src/modulos/farmacia/porta-memoria.ts
+apps/api/src/modulos/farmacia/porta.ts
+apps/api/src/modulos/farmacia/public-api.ts
+apps/api/src/modulos/farmacia/servico.ts

@@ -1,0 +1,28 @@
+# lote 06-07 (onda 6); gerado por tools/obra/fatiar_f22.py
+# registrar: portal-paciente
+# pastas: apps/api/src/modulos/portal-paciente apps/api/src/modulos/portal-paciente/agenda apps/api/src/modulos/portal-paciente/aplicacao
+apps/api/src/modulos/portal-paciente/agenda/gateway.ts
+apps/api/src/modulos/portal-paciente/agenda/interno.controller.ts
+apps/api/src/modulos/portal-paciente/agenda/porta-legado.ts
+apps/api/src/modulos/portal-paciente/agenda/porta-memoria.ts
+apps/api/src/modulos/portal-paciente/agenda/porta.ts
+apps/api/src/modulos/portal-paciente/agenda/portal-agenda.controller.ts
+apps/api/src/modulos/portal-paciente/agenda/portal-agenda.spec.ts
+apps/api/src/modulos/portal-paciente/agenda/servico.ts
+apps/api/src/modulos/portal-paciente/agenda/tesouraria.ts
+apps/api/src/modulos/portal-paciente/aplicacao/canal.ts
+apps/api/src/modulos/portal-paciente/aplicacao/copia-prontuario.int.spec.ts
+apps/api/src/modulos/portal-paciente/aplicacao/copia.spec-util.ts
+apps/api/src/modulos/portal-paciente/aplicacao/liberacao.ts
+apps/api/src/modulos/portal-paciente/aplicacao/portal.autorizacao.int.spec.ts
+apps/api/src/modulos/portal-paciente/aplicacao/provas.ts
+apps/api/src/modulos/portal-paciente/aplicacao/responsavel.int.spec.ts
+apps/api/src/modulos/portal-paciente/aplicacao/servico.spec.ts
+apps/api/src/modulos/portal-paciente/aplicacao/servico.ts
+apps/api/src/modulos/portal-paciente/porta-legado.ts
+apps/api/src/modulos/portal-paciente/porta-memoria.ts
+apps/api/src/modulos/portal-paciente/porta.ts
+apps/api/src/modulos/portal-paciente/portal-paciente-interno.controller.ts
+apps/api/src/modulos/portal-paciente/portal-paciente.controller.ts
+apps/api/src/modulos/portal-paciente/portal-paciente.spec.ts
+apps/api/src/modulos/portal-paciente/public-api.ts

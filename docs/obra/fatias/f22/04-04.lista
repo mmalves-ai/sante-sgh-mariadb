@@ -1,0 +1,26 @@
+# lote 04-04 (onda 4); gerado por tools/obra/fatiar_f22.py
+# registrar: relatorio
+# pastas: apps/api/src/modulos/relatorio apps/api/src/modulos/relatorio/aplicacao apps/api/src/modulos/relatorio/infra
+apps/api/src/modulos/relatorio/aplicacao/bi-rede.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/bi-rede.ts
+apps/api/src/modulos/relatorio/aplicacao/catalogo-w0-09.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/configuracao.ts
+apps/api/src/modulos/relatorio/aplicacao/executar.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/executar.ts
+apps/api/src/modulos/relatorio/aplicacao/exportar.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/exportar.ts
+apps/api/src/modulos/relatorio/aplicacao/gestao-ciclo.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/gestao.spec.ts
+apps/api/src/modulos/relatorio/aplicacao/gestao.ts
+apps/api/src/modulos/relatorio/bi-rede.controller.ts
+apps/api/src/modulos/relatorio/bi-rede.spec.ts
+apps/api/src/modulos/relatorio/infra/catalogo-w0-09.int.spec.ts
+apps/api/src/modulos/relatorio/infra/diretoria-rede.int.spec.ts
+apps/api/src/modulos/relatorio/infra/execucao.int.spec.ts
+apps/api/src/modulos/relatorio/infra/fila-envio.ts
+apps/api/src/modulos/relatorio/infra/gestao-ciclo.int.spec.ts
+apps/api/src/modulos/relatorio/porta-legado.ts
+apps/api/src/modulos/relatorio/porta-memoria.ts
+apps/api/src/modulos/relatorio/porta.ts
+apps/api/src/modulos/relatorio/public-api.ts
+apps/api/src/modulos/relatorio/relatorio.controller.ts

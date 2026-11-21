@@ -1,0 +1,40 @@
+# lote 08-09 (onda 8); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/worker/src
+apps/worker/src/censo-fechamento.service.ts
+apps/worker/src/censo-fechamento.spec.ts
+apps/worker/src/classificacao-estouro.int.spec.ts
+apps/worker/src/classificacao-estouro.service.ts
+apps/worker/src/classificacao-estouro.spec.ts
+apps/worker/src/coexistencia-retrato.service.ts
+apps/worker/src/coexistencia-retrato.spec.ts
+apps/worker/src/coexistencia-retrato.ts
+apps/worker/src/contratos-vencimento.service.ts
+apps/worker/src/contratos-vencimento.spec.ts
+apps/worker/src/email.service.ts
+apps/worker/src/email.spec.ts
+apps/worker/src/indice-busca.service.ts
+apps/worker/src/indice-busca.spec.ts
+apps/worker/src/logger.ts
+apps/worker/src/main.ts
+apps/worker/src/nir-reserva.int.spec.ts
+apps/worker/src/nir-reserva.service.ts
+apps/worker/src/nir-reserva.spec.ts
+apps/worker/src/pacs-worklist.service.ts
+apps/worker/src/pacs-worklist.spec.ts
+apps/worker/src/pessoas-conselho.service.ts
+apps/worker/src/pessoas-conselho.spec.ts
+apps/worker/src/prefixo-filas.spec.ts
+apps/worker/src/publicador-catalogos.service.ts
+apps/worker/src/rede-mpi.service.ts
+apps/worker/src/rede-mpi.spec.ts
+apps/worker/src/relay-outbox.int.spec.ts
+apps/worker/src/relay-outbox.service.ts
+apps/worker/src/relay-outbox.spec.ts
+apps/worker/src/relay-outbox.ts
+apps/worker/src/relogio.ts
+apps/worker/src/representacao-pep.service.ts
+apps/worker/src/representacao-pep.spec.ts
+apps/worker/src/sinal-de-vida.service.ts
+apps/worker/src/smtp.ts
+apps/worker/src/telemetria.ts

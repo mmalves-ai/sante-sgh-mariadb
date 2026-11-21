@@ -1,0 +1,22 @@
+# lote 02-02 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: catalogos config
+# pastas: apps/api/src/modulos/catalogos apps/api/src/modulos/config
+apps/api/src/modulos/catalogos/catalogos.controller.ts
+apps/api/src/modulos/catalogos/catalogos.spec.ts
+apps/api/src/modulos/catalogos/fonte-memoria.ts
+apps/api/src/modulos/catalogos/fonte.ts
+apps/api/src/modulos/catalogos/guardar-arquivo.ts
+apps/api/src/modulos/catalogos/public-api.ts
+apps/api/src/modulos/catalogos/servico-cache.spec.ts
+apps/api/src/modulos/catalogos/servico.ts
+apps/api/src/modulos/config/assinaturas.spec.ts
+apps/api/src/modulos/config/cache-config.int.spec.ts
+apps/api/src/modulos/config/coexistencia.spec.ts
+apps/api/src/modulos/config/dominio.controller.spec.ts
+apps/api/src/modulos/config/dominios-liberacao.spec.ts
+apps/api/src/modulos/config/gravacao.spec.ts
+apps/api/src/modulos/config/guarda-chave-de-tela.ts
+apps/api/src/modulos/config/homologacao.spec.ts
+apps/api/src/modulos/config/onda0.spec.ts
+apps/api/src/modulos/config/prontidao.spec.ts
+apps/api/src/modulos/config/vigia-reconciliacao.spec.ts

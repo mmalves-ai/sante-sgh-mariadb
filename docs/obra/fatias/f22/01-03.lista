@@ -1,0 +1,27 @@
+# lote 01-03 (onda 1); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/config
+apps/api/src/modulos/config/assinaturas.controller.ts
+apps/api/src/modulos/config/assinaturas.ts
+apps/api/src/modulos/config/cache-config.ts
+apps/api/src/modulos/config/chave-recurso.ts
+apps/api/src/modulos/config/coexistencia.controller.ts
+apps/api/src/modulos/config/configuracao-fonte.ts
+apps/api/src/modulos/config/criterio-ligar.ts
+apps/api/src/modulos/config/dominios-fonte.ts
+apps/api/src/modulos/config/dominios.controller.ts
+apps/api/src/modulos/config/falha-configuracao.ts
+apps/api/src/modulos/config/fonte-de-cor.ts
+apps/api/src/modulos/config/fonte.ts
+apps/api/src/modulos/config/gravacao.controller.ts
+apps/api/src/modulos/config/gravacao.ts
+apps/api/src/modulos/config/homologacao.controller.ts
+apps/api/src/modulos/config/homologacao.ts
+apps/api/src/modulos/config/liberacao.controller.ts
+apps/api/src/modulos/config/onda0.controller.ts
+apps/api/src/modulos/config/onda0.ts
+apps/api/src/modulos/config/parametros.controller.ts
+apps/api/src/modulos/config/prontidao.controller.ts
+apps/api/src/modulos/config/prontidao.ts
+apps/api/src/modulos/config/public-api.ts
+apps/api/src/modulos/config/vigia-reconciliacao.ts

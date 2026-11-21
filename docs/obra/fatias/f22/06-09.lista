@@ -1,0 +1,30 @@
+# lote 06-09 (onda 6); gerado por tools/obra/fatiar_f22.py
+# registrar: telemedicina tiss
+# pastas: apps/api/src/modulos/telemedicina apps/api/src/modulos/tiss
+apps/api/src/modulos/tiss/acompanhamento.spec.ts
+apps/api/src/modulos/tiss/acompanhamento.ts
+apps/api/src/modulos/tiss/apoios.ts
+apps/api/src/modulos/tiss/armazem-xml.ts
+apps/api/src/modulos/tiss/guarda-xml.int.spec.ts
+apps/api/src/modulos/tiss/guia-impressao.ts
+apps/api/src/modulos/tiss/guia-pdf.int.spec.ts
+apps/api/src/modulos/tiss/onda4.spec.ts
+apps/api/src/modulos/tiss/porta-legado.ts
+apps/api/src/modulos/tiss/porta-memoria.ts
+apps/api/src/modulos/tiss/porta.ts
+apps/api/src/modulos/tiss/public-api.ts
+apps/api/src/modulos/tiss/servico.ts
+apps/api/src/modulos/tiss/simulador.spec.ts
+apps/api/src/modulos/tiss/simulador.ts
+apps/api/src/modulos/tiss/tiss.controller.ts
+apps/api/src/modulos/tiss/tiss.spec.ts
+apps/api/src/modulos/telemedicina/porta-legado.ts
+apps/api/src/modulos/telemedicina/porta-memoria.ts
+apps/api/src/modulos/telemedicina/porta.ts
+apps/api/src/modulos/telemedicina/portal-teleconsulta.controller.ts
+apps/api/src/modulos/telemedicina/provedor.spec.ts
+apps/api/src/modulos/telemedicina/provedor.ts
+apps/api/src/modulos/telemedicina/public-api.ts
+apps/api/src/modulos/telemedicina/servico.ts
+apps/api/src/modulos/telemedicina/telemedicina.controller.ts
+apps/api/src/modulos/telemedicina/telemedicina.spec.ts

@@ -1,0 +1,26 @@
+# lote 02-10 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: operadora
+# pastas: apps/api/src/modulos/operadora apps/api/src/modulos/operadora/aplicacao apps/api/src/modulos/operadora/infra
+apps/api/src/modulos/operadora/infra/copia.spec-util.ts
+apps/api/src/modulos/operadora/infra/escopo-operadora.int.spec.ts
+apps/api/src/modulos/operadora/infra/liberacao.int.spec.ts
+apps/api/src/modulos/operadora/aplicacao/mensagens.ts
+apps/api/src/modulos/operadora/operadora.controller.ts
+apps/api/src/modulos/operadora/operadora.spec.ts
+apps/api/src/modulos/operadora/porta-legado.ts
+apps/api/src/modulos/operadora/porta-memoria.ts
+apps/api/src/modulos/operadora/porta.ts
+apps/api/src/modulos/operadora/portal-prestador-contas.spec.ts
+apps/api/src/modulos/operadora/portal-prestador-contas.ts
+apps/api/src/modulos/operadora/portal-prestador-servico.ts
+apps/api/src/modulos/operadora/portal-prestador.controller.ts
+apps/api/src/modulos/operadora/public-api.ts
+apps/api/src/modulos/operadora/infra/rede.int.spec.ts
+apps/api/src/modulos/operadora/rede-porta-legado.ts
+apps/api/src/modulos/operadora/rede-porta-memoria.ts
+apps/api/src/modulos/operadora/rede-porta.ts
+apps/api/src/modulos/operadora/rede-servico.ts
+apps/api/src/modulos/operadora/rede.controller.ts
+apps/api/src/modulos/operadora/rede.spec.ts
+apps/api/src/modulos/operadora/infra/segregacao.int.spec.ts
+apps/api/src/modulos/operadora/aplicacao/situacao.ts

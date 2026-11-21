@@ -1,0 +1,38 @@
+# lote 01-01 (onda 1); gerado por tools/obra/fatiar_f22.py
+# registrar: recepcao
+# pastas: apps/api/src/modulos/recepcao apps/api/src/modulos/recepcao/aplicacao
+apps/api/src/modulos/recepcao/aplicacao/classificar.autorizacao.int.spec.ts
+apps/api/src/modulos/recepcao/aplicacao/fonte-classificacao.int.spec.ts
+apps/api/src/modulos/recepcao/aplicacao/fonte-classificacao.spec.ts
+apps/api/src/modulos/recepcao/aplicacao/sinais-fila.int.spec.ts
+apps/api/src/modulos/recepcao/aplicacao/worklist-recepcao.int.spec.ts
+apps/api/src/modulos/recepcao/aplicacao/worklist-recepcao.ts
+apps/api/src/modulos/recepcao/apoio.ts
+apps/api/src/modulos/recepcao/chamadas.spec.ts
+apps/api/src/modulos/recepcao/chamadas.ts
+apps/api/src/modulos/recepcao/classificacao-formulario.spec.ts
+apps/api/src/modulos/recepcao/classificacao-formulario.ts
+apps/api/src/modulos/recepcao/classificacao-porta-legado.ts
+apps/api/src/modulos/recepcao/classificacao-porta-memoria.ts
+apps/api/src/modulos/recepcao/classificacao-porta.ts
+apps/api/src/modulos/recepcao/classificacao-servico.ts
+apps/api/src/modulos/recepcao/classificacao.controller.ts
+apps/api/src/modulos/recepcao/classificacao.spec.ts
+apps/api/src/modulos/recepcao/dispositivo.controller.ts
+apps/api/src/modulos/recepcao/gestao.controller.ts
+apps/api/src/modulos/recepcao/porta-legado.ts
+apps/api/src/modulos/recepcao/porta-memoria.ts
+apps/api/src/modulos/recepcao/porta.ts
+apps/api/src/modulos/recepcao/protocolo-gerenciado-servico.ts
+apps/api/src/modulos/recepcao/protocolo-gerenciado.controller.ts
+apps/api/src/modulos/recepcao/protocolo-gerenciado.spec.ts
+apps/api/src/modulos/recepcao/public-api.ts
+apps/api/src/modulos/recepcao/recepcao.controller.ts
+apps/api/src/modulos/recepcao/recepcao.spec.ts
+apps/api/src/modulos/recepcao/servico.spec.ts
+apps/api/src/modulos/recepcao/servico.ts
+apps/api/src/modulos/recepcao/simbolos.ts
+apps/api/src/modulos/recepcao/termos-memoria.ts
+apps/api/src/modulos/recepcao/termos.controller.ts
+apps/api/src/modulos/recepcao/termos.spec.ts
+apps/api/src/modulos/recepcao/worklist.controller.ts

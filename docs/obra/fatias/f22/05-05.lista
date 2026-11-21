@@ -1,0 +1,35 @@
+# lote 05-05 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: carga sadt
+# pastas: apps/api/src/modulos/carga apps/api/src/modulos/sadt apps/api/src/modulos/sadt/aplicacao apps/api/src/modulos/sadt/infra
+apps/api/src/modulos/sadt/aplicacao/apoios.ts
+apps/api/src/modulos/sadt/aplicacao/aviso-critico.int.spec.ts
+apps/api/src/modulos/sadt/aplicacao/central-critico.spec.ts
+apps/api/src/modulos/sadt/aplicacao/central-critico.ts
+apps/api/src/modulos/sadt/aplicacao/coletar.int.spec.ts
+apps/api/src/modulos/sadt/aplicacao/copia.spec-util.ts
+apps/api/src/modulos/sadt/aplicacao/liberacao.ts
+apps/api/src/modulos/sadt/aplicacao/liberar.autorizacao.int.spec.ts
+apps/api/src/modulos/sadt/aplicacao/pacs.ts
+apps/api/src/modulos/sadt/aplicacao/portal.autorizacao.int.spec.ts
+apps/api/src/modulos/sadt/aplicacao/portal.ts
+apps/api/src/modulos/sadt/aplicacao/retificar.int.spec.ts
+apps/api/src/modulos/sadt/aplicacao/servico.ts
+apps/api/src/modulos/sadt/aplicacao/vigia-criticos.spec.ts
+apps/api/src/modulos/sadt/aplicacao/vigia-criticos.ts
+apps/api/src/modulos/sadt/infra/etiqueta-amostra.ts
+apps/api/src/modulos/sadt/infra/etiqueta-amostra.zpl.spec.ts
+apps/api/src/modulos/sadt/infra/laudo-pdf.int.spec.ts
+apps/api/src/modulos/sadt/infra/parametros-sem-segredo.int.spec.ts
+apps/api/src/modulos/sadt/pacs-porta-legado.ts
+apps/api/src/modulos/sadt/pacs-porta-memoria.ts
+apps/api/src/modulos/sadt/pacs-porta.ts
+apps/api/src/modulos/sadt/pacs.controller.ts
+apps/api/src/modulos/sadt/pacs.spec.ts
+apps/api/src/modulos/sadt/porta-legado.ts
+apps/api/src/modulos/sadt/porta-memoria.ts
+apps/api/src/modulos/sadt/porta.ts
+apps/api/src/modulos/sadt/portal.controller.ts
+apps/api/src/modulos/sadt/public-api.ts
+apps/api/src/modulos/sadt/sadt.controller.ts
+apps/api/src/modulos/sadt/sadt.spec.ts
+apps/api/src/modulos/carga/carga.controller.ts

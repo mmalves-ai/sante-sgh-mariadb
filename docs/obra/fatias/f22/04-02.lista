@@ -1,0 +1,20 @@
+# lote 04-02 (onda 4); gerado por tools/obra/fatiar_f22.py
+# registrar: pep
+# pastas: apps/api/src/modulos/pep apps/api/src/modulos/pep/aplicacao apps/api/src/modulos/pep/infra
+apps/api/src/modulos/pep/acesso-rede.spec.ts
+apps/api/src/modulos/pep/aplicacao/worklist-medico.autorizacao.int.spec.ts
+apps/api/src/modulos/pep/aplicacao/worklist-medico.spec.ts
+apps/api/src/modulos/pep/aplicacao/worklist-medico.ts
+apps/api/src/modulos/pep/documentos-pdf.int.spec.ts
+apps/api/src/modulos/pep/documentos.spec.ts
+apps/api/src/modulos/pep/formulario-novo.spec.ts
+apps/api/src/modulos/pep/infra/acesso-entre-hospitais.int.spec.ts
+apps/api/src/modulos/pep/prescricao-pdf.int.spec.ts
+apps/api/src/modulos/pep/prescricao-vinculo.spec.ts
+apps/api/src/modulos/pep/prescricao.spec.ts
+apps/api/src/modulos/pep/prontuario-regras.spec.ts
+apps/api/src/modulos/pep/prontuario.spec.ts
+apps/api/src/modulos/pep/registro-regras.spec.ts
+apps/api/src/modulos/pep/registro.spec.ts
+apps/api/src/modulos/pep/worklist-porta.ts
+apps/api/src/modulos/pep/worklist.controller.ts

@@ -1,0 +1,42 @@
+# lote 05-01 (onda 5); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/acesso apps/api/src/modulos/acesso/aplicacao apps/api/src/modulos/acesso/contas-banco apps/api/src/modulos/acesso/identidade
+apps/api/src/modulos/acesso/aplicacao/aviso-tempo-real.int.spec.ts
+apps/api/src/modulos/acesso/aplicacao/comunicacao.ts
+apps/api/src/modulos/acesso/comunicacao-porta-memoria.ts
+apps/api/src/modulos/acesso/comunicacao-porta.ts
+apps/api/src/modulos/acesso/comunicacao.controller.ts
+apps/api/src/modulos/acesso/comunicacao.spec.ts
+apps/api/src/modulos/acesso/aplicacao/comunicado-ciclo.int.spec.ts
+apps/api/src/modulos/acesso/comunicado-ciclo.spec.ts
+apps/api/src/modulos/acesso/conselho-gestao.controller.spec.ts
+apps/api/src/modulos/acesso/conselho-gestao.controller.ts
+apps/api/src/modulos/acesso/consulta.controller.ts
+apps/api/src/modulos/acesso/contas-dormentes-porta.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes-porta.ts
+apps/api/src/modulos/acesso/contas-dormentes.controller.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes.controller.ts
+apps/api/src/modulos/acesso/contas-dormentes.spec.ts
+apps/api/src/modulos/acesso/contas-dormentes.ts
+apps/api/src/modulos/acesso/contas-banco/contas-banco.controller.ts
+apps/api/src/modulos/acesso/contas-banco/contas-banco.spec.ts
+apps/api/src/modulos/acesso/contas-banco/partida.spec.ts
+apps/api/src/modulos/acesso/contas-banco/partida.ts
+apps/api/src/modulos/acesso/contas-banco/porta-legado.ts
+apps/api/src/modulos/acesso/contas-banco/porta-memoria.ts
+apps/api/src/modulos/acesso/contas-banco/porta.ts
+apps/api/src/modulos/acesso/contas-banco/servico.ts
+apps/api/src/modulos/acesso/emergencia.spec.ts
+apps/api/src/modulos/acesso/gestao-fonte.ts
+apps/api/src/modulos/acesso/gestao.controller.ts
+apps/api/src/modulos/acesso/gestao.spec.ts
+apps/api/src/modulos/acesso/identidade/contingencia.ts
+apps/api/src/modulos/acesso/identidade/identidade.controller.ts
+apps/api/src/modulos/acesso/identidade/politica-2fa-alteracao.spec.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-legado.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-memoria.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-sintetica.spec.ts
+apps/api/src/modulos/acesso/identidade/porta-identidade-sintetica.ts
+apps/api/src/modulos/acesso/identidade/servico-identidade.spec.ts
+apps/api/src/modulos/acesso/identidade/servico-identidade.ts
+apps/api/src/modulos/acesso/legado-acesso.ts

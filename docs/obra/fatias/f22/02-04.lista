@@ -1,0 +1,43 @@
+# lote 02-04 (onda 2); gerado por tools/obra/fatiar_f22.py
+# registrar: -
+# pastas: apps/api/src/modulos/enfermagem apps/api/src/modulos/enfermagem/aplicacao
+apps/api/src/modulos/enfermagem/agencia-porta-legado.ts
+apps/api/src/modulos/enfermagem/agencia-porta-memoria.ts
+apps/api/src/modulos/enfermagem/agencia-porta.ts
+apps/api/src/modulos/enfermagem/agencia.controller.ts
+apps/api/src/modulos/enfermagem/agencia.spec.ts
+apps/api/src/modulos/enfermagem/apoios.ts
+apps/api/src/modulos/enfermagem/aplicacao/aprazar.autorizacao.int.spec.ts
+apps/api/src/modulos/enfermagem/aplicacao/balanco-origem-checagem.int.spec.ts
+apps/api/src/modulos/enfermagem/balanco-porta-legado.ts
+apps/api/src/modulos/enfermagem/balanco-porta-memoria.ts
+apps/api/src/modulos/enfermagem/balanco-porta.ts
+apps/api/src/modulos/enfermagem/balanco-servico.ts
+apps/api/src/modulos/enfermagem/balanco.controller.ts
+apps/api/src/modulos/enfermagem/balanco.spec.ts
+apps/api/src/modulos/enfermagem/aplicacao/checar.idempotencia.int.spec.ts
+apps/api/src/modulos/enfermagem/contencao-servico.ts
+apps/api/src/modulos/enfermagem/contencao.controller.ts
+apps/api/src/modulos/enfermagem/contingencia-pdf.int.spec.ts
+apps/api/src/modulos/enfermagem/contingencia.spec.ts
+apps/api/src/modulos/enfermagem/contingencia.ts
+apps/api/src/modulos/enfermagem/aplicacao/dupla-checagem.int.spec.ts
+apps/api/src/modulos/enfermagem/enfermagem.controller.ts
+apps/api/src/modulos/enfermagem/enfermagem.spec-util.ts
+apps/api/src/modulos/enfermagem/enfermagem.spec.ts
+apps/api/src/modulos/enfermagem/escores-porta-legado.ts
+apps/api/src/modulos/enfermagem/escores-porta-memoria.ts
+apps/api/src/modulos/enfermagem/escores-porta.ts
+apps/api/src/modulos/enfermagem/escores-servico.ts
+apps/api/src/modulos/enfermagem/escores.controller.ts
+apps/api/src/modulos/enfermagem/escores.spec.ts
+apps/api/src/modulos/enfermagem/indices-uti.controller.ts
+apps/api/src/modulos/enfermagem/lesao-porta-memoria.ts
+apps/api/src/modulos/enfermagem/lesao-servico.ts
+apps/api/src/modulos/enfermagem/lesao.controller.ts
+apps/api/src/modulos/enfermagem/porta-legado.spec.ts
+apps/api/src/modulos/enfermagem/porta-legado.ts
+apps/api/src/modulos/enfermagem/porta-memoria.ts
+apps/api/src/modulos/enfermagem/porta.ts
+apps/api/src/modulos/enfermagem/prescricao-enfermeiro.controller.ts
+apps/api/src/modulos/enfermagem/prescricao-enfermeiro.http.spec.ts

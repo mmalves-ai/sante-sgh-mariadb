@@ -1,0 +1,24 @@
+# lote 03-04 (onda 3); gerado por tools/obra/fatiar_f22.py
+# registrar: nutricao repasse
+# pastas: apps/api/src/modulos/nutricao apps/api/src/modulos/repasse apps/api/src/modulos/repasse/api apps/api/src/modulos/repasse/aplicacao
+apps/api/src/modulos/nutricao/nutricao-crud.spec.ts
+apps/api/src/modulos/nutricao/nutricao-portaria.spec.ts
+apps/api/src/modulos/nutricao/nutricao-vinculo.spec.ts
+apps/api/src/modulos/nutricao/nutricao.controller.ts
+apps/api/src/modulos/nutricao/nutricao.spec.ts
+apps/api/src/modulos/nutricao/porta-legado.ts
+apps/api/src/modulos/nutricao/porta-memoria.ts
+apps/api/src/modulos/nutricao/porta.ts
+apps/api/src/modulos/nutricao/public-api.ts
+apps/api/src/modulos/nutricao/servico.ts
+apps/api/src/modulos/repasse/api/extrato.int.spec.ts
+apps/api/src/modulos/repasse/aplicacao/repasse.int.spec.ts
+apps/api/src/modulos/repasse/aplicacao/repasse.spec.ts
+apps/api/src/modulos/repasse/documentos-pdf.int.spec.ts
+apps/api/src/modulos/repasse/documentos.ts
+apps/api/src/modulos/repasse/porta-legado.ts
+apps/api/src/modulos/repasse/porta-memoria.ts
+apps/api/src/modulos/repasse/porta.ts
+apps/api/src/modulos/repasse/public-api.ts
+apps/api/src/modulos/repasse/repasse.controller.ts
+apps/api/src/modulos/repasse/servico.ts
