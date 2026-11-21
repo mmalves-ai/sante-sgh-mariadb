@@ -1,0 +1,21 @@
+{
+  "lote": "orquestrador",
+  "pedidos": [
+    {
+      "tipo": "correcao-testes",
+      "titulo": "Testes de PDF não deixam bucket para trás no S3 local",
+      "decisao_do_dono": "2026-11-21: apagar os 41 buckets de teste desta obra (feito pelo orquestrador) e corrigir a causa na F2.4",
+      "arquivos": [
+        "apps/api/src/modulos/pep/documentos-pdf.int.spec.ts",
+        "apps/api/src/modulos/pep/prescricao-pdf.int.spec.ts",
+        "apps/api/src/modulos/suprimentos/licitacao-documento.int.spec.ts",
+        "apps/api/src/modulos/documento/documento.int.spec.ts",
+        "apps/api/src/modulos/tiss/guarda-xml.int.spec.ts",
+        "e os demais que criam bucket sgh-teste-* (grep -rl 'sgh-teste-' apps packages tools)"
+      ],
+      "problema": "Cada execução cria o bucket sgh-teste-<marco>-<instante> com Object Lock e não consegue apagá-lo; o S3 local (sgh-s3, SeaweedFS, -volume.max=32) lota e a emissão de PDF passa a responder 503.",
+      "correcao": "Um auxiliar comum de teste (em packages/testes ou num spec-util compartilhado): (1) retenção mínima de teste (ex.: 1 dia em modo GOVERNANCE onde o teste não prova o COMPLIANCE; o teste do COMPLIANCE usa 1 bucket fixo por marco, reaproveitado entre execuções, e não cria outro); (2) no afterAll, remover os objetos e o bucket quando a retenção permitir e, para os vencidos, remover pelo shell do SeaweedFS (s3.bucket.delete), como a limpeza atual tenta; (3) o nome inclui SGH_CLIENTE_TESTE para os agentes em paralelo não se cruzarem. Prova: rodar 3 vezes seguidas os 5 arquivos de PDF e o número de buckets sgh-teste-* não cresce mais que o fixo; todos verdes.",
+      "restricao": "Não parar nem recriar o container sgh-s3 (é do new-sgh, compose sgh); não tocar nos 9 buckets anteriores a 20/11 18h, que são do new-sgh."
+    }
+  ]
+}
