@@ -69,6 +69,10 @@ novos atrasados pela virada de um hospital.
    - O isolamento entre clientes é total.
    - Nada é fixo para nenhum cliente: nem nome, nem caminho, nem mapeamento.
 
-9. **Sem migração parcial (dono, 2026-11-21).** Com banco separado, não há convivência por setor, liberação
-   gradual de telas nem vigilância de gravação no banco antigo. Os módulos `coexistencia` e `onda0` e a
-   verificação de convivência da implantação saem do produto. A passagem de um hospital é inteira, pelo painel.
+9. **Sem migração parcial (dono, 2026-11-21).**
+   - Este produto **nunca teve** coexistência. Cada cliente tem o seu banco, e a passagem de um hospital é
+     inteira, pelo painel.
+   - Os módulos `coexistencia` e `onda0` e a verificação de convivência da implantação **vieram de carona** na
+     cópia do modelo base do `new-sgh` (F0.2, commit `48f9ab3`). São 93 arquivos que nunca funcionaram aqui.
+   - Esse **código herdado é apagado** na onda 5 da F2.2. O verificador `sem-coexistencia` impede que ele volte
+     em cópias futuras.
