@@ -73,7 +73,7 @@ def main():
         for p, (n, eq, t) in sorted(papel.items()):
             extra = ""
             if p == "construir":
-                extra = f"  ({100 * (1 - eq / n / BASE_CONSTRUTOR):+.0f}% vs base 9,51 M)"
+                extra = f"  (economia de {100 * (1 - eq / n / BASE_CONSTRUTOR):.0f}% vs base 9,51 M; negativo = gastou mais)"
             print(f"  {p:10} {n:3} agentes  {eq / n / 1e6:6.2f} M eq/agente  {t // n:4} turnos/agente{extra}")
     eq, t = custo(sessao + ".jsonl")
     print(f"orquestrador: {t} turnos, {eq / 1e6:.1f} M eq")
