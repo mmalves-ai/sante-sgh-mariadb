@@ -8,6 +8,14 @@ Arquivos em `conector/mapa/` (o mapa é a única parte que conhece nomes da orig
 - `declarado/*.tsv`   À MÃO (revisado): ciclos quebrados em duas fases, descartes fora do mapa da análise,
                       tabelas que são catálogo oficial, tabelas do modelo que são catálogo oficial além das que têm
                       `versao_fonte` (oficiais.tsv) e colunas com destino declarado (valem por cima das geradas).
+- `declarado/colunas.d/<fatia>.tsv`  À MÃO, uma por fatia (lotes L5 a L8 em paralelo): mesmo formato de
+                      `declarado/colunas.tsv`. Lidos junto com ele, em ordem de nome (`ler_colunas_declaradas`).
+                      Conflito entre arquivos é erro do verificador: a mesma tabela declarada em dois arquivos (cada
+                      tabela da origem pertence a uma fatia) ou a mesma (tabela, coluna, destino) declarada duas vezes.
+
+Colunas declaradas especiais (a carga dirigida pelo mapa, `carga_mapa.py`): `=<texto>` grava o literal no destino
+(ex.: `=migracao`), `@id` grava o id da linha gravada no destino principal (o primeiro destino declarado), para a
+tabela secundária apontar para ela.
 
 Catálogo oficial (AGENTS.md regra 7): uma tabela do modelo é oficial quando tem a coluna `versao_fonte` no DDL (só o
 carregador versionado a preenche) ou quando `declarado/oficiais.tsv` diz que é (e `N` lá tira uma). Nenhuma tabela da
@@ -64,6 +72,39 @@ _AUDITORIA = re.compile(r"TRILHA|AUDIT|^HT|LOG$|^LOG|HIST")
 CAMPOS_TABELAS = ["tabela", "tipo", "destinos", "tabelas_destino", "destinos_oficiais", "modulo", "lote", "ordem", "registros", "chave", "pk_inteira",
                   "col_alteracao", "estrategia", "depende_de", "dep_fora_do_mapa", "motivo"]
 CAMPOS_COLUNAS = ["tabela", "coluna", "forma", "obrigatoria", "regra", "referencia", "depara"]
+CAMPOS_DECL = ["tabela", "coluna", "destino", "regra", "depara", "via", "motivo"]
+COLUNAS_D = "declarado/colunas.d"
+
+
+def ler_colunas_declaradas(d):
+    """declarado/colunas.tsv + declarado/colunas.d/*.tsv (ordem de nome). Cada linha leva `_arquivo` (relativo a
+    `d`), para o verificador apontar conflito entre arquivos."""
+    d = Path(d)
+    arqs = ([d / "declarado/colunas.tsv"] if (d / "declarado/colunas.tsv").exists() else []) + \
+        sorted((d / COLUNAS_D).glob("*.tsv"))
+    saida = []
+    for a in arqs:
+        for r in ler_tsv(a):
+            r = {k: (v or "") for k, v in r.items() if k is not None}
+            r["_arquivo"] = str(a.relative_to(d))
+            saida.append(r)
+    return saida
+
+
+def conflitos_declarados(colunas_decl):
+    """Erros de conflito entre arquivos de colunas declaradas (só nomes)."""
+    erros, dono, vistos = [], {}, {}
+    for c in colunas_decl:
+        arq = c.get("_arquivo", "declarado/colunas.tsv")
+        t = c.get("tabela", "")
+        if t in dono and dono[t] != arq:
+            erros.append("tabela declarada em mais de um arquivo: %s (%s e %s)" % (t, dono[t], arq))
+        dono.setdefault(t, arq)
+        k = (t, c.get("coluna", ""), c.get("destino", ""))
+        if k in vistos:
+            erros.append("coluna declarada duas vezes: %s.%s -> %s (%s e %s)" % (k[0], k[1], k[2], vistos[k], arq))
+        vistos.setdefault(k, arq)
+    return sorted(set(erros))
 
 
 def ler_tsv(p):
@@ -400,7 +441,9 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             erros.append("de-para desconhecido: %s.%s" % (c["tabela"], c["coluna"]))
         if c.get("referencia") and c["referencia"] not in vol:
             erros.append("referência a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
-    # colunas declaradas: destino existe no DDL, pertence aos destinos da tabela e o tipo casa com a regra
+    # colunas declaradas: sem conflito entre arquivos; destino existe no DDL, pertence aos destinos da tabela e o tipo
+    # casa com a regra
+    erros += conflitos_declarados(colunas_decl)
     gerada = {(c["tabela"], c["coluna"]): c["regra"] for c in colunas}
     for c in colunas_decl:
         t = c["tabela"]
@@ -469,7 +512,7 @@ def carregar(raiz=RAIZ):
     return dict(analise=ler_tsv(raiz / MAPA_ANALISE), volume=ler_tsv(raiz / VOLUME), ddl=ler_ddl(raiz),
                 tabelas=ler("tabelas.tsv"), deps=ler("dependencias.tsv"), ciclos_decl=ler("declarado/ciclos.tsv"),
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
-                colunas_decl=ler("declarado/colunas.tsv"), catalogos_decl=ler("declarado/catalogos.tsv"),
+                colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
                 oficiais_decl=ler("declarado/oficiais.tsv"))
 
 
@@ -479,13 +522,16 @@ def verificar(raiz=RAIZ):
 
 # ---------------- revisão por execução (motor) ----------------
 def carregar_execucao(d=None):
-    """O que o motor precisa do mapa em toda execução: tabelas do mapa (com tipo) e descartes declarados. Lê de
+    """O que o motor precisa do mapa em toda execução: tabelas do mapa (com tipo), descartes declarados e, para a
+    carga dirigida pelo mapa (`carga_mapa.py`), colunas geradas, declaradas (com colunas.d) e dependências. Lê de
     `CONECTOR_MAPA_DIR`, ou de conector/mapa (repositório) / /app/mapa (container)."""
     import os
     d = Path(d or os.environ.get("CONECTOR_MAPA_DIR") or DIR_PACOTE)
     if not (d / "tabelas.tsv").exists():
         raise FileNotFoundError("mapa do conector ausente: %s" % (d / "tabelas.tsv"))
-    return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv")}
+    ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
+    return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
+            "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv")}
 
 
 def tabelas_sem_mapa(contagens, tabelas, descartes):

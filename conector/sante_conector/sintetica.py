@@ -6,9 +6,24 @@ Formas cobertas (o L3 em diante acrescenta tabelas com o DDL do mapa, nesta mesm
 - texto CP1252 com todos os bytes 0x80-0x9F e CHAR com preenchimento;
 - BLOB binário e BLOB de texto; datas sentinela (1899-12-30, 1900-01-01); hora HHMM inteira; S/N;
 - generator.
+
+Fatias dos lotes L5 a L8 (em paralelo): cada fatia acrescenta as suas tabelas e anomalias num módulo próprio em
+`sintetica_d/<fatia>.py` (ex.: `sintetica_d/l5_01.py` para a fatia L5-01), sem editar este arquivo. O módulo define:
+- `DDL`: CREATE TABLE das tabelas da origem da fatia (mesmos nomes e tipos do dicionário; dados 100% falsos);
+- `linhas(r, ins)`: insere as linhas (`ins(tabela, [valores Python])`, com `r` = random.Random determinístico) e
+  devolve o esperado no destino: {tabela: {"gravados": n, "pendencias": {regra: n}}} (pendências por regra da
+  tabela, inclusive as de recusa: `pai_pendente`, `restricao_destino_<código>`...);
+- opcionais: `REQUER` (outras fatias cujas tabelas entram juntas), `PAIS_EXTERNOS` ({tabela: [chaves]}: pais de
+  fora da fatia, registrados como já carregados), `PREPARO_DESTINO` (SQL no banco de destino depois do DDL, ex.: os
+  códigos de catálogo oficial que as linhas usam), `MAPA_TESTE` e `DDL_DESTINO` (só para a fatia `exemplo`, que
+  prova o mecanismo com mapa e destino próprios).
+`gerar(..., fatias=[...])` junta as fatias (e as que elas requerem) e o manifesto traz `fatias` (esperado por fatia)
+e `pais_externos`. A conferência por fatia é `conferencia.conferir` (`conector.sh conferir-fatia <fatia>`).
 """
+import importlib
 import json
 import os
+import pkgutil
 import random
 import subprocess
 import datetime
@@ -223,14 +238,49 @@ def _nome(r):
     return s.capitalize().encode("cp1252")
 
 
-def gerar(destino, versao=1, mapa=False):
+def nome_modulo(fatia):
+    return fatia.lower().replace("-", "_")
+
+
+def fatias_disponiveis():
+    from . import sintetica_d
+    return sorted(m.name for m in pkgutil.iter_modules(sintetica_d.__path__) if not m.name.startswith("_"))
+
+
+def modulo_fatia(fatia):
+    nome = nome_modulo(fatia)
+    if nome not in fatias_disponiveis():
+        raise KeyError("fatia sem imagem sintética: sintetica_d/%s.py" % nome)
+    return importlib.import_module("sante_conector.sintetica_d." + nome)
+
+
+def resolver_fatias(fatias):
+    """Fatias pedidas mais as que elas requerem (`REQUER`), requeridas antes, sem repetição."""
+    saida = []
+
+    def visitar(f, pilha=()):
+        n = nome_modulo(f)
+        if n in saida:
+            return
+        if n in pilha:
+            raise ValueError("REQUER circular entre fatias: %s" % ",".join(pilha + (n,)))
+        for x in getattr(modulo_fatia(n), "REQUER", []):
+            visitar(x, pilha + (n,))
+        saida.append(n)
+    for f in fatias:
+        visitar(f)
+    return saida
+
+
+def gerar(destino, versao=1, mapa=False, fatias=()):
     """Cria `destino` (não pode existir). Devolve o manifesto (contagens e bytes esperados). `mapa=True` acrescenta as
     tabelas com a forma da origem que o mapa do L3 carrega, e o manifesto traz o esperado no destino."""
     if os.path.exists(destino):
         raise FileExistsError(destino)
     r = random.Random(SEMENTE + versao)
+    mods = [(f, modulo_fatia(f)) for f in resolver_fatias(fatias)]
     linhas = ["SET NAMES NONE;", "CREATE DATABASE '%s' PAGE_SIZE 8192 DEFAULT CHARACTER SET NONE;" % destino,
-              DDL + (DDL_MAPA if mapa else ""), "COMMIT;"]
+              DDL + (DDL_MAPA if mapa else "") + "".join(m.DDL for _, m in mods), "COMMIT;"]
     cont = {}
 
     def ins(tab, vals):
@@ -264,6 +314,13 @@ def gerar(destino, versao=1, mapa=False):
     for i in range(1, 41):
         ins("EX_SENTINELA", [str(i), sent[i % 4], str(r.choice([0, 730, 1259, 2359])), "'%s'" % "SN"[i % 2]])
     esperado = _gerar_mapa(random.Random(SEMENTE + versao + 77), ins) if mapa else None
+    esp_fatias, externos = {}, {}
+    for f, m in mods:
+        semente = SEMENTE + versao + sum(ord(c) for c in f)
+        esp_fatias[f] = m.linhas(random.Random(semente), lambda tab, vals: ins(tab, [_q(v) for v in vals]))
+        for t, ks in getattr(m, "PAIS_EXTERNOS", {}).items():
+            externos.setdefault(t, [])
+            externos[t] += [str(k) for k in ks if str(k) not in externos[t]]
     linhas.append("SET GENERATOR EX_GEN_PESSOA TO %d;" % max(ids))
     linhas.append("COMMIT;")
     script = "\n".join(linhas) + "\n"
@@ -278,7 +335,7 @@ def gerar(destino, versao=1, mapa=False):
     manifesto = {
         "versao": versao, "semente": SEMENTE + versao, "contagens": cont,
         "registros_total": sum(cont.values()), "pk_pessoa_max": max(ids),
-        "esperado_destino": esperado, "bytes_c1_hex": BYTES_C1.hex(), "bytes_acento_hex": BYTES_ACENTO.hex(), "anexo_tamanhos": anexos,
+        "esperado_destino": esperado, "fatias": esp_fatias, "pais_externos": externos, "bytes_c1_hex": BYTES_C1.hex(), "bytes_acento_hex": BYTES_ACENTO.hex(), "anexo_tamanhos": anexos,
     }
     with open(destino[:-4] + ".manifesto.json", "w") as f:
         json.dump(manifesto, f, indent=1, sort_keys=True)

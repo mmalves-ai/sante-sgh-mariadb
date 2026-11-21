@@ -5,8 +5,25 @@ Brief idêntico para todo agente (protocolo de tokens, regra 3). A parte variáv
 ## Objetivo
 Carregar no banco próprio do cliente as tabelas da sua fatia, pela ordem do mapa, com conciliação por contagem e
 soma de controle, hash por bloco e medição de linhas por segundo (plano `docs/obra/passagens/F4-plano.md`, seções
-6, 6.1 e 8). O L3 (`conector/sante_conector/carga.py`) é o modelo: `conector_origem`, recusa com pendência no mesmo
-commit, SAVEPOINT por linha, linha igual pulada, alterada/apagada/editada no destino como pendência.
+6, 6.1 e 8). A carga é **dirigida pelo mapa** (`conector/sante_conector/carga_mapa.py`, sem código por tabela): a
+fatia DECLARA colunas, não escreve carregador. Ela já faz `conector_origem`, recusa com pendência no mesmo commit,
+SAVEPOINT por linha, linha igual pulada, alterada/apagada/editada no destino como pendência, de-para oficial,
+referência pelo `conector_origem` (`pai_pendente` em cadeia), autorreferência e ciclo em duas fases, vários destinos,
+conciliação por entidade e linhas por segundo. Leia o cabeçalho dele uma vez. Código novo no motor só se uma regra
+genérica faltar (registre o motivo); nunca código por tabela.
+
+## Arquivos SÓ da sua fatia (lotes em paralelo: não edite os compartilhados)
+- `conector/mapa/declarado/colunas.d/<fatia>.tsv` (ex.: `L5-01.tsv`): as colunas aproveitadas, mesmo formato de
+  `declarado/colunas.tsv`. Cada tabela da origem fica num só arquivo (tabela em dois arquivos = erro do verificador).
+  Especiais: coluna `=<texto>` grava o literal (ex.: `=migracao`, código fixo); `@id` grava o id do destino principal
+  (o primeiro destino declarado) numa tabela secundária. Valor nulo em coluna NOT NULL com padrão fica com o padrão.
+- `conector/sante_conector/sintetica_d/<fatia>.py` (ex.: `l5_01.py`): as tabelas da origem da fatia (`DDL`, mesmos
+  nomes e tipos da fatia) e `linhas(r, ins)` com dados 100% falsos e as anomalias, devolvendo o esperado
+  `{tabela: {"gravados": n, "pendencias": {regra: n}}}`; opcionais `PAIS_EXTERNOS` (pais de fora da fatia, dados como
+  já carregados), `PREPARO_DESTINO` (SQL no destino: ex. códigos do catálogo oficial usados), `REQUER`. Modelo:
+  `sintetica_d/exemplo.py` (o contrato está em `sintetica.py`). Nunca edite `sintetica.py`.
+- `conector/testes/test_<fatia>.py` (ex.: `test_l5_01.py`): testes da fatia (regras próprias, de-para de valores).
+- Saída do agente (resumo curto): `docs/obra/fatias/f4/saida/<fatia>.md`.
 
 ## O que a fatia traz (não busque de novo)
 1. Trecho do mapa: destino, tabelas físicas, chave, estratégia de diferencial, dependências e ordem.
@@ -16,7 +33,7 @@ commit, SAVEPOINT por linha, linha igual pulada, alterada/apagada/editada no des
 4. DDL de destino: CREATE TABLE, ALTER de colunas e FKs.
 
 ## Como declarar
-- Cada coluna aproveitada vai para `conector/mapa/declarado/colunas.tsv`
+- Cada coluna aproveitada vai para `conector/mapa/declarado/colunas.d/<fatia>.tsv`
   (`tabela, coluna, destino=tabela.coluna, regra, depara, via, motivo`); a declarada vale por cima da gerada.
 - Regras válidas: `sentinela.REGRAS`; de-para oficial: `depara.CATALOGOS` (cid10, sigtap, cbo, ibge_municipio,
   ibge_uf, banco). Catálogo oficial **nunca é criado**: código ausente vira pendência `catalogo_codigo_*`.
@@ -41,11 +58,13 @@ commit, SAVEPOINT por linha, linha igual pulada, alterada/apagada/editada no des
   original e regra, sem valor. Testes só com a imagem SINTÉTICA do "cliente de exemplo" (`sintetica.py`).
 - Nenhuma regra de negócio em gatilho; nada instalado na VM (containers).
 
-## Autoconferência (um comando cada, devolvem ok ou a lista de erros)
-- `python3 -I conector/verificar_mapa.py` (também na esteira: `conector:mapa`)
-- `python3 -I tools/obra/fatiar_conector.py --conferir`
-- `conector/conector.sh testes` (suíte do conector, no container)
+## Autoconferência (UM comando; devolve ok ou a lista de erros; no máximo 3 vezes)
+- `tools/obra/conferir-fatia-f4.sh <fatia>`: verificador do mapa + `fatiar_conector --conferir` + declarações +
+  testes da fatia + carga e conciliação da fatia na imagem sintética, duas vezes (idempotência), num banco
+  descartável. Logs em `/tmp/claude-1000/conferir-fatia-f4/<fatia>/` (leia só o necessário).
+- A suíte inteira (`conector/conector.sh testes`) é o validador global do orquestrador.
 
 ## Saída do agente
-Código e testes no `conector/`, declarações em `conector/mapa/declarado/`, resumo curto (contagens, regras novas,
-pendências por regra). Logs longos em `/tmp/claude-1000/`, nunca no chat.
+Declarações em `colunas.d/<fatia>.tsv`, imagem sintética em `sintetica_d/<fatia>.py`, testes em
+`testes/test_<fatia>.py`; resumo curto em `docs/obra/fatias/f4/saida/<fatia>.md` (contagens, regras novas,
+pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp/claude-1000/`, nunca no chat.

@@ -5,7 +5,9 @@ tamanho e sha256 contra o vínculo, conta as tabelas na transação READ ONLY (p
 mesmo snapshot (fonte independente), grava a imagem na base de controle do cliente pelo usuário restrito da execução
 e concilia o que ficou gravado contra o gstat, tabela a tabela. L3: no mesmo snapshot, carrega as entidades do mapa
 (carga.py: estabelecimento, usuários, pacientes, atendimentos) pelo mesmo usuário restrito e concilia cada entidade
-(contagem e soma de controle relida do destino); divergência faz a execução falhar. No fim, sha256, tamanho e mtime
+(contagem e soma de controle relida do destino); divergência faz a execução falhar. L5 a L8: depois do L3, a carga
+dirigida pelo mapa (carga_mapa.py) carrega toda tabela carregável com colunas declaradas, na ordem do mapa, com a
+mesma conciliação por entidade. No fim, sha256, tamanho e mtime
 do arquivo têm de ser iguais aos do início: a prova é obrigatória (não há como desligá-la).
 """
 import datetime
@@ -14,7 +16,7 @@ import time
 
 import pymysql
 
-from . import banco, caminho, carga, controle, disco, imagem, mapa, plataforma
+from . import banco, caminho, carga, carga_mapa, controle, disco, imagem, mapa, plataforma
 from .leitor import Leitor
 from .servico_abridor import abrir_remoto
 
@@ -120,13 +122,32 @@ def executar(trab, eid):
                 raise FalhaExecucao("conciliação da imagem divergiu do gstat (%d tabelas divergentes)"
                                     % max(1, conf["divergentes"]))
             # L3: carga das entidades do mapa (mesmo snapshot; leitor reaberto depois do gstat), pelo usuário restrito
-            if any(t in carga.MAPA for t in tabelas):
+            # L5 a L8: carga dirigida pelo mapa (tabelas com colunas declaradas), depois do L3, mesmo snapshot
+            plano = carga_mapa.planejar(mapa_exec, set(tabelas))
+            if any(t in carga.MAPA for t in tabelas) or plano:
                 cc = banco.conectar(ex["banco_nome"], usuario=usuario, senha=senha, autocommit=False)
                 try:
                     with Leitor(ab.dispositivo) as lt:
                         def prog(frac, etapa):
-                            plataforma.progresso(conn, eid, 65 + 28 * frac, etapa)
-                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(set(tabelas), contagens)
+                            plataforma.progresso(conn, eid, 65 + (14 if plano else 28) * frac, etapa)
+
+                        def prog_mapa(frac, etapa):
+                            plataforma.progresso(conn, eid, 79 + 14 * frac, etapa)
+                        resumo = carga.Carga(lt, cc, ctl, eid, iid, prog).executar(set(tabelas), contagens) or {
+                            "versao_mapa": carga.VERSAO_MAPA, "entidades": {},
+                            "pendencias": {"total": 0, "criticas": 0, "por_regra": {}}, "carga": {}}
+                        if plano:
+                            rm = carga_mapa.CargaMapa(lt, cc, ctl, eid, iid, mapa_exec, prog_mapa,
+                                                      entidades_usadas=set(resumo["entidades"])).executar(
+                                set(tabelas), contagens)
+                            resumo["entidades"].update(rm["entidades"])
+                            resumo["versao_mapa"] += "+" + rm["versao_mapa"]
+                            pr, pm = resumo["pendencias"], rm["pendencias"]
+                            pr["total"] += pm["total"]
+                            pr["criticas"] += pm["criticas"]
+                            for k, n in pm["por_regra"].items():
+                                pr["por_regra"][k] = pr["por_regra"].get(k, 0) + n
+                            resumo["carga"]["mapa"] = rm["carga"]
                 finally:
                     cc.close()
                 cont["entidades"] = {k: {x: v[x] for x in ("tabela_origem", "registros_origem", "registros_destino",

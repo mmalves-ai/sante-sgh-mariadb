@@ -9,7 +9,8 @@ um BLOB de texto não se distingue de um binário: o gerador recusa dicionário 
 Entradas: docs/analise/rodada2/final/mapa-spdata.tsv (destinos), docs/analise/origem-fb/volume-pc-20261019.tsv
 (chave, volume, dependências) e o dicionário de colunas da origem (só nomes e tipos; fora do git, uso local).
 Saídas em conector/mapa/: tabelas.tsv, dependencias.tsv e colunas.tsv. Os arquivos de declarado/ são revisados à
-mão; --propor-ciclos só cria ciclos.tsv quando falta; --propor-catalogos acrescenta a catalogos.tsv uma proposta para
+mão (as colunas declaradas também em declarado/colunas.d/<fatia>.tsv, uma por fatia dos lotes L5 a L8: o gerador as
+lê com o mesmo leitor do verificador e recusa conflito entre arquivos); --propor-ciclos só cria ciclos.tsv quando falta; --propor-catalogos acrescenta a catalogos.tsv uma proposta para
 cada tabela com destino oficial ainda sem declaração (as linhas já revisadas ficam como estão).
 Nenhum dado de linha é lido: só metadado.
 """
@@ -102,6 +103,13 @@ def main():
     ap.add_argument("--propor-ciclos", action="store_true")
     ap.add_argument("--propor-catalogos", action="store_true")
     a = ap.parse_args()
+    decl = mapa.ler_colunas_declaradas(DIR)
+    conflitos = mapa.conflitos_declarados(decl)
+    if conflitos:
+        print("colunas declaradas em conflito (declarado/colunas.tsv e colunas.d/):")
+        for e in conflitos:
+            print("  " + e)
+        return 1
     analise = mapa.ler_tsv(RAIZ / mapa.MAPA_ANALISE)
     volume = mapa.ler_tsv(RAIZ / mapa.VOLUME)
     arq_ofi = DIR / "declarado/oficiais.tsv"
@@ -158,8 +166,9 @@ def main():
     cols = gerar_colunas(tab, ler_dicionario(dic), {v["tabela"] for v in volume}, catalogo_de)
     mapa.escrever_tsv(DIR / "colunas.tsv", mapa.CAMPOS_COLUNAS, cols)
     sem = sorted({r["tabela"] for r in tab if r["tabelas_destino"]} - {c["tabela"] for c in cols})
-    print("tabelas %d, dependências %d, colunas %d, tabelas sem colunas no dicionário %d, ciclos abertos %d" % (
-        len(tab), len(deps), len(cols), len(sem), len(ciclos)))
+    print("tabelas %d, dependências %d, colunas %d, tabelas sem colunas no dicionário %d, ciclos abertos %d, "
+          "colunas declaradas %d (em %d arquivo(s))" % (len(tab), len(deps), len(cols), len(sem), len(ciclos),
+                                                         len(decl), len({c["_arquivo"] for c in decl})))
     return 1 if ciclos else 0
 
 

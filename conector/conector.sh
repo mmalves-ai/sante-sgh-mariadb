@@ -12,7 +12,9 @@
 # - saídas em CONECTOR_SAIDA_DIR (padrão .tmp/conector, fora do git);
 # - comandos da fila/motor (vincular, enfileirar, cancelar, execucao, fila, worker, testes) entram só na rede
 #   Docker interna sante-sgh-conector-int (--internal: sem saída), à qual o MariaDB do projeto é ligado; a senha
-#   do MariaDB vai por variável de ambiente herdada (nunca na linha de comando nem impressa).
+#   do MariaDB vai por variável de ambiente herdada (nunca na linha de comando nem impressa);
+# - conferir-fatia <fatia>: carga da fatia na imagem sintética (privilegiado, rede interna; DDL do modelo em
+#   /app/db/migracoes, só leitura). Autoconferência por fatia: tools/obra/conferir-fatia-f4.sh <fatia>.
 set -euo pipefail
 AQUI=$(cd "$(dirname "$0")" && pwd)
 RAIZ=$(cd "$AQUI/.." && pwd)
@@ -42,12 +44,12 @@ mkdir -p "$SAIDA"
 SAIDA=$(cd "$SAIDA" && pwd -P)
 
 PRIV=()
-case "$1" in registrar|ler-faixa|dicionario|testes|worker) PRIV=(--privileged) ;; esac
+case "$1" in registrar|ler-faixa|dicionario|testes|conferir-fatia|worker) PRIV=(--privileged) ;; esac
 REDE=(--network none)
 MARIADB_CT=${CONECTOR_MARIADB_CONTAINER:-sante-sgh-mariadb}
 REDE_INT=sante-sgh-conector-int
 case "$1" in
-  vincular|enfileirar|cancelar|execucao|fila|worker|testes)
+  vincular|enfileirar|cancelar|execucao|fila|worker|testes|conferir-fatia)
     docker network inspect "$REDE_INT" >/dev/null 2>&1 || docker network create --internal "$REDE_INT" >/dev/null
     if ! docker inspect "$MARIADB_CT" --format '{{json .NetworkSettings.Networks}}' | grep -q "\"$REDE_INT\""; then
       docker network connect --alias mariadb "$REDE_INT" "$MARIADB_CT"
@@ -75,7 +77,7 @@ trap 'docker volume rm -f "$VOL" >/dev/null 2>&1 || true' EXIT
 docker run --rm "${REDE[@]}" "${PRIV[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" -v "$AQUI/mapa:/app/mapa:ro" \
-  -v "$RAIZ/db/plataforma:/db-plataforma:ro" \
+  -v "$RAIZ/db/plataforma:/db-plataforma:ro" -v "$RAIZ/db/migracoes:/app/db/migracoes:ro" \
   -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
   -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" \
   -e CONECTOR_UID="$(id -u)" -e CONECTOR_GID="$(id -g)" \

@@ -8,7 +8,9 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   dicionario <relativo> --saida ARQ        dicionário de colunas (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo),
                                           só metadado, para o gerador do mapa (tools/obra/gerar_mapa_conector.py)
-  testes                                  suíte unittest (precisa de --privileged e do MariaDB)
+  testes [--padrao 'test_*.py']           suíte unittest (precisa de --privileged e do MariaDB)
+  conferir-fatia <fatia>                  carga dirigida pelo mapa da fatia na imagem sintética, conciliada duas
+                                          vezes (sintetica_d/<fatia>.py; banco descartável cliente_cf<fatia>)
 Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
   enfileirar <codigo> importar|sincronizar   põe na fila (erro 409 se já há execução ativa do cliente)
@@ -52,7 +54,8 @@ def main(argv=None):
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     p = sub.add_parser("ler-faixa"); p.add_argument("relativo"); p.add_argument("--tabela", required=True)
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
-    sub.add_parser("testes")
+    p = sub.add_parser("testes"); p.add_argument("--padrao", default="test*.py")
+    p = sub.add_parser("conferir-fatia"); p.add_argument("fatia")
     p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
     p.add_argument("--admin", type=int)
     p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
@@ -123,10 +126,15 @@ def main(argv=None):
     if a.cmd == "sintetica":
         from . import sintetica
         return _json(sintetica.gerar(a.arquivo, a.versao, mapa=a.mapa))
+    if a.cmd == "conferir-fatia":
+        from . import conferencia
+        r = conferencia.conferir(a.fatia)
+        _json(r)
+        return 0 if r["ok"] else 1
     if a.cmd == "testes":
         import unittest
-        r = unittest.main(module=None, argv=["conector", "discover", "-s", "/app/testes", "-t", "/app"], exit=False,
-                          verbosity=1)
+        r = unittest.main(module=None, argv=["conector", "discover", "-s", "/app/testes", "-t", "/app", "-p", a.padrao],
+                          exit=False, verbosity=1)
         return 0 if r.result.wasSuccessful() else 1
 
     from . import abridor
