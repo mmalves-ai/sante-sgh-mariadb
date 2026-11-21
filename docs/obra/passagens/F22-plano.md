@@ -134,3 +134,18 @@
   - o disparo passa a ser um comando do administrador da plataforma: apontar a base Firebird, carga inicial e
     diferencial;
   - nenhum código da API lê o Firebird.
+
+## Sem migração parcial (dono, 2026-11-21)
+
+Com banco separado, não existe convivência por setor, liberação em lote nem parcela das operações feita "aqui".
+Cada hospital passa inteiro, quando decidir, pelo Importar e o Sincronizar do painel (ADR 0003, itens 5 a 8).
+Lote de **limpeza da coexistência**, na onda 5, junto com o 05-04:
+
+- remover os módulos **`coexistencia`** e **`onda0`**, na API, no web (rotas, menu, i18n) e nos testes;
+- no **`implantacao`**, tirar só a verificação de convivência com o sistema antigo do teste de fumaça
+  (`aplicacao/fumaca.ts`) e os textos ligados a ela;
+- criar o verificador `tools/obra/sem-coexistencia.sh`, que falha se aparecer qualquer um destes:
+  - rota, módulo ou texto de convivência ("coexist", "onda0", "sistema antigo", "no outro sistema", liberação
+    por setor);
+  - `dist/` versionado;
+- registrar a remoção no `ESTADO.md`.

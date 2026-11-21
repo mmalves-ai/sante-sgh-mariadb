@@ -68,3 +68,7 @@ novos atrasados pela virada de um hospital.
      máquina.
    - O isolamento entre clientes é total.
    - Nada é fixo para nenhum cliente: nem nome, nem caminho, nem mapeamento.
+
+9. **Sem migração parcial (dono, 2026-11-21).** Com banco separado, não há convivência por setor, liberação
+   gradual de telas nem vigilância de gravação no banco antigo. Os módulos `coexistencia` e `onda0` e a
+   verificação de convivência da implantação saem do produto. A passagem de um hospital é inteira, pelo painel.
