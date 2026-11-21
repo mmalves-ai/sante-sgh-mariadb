@@ -47,3 +47,15 @@ novos atrasados pela virada de um hospital.
    O módulo `carga` da API é **aproveitado como insumo do conector (F4)**, e não migrado como módulo comum. O
    disparo fica na administração da plataforma, e a leitura do Firebird fica só no `conector/` (AGENTS, regra
    3).
+
+## Correção do dono (2026-11-21): é um painel, não linha de comando
+
+7. **Tudo pelo painel de administração da plataforma,** no navegador, logado como administrador da plataforma:
+   1. **Criar o cliente.** Gera o banco novo, só dele. Exemplo: ProntoCardio.
+   2. **Indicar, se quiser, o banco Firebird legado,** apontando para o arquivo.
+   3. **Clicar em "Importar"** (primeira vez) ou **"Sincronizar"** (já importado, diferencial). O sistema
+      importa do Firebird indicado. O painel mostra o progresso, as pendências e a conciliação.
+
+   - O conector é o **motor** que o painel aciona.
+   - A linha de comando existe só como ferramenta interna de teste. Nunca é o fluxo do dono.
+   - O arquivo apontado **nunca é alterado nem copiado inteiro** (regra 4).

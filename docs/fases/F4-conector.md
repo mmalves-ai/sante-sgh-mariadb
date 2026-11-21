@@ -11,7 +11,7 @@ rastreio, pendências e conciliação. O desenho completo está no ADR 0001, ite
 
 Roda **em paralelo com a F3**.
 
-## Disparo: sempre pelo administrador da plataforma (dono, 2026-11-20)
+## Disparo: sempre pelo painel do administrador da plataforma (dono, 2026-11-20 e 21; ADR 0003, item 7)
 
 O conector **nunca roda sozinho** e **nunca cria cliente**. A ordem é sempre esta:
 
@@ -21,11 +21,11 @@ O conector **nunca roda sozinho** e **nunca cria cliente**. A ordem é sempre es
    - O banco nasce vazio, só com os catálogos públicos.
    - O campo `origem` do cliente só registra a intenção. Não carrega nada.
 2. **Apontar a base Firebird e importar (carga inicial, dia 0).**
-   - Comando do administrador da plataforma, na tela de administração e na linha de comando: escolhe o
-     cliente e a imagem do SPDATA e dispara.
+   - No **painel** da plataforma, o administrador aponta o arquivo Firebird do cliente e clica em **Importar**.
+     Não há linha de comando no fluxo do dono.
    - A importação traduz e limpa os dados para o modelo próprio (de-para, pendências e conciliação).
-3. **Diferencial (dia 1 a 2+n).** Cada rodada também é disparada pelo administrador, que pode repetir quantas
-   vezes quiser.
+3. **Sincronizar (diferencial, dia 1 a 2+n).** É um botão no painel, que pode ser repetido quantas vezes o
+   administrador quiser.
 4. **Liberar a gravação.** Decisão do hospital, executada pelo administrador.
 
 Tudo fica registrado em `plataforma.cliente_evento`. Os relatórios de conciliação ficam visíveis na tela de
