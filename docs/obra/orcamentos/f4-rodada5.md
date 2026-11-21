@@ -1,7 +1,7 @@
 # Orçamento: f4-rodada5
 
-estimativa_M: 53
-teto_M: 69
+estimativa_M: 67
+teto_M: 87
 
 - **Objetivo e critério de pronto:** aplicar o ADR 0006 (importação é continuidade) no conector, branch `f4-conector`.
   Pronto quando:
@@ -38,7 +38,11 @@ teto_M: 69
   | Corretor | cerca de 5 | 0,8 M | 4 M |
   | Conferidor | 2 | 3,5 M | 7 M |
 
-- **Estimativa:** 44,3 × 1,2 ≈ 53 M. Teto: 69 M. `LIMITE_AGENTES` = 30.
+- **Absorve a sobra da rodada 4** (fechou em cerca de 60 M de 69 M, sem o Sincronizar e a conciliação, porque a conferência não fechou):
+  - a chave composta de `TBPACTHM`, a última bloqueada;
+  - as 4 fatias com conciliação falhando (L5-04, L5-05, L5-12 e L6-11);
+  - o Sincronizar (L9) e o relatório de conciliação (L10), cada um com construtor, revisor e corretor: 2 × 5,8 M = 11,6 M.
+- **Estimativa:** (44,3 + 11,6) × 1,2 ≈ 67 M. Teto: 87 M. `LIMITE_AGENTES` = 38.
 - **Banco próprio por agente:** as fatias usam o banco descartável do `conferir-fatia`, e o espelho de teste é
   `espelho_f4r5`.
 - **Fora do escopo:** a carga completa da ProntoCardio (passo do orquestrador, depois do merge).
