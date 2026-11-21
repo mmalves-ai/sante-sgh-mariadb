@@ -284,3 +284,33 @@ sobre a cópia `redesante-fb-pc`, transação READ ONLY). Resultado por tabela: 
   6. generators e sequências (F4.7).
 - **L10 Conciliação e relatório:** relatório por entidade em toda execução, com pendências abertas, críticas e
   resolvidas, e saídas externas = 0. Prova do portão F4: carga completa real com disco liberado.
+
+## 9. Estado do L1 (2026-11-21): concluído, prova verde
+
+Código em `conector/` (README lá). Autoconferência: `conector/conector.sh testes` (7 testes, imagem sintética
+do cliente de exemplo, container privilegiado sem rede). Prova real: `conector/provar-l1-real.sh pc-20261019.fdb`.
+
+- **Plano A funciona nesta VM:** `losetup --read-only` + `dmsetup snapshot` (não persistente, COW esparso no
+  volume da execução) dentro do container `sante-sgh-conector` (`--privileged --network none`). O kernel
+  carregou o alvo `snapshot` sozinho. Firebird 3.0.14 embarcado abre o `/dev/mapper/sscon-<execução>` como
+  dispositivo bruto; `gfix -mode read_only` cai no COW. O plano B (cópia com guarda de disco) está
+  implementado e testado na imagem sintética; `--modo auto` cai nele se o snapshot falhar.
+- **Prova sobre `pc-20261019.fdb` (48 GB), só agregados:**
+  - sha256, mtime e tamanho iguais antes e depois; sha256 confere com o `.sha256` lateral;
+  - COW usado: 16 KiB (limite 2 GiB); banco read-only na abertura;
+  - 3.756 tabelas, 195.277.217 registros por `COUNT(*)` em transação READ ONLY; 2.046 generators;
+  - gstat (`-d -r`) no mesmo snapshot: 3.756 tabelas, 195.277.217 registros, **0 divergências**;
+  - contra o TSV da medição (feito na cópia viva `redesante-fb-pc`): 3.754 tabelas iguais; 2 trilhas de
+    auditoria com 18 registros a mais na cópia viva (gravadas depois da restauração), o que confirma que a
+    medição de volume deve ser refeita sobre a imagem, não sobre a cópia em execução;
+  - tempos: contagem 108 s, gstat 72 s, registro completo 180 s; prova inteira (2 × sha256 de 48 GB) 345 s.
+- **Decisões de implementação:**
+  - o gstat roda depois de fechar o leitor: o Firebird embarcado não divide o arquivo entre dois processos;
+  - hash da linha em BLAKE2b-128 (biblioteca padrão), no lugar do xxh128 citado na seção 2, sobre os bytes
+    crus com separação de tipo e tamanho;
+  - CP1252: os 5 bytes sem caractere viram o controle C1 de mesmo código (conversão total e reversível);
+  - a imagem sintética usa tabelas neutras `EX_*` com as formas da origem (PK inteira com lacunas, composta,
+    sem PK, FK, CP1252 0x80–0x9F, CHAR preenchido, BLOB binário e de texto, sentinelas, generator); o L3
+    acrescenta as tabelas do mapa na mesma especificação (`sintetica.py`).
+- **Para o L2:** separar o abridor privilegiado do worker (hoje o comando inteiro roda privilegiado);
+  limpeza de órfãos `sscon-*` após queda do container.
