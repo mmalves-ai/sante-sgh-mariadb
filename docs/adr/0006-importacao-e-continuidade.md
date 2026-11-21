@@ -32,6 +32,10 @@ entra **vivo e utilizável** no modelo próprio. Não existe "acervo morto" nem 
      licenciado da origem.
    - Preço e tabela **próprios do hospital** (tabelas negociadas, personalizações) são dado do cliente e entram pelo
      conector.
+   - **Origem do conteúdo licenciado (dono, opção b):**
+     - **semente inicial**, uma única vez, a partir das edições presentes na cópia da origem da Rede Santé, por uma
+       ferramenta do `conector/` (só ela lê o Firebird) que grava no espelho, e não no cliente;
+     - **edições seguintes** pelos arquivos do fornecedor, com um carregador por tabela licenciada.
 4. **Catálogo oficial do hospital é copiado e fica útil.**
    - O espelho padrão da base (oficiais por carregador versionado da fonte oficial, mais os licenciados) continua
      sendo a referência.
