@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Ferramenta INTERNA de teste do motor do conector (F4). O fluxo do dono é o painel da plataforma.
 #   conector/conector.sh [--construir] <comando> [args]     (comandos: ver sante_conector/cli.py)
-# - roda tudo no container sante-sgh-conector, sempre --network none;
-# - --privileged só para os comandos que abrem o arquivo (registrar, ler-faixa, testes);
+# - roda tudo no container sante-sgh-conector; --network none, salvo os comandos da fila/motor (abaixo);
+# - --privileged só para os comandos que abrem o arquivo (registrar, ler-faixa, testes, worker);
+# - worker: separado em dois processos (sante_conector/separado.py): o abridor privilegiado roda numa rede vazia
+#   (unshare --net) e sem credencial; o motor roda sem privilégio (uid do usuário, sem capacidades, no_new_privs),
+#   é o único com a rede interna e usa a conta restrita sscon_motor_<ficha>, nunca a root. A conta é criada/renovada
+#   antes, num container SEM privilégio (conta-motor), com senha aleatória nova a cada partida;
 # - a pasta autorizada (CONECTOR_ORIGENS_DIR, padrão: banco-dev/backups da área de trabalho) entra só leitura;
 # - o diretório de trabalho (COW ou cópia do plano B) é um volume Docker da execução, apagado no fim;
 # - saídas em CONECTOR_SAIDA_DIR (padrão .tmp/conector, fora do git);
@@ -53,6 +57,17 @@ case "$1" in
     export CONECTOR_MARIADB_SENHA
     ;;
 esac
+if [ "$1" = worker ]; then
+  SUBREDE=$(docker network inspect "$REDE_INT" -f '{{(index .IPAM.Config 0).Subnet}}')
+  CONECTOR_MOTOR_SENHA=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | cut -c1-32)
+  export CONECTOR_MOTOR_SENHA
+  docker run --rm --network "$REDE_INT" -v "$AQUI/sante_conector:/app/sante_conector:ro" \
+    -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA \
+    -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" "$IMG" conta-motor --rede "$SUBREDE" >/dev/null
+  unset CONECTOR_MARIADB_SENHA          # o worker nunca recebe a senha root
+  shift
+  set -- worker-separado "$@"
+fi
 VOL=sante-sgh-conector-trab-$$-$RANDOM
 docker volume create "$VOL" >/dev/null
 trap 'docker volume rm -f "$VOL" >/dev/null 2>&1 || true' EXIT
@@ -61,8 +76,8 @@ docker run --rm "${REDE[@]}" "${PRIV[@]}" \
   -v "$ORIGENS:/origens:ro" -v "$VOL:/trabalho" -v "$SAIDA:/saida" \
   -v "$AQUI/sante_conector:/app/sante_conector:ro" -v "$AQUI/testes:/app/testes:ro" \
   -v "$RAIZ/db/plataforma:/db-plataforma:ro" \
-  -e CONECTOR_MARIADB_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
-  -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" -e CONECTOR_SHA256="${CONECTOR_SHA256:-sim}" \
+  -e CONECTOR_MARIADB_SENHA -e CONECTOR_MOTOR_SENHA -e CONECTOR_PLATAFORMA_BANCO="${CONECTOR_PLATAFORMA_BANCO:-plataforma}" \
+  -e CONECTOR_MAX_PARALELO="${CONECTOR_MAX_PARALELO:-1}" \
   -e CONECTOR_UID="$(id -u)" -e CONECTOR_GID="$(id -g)" \
   -e CONECTOR_PLANO_B_AUTORIZADO="${CONECTOR_PLANO_B_AUTORIZADO:-}" \
   -e CONECTOR_COW_MB="${CONECTOR_COW_MB:-2048}" -e CONECTOR_RESERVA_GB="${CONECTOR_RESERVA_GB:-100}" \

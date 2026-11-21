@@ -350,6 +350,15 @@ apagado no fim).
   manifesto; banco somente leitura na abertura; sha256 do arquivo igual antes e depois.
 - **Rede:** rede Docker interna `sante-sgh-conector-int` (`--internal`, sem saída; conferido: resolução externa
   falha); o `sante-sgh-mariadb` é ligado a ela com alias `mariadb`.
-- **Para o L3:** o trabalhador ainda roda privilegiado inteiro (o abridor não foi separado num processo à parte);
-  a conta de controle do motor é a `root` do MariaDB de dev (produção pede conta própria com CREATE USER/GRANT
-  OPTION só nos bancos `cliente_*`/`conector_ctl_*`); a carga das entidades, as rotas e as telas do painel.
+- **Correções da avaliação do L2 (2026-11-21):**
+  - GRANT do usuário da execução com `_` escapado (no MariaDB o `_` era curinga e dava acesso a outro cliente) e
+    banco obrigatoriamente `cliente_<codigo>`; teste com `ex_l2` × `exxl2`.
+  - Prova do arquivo obrigatória: sem a variável `CONECTOR_SHA256`; sha256 + tamanho + mtime no início e no fim.
+  - Conciliação contra fonte independente: gstat no mesmo snapshot × contagem gravada lida de volta (soma de
+    controle por tabela); teste com leitura adulterada sai `falhou`.
+  - Abridor separado do motor: abridor privilegiado sem rede e sem credencial; motor sem privilégio, com a conta
+    restrita `sscon_motor_<ficha>` (nunca a root). Provado no teste e no `conector.sh worker` real (fila vazia).
+  - Autoconferência: 16 testes (9 do L1 + 7 do L2), verdes.
+- **Para o L3:** a carga das entidades, a conciliação contra o destino real por entidade, as rotas e as telas do
+  painel. A conta do motor tem `CREATE USER` global (necessário para criar o usuário de cada execução); em
+  produção, avaliar conta própria por servidor de clientes.

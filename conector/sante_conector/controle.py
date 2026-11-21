@@ -3,9 +3,15 @@
 
 Guarda só metadados: tabela e chave original, entidade e id de destino, hash, imagem, pendência e conciliação.
 """
+import ipaddress
 import secrets
 
-from .banco import nome_seguro
+from .banco import escapar_curinga, nome_conta_motor, nome_seguro
+
+# Privilégios nos bancos de cliente (sem DROP, TRIGGER, EVENT nem rotinas: regra de negócio nunca vai ao banco).
+PRIVS_CLIENTE = ("SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, CREATE TEMPORARY TABLES,"
+                 " LOCK TABLES, CREATE VIEW, SHOW VIEW")
+PADROES_MOTOR = ("cliente_%", "conector_ctl_%")
 
 DDL = """
 CREATE TABLE IF NOT EXISTS {b}.imagem (
@@ -86,6 +92,8 @@ def nome_ctl(codigo):
 def preparar(conn, codigo, banco_cliente):
     """Garante a base de controle do cliente. Recusa se o banco do cliente não existir."""
     nome_seguro(banco_cliente)
+    if banco_cliente != "cliente_" + codigo:
+        raise RuntimeError("banco do cliente fora do padrão cliente_<codigo>")
     ctl = nome_ctl(codigo)
     with conn.cursor() as c:
         c.execute("SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name=%s", (banco_cliente,))
@@ -114,9 +122,35 @@ def criar_usuario(conn, nome, banco_cliente, ctl, host):
     with conn.cursor() as c:
         c.execute("DROP USER IF EXISTS %s@%s", (nome, host))
         c.execute("CREATE USER %s@%s IDENTIFIED BY %s", (nome, host, senha))
-        for b in (banco_cliente, ctl):
-            c.execute("GRANT ALL PRIVILEGES ON `%s`.* TO %%s@%%s" % b, (nome, host))
+        for b in (banco_cliente, ctl):  # `_` escapado: o GRANT vale só para este banco, não por curinga
+            c.execute("GRANT %s ON `%s`.* TO %%s@%%s" % (PRIVS_CLIENTE, escapar_curinga(b)), (nome, host))
     return senha
+
+
+def host_da_rede(cidr):
+    """Sub-rede Docker interna (`172.20.0.0/16`) no formato de host do MariaDB (`172.20.0.0/255.255.0.0`)."""
+    r = ipaddress.ip_network(cidr, strict=False)
+    if r.version != 4:
+        raise ValueError("sub-rede IPv4 esperada")
+    return "%s/%s" % (r.network_address, r.netmask)
+
+
+def criar_conta_motor(conn, plat, senha, host):
+    """Conta restrita do motor (feita pela root, fora do trabalhador): DML na plataforma, CREATE USER, e os
+    privilégios de cliente com GRANT OPTION só nos padrões `cliente\\_%` e `conector\\_ctl\\_%`."""
+    nome = nome_conta_motor(plat)
+    if not senha or len(senha) < 20:
+        raise ValueError("senha da conta do motor fraca ou ausente")
+    with conn.cursor() as c:
+        c.execute("CREATE USER IF NOT EXISTS %s@%s IDENTIFIED BY %s", (nome, host, senha))
+        c.execute("ALTER USER %s@%s IDENTIFIED BY %s", (nome, host, senha))
+        c.execute("REVOKE ALL PRIVILEGES, GRANT OPTION FROM %s@%s", (nome, host))
+        c.execute("GRANT CREATE USER ON *.* TO %s@%s", (nome, host))
+        c.execute("GRANT SELECT, INSERT, UPDATE ON `%s`.* TO %%s@%%s" % escapar_curinga(plat), (nome, host))
+        for p in PADROES_MOTOR:
+            esc = p.replace("_", "\\_").replace("%", "%%")  # %% = % literal para o pymysql
+            c.execute("GRANT %s ON `%s`.* TO %%s@%%s WITH GRANT OPTION" % (PRIVS_CLIENTE, esc), (nome, host))
+    return nome
 
 
 def remover_usuario(conn, nome, host):

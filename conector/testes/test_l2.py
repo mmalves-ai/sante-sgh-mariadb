@@ -5,22 +5,29 @@ Roda no container do conector, privilegiado, só na rede interna sante-sgh-conec
 exemplo com bancos vazios; apaga tudo no fim. Nunca toca no banco `plataforma` real.
 """
 import glob
+import json
 import os
+import secrets
 import shutil
+import subprocess
+import sys
 import unittest
+from unittest import mock
 
 import pymysql
 
-from sante_conector import banco, caminho, controle, disco, plataforma, sintetica
+from sante_conector import banco, caminho, controle, disco, plataforma, separado, sintetica
+from sante_conector.leitor import Leitor
 from sante_conector.trabalhador import Trabalhador
 
 PLAT = "plataforma_teste_conector"
 TRAB = os.environ.get("CONECTOR_TRABALHO_DIR", "/trabalho")
 ORIG = os.path.join(TRAB, "origens-l2")
 ARQ = "exemplo-l2.fdb"
-CLIENTES = ("exemplo_l2a", "exemplo_l2b")
+CLIENTES = ("exemplo_l2a", "exemplo_l2b", "ex_l2", "exxl2")  # ex_l2 x exxl2: casariam pelo curinga `_` do GRANT
 MANIF = None
 SHA = None
+ABRIDOR = None
 
 
 def _raiz():
@@ -64,9 +71,15 @@ def setUpModule():
     MANIF = sintetica.gerar(os.path.join(ORIG, ARQ))
     os.environ["CONECTOR_ORIGENS_DIR"] = ORIG
     SHA = caminho.sha256_arquivo(os.path.join(ORIG, ARQ))
+    global ABRIDOR  # o motor nunca abre o arquivo: pede ao abridor separado (rede vazia, sem credencial)
+    sock = os.path.join(TRAB, "abridor-teste.sock")
+    ABRIDOR = separado.iniciar_abridor(sock, 0, 0)
+    os.environ["CONECTOR_ABRIDOR_SOCKET"] = sock
 
 
 def tearDownModule():
+    if ABRIDOR:
+        ABRIDOR.terminate(); ABRIDOR.wait(60)
     _limpar()
     shutil.rmtree(ORIG, ignore_errors=True)
 
@@ -206,6 +219,26 @@ class Plataforma(unittest.TestCase):
             u.close()
             controle.remover_usuario(self.c, nome, host)
         self.assertEqual(_um(self.c, "SELECT COUNT(*) FROM mysql.user WHERE user=%s", (nome,))[0], 0)
+        # `_` no nome é literal no GRANT: o usuário de ex_l2 não alcança exxl2 (casaria pelo curinga)
+        ctl = controle.preparar(self.c, "ex_l2", "cliente_ex_l2")
+        controle.preparar(self.c, "exxl2", "cliente_exxl2")
+        senha = controle.criar_usuario(self.c, nome, "cliente_ex_l2", ctl, host)
+        u = banco.conectar(None, usuario=nome, senha=senha)
+        try:
+            with u.cursor() as cur:
+                cur.execute("SHOW DATABASES")
+                self.assertEqual({r[0] for r in cur.fetchall()},
+                                 {"information_schema", "cliente_ex_l2", "conector_ctl_ex_l2"})
+                cur.execute("INSERT INTO cliente_ex_l2.marca VALUES (1)")
+                for proibido in ("INSERT INTO cliente_exxl2.marca VALUES (1)", "SELECT * FROM cliente_exxl2.marca",
+                                 "SELECT COUNT(*) FROM conector_ctl_exxl2.pendencia", "DROP DATABASE cliente_ex_l2"):
+                    with self.assertRaises(pymysql.err.MySQLError, msg=proibido):
+                        cur.execute(proibido)
+        finally:
+            u.close()
+            controle.remover_usuario(self.c, nome, host)
+        with self.assertRaises(RuntimeError):                                 # banco fora de cliente_<codigo>
+            controle.preparar(self.c, "ex_l2", "cliente_exxl2")
 
     def test_5_ponta_a_ponta_importar_e_sincronizar(self):
         eid = plataforma.enfileirar(self.c, "exemplo_l2a", "importar")
@@ -218,6 +251,9 @@ class Plataforma(unittest.TestCase):
             self.assertEqual(k["registros_lidos"], MANIF["registros_total"])
             self.assertEqual(k["tabelas"], len(MANIF["contagens"]))
             self.assertTrue(k["somente_leitura"] and k["arquivo_inalterado"] and k["conciliacao"]["conferido"])
+            self.assertEqual((k["conciliacao"]["fonte_origem"], k["conciliacao"]["registros_origem"],
+                              k["gstat"]["divergentes"]), ("gstat", MANIF["registros_total"], 0))
+            self.assertTrue(k["abertura"]["separado"])
             self.assertEqual(ex["imagem_sha256"], SHA)
             self.assertEqual(k["abertura"]["modo"], "snapshot")
             self.assertEqual([e[1] for e in _eventos(self.c, eid)],
@@ -239,4 +275,56 @@ class Plataforma(unittest.TestCase):
             self.assertEqual(t.laco(uma=True)["resultado"], "fila vazia")
         finally:
             t.fechar()
+        self.assertEqual(caminho.sha256_arquivo(os.path.join(ORIG, ARQ)), SHA)
+
+    def test_6_conciliacao_pega_leitura_errada(self):
+        """A conciliação confronta o gravado com o gstat: uma contagem errada na leitura não sai conferida."""
+        eid = plataforma.enfileirar(self.c, "exemplo_l2a", "sincronizar")
+        original = Leitor.contar
+        alvo = sorted(MANIF["contagens"])[0]
+        t = Trabalhador("t-erro")
+        try:
+            with mock.patch.object(Leitor, "contar", lambda lt, tab: original(lt, tab) + (tab == alvo)):
+                ex = t.laco(uma=True)
+        finally:
+            t.fechar()
+        self.assertEqual((ex["id"], ex["estado"]), (eid, "falhou"))
+        self.assertIn("gstat", ex["motivo_falha"])
+        self.assertFalse(ex["contadores"]["conciliacao"]["conferido"])
+        self.assertEqual(_um(self.c, "SELECT conferido, pendencias FROM conector_ctl_exemplo_l2a.conciliacao"
+                                     " WHERE execucao_id=%s", (eid,)), (0, 1))
+        self.assertEqual(caminho.sha256_arquivo(os.path.join(ORIG, ARQ)), SHA)
+
+    def test_7_trabalhador_separado(self):
+        """conector.sh worker: abridor privilegiado sem rede e sem credencial; motor sem privilégio, conta restrita."""
+        uid = int(os.environ.get("CONECTOR_UID") or 1000) or 1000
+        os.chown(os.path.join(ORIG, ARQ), uid, uid)                          # dono do arquivo = usuário do motor
+        senha = secrets.token_urlsafe(24)
+        conta = controle.criar_conta_motor(self.c, PLAT, senha, controle.host_do_motor(self.c))
+        self.assertEqual(conta, banco.nome_conta_motor(PLAT))
+        eid = plataforma.enfileirar(self.c, "exemplo_l2b", "importar")
+        env = {k: v for k, v in os.environ.items() if k not in ("CONECTOR_MARIADB_SENHA", "CONECTOR_ABRIDOR_SOCKET")}
+        env.update(CONECTOR_MOTOR_SENHA=senha, CONECTOR_MOTOR_UID=str(uid), CONECTOR_MOTOR_GID=str(uid))
+        r = subprocess.run([sys.executable, "-s", "-m", "sante_conector.cli", "worker-separado", "--uma"], env=env,
+                           capture_output=True, text=True, timeout=600)
+        self.assertEqual(r.returncode, 0, r.stderr[-2000:])
+        ex = json.loads(r.stdout)
+        self.assertEqual((ex["id"], ex["estado"]), (eid, "concluida"), ex.get("motivo_falha"))
+        self.assertTrue(ex["contadores"]["arquivo_inalterado"] and ex["contadores"]["conciliacao"]["conferido"])
+        m, a = ex["separacao"]["motor"], ex["separacao"]["abridor"]
+        self.assertEqual((m["uid"], m["cap_efetivas"], m["cap_limite"], m["no_new_privs"], m["conta_mariadb"]),
+                         (uid, "0" * 16, "0" * 16, "1", conta))
+        self.assertEqual((a["uid"], a["interfaces"], a["segredo_no_ambiente"]), (0, ["lo"], False))
+        self.assertEqual(_um(self.c, "SELECT COUNT(*) FROM mysql.user WHERE user LIKE %s",
+                             ("sscon\\_e%d\\_%%" % eid,))[0], 0)
+        u = banco.conectar(None, usuario=conta, senha=senha)                  # a conta do motor é restrita
+        try:
+            with u.cursor() as cur:
+                for proibido in ("SELECT * FROM mysql.user", "DROP DATABASE cliente_exemplo_l2b",
+                                 "CREATE DATABASE intruso", "DELETE FROM %s.cliente" % PLAT,
+                                 "CREATE TABLE %s.intrusa (id INT)" % PLAT):
+                    with self.assertRaises(pymysql.err.MySQLError, msg=proibido):
+                        cur.execute(proibido)
+        finally:
+            u.close()
         self.assertEqual(caminho.sha256_arquivo(os.path.join(ORIG, ARQ)), SHA)

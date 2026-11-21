@@ -24,6 +24,16 @@ def plataforma_banco():
     return nome_seguro(os.environ.get("CONECTOR_PLATAFORMA_BANCO") or "plataforma")
 
 
+def escapar_curinga(nome):
+    """Nome de banco num GRANT: `_` e `%` são curingas no MariaDB; escapados, valem só literalmente."""
+    return nome_seguro(nome).replace("_", "\\_").replace("%", "\\%")
+
+
+def nome_conta_motor(plat=None):
+    """Conta restrita do motor no MariaDB (uma por banco de plataforma); nunca a root."""
+    return "sscon_motor_" + hashlib.sha1((plat or plataforma_banco()).encode()).hexdigest()[:6]
+
+
 def ficha_plataforma():
     """Ficha curta da plataforma usada em nomes de trava e de snapshot (várias plataformas no mesmo servidor)."""
     return hashlib.sha1(plataforma_banco().encode()).hexdigest()[:6]

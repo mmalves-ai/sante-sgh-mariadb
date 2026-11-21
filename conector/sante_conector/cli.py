@@ -13,7 +13,9 @@ Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
   cancelar <id>                           cancela execução ainda na fila
   execucao <id>                           estado, etapa, % e contadores
   fila [--limite N]                       últimas execuções
-  worker [--uma] [--espera S]             trabalhador (com --uma: no máximo uma execução)
+  worker [--uma] [--espera S]             trabalhador (com --uma: no máximo uma execução; precisa do abridor)
+  worker-separado [--uma] [--espera S]    abridor privilegiado sem rede + motor sem privilégio (o conector.sh usa)
+  conta-motor --rede CIDR                 cria/renova a conta restrita do motor (feita pela root, fora do worker)
 """
 import argparse
 import json
@@ -52,6 +54,12 @@ def main(argv=None):
     p = sub.add_parser("execucao"); p.add_argument("id", type=int)
     p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
     p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
+    sub.add_parser("worker-separado")
+    p = sub.add_parser("conta-motor"); p.add_argument("--rede", required=True)
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["worker-separado"]:
+        from . import separado
+        return separado.main(argv[1:])
     a = ap.parse_args(argv)
 
     if a.cmd in ("vincular", "enfileirar", "cancelar", "execucao", "fila"):
@@ -79,9 +87,21 @@ def main(argv=None):
         t = Trabalhador()
         try:
             r = t.laco(uma=a.uma, espera=a.espera)
+            if isinstance(r, dict):
+                r["separacao"] = t.diagnostico()
             return _json(r)
         finally:
             t.fechar()
+
+    if a.cmd == "conta-motor":
+        from . import banco, controle
+        conn = banco.conectar(None)
+        try:
+            plat = banco.plataforma_banco()
+            return _json({"conta": controle.criar_conta_motor(conn, plat, os.environ.get("CONECTOR_MOTOR_SENHA"),
+                                                              controle.host_da_rede(a.rede))})
+        finally:
+            conn.close()
 
     from . import caminho
     if a.cmd == "listar":

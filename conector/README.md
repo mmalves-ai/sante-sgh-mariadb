@@ -23,7 +23,15 @@ daqui é só ferramenta interna de teste.
 - **Pasta autorizada** `CONECTOR_ORIGENS_DIR` (padrão: `banco-dev/backups` da área de trabalho), montada
   somente leitura em `/origens`. Só caminho relativo, sem `..`, sem symlink, arquivo regular `.fdb`,
   cabeçalho Firebird ODS 12 e tamanho múltiplo da página.
-- Container `sante-sgh-conector` sempre `--network none`; `--privileged` só nos comandos que abrem o arquivo.
+- Container `sante-sgh-conector` com `--network none`, salvo os comandos da fila e do motor, que entram só na rede
+  interna `sante-sgh-conector-int` (sem saída). `--privileged` só nos comandos que abrem o arquivo.
+- **Trabalhador separado** (`conector.sh worker` → `separado.py`): o **abridor** (`servico_abridor.py`) é o único
+  processo privilegiado e roda numa rede vazia (`unshare --net`, só `lo`) e sem credencial no ambiente; atende por
+  soquete Unix 0600 (par conferido por SO_PEERCRED), revalida o caminho, monta o snapshot e entrega o dispositivo ao
+  usuário do motor. O **motor** roda sem privilégio (`setpriv`: uid do usuário, sem capacidades, `no_new_privs`), é
+  o único com rede e usa a conta restrita `sscon_motor_<ficha>` (DML na plataforma, `CREATE USER` e, com GRANT
+  OPTION, só os padrões `cliente\_%` e `conector\_ctl\_%`, sem DROP), criada/renovada a cada partida por
+  `conta-motor` num container sem privilégio, com senha aleatória nova. O worker nunca recebe a senha root.
 - Saídas só com metadados, contagens e hashes. Texto sai em bytes crus (`CAST ... CHARACTER SET OCTETS`);
   o hash da linha (BLAKE2b-128) é sobre os bytes crus, antes da conversão CP1252 → Unicode (`texto.py`).
 
@@ -72,7 +80,7 @@ conector/conector.sh execucao <id> | fila | cancelar <id>
 ```
 
 Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam `plataforma_teste_conector`),
-`CONECTOR_MAX_PARALELO`, `CONECTOR_SHA256` (`sim`; `nao` só para teste), `CONECTOR_FATOR_DISCO_IMPORTAR`,
+`CONECTOR_MAX_PARALELO`, `CONECTOR_FATOR_DISCO_IMPORTAR`,
 `CONECTOR_FATOR_DISCO_SINCRONIZAR`.
 
 ## Módulos
@@ -92,3 +100,11 @@ Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam
 | `trabalhador.py` | vagas, `SKIP LOCKED`, travas, órfãs e snapshots órfãos |
 | `motor.py` | uma execução de `abrindo` a `concluida`/`falhou` |
 | `cli.py` | ferramenta interna de teste |
+- **Prova do arquivo, obrigatória:** sha256 no início (igual ao do vínculo) e no fim, mais tamanho e mtime; não há
+  variável que a desligue. Sem prova, a execução não termina `concluida`.
+- **Conciliação da imagem com fonte independente:** o gstat roda no mesmo snapshot (leitor fechado) e a contagem
+  gravada na base de controle, lida de volta, é comparada com ele tabela a tabela (soma de controle sha256 da lista
+  `tabela=registros`). Contagem errada na leitura sai `conferido=0` e a execução `falhou`. Do L3 em diante a
+  conciliação passa a ser contra o destino real, por entidade.
+- **GRANT sem curinga:** o `_` do nome do banco é escapado (`cliente\_a\_b`), e o banco tem de ser
+  `cliente_<codigo>`; o teste prova que o usuário de `ex_l2` não alcança `exxl2`.

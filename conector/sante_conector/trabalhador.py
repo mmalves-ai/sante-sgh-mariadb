@@ -6,15 +6,14 @@
   transação. Durante a execução, o trabalhador segura a trava nomeada da execução.
 - Uma execução por cliente: índice único `uq_conector_execucao_cliente_ativo` (estados ativos), já no enfileirar.
 - Órfãs: execução rodando cuja trava ninguém segura (trabalhador caiu) vira `falhou`; snapshot `sscon-e<id>-<ficha>`
-  sem dono é desmontado.
+  sem dono é desmontado pelo abridor separado (o trabalhador não tem privilégio: `separado.py`).
 """
 import os
 import socket
-import subprocess
 import time
 import uuid
 
-from . import banco, motor, plataforma
+from . import banco, motor, plataforma, servico_abridor
 
 
 class Trabalhador:
@@ -107,15 +106,14 @@ class Trabalhador:
         return feitas
 
     def limpar_snapshots_orfaos(self):
-        """Desmonta `sscon-e<id>-<ficha>` desta plataforma cuja execução não tem dono vivo."""
+        """Desmonta (pelo abridor separado) `sscon-e<id>-<ficha>` desta plataforma cuja execução não tem dono vivo."""
         try:
-            saida = subprocess.run(["dmsetup", "ls"], capture_output=True, text=True, timeout=20).stdout
+            nomes = servico_abridor.pedir("listar")["nomes"]
         except Exception:
             return []
         feitos = []
-        for ln in saida.splitlines():
-            nome = ln.split()[0] if ln.split() else ""
-            if not nome.startswith("sscon-e") or not nome.endswith("-" + self.ficha):
+        for nome in nomes:
+            if not nome.endswith("-" + self.ficha):
                 continue
             try:
                 eid = int(nome[len("sscon-e"):-len(self.ficha) - 1])
@@ -123,13 +121,24 @@ class Trabalhador:
                 continue
             if not self._livre(self.trava_execucao(eid)):
                 continue
-            deps = subprocess.run(["dmsetup", "deps", "-o", "devname", nome], capture_output=True, text=True).stdout
-            subprocess.run(["dmsetup", "remove", "--noudevsync", nome], capture_output=True)
-            for d in deps.replace("(", " ").replace(")", " ").split():
-                if d.startswith("loop"):
-                    subprocess.run(["losetup", "-d", "/dev/" + d], capture_output=True)
-            feitos.append(nome)
+            try:
+                servico_abridor.pedir("remover", nome=nome)
+                feitos.append(nome)
+            except Exception:
+                pass
         return feitos
+
+    def diagnostico(self):
+        """Prova de separação, sem segredos: o motor (este processo) e o abridor."""
+        with self.conn.cursor() as c:
+            c.execute("SELECT SUBSTRING_INDEX(CURRENT_USER(), '@', 1)")
+            conta = c.fetchone()[0]
+        try:
+            ab = servico_abridor.pedir("diagnostico")
+            ab.pop("ok", None)
+        except Exception as e:
+            ab = {"erro": str(e)[:200]}
+        return {"motor": dict(servico_abridor.diagnostico(), conta_mariadb=conta), "abridor": ab}
 
     def executar(self, eid):
         try:
