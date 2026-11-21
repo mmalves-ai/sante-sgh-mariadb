@@ -23,14 +23,18 @@ entra **vivo e utilizável** no modelo próprio. Não existe "acervo morto" nem 
    - O rascunho volta para o **autor** no sistema novo, com a situação "rascunho" e a data original.
    - O autor (ou quem tiver a permissão) pode **finalizar** ou **apagar**, com trilha de auditoria.
    - Rascunho não aparece como registro finalizado do prontuário.
-3. **Tabela licenciada** (ex.: preços de materiais e medicamentos de referência) **é carregada** para o cliente que tem
-   a licença.
-   - A licença é condição comercial, registrada no cadastro do cliente na plataforma: o administrador marca, por
-     tabela licenciada, "cliente possui licença".
-   - A Rede Santé possui a licença (dono, 2026-11-21).
-   - Sem a marca, o conector recusa a carga daquela tabela e avisa no relatório. Nunca descarta em silêncio.
+3. **Tabela licenciada padrão não vem do conector** (dono, 2026-11-21, revisão desta mesma data).
+   - Itens como Simpro, Brasíndice, CBHPM e CEP fazem parte do **espelho padrão da base**: o conjunto de catálogos de
+     referência do produto, mantido pela plataforma e versionado por edição.
+   - Todo cliente, inclusive os novos, recebe esse espelho no "criar novo cliente" e nas atualizações de edição.
+   - A licença é condição comercial; a Rede Santé a possui.
+   - O conector só **liga** as referências do hospital ao espelho, pelo código e pela edição. Não copia o conteúdo
+     licenciado da origem.
+   - Preço e tabela **próprios do hospital** (tabelas negociadas, personalizações) são dado do cliente e entram pelo
+     conector.
 4. **Catálogo oficial do hospital é copiado e fica útil.**
-   - O carregador versionado da fonte oficial (regra 7) continua sendo a base.
+   - O espelho padrão da base (oficiais por carregador versionado da fonte oficial, mais os licenciados) continua
+     sendo a referência.
    - O conteúdo de catálogo que vem da origem do hospital também entra:
      - códigos que existem na fonte oficial são ligados a ela pelo código;
      - versões antigas, códigos locais e personalizações do hospital entram como itens do próprio hospital, ativos e
@@ -43,6 +47,7 @@ entra **vivo e utilizável** no modelo próprio. Não existe "acervo morto" nem 
   própria do conector (rodada 5, "continuidade"), antes da carga completa da ProntoCardio.
 - O modelo ganha:
   - a situação "rascunho" nos registros clínicos que ainda não a têm;
-  - a marca de licença por cliente e por tabela licenciada;
   - os itens de catálogo do próprio hospital.
-- A regra 7 do AGENTS.md passa a ter esta exceção: o licenciado entra pelo conector no cliente com licença marcada.
+- A plataforma ganha o **espelho padrão da base**: carregadores versionados para os licenciados, ao lado dos
+  oficiais. O "criar novo cliente" e a atualização de edição levam o espelho a cada cliente.
+- A regra 7 do AGENTS.md muda: o licenciado padrão faz parte da base do produto, pelo espelho, e nunca pelo conector.

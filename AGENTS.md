@@ -221,13 +221,18 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
 
 - Dados públicos (TUSS, SIGTAP, CID-10, CBO, IBGE, CNES, terminologias TISS) vêm **das fontes oficiais**,
   por carregador versionado. Nunca do dump do MV nem do SPDATA.
-- **Licenciados** (Simpro, Brasíndice, CBHPM, CEP dos Correios) nunca entram na base do produto. Entram só
-  por hospital que comprove licença.
+- **Licenciados** (Simpro, Brasíndice, CBHPM, CEP dos Correios) fazem parte do **espelho padrão da base**
+  (ADR 0006, dono, 2026-11-21).
+  - Carregador versionado por edição, mantido pela plataforma.
+  - Todo cliente, inclusive o novo, recebe o espelho.
+  - Nunca entram pelo conector: o conector só liga as referências do hospital pelo código e pela edição.
+  - A licença é condição comercial.
 - **Importação é continuidade (ADR 0006, dono, 2026-11-21).** Tudo que o hospital usa entra vivo e utilizável. Não
   existe arquivo morto.
   - **Catálogo da origem:** entra ligado ao catálogo oficial pelo código. Os itens próprios do hospital entram
     ativos.
-  - **Licenciado:** entra no cliente com a licença marcada na plataforma. A Rede Santé tem a licença.
+  - **Licenciado padrão:** vem do espelho padrão da base, nunca do conector. Preço próprio do hospital entra pelo
+    conector.
   - **Rascunho clínico:** volta como rascunho ao autor, que pode finalizá-lo ou apagá-lo.
   - **Não copiar uma tabela** só vale com prova, pela conciliação, de que a informação continua disponível. Nunca
     por julgamento do agente.
