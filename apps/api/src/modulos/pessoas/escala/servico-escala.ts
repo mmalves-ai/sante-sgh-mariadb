@@ -6,7 +6,13 @@
 // estabelecimento vem da sessão, nunca do pedido (escala, plantão, regime ou vínculo de outro estabelecimento: 404).
 // A sobreposição na Rede (regra 7) é lida antes da transação, nos bancos dos outros estabelecimentos, só de leitura e
 // só com os intervalos. Escala publicada só muda com motivo (regra 8), que vai à trilha da escala e ao evento de
-// mudança na SGH_OUTBOX; a publicação vai ao evento PESSOAS_ESCALA_PUBLICADA (a F3 consome).
+// mudança na integracao_mensagem; a publicação vai ao evento PESSOAS_ESCALA_PUBLICADA (a F3 consome).
+import {
+  type OpcaoTempoParcial,
+  type RegistroEscala,
+  type RegistroPlantao,
+  type RegistroRegime,
+} from './tipos.js';
 import {
   ACOES_EVENTO_ESCALA,
   type AlterarCoberturaEntrada,
@@ -67,13 +73,6 @@ import {
   segundaDaSemana,
   vinculoAtivo,
 } from '@sgh/dominio-pessoas';
-import type {
-  EscalaPesLida,
-  PlantaoPesLido,
-  RegimePesLido,
-  TempoParcialLido,
-  VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -83,6 +82,9 @@ import { LiberacaoPep } from '../../pep/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { PortaPonto } from '../ponto/porta-ponto.js';
 import type { GravadorEscala, JanelaPlantoes, PlantoesDaRede, PortaEscala } from './porta-escala.js';
+
+/** O vínculo de trabalho como a porta da gestão de pessoas o lê. */
+type VinculoDaPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
 
 const E = EVENTOS_AUDITAVEIS;
 export const CHAVE_PESSOAS_ESCALA = 'pessoas.escala';
@@ -216,7 +218,7 @@ export class ServicoEscala {
 
   // ── Apoio e regimes ─────────────────────────────────────────────────────────────────────────────────────────
 
-  private regimeLido(r: RegimePesLido, dom: DominiosEscala): RegimeLido {
+  private regimeLido(r: RegistroRegime, dom: DominiosEscala): RegimeLido {
     const parcial = dom.parciais.find((x) => x.codigo === r.contratoParcial) ?? null;
     return {
       id: r.id,
@@ -239,7 +241,7 @@ export class ServicoEscala {
     };
   }
 
-  private regraDoRegime(r: RegimePesLido, parciais: readonly TempoParcialLido[]) {
+  private regraDoRegime(r: RegistroRegime, parciais: readonly OpcaoTempoParcial[]) {
     return {
       descansoMinimoMin: r.descansoMinimoMin,
       acordo: r.acordo,
@@ -265,7 +267,7 @@ export class ServicoEscala {
       : carregar();
   }
 
-  private async temposParciais(s: SessaoCadastro): Promise<readonly TempoParcialLido[]> {
+  private async temposParciais(s: SessaoCadastro): Promise<readonly OpcaoTempoParcial[]> {
     return (await this.dominios(s)).parciais;
   }
 
@@ -336,7 +338,7 @@ export class ServicoEscala {
       s,
       E.pessoasRegimeGravado.codigo,
       CHAVE_PESSOAS_ESCALA,
-      (x: number) => ({ tabela: 'SGH_PES_REGIME', id: String(x) }),
+      (x: number) => ({ tabela: 'regime_jornada', id: String(x) }),
       (g) => g.incluirRegime({ ...e, por: s.login }),
     );
     return { id, mensagem: 'Regime incluído.', alertas: [] };
@@ -345,14 +347,13 @@ export class ServicoEscala {
   async alterarRegime(s: SessaoCadastro, e: AlterarRegimeEntrada): Promise<ResultadoEscala> {
     await this.apoio.exigirLiberacao(s);
     const atual = await this.porta.regime(s.porta, e.id);
-    if (!atual || atual.hospital !== s.hospital)
-      throw naoEncontrado('Regime', 'O regime não existe neste estabelecimento.');
+    if (!atual) throw naoEncontrado('Regime', 'O regime não existe neste estabelecimento.');
     await this.conferirCamposRegime(s, e);
     await this.apoio.sgh(
       s,
       E.pessoasRegimeGravado.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_REGIME', id: String(e.id) },
+      { tabela: 'regime_jornada', id: String(e.id) },
       (g) => g.alterarRegime({ ...e, por: s.login }),
     );
     return { id: e.id, mensagem: 'Regime alterado.', alertas: [] };
@@ -397,10 +398,9 @@ export class ServicoEscala {
     };
   }
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoDaPessoa> {
     const v = await this.pessoas.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital)
-      throw naoEncontrado('Colaborador', 'O vínculo não existe neste estabelecimento.');
+    if (!v) throw naoEncontrado('Colaborador', 'O vínculo não existe neste estabelecimento.');
     return v;
   }
 
@@ -424,8 +424,7 @@ export class ServicoEscala {
   async atribuirRegime(s: SessaoCadastro, e: AtribuirRegimeEntrada): Promise<ResultadoEscala> {
     await this.apoio.exigirLiberacao(s);
     const [v, r] = await Promise.all([this.vinculoOu404(s, e.vinculo), this.porta.regime(s.porta, e.regime)]);
-    if (!r || r.hospital !== s.hospital)
-      throw naoEncontrado('Regime', 'O regime não existe neste estabelecimento.');
+    if (!r) throw naoEncontrado('Regime', 'O regime não existe neste estabelecimento.');
     if (!vinculoAtivo(v)) throw recusaRegra('desligado', 'O vínculo está desligado: não recebe regime.');
     if (!r.ativo) throw recusaRegra('regime-inativo', 'O regime está inativo.', ['regime']);
     if (diasEntre(v.admissao, e.desde) < 0)
@@ -434,7 +433,11 @@ export class ServicoEscala {
       s,
       E.pessoasRegimeAtribuido.codigo,
       CHAVE_PESSOAS_ESCALA,
-      (x: number) => ({ tabela: 'SGH_PES_REGIME_VINCULO', id: String(x), chave: `SGH_PES_VINCULO:${v.id}` }),
+      (x: number) => ({
+        tabela: 'vigencia_regime_colaborador',
+        id: String(x),
+        chave: `vinculo_trabalho:${v.id}`,
+      }),
       (g) => g.atribuirRegime({ vinculo: v.id, regime: r.id, desde: e.desde, por: s.login }),
     );
     return {
@@ -458,7 +461,7 @@ export class ServicoEscala {
       s,
       E.pessoasRegimeVigenciaAnulada.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_REGIME_VINCULO', id: String(alvo.id), chave: `SGH_PES_VINCULO:${v.id}` },
+      { tabela: 'vigencia_regime_colaborador', id: String(alvo.id), chave: `vinculo_trabalho:${v.id}` },
       async (g) => {
         // Revisão W0-06 (fail-closed): trava a pessoa (a mesma trava do fechamento do ponto) e reconta os períodos
         // fechados DENTRO da transação; um fechamento gravado depois da leitura da tela não passa.
@@ -530,7 +533,7 @@ export class ServicoEscala {
 
   // ── Escala ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private resumo(x: EscalaPesLida, unidades: ReadonlyMap<number, string>): EscalaResumo {
+  private resumo(x: RegistroEscala, unidades: ReadonlyMap<number, string>): EscalaResumo {
     const tipo = x.tipo as TipoEscala;
     return {
       id: x.id,
@@ -562,9 +565,9 @@ export class ServicoEscala {
     return { itens: lista.map((x) => this.resumo(x, un)) };
   }
 
-  private async escalaOu404(s: SessaoCadastro, id: number): Promise<EscalaPesLida> {
+  private async escalaOu404(s: SessaoCadastro, id: number): Promise<RegistroEscala> {
     const x = await this.porta.escala(s.porta, id);
-    if (!x || x.hospital !== s.hospital) throw escalaNaoEncontrada();
+    if (!x) throw escalaNaoEncontrada();
     return x;
   }
 
@@ -582,7 +585,7 @@ export class ServicoEscala {
       s,
       E.pessoasEscalaCriada.codigo,
       CHAVE_PESSOAS_ESCALA,
-      (x: number) => ({ tabela: 'SGH_PES_ESCALA', id: String(x) }),
+      (x: number) => ({ tabela: 'escala', id: String(x) }),
       (g) =>
         g.incluirEscala({
           unidade: e.unidade,
@@ -605,7 +608,7 @@ export class ServicoEscala {
       s,
       E.pessoasEscalaCriada.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ESCALA', id: String(x.id) },
+      { tabela: 'escala', id: String(x.id) },
       async (g) => {
         const esc = await g.escala(x.id);
         if (!esc) throw escalaNaoEncontrada();
@@ -626,11 +629,11 @@ export class ServicoEscala {
     return { id: x.id, mensagem: 'Cobertura mínima alterada.', alertas: [] };
   }
 
-  /** O evento de mudança da escala publicada: a chave (única na SGH_OUTBOX) leva o evento da trilha da escala. */
+  /** O evento de mudança da escala publicada: a chave (única na integracao_mensagem) leva o evento da trilha da escala. */
   private async outboxMudanca(
     g: GravadorEscala,
     s: SessaoCadastro,
-    x: EscalaPesLida,
+    x: RegistroEscala,
     acao: string,
     evento: number,
   ) {
@@ -669,7 +672,7 @@ export class ServicoEscala {
   private async gravarPlantao(
     s: SessaoCadastro,
     e: IncluirPlantaoEntrada | AlterarPlantaoEntrada,
-    atual: PlantaoPesLido | null,
+    atual: RegistroPlantao | null,
   ): Promise<ResultadoEscala> {
     await this.apoio.exigirLiberacao(s);
     const x = await this.escalaOu404(s, e.escala);
@@ -696,7 +699,7 @@ export class ServicoEscala {
     const regra = r ? this.regraDoRegime(r, dom) : null;
     const registros = v.profissional !== null ? (regs.get(v.profissional) ?? []) : [];
 
-    const conferir = (estado: EstadoEscala, daPessoa: readonly PlantaoPesLido[]) => {
+    const conferir = (estado: EstadoEscala, daPessoa: readonly RegistroPlantao[]) => {
       const outros = daPessoa.filter((o) => o.id !== atual?.id);
       return conferirPlantaoNaEscala(p, {
         escala: { competencia: x.competencia, tipo: x.tipo as TipoEscala, estado },
@@ -723,9 +726,9 @@ export class ServicoEscala {
       E.pessoasPlantaoGravado.codigo,
       CHAVE_PESSOAS_ESCALA,
       (y: { id: number }) => ({
-        tabela: 'SGH_PES_PLANTAO',
+        tabela: 'plantao',
         id: String(y.id),
-        chave: `SGH_PES_ESCALA:${x.id}`,
+        chave: `escala:${x.id}`,
       }),
       async (g) => {
         await g.travarPessoa(v.pessoa);
@@ -783,9 +786,9 @@ export class ServicoEscala {
    */
   async conferenciaComOutroVinculo(
     s: SessaoCadastro,
-    x: EscalaPesLida,
-    v: VinculoPesLido,
-    p: PlantaoPesLido,
+    x: RegistroEscala,
+    v: VinculoDaPessoa,
+    p: RegistroPlantao,
     motivo: string,
   ) {
     const prop = proposto(p);
@@ -805,7 +808,7 @@ export class ServicoEscala {
     const registros = v.profissional !== null ? (regs.get(v.profissional) ?? []) : [];
     return {
       janela,
-      conferir: (estado: EstadoEscala, daPessoa: readonly PlantaoPesLido[], fora: ReadonlySet<number>) => {
+      conferir: (estado: EstadoEscala, daPessoa: readonly RegistroPlantao[], fora: ReadonlySet<number>) => {
         const outros = daPessoa.filter((o) => !fora.has(o.id));
         return conferirPlantaoNaEscala(prop, {
           escala: { competencia: x.competencia, tipo: x.tipo as TipoEscala, estado },
@@ -826,7 +829,7 @@ export class ServicoEscala {
   static readonly ALERTAS = ALERTAS;
 
   /** O evento de mudança da escala publicada (a troca aprovada também o gera). */
-  outboxDaMudanca(g: GravadorEscala, s: SessaoCadastro, x: EscalaPesLida, acao: string, evento: number) {
+  outboxDaMudanca(g: GravadorEscala, s: SessaoCadastro, x: RegistroEscala, acao: string, evento: number) {
     return this.outboxMudanca(g, s, x, acao, evento);
   }
 
@@ -834,7 +837,7 @@ export class ServicoEscala {
     return this.gravarPlantao(s, e, null);
   }
 
-  private async plantaoOu404(s: SessaoCadastro, escala: number, id: number): Promise<PlantaoPesLido> {
+  private async plantaoOu404(s: SessaoCadastro, escala: number, id: number): Promise<RegistroPlantao> {
     const [p] = (await this.porta.plantoesDaEscala(s.porta, escala)).filter((x) => x.id === id);
     if (!p) throw naoEncontrado('Plantão', 'O plantão não está nesta escala.');
     return p;
@@ -868,7 +871,7 @@ export class ServicoEscala {
       s,
       E.pessoasPlantaoGravado.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_PLANTAO', id: String(p.id), chave: `SGH_PES_ESCALA:${x.id}` },
+      { tabela: 'plantao', id: String(p.id), chave: `escala:${x.id}` },
       async (g) => {
         const esc = await g.escala(x.id);
         if (!esc) throw escalaNaoEncontrada();
@@ -892,7 +895,7 @@ export class ServicoEscala {
 
   // ── W0-06: exclusão do rascunho e cancelamento da publicada ────────────────────────────────────────────────
 
-  private conferirVersao(x: EscalaPesLida, versao: number): void {
+  private conferirVersao(x: RegistroEscala, versao: number): void {
     if (x.versao !== versao)
       throw recusaRegra(
         'desatualizado',
@@ -904,7 +907,7 @@ export class ServicoEscala {
    * Exclusão física da escala em RASCUNHO criada por engano (matriz: "rascunho admite exclusão física com log"): só
    * sem vínculo (trocas, realizados e acionamentos dos plantões dela; recusa 409 com a contagem por grupo, e a
    * contagem é refeita na transação), com o retrato da escala, dos plantões e da trilha da escala na
-   * SGH_HIST_EXCLUSAO antes do DELETE (D-CRUD-SNAP). A publicada não se apaga: cancela-se com motivo.
+   * o retrato na trilha antes do DELETE (D-CRUD-SNAP). A publicada não se apaga: cancela-se com motivo.
    */
   async excluirEscala(s: SessaoCadastro, e: ExcluirEscalaEntrada): Promise<ResultadoEscala> {
     await this.apoio.exigirLiberacao(s);
@@ -921,7 +924,7 @@ export class ServicoEscala {
       s,
       E.pessoasEscalaExcluida.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ESCALA', id: String(x.id) },
+      { tabela: 'escala', id: String(x.id) },
       (g) => g.excluirEscalaRascunho({ id: x.id, versao: e.versao, motivo: e.motivo.trim(), por: s.login }),
     );
     return {
@@ -933,7 +936,7 @@ export class ServicoEscala {
 
   /**
    * Cancelamento lógico da escala PUBLICADA com motivo (matriz, linha "Ponto e escala"): o estado vira 'cancelada',
-   * os plantões previstos ficam cancelados com o mesmo motivo, a trilha da escala e o evento de mudança na SGH_OUTBOX
+   * os plantões previstos ficam cancelados com o mesmo motivo, a trilha da escala e o evento de mudança na integracao_mensagem
    * registram. Recusa com a contagem se houver troca em aberto, realizado registrado (não recusado) ou acionamento
    * do sobreaviso: estes se resolvem antes (desistência da troca, estorno do realizado).
    */
@@ -954,7 +957,7 @@ export class ServicoEscala {
     if (abertas.size > 0)
       bloqueio.unshift({
         grupo: 'Trocas de plantão em aberto',
-        tabela: 'SGH_PES_TROCA',
+        tabela: 'troca_plantao',
         coluna: 'ID_PLANTAO',
         quantidade: abertas.size,
       });
@@ -963,7 +966,7 @@ export class ServicoEscala {
       s,
       E.pessoasEscalaCancelada.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ESCALA', id: String(x.id) },
+      { tabela: 'escala', id: String(x.id) },
       async (g) => {
         if ((await g.plantoesEmTrocaAberta(ids)).size > 0)
           throw recusaRegra(
@@ -996,9 +999,9 @@ export class ServicoEscala {
   /** Plantões previstos cujo conselho estará vencido (ou sem registro) no dia: bloqueiam a publicação (regra 3). */
   private async bloqueadosPeloConselho(
     s: SessaoCadastro,
-    x: EscalaPesLida,
-    previstos: readonly PlantaoPesLido[],
-    vinculos: ReadonlyMap<number, VinculoPesLido>,
+    x: RegistroEscala,
+    previstos: readonly RegistroPlantao[],
+    vinculos: ReadonlyMap<number, VinculoDaPessoa>,
   ): Promise<Set<number>> {
     const exigido = CONSELHO_DA_ESCALA[x.tipo as TipoEscala];
     const r = new Set<number>();
@@ -1022,7 +1025,11 @@ export class ServicoEscala {
 
   private async vinculosDe(s: SessaoCadastro, ids: readonly number[]) {
     const lidos = await Promise.all([...new Set(ids)].map((id) => this.pessoas.vinculo(s.porta, id)));
-    return new Map(lidos.filter((v): v is VinculoPesLido => v !== null).map((v) => [v.id, v]));
+    return new Map<number, VinculoDaPessoa>(
+      lidos
+        .filter((v: VinculoDaPessoa | null): v is VinculoDaPessoa => v !== null)
+        .map((v: VinculoDaPessoa) => [v.id as number, v] as const),
+    );
   }
 
   async grade(s: SessaoCadastro, id: number): Promise<GradeEscala> {
@@ -1118,7 +1125,7 @@ export class ServicoEscala {
       s,
       E.pessoasEscalaPublicada.codigo,
       CHAVE_PESSOAS_ESCALA,
-      { tabela: 'SGH_PES_ESCALA', id: String(x.id) },
+      { tabela: 'escala', id: String(x.id) },
       async (g) => {
         await g.publicarEscala({
           id: x.id,
@@ -1141,8 +1148,11 @@ export class ServicoEscala {
         });
       },
     );
-    const alertas =
-      furos.length > 0
+    const alertas = !this.porta.coberturaRegistrada
+      ? [
+          'A conferência de furo (cobertura mínima por turno) não foi feita: a cobertura ainda não é gravada neste banco (pendência de modelo).',
+        ]
+      : furos.length > 0
         ? [`Publicada com ${furos.length} turno(s) abaixo da cobertura mínima, com a justificativa.`]
         : [];
     return { id: x.id, mensagem: 'Escala publicada.', alertas };
@@ -1151,11 +1161,11 @@ export class ServicoEscala {
 
 interface DominiosEscala {
   readonly jornadas: readonly { codigo: number; nome: string }[];
-  readonly parciais: readonly TempoParcialLido[];
+  readonly parciais: readonly OpcaoTempoParcial[];
   readonly folgas: readonly { codigo: number; nome: string }[];
 }
 
-function plantaoLido(p: PlantaoPesLido): PlantaoLido {
+function plantaoLido(p: RegistroPlantao): PlantaoLido {
   return {
     id: p.id,
     vinculo: p.vinculo,

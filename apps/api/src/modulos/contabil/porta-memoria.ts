@@ -1,25 +1,25 @@
 // Porta da contabilidade em MEMÓRIA (M54-F1): a sessão sintética de dev/ci (E2E). Os domínios com os códigos que o banco
 // do estabelecimento tem (origens e tipos de plano referencial com rótulos de produto), um plano de contas curto, um
-// de-para da exportação e fatos SINTÉTICOS de duas fontes (nenhum dado de pessoa), as mesmas recusas das SGH_ (código
+// de-para da exportação e fatos SINTÉTICOS de duas fontes (nenhum dado de pessoa), as mesmas recusas do banco (código
 // repetido, versão vista, versão de regra concorrente) e o relógio do processo. Nada vai à cópia. A trilha da memória é
 // registrada pela API (como nas outras portas em memória).
 import { ORIGENS_LANCAMENTO } from '@sgh/contratos';
 import type {
-  ContaPlanoLida,
-  FiltroSomasSgh,
-  EstadoFonteLido,
-  FatoRegistradoLido,
-  ItemDeParaLido,
-  ReferenciaContabilLida,
-  RegraPublicadaLida,
-  FiltroLancamentosSgh,
-  FiltroRazaoSgh,
-  ResumoFonteFatosLido,
-} from '@sgh/legado';
+  ContaPlanoVersionada,
+  FiltroSomasPorta,
+  EstadoFonteFatos,
+  FatoRegistrado,
+  ItemDePara,
+  ReferenciasContabeis,
+  RegraPublicada,
+  FiltroLancamentosPorta,
+  FiltroRazaoPorta,
+  ResumoFonteFatos,
+} from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import { DemonstracoesMemoria, EMPRESA_SINTETICA } from './memoria-demonstracoes.js';
 import { LancamentosMemoria } from './memoria-lancamentos.js';
-import type { ContextoContabil, GravadorContabil, PortaContabil } from './porta.js';
+import type { ContextoContabil, GravadorContabil, PedidoDeGravacao, PortaContabil } from './porta.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Não foi possível gravar', detalhe, { codigo });
@@ -30,7 +30,7 @@ const hojeLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const conta = (codigo: string, nome: string, extra: Partial<ContaPlanoLida> = {}): ContaPlanoLida => ({
+const conta = (codigo: string, nome: string, extra: Partial<ContaPlanoVersionada> = {}): ContaPlanoVersionada => ({
   empresa: 1,
   codigo,
   nome,
@@ -49,7 +49,7 @@ const conta = (codigo: string, nome: string, extra: Partial<ContaPlanoLida> = {}
 });
 
 /** O plano sintético (máscara 9.9.9.99.9999). */
-export const PLANO_SINTETICO: readonly ContaPlanoLida[] = [
+export const PLANO_SINTETICO: readonly ContaPlanoVersionada[] = [
   conta('1', 'Ativo', { tipo: 'sintetica' }),
   conta('1.1', 'Ativo circulante', { tipo: 'sintetica' }),
   conta('1.1.2', 'Créditos', { tipo: 'sintetica' }),
@@ -89,7 +89,7 @@ export const PLANO_SINTETICO: readonly ContaPlanoLida[] = [
   }),
 ];
 
-const fato = (idFato: number, id: number, valorCentavos: number, convenio: number): FatoRegistradoLido => ({
+const fato = (idFato: number, id: number, valorCentavos: number, convenio: number): FatoRegistrado => ({
   idFato,
   tabela: 'FCCTAEXT',
   id,
@@ -114,14 +114,14 @@ const fato = (idFato: number, id: number, valorCentavos: number, convenio: numbe
 
 export class PortaContabilMemoria implements PortaContabil {
   readonly destino = 'memoria' as const;
-  readonly contas: ContaPlanoLida[] = PLANO_SINTETICO.map((c) => ({ ...c }));
-  readonly regrasGravadas: RegraPublicadaLida[] = [];
-  readonly fatosGravados: FatoRegistradoLido[] = [
+  readonly contas: ContaPlanoVersionada[] = PLANO_SINTETICO.map((c) => ({ ...c }));
+  readonly regrasGravadas: RegraPublicada[] = [];
+  readonly fatosGravados: FatoRegistrado[] = [
     fato(1, 900_001, 125_000, 5),
     fato(2, 900_002, 87_550, 5),
     fato(3, 900_003, 40_000, 6),
   ];
-  readonly estados: EstadoFonteLido[] = [
+  readonly estados: EstadoFonteFatos[] = [
     {
       tabela: 'FCCTAEXT',
       marca: 900_003,
@@ -153,7 +153,7 @@ export class PortaContabilMemoria implements PortaContabil {
     return Promise.resolve(this.hojeFixo ?? hojeLocal());
   }
 
-  referencias(): Promise<ReferenciaContabilLida> {
+  referencias(): Promise<ReferenciasContabeis> {
     return Promise.resolve({
       origens: Object.entries(ORIGENS_LANCAMENTO).map(([id, descricao]) => ({ id: Number(id), descricao })),
       tiposPlanoReferencial: [
@@ -164,8 +164,8 @@ export class PortaContabilMemoria implements PortaContabil {
     });
   }
 
-  dePara(_c: ContextoContabil, empresa: number): Promise<ItemDeParaLido[]> {
-    const item = (convenio: number, conta: number | null): ItemDeParaLido => ({
+  dePara(_c: ContextoContabil, empresa: number): Promise<ItemDePara[]> {
+    const item = (convenio: number, conta: number | null): ItemDePara => ({
       empresa,
       convenio,
       tipoConta: 'A',
@@ -189,7 +189,7 @@ export class PortaContabilMemoria implements PortaContabil {
     return Promise.resolve([...new Set(this.contas.map((c) => c.empresa))].sort((a, b) => a - b));
   }
 
-  plano(_c: ContextoContabil, empresa: number): Promise<ContaPlanoLida[]> {
+  plano(_c: ContextoContabil, empresa: number): Promise<ContaPlanoVersionada[]> {
     return Promise.resolve(
       this.contas
         .filter((c) => c.empresa === empresa)
@@ -202,7 +202,7 @@ export class PortaContabilMemoria implements PortaContabil {
     _c: ContextoContabil,
     empresa: number,
     f: { origem?: number; tipoFato?: string },
-  ): Promise<RegraPublicadaLida[]> {
+  ): Promise<RegraPublicada[]> {
     return Promise.resolve(
       this.regrasGravadas.filter(
         (r) =>
@@ -213,11 +213,11 @@ export class PortaContabilMemoria implements PortaContabil {
     );
   }
 
-  fontes(): Promise<EstadoFonteLido[]> {
+  fontes(): Promise<EstadoFonteFatos[]> {
     return Promise.resolve(this.estados.map((e) => ({ ...e })));
   }
 
-  resumoFatos(): Promise<ResumoFonteFatosLido[]> {
+  resumoFatos(): Promise<ResumoFonteFatos[]> {
     const por = new Map<string, Record<string, number>>();
     for (const f of this.fatosGravados) {
       const x = por.get(f.tabela) ?? {};
@@ -238,7 +238,7 @@ export class PortaContabilMemoria implements PortaContabil {
     },
     pagina: number,
     tamanho: number,
-  ): Promise<{ itens: FatoRegistradoLido[]; total: number }> {
+  ): Promise<{ itens: FatoRegistrado[]; total: number }> {
     const todos = this.fatosGravados
       .filter(
         (x) =>
@@ -258,7 +258,7 @@ export class PortaContabilMemoria implements PortaContabil {
     empresa: number,
     competencia: string,
     teto: number,
-  ): Promise<FatoRegistradoLido[]> {
+  ): Promise<FatoRegistrado[]> {
     return Promise.resolve(
       this.fatosGravados
         .filter((x) => x.empresa === empresa && x.competencia === competencia)
@@ -282,13 +282,13 @@ export class PortaContabilMemoria implements PortaContabil {
   }
 
   fatosDoPeriodo(_c: ContextoContabil, empresa: number, competencia: string) {
-    const r: Partial<Record<FatoRegistradoLido['situacao'], number>> = {};
+    const r: Partial<Record<FatoRegistrado['situacao'], number>> = {};
     for (const f of this.fatosGravados.filter((x) => x.empresa === empresa && x.competencia === competencia))
       r[f.situacao] = (r[f.situacao] ?? 0) + 1;
     return Promise.resolve(r);
   }
 
-  lancamentos(_c: ContextoContabil, f: FiltroLancamentosSgh, pagina: number, tamanho: number) {
+  lancamentos(_c: ContextoContabil, f: FiltroLancamentosPorta, pagina: number, tamanho: number) {
     return Promise.resolve(this.f2.lancamentos(f, pagina, tamanho));
   }
 
@@ -308,7 +308,7 @@ export class PortaContabilMemoria implements PortaContabil {
     return Promise.resolve(this.f2.lancamentosDosFatos(ids));
   }
 
-  razao(_c: ContextoContabil, f: FiltroRazaoSgh, teto: number, pagina = 1) {
+  razao(_c: ContextoContabil, f: FiltroRazaoPorta, teto: number, pagina = 1) {
     return Promise.resolve(this.f2.razao(f, teto, pagina));
   }
 
@@ -329,7 +329,7 @@ export class PortaContabilMemoria implements PortaContabil {
   paraContabilizar(
     _c: ContextoContabil,
     empresa: number,
-    situacoes: readonly FatoRegistradoLido['situacao'][],
+    situacoes: readonly FatoRegistrado['situacao'][],
     competencia: string | null,
     lote: number,
   ) {
@@ -354,7 +354,7 @@ export class PortaContabilMemoria implements PortaContabil {
     });
   }
 
-  somas(_c: ContextoContabil, f: FiltroSomasSgh, teto: number) {
+  somas(_c: ContextoContabil, f: FiltroSomasPorta, teto: number) {
     return Promise.resolve(this.f3.somas(f, teto));
   }
 
@@ -382,8 +382,9 @@ export class PortaContabilMemoria implements PortaContabil {
     return Promise.resolve(this.f3.conteudo(empresa, id));
   }
 
-  async gravarSgh<T>(
+  async gravar<T>(
     _c: ContextoContabil,
+    _pedido: PedidoDeGravacao,
     _trilha: unknown,
     fn: (g: GravadorContabil) => Promise<T>,
   ): Promise<T> {
@@ -411,7 +412,7 @@ export class PortaContabilMemoria implements PortaContabil {
             recusa('conta-ja-existe', 'Já existe uma conta com este código no plano da empresa.'),
           );
         contas.push({ ...x.conta, versao: 1, alteradoPor: x.usuario, alteradoEm: agora() });
-        return Promise.resolve({ versao: 1 });
+        return Promise.resolve({ id: contas.length, versao: 1 });
       },
       alterarConta: (x) => {
         const i = contas.findIndex((c) => c.empresa === x.empresa && c.codigo === x.codigo);
@@ -448,7 +449,7 @@ export class PortaContabilMemoria implements PortaContabil {
         this.seqRegra += 1;
         regras.push({
           id: this.seqRegra,
-          regra: JSON.parse(x.conteudo) as RegraPublicadaLida['regra'],
+          regra: JSON.parse(x.conteudo) as RegraPublicada['regra'],
           impressao: x.impressao,
           justificativa: x.justificativa,
           publicadaPor: x.usuario,
@@ -458,7 +459,7 @@ export class PortaContabilMemoria implements PortaContabil {
       },
       marcarSituacao: (x) => {
         const f = fatos.find((y) => y.idFato === x.idFato);
-        // D-CORRIDA-542: como o UPDATE do legado, só grava se a situação ainda for a lida.
+        // D-CORRIDA-542: como a porta própria, só grava se a situação ainda for a lida.
         if (!f || (x.situacaoLida != null && f.situacao !== x.situacaoLida)) return Promise.resolve(false);
         Object.assign(f, { situacao: x.situacao, motivo: x.motivo, regraId: x.regraId });
         return Promise.resolve(true);

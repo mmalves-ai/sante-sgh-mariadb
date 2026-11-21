@@ -13,15 +13,14 @@ import {
   type ListaTesourariaPortal,
   type PagamentoTesourariaPortal as PagamentoTesourariaDto,
 } from '@sgh/contratos';
+import { ErroPortal, type RegistroTrilhaPortal } from '../tipos.js';
 import {
   type AcaoConciliacaoPortal,
-  type ConciliacaoPortalLida,
+  type ConciliacaoPortal,
   conferirConciliacaoPortal,
-  ErroPortalSgh,
-  type LinhaTrilha,
   type PagamentoTesourariaPortal,
   situacaoTesourariaPortal,
-} from '@sgh/legado';
+} from './tipos.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { GatewayPagamento } from './gateway.js';
 import type { ContextoAgendaOnline, PortaAgendaOnline } from './porta.js';
@@ -40,7 +39,7 @@ const dto = (t: PagamentoTesourariaPortal): PagamentoTesourariaDto => ({
   confirmadoEm: t.pagamento.confirmadoEm,
   cobradoPor: t.cobradoPor,
   situacao: situacaoTesourariaPortal(t.atos),
-  atos: t.atos.map((a: ConciliacaoPortalLida) => ({
+  atos: t.atos.map((a: ConciliacaoPortal) => ({
     id: String(a.id),
     acao: a.acao,
     valor: a.valor,
@@ -97,7 +96,11 @@ export class TesourariaPortal {
     return t;
   }
 
-  private linha(q: QuemAgendaOnline, t: PagamentoTesourariaPortal, acao: AcaoConciliacaoPortal): LinhaTrilha {
+  private linha(
+    q: QuemAgendaOnline,
+    t: PagamentoTesourariaPortal,
+    acao: AcaoConciliacaoPortal,
+  ): RegistroTrilhaPortal {
     const estorno = acao === 'estorno';
     return {
       rede: this.rede,
@@ -112,7 +115,7 @@ export class TesourariaPortal {
         : acao === 'conciliado'
           ? 'conciliarPagamento'
           : 'divergenciaPagamento',
-      tabelaAlvo: 'SGH_POR_CONCILIACAO',
+      tabelaAlvo: 'conciliacao_pagamento_portal',
       idAlvo: String(t.pagamento.id),
       chaveNaturalAlvo: t.pagamento.transacao.slice(0, 80),
       resultado: 'sucesso',
@@ -136,7 +139,7 @@ export class TesourariaPortal {
       );
     } catch (e) {
       // A regra conferida de novo sob a trava (outro ato chegou antes): 409 com o motivo.
-      if (e instanceof ErroPortalSgh)
+      if (e instanceof ErroPortal)
         throw new ErroProblema(
           e.codigo === 'nao-encontrado' ? 'nao-encontrado' : 'recusa-de-negocio',
           e.codigo === 'nao-encontrado' ? 404 : 409,

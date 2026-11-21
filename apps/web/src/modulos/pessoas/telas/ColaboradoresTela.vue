@@ -79,12 +79,18 @@ const opcoesUnidade = computed(() => [
   ...(a.value?.unidades ?? []).map((u) => ({ valor: u.codigo, rotulo: u.rotulo })),
 ]);
 function lotacaoTexto(l: {
-  centroCusto: number;
+  centroCusto: number | null;
   centroCustoNome: string | null;
   unidadeNome: string | null;
   setor: string | null;
 }): string {
-  return [l.centroCustoNome ?? String(l.centroCusto), l.unidadeNome, l.setor].filter(Boolean).join(' · ');
+  return [
+    l.centroCustoNome ?? (l.centroCusto === null ? null : String(l.centroCusto)),
+    l.unidadeNome,
+    l.setor,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 const opcoesTipo = computed(() => [
   { valor: null, rotulo: t('pessoas.colaboradores.vinculoTipo') },

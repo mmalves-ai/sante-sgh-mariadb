@@ -57,6 +57,8 @@ export async function moduloRepasse(ctx: ContextoModulo, opcoes: OpcoesModuloRep
           (await converterHtmlEmPdfA(gotenberg, html, { metadados: { Title: titulo } })).pdf;
   return {
     module: class ModuloRepasse {},
+    // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
+    global: true,
     controllers: [RepasseController],
     providers: [
       { provide: PORTA_REPASSE, useValue: porta },

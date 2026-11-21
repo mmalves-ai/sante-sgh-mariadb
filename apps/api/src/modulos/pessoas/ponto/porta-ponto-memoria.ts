@@ -1,28 +1,27 @@
 // Porta do ponto em memória (M52.4): a sessão sintética de dev/ci e o E2E. Os domínios são os rótulos do vocabulário
 // (os mesmos códigos do ramo), os feriados são os nacionais fixos, e os registros vivem por estabelecimento, numa cópia
-// por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. As regras de banco que importam ao teste também
+// por transação (o erro no meio desfaz tudo). Nada vai ao banco. As regras de banco que importam ao teste também
 // valem aqui: só inclusão no arquivo, nas marcações, na trilha do período e no banco; a mesma marcação do mesmo relógio
 // uma vez; o mesmo arquivo uma vez; a decisão só do ajuste pendente, com a versão, por outra pessoa.
 import { CLASSES_HORA, DESTINOS_BANCO, EVENTOS_FOLHA, INICIOS_BANCO } from '@sgh/contratos';
-import {
-  type AjustePontoLido,
-  type ArquivoAfdLido,
-  type FiltroArquivosAfdSgh,
-  type DominiosPonto,
-  ErroOperacao,
-  type EventoPeriodoLidoSgh,
-  type FeriadoLido,
-  type LinhaTrilha,
-  type MarcacaoPontoLida,
-  type MovimentoBancoLidoSgh,
-  type RegraBancoLida,
-  type CorrecaoPesLida,
-  type VinculoPorHmacLido,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
 import { idUsuarioSintetico } from '../../acesso/fonte-sintetica.js';
-import type { GravacaoFeita } from '../../exames/public-api.js';
+import type { GravacaoFeita, TrilhaDaGravacao } from '../../exames/public-api.js';
 import type { PortaPessoasMemoria } from '../porta-memoria.js';
+import { chaveMemoria, type CorrecaoRegistrada } from '../tipos-pessoas.js';
 import type { ContextoPonto, GravadorPonto, PortaPonto } from './porta-ponto.js';
+import type {
+  AjustePonto,
+  ArquivoRelogio,
+  DominiosPonto,
+  EventoDoPeriodo,
+  FeriadoDoPeriodo,
+  FiltroArquivosRelogio,
+  MarcacaoRelogio,
+  MovimentoBancoHoras,
+  RegraBancoDoRegime,
+  VinculoDoCpf,
+} from './tipos-ponto.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', detalhe);
@@ -32,18 +31,18 @@ const desatualizado = () =>
     'O registro mudou depois que você abriu (outra pessoa gravou). Abra de novo para ver a versão atual.',
   );
 
-interface MarcacaoMem extends MarcacaoPontoLida {
+interface MarcacaoMem extends MarcacaoRelogio {
   readonly cpfHmac: string;
 }
 interface Estado {
   seq: number;
-  arquivos: ArquivoAfdLido[];
+  arquivos: ArquivoRelogio[];
   marcacoes: MarcacaoMem[];
-  ajustes: AjustePontoLido[];
-  periodo: EventoPeriodoLidoSgh[];
-  regras: RegraBancoLida[];
-  correcoes: CorrecaoPesLida[];
-  banco: MovimentoBancoLidoSgh[];
+  ajustes: AjustePonto[];
+  periodo: EventoDoPeriodo[];
+  regras: RegraBancoDoRegime[];
+  correcoes: CorrecaoRegistrada[];
+  banco: MovimentoBancoHoras[];
   outbox: { tipo: string; chave: string; carga: Record<string, string | number> }[];
 }
 const novo = (): Estado => ({
@@ -125,9 +124,10 @@ export class PortaPontoMemoria implements PortaPonto {
 
   constructor(private readonly pessoas: PortaPessoasMemoria | null = null) {}
 
-  private e(c: { hospital: string }): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+  private e(c: ContextoPonto): Estado {
+    const k = chaveMemoria(c);
+    let s = this.estados.get(k);
+    if (!s) this.estados.set(k, (s = novo()));
     return s;
   }
 
@@ -145,7 +145,7 @@ export class PortaPontoMemoria implements PortaPonto {
 
   async gravarSgh<T>(
     c: ContextoPonto,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorPonto) => Promise<T>,
   ): Promise<T> {
     const s = copiar(this.e(c));
@@ -162,7 +162,7 @@ export class PortaPontoMemoria implements PortaPonto {
           throw recusa('arquivo-ja-importado', 'Este arquivo já foi importado (mesmo conteúdo).');
         const n = id();
         const { por, ...resto } = a;
-        s.arquivos.push({ ...resto, id: n, hospital: c.hospital, importadoPor: por, importadoEm: agora });
+        s.arquivos.push({ ...resto, id: n, importadoPor: por, importadoEm: agora });
         return n;
       },
       incluirMarcacao: async (m) => {
@@ -329,11 +329,11 @@ export class PortaPontoMemoria implements PortaPonto {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveMemoria(c), s);
     return r;
   }
 
-  private daPessoa(s: Estado, h: string, de: string, ate: string): MarcacaoPontoLida[] {
+  private daPessoa(s: Estado, h: string, de: string, ate: string): MarcacaoRelogio[] {
     return s.marcacoes
       .filter((m) => m.cpfHmac === h && m.instante >= de && m.instante < ate)
       .sort((a, b) => (a.instante === b.instante ? a.id - b.id : a.instante < b.instante ? -1 : 1))
@@ -355,8 +355,8 @@ export class PortaPontoMemoria implements PortaPonto {
   async dominios(): Promise<DominiosPonto> {
     return DOMINIOS_PONTO_SINTETICOS;
   }
-  async feriados(_c: ContextoPonto, de: string, ate: string): Promise<FeriadoLido[]> {
-    const r: FeriadoLido[] = [];
+  async feriados(_c: ContextoPonto, de: string, ate: string): Promise<FeriadoDoPeriodo[]> {
+    const r: FeriadoDoPeriodo[] = [];
     for (let ano = Number(de.slice(0, 4)); ano <= Number(ate.slice(0, 4)); ano++)
       for (const [md, nome] of FERIADOS_FIXOS) {
         const data = `${ano}-${md}`;
@@ -364,7 +364,7 @@ export class PortaPontoMemoria implements PortaPonto {
       }
     return r;
   }
-  async arquivos(c: ContextoPonto, f: FiltroArquivosAfdSgh) {
+  async arquivos(c: ContextoPonto, f: FiltroArquivosRelogio) {
     return [...this.e(c).arquivos]
       .reverse()
       .filter(
@@ -399,7 +399,7 @@ export class PortaPontoMemoria implements PortaPonto {
   async hmacs(c: ContextoPonto, vs: readonly number[]) {
     const r = new Map<number, string>();
     for (const v of vs) {
-      const h = this.pessoas?.cpfHmacDoVinculo(c.hospital, v) ?? null;
+      const h = this.pessoas?.cpfHmacDoVinculo(chaveMemoria(c), v) ?? null;
       if (h) r.set(v, h);
     }
     return r;
@@ -445,11 +445,11 @@ export class PortaPontoMemoria implements PortaPonto {
     return r.itens.filter((v) => v.usuario === usuario).map((v) => v.id);
   }
   async vinculosPorHmacs(c: ContextoPonto, hs: readonly string[]) {
-    const r = new Map<string, VinculoPorHmacLido[]>();
+    const r = new Map<string, VinculoDoCpf[]>();
     if (!this.pessoas) return r;
     const todos = await this.pessoas.listarVinculos(c, { estado: 'todos', limite: 1000 });
     for (const v of todos.itens) {
-      const h = this.pessoas.cpfHmacDoVinculo(c.hospital, v.id);
+      const h = this.pessoas.cpfHmacDoVinculo(chaveMemoria(c), v.id);
       if (!h || !hs.includes(h)) continue;
       r.set(h, [
         ...(r.get(h) ?? []),

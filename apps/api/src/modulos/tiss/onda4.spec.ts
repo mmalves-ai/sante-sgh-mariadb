@@ -1,24 +1,28 @@
 // M42 pela HTTP, com a sessão real sobre a fonte sintética e as portas EM MEMÓRIA (nada conecta a banco): o painel
 // "Acompanhamento da competência" (contas por situação e sistema que fechou, com a conta fechada aqui contando como
 // deste sistema; lotes; glosas; títulos e repasse só com a leitura do setor; gravações por operação da onda), a
-// exportação com as parcelas, a conferência com o outro sistema (0 diferença e com diferença), o escopo por convênio e
-// a aba Onda 4 do painel de migração (nove setores na ordem, itens da onda, regra 1 no registro e o lote recusado fora
-// de dev/ci; a tela de chaves conferindo o critério do setor da onda 4).
+// exportação com as parcelas, a conferência com o outro sistema (0 diferença e com diferença) e o escopo por convênio.
+// O painel de migração da onda 4 saiu com o fim da convivência (ADR 0003).
 import { resolve } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
-import { ErroProblema } from '../../problema.filter.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
-import type { SessaoCadastro } from '../cadastro/comum.js';
-import { ServicoMigracao } from '../coexistencia/aplicacao/servico.js';
-import { PortaCoexistenciaMemoria } from '../coexistencia/porta-memoria.js';
-import { criterioLigarSetor, fonteConfiguracaoMemoria } from '../config/public-api.js';
+import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo as moduloFaturamento } from '../faturamento/modulo.js';
+import { PortaFaturamentoMemoria } from '../faturamento/porta-memoria.js';
+import { modulo } from './modulo.js';
+import { PortaTissMemoria } from './porta-memoria.js';
 
 const CATALOGO = resolve(import.meta.dirname, '../../../../../docs/operacoes/catalogo');
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', CATALOGO_OPERACOES: CATALOGO };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  CATALOGO_OPERACOES: CATALOGO,
+  API_MODULOS: 'configuracao_teste,faturamento,tiss',
+};
 const trilha = new RegistradorTrilhaMemoria();
 let app: NestFastifyApplication;
 let chave = 0;
@@ -26,7 +30,21 @@ const hoje = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
 const comp = hoje.slice(0, 7);
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, vigia: null });
+  const faturamento = new PortaFaturamentoMemoria({ estado: () => 'verde' });
+  const tiss = new PortaTissMemoria({ estado: () => 'verde' });
+  // M42: o acompanhamento da competência na sessão sintética conta as contas fechadas pela porta da conta.
+  tiss.fonteContas = {
+    linhas: (h, a, m) => faturamento.linhasDaCompetencia(h, a, m),
+    gravacoes: (h) => faturamento.gravacoesAqui(h),
+  };
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      configuracao_teste: async () => ({ modulo: (ctx) => moduloConfiguracaoDeTeste(ctx) }),
+      faturamento: async () => ({ modulo: (ctx) => moduloFaturamento(ctx, { porta: faturamento }) }),
+      tiss: async () => ({ modulo: (ctx) => modulo(ctx, { porta: tiss, armazem: tiss.armazem }) }),
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -64,9 +82,6 @@ const get = (s: Sessao, url: string) =>
   app.inject({ method: 'GET', url: `/api${url}`, headers: { cookie: s.cookie } });
 const post = (s: Sessao, url: string, payload: unknown = {}) =>
   app.inject({ method: 'POST', url: `/api${url}`, headers: h(s), payload: payload as object });
-const put = (s: Sessao, url: string, payload: unknown) =>
-  app.inject({ method: 'PUT', url: `/api${url}`, headers: h(s), payload: payload as object });
-
 describe('acompanhamento da competência (campos 4 e 7)', { timeout: 30_000 }, () => {
   it('conta fechada aqui conta como deste sistema; as parcelas somam; os blocos do financeiro e do repasse aparecem', async () => {
     const antes = (
@@ -150,7 +165,7 @@ describe('acompanhamento da competência (campos 4 e 7)', { timeout: 30_000 }, (
     expect(semFin.body).toMatch(/^Títulos e movimento;indisponível: .*financeiro/m);
     expect(semFin.body).toMatch(/^Repasse;indisponível: .*repasse/m);
     expect(
-      trilha.eventos.some((l) => l.tabelaAlvo === 'FCCTAEXT' && l.idAlvo === `competencia ${comp}`),
+      trilha.eventos.some((l) => l.tabelaAlvo === 'conta_hospitalar' && l.idAlvo === `competencia ${comp}`),
     ).toBe(true);
   });
 
@@ -298,178 +313,3 @@ describe('acompanhamento da competência (campos 4 e 7)', { timeout: 30_000 }, (
     ]);
   });
 });
-
-describe('aba Onda 4 do painel de migração (regras 1 a 8 do M40 e as da onda)', { timeout: 30_000 }, () => {
-  it('nove setores na ordem, itens da onda, regra 1, sem versão, saídas externas, SUS e códigos a confirmar', async () => {
-    const s = await entrar('SINT.ADMIN');
-    const r = await get(s, '/administracao/coexistencia/migracao/onda4');
-    expect(r.statusCode, r.body).toBe(200);
-    const p = r.json();
-    expect(p.ordem.flat()).toEqual([
-      'faturamento-convenio',
-      'auditoria-contas',
-      'tiss-lotes',
-      'glosa-recurso',
-      'contas-a-pagar',
-      'contas-a-receber',
-      'tesouraria',
-      'repasse',
-      'fiscal',
-    ]);
-    const fat = p.setores.find((x: { setor: string }) => x.setor === 'faturamento-convenio');
-    expect(fat.exigeAbertura).toBe(true);
-    expect(fat.momentoRotulo).toBe('Na abertura da competência');
-    expect(fat.itens.map((i: { item: string }) => i.item)).toEqual(
-      expect.arrayContaining(['abertura-da-competencia', 'reproducao-sem-diferenca', 'registros-conferidos']),
-    );
-    expect(fat.podeLiberar).toBe(false);
-    expect(fat.respostas.map((x: { pergunta: string }) => x.pergunta)).toContain('FAT-01');
-    expect(fat.respostas[0].comoEntra).toBe('padrao-de-mercado');
-    const lancar = fat.operacoes.find((o: { nome: string }) => o.nome === 'faturamento.lancarItem');
-    expect(lancar).toMatchObject({ estado: 'especificada', fora: true });
-    const tiss = p.setores.find((x: { setor: string }) => x.setor === 'tiss-lotes');
-    expect(tiss.exigeAbertura).toBe(false);
-    expect(tiss.antesFaltam).toEqual(['faturamento-convenio', 'auditoria-contas']);
-    expect(p.abertura.hoje).toBe(hoje);
-    expect(p.semVersao.dias.length).toBeGreaterThan(0);
-    expect(p.saidasExternas.every((x: { permitida: boolean }) => !x.permitida)).toBe(true);
-    expect(p.sus).toEqual({ fora: ['SISAIH01', 'BPA', 'APAC', 'CIHA'], operacoesSus: [] });
-    const tipo = p.codigosAConfirmar.find((x: { coluna: string }) => x.coluna === 'MFLANCTO.TIPO_TRF');
-    expect(tipo.vistos).toEqual(expect.arrayContaining(['I', 'O']));
-    expect(p.catalogos.operacoes).toContain('catalogo.importarBrasindice');
-    expect(JSON.stringify(p)).not.toMatch(/spdata/i);
-  });
-
-  it('regra 1: o início registrado fora do primeiro dia útil é recusado (409) com a abertura; no dia certo grava', async () => {
-    const s = await entrar('SINT.ADMIN');
-    const fora = await put(s, '/administracao/coexistencia/migracao/onda4/criterio/faturamento-convenio', {
-      itens: [
-        {
-          item: 'abertura-da-competencia',
-          situacao: 'cumprido',
-          evidencia: 'ata do comitê 7',
-          em: '2027-03-02',
-        },
-      ],
-      justificativa: 'início marcado pelo comitê',
-    });
-    expect(fora.statusCode, fora.body).toBe(409);
-    expect(fora.json().codigo).toBe('fora-da-abertura-da-competencia');
-    expect(fora.json().detail).toContain('01/03/2027');
-    const ok = await put(s, '/administracao/coexistencia/migracao/onda4/criterio/faturamento-convenio', {
-      itens: [
-        {
-          item: 'abertura-da-competencia',
-          situacao: 'cumprido',
-          evidencia: 'ata do comitê 7',
-          em: '2027-03-01',
-        },
-      ],
-      justificativa: 'início marcado pelo comitê',
-    });
-    expect(ok.statusCode, ok.body).toBe(200);
-    // Com a configuração padrão (só os feriados nacionais), 01/01/2027 é feriado e a abertura é 04/01/2027.
-    const anoNovo = (em: string) =>
-      put(s, '/administracao/coexistencia/migracao/onda4/criterio/faturamento-convenio', {
-        itens: [{ item: 'abertura-da-competencia', situacao: 'cumprido', evidencia: 'ata do comitê 8', em }],
-        justificativa: 'início marcado pelo comitê',
-      });
-    const feriado = await anoNovo('2027-01-01');
-    expect(feriado.statusCode, feriado.body).toBe(409);
-    expect(feriado.json().detail).toContain('04/01/2027');
-    expect((await anoNovo('2027-01-04')).statusCode).toBe(200);
-    expect((await anoNovo('2027-03-01')).statusCode).toBe(200);
-    const p = (await get(s, '/administracao/coexistencia/migracao/onda4')).json();
-    const item = p.setores
-      .find((x: { setor: string }) => x.setor === 'faturamento-convenio')
-      .itens.find((i: { item: string }) => i.item === 'abertura-da-competencia');
-    expect(item.ok).toBe(true);
-    // Item de outro setor, "não se aplica" e setor fora da onda.
-    expect(
-      (
-        await put(s, '/administracao/coexistencia/migracao/onda4/criterio/repasse', {
-          itens: [
-            { item: 'abertura-da-competencia', situacao: 'cumprido', evidencia: 'ata 7', em: '2027-03-01' },
-          ],
-          justificativa: 'início marcado pelo comitê',
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect(
-      (
-        await put(s, '/administracao/coexistencia/migracao/onda4/criterio/repasse', {
-          itens: [
-            { item: 'registros-conferidos', situacao: 'nao-se-aplica', evidencia: 'ata 7', em: '2027-03-01' },
-          ],
-          justificativa: 'início marcado pelo comitê',
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect(
-      (
-        await put(s, '/administracao/coexistencia/migracao/onda4/criterio/farmacia-central', {
-          itens: [{ item: 'aceite-jornada', situacao: 'pendente' }],
-          justificativa: 'início marcado pelo comitê',
-        })
-      ).statusCode,
-    ).toBe(404);
-  });
-});
-
-describe(
-  'fora de dev/ci: o lote e a chave do setor da onda 4 conferem o critério',
-  { timeout: 30_000 },
-  () => {
-    it('o lote de um setor da onda 4 com o critério incompleto: 409 criterio-onda4-incompleto; a chave diz o setor', async () => {
-      const sessao: SessaoCadastro = {
-        req: { headers: {}, ip: '127.0.0.1' } as unknown as SessaoCadastro['req'],
-        hospital: 'pc',
-        rede: 'r',
-        login: 'SINT.ADMIN',
-        porta: { rede: 'r', hospital: 'pc' },
-        pode: () => true,
-      };
-      const servico = new ServicoMigracao({
-        porta: new PortaCoexistenciaMemoria(
-          new RegistradorTrilhaMemoria(),
-          fonteConfiguracaoMemoria(new RegistradorTrilhaMemoria()),
-        ),
-        trilha: new RegistradorTrilhaMemoria(),
-        administracao: null,
-        fonteConfig: null,
-        cache: null,
-        caminhoCatalogo: CATALOGO,
-        ambiente: 'homologacao',
-        grafana: null,
-        metodoMascaramento: null,
-        primeiro: { codigo: 'pc', nome: 'ProntoCardio' },
-        criterio: criterioLigarSetor(),
-      });
-      const e = await servico
-        .aplicarLote(sessao, {
-          setor: 'glosa-recurso',
-          alvo: { tipo: 'setor', valores: [] },
-          justificativa: 'Lote sintético da glosa (teste)',
-        })
-        .then(
-          () => null,
-          (x: unknown) => x as ErroProblema,
-        );
-      expect(e?.getStatus()).toBe(409);
-      expect(e?.extras).toMatchObject({ codigo: 'criterio-onda4-incompleto' });
-      const motivo = await servico.motivoLigarChaveOnda2(
-        { rede: 'r', hospital: 'pc' },
-        'operacao',
-        'faturamento.registrarGlosa',
-      );
-      expect(motivo).toContain('Glosa e recurso');
-      expect(
-        await servico.motivoLigarChaveOnda2(
-          { rede: 'r', hospital: 'pc' },
-          'recurso',
-          'suprimentos.inexistente',
-        ),
-      ).toBeNull();
-    });
-  },
-);

@@ -1,7 +1,10 @@
 // W0-06, parte 3a: a correção cadastral do colaborador (nome, matrícula, tipo de vínculo, admissão; motivo, versão e
 // valor anterior) e a alteração do dependente com versão a partir de uma data (IR e salário-família), sobre a porta EM
 // MEMÓRIA (dados SINTÉTICOS; nada conecta a banco).
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+import type {
+  ChaveLiberacao as ChaveGravada,
+  PrerequisitoRecurso as PrerequisitoGravado,
+} from '../config/public-api.js';
 import {
   esquemaAlterarDependente,
   esquemaCorrigirColaborador,
@@ -16,6 +19,20 @@ import { fonteConfiguracaoMemoria } from '../config/public-api.js';
 import { CifraCpf } from './cifra-cpf.js';
 import { cpfSintetico, PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from './porta-memoria.js';
 import { ServicoPessoas } from './servico.js';
+
+/** Contexto da porta do teste: um estabelecimento sintético distinto por código de hospital. */
+const ESTABS = new Map<string, number>();
+const ctxDe = (hospital: string) => {
+  if (!ESTABS.has(hospital)) ESTABS.set(hospital, ESTABS.size + 1);
+  return {
+    cliente: 'sintetico',
+    estabelecimento: ESTABS.get(hospital) ?? null,
+    usuario: 7,
+    correlacao: 'teste-colaborador',
+    rede: 'rede-sintetica',
+    hospital,
+  };
+};
 
 const ligada: ChaveGravada = {
   id: 'pessoas.colaborador',
@@ -67,7 +84,7 @@ const sessao = (hospital: string): SessaoCadastro => ({
   hospital,
   rede: 'rede-sintetica',
   login: 'SINT.RH',
-  porta: { rede: 'rede-sintetica', hospital },
+  porta: ctxDe(hospital),
   pode: () => true,
 });
 const admissao = (extra: Record<string, unknown> = {}) => ({
@@ -209,7 +226,7 @@ describe('correção cadastral do colaborador (W0-06)', () => {
     const v = (
       await servico.admitir(sessao(h), admissao({ cpf: C.nova.cpf, profissional: null, usuario: null }))
     ).id;
-    await porta.gravarSgh({ rede: 'rede-sintetica', hospital: h }, null as never, (g) =>
+    await porta.gravarSgh(ctxDe(h), null as never, (g) =>
       g.desligarVinculo({
         id: v,
         versao: 0,
@@ -434,7 +451,7 @@ describe('cargo do quadro ligado ao colaborador (W0-06, parte 5d-3a)', () => {
     expect(
       await recusa(servico.ligarCargo(sessao(h2), { vinculo: v2, versao: 0, cargo: 11, motivo: MOTIVO })),
     ).toMatchObject({ status: 404, codigo: 'cargo-nao-encontrado' });
-    await porta.gravarSgh({ rede: 'rede-sintetica', hospital: h }, null as never, (g) =>
+    await porta.gravarSgh(ctxDe(h), null as never, (g) =>
       g.desligarVinculo({
         id: v,
         versao: 1,

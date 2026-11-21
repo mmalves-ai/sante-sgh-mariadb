@@ -14,7 +14,7 @@
 //   GET  /api/contabil/periodos/situacao?empresa=&competencia=       totais com as parcelas e os impedimentos
 //   POST /api/contabil/periodos/encerrar                     contabil.encerrarPeriodo (crítica: senha de novo)
 //   POST /api/contabil/periodos/reabrir                      contabil.reabrirPeriodo (crítica: senha de novo)
-// Tudo exige a chave `contabil`, menos o apoio. Cada gravação vai com a SGH_TRILHA na mesma transação; nenhuma tabela do
+// Tudo exige a chave `contabil`, menos o apoio. Cada gravação vai com a trilha_auditoria na mesma transação; nenhuma tabela do
 // banco anterior é escrita (regra 1).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import {
@@ -47,7 +47,7 @@ import {
   type SituacaoDoPeriodo,
 } from '@sgh/contratos';
 import { competenciaBr, problemasDaConciliacao } from '@sgh/dominio-contabil';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { TrilhaDaGravacao as LinhaTrilha } from '../exames/public-api.js';
 import { z } from 'zod';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -60,6 +60,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { gravacaoDaTela } from './gravacao.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -144,7 +145,7 @@ export class LancamentosContabilController {
     await reautenticar(this.sessoes, this.resolvedor, req, senha);
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação pelo Executor, com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T>(
     s: SessaoCadastro,
     evento: string,
@@ -159,7 +160,8 @@ export class LancamentosContabilController {
         ...(a.diferenca ? { diferenca: a.diferenca.slice(0, 400) } : {}),
       };
     };
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const g = gravacaoDaTela(s, operacao);
+    const r = await this.porta.gravar(g.contexto, g.pedido, linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria') {
@@ -320,7 +322,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.incluir.permissao)
   @AuditadoNoHandler(
-    'contabil.incluirLancamento (SGH_CTB_LANCAMENTO e SGH_CTB_PARTIDA) com a SGH_TRILHA na mesma transação',
+    'contabil.incluirLancamento (lancamento_contabil e partida_contabil) com a trilha_auditoria na mesma transação',
   )
   async incluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoLancamento> {
     const e = corpo(esquemaLancamentoManual, b);
@@ -331,7 +333,7 @@ export class LancamentosContabilController {
       E.contabilLancamentoIncluido.codigo,
       'contabil.incluirLancamento',
       (x: { id: number; repetido: boolean }) => ({
-        tabela: 'SGH_CTB_LANCAMENTO',
+        tabela: 'lancamento_contabil',
         id: String(x.id),
         diferenca: `empresa=${l.empresa};competencia=${l.competencia};partidas=${l.partidas.length};repetido=${x.repetido ? 'S' : 'N'}`,
       }),
@@ -351,7 +353,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.estornar.permissao)
   @AuditadoNoHandler(
-    'contabil.estornarLancamento (outro lançamento em SGH_CTB_LANCAMENTO; o original fica) com a SGH_TRILHA',
+    'contabil.estornarLancamento (outro lançamento em lancamento_contabil; o original fica) com a trilha_auditoria',
   )
   async estornar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoLancamento> {
     const e = corpo(esquemaEstornarLancamento, b);
@@ -362,7 +364,7 @@ export class LancamentosContabilController {
       E.contabilLancamentoEstornado.codigo,
       'contabil.estornarLancamento',
       (x: { id: number; repetido: boolean }) => ({
-        tabela: 'SGH_CTB_LANCAMENTO',
+        tabela: 'lancamento_contabil',
         id: String(x.id),
         diferenca: `estorna=${e.id};competencia=${l.competencia}`,
       }),
@@ -380,7 +382,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.contabilizar.permissao)
   @AuditadoNoHandler(
-    'contabil.contabilizarFatos (SGH_CTB_LANCAMENTO, SGH_CTB_PARTIDA e a situação em SGH_CTB_FATO) com a SGH_TRILHA; sem fato, nada grava',
+    'contabil.contabilizarFatos (lancamento_contabil, partida_contabil e a situação em fato_contabil) com a trilha_auditoria; sem fato, nada grava',
   )
   async contabilizar(
     @Body() b: unknown,
@@ -403,7 +405,7 @@ export class LancamentosContabilController {
         E.contabilFatosContabilizados.codigo,
         'contabil.contabilizarFatos',
         () => ({
-          tabela: 'SGH_CTB_LANCAMENTO',
+          tabela: 'lancamento_contabil',
           chave: `${e.empresa}:${e.competencia ?? 'todas'}`,
           diferenca: `fatos=${fatos};lancamentos=${r.lancamentos};movidos=${r.movidos};semRegra=${r.porSituacao.semRegra};semConta=${r.porSituacao.semConta};debitos=${r.debitos};creditos=${r.creditos}`,
         }),
@@ -450,7 +452,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.conciliar.permissao)
   @AuditadoNoHandler(
-    'contabil.conciliar (SGH_CTB_CONCILIACAO e as partidas) com a SGH_TRILHA na mesma transação',
+    'contabil.conciliar (conciliacao_conta_contabil e as partidas) com a trilha_auditoria na mesma transação',
   )
   async conciliar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoConciliacao> {
     const e = corpo(esquemaConciliarContabil, b);
@@ -460,7 +462,7 @@ export class LancamentosContabilController {
       E.contabilConciliacaoRegistrada.codigo,
       'contabil.conciliar',
       (x: { id: number; valor: number }) => ({
-        tabela: 'SGH_CTB_CONCILIACAO',
+        tabela: 'conciliacao_conta_contabil',
         id: String(x.id),
         diferenca: `conta=${e.conta};partidas=${e.partidas.length};valor=${x.valor}`,
       }),
@@ -481,7 +483,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.desfazerConciliacao.permissao)
   @AuditadoNoHandler(
-    'contabil.desfazerConciliacao (SGH_CTB_CONCILIACAO, sem apagar) com a SGH_TRILHA na mesma transação',
+    'contabil.desfazerConciliacao (conciliacao_conta_contabil, sem apagar) com a trilha_auditoria na mesma transação',
   )
   async desfazer(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoConciliacao> {
     const e = corpo(esquemaDesfazerConciliacao, b);
@@ -490,7 +492,7 @@ export class LancamentosContabilController {
       s,
       E.contabilConciliacaoDesfeita.codigo,
       'contabil.desfazerConciliacao',
-      () => ({ tabela: 'SGH_CTB_CONCILIACAO', id: String(e.id) }),
+      () => ({ tabela: 'conciliacao_conta_contabil', id: String(e.id) }),
       (g) =>
         g.desfazerConciliacao({
           empresa: e.empresa,
@@ -506,7 +508,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.encerrar.permissao)
   @AuditadoNoHandler(
-    'contabil.encerrarPeriodo (SGH_CTB_PERIODO, com a linha travada) com a SGH_TRILHA na mesma transação',
+    'contabil.encerrarPeriodo (periodo_contabil, com a linha travada) com a trilha_auditoria na mesma transação',
   )
   async encerrar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPeriodo> {
     const e = corpo(esquemaEncerrarComSenha, b);
@@ -518,7 +520,7 @@ export class LancamentosContabilController {
       E.contabilPeriodoEncerrado.codigo,
       'contabil.encerrarPeriodo',
       (d: { lancamentos: number; debitos: number; creditos: number }) => ({
-        tabela: 'SGH_CTB_PERIODO',
+        tabela: 'periodo_contabil',
         chave: `${e.empresa}:${e.competencia}`,
         diferenca: `lancamentos=${d.lancamentos};debitos=${d.debitos};creditos=${d.creditos}`,
       }),
@@ -543,7 +545,7 @@ export class LancamentosContabilController {
   @HttpCode(200)
   @Permissao(R.reabrir.permissao)
   @AuditadoNoHandler(
-    'contabil.reabrirPeriodo (SGH_CTB_PERIODO, com a justificativa) com a SGH_TRILHA na mesma transação',
+    'contabil.reabrirPeriodo (periodo_contabil, com a justificativa) com a trilha_auditoria na mesma transação',
   )
   async reabrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPeriodo> {
     const e = corpo(esquemaReabrirComSenha, b);
@@ -553,7 +555,7 @@ export class LancamentosContabilController {
       s,
       E.contabilPeriodoReaberto.codigo,
       'contabil.reabrirPeriodo',
-      () => ({ tabela: 'SGH_CTB_PERIODO', chave: `${e.empresa}:${e.competencia}` }),
+      () => ({ tabela: 'periodo_contabil', chave: `${e.empresa}:${e.competencia}` }),
       (g) =>
         g.reabrirPeriodo({
           empresa: e.empresa,

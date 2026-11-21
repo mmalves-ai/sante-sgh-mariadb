@@ -2,19 +2,19 @@
 // centro cirúrgico e o OPME EM MEMÓRIA (nada conecta a banco; dados SINTÉTICOS), o relógio fixo em 2026-10-21 09:00. A
 // cirurgia 704 (sala 3, paciente internado) dois dias úteis adiante; a 701 (sem internação) para a recusa do consumo.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type AppBloco, montarAppBloco, type Sessao } from '../cirurgia/bloco-seguro.spec-util.js';
+import { montarAppSuprimentos, type Sessao } from './suprimentos-http.spec-util.js';
 
 const AG = 704;
 const ITEM = 950001;
 const O = '/api/suprimentos/opme';
-let a: AppBloco;
+let a: Awaited<ReturnType<typeof montarAppSuprimentos>>;
 let bloco: Sessao;
 let opme: Sessao;
 let circ: Sessao;
 let fat: Sessao;
 
 beforeAll(async () => {
-  a = await montarAppBloco();
+  a = await montarAppSuprimentos();
   [bloco, opme, circ, fat] = await Promise.all([
     a.entrar('SINT.BLOCO'),
     a.entrar('SINT.OPME'),
@@ -325,7 +325,7 @@ describe('correções da revisão: documentos conferidos, devolução ao local d
 
 describe('liberação (POL-3)', () => {
   it('com a chave suprimentos.opme desligada, a solicitação fica em consulta', async () => {
-    const d = await montarAppBloco({ semChaves: ['suprimentos.opme'] });
+    const d = await montarAppSuprimentos({ semChaves: ['suprimentos.opme'] });
     try {
       const s = await d.entrar('SINT.BLOCO');
       const r = await d.post(s, O, {

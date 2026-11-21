@@ -1,25 +1,26 @@
-// Porta do eSocial em memória (M53.6): a sessão sintética de dev/ci, o E2E e os testes do serviço. Os registros vivem
+// Porta do eSocial em memória (M53.6; F2.2 lote 03-05: tipos próprios, contexto do núcleo): a sessão sintética de dev/ci, o E2E e os testes do serviço. Os registros vivem
 // por estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. Os catálogos e
-// as pendências do outro sistema são sintéticos (formato dos reais, nenhum dado de pessoa). As regras de banco que
+// as pendências migradas são sintéticos (formato dos reais, nenhum dado de pessoa). As regras de banco que
 // importam ao teste também valem aqui: vigência única por início, ficha única por vínculo com versão, identificador do
 // eSocial único e versão na troca de situação.
-import {
-  type ConciliacaoEsocialSghLida,
-  type EmpregadorEsocialSghLido,
-  ErroOperacao,
-  type EventoCatalogoEsocial,
-  type EventoEsocialSghLido,
-  type FichaEsocialSghLida,
-  type FiltroEventosEsocialSgh,
-  type ItemCatalogoEsocial,
-  type LeiauteCatalogoEsocial,
-  type LinhaTrilha,
-  type LoteEsocialSghLido,
-  type PendenciaLegadoLida,
-} from '@sgh/legado';
 import { CATALOGO_EVENTOS_ESOCIAL, NUMERO_GRUPO_ESOCIAL } from '@sgh/contratos';
-import type { GravacaoFeita } from '../../exames/public-api.js';
-import type { ContextoEsocial, GravadorEsocial, PortaEsocial } from './porta-esocial.js';
+import { ErroOperacao } from '@sgh/nucleo';
+import type { GravacaoFeita, TrilhaDaGravacao } from '../../exames/public-api.js';
+import type {
+  ContextoEsocial,
+  EventoDoCatalogoEsocial,
+  FichaEsocialCifrada,
+  FiltroRegistrosEventoEsocial,
+  GravadorEsocial,
+  ItemDoCatalogoEsocial,
+  LeiauteDoCatalogoEsocial,
+  PendenciaMigradaEsocial,
+  PortaEsocial,
+  RegistroConciliacaoEsocial,
+  RegistroEventoEsocial,
+  RegistroLoteEsocial,
+  VigenciaEmpregadorEsocial,
+} from './porta-esocial.js';
 
 const recusa = (codigo: string, mensagem: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', mensagem);
@@ -31,11 +32,11 @@ const desatualizado = () =>
 
 interface Estado {
   seq: number;
-  empregadores: EmpregadorEsocialSghLido[];
-  fichas: FichaEsocialSghLida[];
-  eventos: { evento: EventoEsocialSghLido; xml: string }[];
-  lotes: LoteEsocialSghLido[];
-  conciliacoes: ConciliacaoEsocialSghLida[];
+  empregadores: VigenciaEmpregadorEsocial[];
+  fichas: FichaEsocialCifrada[];
+  eventos: { evento: RegistroEventoEsocial; xml: string }[];
+  lotes: RegistroLoteEsocial[];
+  conciliacoes: RegistroConciliacaoEsocial[];
 }
 
 const novo = (): Estado => ({
@@ -55,6 +56,9 @@ const copiar = (s: Estado): Estado => ({
   conciliacoes: s.conciliacoes.map((x) => ({ ...x })),
 });
 
+/** O estado é por cliente e estabelecimento da sessão. */
+const chave = (c: ContextoEsocial) => `${c.cliente}|${c.estabelecimento}`;
+
 const p2 = (x: number) => String(x).padStart(2, '0');
 const local = (d: Date) =>
   `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
@@ -62,7 +66,7 @@ const local = (d: Date) =>
 /** Empresa sintética com CNPJ de exemplo (dígitos válidos; não é de empresa real conhecida). */
 export const CNPJ_SINTETICO_ESOCIAL = '11222333000181';
 
-const filtra = (x: EventoEsocialSghLido, f: FiltroEventosEsocialSgh) =>
+const filtra = (x: RegistroEventoEsocial, f: FiltroRegistrosEventoEsocial) =>
   (f.empresa === undefined || x.empresa === f.empresa) &&
   (f.evento === undefined || x.evento === f.evento) &&
   (f.eventos === undefined || f.eventos.length === 0 || f.eventos.includes(x.evento)) &&
@@ -80,9 +84,9 @@ export class PortaEsocialMemoria implements PortaEsocial {
   private readonly estados = new Map<string, Estado>();
   /** Testes: o relógio sintético das gravações. */
   agoraFixo: string | null = null;
-  /** Catálogos e dados sintéticos do outro sistema (os testes trocam). */
+  /** Catálogos e dados sintéticos (os testes trocam). */
   cnpjsSinteticos = new Map<number, string | null>([[1, CNPJ_SINTETICO_ESOCIAL]]);
-  pendenciasSinteticas: PendenciaLegadoLida[] = [
+  pendenciasSinteticas: PendenciaMigradaEsocial[] = [
     { evento: 'S-1010', ano: 2020, quantidade: 12 },
     { evento: 'S-1200', ano: 2021, quantidade: 40 },
     { evento: 'S-1200', ano: 2022, quantidade: 35 },
@@ -90,8 +94,8 @@ export class PortaEsocialMemoria implements PortaEsocial {
   recibosSinteticos = 3;
 
   private e(c: ContextoEsocial): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    let s = this.estados.get(chave(c));
+    if (!s) this.estados.set(chave(c), (s = novo()));
     return s;
   }
   private agora(): string {
@@ -112,7 +116,7 @@ export class PortaEsocialMemoria implements PortaEsocial {
 
   async gravarSgh<T>(
     c: ContextoEsocial,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorEsocial) => Promise<T>,
   ): Promise<T> {
     const s = copiar(this.e(c));
@@ -168,10 +172,12 @@ export class PortaEsocialMemoria implements PortaEsocial {
           .filter((x) => filtra(x, f))
           .sort((a, b) => b.id - a.id),
       eventosComTrava: async (ids) => s.eventos.map((x) => x.evento).filter((x) => ids.includes(x.id)),
-      proximoIdEvento: async () => ++s.seq,
-      incluirEvento: async (id, x) => {
+      // O sequencial do identificador acompanha o próximo id da memória (no banco, é a sequencia_negocio).
+      proximoSequencialEvento: async () => s.seq + 1,
+      incluirEvento: async (x) => {
         if (s.eventos.some((y) => y.evento.idEsocial === x.idEsocial))
           throw recusa('evento-repetido', 'O identificador do evento já existe.');
+        const id = ++s.seq;
         s.eventos.push({
           xml: x.xml,
           evento: {
@@ -270,19 +276,19 @@ export class PortaEsocialMemoria implements PortaEsocial {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(chave(c), s);
     return r;
   }
 
-  private listaEmpregadores(s: Estado, empresa: number | null): EmpregadorEsocialSghLido[] {
+  private listaEmpregadores(s: Estado, empresa: number | null): VigenciaEmpregadorEsocial[] {
     return s.empregadores
       .filter((x) => empresa === null || x.empresa === empresa)
       .sort((a, b) => a.empresa - b.empresa || b.inicio.localeCompare(a.inicio));
   }
 
-  // ── Catálogos e dados do outro sistema (sintéticos) ─────────────────────────────────────────────────────────
+  // ── Catálogos e pendências migradas (sintéticos) ─────────────────────────────────────────────────────────
 
-  async eventosCatalogo(): Promise<EventoCatalogoEsocial[]> {
+  async eventosCatalogo(): Promise<EventoDoCatalogoEsocial[]> {
     return CATALOGO_EVENTOS_ESOCIAL.map((e, i) => ({
       id: i + 1,
       codigo: e.codigo,
@@ -290,14 +296,14 @@ export class PortaEsocialMemoria implements PortaEsocial {
       grupo: NUMERO_GRUPO_ESOCIAL[e.grupo],
     }));
   }
-  async leiauteCatalogo(): Promise<LeiauteCatalogoEsocial[]> {
+  async leiauteCatalogo(): Promise<LeiauteDoCatalogoEsocial[]> {
     return CATALOGO_EVENTOS_ESOCIAL.map((e) => ({
       evento: e.codigo,
       versao: 'v_S_01_03_00',
       inicio: '2024-12-02',
     }));
   }
-  async motivosAfastamento(): Promise<ItemCatalogoEsocial[]> {
+  async motivosAfastamento(): Promise<ItemDoCatalogoEsocial[]> {
     return [
       { codigo: '01', rotulo: 'Acidente ou doença do trabalho' },
       { codigo: '03', rotulo: 'Acidente ou doença não relacionada ao trabalho' },
@@ -305,7 +311,7 @@ export class PortaEsocialMemoria implements PortaEsocial {
       { codigo: '17', rotulo: 'Licença maternidade' },
     ];
   }
-  async categorias(): Promise<ItemCatalogoEsocial[]> {
+  async categorias(): Promise<ItemDoCatalogoEsocial[]> {
     return [
       { codigo: '101', rotulo: 'Empregado - Geral' },
       { codigo: '731', rotulo: 'Contribuinte individual - Cooperado' },
@@ -316,14 +322,14 @@ export class PortaEsocialMemoria implements PortaEsocial {
   async cnpjs(): Promise<Map<number, string | null>> {
     return new Map(this.cnpjsSinteticos);
   }
-  async pendenciasLegado(_c: ContextoEsocial, empresa: number | null): Promise<PendenciaLegadoLida[]> {
+  async pendenciasMigradas(_c: ContextoEsocial, empresa: number | null): Promise<PendenciaMigradaEsocial[]> {
     return empresa === null || empresa === 1 ? [...this.pendenciasSinteticas] : [];
   }
   async recibosAutonomo(): Promise<number> {
     return this.recibosSinteticos;
   }
 
-  // ── SGH_ ────────────────────────────────────────────────────────────────────────────────────────────────────
+  // ── Registros ────────────────────────────────────────────────────────────────────────────────────────────────────
 
   async empregadores(c: ContextoEsocial, empresa: number | null) {
     return this.listaEmpregadores(this.e(c), empresa);
@@ -332,7 +338,7 @@ export class PortaEsocialMemoria implements PortaEsocial {
     const f = this.e(c).fichas.find((x) => x.vinculo === vinculo);
     return f ? { ...f } : null;
   }
-  async eventos(c: ContextoEsocial, f: FiltroEventosEsocialSgh) {
+  async eventos(c: ContextoEsocial, f: FiltroRegistrosEventoEsocial) {
     return this.e(c)
       .eventos.map((x) => x.evento)
       .filter((x) => filtra(x, f))

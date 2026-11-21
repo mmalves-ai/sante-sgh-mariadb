@@ -1,0 +1,50 @@
+{
+  "lote": "03-16",
+  "apagados": [
+    "apps/api/src/modulos/tiss/porta-legado.ts"
+  ],
+  "registrar": [
+    "tiss: () => import('./tiss/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/tiss/acompanhamento.spec.ts",
+    "src/modulos/tiss/acompanhamento.ts",
+    "src/modulos/tiss/apoios.ts",
+    "src/modulos/tiss/esquemas.ts",
+    "src/modulos/tiss/guarda-xml.int.spec.ts",
+    "src/modulos/tiss/guia-impressao.ts",
+    "src/modulos/tiss/guia-pdf.int.spec.ts",
+    "src/modulos/tiss/modulo.ts",
+    "src/modulos/tiss/onda4.spec.ts",
+    "src/modulos/tiss/operacoes.ts",
+    "src/modulos/tiss/porta-memoria.ts",
+    "src/modulos/tiss/porta-propria.int.spec.ts",
+    "src/modulos/tiss/porta-propria.ts",
+    "src/modulos/tiss/porta.ts",
+    "src/modulos/tiss/public-api.ts",
+    "src/modulos/tiss/regras-tiss.spec.ts",
+    "src/modulos/tiss/regras-tiss.ts",
+    "src/modulos/tiss/servico.ts",
+    "src/modulos/tiss/simulador.spec.ts",
+    "src/modulos/tiss/simulador.ts",
+    "src/modulos/tiss/tiss.controller.ts",
+    "src/modulos/tiss/tiss.spec.ts",
+    "src/modulos/tiss/armazem-xml.ts"
+  ],
+  "pedidos": [
+    "DDL (FAT, ADR 0002): pagamento por item do demonstrativo -- tabela demonstrativo_pagamento_item (ou equivalente ja planejada para demonstrativo_pagamento, referenciada por glosa.demonstrativo_pagamento_id) com conta_hospitalar_item_id, valor_pago DECIMAL(15,2) NOT NULL CHECK >=0, quantidade_paga DECIMAL(15,4) NOT NULL, data_pagamento DATE NOT NULL, motivo_glosa_id NULL, colunas de auditoria e versao. Sem ela ficam INDISPONIVEIS no banco: faturamento.registrarGlosa (baixa por item), faturamento.registrarRecurso, faturamento.registrarRetornoRecurso e a importacao do demonstrativo (casamento e baixa); recusam com 409 operacao-pendente e a liberacao mostra o motivo.",
+    "DDL (FAT): glosa_item.motivo_retorno_glosa_id BIGINT UNSIGNED NULL FK motivo_glosa (motivo da negativa/parcial no retorno do recurso); hoje o ItemGlosaLido.motivoRetorno sai 0.",
+    "DDL (FAT): glosa_item.evidencia_prontuario VARCHAR(250) NULL (evidencia do prontuario na decisao de recorrer). Sem ela, decidirGlosa com evidencia recusa 409 modelo-pendente e evidenciaDoItem devolve null (rota da evidencia sem conteudo).",
+    "DDL (FAT): protocolo_recebimento.numero_recibo VARCHAR(60) NULL (recibo do comprovante de entrega). Hoje o recibo vai so na trilha (dados) e o historico do lote mostra recibo vazio.",
+    "DDL (FAT/CAD): calendario de entrega por fonte pagadora (ex.: entrega_lote_fonte_pagadora: estabelecimento_id, fonte_pagadora_id, dia_entrega SMALLINT CHECK 1..31, vigencia). Sem ela PrazoEnvio.entregas = [] e proximaEntrega = null.",
+    "DDL (FIN): escopo de contas bancarias por usuario (usuario_conta_bancaria: usuario_id, conta_bancaria_id, UNIQUE). Sem ela contasBancariasDoEscopo responde [] (falha fechada: nenhuma conta) no banco.",
+    "LEITURA de outros modulos: os blocos titulos (financeiro) e repasse do acompanhamento da competencia (M42) saem null no banco; precisam de uma porta de leitura exportada pelos modulos financeiro e repasse (ou que este lote leia as tabelas deles) -- decidir no integrador.",
+    "CONTRATO (packages/contratos, outro dono): LinhaContasCompetencia.situacao usa 'N'/'S'/'A' (SITUACOES_CONTA_ONDA) e ContaParaLote/ItemRetorno usam letras do sistema de origem ('T','S','A','E','I'); a porta propria nao usa essas regras (regras-tiss.ts neutras) mas a leitura agregada ainda devolve N/S/A. Sugerido neutralizar o contrato (aberta/fechada/apresentada).",
+    "CONTRATO: ConfiguracaoTissLida.versoes[].conhecidaNoOutroSistema e webservicesOutroSistema sao de convivencia (ADR 0003): no banco saem false e []. Remover do contrato e da tela.",
+    "app.module.ts (ultima onda): remover a montagem antiga do TISS (portaTissLegado, definirMontadorLoteTiss de @sgh/legado, opcoes.tiss/armazemXmlTiss) -- o modulo tiss/modulo.ts ja monta porta, armazem do XML, gerador de PDF e a fonte de configuracao.",
+    "onda4.spec.ts: o describe da 'aba Onda 4 do painel de migracao' e o do lote recusado pelo criterio da onda 4 foram removidos (coexistencia removida no lote 02-08).",
+    "CONTRATO (packages/contratos, EditarEndpointTissEntrada): incluir tipoAutenticacao ('nenhuma'|'basica'|'certificado'|'token'). Hoje a alteracao preserva o tipo cadastrado e a inclusao grava 'basica' (credencial no cofre, sempre exigida pelo contrato); um canal novo com certificado ou token so pode ser cadastrado direto no banco ate la.",
+    "DOMINIO (packages/dominio-faturamento, outro dono): src/tiss/executante.spec.ts testa executanteTiss/EXECUTANTE_PADRAO de um executante.ts que nao existe no pacote (spec orfao). O lote 03-16 nao usa executante padrao (ADR 0003: recusa cadastro-tiss-incompleto); sugerido apagar o spec ou reescreve-lo sem o padrao.",
+    "DECISAO (registrada no lote 03-16): o protocolo registrado de novo no mesmo lote depois de limpo REATIVA o protocolo_recebimento cancelado (uq_protocolo_recebimento_fonte_numero inclui os cancelados); numero ja usado em outro lote do convenio recusa 'protocolo-em-uso'. O historico do lote passa a mostrar so o registro vivo; a limpeza fica na trilha_auditoria. Se o dono preferir o historico completo na tela, o DDL alternativo e uma coluna gerada numero_protocolo_vivo (NULL quando cancelado) com o UNIQUE nela."
+  ]
+}

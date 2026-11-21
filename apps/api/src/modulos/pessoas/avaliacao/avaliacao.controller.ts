@@ -84,7 +84,7 @@ import { PORTA_AVALIACAO, type PortaAvaliacao } from './porta-avaliacao.js';
 import { PERMISSOES_AVALIACAO, ServicoAvaliacao } from './servico-avaliacao.js';
 
 const P = PERMISSOES_AVALIACAO;
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha_auditoria na mesma transação`;
 const com = (b: unknown, x: Record<string, number>) => ({ ...(b as object), ...x });
 
 @Controller('pessoas/avaliacoes')
@@ -186,7 +186,7 @@ export class AvaliacaoController {
   @Post('competencias')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_COMPETENCIA'))
+  @AuditadoNoHandler(NA_TABELA('competencia_avaliacao'))
   incluirCompetencia(
     @Body() b: unknown,
     @Req() req: RequisicaoAutorizada,
@@ -197,7 +197,7 @@ export class AvaliacaoController {
   @Post('competencias/:id/alteracao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_COMPETENCIA e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('competencia_avaliacao e correcao_registro'))
   alterarCompetencia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.alterarCompetencia(
       sessaoDe(req),
@@ -208,7 +208,7 @@ export class AvaliacaoController {
   @Post('competencias/:id/situacao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_COMPETENCIA e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('competencia_avaliacao e correcao_registro'))
   situacaoCompetencia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.situacaoCompetencia(
       sessaoDe(req),
@@ -219,7 +219,9 @@ export class AvaliacaoController {
   @Post('competencias/:id/exclusao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_HIST_EXCLUSAO (retrato) e o DELETE da competência nunca usada'))
+  @AuditadoNoHandler(
+    NA_TABELA('retrato da exclusão na trilha_auditoria (retrato) e o DELETE da competência nunca usada'),
+  )
   excluirCompetencia(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.excluirCompetencia(
       sessaoDe(req),
@@ -230,7 +232,7 @@ export class AvaliacaoController {
   @Post('cargos/:cargo/competencias')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO_COMPETENCIA'))
+  @AuditadoNoHandler(NA_TABELA('cargo_competencia'))
   ligar(@Param('cargo') cargo: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.ligarCompetenciaCargo(
       sessaoDe(req),
@@ -241,7 +243,9 @@ export class AvaliacaoController {
   @Post('cargos/:cargo/competencias/:competencia/desligamento')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_HIST_EXCLUSAO (retrato) e o DELETE da SGH_PES_CARGO_COMPETENCIA'))
+  @AuditadoNoHandler(
+    NA_TABELA('retrato da exclusão na trilha_auditoria (retrato) e o DELETE da cargo_competencia'),
+  )
   desligar(
     @Param('cargo') cargo: string,
     @Param('competencia') k: string,
@@ -259,7 +263,7 @@ export class AvaliacaoController {
   @Post('ciclos')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVAL_CICLO'))
+  @AuditadoNoHandler(NA_TABELA('ciclo_avaliacao'))
   incluirCiclo(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAvaliacaoDesempenho> {
     return this.servico.incluirCiclo(sessaoDe(req), corpo(esquemaIncluirCiclo, b));
   }
@@ -267,7 +271,7 @@ export class AvaliacaoController {
   @Post('ciclos/:id/alteracao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVAL_CICLO e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('ciclo_avaliacao e correcao_registro'))
   alterarCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.alterarCiclo(
       sessaoDe(req),
@@ -278,7 +282,7 @@ export class AvaliacaoController {
   @Post('ciclos/:id/situacao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVAL_CICLO e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('ciclo_avaliacao e correcao_registro'))
   situacaoCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.situacaoCiclo(
       sessaoDe(req),
@@ -289,7 +293,9 @@ export class AvaliacaoController {
   @Post('ciclos/:id/exclusao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_HIST_EXCLUSAO (retrato) e o DELETE do ciclo sem avaliação'))
+  @AuditadoNoHandler(
+    NA_TABELA('retrato da exclusão na trilha_auditoria (retrato) e o DELETE do ciclo sem avaliação'),
+  )
   excluirCiclo(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.excluirCiclo(
       sessaoDe(req),
@@ -302,7 +308,7 @@ export class AvaliacaoController {
   @Post('pdi')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_PDI'))
+  @AuditadoNoHandler(NA_TABELA('plano_desenvolvimento'))
   incluirPdi(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAvaliacaoDesempenho> {
     return this.servico.incluirPdi(sessaoDe(req), corpo(esquemaIncluirPdi, b));
   }
@@ -310,7 +316,7 @@ export class AvaliacaoController {
   @Post('pdi/:id/alteracao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_PDI e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('plano_desenvolvimento e correcao_registro'))
   alterarPdi(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.alterarPdi(sessaoDe(req), corpo(esquemaAlterarPdi, com(b, { pdi: idDaRota(id) })));
   }
@@ -318,7 +324,7 @@ export class AvaliacaoController {
   @Post('pdi/:id/situacao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_PDI e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('plano_desenvolvimento e correcao_registro'))
   situacaoPdi(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.situacaoPdi(sessaoDe(req), corpo(esquemaSituacaoPdi, com(b, { pdi: idDaRota(id) })));
   }
@@ -328,7 +334,7 @@ export class AvaliacaoController {
   @Post('minhas/:id/ciencia')
   @HttpCode(200)
   @Permissao(P.ciencia)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO'))
+  @AuditadoNoHandler(NA_TABELA('avaliacao_desempenho'))
   cienciaPropria(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.cienciaPropria(
       sessaoDe(req),
@@ -341,7 +347,7 @@ export class AvaliacaoController {
   @Post()
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO e SGH_PES_AVAL_ITEM'))
+  @AuditadoNoHandler(NA_TABELA('avaliacao_desempenho e avaliacao_desempenho_item'))
   abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoAvaliacaoDesempenho> {
     return this.servico.abrir(sessaoDe(req), corpo(esquemaAbrirAvaliacao, b));
   }
@@ -349,7 +355,7 @@ export class AvaliacaoController {
   @Post(':id/notas')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO e SGH_PES_AVAL_ITEM'))
+  @AuditadoNoHandler(NA_TABELA('avaliacao_desempenho e avaliacao_desempenho_item'))
   notas(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.lancarNotas(
       sessaoDe(req),
@@ -360,7 +366,7 @@ export class AvaliacaoController {
   @Post(':id/finalizacao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO'))
+  @AuditadoNoHandler(NA_TABELA('avaliacao_desempenho'))
   finalizar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.finalizar(
       sessaoDe(req),
@@ -371,7 +377,7 @@ export class AvaliacaoController {
   @Post(':id/ciencia')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO'))
+  @AuditadoNoHandler(NA_TABELA('avaliacao_desempenho'))
   cienciaRegistrada(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.cienciaRegistrada(
       sessaoDe(req),
@@ -382,7 +388,9 @@ export class AvaliacaoController {
   @Post(':id/correcao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_AVALIACAO (versão nova) e SGH_PES_AVAL_ITEM (notas copiadas)'))
+  @AuditadoNoHandler(
+    NA_TABELA('avaliacao_desempenho (versão nova) e avaliacao_desempenho_item (notas copiadas)'),
+  )
   corrigir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.corrigir(
       sessaoDe(req),
@@ -393,7 +401,9 @@ export class AvaliacaoController {
   @Post(':id/exclusao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_HIST_EXCLUSAO (retrato) e o DELETE do rascunho e das notas'))
+  @AuditadoNoHandler(
+    NA_TABELA('retrato da exclusão na trilha_auditoria (retrato) e o DELETE do rascunho e das notas'),
+  )
   excluir(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     return this.servico.excluir(
       sessaoDe(req),

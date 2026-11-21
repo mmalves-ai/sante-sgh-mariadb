@@ -3,21 +3,18 @@
 // salário, parâmetros) abre tudo; quem só consulta a folha (351) vê os cálculos e os parâmetros, não o salário, e não
 // calcula; quem só tem os eventos (367) abre o apoio da área e nada mais. A chave `pessoas.folha` nasce desligada:
 // calcular de verdade é recusado, a prévia sai.
+import { criarAppPessoas } from '../opcoes-teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { CifraCpf } from '../cifra-cpf.js';
 
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 let app: NestFastifyApplication;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPessoas(env, {
     trilha: new RegistradorTrilhaMemoria(),
-    cifraCpf: new CifraCpf(Buffer.alloc(32, 7)),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

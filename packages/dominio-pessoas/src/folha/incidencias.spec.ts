@@ -1,7 +1,12 @@
 // Conferência das incidências da rubrica contra os códigos do eSocial (M53, etapa F1). Rubricas sintéticas.
 import { INCIDENCIAS_RUBRICA_FOLHA, type RubricaFolha } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
-import { codigoEsocialEhBase, conferirIncidenciasRubrica, conferirRubricas } from './incidencias.js';
+import {
+  codigoEsocialEhBase,
+  conferirIncidenciasRubrica,
+  conferirRubricas,
+  marcasTributoRubrica,
+} from './incidencias.js';
 
 function rubrica(extra: Partial<RubricaFolha> = {}): RubricaFolha {
   const incidencias = Object.fromEntries(
@@ -117,5 +122,78 @@ describe('conferência da rubrica', () => {
       [7, 'sem-natureza-esocial'],
       [8, 'sem-codigo-esocial'],
     ]);
+  });
+});
+
+describe('marcas de tributo da rubrica pelo código do eSocial', () => {
+  const sem = { inss: null, irrf: null, fgts: null, sindical: null, pis: null };
+  it('base mensal: INSS 11, IRRF 11, FGTS 11; usada nas férias, o INSS das férias também', () => {
+    const m = marcasTributoRubrica({ ...sem, inss: '11', irrf: '11', fgts: '11' }, { ferias: true });
+    expect(m).toMatchObject({
+      inss: true,
+      irrf: true,
+      fgts: true,
+      inss13: false,
+      irrf13: false,
+      fgts13: false,
+      inssFerias: true,
+      irrfFerias: false,
+    });
+  });
+  it('IRRF 09 e 31 em diante não são base de nada; INSS 31 e 51 também não', () => {
+    for (const c of ['09', '31', '41', '51', '63', '79']) {
+      const m = marcasTributoRubrica({ ...sem, irrf: c }, { ferias: true });
+      expect([c, m.irrf, m.irrf13, m.irrfFerias]).toEqual([c, false, false, false]);
+    }
+    for (const c of ['31', '35', '51']) {
+      const m = marcasTributoRubrica({ ...sem, inss: c }, { ferias: true });
+      expect([c, m.inss, m.inss13, m.inssFerias]).toEqual([c, false, false, false]);
+    }
+  });
+  it('12 é a base do 13º (não a mensal) nos três tributos; INSS 14 é 13º do empregador; IRRF 14 (PLR) não é 13º', () => {
+    const m = marcasTributoRubrica({ ...sem, inss: '12', irrf: '12', fgts: '12' }, { ferias: false });
+    expect(m).toMatchObject({
+      inss: false,
+      irrf: false,
+      fgts: false,
+      inss13: true,
+      irrf13: true,
+      fgts13: true,
+    });
+    expect(marcasTributoRubrica({ ...sem, inss: '14' }, { ferias: false })).toMatchObject({
+      inss: false,
+      inss13: true,
+    });
+    expect(marcasTributoRubrica({ ...sem, irrf: '14' }, { ferias: false })).toMatchObject({
+      irrf: false,
+      irrf13: false,
+      irrfFerias: false,
+    });
+  });
+  it('IRRF 13 é a base das férias; FGTS 21 (aviso indenizado) é mensal; PIS e sindical pelo código', () => {
+    expect(marcasTributoRubrica({ ...sem, irrf: '13' }, { ferias: true })).toMatchObject({
+      irrf: false,
+      irrfFerias: true,
+    });
+    expect(marcasTributoRubrica({ ...sem, fgts: '21' }, { ferias: false })).toMatchObject({
+      fgts: true,
+      fgts13: false,
+    });
+    expect(marcasTributoRubrica({ ...sem, pis: '11', sindical: '11' }, { ferias: false })).toMatchObject({
+      pis: true,
+      contribuicaoSindical: true,
+    });
+    expect(marcasTributoRubrica({ ...sem, pis: '00', sindical: '31' }, { ferias: false })).toMatchObject({
+      pis: false,
+      contribuicaoSindical: false,
+    });
+  });
+  it('sem código ou com código desconhecido: nenhuma marca', () => {
+    expect(Object.values(marcasTributoRubrica(sem, { ferias: true })).every((x) => x === false)).toBe(true);
+    expect(
+      Object.values(marcasTributoRubrica({ ...sem, inss: '77', irrf: 'X' }, { ferias: true })).every(
+        (x) => x === false,
+      ),
+    ).toBe(true);
   });
 });

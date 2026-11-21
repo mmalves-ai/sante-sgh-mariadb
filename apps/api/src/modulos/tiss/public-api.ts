@@ -7,6 +7,7 @@ export {
   TissController,
 } from './tiss.controller.js';
 export { PORTA_TISS, type PortaTiss } from './porta.js';
-export { portaTissIndisponivel, portaTissLegado, portaTissNaTransacao } from './porta-legado.js';
+export { type NucleoTiss, portaTissIndisponivel, PortaTissPropria } from './porta-propria.js';
 export { type FonteContasMemoria, PortaTissMemoria } from './porta-memoria.js';
 export { type ArmazemXmlTiss, armazemXmlMemoria, armazemXmlS3 } from './armazem-xml.js';
+export { modulo, type OpcoesModuloTiss, portaDoTiss } from './modulo.js';

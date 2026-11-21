@@ -4,17 +4,17 @@
 //     da presença (aceite 3); a retirada guarda o retrato antes de apagar;
 //   - corrigir a presença e o aproveitamento já lançados, também na turma encerrada, com o valor anterior na trilha.
 // Portas EM MEMÓRIA; dados SINTÉTICOS.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/configuracao-fonte.js';
 import { PortaPessoasMemoria } from '../porta-memoria.js';
 import { PortaTreinamentoMemoria } from './porta-treinamento-memoria.js';
 import { ServicoTreinamento } from './servico-treinamento.js';
 
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -27,7 +27,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -37,7 +37,7 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
   alteradoEm: '2026-10-25T10:00:00',
 });
 
-const ctx = { rede: '', hospital: 'aa' };
+const ctx = { cliente: 'teste', estabelecimento: 1, usuario: null, correlacao: 'crud-treinamento' };
 let k = 0;
 const sessao = (login: string, pode: (c: string) => boolean = () => true): SessaoCadastro =>
   ({
@@ -93,7 +93,7 @@ async function montar() {
       cargaMinimaMin: 60,
       validadeMeses: 12,
       obrigatorio: true,
-      alvos: [],
+      alvos: [{ tipo: 'funcao', valor: 'tecnico-de-enfermagem' }],
       por: 'SINT.TREIN',
     });
     const t = await g.incluirTurma({
@@ -122,6 +122,33 @@ async function montar() {
 }
 
 describe('correções do treinamento (W0-06, parte 2)', () => {
+  it('o que o cadastro de cursos do banco ainda não guarda recusa igual na memória (modelo-pendente)', async () => {
+    const porta = new PortaTreinamentoMemoria(new PortaPessoasMemoria());
+    const base = {
+      codigo: 'NR32X',
+      titulo: 'NR 32 sintético',
+      conteudo: 'Conteúdo sintético',
+      categoria: 'nr32' as const,
+      cargaMinimaMin: 60,
+      validadeMeses: 12,
+      obrigatorio: true,
+      alvos: [{ tipo: 'funcao' as const, valor: 'tecnico-de-enfermagem' }],
+      por: 'SINT.TREIN',
+    };
+    const incluir = (x: Partial<typeof base> & Record<string, unknown>) =>
+      porta.gravarSgh(ctx, {} as never, (g) => g.incluirCurso({ ...base, ...x } as never));
+    const cod = (p: Promise<unknown>) =>
+      p.then(
+        () => 'ok',
+        (e: { problema?: { codigo?: string } }) => e.problema?.codigo ?? 'outro',
+      );
+    expect(await cod(incluir({ alvos: [] }))).toBe('modelo-pendente');
+    expect(await cod(incluir({ alvos: [{ tipo: 'unidade', valor: '1' }] as never }))).toBe('modelo-pendente');
+    expect(await cod(incluir({ categoria: 'pop' as never }))).toBe('modelo-pendente');
+    expect(await cod(incluir({ obrigatorio: false }))).toBe('modelo-pendente');
+    expect(await cod(incluir({}))).toBe('ok');
+  });
+
   it('altera a turma aberta com motivo; o valor anterior aparece no histórico da turma', async () => {
     const { servico, turma, versaoTurma } = await montar();
     const s = sessao('SINT.TREIN');

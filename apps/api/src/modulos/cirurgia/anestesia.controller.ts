@@ -10,7 +10,7 @@
 //   GET  /api/cirurgia/anestesia/srpa/quadro                     o quadro da recuperação (admitidos sem alta)
 //   GET  /api/cirurgia/anestesia/:agenda/srpa                    a série da SRPA com os impedimentos da alta
 //   POST /api/cirurgia/anestesia/:agenda/srpa                    cirurgia.registrarSrpa (admissão, avaliação, alta)
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação e o ator real; o estabelecimento vem da sessão. A receita relê
+// Só do novo (banco), com a trilha de auditoria na mesma transação e o ator real; o estabelecimento vem da sessão. A receita relê
 // a ficha travada e a versão na MESMA transação e o domínio confere ali de novo. A assinatura é do anestesista da
 // cirurgia (o do agendamento, o da equipe com a função de anestesista e quem teve a responsabilidade), com a senha
 // conferida de novo; quem não é recebe 403 e a negação vai à trilha. Tudo nasce desligado (chave `bloco.ficha`, POL-3).
@@ -72,14 +72,14 @@ import {
   situacaoDepoisDoMarco,
 } from '@sgh/dominio-cirurgia';
 import { horaDoCorte, janelaDoInstante } from '@sgh/dominio-enfermagem';
-import {
-  type AvaliacaoSrpaLidaSgh,
-  type ContextoAnestesiaLido,
-  type FichaLidaSgh,
-  funcaoAnestesista,
-  type DominiosFichaLidos,
-  type LancamentoFichaSgh,
-} from '@sgh/legado';
+import type {
+  AvaliacaoRecuperacao,
+  ContextoAnestesia,
+  DominiosFicha,
+  FichaAnestesica,
+  LancamentoFicha,
+} from './tipos.js';
+import { funcaoAnestesista } from './regras.js';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -99,7 +99,8 @@ import {
 } from '../config/public-api.js';
 import { PORTA_BALANCO, type PortaBalanco } from '../enfermagem/public-api.js';
 import { ApoioGravacao, corpo } from '../exames/public-api.js';
-import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from '../suprimentos/public-api.js';
+// A porta (só o símbolo e o tipo), não a public-api: os adaptadores de suprimentos migram em outro lote da onda.
+import { PORTA_SUPRIMENTOS, type PortaSuprimentos } from '../suprimentos/porta.js';
 import { type GravadorAnestesia, PORTA_ANESTESIA, type PortaAnestesia } from './anestesia-porta.js';
 import { PORTA_CIRURGIA, type PortaCirurgia } from './porta.js';
 import { TRAVA_INCISAO, type TravaIncisao } from './trava-incisao.js';
@@ -177,7 +178,7 @@ export function chaveDoPedidoAnestesia(s: SessaoCadastro, doCorpo: string): stri
 export async function montarContextoAnestesia(
   cirurgia: PortaCirurgia,
   s: SessaoCadastro,
-  c: ContextoAnestesiaLido,
+  c: ContextoAnestesia,
 ): Promise<ContextoAnestesiaResposta> {
   const [ag, nomes, procs] = await Promise.all([
     cirurgia.agendamento(s.porta, c.agendamento),
@@ -210,7 +211,7 @@ export async function montarContextoAnestesia(
 @Controller('cirurgia/anestesia')
 export class AnestesiaController {
   private readonly apoio: ApoioGravacao<GravadorAnestesia>;
-  private readonly cacheDominios = new Map<string, { em: number; d: DominiosFichaLidos }>();
+  private readonly cacheDominios = new Map<string, { em: number; d: DominiosFicha }>();
 
   constructor(
     @Inject(PORTA_ANESTESIA) private readonly porta: PortaAnestesia,
@@ -240,7 +241,7 @@ export class AnestesiaController {
   // ── Apoio ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
   /** Os domínios da ficha: no cache compartilhado (Valkey) por estabelecimento, 1 h; sem ele, na memória do processo. */
-  private async dominios(s: SessaoCadastro): Promise<DominiosFichaLidos> {
+  private async dominios(s: SessaoCadastro): Promise<DominiosFicha> {
     if (this.cache)
       return this.cache.lerOuCarregar(
         this.cache.chave(s.rede, s.hospital, 'dominios-anestesia'),
@@ -266,7 +267,7 @@ export class AnestesiaController {
       throw recusaAnestesia('anestesia-horario-futuro');
   }
 
-  private async contextoLido(s: SessaoCadastro, agenda: number): Promise<ContextoAnestesiaLido> {
+  private async contextoLido(s: SessaoCadastro, agenda: number): Promise<ContextoAnestesia> {
     const c = await this.porta.contexto(s.porta, agenda);
     if (!c)
       throw new ErroProblema(
@@ -278,7 +279,7 @@ export class AnestesiaController {
     return c;
   }
 
-  private contexto(s: SessaoCadastro, c: ContextoAnestesiaLido): Promise<ContextoAnestesiaResposta> {
+  private contexto(s: SessaoCadastro, c: ContextoAnestesia): Promise<ContextoAnestesiaResposta> {
     return montarContextoAnestesia(this.cirurgia, s, c);
   }
 
@@ -333,13 +334,13 @@ export class AnestesiaController {
       .catch(() => undefined);
   }
 
-  private dominiosResposta(d: DominiosFichaLidos): DominiosFichaResposta {
+  private dominiosResposta(d: DominiosFicha): DominiosFichaResposta {
     return {
       tiposAnestesia: d.tiposAnestesia,
       posicoes: d.posicoes,
       modosRespiratorios: d.modosRespiratorios,
       funcoesEquipe: d.funcoesEquipe,
-      tiposSinalLegado: d.tiposSinalLegado,
+      tiposSinalLegado: d.tiposSinal,
       utilizacoes: d.utilizacoes,
     };
   }
@@ -412,7 +413,10 @@ export class AnestesiaController {
   async apa(@Param('agenda') agenda: string, @Req() req: RequisicaoAutorizada): Promise<TelaApaResposta> {
     const s = sessaoDe(req);
     const c = await this.contextoLido(s, idDaRota(agenda));
-    req.sghAlvo = { ...(c.paciente !== null ? { paciente: c.paciente } : {}), tabelaAlvo: 'SGH_CC_APA' };
+    req.sghAlvo = {
+      ...(c.paciente !== null ? { paciente: c.paciente } : {}),
+      tabelaAlvo: 'avaliacao_pre_anestesica',
+    };
     const [contexto, apas, d, gravacao] = await Promise.all([
       this.contexto(s, c),
       this.porta.apas(s.porta, c.agendamento),
@@ -472,7 +476,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.apaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarApa: SGH_CC_APA (e SGH_CC_PENDENCIA) com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarApa: avaliacao_pre_anestesica (e pendencia_agendamento_cirurgico) com a trilha de auditoria na mesma transação',
   )
   async registrarApa(
     @Param('agenda') agenda: string,
@@ -520,7 +524,7 @@ export class AnestesiaController {
       E.apaRegistrada.codigo,
       P.apaRegistrar,
       (x: { id: number; versao: number }) => ({
-        tabela: 'SGH_CC_APA',
+        tabela: 'avaliacao_pre_anestesica',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:v${x.versao}`,
@@ -574,8 +578,8 @@ export class AnestesiaController {
 
   private async montarFichaResposta(
     s: SessaoCadastro,
-    f: FichaLidaSgh,
-    o: { agora: string; agendado: number | null; dominios: DominiosFichaLidos; registros: readonly number[] },
+    f: FichaAnestesica,
+    o: { agora: string; agendado: number | null; dominios: DominiosFicha; registros: readonly number[] },
   ): Promise<{ resposta: FichaAnestesicaResposta; assinante: number | null }> {
     const m = montarFicha(f, {
       agora: o.agora,
@@ -659,7 +663,10 @@ export class AnestesiaController {
   async ficha(@Param('agenda') agenda: string, @Req() req: RequisicaoAutorizada): Promise<TelaFichaResposta> {
     const s = sessaoDe(req);
     const c = await this.contextoLido(s, idDaRota(agenda));
-    req.sghAlvo = { ...(c.paciente !== null ? { paciente: c.paciente } : {}), tabelaAlvo: 'SGH_CC_FA' };
+    req.sghAlvo = {
+      ...(c.paciente !== null ? { paciente: c.paciente } : {}),
+      tabelaAlvo: 'ficha_anestesica',
+    };
     const [contexto, f, d, gravacao, agora, registros] = await Promise.all([
       this.contexto(s, c),
       this.porta.ficha(s.porta, c.agendamento),
@@ -711,9 +718,9 @@ export class AnestesiaController {
   private async fichaNaTransacao(
     g: GravadorAnestesia,
     s: SessaoCadastro,
-    c: ContextoAnestesiaLido,
+    c: ContextoAnestesia,
     o: { abrir: boolean; profissional: number | null; agora: string; chave: string; inicio?: string },
-  ): Promise<FichaLidaSgh> {
+  ): Promise<FichaAnestesica> {
     await this.conferirNaTransacao(g, c.agendamento);
     const f = await g.ficha(c.agendamento);
     if (f) return f;
@@ -736,7 +743,7 @@ export class AnestesiaController {
     return aberta;
   }
 
-  private profissionalPreferido(c: ContextoAnestesiaLido, registros: readonly number[]): number | null {
+  private profissionalPreferido(c: ContextoAnestesia, registros: readonly number[]): number | null {
     if (c.anestesistaAgendado !== null && registros.includes(c.anestesistaAgendado))
       return c.anestesistaAgendado;
     return registros[0] ?? null;
@@ -744,15 +751,15 @@ export class AnestesiaController {
 
   private async paraGravar(
     s: SessaoCadastro,
-    c: ContextoAnestesiaLido,
+    c: ContextoAnestesia,
     l: LancamentoFichaEntrada,
     o: {
-      d: DominiosFichaLidos;
+      d: DominiosFicha;
       balanco: DominioDoBalanco | null;
       horaCorte: string;
       nomesItens: ReadonlyMap<number, string>;
     },
-  ): Promise<LancamentoFichaSgh> {
+  ): Promise<LancamentoFicha> {
     const campo = (nome: string) =>
       new ErroProblema('entrada-invalida', 400, 'Dados inválidos', 'Escolha o valor da lista.', {
         campos: [nome],
@@ -888,7 +895,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica: SGH_CC_FA e SGH_CC_FA_<parte> com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica: ficha_anestesica e lancamento_ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async lancar(
     @Param('agenda') agenda: string,
@@ -924,7 +931,7 @@ export class AnestesiaController {
       temBalanco ? this.horaCorte(s) : '07:00',
       this.nomesItens(s, itens),
     ]);
-    const lancamentos: LancamentoFichaSgh[] = [];
+    const lancamentos: LancamentoFicha[] = [];
     for (const l of e.lancamentos)
       lancamentos.push(await this.paraGravar(s, c, l, { d, balanco, horaCorte, nomesItens }));
     const profissional = this.profissionalPreferido(c, registros);
@@ -933,7 +940,7 @@ export class AnestesiaController {
       E.fichaAnestesicaLancada.codigo,
       P.fichaRegistrar,
       (x: { ficha: number; ids: number[] }) => ({
-        tabela: 'SGH_CC_FA',
+        tabela: 'ficha_anestesica',
         id: String(x.ficha),
         paciente: c.paciente,
         chave: `${id}:${x.ids.length}`,
@@ -990,7 +997,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (marco): SGH_CC_FA com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (marco): ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async marcar(
     @Param('agenda') agenda: string,
@@ -1022,7 +1029,7 @@ export class AnestesiaController {
       E.fichaAnestesicaLancada.codigo,
       P.fichaRegistrar,
       (x: { ficha: number }) => ({
-        tabela: 'SGH_CC_FA',
+        tabela: 'ficha_anestesica',
         id: String(x.ficha),
         paciente: c.paciente,
         chave: `${id}:${e.marco}`,
@@ -1055,7 +1062,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (fim): SGH_CC_FA_<parte> com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (fim): lancamento_ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async encerrar(
     @Param('agenda') agenda: string,
@@ -1076,7 +1083,7 @@ export class AnestesiaController {
       E.fichaAnestesicaLancada.codigo,
       P.fichaRegistrar,
       (x: { ficha: number }) => ({
-        tabela: 'SGH_CC_FA',
+        tabela: 'ficha_anestesica',
         id: String(x.ficha),
         paciente: c.paciente,
         chave: `${id}:fim:${e.lancamento}`,
@@ -1101,7 +1108,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (passagem): SGH_CC_FA_PASSAGEM com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (passagem): passagem_ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async passar(
     @Param('agenda') agenda: string,
@@ -1136,7 +1143,7 @@ export class AnestesiaController {
       E.fichaAnestesicaPassagem.codigo,
       P.fichaRegistrar,
       (x: { ficha: number; id: number }) => ({
-        tabela: 'SGH_CC_FA_PASSAGEM',
+        tabela: 'passagem_ficha_anestesica',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:${e.para.id}`,
@@ -1170,7 +1177,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaRegistrar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (lacuna): SGH_CC_FA_LACUNA com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (lacuna): lacuna_ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async justificar(
     @Param('agenda') agenda: string,
@@ -1209,7 +1216,7 @@ export class AnestesiaController {
       E.fichaAnestesicaLancada.codigo,
       P.fichaRegistrar,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_FA_LACUNA',
+        tabela: 'lacuna_ficha_anestesica',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:lacuna`,
@@ -1236,7 +1243,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaAssinar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (assinatura): SGH_CC_FA com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (assinatura): ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async assinar(
     @Param('agenda') agenda: string,
@@ -1286,7 +1293,7 @@ export class AnestesiaController {
       E.fichaAnestesicaAssinada.codigo,
       P.fichaAssinar,
       (x: { ficha: number }) => ({
-        tabela: 'SGH_CC_FA',
+        tabela: 'ficha_anestesica',
         id: String(x.ficha),
         paciente: c.paciente,
         chave: `${id}:assinada`,
@@ -1345,7 +1352,7 @@ export class AnestesiaController {
   @HttpCode(201)
   @Permissao(P.fichaAssinar)
   @AuditadoNoHandler(
-    'cirurgia.registrarFichaAnestesica (adendo): SGH_CC_FA_ADENDO com a SGH_TRILHA na mesma transação',
+    'cirurgia.registrarFichaAnestesica (adendo): adendo_ficha_anestesica com a trilha de auditoria na mesma transação',
   )
   async adendo(
     @Param('agenda') agenda: string,
@@ -1395,7 +1402,7 @@ export class AnestesiaController {
       E.fichaAnestesicaAdendo.codigo,
       P.fichaAssinar,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_FA_ADENDO',
+        tabela: 'adendo_ficha_anestesica',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:adendo`,
@@ -1409,8 +1416,8 @@ export class AnestesiaController {
   // ── SRPA ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
   private srpaResposta(
-    c: ContextoAnestesiaLido,
-    h: readonly AvaliacaoSrpaLidaSgh[],
+    c: ContextoAnestesia,
+    h: readonly AvaliacaoRecuperacao[],
     agora: string,
   ): SrpaResposta {
     const serie = h.map((a) => ({
@@ -1463,7 +1470,7 @@ export class AnestesiaController {
   @Auditar(E.anestesiaLida.codigo)
   async quadro(@Req() req: RequisicaoAutorizada): Promise<QuadroSrpaResposta> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_CC_SRPA' };
+    req.sghAlvo = { tabelaAlvo: 'registro_recuperacao_anestesica' };
     const agora = await this.agora(s);
     // Os admitidos desde ontem (a recuperação que passa da meia-noite continua no quadro).
     const ontem = new Date(`${agora.slice(0, 10)}T00:00:00Z`);
@@ -1519,7 +1526,10 @@ export class AnestesiaController {
   async srpa(@Param('agenda') agenda: string, @Req() req: RequisicaoAutorizada): Promise<TelaSrpaResposta> {
     const s = sessaoDe(req);
     const c = await this.contextoLido(s, idDaRota(agenda));
-    req.sghAlvo = { ...(c.paciente !== null ? { paciente: c.paciente } : {}), tabelaAlvo: 'SGH_CC_SRPA' };
+    req.sghAlvo = {
+      ...(c.paciente !== null ? { paciente: c.paciente } : {}),
+      tabelaAlvo: 'registro_recuperacao_anestesica',
+    };
     const [contexto, h, agora, gravacao] = await Promise.all([
       this.contexto(s, c),
       this.porta.srpa(s.porta, c.agendamento),
@@ -1532,7 +1542,9 @@ export class AnestesiaController {
   @Post(':agenda/srpa')
   @HttpCode(201)
   @Permissao(P.srpaRegistrar)
-  @AuditadoNoHandler('cirurgia.registrarSrpa: SGH_CC_SRPA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'cirurgia.registrarSrpa: registro_recuperacao_anestesica com a trilha de auditoria na mesma transação',
+  )
   async registrarSrpa(
     @Param('agenda') agenda: string,
     @Body() b: unknown,
@@ -1561,7 +1573,7 @@ export class AnestesiaController {
       evento,
       P.srpaRegistrar,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_SRPA',
+        tabela: 'registro_recuperacao_anestesica',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:${e.momento}`,

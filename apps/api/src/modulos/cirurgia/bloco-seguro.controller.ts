@@ -9,7 +9,7 @@
 //   POST /api/cirurgia/bloco/:agenda/checklist/excecao     a exceção da trava da incisão em urgência (INCISAO_EXCECAO)
 //   GET  /api/cirurgia/bloco/:agenda/rastreio              o rastreio do paciente (movimentos e o código do painel)
 //   POST /api/cirurgia/bloco/:agenda/rastreio              cirurgia.moverPacienteBloco
-// Só do novo (SGH_), com a SGH_TRILHA na mesma transação e o ator real; o estabelecimento vem da sessão. A gravação relê
+// Só do novo (banco), com a trilha de auditoria na mesma transação e o ator real; o estabelecimento vem da sessão. A gravação relê
 // o checklist travado e a sequência do rastreio na MESMA transação e o domínio confere ali de novo. Nasce desligado
 // (chaves `bloco.checklistFormulario` e `bloco.rastreio`, POL-3); a trava da incisão tem a sua (`bloco.checklistTrava`).
 import {
@@ -70,7 +70,7 @@ import {
   validadeDoCodigo,
   vigentes,
 } from '@sgh/dominio-cirurgia';
-import type { ChecklistLidoSgh, ContextoAnestesiaLido, MovimentoLidoSgh } from '@sgh/legado';
+import type { ChecklistDaCirurgia, ContextoAnestesia, MovimentoDoBloco } from './tipos.js';
 import { randomBytes } from 'node:crypto';
 import { AuditadoNoHandler, Auditar, Permissao } from '../../autorizacao/decoradores.js';
 import type { RequisicaoAutorizada } from '../../autorizacao/guarda.js';
@@ -177,7 +177,7 @@ export class BlocoSeguroController {
     );
   }
 
-  private async contextoLido(s: SessaoCadastro, agenda: number): Promise<ContextoAnestesiaLido> {
+  private async contextoLido(s: SessaoCadastro, agenda: number): Promise<ContextoAnestesia> {
     const c = await this.anestesia.contexto(s.porta, agenda);
     if (!c) throw this.naoEncontrado();
     return c;
@@ -271,7 +271,7 @@ export class BlocoSeguroController {
     @Query('sala') sala: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ): Promise<QuadroBlocoResposta> {
-    req.sghAlvo = { tabelaAlvo: 'SGH_CC_MOVIMENTO' };
+    req.sghAlvo = { tabelaAlvo: 'movimento_paciente_bloco' };
     return this.quadro(sessaoDe(req), data, sala, this.rastreioApoio, { mover: P.rastreioMover });
   }
 
@@ -292,7 +292,7 @@ export class BlocoSeguroController {
     @Query('data') data: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ): Promise<QuadroBlocoResposta> {
-    req.sghAlvo = { tabelaAlvo: 'SGH_CC_CHECKLIST' };
+    req.sghAlvo = { tabelaAlvo: 'checklist_cirurgia_segura' };
     return this.quadro(sessaoDe(req), data, undefined, this.checklistApoio, {
       confirmar: P.checklistConfirmar,
     });
@@ -321,7 +321,7 @@ export class BlocoSeguroController {
 
   // ── Checklist ──────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private checklistResposta(k: ChecklistLidoSgh | null): ChecklistResposta {
+  private checklistResposta(k: ChecklistDaCirurgia | null): ChecklistResposta {
     const lista = (k && listaChecklist(k.lista)) || LISTA_CHECKLIST_VIGENTE;
     const conf = k?.confirmacoes ?? [];
     const v = vigentes(conf);
@@ -330,7 +330,9 @@ export class BlocoSeguroController {
       id: k?.id ?? null,
       versao: k?.versao ?? 0,
       lista: lista.versao,
-      situacao: k?.situacao ?? null,
+      // O contrato só tem aberto/concluído: dispensado e interrompido aparecem abertos, com a exceção nos campos dela
+      // (pedido de contrato do lote 03-01: as duas situações no enum).
+      situacao: k ? (k.situacao === 'concluido' ? 'concluido' : 'aberto') : null,
       momentos: MOMENTOS_CHECKLIST.map((m) => ({
         momento: m.codigo,
         rotulo: m.rotulo,
@@ -384,7 +386,7 @@ export class BlocoSeguroController {
     const c = await this.contextoLido(s, idDaRota(agenda));
     req.sghAlvo = {
       ...(c.paciente !== null ? { paciente: c.paciente } : {}),
-      tabelaAlvo: 'SGH_CC_CHECKLIST',
+      tabelaAlvo: 'checklist_cirurgia_segura',
     };
     const [contexto, k, estados, agora, gravacao, trava] = await Promise.all([
       montarContextoAnestesia(this.cirurgia, s, c),
@@ -408,7 +410,7 @@ export class BlocoSeguroController {
   @HttpCode(201)
   @Permissao(P.checklistConfirmar)
   @AuditadoNoHandler(
-    'cirurgia.confirmarItemChecklist: SGH_CC_CHECKLIST_ITEM com a SGH_TRILHA na mesma transação',
+    'cirurgia.confirmarItemChecklist: confirmacao_checklist_cirurgia com a trilha de auditoria na mesma transação',
   )
   async confirmarItens(
     @Param('agenda') agenda: string,
@@ -430,7 +432,7 @@ export class BlocoSeguroController {
       E.checklistItensConfirmados.codigo,
       P.checklistConfirmar,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_CHECKLIST_ITEM',
+        tabela: 'confirmacao_checklist_cirurgia',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:${e.momento}`,
@@ -465,7 +467,7 @@ export class BlocoSeguroController {
             usuario: s.login,
           });
           versao = aberto.versao;
-          k = { id: aberto.id } as ChecklistLidoSgh;
+          k = { id: aberto.id } as ChecklistDaCirurgia;
         }
         const x = await g.confirmarItens({
           checklist: k.id,
@@ -488,7 +490,7 @@ export class BlocoSeguroController {
   @HttpCode(201)
   @Permissao(P.checklistConfirmar)
   @AuditadoNoHandler(
-    'cirurgia.concluirMomentoChecklist: SGH_CC_CHECKLIST com a SGH_TRILHA na mesma transação',
+    'cirurgia.concluirMomentoChecklist: checklist_cirurgia_segura com a trilha de auditoria na mesma transação',
   )
   async concluirMomento(
     @Param('agenda') agenda: string,
@@ -506,7 +508,7 @@ export class BlocoSeguroController {
       E.checklistMomentoConcluido.codigo,
       P.checklistConfirmar,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_CHECKLIST',
+        tabela: 'checklist_cirurgia_segura',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:${e.momento}`,
@@ -538,7 +540,9 @@ export class BlocoSeguroController {
   @Post(':agenda/checklist/excecao')
   @HttpCode(201)
   @Permissao(P.checklistExcecao)
-  @AuditadoNoHandler('exceção da trava da incisão: SGH_CC_CHECKLIST com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'exceção da trava da incisão: checklist_cirurgia_segura com a trilha de auditoria na mesma transação',
+  )
   async excecao(
     @Param('agenda') agenda: string,
     @Body() b: unknown,
@@ -560,7 +564,7 @@ export class BlocoSeguroController {
       E.incisaoExcecao.codigo,
       P.checklistExcecao,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_CHECKLIST',
+        tabela: 'checklist_cirurgia_segura',
         id: String(x.id),
         paciente: c.paciente,
         chave: `${id}:excecao`,
@@ -583,7 +587,7 @@ export class BlocoSeguroController {
             usuario: s.login,
           });
           versao = aberto.versao;
-          k = { id: aberto.id } as ChecklistLidoSgh;
+          k = { id: aberto.id } as ChecklistDaCirurgia;
         }
         await g.registrarExcecao({
           checklist: k.id,
@@ -601,7 +605,7 @@ export class BlocoSeguroController {
 
   // ── Rastreio ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private movimentoResposta(m: MovimentoLidoSgh): MovimentoBlocoResposta {
+  private movimentoResposta(m: MovimentoDoBloco): MovimentoBlocoResposta {
     return {
       id: m.id,
       sequencia: m.sequencia,
@@ -633,7 +637,7 @@ export class BlocoSeguroController {
   ): Promise<TelaRastreioResposta> {
     const s = sessaoDe(req);
     const { a, paciente } = await this.agendamentoLido(s, idDaRota(agenda));
-    req.sghAlvo = { ...(paciente !== null ? { paciente } : {}), tabelaAlvo: 'SGH_CC_MOVIMENTO' };
+    req.sghAlvo = { ...(paciente !== null ? { paciente } : {}), tabelaAlvo: 'movimento_paciente_bloco' };
     const [movs, agora, gravacao] = await Promise.all([
       this.porta.movimentos(s.porta, a.id),
       this.agora(s),
@@ -665,7 +669,9 @@ export class BlocoSeguroController {
   @Post(':agenda/rastreio')
   @HttpCode(201)
   @Permissao(P.rastreioMover)
-  @AuditadoNoHandler('cirurgia.moverPacienteBloco: SGH_CC_MOVIMENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'cirurgia.moverPacienteBloco: movimento_paciente_bloco com a trilha de auditoria na mesma transação',
+  )
   async mover(
     @Param('agenda') agenda: string,
     @Body() b: unknown,
@@ -691,7 +697,7 @@ export class BlocoSeguroController {
       E.pacienteMovidoBloco.codigo,
       P.rastreioMover,
       (x: { id: number }) => ({
-        tabela: 'SGH_CC_MOVIMENTO',
+        tabela: 'movimento_paciente_bloco',
         id: String(x.id),
         paciente,
         chave: `${id}:${e.tipo}`,

@@ -1,5 +1,5 @@
 // M28 (estoque, almoxarifado e compras) pela HTTP, com a sessão real sobre a fonte sintética e a porta EM MEMÓRIA (nada
-// conecta a banco): permissões pelas opções do legado e as marcas do usuário do estoque, liberação (POL-3), nota com
+// conecta a banco), com o módulo registrado (API_MODULOS=suprimentos): permissões pelas opções do perfil e as marcas do usuário do estoque, liberação (POL-3), nota com
 // dois lotes → saldo e custo lidos; requisição → atendimento parcial; transferência em dois passos com divergência;
 // saída a paciente internado; devolução; cotação com rateio → aprovação por alçada; recusa de saldo insuficiente em
 // português; inventário cego; textos de produto. Dados sintéticos.
@@ -12,15 +12,37 @@ import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { lerXmlNota } from './nfe-xml.js';
 import { csv } from './suprimentos.controller.js';
 import { PortaSuprimentosMemoria } from './porta-memoria.js';
+import { REGISTRO_MODULOS } from '../registro.js';
+import { modulo } from './modulo.js';
+import { PortaManipulacaoMemoria } from './manipulacao-porta-memoria.js';
+import { PortaOpmeMemoria } from './opme-porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'suprimentos,acesso,config',
+};
 const trilha = new RegistradorTrilhaMemoria();
 const suprimentos = new PortaSuprimentosMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, suprimentos, vigia: null });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: {
+      suprimentos: async () => ({
+        modulo: (ctx) =>
+          modulo(ctx, {
+            suprimentos,
+            opme: new PortaOpmeMemoria(),
+            manipulacao: new PortaManipulacaoMemoria(),
+          }),
+      }),
+      acesso: REGISTRO_MODULOS['acesso']!,
+      config: REGISTRO_MODULOS['config']!,
+    },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -273,7 +295,7 @@ describe('requisição, saída, devolução e transferência', () => {
     const { ano, mes, doc } = r.json().ids;
     const det = (await get(s, `/suprimentos/documentos/saida/${ano}/${mes}/${doc}`)).json();
     expect(det.paciente.nome).toBe('PACIENTE SINTÉTICO INTERNADO');
-    expect(suprimentos.contaDoPaciente({ rede: '', hospital: 'aa' }, 31337).at(-1)).toMatchObject({
+    expect(suprimentos.contaDoPaciente(null, 31337).at(-1)).toMatchObject({
       item: 5003,
       quantidade: 2,
     });
@@ -306,7 +328,7 @@ describe('requisição, saída, devolução e transferência', () => {
       ],
     });
     expect(dev.statusCode).toBe(200);
-    expect(suprimentos.contaDoPaciente({ rede: '', hospital: 'aa' }, 31337).at(-1)).toMatchObject({
+    expect(suprimentos.contaDoPaciente(null, 31337).at(-1)).toMatchObject({
       quantidade: -1,
     });
   });

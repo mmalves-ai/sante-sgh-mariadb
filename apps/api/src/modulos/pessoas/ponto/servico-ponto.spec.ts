@@ -4,12 +4,12 @@
 // não é de colaborador, a inclusão de marcação aprovada no espelho, o colaborador sem vínculo no próprio espelho e a
 // virada do ciclo do banco no fechamento.
 import { linhaCabecalhoAfd, linhaMarcacaoAfd, linhaTrailerAfd } from '@sgh/dominio-pessoas';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { idUsuarioSintetico } from '../../acesso/fonte-sintetica.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/configuracao-fonte.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEscalaMemoria } from '../escala/porta-escala-memoria.js';
@@ -18,8 +18,18 @@ import { ServicoPessoas } from '../servico.js';
 import { PortaPontoMemoria } from './porta-ponto-memoria.js';
 import { MOTIVO_PROPRIO_PONTO, MOTIVO_SESSAO_COMO_PONTO, ServicoPonto } from './servico-ponto.js';
 
+/** Contexto da porta em memória pelo código do estabelecimento da sessão sintética. */
+const ctxMem = (hospital: string) => ({
+  cliente: 'memoria',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede: 'rede-sintetica',
+  hospital,
+});
+
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -32,7 +42,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -71,7 +81,7 @@ function sessao(login = 'SINT.RH', hospital = 'pc'): SessaoCadastro {
     hospital,
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: ctxMem(hospital),
     pode: () => true,
   };
 }
@@ -412,8 +422,8 @@ describe('serviço do ponto (M52.4)', () => {
   it('regra do banco: regime de outro estabelecimento não; alteração pela versão; virada do ciclo no fechamento', async () => {
     const d = montar();
     const v = await admitir(d.rh, '2026-01-01');
-    const c = { rede: 'rede-sintetica', hospital: 'pc' };
-    const regime = await d.escala.gravarSgh(c, {} as never, async (g) => {
+    const c = ctxMem('pc');
+    const regime = await d.escala.gravarSgh<number>(c, {} as never, async (g) => {
       const r = await g.incluirRegime({
         codigo: '44h',
         nome: 'Comercial 44 h',

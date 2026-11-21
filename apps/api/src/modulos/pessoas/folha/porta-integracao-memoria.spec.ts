@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { PortaFolhaMemoria } from './porta-folha-memoria.js';
 import { PortaIntegracaoFolhaMemoria } from './porta-integracao-memoria.js';
 
-const c = { hospital: 'pc' } as never;
+const c = { cliente: 'pc', estabelecimento: 1, usuario: null, correlacao: 'teste-folha' };
 
 async function comRetorno(): Promise<{ folha: PortaFolhaMemoria; id: number }> {
   const folha = new PortaFolhaMemoria();
@@ -46,7 +46,7 @@ async function comRetorno(): Promise<{ folha: PortaFolhaMemoria; id: number }> {
 describe('integração da folha em memória sobre o retorno da F0', () => {
   it('soma o líquido (vencimento mais cedo), os encargos e os proventos por centro; desconto fica fora', async () => {
     const { folha, id } = await comRetorno();
-    const r = folha.retornoParaTitulos('pc', id)!;
+    const r = folha.retornoParaTitulos('1', id)!;
     expect(r).toMatchObject({ id, empresa: 1, competencia: '2099-08', situacao: 'conferido' });
     expect(r.liquido).toBe(460_000);
     expect(r.vencimentoLiquido).toBe('2099-09-03');
@@ -55,7 +55,7 @@ describe('integração da folha em memória sobre o retorno da F0', () => {
       { tipo: 'fgts', valor: 40_000, vencimento: '2099-09-07' },
     ]);
     expect(r.proventos).toEqual([{ centroCusto: 10, proventos: 500_000 }]);
-    expect(folha.retornoParaTitulos('pc', id + 1)).toBeNull();
+    expect(folha.retornoParaTitulos('1', id + 1)).toBeNull();
   });
 
   it('a integração lê o retorno da folha em memória; sem a folha, só o semeado', async () => {
@@ -63,7 +63,7 @@ describe('integração da folha em memória sobre o retorno da F0', () => {
     const comFolha = new PortaIntegracaoFolhaMemoria(folha);
     expect((await comFolha.retorno(c, id))?.liquido).toBe(460_000);
     expect(await new PortaIntegracaoFolhaMemoria().retorno(c, id)).toBeNull();
-    folha.marcarLancado('pc', id);
+    folha.marcarLancado('1', id);
     expect((await comFolha.retorno(c, id))?.situacao).toBe('lancado');
   });
 });

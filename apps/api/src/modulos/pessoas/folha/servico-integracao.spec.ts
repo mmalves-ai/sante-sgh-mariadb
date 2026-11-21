@@ -4,7 +4,6 @@
 // pessoal por centro de custo. A chave `pessoas.folha` desligada barra as gravações. Dados sintéticos.
 import type { DestinoIntegracaoFolha, TotaisCalculoFolha } from '@sgh/contratos';
 import { SUGESTAO_CLASSIFICACAO_FOLHA } from '@sgh/dominio-pessoas';
-import type { ChaveGravada, FechamentoFolhaLido, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -14,9 +13,19 @@ import type { PortaCalculoFolha } from './porta-calculo.js';
 import type { PortaFolha } from './porta-folha.js';
 import { PortaIntegracaoFolhaMemoria } from './porta-integracao-memoria.js';
 import { ServicoIntegracaoFolha } from './servico-integracao.js';
+import { erroSemModelo } from './porta-integracao-propria.js';
+import { type ChaveLiberacao, type PrerequisitoRecurso } from '../../config/public-api.js';
+import { type FechamentoDaFolha } from './tipos-folha.js';
 
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
-const chave = (c: string): ChaveGravada => ({
+const CTX = {
+  cliente: 'pc',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 'teste-folha',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -29,7 +38,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -76,7 +85,7 @@ const totais = (x: Partial<TotaisCalculoFolha>): TotaisCalculoFolha => ({
   ...x,
 });
 
-const FECHAMENTO = (situacao: 'fechada' | 'reaberta' = 'fechada'): FechamentoFolhaLido =>
+const FECHAMENTO = (situacao: 'fechada' | 'reaberta' = 'fechada'): FechamentoDaFolha =>
   ({
     id: 70,
     empresa: 1,
@@ -114,7 +123,7 @@ const FECHAMENTO = (situacao: 'fechada' | 'reaberta' = 'fechada'): FechamentoFol
     reabertoEm: null,
     motivo: null,
     versao: 0,
-  }) as FechamentoFolhaLido;
+  }) as FechamentoDaFolha;
 
 function montar(chaves: readonly string[] = ['pessoas.folha'], situacao: 'fechada' | 'reaberta' = 'fechada') {
   const trilha = new RegistradorTrilhaMemoria();
@@ -189,6 +198,23 @@ const DE_PARA = [
 ];
 
 describe('ServicoIntegracaoFolha (M53.9)', () => {
+  it('apoio sem a tabela do de-para (503 modelo-pendente): segue sem de-para vigente; outro erro sobe', async () => {
+    const { servico, porta } = montar();
+    porta.integracoes = async () => {
+      throw erroSemModelo('integracoes');
+    };
+    const a = await servico.apoioTela(sessao(), 1);
+    expect(a.vigente).toBeNull();
+    expect(a.classificacoes.length).toBeGreaterThan(0);
+    await expect(servico.integracoes(sessao(), 1)).rejects.toMatchObject({
+      problema: { status: 503, codigo: 'modelo-pendente' },
+    });
+    porta.integracoes = async () => {
+      throw new Error('falha de conexão');
+    };
+    await expect(servico.apoioTela(sessao(), 1)).rejects.toThrow('falha de conexão');
+  });
+
   it('apoio: empresas, as 19 rotinas, os destinos com a rotina e a sugestão do perfil; sem de-para vigente', async () => {
     const { servico } = montar();
     const a = await servico.apoioTela(sessao(), null);
@@ -386,7 +412,7 @@ describe('ServicoIntegracaoFolha (M53.9)', () => {
       encargos: [{ tipo: 'inss' as const, valor: 40_000, vencimento: '2026-10-20' }],
       proventos: [{ centroCusto: 10, proventos: 350_000 }],
     };
-    porta.semearRetorno('pc', retorno);
+    porta.semearRetorno(CTX, retorno);
     const p = await servico.previa(sessao(), { empresa: 1, origem: 'interface', id: 33 });
     expect(p.pendencias).toEqual([]);
     expect(p.titulos.map((t) => [t.destino, t.valor])).toEqual([
@@ -407,7 +433,7 @@ describe('ServicoIntegracaoFolha (M53.9)', () => {
         (x) => x.codigo,
       ),
     ).toContain('ja-lancado');
-    porta.semearRetorno('pc', {
+    porta.semearRetorno(CTX, {
       ...retorno,
       id: 34,
       situacao: 'divergente',
@@ -427,7 +453,7 @@ describe('ServicoIntegracaoFolha (M53.9)', () => {
     const { servico, porta } = montar();
     await servico.gravarIntegracao(sessao(), { empresa: 1, inicio: '2026-07-01', destinos: DE_PARA });
     // Hoje é 30/09/2026; o retorno de julho vence em agosto (já passou).
-    porta.semearRetorno('pc', {
+    porta.semearRetorno(CTX, {
       id: 35,
       empresa: 1,
       competencia: '2026-07',

@@ -1,23 +1,22 @@
 // Porta da interface com a folha externa em memória (M53.1): a sessão sintética de dev/ci e o E2E. Os registros vivem
-// por estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. Os vínculos e
+// por estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai ao banco. Os vínculos e
 // o conselho vêm da gestão de pessoas em memória; os domínios são sintéticos (rótulos de produto). As regras de banco que
 // importam ao teste também valem aqui: a situação esperada na troca, a versão na alteração do afastamento, o resumo uma
 // vez por colaborador e rubrica.
 import { EVENTOS_FOLHA, type TipoEncargoFolha } from '@sgh/contratos';
+import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
 import {
-  type AfastamentoPesLido,
-  type ConselhoDoProfissionalLido,
-  ErroOperacao,
-  type FiltroAfastamentosSgh,
+  type AfastamentoFolha,
+  type ConselhoDoProfissional,
+  type FiltroAfastamentosFolha,
   type ItemDominioFolha,
-  type LinhaTrilha,
-  type LoteFolhaCompletoLido,
-  type LoteFolhaLido,
-  type ResumoFolhaLido,
-  type RetornoParaTitulosLido,
+  type LoteDaFolha,
+  type LoteFolhaCompleto,
+  type ResumoDaFolha,
+  type RetornoParaTitulos,
   TIPOS_VINCULO_DA_FOLHA,
-  type VinculoFolhaLido,
-} from '@sgh/legado';
+  type VinculoDaFolha,
+} from './tipos-folha.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { ContextoFolha, GravadorFolha, PortaFolha } from './porta-folha.js';
@@ -40,9 +39,9 @@ export const MOTIVOS_AFASTAMENTO_SINTETICOS: readonly ItemDominioFolha[] = [
 
 interface Estado {
   seq: number;
-  lotes: LoteFolhaCompletoLido[];
-  resumo: (ResumoFolhaLido & { interface: number; vencimento: string | null })[];
-  afastamentos: AfastamentoPesLido[];
+  lotes: LoteFolhaCompleto[];
+  resumo: (ResumoDaFolha & { interface: number; vencimento: string | null })[];
+  afastamentos: AfastamentoFolha[];
 }
 const novo = (): Estado => ({ seq: 5300, lotes: [], resumo: [], afastamentos: [] });
 const copiar = (s: Estado): Estado => ({
@@ -55,7 +54,7 @@ const copiar = (s: Estado): Estado => ({
 const p2 = (x: number) => String(x).padStart(2, '0');
 const local = (d: Date) =>
   `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
-const semVinculos = (l: LoteFolhaCompletoLido): LoteFolhaLido => ({
+const semVinculos = (l: LoteFolhaCompleto): LoteDaFolha => ({
   id: l.id,
   empresa: l.empresa,
   competencia: l.competencia,
@@ -72,7 +71,7 @@ const semVinculos = (l: LoteFolhaCompletoLido): LoteFolhaLido => ({
   geradoPor: l.geradoPor,
   versao: l.versao,
 });
-const toca = (a: AfastamentoPesLido, f: FiltroAfastamentosSgh) =>
+const toca = (a: AfastamentoFolha, f: FiltroAfastamentosFolha) =>
   (f.vinculo === undefined || a.vinculo === f.vinculo) &&
   (f.ate === undefined || a.inicio <= f.ate) &&
   (f.de === undefined || a.fim === null || a.fim >= f.de);
@@ -86,8 +85,8 @@ export class PortaFolhaMemoria implements PortaFolha {
   constructor(private readonly pessoas: PortaPessoas | null = null) {}
 
   private e(c: ContextoFolha): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    let s = this.estados.get(String(c.estabelecimento));
+    if (!s) this.estados.set(String(c.estabelecimento), (s = novo()));
     return s;
   }
 
@@ -207,7 +206,7 @@ export class PortaFolhaMemoria implements PortaFolha {
     };
     void agora;
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(String(c.estabelecimento), s);
     return r;
   }
 
@@ -242,10 +241,10 @@ export class PortaFolhaMemoria implements PortaFolha {
   }
   /**
    * M53.9 (memória): o retorno recebido como a integração da folha o lê (o resumo somado por rubrica, centro e
-   * vencimento), como `retornoParaTitulosPesSgh` faz na cópia; e a marca de lançado que o `incluir-folha` grava.
+   * vencimento), como a porta do banco faz; e a marca de lançado que o `incluir-folha` grava.
    */
-  retornoParaTitulos(hospital: string, id: number): RetornoParaTitulosLido | null {
-    const s = this.e({ hospital } as ContextoFolha);
+  retornoParaTitulos(estabelecimento: number | string, id: number): RetornoParaTitulos | null {
+    const s = this.e({ estabelecimento: Number(estabelecimento) } as ContextoFolha);
     const l = s.lotes.find((x) => x.id === id);
     if (!l) return null;
     const acc = new Map<
@@ -282,8 +281,10 @@ export class PortaFolhaMemoria implements PortaFolha {
       proventos,
     };
   }
-  marcarLancado(hospital: string, id: number): void {
-    const l = this.e({ hospital } as ContextoFolha).lotes.find((x) => x.id === id);
+  marcarLancado(estabelecimento: number | string, id: number): void {
+    const l = this.e({ estabelecimento: Number(estabelecimento) } as ContextoFolha).lotes.find(
+      (x) => x.id === id,
+    );
     if (l) Object.assign(l, { situacao: 'lancado', versao: l.versao + 1 });
   }
 
@@ -295,9 +296,9 @@ export class PortaFolhaMemoria implements PortaFolha {
       (x) => x.empresa === empresa && x.competencia === competencia && x.situacao === 'lancado',
     );
   }
-  async vinculosDaFolha(c: ContextoFolha, inicio: string, fim: string): Promise<VinculoFolhaLido[]> {
+  async vinculosDaFolha(c: ContextoFolha, inicio: string, fim: string): Promise<VinculoDaFolha[]> {
     if (!this.pessoas) return [];
-    const r: VinculoFolhaLido[] = [];
+    const r: VinculoDaFolha[] = [];
     let depois: number | undefined;
     for (;;) {
       const p = await this.pessoas.listarVinculos(c, {
@@ -328,7 +329,7 @@ export class PortaFolhaMemoria implements PortaFolha {
     return r.sort((a, b) => a.id - b.id);
   }
   async conselhos(c: ContextoFolha, profissionais: readonly number[]) {
-    const out = new Map<number, ConselhoDoProfissionalLido>();
+    const out = new Map<number, ConselhoDoProfissional>();
     if (!this.pessoas || profissionais.length === 0) return out;
     for (const p of await this.pessoas.profissionais(c, [...new Set(profissionais)])) {
       const reg = p.registros.find((x) => x.ativo) ?? p.registros[0];
@@ -344,7 +345,7 @@ export class PortaFolhaMemoria implements PortaFolha {
     }
     return out;
   }
-  async afastamentos(c: ContextoFolha, f: FiltroAfastamentosSgh) {
+  async afastamentos(c: ContextoFolha, f: FiltroAfastamentosFolha) {
     return this.e(c)
       .afastamentos.filter((a) => toca(a, f))
       .sort((a, b) => a.vinculo - b.vinculo || a.inicio.localeCompare(b.inicio) || a.id - b.id);

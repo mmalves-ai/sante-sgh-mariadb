@@ -8,7 +8,8 @@ import type { TipoVinculo } from '@sgh/contratos';
 export interface VinculoExistente {
   readonly id: number;
   readonly tipo: TipoVinculo;
-  readonly centroCusto: number;
+  /** Nulo: vínculo sem centro de custo (nunca é igual ao de outro vínculo). */
+  readonly centroCusto: number | null;
   readonly cargo: string;
   readonly admissao: string;
   readonly desligamento: string | null;

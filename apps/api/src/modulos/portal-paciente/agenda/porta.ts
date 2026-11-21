@@ -1,27 +1,26 @@
 // Porta da etapa 2 do portal do paciente (M50): a configuração da agenda online, o pré-check-in, a intenção de pagamento
-// e a pesquisa de satisfação, todas SÓ do novo (scripts 0503 a 0506), com a SGH_TRILHA na mesma transação. A marcação
-// em si não passa por aqui: vai pelas portas da agenda de consultas (M17) e de exames (M18), pelo executor; o cadastro
-// conferido, pela porta do cadastro (M11).
-//   - `legado`: o núcleo (READ ONLY nas leituras; transação SGH_ nas gravações);
+// e a pesquisa de satisfação. A marcação em si não passa por aqui: vai pelas portas da agenda de consultas e de exames;
+// o cadastro conferido, pela porta do cadastro.
+//   - `banco`: a porta própria (agenda/porta-propria.ts), hoje sem modelo para a etapa 2 (recusa nomeada, 503);
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo.
+import type { RegistroTrilhaPortal } from '../tipos.js';
 import type {
-  ConciliacaoPortalLida,
-  ConfigAgendaOnlineLida,
+  ConciliacaoPortal,
+  ConfigAgendaOnline,
   ConfigAgendaOnlineParaGravar,
-  FiltroFilaPreCheckin,
-  LinhaTrilha,
+  FiltroPreCheckins,
   NovaConciliacaoPortal,
   NovaIntencaoPagamento,
-  PagamentoPortalLido,
+  PagamentoPortal,
   PagamentoTesourariaPortal,
-  PesquisaPortalLida,
-  PreCheckinLido,
+  PesquisaPortal,
+  PreCheckinOnline,
   PreCheckinParaGravar,
   RespostaPesquisaParaGravar,
   ResultadoConfirmacaoPortal,
   TipoAgendaOnline,
-} from '@sgh/legado';
+} from './tipos.js';
 
 export const PORTA_AGENDA_ONLINE = Symbol('PORTA_AGENDA_ONLINE');
 
@@ -57,39 +56,35 @@ export interface GravadorAgendaOnline {
   confirmarPagamento(c: ConfirmacaoParaGravar): Promise<ResultadoConfirmacaoPortal>;
   responderPesquisa(r: Omit<RespostaPesquisaParaGravar, 'hospital'>): Promise<{ id: number }>;
   /** W0-10: o ato da tesouraria (só inclusão; a regra conferida com o pagamento travado). */
-  registrarConciliacao(n: Omit<NovaConciliacaoPortal, 'hospital'>): Promise<ConciliacaoPortalLida>;
+  registrarConciliacao(n: Omit<NovaConciliacaoPortal, 'hospital'>): Promise<ConciliacaoPortal>;
 }
 
-export type TrilhaAgendaOnline<T> = LinhaTrilha | ((r: T) => LinhaTrilha | null) | null;
+export type TrilhaAgendaOnline<T> = RegistroTrilhaPortal | ((r: T) => RegistroTrilhaPortal | null) | null;
 
 export interface PortaAgendaOnline {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
   gravar<T>(
     c: ContextoAgendaOnline,
     fn: (g: GravadorAgendaOnline) => Promise<T>,
     trilha: TrilhaAgendaOnline<T>,
   ): Promise<T>;
-  configs(c: ContextoAgendaOnline): Promise<ConfigAgendaOnlineLida[]>;
-  config(
-    c: ContextoAgendaOnline,
-    tipo: TipoAgendaOnline,
-    agenda: number,
-  ): Promise<ConfigAgendaOnlineLida | null>;
+  configs(c: ContextoAgendaOnline): Promise<ConfigAgendaOnline[]>;
+  config(c: ContextoAgendaOnline, tipo: TipoAgendaOnline, agenda: number): Promise<ConfigAgendaOnline | null>;
   preCheckinDaMarcacao(
     c: ContextoAgendaOnline,
     tipo: TipoAgendaOnline,
     marcacao: number,
-  ): Promise<PreCheckinLido | null>;
-  preCheckinPorId(c: ContextoAgendaOnline, id: number): Promise<PreCheckinLido | null>;
-  preCheckinsDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PreCheckinLido[]>;
+  ): Promise<PreCheckinOnline | null>;
+  preCheckinPorId(c: ContextoAgendaOnline, id: number): Promise<PreCheckinOnline | null>;
+  preCheckinsDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PreCheckinOnline[]>;
   filaPreCheckin(
     c: ContextoAgendaOnline,
-    f: FiltroFilaPreCheckin,
-  ): Promise<{ itens: PreCheckinLido[]; haMais: boolean }>;
-  pagamentoPorTransacao(c: ContextoAgendaOnline, transacao: string): Promise<PagamentoPortalLido | null>;
-  pagamentoPorId(c: ContextoAgendaOnline, id: number): Promise<PagamentoPortalLido | null>;
-  pagamentosDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PagamentoPortalLido[]>;
-  pesquisasDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PesquisaPortalLida[]>;
+    f: FiltroPreCheckins,
+  ): Promise<{ itens: PreCheckinOnline[]; haMais: boolean }>;
+  pagamentoPorTransacao(c: ContextoAgendaOnline, transacao: string): Promise<PagamentoPortal | null>;
+  pagamentoPorId(c: ContextoAgendaOnline, id: number): Promise<PagamentoPortal | null>;
+  pagamentosDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PagamentoPortal[]>;
+  pesquisasDoPaciente(c: ContextoAgendaOnline, paciente: number): Promise<PesquisaPortal[]>;
   /** W0-10: a fila da tesouraria (confirmados e duplicados no período, com os atos). */
   tesouraria(c: ContextoAgendaOnline, de: string, ate: string): Promise<PagamentoTesourariaPortal[]>;
   pagamentoTesouraria(c: ContextoAgendaOnline, id: number): Promise<PagamentoTesourariaPortal | null>;

@@ -1,25 +1,21 @@
-// Porta da telemedicina EM MEMÓRIA (M50, etapa 4): a sessão sintética de dev/ci (E2E) e os testes da API. As mesmas
-// recusas do banco (versão desatualizada, a situação conferida em cada mudança, a teleconsulta viva única por
-// marcação, a concluída só em andamento, o parecer só do convidado, o cancelamento só de quem pediu). Nada vai à cópia.
-// A semente (D-SEMENTE-50.4): a paciente sintética 1003 com uma teleconsulta HOJE, na meia hora corrente (a sala de
-// espera aberta), na agenda sintética 902, e o histórico clínico sintético de hipertensa sem consulta presencial há
-// 200 dias (o alerta do crônico aparece).
+// Porta da telemedicina EM MEMÓRIA: a sessão sintética de dev/ci e os testes da API. As mesmas recusas do banco
+// (versão desatualizada, a situação conferida em cada mudança, a teleconsulta viva única por marcação, a concluída só
+// em andamento, o médico da sala, o parecer só do convidado, o cancelamento só de quem pediu). Nada vai a banco.
+// A semente: a paciente sintética 1003 com uma teleconsulta HOJE, na meia hora corrente (a sala de espera aberta), e o
+// histórico sintético de hipertensa sem consulta presencial há 200 dias (o alerta do crônico aparece).
+import type { TrilhaDaGravacao } from '../exames/public-api.js';
 import {
-  ErroPortalSgh,
-  type FichaDoHistoricoClinico,
-  type LinhaTrilha,
-  type SituacaoTeleSgh,
-  type TeleconsultaLida,
-} from '@sgh/legado';
-import type {
-  ContextoTelemedicina,
-  GravadorTelemedicina,
-  PortaTelemedicina,
-  TrilhaTelemedicina,
+  type AtendimentoDoHistoricoClinico,
+  type ContextoTelemedicina,
+  ErroTelemedicina,
+  type GravadorTelemedicina,
+  type PortaTelemedicina,
+  type Teleconsulta,
+  type TrilhaTelemedicina,
 } from './porta.js';
 
 type Mutavel<T> = { -readonly [K in keyof T]: T[K] };
-type Linha = Mutavel<TeleconsultaLida>;
+type Linha = Mutavel<Omit<Teleconsulta, 'marcacaoVigente'>>;
 
 interface Estado {
   linhas: Linha[];
@@ -41,19 +37,15 @@ export interface MarcacaoSinteticaTele {
 }
 
 const versaoVelha = (o: string) =>
-  new ErroPortalSgh(
+  new ErroTelemedicina(
     'versao-desatualizada',
     `A teleconsulta foi alterada por outra pessoa ou mudou de situação (${o}); recarregue.`,
   );
-const VIVAS: ReadonlySet<SituacaoTeleSgh> = new Set([
-  'agendada',
-  'aguardando',
-  'sala-aberta',
-  'em-andamento',
-]);
+const VIVAS: ReadonlySet<string> = new Set(['agendada', 'aguardando', 'sala-aberta', 'em-andamento']);
 
 export const PACIENTE_SEMENTE_TELE = 1003;
 export const MARCACAO_SEMENTE_TELE = 880_101;
+export const VINCULO_SEMENTE_TELE = 7101;
 
 function relogio(agora: Date): { hoje: string; hhmm: string; carimbo: string } {
   const p = new Intl.DateTimeFormat('en-CA', {
@@ -71,35 +63,38 @@ function relogio(agora: Date): { hoje: string; hhmm: string; carimbo: string } {
   return {
     hoje,
     hhmm: `${v('hour')}${v('minute')}`,
-    carimbo: `${hoje}T${v('hour')}:${v('minute')}:${v('second')}.000`,
+    carimbo: `${hoje}T${v('hour')}:${v('minute')}:${v('second')}`,
   };
 }
 
 const dias = (hoje: string, n: number) =>
   new Date(Date.parse(`${hoje}T12:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
 
+const chaveDe = (c: ContextoTelemedicina) => c.hospital ?? `est-${c.estabelecimento ?? 0}`;
+
 export class PortaTelemedicinaMemoria implements PortaTelemedicina {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
   /** As linhas de trilha das gravações (para os testes). */
-  readonly trilhas: LinhaTrilha[] = [];
+  readonly trilhas: TrilhaDaGravacao[] = [];
 
   constructor(
     private readonly agora: () => Date = () => new Date(),
     private readonly opcoes: {
       /** A semente da sessão sintética (desligada nos testes que montam o próprio estado). */
       readonly semente?: boolean;
-      /** Avisa a abertura do atendimento em memória da marcação sintética (a ficha nasce dela). */
+      /** Avisa a abertura do atendimento em memória da marcação sintética. */
       readonly aoSemear?: (hospital: string, m: MarcacaoSinteticaTele) => void;
     } = {},
   ) {}
 
   private e(c: ContextoTelemedicina): Estado {
-    let s = this.estados.get(c.hospital);
+    const k = chaveDe(c);
+    let s = this.estados.get(k);
     if (!s) {
       s = { linhas: [], seq: 90 };
-      if (this.opcoes.semente) this.semear(c.hospital, s);
-      this.estados.set(c.hospital, s);
+      if (this.opcoes.semente) this.semear(k, s);
+      this.estados.set(k, s);
     }
     return s;
   }
@@ -126,15 +121,12 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
         modalidade: 'teleconsulta',
         situacao: 'agendada',
         marcacao: m.id,
-        agenda: 902,
         nomeAgenda: 'CARDIOLOGIA - ANA MEDICA SINTETICO',
-        crmAgenda: m.crm,
+        profissionalAgenda: VINCULO_SEMENTE_TELE,
         data: m.data,
         hora: m.hora,
         paciente: m.paciente,
-        conta: null,
-        criadoPor: 'SGH.PORTAL.C1',
-        criadoEm: r.carimbo,
+        criadoPor: '',
       }),
     );
   }
@@ -146,12 +138,9 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
     return {
       id,
       marcacao: null,
-      agenda: null,
       nomeAgenda: '',
-      crmAgenda: 0,
-      conta: null,
-      cabecalho: null,
-      reg: null,
+      profissionalAgenda: null,
+      atendimento: null,
       termo: null,
       local: null,
       esperaDesde: null,
@@ -161,7 +150,6 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
       declaracao: null,
       medico: null,
       vinculoMedico: null,
-      cienteAlerta: false,
       pacienteEntrouEm: null,
       iniciadaEm: null,
       encerradaEm: null,
@@ -171,6 +159,8 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
       motivoInterconsulta: null,
       parecer: null,
       respondidaEm: null,
+      canceladaEm: null,
+      motivoCancelamento: null,
       criadoEm: relogio(this.agora()).carimbo,
       versao: 1,
       ...d,
@@ -187,7 +177,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
     const r = await fn(this.gravador(copia));
     const linha = typeof trilha === 'function' ? trilha(r) : trilha;
     if (linha) this.trilhas.push(linha);
-    this.estados.set(c.hospital, copia);
+    this.estados.set(chaveDe(c), copia);
     return r;
   }
 
@@ -198,30 +188,28 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
       if (!l || (versao !== null && l.versao !== versao) || !ok(l)) throw versaoVelha(o);
       return l;
     };
-    const mudou = (l: Linha, por: string) => {
+    const mudou = (l: Linha) => {
       l.versao += 1;
-      void por;
     };
     return {
       agendar: async (t) => {
         if (
+          t.marcacao !== null &&
           s.linhas.some(
             (x) => x.modalidade === 'teleconsulta' && x.marcacao === t.marcacao && x.situacao !== 'cancelada',
           )
         )
-          throw new ErroPortalSgh('situacao', 'Esta marcação já tem teleconsulta.');
+          throw new ErroTelemedicina('situacao', 'Esta marcação já tem teleconsulta.');
         const l = this.nova(++s.seq, {
           modalidade: 'teleconsulta',
           situacao: 'agendada',
           marcacao: t.marcacao,
-          agenda: t.agenda,
-          nomeAgenda: t.nomeAgenda.slice(0, 40),
-          crmAgenda: t.crmAgenda,
+          nomeAgenda: t.nomeAgenda.slice(0, 70),
+          profissionalAgenda: t.profissional,
           data: t.data,
           hora: t.hora,
           paciente: t.paciente,
-          conta: t.conta,
-          criadoPor: t.por.slice(0, 31),
+          criadoPor: t.por,
         });
         s.linhas.push(l);
         return { id: l.id };
@@ -234,11 +222,11 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           (x) =>
             x.modalidade === 'teleconsulta' && ['agendada', 'aguardando', 'sala-aberta'].includes(x.situacao),
         );
-        l.termo = { versao: d.termo, aceitoEm: agora(), por: d.por };
+        l.termo = { versao: d.termo, aceitoEm: agora() };
         l.local = { ...d.local };
         l.esperaDesde ??= agora();
         if (l.situacao === 'agendada') l.situacao = 'aguardando';
-        mudou(l, d.por);
+        mudou(l);
         return { versao: l.versao };
       },
       registrarEntradaPaciente: async (id) => {
@@ -262,31 +250,29 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           declaracao: d.declaracao,
           medico: d.medico,
           vinculoMedico: d.vinculo,
-          cienteAlerta: d.cienteAlerta,
         });
-        mudou(l, d.medico);
+        mudou(l);
         return { versao: l.versao };
       },
       vincularAtendimento: async (d) => {
-        const l = s.linhas.find(
-          (x) =>
-            x.id === d.id &&
-            x.marcacao === d.marcacao &&
-            x.situacao === 'sala-aberta' &&
-            x.vinculoMedico === d.profissional,
-        );
-        if (!l)
-          throw new ErroPortalSgh(
+        const l = s.linhas.find((x) => x.id === d.id && x.modalidade === 'teleconsulta');
+        if (!l) throw new ErroTelemedicina('nao-encontrado', 'Teleconsulta não encontrada.');
+        if (l.vinculoMedico !== d.profissional)
+          throw new ErroTelemedicina(
             'situacao',
-            'A teleconsulta não está com a sala aberta por este profissional para esta marcação: o atendimento não foi aberto.',
+            'A sala desta teleconsulta foi aberta por outro profissional: o atendimento não foi ligado.',
           );
-        Object.assign(l, {
-          situacao: 'em-andamento',
-          cabecalho: d.cabecalho,
-          reg: d.reg,
-          iniciadaEm: agora(),
-        });
-        mudou(l, d.usuario);
+        if (l.atendimento !== null && l.atendimento !== d.atendimento)
+          throw new ErroTelemedicina('situacao', 'A teleconsulta já está ligada a outro atendimento.');
+        if (l.situacao === 'em-andamento') return false;
+        if (l.situacao !== 'sala-aberta')
+          throw new ErroTelemedicina(
+            'situacao',
+            'A teleconsulta não está com a sala aberta: o atendimento não foi ligado.',
+          );
+        Object.assign(l, { situacao: 'em-andamento', atendimento: d.atendimento, iniciadaEm: agora() });
+        mudou(l);
+        return true;
       },
       encerrar: async (id, versao, d) => {
         const l = achar(
@@ -297,13 +283,13 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
             x.modalidade === 'teleconsulta' &&
             VIVAS.has(x.situacao) &&
             (d.motivo !== 'concluida' || x.situacao === 'em-andamento') &&
-            (!['sala-aberta', 'em-andamento'].includes(x.situacao) || x.medico === d.por.slice(0, 31)),
+            (!['sala-aberta', 'em-andamento'].includes(x.situacao) || x.vinculoMedico === d.vinculo),
         );
         Object.assign(l, { situacao: 'encerrada', encerradaEm: agora(), motivoEncerramento: d.motivo });
-        mudou(l, d.por);
+        mudou(l);
         return { versao: l.versao };
       },
-      cancelarDaMarcacao: async (marcacao, por) => {
+      cancelarDaMarcacao: async (marcacao) => {
         let n = 0;
         for (const l of s.linhas)
           if (
@@ -311,8 +297,12 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
             l.marcacao === marcacao &&
             ['agendada', 'aguardando', 'sala-aberta'].includes(l.situacao)
           ) {
-            l.situacao = 'cancelada';
-            mudou(l, por);
+            Object.assign(l, {
+              situacao: 'cancelada',
+              canceladaEm: agora(),
+              motivoCancelamento: 'Marcação cancelada.',
+            });
+            mudou(l);
             n++;
           }
         return n;
@@ -327,9 +317,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           ) {
             Object.assign(l, {
               marcacao: d.para,
-              agenda: d.agenda,
-              nomeAgenda: d.nomeAgenda.slice(0, 40),
-              crmAgenda: d.crmAgenda,
+              nomeAgenda: d.nomeAgenda.slice(0, 70),
               data: d.data,
               hora: d.hora,
               situacao: 'agendada',
@@ -337,7 +325,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
               local: null,
               esperaDesde: null,
             });
-            mudou(l, d.por);
+            mudou(l);
             n++;
           }
         return n;
@@ -349,14 +337,13 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           data: t.data,
           hora: t.hora,
           paciente: t.paciente,
-          cabecalho: t.cabecalho,
-          reg: t.reg,
+          atendimento: t.atendimento,
           medico: t.solicitante,
           vinculoMedico: t.vinculoSolicitante,
           convidado: t.convidado,
           nomeConvidado: t.nomeConvidado.slice(0, 70),
           motivoInterconsulta: t.motivo,
-          criadoPor: t.solicitante.slice(0, 31),
+          criadoPor: t.solicitante,
         });
         s.linhas.push(l);
         return { id: l.id };
@@ -374,7 +361,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           sala: d.sala,
           salaAbertaEm: agora(),
         });
-        mudou(l, d.por);
+        mudou(l);
         return { versao: l.versao };
       },
       responderInterconsulta: async (id, versao, d) => {
@@ -388,7 +375,7 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
             x.convidado === d.vinculo,
         );
         Object.assign(l, { situacao: 'respondida', parecer: d.parecer, respondidaEm: agora() });
-        mudou(l, d.por);
+        mudou(l);
         return { versao: l.versao };
       },
       cancelarInterconsulta: async (id, versao, d) => {
@@ -403,79 +390,70 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
         );
         Object.assign(l, {
           situacao: 'cancelada',
-          encerradaEm: agora(),
-          motivoInterconsulta: `${l.motivoInterconsulta ?? ''} | Cancelada: ${d.motivo}`.slice(0, 1000),
+          canceladaEm: agora(),
+          motivoCancelamento: d.motivo.slice(0, 200),
         });
-        mudou(l, d.por);
+        mudou(l);
         return { versao: l.versao };
       },
     };
   }
 
-  /** As marcações apagadas fora do portal e da central (o outro sistema), por estabelecimento (só testes). */
+  /** As marcações apagadas fora do portal e da central, por estabelecimento (só testes). */
   private readonly apagadas = new Set<string>();
 
-  /** Simula a marcação cancelada ou mudada pelo outro sistema: a leitura a dá como não vigente (como o banco). */
+  /** Simula a marcação cancelada ou mudada por fora: a leitura a dá como não vigente (como o banco). */
   apagarMarcacao(hospital: string, marcacao: number): void {
     this.apagadas.add(`${hospital}:${marcacao}`);
   }
 
-  private copia = (l: Linha, hospital: string): TeleconsultaLida => ({
+  private copia = (l: Linha, c: ContextoTelemedicina): Teleconsulta => ({
     ...structuredClone(l),
     marcacaoVigente:
       l.modalidade !== 'teleconsulta' || l.marcacao === null
         ? null
-        : !this.apagadas.has(`${hospital}:${l.marcacao}`),
+        : !this.apagadas.has(`${chaveDe(c)}:${l.marcacao}`),
   });
 
   async porId(c: ContextoTelemedicina, id: number) {
     const l = this.e(c).linhas.find((x) => x.id === id);
-    return l ? this.copia(l, c.hospital) : null;
+    return l ? this.copia(l, c) : null;
   }
 
   async daMarcacao(c: ContextoTelemedicina, marcacao: number) {
     const l = this.e(c).linhas.find(
       (x) => x.modalidade === 'teleconsulta' && x.marcacao === marcacao && x.situacao !== 'cancelada',
     );
-    return l ? this.copia(l, c.hospital) : null;
+    return l ? this.copia(l, c) : null;
   }
 
   async doPaciente(c: ContextoTelemedicina, paciente: number) {
     return this.e(c)
       .linhas.filter((x) => x.modalidade === 'teleconsulta' && x.paciente === paciente)
       .sort((a, b) => b.data.localeCompare(a.data) || b.hora.localeCompare(a.hora) || b.id - a.id)
-      .map((x) => this.copia(x, c.hospital));
+      .map((x) => this.copia(x, c));
   }
 
-  async doDia(c: ContextoTelemedicina, f: { data: string; crm: number | null; teto: number }) {
+  async doDia(c: ContextoTelemedicina, f: { data: string; profissional: number | null; teto: number }) {
     const todas = this.e(c)
       .linhas.filter(
-        (x) => x.modalidade === 'teleconsulta' && x.data === f.data && (!f.crm || x.crmAgenda === f.crm),
+        (x) =>
+          x.modalidade === 'teleconsulta' &&
+          x.data === f.data &&
+          (f.profissional === null || (x.vinculoMedico ?? x.profissionalAgenda) === f.profissional),
       )
       .sort((a, b) => a.hora.localeCompare(b.hora) || a.id - b.id);
-    return {
-      itens: todas.slice(0, f.teto).map((x) => this.copia(x, c.hospital)),
-      truncado: todas.length > f.teto,
-    };
+    return { itens: todas.slice(0, f.teto).map((x) => this.copia(x, c)), truncado: todas.length > f.teto };
   }
 
-  async doCabecalho(c: ContextoTelemedicina, cabecalho: string) {
+  async doAtendimento(c: ContextoTelemedicina, atendimento: number) {
     const l = this.e(c).linhas.find(
       (x) =>
         x.modalidade === 'teleconsulta' &&
-        x.cabecalho === cabecalho &&
+        x.atendimento === atendimento &&
         (x.situacao === 'em-andamento' || x.situacao === 'encerrada'),
     );
-    return l ? this.copia(l, c.hospital) : null;
-  }
-
-  async regsDeTeleconsulta(c: ContextoTelemedicina, regs: readonly number[]) {
-    const set = new Set(regs);
-    return new Set(
-      this.e(c)
-        .linhas.filter((x) => x.modalidade === 'teleconsulta' && x.reg !== null && set.has(x.reg))
-        .map((x) => x.reg as number),
-    );
+    return l ? this.copia(l, c) : null;
   }
 
   async interconsultas(
@@ -490,19 +468,26 @@ export class PortaTelemedicinaMemoria implements PortaTelemedicina {
           (['solicitada', 'sala-aberta'].includes(x.situacao) || x.data >= f.desde),
       )
       .sort((a, b) => b.data.localeCompare(a.data) || b.id - a.id);
-    return {
-      itens: todas.slice(0, f.teto).map((x) => this.copia(x, c.hospital)),
-      truncado: todas.length > f.teto,
-    };
+    return { itens: todas.slice(0, f.teto).map((x) => this.copia(x, c)), truncado: todas.length > f.teto };
   }
 
-  async historicoClinico(_c: ContextoTelemedicina, paciente: number): Promise<FichaDoHistoricoClinico[]> {
+  async historicoClinico(
+    c: ContextoTelemedicina,
+    paciente: number,
+  ): Promise<AtendimentoDoHistoricoClinico[]> {
     if (paciente !== PACIENTE_SEMENTE_TELE) return [];
     const hoje = relogio(this.agora()).hoje;
-    // Hipertensa (I10) com a última consulta presencial há 200 dias: o alerta do crônico (TELE-04).
+    const tele = new Set(this.e(c).linhas.map((x) => x.atendimento));
+    // Hipertensa (I10) com a última consulta presencial há 200 dias: o alerta do crônico.
     return [
-      { reg: 900_001, data: dias(hoje, 200), cid: 'I10', laboratorio: false },
-      { reg: 900_002, data: dias(hoje, 210), cid: null, laboratorio: true },
+      {
+        atendimento: 900_001,
+        data: dias(hoje, 200),
+        cid: 'I10',
+        laboratorio: false,
+        teleconsulta: tele.has(900_001),
+      },
+      { atendimento: 900_002, data: dias(hoje, 210), cid: null, laboratorio: true, teleconsulta: false },
     ];
   }
 }

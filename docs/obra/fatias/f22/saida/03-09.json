@@ -1,0 +1,129 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/tipos-pessoas.ts",
+    "src/modulos/pessoas/banco-apoio.ts",
+    "src/modulos/pessoas/porta.ts",
+    "src/modulos/pessoas/porta-memoria.ts",
+    "src/modulos/pessoas/porta-propria.ts",
+    "src/modulos/pessoas/porta-propria.int.spec.ts",
+    "src/modulos/pessoas/public-api.ts",
+    "src/modulos/pessoas/ponto/tipos-ponto.ts",
+    "src/modulos/pessoas/ponto/porta-ponto.ts",
+    "src/modulos/pessoas/ponto/porta-ponto-memoria.ts",
+    "src/modulos/pessoas/ponto/porta-ponto-propria.ts",
+    "src/modulos/pessoas/ponto/porta-ponto-propria.int.spec.ts",
+    "src/modulos/pessoas/ponto/servico-ponto.ts",
+    "src/modulos/pessoas/ponto/ponto.controller.ts",
+    "src/modulos/pessoas/ponto/documentos-ponto.ts",
+    "src/modulos/pessoas/ponto/crud-ponto.spec.ts",
+    "src/modulos/pessoas/ponto/ponto.spec.ts",
+    "src/modulos/pessoas/ponto/servico-ponto.spec.ts",
+    "src/modulos/pessoas/ponto/portao-afd.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (nova tabela evento_periodo_ponto)",
+      "bloqueia": "Fechamento, reabertura e ciência do espelho do ponto no banco (incluirEventoPeriodo recusa 'modelo-pendente'; eventosPeriodo/eventosDaCompetencia leem vazio).",
+      "pedido": "Convenções do ADR 0002 (id BIGINT UNSIGNED, auditoria criado_/alterado_/excluido_, versao, origem, CHECK de domínio, FK com ON DELETE RESTRICT): CREATE TABLE evento_periodo_ponto (id, estabelecimento_id FK, vinculo_trabalho_id FK, competencia DATE NOT NULL, acao VARCHAR(20) NOT NULL CHECK IN ('fechado','reaberto','ciencia'), fechamento_ponto_id FK NULL, hash_espelho CHAR(64) NULL, totais JSON NULL, concorda BOOLEAN NULL, texto VARCHAR(1000) NULL, ocorrido_em DATETIME(3) NOT NULL, usuario_id FK NOT NULL, + auditoria), KEY (vinculo_trabalho_id, competencia), só inclusão. A porta própria passa a ler e gravar nela."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (regra_banco_horas e movimento_banco_horas)",
+      "bloqueia": "Banco de horas no banco: regra por regime (gravarRegraBanco/situacaoRegraBanco recusam), acerto e lançamento do fechamento (incluirMovimentoBanco recusa); regrasBanco/movimentosBanco/saldosBanco leem vazio.",
+      "pedido": "Convenções do ADR 0002 (id BIGINT UNSIGNED, auditoria criado_/alterado_/excluido_, versao, origem, CHECK de domínio, FK com ON DELETE RESTRICT): regra_banco_horas + regime_jornada_id FK NULL (UNIQUE estabelecimento+regime+vigencia_inicio), destino VARCHAR(20) CHECK IN ('sem_banco','banco','folha','expiracao_negativa'), inicio_ciclo VARCHAR(30) CHECK IN ('zerado','residual_positivo','residual_negativo','residual_ambos'), falta_debita BOOLEAN; movimento_banco_horas + vinculo_trabalho_id FK NOT NULL, competencia DATE NOT NULL, fechamento_ponto_id FK NULL e motivo ampliado com 'acerto','inicio_ciclo','pago_folha','expiracao'."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (ajuste_ponto)",
+      "bloqueia": "Ajuste do tipo justificativa/abono no banco (incluirAjuste com tipo 'justificativa' recusa 'modelo-pendente'). Inclusão de marcação para colaborador com DOIS vínculos vigentes no mesmo dia no estabelecimento recusa 'modelo-pendente'. Até o DDL, a inclusão vale para o vínculo vigente na data local da marcação (conferido na gravação e reconstruído na leitura; readmissão coberta por teste) e a desconsideração pelo vínculo da marcação.",
+      "pedido": "Convenções do ADR 0002 (id BIGINT UNSIGNED, auditoria criado_/alterado_/excluido_, versao, origem, CHECK de domínio, FK com ON DELETE RESTRICT): ajuste_ponto + vinculo_trabalho_id FK NOT NULL (todos os tipos: inclusao, desconsideracao e justificativa; carga inicial pelo vínculo da marcação ou o vigente na data de marcacao_em), KEY (vinculo_trabalho_id, situacao), tipo_movimento_ponto_id FK NULL, minutos INT UNSIGNED NULL; CHECK do tipo com 'justificativa' (exige tipo_movimento_ponto_id) e ck_ajuste_ponto_alvo ajustado. A porta passa a gravar e ler por vinculo_trabalho_id (sai a reconstrução pela data)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (admissão da ficha de colaborador) e lote dono de pessoas/servico.ts",
+      "bloqueia": "Admissão pela ficha rápida no banco (GravadorPessoas.incluirVinculo recusa 'modelo-pendente').",
+      "pedido": "A entrada da admissão deve trazer data de nascimento, sexo, grau de instrução, categoria do trabalhador, tipo de vínculo, cargo do quadro (id) e salário base, que vinculo_trabalho e colaborador exigem (NOT NULL). Com isso a porta própria grava colaborador + vinculo_trabalho + historico_cargo."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (dependente) e lote dono de pessoas/servico.ts",
+      "bloqueia": "Inclusão e alteração (nova versão) de dependente no banco (incluirDependente/versionarDependente recusam 'modelo-pendente'); leitura e encerramento funcionam.",
+      "pedido": "A tela do dependente deve escolher o tipo de dependente do eSocial (dependente.tipo_dependente_codigo_esocial_id NOT NULL) e a data de início da dependência, em vez do parentesco em texto."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/03_CAD ou 15_RH (nova tabela inscricao_conselho_unidade)",
+      "bloqueia": "Nada bloqueado: unidadesDosRegistros lê vazio (a ficha mostra sem unidade).",
+      "pedido": "Convenções do ADR 0002 (id BIGINT UNSIGNED, auditoria criado_/alterado_/excluido_, versao, origem, CHECK de domínio, FK com ON DELETE RESTRICT): CREATE TABLE inscricao_conselho_unidade (id, inscricao_conselho_id FK, unidade_assistencial_id FK, vigencia_inicio DATE NOT NULL, vigencia_fim DATE NULL, + auditoria), UNIQUE (inscricao_conselho_id, unidade_assistencial_id, vigencia_inicio)."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (colaborador)",
+      "bloqueia": "Nada bloqueado (desempenho): a busca por CPF compara o HMAC de todos os colaboradores do estabelecimento.",
+      "pedido": "colaborador + cpf_hmac CHAR(64) NULL com UNIQUE KEY uq_colaborador_cpf_hmac; ou trocar a porta para receber o CPF (o modelo já guarda o CPF em claro)."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (arquivo_ponto.conferencia)",
+      "bloqueia": "Nada bloqueado: a lista de falhas do arquivo em quarentena é cortada para caber em 1000 caracteres.",
+      "pedido": "arquivo_ponto.conferencia de VARCHAR(1000) para JSON."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes (estabelecimento/município)",
+      "bloqueia": "Nada bloqueado: feriados estaduais não entram na apuração (só nacionais, municipais e do estabelecimento).",
+      "pedido": "Expor a UF do estabelecimento (municipio_ibge.unidade_federativa_id ou estabelecimento.uf) para a porta ler os feriados de abrangência 'estadual'."
+    },
+    {
+      "tipo": "seguranca",
+      "alvo": "criar_cliente / papel da aplicação",
+      "bloqueia": "Nada bloqueado; o portão W0-06 confere no código e nas chaves únicas.",
+      "pedido": "Conceder ao papel da aplicação só SELECT e INSERT em marcacao_ponto e arquivo_ponto (Portaria 671/2021: marcação e AFD só de inclusão)."
+    },
+    {
+      "tipo": "armazenamento",
+      "alvo": "serviço de arquivos (arquivo.chave_armazenamento)",
+      "bloqueia": "Nada bloqueado: o registro do AFD é gravado com hash e chave ponto/afd/<estabelecimento>/<hash>, mas o conteúdo não é guardado.",
+      "pedido": "Guardar o conteúdo do AFD importado no armazenamento de arquivos sob a chave registrada (guarda legal)."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/pessoas/modulo.ts (lote que registra pessoas) e app.module.ts (desmontagem)",
+      "pedido": "PORTA_PESSOAS = new PortaPessoasPropria(ctx.nucleo, cifra) e PORTA_PONTO = new PortaPontoPropria(ctx.nucleo, cifra) quando há núcleo (cifra = CifraCpf da chave do ambiente); memória só em dev/ci sem núcleo. app.module.ts ainda chama portaPessoasLegado/portaPontoLegado (linhas ~2742 e ~2807), que deixaram de existir."
+    },
+    {
+      "tipo": "aviso-outros-lotes",
+      "alvo": "pessoas/servico.ts (03-10), escala, autoatendimento, folha, contabil, portal-medico",
+      "pedido": "Tipos renomeados em pessoas/porta.ts e ponto/porta-ponto.ts (reexportados): VinculoPesLido→VinculoColaborador (hospital→estabelecimento: number|null; centroCusto: number|null), FiltroVinculosSgh→FiltroVinculos, NovoVinculoSgh→NovoVinculo, MudancaVinculoSgh→MudancaVinculo, DesligamentoSgh→DesligamentoVinculo, EventoHistoricoSgh→EventoHistorico, HistoricoPesLido→HistoricoVinculo, DependentePesLido→DependenteColaborador, NovoDependenteSgh→NovoDependente, FimDependenteSgh→FimDependente, VersaoDependenteSgh→VersaoDependente, HabilitacaoPesLida→HabilitacaoRegistro, HabilitacaoSgh→ConferenciaHabilitacao, CorrecaoVinculoSgh→CorrecaoVinculo, CargoDoVinculoSgh→CargoDoVinculo, CorrecaoPesLida→CorrecaoRegistrada, RegistroDoColaboradorLido→RegistroDoColaborador, ConselhoDiaSgh→RetratoConselhoDia (sem hospital), PessoaLidaPorCpf→PessoaPorCpf, UsuarioLidoPessoa→UsuarioDaPessoa, ProfissionalLido→ProfissionalCadastro, UnidadeDoRegistroLida→UnidadeDoRegistro; ponto: AjustePontoLido→AjustePonto, ArquivoAfdLido→ArquivoRelogio, EventoPeriodoLidoSgh→EventoDoPeriodo, MovimentoBancoLidoSgh→MovimentoBancoHoras, RegraBancoLida→RegraBancoDoRegime, MarcacaoPontoLida→MarcacaoRelogio, VinculoPorHmacLido→VinculoDoCpf, FeriadoLido→FeriadoDoPeriodo, DominiosPonto (local). PortaPessoasMemoria.gravarRetrato(estabelecimento, retrato); estado da memória por chaveMemoria(c) (o código do estabelecimento da sessão). Removidos: portaPessoasLegado, portaPessoasNaTransacao, gravadorPessoasSgh, portaPontoLegado, portaPontoNaTransacao, gravadorPontoSgh. Tabelas da trilha no serviço do ponto já com nomes do modelo (arquivo_ponto, ajuste_ponto, fechamento_ponto, movimento_banco_horas, regra_banco_horas)."
+    },
+    {
+      "tipo": "testes-removidos",
+      "alvo": "pessoas/aplicacao/realizado.int.spec.ts e rescisao.int.spec.ts (lotes donos de escala/realizado e folha)",
+      "pedido": "Apagados por rodarem na cópia do outro sistema (ambienteM27, portas *NaTransacao de escala, realizado, folha, cálculo e rubricas). Os cenários (realizado: quatro olhos, tarifa, relatório ao repasse, chave desligada; rescisão: prévia, gravação, recálculo, cancelamento) devem voltar como porta-propria.int.spec.ts nos lotes donos dessas portas. aplicacao/ponto.int.spec.ts foi substituído por ponto/porta-ponto-propria.int.spec.ts."
+    },
+    {
+      "tipo": "aviso-outros-lotes",
+      "alvo": "pessoas/public-api.ts (lotes donos de autoatendimento, cargos, avaliação e os que já têm porta própria)",
+      "pedido": "public-api.ts passou a reexportar (export *) as portas próprias que os lotes da onda já criaram no lugar dos *-legado.js apagados (escala, realizado, sesmt, rubricas, treinamento, folha, cálculo, integração, eSocial, indicadores). autoatendimento, cargos e avaliação ficaram com um comentário 'Pendente do lote dono': o lote dono inclui a exportação da porta própria dele."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos (mudança do vínculo) e lote dono de pessoas/servico.ts (03-10)",
+      "bloqueia": "Nada bloqueado; a mudança de cargo, função e carga funciona por nome. Limites: a linha do historico_cargo fica com motivo 'outro' (o texto digitado em descricao_motivo) e a carga só muda quando existe UM regime de jornada ativo com aquela carga (senão recusa 'regime-de-jornada-indefinido').",
+      "pedido": "A entrada da mudança deve trazer o motivo do eSocial (promocao, reenquadramento, readaptacao, transferencia, funcao_confianca, decisao_judicial — o CHECK de historico_cargo.motivo), o id do cargo do quadro, o id da função e o id do regime de jornada, em vez dos nomes e das horas. A porta passa a gravar o motivo real (S-2206)."
+    },
+    {
+      "tipo": "aviso-outros-lotes",
+      "alvo": "pessoas/servico.ts (03-10)",
+      "pedido": "(1) PortaPessoas.vinculosDaPessoa agora lê a REDE inteira (cada vínculo traz `estabelecimento`): no desligamento, use o.estabelecimento em outrosVinculosAtivos (não s.hospital); na ficha, filtre outrosVinculos por estabelecimento ou mostre o estabelecimento (o id de outro estabelecimento dá 404 aqui). (2) O bloqueio pelo Executor recusa 'vinculo-ativo-em-outro-estabelecimento' quando a conta tem vínculo ativo em outro estabelecimento. (3) ConferenciaHabilitacao ganhou `versao?` (trava otimista): passe a versão que a tela leu (HabilitacaoRegistro.versao); a observação passa a ser guardada na trilha e volta em habilitacoes(). (4) incluirHistorico: 'cargo'/'funcao' (e motivos de cargo) vão ao historico_cargo fechando a linha anterior; 'jornada' à vigencia_regime_colaborador + trilha; 'lotacao', 'correcao', 'desligamento' e o resto à trilha como evento do vínculo; ultimaVigencia ignora correções. (5) ligarCargo é correção do cargo ligado (corrige a linha aberta do historico_cargo); a mudança com vigência é alterarVinculo, que agora aceita cargo, função e carga."
+    },
+    {
+      "tipo": "arquitetura",
+      "alvo": "exames/apoio-gravacao.ts (PortaGravacaoM18: gravarSgh e TrilhaDaGravacao, comum a ~70 portas) e orquestrador da F2.3",
+      "bloqueia": "Nada bloqueado; sem idempotência nas gravações diretas da gestão de pessoas e do ponto (o desligamento repetido responde conflito de versão, não 'repetida').",
+      "pedido": "Trocar o contrato comum gravarSgh(c, trilha, fn) por operações do Executor (definirOperacao com entrada zod e a chave de idempotência da requisição) e renomear gravarSgh/TrilhaDaGravacao para nomes de negócio. É mudança de todas as portas e dos serviços (fora do lote 03-09, que não edita exames/ nem pessoas/servico.ts). Mitigação já no lote: o ajuste de ponto pendente reenviado devolve o ajuste já registrado (teste de integração)."
+    }
+  ]
+}

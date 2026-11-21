@@ -16,7 +16,7 @@ import {
   SITUACOES_PROFILAXIA,
   TIPOS_ACIDENTE,
 } from '@sgh/contratos';
-import type { DominiosSesmt } from '@sgh/legado';
+import type { DominiosSesmt } from './porta-sesmt.js';
 
 const esc = (t: string) =>
   t.replace(

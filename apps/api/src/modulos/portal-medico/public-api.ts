@@ -2,12 +2,13 @@
 // cirurgia pela sessão do portal de resultados do M26; a tela interna das contas e do vínculo com o corpo clínico.
 export { PortalMedicoController, SERVICO_PORTAL_MEDICO } from './portal-medico.controller.js';
 export { PortalMedicoInternoController } from './portal-medico-interno.controller.js';
-export { PORTA_PORTAL_MEDICO, type PortaPortalMedico } from './porta.js';
+export { type ContextoPortalMedico, PORTA_PORTAL_MEDICO, type PortaPortalMedico } from './porta.js';
 export {
+  OPERACOES_PENDENTES as OPERACOES_PENDENTES_PORTAL_MEDICO,
   portaPortalMedicoIndisponivel,
-  portaPortalMedicoLegado,
-  portaPortalMedicoNaTransacao,
-} from './porta-legado.js';
+  PortaPortalMedicoPropria,
+  portaPortalMedicoPropria,
+} from './porta-propria.js';
 export { CORPO_CLINICO_SINTETICO, PortaPortalMedicoMemoria } from './porta-memoria.js';
 export { ServicoPortalMedico } from './aplicacao/servico.js';
 export { CanalMedicoDesligado, CanalMedicoSimulador, canalMedicoDoAmbiente } from './aplicacao/canal.js';
@@ -16,3 +17,4 @@ export {
   retornoDoPortalMedico,
   sessaoDaAssinaturaRemota,
 } from './aplicacao/assinatura-remota.js';
+export { moduloPortalMedico } from './modulo.js';

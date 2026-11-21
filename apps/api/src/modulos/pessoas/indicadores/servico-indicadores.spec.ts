@@ -21,7 +21,14 @@ const sessao = (hospital = 'aa'): SessaoCadastro => ({
   hospital,
   rede: 'rede-sintetica',
   login: 'SINT.RH',
-  porta: { rede: 'rede-sintetica', hospital },
+  porta: {
+    cliente: 'sintetico',
+    estabelecimento: 1,
+    usuario: 1,
+    correlacao: 'teste',
+    rede: 'rede-sintetica',
+    hospital,
+  },
   pode: () => true,
 });
 

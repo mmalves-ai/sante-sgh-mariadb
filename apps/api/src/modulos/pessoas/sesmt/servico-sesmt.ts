@@ -101,26 +101,42 @@ import {
   situacaoAso,
   situacaoVacinas,
 } from '@sgh/dominio-pessoas';
-import type {
-  AcidenteLido,
-  CorrecaoPesLida,
-  DadosCatSgh,
-  DominiosSesmt,
-  EventoEsocialSghLido,
-  LinhaRiscoLidaSgh,
-  OcupacionalLido,
-  RegistroEpiLido,
-  SorologiaLida,
-  VacinaLida,
-  VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
-import type { GravadorSesmt, PortaSesmt } from './porta-sesmt.js';
+import type {
+  AcidenteTrabalho,
+  CorrecaoSesmt,
+  DadosCat,
+  DominiosSesmt,
+  DoseVacinaColaborador,
+  GravadorSesmt,
+  LinhaRiscoFuncao,
+  PortaSesmt,
+  RegistroOcupacional,
+  RegistroProtecao,
+  SorologiaAcidente,
+} from './porta-sesmt.js';
+
+/** O vínculo de trabalho como a gestão de pessoas o lê. */
+type VinculoPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
+
+/** O evento do eSocial na fila (o que o SESMT lê da fila do serviço do eSocial). */
+export interface EventoEsocialNaFila {
+  readonly id: number;
+  readonly evento: string;
+  readonly situacao: string;
+  readonly recibo: string | null;
+  readonly eventoAnterior: number | null;
+  readonly motivo: string | null;
+  readonly criadoEm: string;
+  readonly versao: number;
+  /** Empresa (estabelecimento empregador) do evento. */
+  readonly empresa: number;
+}
 
 const E = EVENTOS_AUDITAVEIS;
 export const CHAVE_PESSOAS_SESMT = 'pessoas.sesmt';
@@ -170,14 +186,14 @@ function resposta(p: readonly PendenciaSesmt[]): PendenciaResposta[] {
  */
 export interface FilaCatEsocial {
   empresasCat(s: SessaoCadastro): Promise<{ codigo: number; rotulo: string }[]>;
-  eventosCat(s: SessaoCadastro, acidente: number): Promise<EventoEsocialSghLido[]>;
+  eventosCat(s: SessaoCadastro, acidente: number): Promise<EventoEsocialNaFila[]>;
   gerarCat(
     s: SessaoCadastro,
     x: {
       empresa: number;
       vinculo: number;
       cat: CatParaEvento;
-      retificar: EventoEsocialSghLido | null;
+      retificar: EventoEsocialNaFila | null;
       gravar: boolean;
     },
   ): Promise<ResultadoGeracaoEsocial>;
@@ -186,7 +202,7 @@ export interface FilaCatEsocial {
 }
 
 /** W0-06: o histórico das correções (motivo, quem, quando e o valor anterior), da mais nova para a mais antiga. */
-function correcoesResposta(xs: readonly CorrecaoPesLida[]): CorrecaoResposta[] {
+function correcoesResposta(xs: readonly CorrecaoSesmt[]): CorrecaoResposta[] {
   return [...xs]
     .sort((a, b) => b.id - a.id)
     .map((c) => ({
@@ -206,7 +222,7 @@ const CAT_NAO_ENVIADA: ReadonlySet<string> = new Set(['gerado', 'invalido', 'val
 const CAT_EM_TRANSITO: ReadonlySet<string> = new Set(['em-lote', 'enviado']);
 
 /** O acidente lido no formato do S-2210 (o local do acidente sem tipo é o estabelecimento do empregador). */
-export function catParaEvento(a: AcidenteLido): CatParaEvento {
+export function catParaEvento(a: AcidenteTrabalho): CatParaEvento {
   const c = a.cat;
   const tipoCat = a.tipoCat === 1 || a.tipoCat === 2 || a.tipoCat === 3 ? a.tipoCat : null;
   const lat = c.lateralidade;
@@ -260,8 +276,8 @@ export function catParaEvento(a: AcidenteLido): CatParaEvento {
   };
 }
 
-/** O que a retificação troca (o valor anterior e o novo vão à SGH_PES_CORRECAO). */
-function retificaveis(a: AcidenteLido): Record<string, unknown> {
+/** O que a retificação troca (o valor anterior e o novo vão à trilha_auditoria). */
+function retificaveis(a: AcidenteTrabalho): Record<string, unknown> {
   return {
     ocorridoEm: a.ocorridoEm,
     tipo: a.tipo,
@@ -370,9 +386,9 @@ export class ServicoSesmt {
 
   // ── Colaborador ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPessoa> {
     const v = await this.pessoas.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital) throw naoEncontrado('Colaborador');
+    if (!v || v.estabelecimento !== s.porta.estabelecimento) throw naoEncontrado('Colaborador');
     return v;
   }
 
@@ -380,7 +396,7 @@ export class ServicoSesmt {
     return new Map((await this.pessoas.unidades(s.porta)).map((u) => [u.codigo, u.nome]));
   }
 
-  private colaborador(v: VinculoPesLido, unidades: Map<number, string>): ColaboradorSesmt {
+  private colaborador(v: VinculoPessoa, unidades: Map<number, string>): ColaboradorSesmt {
     return {
       vinculo: v.id,
       nome: v.nome,
@@ -425,7 +441,7 @@ export class ServicoSesmt {
     const vacinas = por(r.vacinas);
     const epis = por(r.epis);
     const acidentes = por(r.acidentes);
-    const soro = new Map<number, SorologiaLida[]>();
+    const soro = new Map<number, SorologiaAcidente[]>();
     for (const x of r.sorologias) soro.set(x.acidente, [...(soro.get(x.acidente) ?? []), x]);
     // Regra 16 (segregação): cada pendência só aparece a quem tem a permissão da tela de origem; o painel
     // (pessoas.ocupacional.ler) não revela acidente, CAT, sorologia, EPI, dose ou vacina a quem não as lê. As contagens
@@ -562,7 +578,7 @@ export class ServicoSesmt {
       s,
       E.pessoasAsoRegistrado.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_OCUPACIONAL', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'aso', id: String(x.id) }),
       async (g) => {
         const anteriores = (await g.ocupacional(v.id)).filter((x) => x.registro === 'aso');
         if (e.retifica !== null) {
@@ -683,7 +699,7 @@ export class ServicoSesmt {
       s,
       E.pessoasVacinaRegistrada.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_VACINA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'vacina_colaborador', id: String(x.id) }),
       async (g) => {
         const anteriores = await g.vacinas(v.id);
         if (e.retifica !== null) {
@@ -721,9 +737,9 @@ export class ServicoSesmt {
           registro: e.registro,
           vacina: e.vacina,
           // D-VAC-525: o código do domínio lido na hora pela descrição; sem casamento único, vazio.
-          codigoLegado: codigoNoDominio(dominios.vacinasCadastro, VACINAS_SESMT[e.vacina].termos),
+          codigoVacina: codigoNoDominio(dominios.vacinasCadastro, VACINAS_SESMT[e.vacina].termos),
           dose,
-          codigoDoseLegado: dose
+          codigoDose: dose
             ? codigoNoDominio(dominios.dosesVacinaCadastro, DOSES_VACINA_SESMT[dose].termos)
             : null,
           data: e.data,
@@ -744,9 +760,9 @@ export class ServicoSesmt {
   // ── Acidentes e CAT (regra 18) ──────────────────────────────────────────────────────────────────────────────
 
   private resumoAcidente(
-    a: AcidenteLido,
+    a: AcidenteTrabalho,
     nome: string,
-    soro: readonly SorologiaLida[],
+    soro: readonly SorologiaAcidente[],
     hoje: string,
   ): AcidenteResumo {
     return {
@@ -782,7 +798,7 @@ export class ServicoSesmt {
         r.itens.map((a) => a.id),
       ),
     ]);
-    const nomes = new Map(vincs.filter((v): v is VinculoPesLido => v !== null).map((v) => [v.id, v.nome]));
+    const nomes = new Map(vincs.filter((v): v is VinculoPessoa => v !== null).map((v) => [v.id, v.nome]));
     return {
       hoje,
       itens: r.itens.map((a) =>
@@ -797,7 +813,7 @@ export class ServicoSesmt {
     };
   }
 
-  private async acidenteOu404(s: SessaoCadastro, id: number): Promise<AcidenteLido> {
+  private async acidenteOu404(s: SessaoCadastro, id: number): Promise<AcidenteTrabalho> {
     const a = await this.porta.acidente(s.porta, id);
     if (!a) throw naoEncontrado('Acidente');
     return a;
@@ -810,7 +826,7 @@ export class ServicoSesmt {
       this.vinculoOu404(s, a.vinculo),
       this.porta.sorologias(s.porta, [a.id]),
       this.nomesUnidades(s),
-      this.porta.correcoes(s.porta, 'SGH_PES_ACIDENTE', [a.id]),
+      this.porta.correcoes(s.porta, 'comunicacao_acidente', [a.id]),
       this.esocialDoAcidente(s, a.id),
     ]);
     return {
@@ -930,7 +946,7 @@ export class ServicoSesmt {
       s,
       E.pessoasAcidenteRegistrado.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_ACIDENTE', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'comunicacao_acidente', id: String(x.id) }),
       async (g) => {
         const id = await g.incluirAcidente({
           vinculo: v.id,
@@ -964,7 +980,7 @@ export class ServicoSesmt {
   private async atualizar<T>(
     s: SessaoCadastro,
     acidente: number,
-    fn: (g: GravadorSesmt, a: AcidenteLido) => Promise<T>,
+    fn: (g: GravadorSesmt, a: AcidenteTrabalho) => Promise<T>,
   ): Promise<T> {
     await this.apoio.exigirLiberacao(s);
     await this.acidenteOu404(s, acidente);
@@ -972,7 +988,7 @@ export class ServicoSesmt {
       s,
       E.pessoasAcidenteAtualizado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_ACIDENTE', id: String(acidente) },
+      { tabela: 'comunicacao_acidente', id: String(acidente) },
       async (g) => {
         const a = await g.acidente(acidente);
         if (!a) throw naoEncontrado('Acidente');
@@ -1073,7 +1089,7 @@ export class ServicoSesmt {
             Parameters<GravadorSesmt['retificarAcidente']>[0],
             'id' | 'versao' | 'por'
           >),
-          cat: e.cat as DadosCatSgh,
+          cat: e.cat as DadosCat,
           id: a.id,
           versao: e.versao + 1,
           por: s.login,
@@ -1191,7 +1207,7 @@ export class ServicoSesmt {
       v.admissao,
     );
     if (r) throw recusar(r);
-    const novo: AcidenteLido = {
+    const novo: AcidenteTrabalho = {
       ...a,
       ocorridoEm: e.ocorridoEm,
       tipo: e.tipo,
@@ -1204,7 +1220,7 @@ export class ServicoSesmt {
       afastamento: e.afastamento,
       obito: e.obito,
       catPrazo: prazoCat(e.ocorridoEm, e.obito, params.prazoCatDiasUteis),
-      cat: e.cat as DadosCatSgh,
+      cat: e.cat as DadosCat,
     };
     const { aceito, naoEnviados } = await this.filaCat(s, a.id);
     const fila = aceito || naoEnviados.length ? this.exigirFila() : null;
@@ -1228,7 +1244,7 @@ export class ServicoSesmt {
       s,
       E.pessoasAcidenteRetificado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_ACIDENTE', id: String(a.id), chave: 'retificacao' },
+      { tabela: 'comunicacao_acidente', id: String(a.id), chave: 'retificacao' },
       async (g) => {
         const atual = await g.acidente(a.id);
         if (!atual) throw naoEncontrado('Acidente');
@@ -1244,7 +1260,7 @@ export class ServicoSesmt {
           por: s.login,
         });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_ACIDENTE',
+          tabela: 'comunicacao_acidente',
           registro: a.id,
           operacao: 'acidente.retificado',
           antes,
@@ -1325,11 +1341,11 @@ export class ServicoSesmt {
       s,
       E.pessoasAcidenteAnulado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_ACIDENTE', id: String(a.id), chave: 'anulacao' },
+      { tabela: 'comunicacao_acidente', id: String(a.id), chave: 'anulacao' },
       async (g) => {
         await g.anularAcidente({ id: a.id, versao: e.versao, motivo: e.motivo, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_ACIDENTE',
+          tabela: 'comunicacao_acidente',
           registro: a.id,
           operacao: 'acidente.anulado',
           antes: {
@@ -1385,7 +1401,7 @@ export class ServicoSesmt {
 
   private async linhasResposta(
     s: SessaoCadastro,
-    linhas: readonly LinhaRiscoLidaSgh[],
+    linhas: readonly LinhaRiscoFuncao[],
   ): Promise<LinhaRiscoResposta[]> {
     const [dominios, unidades, fatores] = await Promise.all([
       this.dominios(s),
@@ -1454,7 +1470,7 @@ export class ServicoSesmt {
       s,
       E.pessoasRiscoAlterado.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_RISCO_FUNCAO', id: String(x.id) }),
+      (x: { id: number }) => alvoLinhaRisco(x.id),
       async (g) => ({
         id: await g.incluirLinhaRisco({
           unidade: e.unidade,
@@ -1485,7 +1501,7 @@ export class ServicoSesmt {
       s,
       E.pessoasRiscoAlterado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_RISCO_FUNCAO', id: String(e.id) },
+      alvoLinhaRisco(e.id),
       async (g) => {
         await g.encerrarLinhaRisco({ id: e.id, fim: e.fim, motivo: e.motivo, por: s.login });
         return { id: e.id };
@@ -1505,7 +1521,7 @@ export class ServicoSesmt {
     ]);
     const correcoes = await this.porta.correcoes(
       s.porta,
-      'SGH_PES_EPI_ENTREGA',
+      'entrega_epi',
       registros.map((r) => r.id),
     );
     const vigentes = linhasDaFuncao(mapa, funcao, v.unidade, hoje);
@@ -1558,7 +1574,7 @@ export class ServicoSesmt {
       s,
       E.pessoasEpiRegistrado.codigo,
       CHAVE_PESSOAS_SESMT,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_EPI_ENTREGA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'entrega_epi', id: String(x.id) }),
       async (g) => ({
         id: await g.incluirRegistroEpi({
           vinculo: v.id,
@@ -1599,7 +1615,7 @@ export class ServicoSesmt {
       s,
       E.pessoasEpiRegistrado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_EPI_ENTREGA', id: String(x.id) },
+      { tabela: 'entrega_epi', id: String(x.id) },
       async (g) => {
         await g.assinarEntregaEpi({ id: x.id, por: s.login });
         return { id: x.id };
@@ -1619,11 +1635,11 @@ export class ServicoSesmt {
       s,
       E.pessoasEpiCancelado.codigo,
       CHAVE_PESSOAS_SESMT,
-      { tabela: 'SGH_PES_EPI_ENTREGA', id: String(x.id), chave: 'cancelamento' },
+      { tabela: 'entrega_epi', id: String(x.id), chave: 'cancelamento' },
       async (g) => {
         await g.cancelarEntregaEpi({ id: x.id, motivo: e.motivo, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_EPI_ENTREGA',
+          tabela: 'entrega_epi',
           registro: x.id,
           operacao: 'epi.cancelado',
           antes: { cancelado: false, assinatura: x.assinatura },
@@ -1676,7 +1692,7 @@ export class ServicoSesmt {
       { admissao: v.admissao, desligamento: v.desligamento, cargo: v.cargo, funcao: v.funcao },
       historico,
     );
-    const mapas = new Map<string, LinhaRiscoLidaSgh[]>();
+    const mapas = new Map<string, LinhaRiscoFuncao[]>();
     for (const chave of new Set(periodos.map((p) => chaveFuncao(p.funcao))))
       mapas.set(chave, await this.porta.mapaRiscos(s.porta, { vigentes: false, funcaoChave: chave }));
     const unidadeNome = v.unidade !== null ? (unidades.get(v.unidade) ?? null) : null;
@@ -1715,7 +1731,7 @@ export class ServicoSesmt {
 
 // ── Conversões ────────────────────────────────────────────────────────────────────────────────────────────────
 
-function asoLido(x: OcupacionalLido): AsoLido {
+function asoLido(x: RegistroOcupacional): AsoLido {
   return {
     id: x.id,
     tipo: x.tipo ?? -1,
@@ -1726,7 +1742,7 @@ function asoLido(x: OcupacionalLido): AsoLido {
   };
 }
 
-function vacinaLida(x: VacinaLida): RegistroVacinaLido {
+function vacinaLida(x: DoseVacinaColaborador): RegistroVacinaLido {
   return {
     id: x.id,
     registro: x.registro,
@@ -1738,7 +1754,7 @@ function vacinaLida(x: VacinaLida): RegistroVacinaLido {
   };
 }
 
-function entregaLida(x: RegistroEpiLido): EntregaLida {
+function entregaLida(x: RegistroProtecao): EntregaLida {
   return {
     id: x.id,
     tipo: x.tipo,
@@ -1750,7 +1766,7 @@ function entregaLida(x: RegistroEpiLido): EntregaLida {
   };
 }
 
-function paraSituacao(a: AcidenteLido, soro: readonly SorologiaLida[]): AcidenteParaSituacao {
+function paraSituacao(a: AcidenteTrabalho, soro: readonly SorologiaAcidente[]): AcidenteParaSituacao {
   return {
     estado: a.estado,
     catNumero: a.catNumero,
@@ -1760,7 +1776,7 @@ function paraSituacao(a: AcidenteLido, soro: readonly SorologiaLida[]): Acidente
   };
 }
 
-function registroEpiResposta(x: RegistroEpiLido): RegistroEpiResposta {
+function registroEpiResposta(x: RegistroProtecao): RegistroEpiResposta {
   return {
     id: x.id,
     tipo: x.tipo,
@@ -1782,4 +1798,12 @@ function registroEpiResposta(x: RegistroEpiLido): RegistroEpiResposta {
     canceladoPor: x.canceladoPor,
     motivoCancelamento: x.motivoCancelamento,
   };
+}
+
+/**
+ * O alvo da trilha da linha do mapa de riscos: a linha de EPI exigido chega com o id negativo (a tela a distingue da do
+ * fator de risco), e a trilha leva a tabela e o id positivo da linha (entidade_id não tem sinal).
+ */
+function alvoLinhaRisco(id: number): { tabela: string; id: string } {
+  return id < 0 ? { tabela: 'epi_funcao', id: String(-id) } : { tabela: 'risco_funcao', id: String(id) };
 }

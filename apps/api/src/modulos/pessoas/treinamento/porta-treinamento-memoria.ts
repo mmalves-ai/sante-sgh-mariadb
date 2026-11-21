@@ -1,24 +1,26 @@
 // Porta dos treinamentos em memória (M52.6): a sessão sintética de dev/ci e o E2E. Os registros vivem por
-// estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. As regras de banco
+// estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai ao banco. As regras de banco
 // que importam ao teste também valem aqui: código de curso único, a versão na condição, a inscrição uma vez por turma,
 // a versão do POP única por código, a troca de situação só da vigente, a ciência uma vez por versão e vínculo.
-import {
-  type CienciaPopPesLida,
-  type CorrecaoPesLida,
-  type ConclusaoPesLida,
-  type CursoPesLido,
-  ErroOperacao,
-  type LinhaTrilha,
-  type ParticipacaoPesLida,
-  type ParticipantePesLido,
-  type PopPesLido,
-  type TurmaPesLida,
-  type VinculoAtivoTreinamento,
-  type VinculoResumoTreinamento,
-} from '@sgh/legado';
+import { ErroOperacao } from '@sgh/nucleo';
+import type {
+  CienciaPop,
+  ConclusaoTreinamento,
+  CorrecaoTreinamento,
+  CursoTreinamento,
+  ParticipacaoDoVinculo,
+  ParticipanteTreinamento,
+  TurmaTreinamento,
+  UnidadeTreinamento,
+  VersaoPop,
+  VinculoAtivoTreinamento,
+  VinculoResumoTreinamento,
+} from './tipos-treinamento.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
+import type { TrilhaDaGravacao } from '../../exames/public-api.js';
 import type { ContextoTreinamento, GravadorTreinamento, PortaTreinamento } from './porta-treinamento.js';
+import { conferirModeloDoCurso } from './modelo-curso.js';
 
 const recusa = (codigo: string, mensagem: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', mensagem);
@@ -28,16 +30,16 @@ const desatualizado = () =>
     'O registro mudou depois que você abriu (outra pessoa gravou). Abra de novo para ver a versão atual.',
   );
 
-type TurmaBase = Omit<TurmaPesLida, 'participantes' | 'concluintes'>;
+type TurmaBase = Omit<TurmaTreinamento, 'participantes' | 'concluintes'>;
 interface Estado {
   seq: number;
-  cursos: CursoPesLido[];
+  cursos: CursoTreinamento[];
   turmas: TurmaBase[];
-  participantes: ParticipantePesLido[];
-  pops: PopPesLido[];
-  ciencias: CienciaPopPesLida[];
+  participantes: ParticipanteTreinamento[];
+  pops: VersaoPop[];
+  ciencias: CienciaPop[];
   /** W0-06: a trilha do valor anterior e os retratos das inscrições retiradas. */
-  correcoes: CorrecaoPesLida[];
+  correcoes: CorrecaoTreinamento[];
   retratos: Record<string, unknown>[];
 }
 const novo = (): Estado => ({
@@ -64,7 +66,7 @@ const copiar = (s: Estado): Estado => ({
 const p2 = (x: number) => String(x).padStart(2, '0');
 const local = (d: Date) =>
   `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`;
-const conclui = (p: ParticipantePesLido) =>
+const conclui = (p: ParticipanteTreinamento) =>
   p.presenca === 'presente' &&
   p.conclusao !== null &&
   (p.aproveitamento === 'aprovado' || p.aproveitamento === 'sem-avaliacao');
@@ -79,12 +81,13 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
   constructor(private readonly pessoas: PortaPessoas | null = null) {}
 
   private e(c: ContextoTreinamento): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    const k = String(c.estabelecimento ?? 0);
+    let s = this.estados.get(k);
+    if (!s) this.estados.set(k, (s = novo()));
     return s;
   }
 
-  private turmaCompleta(s: Estado, t: TurmaBase): TurmaPesLida {
+  private turmaCompleta(s: Estado, t: TurmaBase): TurmaTreinamento {
     const ps = s.participantes.filter((p) => p.treinamento === t.id);
     return { ...t, participantes: ps.length, concluintes: ps.filter(conclui).length };
   }
@@ -103,7 +106,7 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
 
   async gravarSgh<T>(
     c: ContextoTreinamento,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorTreinamento) => Promise<T>,
   ): Promise<T> {
     const s = copiar(this.e(c));
@@ -124,6 +127,7 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
           (x) => (f.vinculo === undefined || x.vinculo === f.vinculo) && (!f.pops || f.pops.includes(x.pop)),
         ),
       incluirCurso: async (x) => {
+        conferirModeloDoCurso(x);
         if (s.cursos.some((k) => k.codigo === x.codigo))
           throw recusa('codigo-repetido', 'Já existe um curso com este código.');
         const n = id();
@@ -145,6 +149,7 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
       alterarCurso: async (x) => {
         const k = s.cursos.find((y) => y.id === x.id);
         if (!k || k.versao !== x.versao) throw desatualizado();
+        conferirModeloDoCurso(x);
         if (s.cursos.some((y) => y.id !== x.id && y.codigo === x.codigo))
           throw recusa('codigo-repetido', 'Já existe um curso com este código.');
         Object.assign(k, {
@@ -294,15 +299,19 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(String(c.estabelecimento ?? 0), s);
     return r;
   }
 
-  /** W0-06, testes: os retratos das inscrições retiradas (o que iria à SGH_HIST_EXCLUSAO). */
+  /** Testes: os retratos das inscrições retiradas (no banco, a linha excluída logicamente). */
   retratos(c: ContextoTreinamento): readonly Record<string, unknown>[] {
     return this.e(c).retratos;
   }
-  async correcoes(c: ContextoTreinamento, tabela: string, registros: readonly number[]) {
+  async correcoes(
+    c: ContextoTreinamento,
+    tabela: string,
+    registros: readonly number[],
+  ): Promise<CorrecaoTreinamento[]> {
     return this.e(c)
       .correcoes.filter((x) => x.tabela === tabela && registros.includes(x.registro))
       .sort((a, b) => b.id - a.id);
@@ -312,13 +321,20 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
     const agora = this.agoraFixo ?? local(new Date());
     return { hoje: agora.slice(0, 10), agora };
   }
+  async unidades(c: ContextoTreinamento): Promise<UnidadeTreinamento[]> {
+    if (!this.pessoas) return [];
+    return (await this.pessoas.unidades(c)).map((u) => ({ codigo: u.codigo, nome: u.nome }));
+  }
   async cursos(c: ContextoTreinamento) {
     return [...this.e(c).cursos].sort((a, b) => a.codigo.localeCompare(b.codigo));
   }
   async curso(c: ContextoTreinamento, id: number) {
     return this.e(c).cursos.find((x) => x.id === id) ?? null;
   }
-  async turmas(c: ContextoTreinamento, f: { situacao?: string; curso?: number; de?: string; ate?: string }) {
+  async turmas(
+    c: ContextoTreinamento,
+    f: { situacao?: string; curso?: number; de?: string; ate?: string },
+  ): Promise<TurmaTreinamento[]> {
     const s = this.e(c);
     return s.turmas
       .filter(
@@ -339,7 +355,7 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
   async participantes(c: ContextoTreinamento, turma: number) {
     return this.e(c).participantes.filter((p) => p.treinamento === turma);
   }
-  async participacoes(c: ContextoTreinamento, vinculo: number): Promise<ParticipacaoPesLida[]> {
+  async participacoes(c: ContextoTreinamento, vinculo: number): Promise<ParticipacaoDoVinculo[]> {
     const s = this.e(c);
     return s.participantes
       .filter((p) => p.vinculo === vinculo)
@@ -357,7 +373,10 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
       })
       .sort((a, b) => b.inicio.localeCompare(a.inicio));
   }
-  async conclusoes(c: ContextoTreinamento, vinculos: readonly number[] | null): Promise<ConclusaoPesLida[]> {
+  async conclusoes(
+    c: ContextoTreinamento,
+    vinculos: readonly number[] | null,
+  ): Promise<ConclusaoTreinamento[]> {
     const s = this.e(c);
     return s.participantes
       .filter((p) => conclui(p) && (vinculos === null || vinculos.includes(p.vinculo)))
@@ -412,7 +431,7 @@ export class PortaTreinamentoMemoria implements PortaTreinamento {
     const r: VinculoResumoTreinamento[] = [];
     for (const id of new Set(ids)) {
       const v = await this.pessoas.vinculo(c, id);
-      if (v && v.hospital === c.hospital)
+      if (v && v.estabelecimento === c.estabelecimento)
         r.push({
           id: v.id,
           nome: v.nome,

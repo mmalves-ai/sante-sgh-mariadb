@@ -1,0 +1,218 @@
+{
+  "lote": "03-12",
+  "registrar": [
+    "'portal-paciente': () => import('./portal-paciente/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/portal-paciente/agenda/gateway.ts",
+    "src/modulos/portal-paciente/agenda/interno.controller.ts",
+    "src/modulos/portal-paciente/agenda/porta-memoria.ts",
+    "src/modulos/portal-paciente/agenda/porta-propria.ts",
+    "src/modulos/portal-paciente/agenda/porta.ts",
+    "src/modulos/portal-paciente/agenda/portal-agenda.controller.ts",
+    "src/modulos/portal-paciente/agenda/portal-agenda.spec.ts",
+    "src/modulos/portal-paciente/agenda/servico.ts",
+    "src/modulos/portal-paciente/agenda/tesouraria.ts",
+    "src/modulos/portal-paciente/agenda/tipos.ts",
+    "src/modulos/portal-paciente/aplicacao/canal.ts",
+    "src/modulos/portal-paciente/aplicacao/liberacao.ts",
+    "src/modulos/portal-paciente/aplicacao/provas.ts",
+    "src/modulos/portal-paciente/aplicacao/servico.spec.ts",
+    "src/modulos/portal-paciente/aplicacao/servico.ts",
+    "src/modulos/portal-paciente/modulo.ts",
+    "src/modulos/portal-paciente/porta-memoria.ts",
+    "src/modulos/portal-paciente/porta-propria.int.spec.ts",
+    "src/modulos/portal-paciente/porta-propria.ts",
+    "src/modulos/portal-paciente/porta.ts",
+    "src/modulos/portal-paciente/portal-paciente-interno.controller.ts",
+    "src/modulos/portal-paciente/portal-paciente.controller.ts",
+    "src/modulos/portal-paciente/portal-paciente.spec.ts",
+    "src/modulos/portal-paciente/public-api.ts",
+    "src/modulos/portal-paciente/tipos.ts"
+  ],
+  "pedidos": [
+    [
+      {
+        "tipo": "ddl",
+        "prioridade": "bloqueante-F2.2",
+        "tabela": "conta_portal_paciente (colunas novas sobre o modelo atual)",
+        "bloqueia": [
+          "conta",
+          "contaPorEmail",
+          "contaPorConvite",
+          "contaDoPaciente",
+          "contasAbertas",
+          "criarConta",
+          "reemitirConvite",
+          "registrarErroConvite",
+          "ativar",
+          "registrarEntrada",
+          "trocarSenha",
+          "trocarSegundoFator",
+          "bloquear",
+          "desbloquear",
+          "encerrar"
+        ],
+        "ddl": "Sobre o DDL atual (uma conta por paciente no cliente, uq_conta_portal_paciente_paciente; a senha no provedor de identidade por usuario_id, nunca nesta tabela): ADD convite_resumo CHAR(64) NULL (SHA-256 do código do convite) + UNIQUE uq_conta_portal_paciente_convite (convite_resumo); ADD convite_valido_ate DATETIME(3) NULL; ADD convite_usado_em DATETIME(3) NULL; ADD convite_tentativas_falhas SMALLINT UNSIGNED NOT NULL DEFAULT 0; ADD convite_canal VARCHAR(20) NOT NULL DEFAULT 'recepcao' CHECK IN ('recepcao','portal'); ADD convidada_por_usuario_id BIGINT UNSIGNED NULL FK usuario; ADD segundo_fator_segredo_cifrado VARCHAR(500) NULL (envelope do autenticador pela chave mestra; o CHECK segundo_fator já tem 'aplicativo'); ADD segundo_fator_definido_em DATETIME(3) NULL; ADD motivo_bloqueio VARCHAR(200) NULL + CHECK (situacao <> 'bloqueada' OR motivo_bloqueio IS NOT NULL); ADD motivo_encerramento VARCHAR(40) NULL CHECK IN ('pedido_titular','obito','unificacao','maioridade','hospital') + CHECK (situacao <> 'encerrada' OR (encerrada_em IS NOT NULL AND motivo_encerramento IS NOT NULL)). A situação 'pendente_ativacao' do DDL atual vale como 'convidada' no domínio (mapeamento no domínio, sem trocar o CHECK). A conta só de responsável sem cadastro (D-RESP-50) fica fora desta tabela: pedido separado do vínculo. Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+      }
+    ],
+    {
+      "tipo": "ddl",
+      "tabela": "conta_portal_paciente_dependente (colunas novas) ou vinculo_responsavel_portal (nova)",
+      "bloqueia": [
+        "vinculosDaConta",
+        "vinculosDoTitular",
+        "vinculo",
+        "filaVinculos",
+        "vinculosAtivos",
+        "pedirVinculo",
+        "decidirVinculo",
+        "encerrarVinculo"
+      ],
+      "ddl": "situacao VARCHAR(20) NOT NULL DEFAULT 'pendente' CHECK IN ('pendente','ativo','recusado','encerrado'); tipo_vinculo VARCHAR(30) NOT NULL (pai-mae, tutor, curador, procurador...); prova VARCHAR(40) NOT NULL; prova_arquivo_id BIGINT UNSIGNED NULL FK arquivo + prova_hash CHAR(64); escopos JSON NOT NULL (ou tabela filha vinculo_responsavel_portal_escopo); canal VARCHAR(10) CHECK IN ('portal','balcao'); pedido_em DATETIME(3) NOT NULL, pedido_por VARCHAR(60); decidido_por_usuario_id, decidido_em, motivo_recusa VARCHAR(200), motivo_fim VARCHAR(40), encerrado_em; CHECK (decidido_por_usuario_id IS NULL OR quem pediu <> quem decidiu) fica no domínio + índice (estabelecimento_id, situacao, id) para a fila. Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, estabelecimento_id quando for do estabelecimento, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "troca_email_conta_portal (nova)",
+      "bloqueia": [
+        "trocaEmailPorToken",
+        "trocaEmailPendente",
+        "pedirTrocaEmail",
+        "confirmarTrocaEmail",
+        "cancelarTrocaEmail"
+      ],
+      "ddl": "id, conta_portal_paciente_id FK, email_novo VARCHAR(254) NOT NULL, email_novo_resumo CHAR(64) NOT NULL, token_resumo CHAR(64) NOT NULL UNIQUE, valido_ate DATETIME(3) NOT NULL, origem CHECK IN ('portal','balcao'), motivo VARCHAR(200) NOT NULL, pedido_por VARCHAR(60) NOT NULL, envio CHECK IN ('simulador','plataforma'), situacao CHECK IN ('pendente','confirmada','cancelada'), decidido_em; UNIQUE parcial de uma pendente por conta (coluna gerada). Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, estabelecimento_id quando for do estabelecimento, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "consentimento_titular (colunas novas)",
+      "bloqueia": [
+        "dominiosConsentimento",
+        "consentimentos",
+        "registrarConsentimento",
+        "revogarConsentimento"
+      ],
+      "ddl": "canal_registro VARCHAR(20) NULL CHECK IN ('portal','balcao','sistema'), conta_portal_paciente_id BIGINT UNSIGNED NULL FK, vinculo_responsavel_portal_id NULL FK. E o contrato do portal passa a usar os códigos de texto do modelo (situacao/tipo_signatario e motivo de revogação) no lugar dos ids numéricos dos domínios antigos (ConsentimentoPortal.situacao/signatario: number -> código)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_titular (colunas novas)",
+      "bloqueia": [
+        "pedidos",
+        "registrarPedido",
+        "cancelarPedido"
+      ],
+      "ddl": "conta_portal_paciente_id BIGINT UNSIGNED NULL FK (pedido aberto pela conta do portal), motivo_cancelamento VARCHAR(40) NULL, observacao_cancelamento VARCHAR(500) NULL, cancelado_em DATETIME(3) NULL, fundamento VARCHAR(200) NULL; e o mapa de situação do serviço (vocabulário do portal) para o CHECK do pedido_titular (recebido/em_analise/.../cancelado) no domínio."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ato_copia_prontuario (nova, filha de solicitacao_copia_prontuario) ou ligação pedido_titular -> solicitacao_copia_prontuario",
+      "bloqueia": [
+        "filaCopias",
+        "atosCopia",
+        "pedirCopia",
+        "registrarAtoCopia"
+      ],
+      "ddl": "id, estabelecimento_id, solicitacao_copia_prontuario_id FK (e pedido_titular_id FK na solicitação), ato CHECK IN ('solicitacao','legitimidade','geracao','entrega'), solicitante VARCHAR(30), vinculo VARCHAR(30), prova VARCHAR(40), hash_conteudo CHAR(64), paginas INT UNSIGNED, meio VARCHAR(20), recebedor VARCHAR(150), usuario_id, ocorrido_em; UNIQUE (solicitacao, ato) exceto geracao. Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, estabelecimento_id quando for do estabelecimento, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+    },
+    {
+      "tipo": "leitura",
+      "tabela": "documento_assinado + liberacao do portal",
+      "bloqueia": [
+        "documentos"
+      ],
+      "ddl": "Definir a regra de publicação de documento no portal (tipo_documento publicado e situacao 'assinado') e a ligação com os eventos de assinatura (nivel atingido, ICP); sem isso a porta não sabe quais documentos o paciente pode ver."
+    },
+    {
+      "tipo": "leitura",
+      "tabela": "trilha_auditoria",
+      "bloqueia": [
+        "leituras"
+      ],
+      "ddl": "Índice/colunas para o relatório de acessos do titular (LGPD art. 18): paciente_id BIGINT UNSIGNED NULL e evento VARCHAR(80) NULL na trilha_auditoria, com KEY (paciente_id, ocorrido_em); hoje o paciente só ficaria nos dados JSON (consulta sem índice)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "agenda_online_configuracao (nova)",
+      "bloqueia": [
+        "agendaOnline.configs",
+        "agendaOnline.config",
+        "gravarConfig"
+      ],
+      "ddl": "id, estabelecimento_id, tipo CHECK IN ('consulta','exame'), agenda_id FK (agenda única do modelo), ativa BOOLEAN, antecedencia_horas, horizonte_dias, cancela_ate_horas SMALLINT UNSIGNED, pre_checkin BOOLEAN, valor_particular DECIMAL(12,2) NULL CHECK >=0, teleconsulta BOOLEAN CHECK (tipo='consulta' OR NOT teleconsulta); filhas agenda_online_convenio (fonte_pagadora_id) e agenda_online_servico (especialidade_id ou exame); UNIQUE (estabelecimento_id, tipo, agenda_id). Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, estabelecimento_id quando for do estabelecimento, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pre_checkin (colunas novas)",
+      "bloqueia": [
+        "preCheckinDaMarcacao",
+        "preCheckinPorId",
+        "preCheckinsDoPaciente",
+        "filaPreCheckin",
+        "enviarPreCheckin",
+        "decidirPreCheckin",
+        "reservarConferencia",
+        "liberarConferencia",
+        "cancelarPreCheckin"
+      ],
+      "ddl": "conta_portal_paciente_id FK, dados_propostos JSON (campos da alteração do cadastro), campos_gravados JSON, termos_versao VARCHAR(20), reservado_por_usuario_id + reservado_em (reserva da conferência), situacao com 'cancelado'; filha pre_checkin_documento (tipo, arquivo_id FK, sha256 CHAR(64), mime)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "intencao_pagamento_portal e conciliacao_pagamento_portal (novas)",
+      "bloqueia": [
+        "pagamentoPorTransacao",
+        "pagamentoPorId",
+        "pagamentosDoPaciente",
+        "tesouraria",
+        "pagamentoTesouraria",
+        "iniciarPagamento",
+        "confirmarPagamento",
+        "registrarConciliacao"
+      ],
+      "ddl": "intencao_pagamento_portal: id, estabelecimento_id, conta_portal_paciente_id, paciente_id, marcacao_horario_id, valor DECIMAL(12,2) CHECK >0, forma CHECK IN ('pix','cartao-credito'), conector CHECK IN ('simulado','gateway'), transacao VARCHAR(80) UNIQUE, situacao CHECK IN ('pendente','confirmado','recusado','expirado','duplicado'), expira_em, confirmado_em, confirmado_por, pix_copia_e_cola TEXT, endereco_cartao VARCHAR(500), recebimento_caixa_id FK (baixa no financeiro). conciliacao_pagamento_portal: intencao FK, acao CHECK IN ('conciliado','divergente','estorno'), valor, referencia, motivo, usuario_id, UNIQUE de uma baixa e um estorno por pagamento. Convenções do ADR 0002: id BIGINT UNSIGNED AUTO_INCREMENT, estabelecimento_id quando for do estabelecimento, criado_em/criado_por/alterado_em/alterado_por/versao/excluido_em/excluido_por/origem, CHECK nas situações, FK ON DELETE RESTRICT, nomes de negócio."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "resposta_pesquisa_satisfacao (colunas novas)",
+      "bloqueia": [
+        "pesquisasDoPaciente",
+        "responderPesquisa"
+      ],
+      "ddl": "marcacao_horario_id BIGINT UNSIGNED NULL FK e conta_portal_paciente_id NULL FK, UNIQUE (marcacao_horario_id) para a resposta única por marcação; e o modelo de pesquisa padrão do portal (modelo_pesquisa_satisfacao canal 'portal') como parâmetro do estabelecimento."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/portal/respostas.ts",
+      "feito": "destino z.enum(['legado','memoria']) -> z.enum(['banco','memoria']) (pedido da tarefa; única linha alterada fora do lote)."
+    },
+    {
+      "tipo": "carga-inicial",
+      "prioridade": "bloqueante-F2.2",
+      "tabela": "canal_ouvidoria e motivo_manifestacao (catálogo da ouvidoria)",
+      "bloqueia": [
+        "registrarManifestacao"
+      ],
+      "ddl": "A carga inicial do catálogo da ouvidoria no 'criar novo cliente' (tools/db/criar_cliente.py ou migração de dados do 18_QUA) precisa trazer o canal_ouvidoria codigo='portal' (Portal do paciente) e o motivo_manifestacao codigo='geral' (Assunto geral, triagem da ouvidoria). Hoje nenhuma migração, carregador ou ferramenta cria essas linhas: sem o canal, a manifestação pelo portal recusa com 503 'canal-portal-ausente'. Sem o motivo 'geral', a manifestação sem assunto entra sem motivo (motivo_manifestacao_id NULL) e não é recusada."
+    },
+    {
+      "tipo": "contrato-dominio",
+      "tabela": "packages/contratos/src/portal/agenda-online.ts e packages/dominio-agenda (online/regras.ts, tempo.ts, estado-horario.ts)",
+      "bloqueia": [],
+      "ddl": "O contrato do portal e as regras do domínio da agenda ainda usam hora HHMM (FORMATO_HHMM de formatacao/hora-legada) e estadoDaMarcacao sobre sinais S/N e letras; a porta de consultas migrada devolve HH:MM e a situação de negócio. O serviço do portal converte na fronteira (paraHhmm e estadoPelaSituacao em agenda/servico.ts). Pedido: unificar em HH:MM no contrato e no domínio, e trocar estadoDaMarcacao(SinaisMarcacao) pela situação de negócio; depois disso as duas funções de fronteira saem do serviço."
+    }
+  ],
+  "pendencias": [
+    "Integrador: aplicar 'registrar' e 'fecho_tsconfig' (25 arquivos com o modulo.ts); apagar apps/api/tsconfig.lote-03-12.tmp.json se ainda existir.",
+    "Os comentários @AuditadoNoHandler dos controllers ainda citam nomes de tabela antigos (só texto de documentação)."
+  ],
+  "avisos": [
+    "Com o destino 'banco' (núcleo configurado), o portal do paciente INTEIRO fica indisponível até o DDL da conta (pedido 1, bloqueante da F2.2): conta, contaPorEmail e contaPorConvite recusam com 503 'recurso-sem-modelo', então ninguém recebe convite, ativa a conta nem entra. Por consequência ficam inalcançáveis todas as rotas autenticadas do portal, mesmo as que têm SQL pronto: resultados, documentos, manifestações (registrarManifestacao e manifestacoes), responsável, consentimentos, pedidos do titular, cópia do prontuário, relatório de acessos, a agenda online (opções, horários, marcar, cancelar, remarcar), o pré-check-in, o pagamento e a pesquisa.",
+    "Telas internas indisponíveis no banco (503 'recurso-sem-modelo'): conta do paciente na recepção (convite, bloqueio, encerramento), fila e decisão dos vínculos do responsável, troca de e-mail no balcão, fila de cópias do prontuário, configuração da agenda online, fila e conferência do pré-check-in, tesouraria e conciliação das cobranças do portal.",
+    "Job da vigência (encerramento de vínculos por maioridade/validade/óbito e de contas por óbito/unificação): no banco o módulo NÃO o liga enquanto a leitura das contas abertas recusar (aviso único no log, código sem dado pessoal); se a recusa vier depois, o job registra o código e para. Até o DDL, nenhum encerramento automático acontece.",
+    "A manifestação pelo portal, quando a conta existir, ainda depende da carga inicial do catálogo da ouvidoria (pedido 'carga-inicial'): sem o canal 'portal', 503 'canal-portal-ausente'. O assunto livre não é mais recusado: bate com código ou descrição do motivo, ou vai no relato.",
+    "As leituras que o DDL atual comporta (consentimentos por paciente, pedidos do titular, pré-check-in por marcação, conta por paciente) não foram ligadas: o serviço as usa só atrás da conta (sessão) e, nos consentimentos, sobre os domínios numéricos (situação, signatário, revogação) que o modelo não tem; ligá-las agora não libera nenhuma rota. Entram junto com o DDL dos pedidos 1, 4, 5 e 10.",
+    "No modo memória (dev/ci sem núcleo), a agenda de consultas do portal é outra instância da memória da agenda do módulo agenda (estados separados na sessão sintética); os testes do lote usam uma porta compartilhada. Em banco as duas leem as mesmas tabelas.",
+    "Cobertura: os 3 int specs apagados (cópia do prontuário, autorização do portal, responsável) rodavam sobre a cópia antiga; as mesmas regras (só o documento do próprio titular, outro paciente não, escopo do responsável, CSRF, bloqueio que derruba a sessão, recusa para maior, quem pede não aprova) seguem cobertas pela HTTP em memória (portal-paciente.spec.ts e aplicacao/servico.spec.ts, verdes). A versão no banco depende do DDL; o int spec da porta própria cobre o que tem modelo (paciente, prontuário, guarda legal, capacidades, nomes, feriados nas 4 abrangências, manifestação pelo serviço com a trilha)."
+  ]
+}

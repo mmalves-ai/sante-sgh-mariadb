@@ -70,7 +70,7 @@ export class MeuEspacoController {
   @Post('pops/:id/ciencia')
   @HttpCode(200)
   @Permissao('pessoas.pop.ciencia')
-  @AuditadoNoHandler('SGH_PES_POP_CIENCIA com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('ciencia_pop com a trilha_auditoria na mesma transação')
   async ciencia(
     @Param('id') id: string,
     @Body() b: unknown,

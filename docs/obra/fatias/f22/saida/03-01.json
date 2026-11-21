@@ -1,0 +1,137 @@
+{
+ "registrar": [
+  "cirurgia"
+ ],
+ "fecho_tsconfig": [
+  "src/modulos/cirurgia/anestesia-porta-memoria.ts",
+  "src/modulos/cirurgia/anestesia-porta-propria.ts",
+  "src/modulos/cirurgia/anestesia-porta.ts",
+  "src/modulos/cirurgia/anestesia.controller.ts",
+  "src/modulos/cirurgia/anestesia.spec-util.ts",
+  "src/modulos/cirurgia/anestesia.spec.ts",
+  "src/modulos/cirurgia/aplicacao/ficha.autorizacao.int.spec.ts",
+  "src/modulos/cirurgia/aplicacao/trava-incisao.int.spec.ts",
+  "src/modulos/cirurgia/banco-apoio.ts",
+  "src/modulos/cirurgia/bloco-seguro-porta-memoria.ts",
+  "src/modulos/cirurgia/bloco-seguro-porta-propria.ts",
+  "src/modulos/cirurgia/bloco-seguro-porta.ts",
+  "src/modulos/cirurgia/bloco-seguro.controller.ts",
+  "src/modulos/cirurgia/bloco-seguro.spec-util.ts",
+  "src/modulos/cirurgia/bloco-seguro.spec.ts",
+  "src/modulos/cirurgia/cirurgia.controller.ts",
+  "src/modulos/cirurgia/cirurgia.spec.ts",
+  "src/modulos/cirurgia/esquemas.ts",
+  "src/modulos/cirurgia/modulo.ts",
+  "src/modulos/cirurgia/operacoes.ts",
+  "src/modulos/cirurgia/painel-bloco-familia.ts",
+  "src/modulos/cirurgia/porta-memoria.ts",
+  "src/modulos/cirurgia/porta-propria.int.spec.ts",
+  "src/modulos/cirurgia/porta-propria.ts",
+  "src/modulos/cirurgia/porta.ts",
+  "src/modulos/cirurgia/public-api.ts",
+  "src/modulos/cirurgia/regras.ts",
+  "src/modulos/cirurgia/servico.ts",
+  "src/modulos/cirurgia/tipos.ts",
+  "src/modulos/cirurgia/trava-incisao.ts",
+  "src/modulos/cirurgia/vocabulario-banco.spec.ts",
+  "src/modulos/cirurgia/vocabulario-banco.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "registrar",
+   "modulo": "cirurgia",
+   "motivo": "modulo.ts monta CirurgiaController, AnestesiaController e BlocoSeguroController com as portas próprias (núcleo), memória (dev/ci) ou indisponíveis."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/cirurgia/respostas.ts (e anestesia-respostas.ts, bloco-seguro-respostas.ts)",
+   "motivo": "destino 'legado' | 'memoria' -> 'banco' | 'memoria'; até lá servico.ts converte por destinoDoContrato. A chave tiposSinalLegado da resposta dos domínios da ficha -> tiposSinal (a porta já usa tiposSinal)."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/cirurgia/entradas.ts e packages/dominio-cirurgia/src/equipe.ts",
+   "motivo": "Vocabulário do sistema de origem nos contratos e no domínio: hora em HHMM, reg (atendimento), pares com nomes de coluna (CRM/ID_CRM, CIRUR/ID_CIRUR), porte P/M/G e contaminação L/P/C em letras, recursos por sigla de coluna, motivo 'OUTRO', solicitante 'convenio'. A porta própria traduz na fronteira (ids do modelo; pares montados de agendamento_cirurgico_equipe pela função); pedido: contratos com instante ISO, ids e a equipe como lista {funcao, profissional}."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "checklist_cirurgia_segura / ficha_anestesica",
+   "motivo": "O checklist (indução antes da incisão) e a ficha anestésica são abertos ANTES do registro do ato, mas exigem ato_cirurgico_id NOT NULL. Sem isso, abrir o checklist, confirmar itens, concluir momento, registrar a exceção da incisão, abrir/lançar/encerrar/assinar a ficha ficam indisponíveis no banco (409 modelo-pendente).",
+   "ddl": "ALTER TABLE checklist_cirurgia_segura ADD COLUMN agendamento_cirurgico_id BIGINT UNSIGNED NULL AFTER ato_cirurgico_id, MODIFY ato_cirurgico_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_checklist_cirurgia_segura_alvo CHECK (ato_cirurgico_id IS NOT NULL OR agendamento_cirurgico_id IS NOT NULL), ADD UNIQUE KEY uq_checklist_cirurgia_segura_agendamento (agendamento_cirurgico_id), ADD CONSTRAINT fk_checklist_cirurgia_segura_agendamento_cirurgico_id FOREIGN KEY (agendamento_cirurgico_id) REFERENCES agendamento_cirurgico (id) ON DELETE RESTRICT;\nALTER TABLE ficha_anestesica ADD COLUMN agendamento_cirurgico_id BIGINT UNSIGNED NULL AFTER ato_cirurgico_id, MODIFY ato_cirurgico_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_ficha_anestesica_alvo CHECK (ato_cirurgico_id IS NOT NULL OR agendamento_cirurgico_id IS NOT NULL), ADD KEY ix_ficha_anestesica_agendamento_cirurgico_id (agendamento_cirurgico_id), ADD CONSTRAINT fk_ficha_anestesica_agendamento_cirurgico_id FOREIGN KEY (agendamento_cirurgico_id) REFERENCES agendamento_cirurgico (id) ON DELETE RESTRICT;"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "passagem_ficha_anestesica, lacuna_ficha_anestesica, adendo_ficha_anestesica",
+   "motivo": "A ficha registra a passagem de responsabilidade entre anestesistas (momento, de, para, resumo), a lacuna justificada (início, fim, motivo) e o adendo após a assinatura (texto, profissional). O modelo não tem; a leitura devolve listas vazias e as gravações passar/justificar/adendo ficam indisponíveis.",
+   "ddl": "CREATE TABLE passagem_ficha_anestesica (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, ficha_anestesica_id BIGINT UNSIGNED NOT NULL, sequencia SMALLINT UNSIGNED NOT NULL, momento DATETIME(3) NOT NULL, de_profissional_id BIGINT UNSIGNED NOT NULL, para_profissional_id BIGINT UNSIGNED NOT NULL, resumo VARCHAR(1000) NOT NULL, <auditoria padrão>, CONSTRAINT ck_passagem_ficha_anestesica_pessoas CHECK (de_profissional_id <> para_profissional_id), UNIQUE KEY uq_passagem_ficha_anestesica_sequencia (ficha_anestesica_id, sequencia));\nCREATE TABLE lacuna_ficha_anestesica (id ..., ficha_anestesica_id BIGINT UNSIGNED NOT NULL, inicio DATETIME(3) NOT NULL, fim DATETIME(3) NOT NULL, motivo VARCHAR(500) NOT NULL, profissional_id BIGINT UNSIGNED NULL, <auditoria>, CONSTRAINT ck_lacuna_ficha_anestesica_periodo CHECK (fim > inicio));\nCREATE TABLE adendo_ficha_anestesica (id ..., ficha_anestesica_id BIGINT UNSIGNED NOT NULL, sequencia SMALLINT UNSIGNED NOT NULL, texto TEXT NOT NULL, profissional_id BIGINT UNSIGNED NOT NULL, <auditoria>, UNIQUE KEY (ficha_anestesica_id, sequencia)); FKs ON DELETE RESTRICT. Também ficha_anestesica.hash_assinatura CHAR(64) NULL e assinada_por_profissional_id."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "avaliacao_pre_anestesica",
+   "motivo": "A APA do contrato traz critérios de Lee (lista), comorbidades, medicações em uso e o plano estruturado; o modelo só tem indice_lee e plano_anestesico em texto. Sem as colunas, registrar a APA no banco fica indisponível (409).",
+   "ddl": "ALTER TABLE avaliacao_pre_anestesica ADD COLUMN criterios_lee JSON NULL CHECK (criterios_lee IS NULL OR JSON_VALID(criterios_lee)), ADD COLUMN comorbidades TEXT NULL, ADD COLUMN medicacoes_em_uso TEXT NULL, ADD COLUMN plano_estruturado JSON NULL CHECK (plano_estruturado IS NULL OR JSON_VALID(plano_estruturado));"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "codigo_painel_familia",
+   "motivo": "O painel para familiares mostra só um código sorteado por paciente/dia; não há tabela. A porta devolve o mapa vazio: o painel da família fica sem linhas no banco.",
+   "ddl": "CREATE TABLE codigo_painel_familia (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, agendamento_cirurgico_id BIGINT UNSIGNED NOT NULL, dia DATE NOT NULL, codigo VARCHAR(10) NOT NULL, valido_ate DATETIME(3) NOT NULL, <auditoria>, UNIQUE KEY uq_codigo_painel_familia_dia_codigo (estabelecimento_id, dia, codigo), UNIQUE KEY uq_codigo_painel_familia_agendamento_dia (agendamento_cirurgico_id, dia)); FKs ON DELETE RESTRICT."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "movimento_paciente_bloco",
+   "motivo": "A saída do bloco registra o destino (unidade, UTI, domicílio...); o modelo só tem o leito. Mover paciente no rastreio fica indisponível no banco até o destino e a regra da unidade cirúrgica/atendimento do agendamento (atendimento_id NOT NULL) serem decididos.",
+   "ddl": "ALTER TABLE movimento_paciente_bloco ADD COLUMN destino_saida VARCHAR(30) NULL, ADD CONSTRAINT ck_movimento_paciente_bloco_destino CHECK (destino_saida IS NULL OR destino_saida IN ('unidade','uti','domicilio','centro_cirurgico','obito','outro'));"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "agendamento_cirurgico (portal do médico externo)",
+   "motivo": "O pedido feito pelo médico externo no portal (conta do portal, paciente informado e nascimento) e as versões do pedido alterado. Sem isso: estadosDoPortal e versoesDosPedidos respondem 409 modelo-pendente; solicitar pelo portal, retirar e alterar o pedido do portal ficam indisponíveis.",
+   "ddl": "ALTER TABLE agendamento_cirurgico ADD COLUMN portal_acesso_id BIGINT UNSIGNED NULL, ADD COLUMN paciente_informado VARCHAR(150) NULL, ADD COLUMN nascimento_informado DATE NULL, MODIFY paciente_id BIGINT UNSIGNED NULL, ADD CONSTRAINT ck_agendamento_cirurgico_paciente CHECK (paciente_id IS NOT NULL OR (canal_solicitacao = 'portal' AND paciente_informado IS NOT NULL AND situacao IN ('solicitado','em_analise','reprovado','cancelado')));\nCREATE TABLE agendamento_cirurgico_versao (id ..., agendamento_cirurgico_id BIGINT UNSIGNED NOT NULL, numero_versao SMALLINT UNSIGNED NOT NULL, dados JSON NOT NULL CHECK (JSON_VALID(dados)), motivo VARCHAR(500) NOT NULL, substituida_em DATETIME(3) NOT NULL, <auditoria>, UNIQUE KEY (agendamento_cirurgico_id, numero_versao));"
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "agendamento_cirurgico_recurso",
+   "motivo": "Os 13 recursos pedidos para a sala (microscópio, intensificador, vídeo, arco, congelação...). O modelo só tem reserva_uti: os demais recursos não são gravados nem lidos (a porta lê CTI pela reserva_uti).",
+   "ddl": "CREATE TABLE agendamento_cirurgico_recurso (id ..., agendamento_cirurgico_id BIGINT UNSIGNED NOT NULL, recurso VARCHAR(30) NOT NULL, <auditoria>, UNIQUE KEY (agendamento_cirurgico_id, recurso)); ou ligar a reserva_equipamento_cirurgia (decisão do dono)."
+  },
+  {
+   "tipo": "implementacao",
+   "motivo": "Próxima rodada do lote 03-01 (depois do DDL acima): registrarCirurgia sobre ato_cirurgico + ato_cirurgico_procedimento + participante_cirurgia (hoje 409 modelo-pendente com motivo na tela); os 12 métodos do GravadorAnestesia e os 9 do GravadorBlocoSeguro (hoje podeGravar=false e gravarSgh 409); contexto da anestesia com alergias, exames e medicações pela porta do PEP; 'utilizações' da ficha (cadastro inexistente); a bateria de regras de horário em describe.each memória × banco (a memória ainda não tem o cadastro da sala: preparo, duração mínima e procedimento vedado)."
+  },
+  {
+   "tipo": "mover",
+   "motivo": "apps/api/src/modulos/cirurgia/regras.ts (funcaoAnestesista, conferirAlteracaoPedido) -> packages/dominio-cirurgia, com teste."
+  },
+  {
+   "tipo": "integracao",
+   "motivo": "anestesia.controller.ts importa PORTA_SUPRIMENTOS de '../suprimentos/porta.js' (não da public-api) porque a public-api de suprimentos ainda carrega os adaptadores antigos (lotes 03-13/03-14); voltar à public-api ao fechar a onda. PAINEL_BLOCO_TV (recepção) era montado no app.module com PainelBlocoFamilia(blocoSeguro, cirurgia): ao migrar a recepção, importar as portas exportadas pelo ModuloCirurgia."
+  },
+  {
+   "tipo": "carga",
+   "tabela": "funcao_equipe_cirurgica, tipo_pendencia_cirurgica, motivo_suspensao_cirurgia",
+   "motivo": "A agenda no banco resolve a equipe, a pendência e o motivo pelo código do contrato (idPorCodigo). Sem a carga, agendar recusa 'funcao-equipe-cirurgica-inexistente', a pendência 'tipo-pendencia-cirurgica-inexistente' e o cancelamento 'motivo-suspensao-cirurgia-inexistente' (com a mensagem de carga pendente). Hoje os códigos só existem na massa do int.spec.",
+   "carga": "Carga versionada (catalogos/ ou db/, idempotente por codigo, aplicada pelo 'criar novo cliente'): funcao_equipe_cirurgica = cirurgiao, auxiliar1, auxiliar2, auxiliar3, instrumentador, anestesista, circulante, pediatra (FUNCOES_AGENDA + FUNCOES_REGISTRO de @sgh/dominio-cirurgia); tipo_pendencia_cirurgica = TIPOS_PENDENCIA de packages/contratos/src/cirurgia/vocabulario.ts; motivo_suspensao_cirurgia = MOTIVOS_CANCELAMENTO_CIRURGIA (com responsavel e aplicacao). Alternativa: mapeamento configurável por cliente (decisão do dono)."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "agendamento_cirurgico",
+   "motivo": "A marcação 'no bloco' (paciente admitido no bloco, antes da sala) não tem situação no modelo: POST estados/:id/andamento para 'no-bloco' responde 409 modelo-pendente com o motivo; 'em sala' grava em_andamento.",
+   "ddl": "ALTER TABLE agendamento_cirurgico DROP CONSTRAINT ck_agendamento_cirurgico_situacao, ADD CONSTRAINT ck_agendamento_cirurgico_situacao CHECK (situacao IN ('solicitado','em_analise','reprovado','agendado','confirmado','no_bloco','em_andamento','realizado','suspenso','cancelado')); e incluir 'no_bloco' nas situações que ocupam a sala (ck_agendamento_cirurgico_sala já exige sala/horário fora das 4 iniciais). Depois: @sgh/dominio-cirurgia situacaoDoEstado('no-bloco') -> 'no_bloco' e estadoDaSituacao('no_bloco') -> 'no-bloco'."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "packages/contratos/src/cirurgia/bloco-seguro-vocabulario.ts e anestesia-vocabulario.ts",
+   "motivo": "SITUACOES_CHECKLIST só tem aberto/concluido: o checklist dispensado (urgência) e o interrompido aparecem 'aberto' na tela (com a exceção nos campos dela). MARCOS_FICHA não tem indução, intubação e extubação, que o modelo grava: são lidos e não mostrados (vocabulario-banco.ts MARCOS_SEM_CONTRATO). Pedido: incluir as duas situações e os três marcos nos enums."
+  },
+  {
+   "tipo": "apoio",
+   "arquivo": "apps/api/src/modulos/exames/apoio-gravacao.ts",
+   "motivo": "PortaGravacaoM18.gravarSgh não carrega a chave de idempotência da requisição. O lote a passa por ContextoGravacaoCirurgia (s.porta + chaveIdempotencia, posto por comChave no cirurgia.controller); a anestesia e o bloco seguro ainda não (as gravações deles respondem 409). Pedido: ApoioGravacao.sgh ler o Idempotency-Key e levá-lo ao gravarSgh de todas as portas do M18."
+  },
+  {
+   "tipo": "dominio",
+   "arquivo": "packages/dominio-cirurgia/src/agenda-modelo.ts (novo) e index.ts (uma linha de export)",
+   "motivo": "Regras de agenda e a tradução situação do modelo <-> estado da tela levadas ao domínio, puras e testadas (agenda-modelo.spec.ts, 7 testes). Rode o vitest do pacote na conferência global."
+  }
+ ]
+}

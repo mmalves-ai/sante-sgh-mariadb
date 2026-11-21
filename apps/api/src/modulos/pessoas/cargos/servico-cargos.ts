@@ -1,10 +1,11 @@
 // Cargos e salários (W0-06, parte 4; M1 de mercado; matriz, linha "Tabelas de domínio"): o cadastro de cargos (CBO,
 // descrição, requisitos, conselho exigido), a tabela salarial por faixa e nível e o quadro de vagas aprovado por
 // centro de custo, com inclusão, alteração, inativação e exclusão.
-//   - cargo: a alteração leva motivo e o valor anterior (SGH_PES_CORRECAO); o referenciado (colaborador, faixa ou vaga)
+//   - cargo: a alteração leva motivo e o valor anterior (no histórico da trilha); o referenciado (colaborador, faixa ou vaga)
 //     se inativa; a exclusão física só vale para o nunca usado (409 com a contagem e a oferta da inativação);
 //   - faixa salarial e vaga: a alteração é versão nova a partir de uma data (a anterior acaba na véspera); a linha em
 //     vigor se inativa com motivo; a exclusão física só da lançada por engano (sem versão), com o retrato.
+// Melhoria: tipos de negócio próprios e nomes de tabela do modelo; a exclusão do cargo é lógica, com o retrato na trilha.
 // A chave de liberação é a do cadastro de colaboradores (`pessoas.colaborador`; proibido criar chave nova). A tabela
 // salarial e o quadro nascem vazios: os valores são dados do dono.
 import {
@@ -27,14 +28,6 @@ import {
   type VersaoFaixaSalarialEntrada,
   type VersaoVagaEntrada,
 } from '@sgh/contratos';
-import type {
-  CargoLido,
-  CorrecaoPesLida,
-  FaixaSalarialLida,
-  OcupacaoCargoLida,
-  VagaQuadroLida,
-  VinculoPessoasContado,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -42,7 +35,18 @@ import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js'
 import { ApoioGravacao } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import { CHAVE_PESSOAS_COLABORADOR } from '../servico.js';
-import type { AlvoDependenciaCargos, GravadorCargos, PortaCargos, TabelaCargos } from './porta-cargos.js';
+import type {
+  AlvoDependenciaCargos,
+  CargoRegistrado,
+  CorrecaoRegistrada,
+  DependenciaContada,
+  FaixaSalarialRegistrada,
+  GravadorCargos,
+  OcupacaoCargo,
+  PortaCargos,
+  TabelaCargos,
+  VagaQuadroRegistrada,
+} from './porta-cargos.js';
 
 const E = EVENTOS_AUDITAVEIS;
 
@@ -76,19 +80,19 @@ const ALVOS: Readonly<
   >
 > = {
   cargo: {
-    tabela: 'SGH_PES_CARGO',
+    tabela: 'cargo',
     dependencia: 'cargo',
     nome: 'O cargo',
     evento: E.pessoasCargoGravado.codigo,
   },
   faixa: {
-    tabela: 'SGH_PES_CARGO_FAIXA',
+    tabela: 'faixa_salarial',
     dependencia: 'salario-faixa',
     nome: 'A faixa salarial',
     evento: E.pessoasFaixaSalarialGravada.codigo,
   },
   vaga: {
-    tabela: 'SGH_PES_VAGA',
+    tabela: 'quadro_vaga',
     dependencia: 'vaga',
     nome: 'A vaga',
     evento: E.pessoasVagaGravada.codigo,
@@ -96,7 +100,7 @@ const ALVOS: Readonly<
 };
 
 /** 409 da exclusão com vínculo: a contagem por grupo e a oferta da inativação (a tela mostra os dois). */
-function recusaComVinculos(alvo: AlvoCargos, v: readonly VinculoPessoasContado[]): ErroProblema {
+function recusaComVinculos(alvo: AlvoCargos, v: readonly DependenciaContada[]): ErroProblema {
   const porGrupo = new Map<string, number>();
   for (const x of v) porGrupo.set(x.grupo, (porGrupo.get(x.grupo) ?? 0) + x.quantidade);
   const linhas = [...porGrupo].map(([g, q]) => `${g}: ${q}`);
@@ -114,7 +118,7 @@ function recusaComVinculos(alvo: AlvoCargos, v: readonly VinculoPessoasContado[]
   );
 }
 
-const correcaoResposta = (c: CorrecaoPesLida): CorrecaoResposta => ({
+const correcaoResposta = (c: CorrecaoRegistrada): CorrecaoResposta => ({
   id: c.id,
   operacao: c.operacao,
   registro: c.registro,
@@ -127,7 +131,7 @@ const correcaoResposta = (c: CorrecaoPesLida): CorrecaoResposta => ({
 
 const vigente = (x: { ate: string | null; ativo: boolean }) => x.ate === null && x.ativo;
 
-const faixaResposta = (f: FaixaSalarialLida): FaixaSalarialResposta => ({ ...f, vigente: vigente(f) });
+const faixaResposta = (f: FaixaSalarialRegistrada): FaixaSalarialResposta => ({ ...f, vigente: vigente(f) });
 
 export class ServicoCargos {
   readonly apoio: ApoioGravacao<GravadorCargos>;
@@ -171,11 +175,11 @@ export class ServicoCargos {
   }
 
   private cargoResposta(
-    c: CargoLido,
+    c: CargoRegistrado,
     cbo: Map<string, string>,
-    faixas: readonly FaixaSalarialLida[],
-    vagas: readonly VagaQuadroLida[],
-    ocupacao: readonly OcupacaoCargoLida[],
+    faixas: readonly FaixaSalarialRegistrada[],
+    vagas: readonly VagaQuadroRegistrada[],
+    ocupacao: readonly OcupacaoCargo[],
   ): CargoResposta {
     return {
       ...c,
@@ -212,15 +216,15 @@ export class ServicoCargos {
       this.porta.cboPorCodigo(s.porta, [c.cbo]),
     ]);
     const [corrCargo, corrFaixa, corrVaga] = await Promise.all([
-      this.porta.correcoes(s.porta, 'SGH_PES_CARGO', [c.id]),
+      this.porta.correcoes(s.porta, 'cargo', [c.id]),
       this.porta.correcoes(
         s.porta,
-        'SGH_PES_CARGO_FAIXA',
+        'faixa_salarial',
         faixas.map((f) => f.id),
       ),
       this.porta.correcoes(
         s.porta,
-        'SGH_PES_VAGA',
+        'quadro_vaga',
         vagas.map((v) => v.id),
       ),
     ]);
@@ -244,7 +248,7 @@ export class ServicoCargos {
     return this.porta.buscarCbo(s.porta, termo);
   }
 
-  private async cargoOu404(s: SessaoCadastro, id: number): Promise<CargoLido> {
+  private async cargoOu404(s: SessaoCadastro, id: number): Promise<CargoRegistrado> {
     const c = await this.porta.cargo(s.porta, id);
     if (!c) throw naoEncontrado('O cargo');
     return c;
@@ -275,7 +279,7 @@ export class ServicoCargos {
       s,
       E.pessoasCargoGravado.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_CARGO', id: String(r) }),
+      (r: number) => ({ tabela: 'cargo', id: String(r) }),
       (g) => g.incluirCargo({ ...e, por: s.login }),
     );
     return { id, mensagem: 'Cargo incluído.' };
@@ -308,11 +312,11 @@ export class ServicoCargos {
       s,
       E.pessoasCargoGravado.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      { tabela: 'SGH_PES_CARGO', id: String(c.id), chave: 'alteracao' },
+      { tabela: 'cargo', id: String(c.id), chave: 'alteracao' },
       async (g) => {
         await g.alterarCargo({ id: c.id, versao: e.versao, ...depois, por: s.login });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_CARGO',
+          tabela: 'cargo',
           registro: c.id,
           operacao: 'cargo.alterado',
           antes: Object.fromEntries(campos.map((k) => [k, antes[k]])),
@@ -408,7 +412,7 @@ export class ServicoCargos {
 
   // ── Faixa salarial ─────────────────────────────────────────────────────────────────────────────────────────
 
-  private async cargoAtivo(s: SessaoCadastro, id: number): Promise<CargoLido> {
+  private async cargoAtivo(s: SessaoCadastro, id: number): Promise<CargoRegistrado> {
     const c = await this.cargoOu404(s, id);
     if (!c.ativo)
       throw recusaRegra('cargo-inativo', 'O cargo está inativo: reative-o antes de incluir.', ['cargo']);
@@ -429,7 +433,7 @@ export class ServicoCargos {
       s,
       E.pessoasFaixaSalarialGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_CARGO_FAIXA', id: String(r) }),
+      (r: number) => ({ tabela: 'faixa_salarial', id: String(r) }),
       (g) => g.incluirFaixa({ ...e, cargo: c.id, por: s.login }),
     );
     return { id, mensagem: 'Faixa salarial incluída.' };
@@ -453,7 +457,7 @@ export class ServicoCargos {
       s,
       E.pessoasFaixaSalarialGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_CARGO_FAIXA', id: String(r), chave: 'versao' }),
+      (r: number) => ({ tabela: 'faixa_salarial', id: String(r), chave: 'versao' }),
       async (g) => {
         const n = await g.versionarFaixa({
           anterior: f,
@@ -463,7 +467,7 @@ export class ServicoCargos {
           por: s.login,
         });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_CARGO_FAIXA',
+          tabela: 'faixa_salarial',
           registro: n,
           operacao: 'faixa.versao',
           antes: { id: f.id, valor: f.valor, desde: f.desde },
@@ -500,7 +504,7 @@ export class ServicoCargos {
       s,
       E.pessoasVagaGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_VAGA', id: String(r) }),
+      (r: number) => ({ tabela: 'quadro_vaga', id: String(r) }),
       (g) => g.incluirVaga({ ...e, cargo: c.id, por: s.login }),
     );
     return { id, mensagem: 'Vaga incluída no quadro aprovado.' };
@@ -527,7 +531,7 @@ export class ServicoCargos {
       s,
       E.pessoasVagaGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_VAGA', id: String(r), chave: 'versao' }),
+      (r: number) => ({ tabela: 'quadro_vaga', id: String(r), chave: 'versao' }),
       async (g) => {
         const n = await g.versionarVaga({
           anterior: v,
@@ -537,7 +541,7 @@ export class ServicoCargos {
           por: s.login,
         });
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_VAGA',
+          tabela: 'quadro_vaga',
           registro: n,
           operacao: 'vaga.versao',
           antes: { id: v.id, quantidade: v.quantidade, desde: v.desde },

@@ -9,7 +9,7 @@
 //                                                         farmacêutico; MANIPULACAO_CONFERIDA)
 //   POST /api/farmacia/manipulacao/:id/baixa              a baixa do insumo: a saída do estoque a paciente internado
 //                                                         (suprimentos.registrarSaida com o bloco `manipulacao`)
-// A abertura e a conferência só do novo (SGH_), com a SGH_TRILHA na mesma transação; a baixa pelo EXECUTOR (a ordem
+// A abertura e a conferência diretas, com a trilha na mesma transação; a baixa pelo EXECUTOR (a ordem
 // ligada na mesma transação da saída). Nasce desligado (chave `suprimentos.manipulacao`, POL-3).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Param, Post, Query, Req } from '@nestjs/common';
 import {
@@ -166,7 +166,7 @@ export class ManipulacaoController {
     gravacao: GravacaoAgenda;
   }> {
     const s = sessaoDe(req);
-    req.sghAlvo = { tabelaAlvo: 'SGH_SUP_MANIPULACAO' };
+    req.sghAlvo = { tabelaAlvo: 'ordem_manipulacao' };
     const hoje = (await this.suprimentos.relogio(s.porta)).hoje;
     const d = de && DATA.test(de) ? de : hoje;
     const a = ate && DATA.test(ate) ? ate : d;
@@ -237,9 +237,7 @@ export class ManipulacaoController {
   @Post()
   @HttpCode(201)
   @Permissao(P.abrir)
-  @AuditadoNoHandler(
-    'suprimentos.abrirOrdemManipulacao: SGH_SUP_MANIPULACAO com a SGH_TRILHA na mesma transação',
-  )
+  @AuditadoNoHandler('suprimentos.abrirOrdemManipulacao: ordem_manipulacao com a trilha na mesma transação')
   async abrir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoManipulacao> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirOrdemManipulacao, b);
@@ -261,7 +259,7 @@ export class ManipulacaoController {
       E.manipulacaoAberta.codigo,
       P.abrir,
       (y: { id: number }) => ({
-        tabela: 'SGH_SUP_MANIPULACAO',
+        tabela: 'ordem_manipulacao',
         id: String(y.id),
         paciente: null,
         chave: `${e.itemPrescrito}`,
@@ -323,9 +321,7 @@ export class ManipulacaoController {
   @Post(':id/conferencias')
   @HttpCode(201)
   @Permissao(P.conferir)
-  @AuditadoNoHandler(
-    'suprimentos.conferirManipulacao: SGH_SUP_MANIPULACAO com a SGH_TRILHA na mesma transação',
-  )
+  @AuditadoNoHandler('suprimentos.conferirManipulacao: ordem_manipulacao com a trilha na mesma transação')
   async conferir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -350,7 +346,7 @@ export class ManipulacaoController {
       s,
       E.manipulacaoConferida.codigo,
       P.conferir,
-      { tabela: 'SGH_SUP_MANIPULACAO', id: String(e.ordem), paciente: null, chave: e.resultado },
+      { tabela: 'ordem_manipulacao', id: String(e.ordem), paciente: null, chave: e.resultado },
       async (g) => {
         const o = await g.ordem(e.ordem);
         if (!o)
@@ -466,7 +462,7 @@ export class ManipulacaoController {
         manipulacao: { ordem: o.id, versaoVista: e.versaoVista },
       },
       'Insumo baixado do estoque e ligado à ordem de manipulação.',
-      { idempotencyKey: e.chave },
+      { chaveIdempotencia: e.chave },
     );
   }
 }

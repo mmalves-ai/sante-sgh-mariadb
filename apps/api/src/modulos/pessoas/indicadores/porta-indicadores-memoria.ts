@@ -124,13 +124,24 @@ export class PortaIndicadoresPessoasMemoria implements PortaIndicadoresPessoas {
         treinamento: fonte('treinamento', sem(noPeriodo(f.treinamento))),
         acidentes: fonte(
           'sesmt',
-          noPeriodo(f.acidentes).map((x) => ({
-            hospital: x.hospital,
-            setor: x.setor,
-            nomeSetor: x.nomeSetor,
-            quantidade: 1,
-            comAfastamento: x.comAfastamento ? 1 : 0,
-          })),
+          // Somados por setor, como a porta do banco.
+          [
+            ...noPeriodo(f.acidentes)
+              .reduce((m, x) => {
+                const k = `${x.setor}|${x.nomeSetor}`;
+                const t = m.get(k) ?? {
+                  hospital: x.hospital,
+                  setor: x.setor,
+                  nomeSetor: x.nomeSetor,
+                  quantidade: 0,
+                  comAfastamento: 0,
+                };
+                t.quantidade += 1;
+                t.comAfastamento += x.comAfastamento ? 1 : 0;
+                return m.set(k, t);
+              }, new Map<string, { hospital: string; setor: number | null; nomeSetor: string; quantidade: number; comAfastamento: number }>())
+              .values(),
+          ],
         ),
         censo: fonte('censo', sem(noPeriodo(f.censo))),
         dimensionamento: fonte('dimensionamento', sem(doSetor([...ultimo.values()]))),

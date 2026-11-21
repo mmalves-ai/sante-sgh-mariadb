@@ -4,8 +4,8 @@
 // aprovação; o plantão mudado depois do pedido derruba a aprovação), "quem está de plantão agora" (regra 10: o noturno
 // que atravessa a meia-noite, o sobreaviso com o tempo de chegada, o acionamento e a chegada com o atraso) e o
 // dimensionamento (regra 9: a prévia com as parcelas, a classificação do turno e o registro só com a chave).
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
-import { TETO_LEITURA_INSTANTE } from '@sgh/legado';
+import { TETO_LEITURA_INSTANTE } from './tipos.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/public-api.js';
 import { EVENTO_ESCALA_ALTERADA, EVENTO_SOBREAVISO_ACIONADO, EVENTO_TROCA_APROVADA } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -16,12 +16,12 @@ import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js';
 import { ServicoPessoas } from '../servico.js';
-import { PortaEscalaMemoria } from './porta-escala-memoria.js';
+import { CONTEXTO_SINTETICO, PortaEscalaMemoria } from './porta-escala-memoria.js';
 import { ServicoEscala } from './servico-escala.js';
 import { ServicoPlantao } from './servico-plantao.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -34,7 +34,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -74,7 +74,7 @@ function sessao(login = 'SINT.ESCALA', pode: (c: string) => boolean = () => true
     hospital: 'pc',
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: { ...CONTEXTO_SINTETICO, rede: 'rede-sintetica', hospital: 'pc' },
     pode,
   };
 }

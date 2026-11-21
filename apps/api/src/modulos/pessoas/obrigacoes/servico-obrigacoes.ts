@@ -3,7 +3,7 @@
 // competência (conferida com o eSocial), a geração (prévia ou gravação) da obrigação do período FECHADO na folha (o
 // FGTS Digital, a SEFIP, o CAGED, a RAIS), o arquivo para baixar (cifrado no banco; a leitura é auditada), a entrega
 // registrada (no FGTS Digital, a guia conciliada) e o cancelamento. Nada se transmite ao governo (regra 3): o arquivo vai
-// ao programa oficial pelas mãos do DP. Grava só SGH_ com a trilha na mesma transação, atrás da chave `pessoas.folha`
+// ao programa oficial pelas mãos do DP. Grava pelo gravador da folha, com a trilha na mesma transação, atrás da chave `pessoas.folha`
 // (POL-3). Nenhuma resposta traz CPF, NIS ou nome; os valores só com `pessoas.salario.ler`.
 //
 // D-FONTE-OBR-538 (POL-5): os valores vêm dos processamentos `calculada` das competências do período, que o fechamento
@@ -71,20 +71,24 @@ import {
   type TrabalhadorObrigacao,
   type VinculoParaObrigacao,
 } from '@sgh/dominio-pessoas';
-import {
-  type FechamentoFolhaLido,
-  type ObrigacaoPesLida,
-  type ProcessoFolhaLido,
-  TETO_OBRIGACOES,
-  type VinculoCalculoLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js';
 import { ApoioGravacao } from '../../exames/public-api.js';
 import { type ServicoEsocial, vigenciaNa } from '../esocial/servico-esocial.js';
-import type { GravadorCalculoFolha } from '../folha/porta-calculo.js';
+import type { GravadorCalculoFolha, PortaCalculoFolha } from '../folha/porta-calculo.js';
+
+// Os registros da folha como a porta do cálculo os entrega (tipos de negócio do módulo da folha, sem cópia local).
+type ObrigacaoGravada = NonNullable<Awaited<ReturnType<GravadorCalculoFolha['obrigacaoComTrava']>>>;
+type FechamentoDaFolha = NonNullable<
+  Awaited<ReturnType<GravadorCalculoFolha['fechamentoEmVigorComTrava']>>['vigente']
+>;
+type ProcessoDaFolha = NonNullable<Awaited<ReturnType<GravadorCalculoFolha['processo']>>>;
+type VinculoDoCalculo = Awaited<ReturnType<PortaCalculoFolha['vinculos']>>[number];
+
+/** Teto da lista de obrigações de uma consulta (acima dele a resposta sai marcada como limitada). */
+export const TETO_OBRIGACOES = 300;
 
 export const PERMISSOES_OBRIGACOES = {
   ler: 'pessoas.obrigacao.ler',
@@ -125,7 +129,7 @@ async function emLotes<T, R>(xs: readonly T[], n: number, fn: (x: T) => Promise<
 }
 
 /** A obrigação para a API: os valores só com `pessoas.salario.ler` (as quantidades ficam). */
-export const paraObrigacaoApi = (o: ObrigacaoPesLida, verValores: boolean): ObrigacaoLegal => ({
+export const paraObrigacaoApi = (o: ObrigacaoGravada, verValores: boolean): ObrigacaoLegal => ({
   id: o.id,
   empresa: o.empresa,
   tipo: o.tipo,
@@ -159,7 +163,7 @@ export const paraObrigacaoApi = (o: ObrigacaoPesLida, verValores: boolean): Obri
   versao: o.versao,
 });
 
-const paraProcesso = (p: ProcessoFolhaLido): ProcessoParaObrigacao => ({
+const paraProcesso = (p: ProcessoDaFolha): ProcessoParaObrigacao => ({
   id: p.id,
   tipo: p.tipo,
   competencia: p.competencia,
@@ -201,10 +205,10 @@ interface Montagem {
   readonly arquivo: ArquivoObrigacao | null;
   readonly totais: TotaisObrigacao | null;
   readonly conferencia: ConferenciaObrigacao | null;
-  readonly fechamentos: readonly FechamentoFolhaLido[];
+  readonly fechamentos: readonly FechamentoDaFolha[];
   readonly parametros: ParametrosObrigacoesLidos | null;
   readonly trabalhadoresFgts: readonly TrabalhadorApuracaoFgts[] | null;
-  readonly vigentes: readonly ObrigacaoPesLida[];
+  readonly vigentes: readonly ObrigacaoGravada[];
 }
 
 export class ServicoObrigacoes {
@@ -295,7 +299,7 @@ export class ServicoObrigacoes {
     };
   }
 
-  private async obrigacaoOu404(s: SessaoCadastro, id: number): Promise<ObrigacaoPesLida> {
+  private async obrigacaoOu404(s: SessaoCadastro, id: number): Promise<ObrigacaoGravada> {
     const o = await this.calculo.obrigacao(s.porta, id);
     if (!o) throw naoEncontrado('Obrigação');
     return o;
@@ -309,7 +313,7 @@ export class ServicoObrigacoes {
   async arquivo(
     s: SessaoCadastro,
     id: number,
-  ): Promise<{ nome: string; conteudo: string; obrigacao: ObrigacaoPesLida }> {
+  ): Promise<{ nome: string; conteudo: string; obrigacao: ObrigacaoGravada }> {
     const o = await this.obrigacaoOu404(s, id);
     const cifrado = await this.calculo.conteudoObrigacao(s.porta, id);
     if (cifrado === null) throw naoEncontrado('Obrigação');
@@ -341,7 +345,7 @@ export class ServicoObrigacoes {
     const faltam = competencias.filter((_, i) => !mensais[i]);
     if (tipo === 'rais' && !anual) faltam.push(ano);
     const presentes = [...mensais, ...(tipo === 'rais' ? [anual] : [])].filter(
-      (f): f is FechamentoFolhaLido => f !== null,
+      (f): f is FechamentoDaFolha => f !== null,
     );
     return { competencias, presentes, faltam, anualFechado: anual !== null };
   }
@@ -467,8 +471,8 @@ export class ServicoObrigacoes {
     const pendencias: PendenciaObrigacao[] = [];
     const avisos: CodigoAvisoObrigacao[] = [];
     const vazio = (
-      fechamentos: readonly FechamentoFolhaLido[] = [],
-      vigentes: readonly ObrigacaoPesLida[] = [],
+      fechamentos: readonly FechamentoDaFolha[] = [],
+      vigentes: readonly ObrigacaoGravada[] = [],
     ) => ({
       pendencias,
       avisos,
@@ -596,7 +600,7 @@ export class ServicoObrigacoes {
     } else if (x.tipo === 'caged') {
       const primeiro = inicio;
       const empregadosPrimeiroDia = vinculosPeriodo.filter(
-        (v: VinculoCalculoLido) =>
+        (v: VinculoDoCalculo) =>
           v.tipo === 'clt' &&
           v.admissao < primeiro &&
           (v.desligamento === null || v.desligamento >= primeiro),
@@ -629,7 +633,7 @@ export class ServicoObrigacoes {
     base: Montagem,
     processos: readonly ProcessoParaObrigacao[],
     resumos: ReadonlyMap<number, readonly ResumoParaObrigacao[]>,
-    fechamentos: readonly FechamentoFolhaLido[],
+    fechamentos: readonly FechamentoDaFolha[],
   ): Promise<Montagem> {
     const fim = fimDaCompetenciaObrigacao(x.periodo);
     const [eventos, vinculosPeriodo] = await Promise.all([
@@ -822,7 +826,7 @@ export class ServicoObrigacoes {
     return this.detalhe(s, id);
   }
 
-  private conferirEntrega(o: ObrigacaoPesLida, x: RegistrarEntregaObrigacaoEntrada): void {
+  private conferirEntrega(o: ObrigacaoGravada, x: RegistrarEntregaObrigacaoEntrada): void {
     if (o.situacao === 'entregue')
       throw recusa('obrigacao-ja-entregue', 'A obrigação já tem a entrega registrada.');
     if (o.situacao !== 'gerada')

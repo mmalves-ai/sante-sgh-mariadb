@@ -4,12 +4,15 @@
 // coletor fora de produção (regra 3), o retorno com recibo, a retificação e a exclusão, o descarte, as pendências do
 // outro sistema só contadas (regra 2), a conciliação com o repasse e as chaves desligadas.
 import type { FichaEsocialVinculo, RubricaFolha } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado, RescisaoPesLida, SalarioPesLido } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso,
+} from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import type { PortaCalculoFolha } from '../folha/porta-calculo.js';
 import { PortaFolhaMemoria } from '../folha/porta-folha-memoria.js';
@@ -26,9 +29,19 @@ import {
 } from './transmissor/transmissor-esocial.js';
 import { criarRaizSintetica, emitirSintetico } from '@sgh/dominio-documento';
 
+type SalarioDoCalculo = Awaited<ReturnType<PortaCalculoFolha['salarios']>>[number];
+type RescisaoDoCalculo = NonNullable<Awaited<ReturnType<PortaCalculoFolha['rescisaoPorId']>>>;
+
 const C = PESSOAS_SINTETICAS_M52;
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
-const chave = (c: string): ChaveGravada => ({
+const CTX = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 1,
+  correlacao: 'teste-esocial',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -41,7 +54,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: recurso === 'pessoas.esocial' ? 'certificado' : 'aprovacao',
   situacao: 'cumprido',
@@ -158,8 +171,8 @@ function montar(
   const folha = new PortaFolhaMemoria(pessoas);
   folha.agoraFixo = '2026-10-27T10:15:30';
   const porta = new PortaEsocialMemoria();
-  const salarios: SalarioPesLido[] = [];
-  const rescisoes: RescisaoPesLida[] = [];
+  const salarios: SalarioDoCalculo[] = [];
+  const rescisoes: RescisaoDoCalculo[] = [];
   const calculo = {
     salarios: async (_c: unknown, vs: readonly number[]) => salarios.filter((x) => vs.includes(x.vinculo)),
     rescisaoPorId: async (_c: unknown, id: number) => rescisoes.find((r) => r.id === id) ?? null,
@@ -946,7 +959,7 @@ describe('eSocial (serviço)', () => {
   it('pendências do outro sistema só contadas; conciliação com o repasse e a conferência gravada', async () => {
     const m = montar();
     const s = sessao();
-    const p = await m.servico.pendenciasLegado(s, null);
+    const p = await m.servico.pendenciasMigradas(s, null);
     expect(p.total).toBe(87);
     expect(p.porEvento.map((x) => [x.evento, x.quantidade])).toEqual([
       ['S-1010', 12],

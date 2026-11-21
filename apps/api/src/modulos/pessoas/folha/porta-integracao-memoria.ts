@@ -1,7 +1,7 @@
-// Porta da integração da folha em memória (M53.9; ambiente sintético, testes e E2E): o cadastro de rotinas sintético
-// com as marcas como a cópia mostra (2 = integra), o de-para por vigência, o retorno conferido semeado pelos testes, o
-// lançamento dos títulos pela ação `incluir-folha` de `financeiro.criarTituloPagar` (com as mesmas recusas: soma, folha
-// repetida e a chave de idempotência) e o custo de pessoal somado dos fatos. Nada de dado pessoal.
+// Porta da integração da folha em memória (M53.9; dev/ci, testes e E2E): o catálogo de rotinas do produto, o de-para
+// por vigência, o retorno conferido semeado pelos testes ou lido da folha em memória, o lançamento dos títulos pela ação
+// `incluir-folha` de `financeiro.criarTituloPagar` (com as mesmas recusas: soma, folha repetida e a chave de
+// idempotência) e o custo de pessoal somado dos fatos. Nada de dado pessoal.
 import {
   type ApuracaoFolha,
   type CustoPessoalCentro,
@@ -11,15 +11,7 @@ import {
   ROTINA_DO_DESTINO,
   type RotinaIntegracaoFolha,
 } from '@sgh/contratos';
-import {
-  ErroOperacao,
-  type LancamentoFolhaLido,
-  type LinhaTrilha,
-  type RetornoParaTitulosLido,
-  type TituloFolhaLancadoLido,
-} from '@sgh/legado';
 import { SUGESTAO_CLASSIFICACAO_FOLHA } from '@sgh/dominio-pessoas';
-import type { ContextoOperacao } from '@sgh/legado';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type {
   ContextoIntegracaoFolha,
@@ -27,42 +19,25 @@ import type {
   GravadorIntegracaoFolha,
   PortaIntegracaoFolha,
 } from './porta-integracao.js';
+import { type ContextoOperacao, ErroOperacao } from '@sgh/nucleo';
+import { type TrilhaDaGravacao } from '../../exames/public-api.js';
+import {
+  type LancamentoTitulosFolha,
+  ROTINAS_INTEGRACAO_FOLHA,
+  type TituloFolhaLancado,
+} from './apoio-folha.js';
+import { type RetornoParaTitulos } from './tipos-folha.js';
+
+/** A chave do estado em memória: o estabelecimento da sessão (a mesma que a folha em memória usa). */
+export const chaveMemoria = (c: ContextoIntegracaoFolha): string => String(c.estabelecimento ?? 0);
 
 const recusa = (codigo: string, mensagem: string) =>
   new ErroOperacao(409, codigo, 'Operação recusada', mensagem);
 
-/** O cadastro de rotinas como a cópia do pc mostra (nomes do fornecedor; 19 rotinas). */
-export const ROTINAS_SINTETICAS: readonly RotinaIntegracaoFolha[] = [
-  [1, 'Vale transporte', '', 1, 'Compras', true, true],
-  [2, 'Vale refeição/ alimentação', '', 1, 'Compras', true, true],
-  [3, 'Adiantamento', '', 2, 'Rotinas mensais', true, false],
-  [4, 'Folha mensal', '', 2, 'Rotinas mensais', true, true],
-  [5, 'Folha mensal', 'Consignado em Folha (Pagamento)', 2, 'Rotinas mensais', true, false],
-  [6, 'Folha mensal', 'Contribuição sindical laboral (Pagamento)', 2, 'Rotinas mensais', true, false],
-  [7, 'Folha mensal', 'Pensão alimentícia (Pagamento)', 2, 'Rotinas mensais', true, false],
-  [8, 'Folha mensal', 'Provisão mensal de avos de férias', 2, 'Rotinas mensais', false, true],
-  [9, 'Folha mensal', 'Provisão mensal de avos de 13º salário', 2, 'Rotinas mensais', false, true],
-  [10, 'Folha mensal', 'Reversão de provisão de férias', 2, 'Rotinas mensais', false, true],
-  [11, 'Férias', '', 3, 'Férias', true, false],
-  [12, 'Rescisão', '', 4, 'Rescisão', true, true],
-  [13, 'Rescisão complementar', '', 4, 'Rescisão', true, true],
-  [14, '13º salário', '', 5, 'Outros', true, false],
-  [15, 'Tributos', 'FGTS', 5, 'Outros', true, true],
-  [16, 'Tributos', 'INSS', 5, 'Outros', true, false],
-  [17, 'Tributos', 'INSS - Patronal', 5, 'Outros', true, true],
-  [18, 'Tributos', 'IRRF', 5, 'Outros', true, false],
-  [19, 'Tributos', 'PIS', 5, 'Outros', true, true],
-].map(([id, nome, complemento, agrupamento, agrupamentoNome, financeiro, contabilidade]) => ({
-  id: id as number,
-  nome: nome as string,
-  complemento: complemento as string,
-  agrupamento: agrupamento as number,
-  agrupamentoNome: agrupamentoNome as string,
-  financeiro: financeiro as boolean,
-  contabilidade: contabilidade as boolean,
-}));
+/** O catálogo de rotinas (o mesmo da porta própria). */
+export const ROTINAS_SINTETICAS: readonly RotinaIntegracaoFolha[] = ROTINAS_INTEGRACAO_FOLHA;
 
-interface TituloMemoria extends TituloFolhaLancadoLido {
+interface TituloMemoria extends TituloFolhaLancado {
   readonly lancamento: number;
   readonly empresa: number;
   readonly apuracao: ApuracaoFolha;
@@ -82,10 +57,10 @@ interface Estado {
   seq: number;
   titulo: number;
   integracoes: (IntegracaoFolhaLida & { readonly empresaCod: number })[];
-  lancamentos: LancamentoFolhaLido[];
+  lancamentos: LancamentoTitulosFolha[];
   titulos: TituloMemoria[];
   fatos: FatoMemoria[];
-  retornos: Map<number, RetornoParaTitulosLido>;
+  retornos: Map<number, RetornoParaTitulos>;
   idem: Map<string, { hash: string; resultado: Record<string, number | string> }>;
 }
 
@@ -131,8 +106,8 @@ export const CLASSIFICACOES_SINTETICAS: readonly {
 
 /** A interface com a folha externa em memória (o E2E lança pelo retorno que a F0 importou). */
 export interface RetornosDaFolhaMemoria {
-  retornoParaTitulos(hospital: string, id: number): RetornoParaTitulosLido | null;
-  marcarLancado(hospital: string, id: number): void;
+  retornoParaTitulos(estabelecimento: string, id: number): RetornoParaTitulos | null;
+  marcarLancado(estabelecimento: string, id: number): void;
 }
 
 export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
@@ -146,8 +121,9 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
   readonly manuais = new Map<number, number>();
 
   private e(c: ContextoIntegracaoFolha): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    const chave = chaveMemoria(c);
+    let s = this.estados.get(chave);
+    if (!s) this.estados.set(chave, (s = novo()));
     return s;
   }
   private agora(): string {
@@ -155,8 +131,8 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
   }
 
   /** Testes e E2E: um retorno da folha externa (o resumo gravado pela F0). */
-  semearRetorno(hospital: string, r: RetornoParaTitulosLido): void {
-    this.e({ hospital } as ContextoIntegracaoFolha).retornos.set(r.id, r);
+  semearRetorno(c: ContextoIntegracaoFolha, r: RetornoParaTitulos): void {
+    this.e(c).retornos.set(r.id, r);
   }
 
   async podeGravar() {
@@ -175,7 +151,7 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
     const e = analise.data as IncluirTitulosFolhaEntrada;
     const s = this.e(c);
     const hash = JSON.stringify(e);
-    const chaveIdem = `${op}:${ctx.idempotencyKey}`;
+    const chaveIdem = `${op}:${ctx.chaveIdempotencia}`;
     const anterior = s.idem.get(chaveIdem);
     if (anterior) {
       if (anterior.hash !== hash)
@@ -204,14 +180,15 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
     )
       throw recusa('folha-repetida', 'A competência já tem os títulos da folha lançados no contas a pagar.');
     if (e.origem === 'interface') {
-      const r = s.retornos.get(e.idOrigem) ?? this.folha?.retornoParaTitulos(c.hospital, e.idOrigem) ?? null;
+      const r =
+        s.retornos.get(e.idOrigem) ?? this.folha?.retornoParaTitulos(chaveMemoria(c), e.idOrigem) ?? null;
       if (!r || r.situacao !== 'conferido')
         throw recusa(
           'registro-alterado',
           'O registro mudou agora há pouco (outra pessoa ou outra aba): releia.',
         );
       if (s.retornos.has(r.id)) s.retornos.set(r.id, { ...r, situacao: 'lancado' });
-      else this.folha?.marcarLancado(c.hospital, r.id);
+      else this.folha?.marcarLancado(chaveMemoria(c), r.id);
     }
     const id = ++s.seq;
     const ids = e.titulos.map(() => ++s.titulo);
@@ -228,7 +205,7 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
       liquido: e.liquido,
       encargos: e.encargos,
       total,
-      lancadoPor: ctx.usuarioLegado,
+      lancadoPor: ctx.usuario === null ? 'sistema' : String(ctx.usuario),
       lancadoEm: this.agora(),
     });
     for (const [i, t] of e.titulos.entries())
@@ -271,7 +248,7 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
 
   async gravarSgh<T>(
     c: ContextoIntegracaoFolha,
-    _trilha: LinhaTrilha | ((r: T) => LinhaTrilha),
+    _trilha: TrilhaDaGravacao | ((r: T) => TrilhaDaGravacao),
     fn: (g: GravadorIntegracaoFolha) => Promise<T>,
   ): Promise<T> {
     const s = this.e(c);
@@ -323,7 +300,7 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
     return this.lerIntegracoes(this.e(c).integracoes, empresa);
   }
   async retorno(c: ContextoIntegracaoFolha, id: number) {
-    return this.e(c).retornos.get(id) ?? this.folha?.retornoParaTitulos(c.hospital, id) ?? null;
+    return this.e(c).retornos.get(id) ?? this.folha?.retornoParaTitulos(chaveMemoria(c), id) ?? null;
   }
   async lancamentos(c: ContextoIntegracaoFolha, empresa: number, ano: number) {
     return this.e(c)
@@ -336,10 +313,7 @@ export class PortaIntegracaoFolhaMemoria implements PortaIntegracaoFolha {
   async lancamentoDaOrigem(c: ContextoIntegracaoFolha, origem: 'fechamento' | 'interface', id: number) {
     return this.e(c).lancamentos.find((l) => l.origem === origem && l.idOrigem === id) ?? null;
   }
-  async titulosDoLancamento(
-    c: ContextoIntegracaoFolha,
-    lancamento: number,
-  ): Promise<TituloFolhaLancadoLido[]> {
+  async titulosDoLancamento(c: ContextoIntegracaoFolha, lancamento: number): Promise<TituloFolhaLancado[]> {
     return this.e(c)
       .titulos.filter((t) => t.lancamento === lancamento)
       .map((t) => ({

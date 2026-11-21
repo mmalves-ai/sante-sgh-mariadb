@@ -6,6 +6,7 @@
 // solicitação do portal e é retirado pelo próprio médico; a sessão do paciente e a interna não abrem estas rotas; a
 // conta desligada volta a não ver nada. Dados sintéticos.
 import { codigoTotp } from '@sgh/dominio-acesso';
+import type { DynamicModule } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../app.js';
@@ -17,11 +18,23 @@ import { PortaCirurgiaMemoria } from '../cirurgia/porta-memoria.js';
 import { PortaDocumentosMemoria } from '../pep/documentos-porta-memoria.js';
 import type { PortaRegistroMemoria, RegistroOuvido } from '../pep/registro-porta-memoria.js';
 import { PortaSadtMemoria } from '../sadt/porta-memoria.js';
+import { moduloCirurgia } from '../cirurgia/modulo.js';
+import { moduloPep } from '../pep/modulo.js';
+import { type CarregadorModulo, REGISTRO_MODULOS } from '../registro.js';
+import { moduloRepasse } from '../repasse/modulo.js';
+import { moduloSadt } from '../sadt/modulo.js';
+import { moduloPortalMedico } from './modulo.js';
 import { PortaPortalMedicoMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'sadt,cirurgia,repasse,pep,portal-medico,config',
+};
+/** Os módulos de que o portal depende ficam globais no teste (a integração da onda decide o mesmo no registro). */
+const global = async (m: Promise<DynamicModule>): Promise<DynamicModule> => ({ ...(await m), global: true });
 const trilha = new RegistradorTrilhaMemoria();
-/** W0-10 (M4): os registros clínicos sintéticos (o vínculo assistencial pelo registro TBCBOPRO do profissional). */
+/** W0-10 (M4): os registros clínicos sintéticos (o vínculo assistencial pelo inscrição do profissional). */
 const registrosClinicos: RegistroOuvido[] = [];
 const documentos = new PortaDocumentosMemoria(trilha, {
   registrosDe: () => registrosClinicos,
@@ -35,7 +48,7 @@ const portalMedico = new PortaPortalMedicoMemoria(
   (c, a, x) => sadt.definirCredencialAcesso(c, a, x),
 );
 const cadastro = new PortaCadastroMemoria();
-const cirurgia = new PortaCirurgiaMemoria(null, (c, ids) => cadastro.lerPacientes(c, ids));
+const cirurgia = new PortaCirurgiaMemoria(null, (c, ids) => cadastro.lerPacientes(c as never, ids));
 /** Pedidos aceitos desta conta (o limite é de 10 por hora). */
 let aceitos = 0;
 let app: NestFastifyApplication;
@@ -43,15 +56,17 @@ let chave = 0;
 const ORIGEM = '10.50.3.1';
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    documentos,
-    sadt,
-    portalMedico,
-    cadastro,
-    cirurgia,
-    vigia: null,
-  });
+  const registro: Record<string, CarregadorModulo> = {
+    sadt: async () => ({
+      modulo: (ctx) => global(moduloSadt(ctx, { porta: sadt, estabelecimentos: ['aa'] })),
+    }),
+    cirurgia: async () => ({ modulo: (ctx) => global(moduloCirurgia(ctx, { cirurgia })) }),
+    repasse: async () => ({ modulo: (ctx) => global(moduloRepasse(ctx)) }),
+    pep: async () => ({ modulo: (ctx) => global(moduloPep(ctx, { documentos, cadastro })) }),
+    'portal-medico': async () => ({ modulo: (ctx) => moduloPortalMedico(ctx, { porta: portalMedico }) }),
+    config: REGISTRO_MODULOS['config']!,
+  };
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -257,7 +272,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     // Antes de qualquer registro do profissional: a lista está vazia e o prontuário de qualquer um é negado.
     const vazia = (await doPortal.get(medico, '/pacientes')).json();
     expect(vazia).toMatchObject({ vinculado: true, profissional: 'CIRURGIAO SINTETICO A', total: 0 });
-    // O registro de cirurgião dele (TBCBOPRO 5001) evoluiu o paciente 1001: o vínculo assistencial.
+    // O registro de cirurgião dele (5001) evoluiu o paciente 1001: o vínculo assistencial.
     registrosClinicos.push({
       id: 990_001,
       paciente: 1001,
@@ -296,7 +311,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
       [1001, 'sucesso'],
       [1003, 'falha'],
     ]);
-    expect(acessos.every((t) => t.usuario === `SGH.PORTAL.M${acesso}` && t.tabelaAlvo === 'HTPACIENTE')).toBe(
+    expect(acessos.every((t) => t.usuario === `SGH.PORTAL.M${acesso}` && t.tabelaAlvo === 'paciente')).toBe(
       true,
     );
     const listas = portalMedico.trilhas.filter((t) => t.evento === 'portal.medico.pacientesLidos');
@@ -313,7 +328,8 @@ describe('portal do médico externo (M50, etapa 3)', () => {
     portalMedico.registrosAvulsos.push({
       id: 6899,
       nome: 'REGISTRO REPETIDO SINTETICO',
-      registros: [{ id: 5199, codigo: 7001, uf: 'RJ' }],
+      registros: [{ id: 5199, codigo: 7001, uf: 'RJ', numero: '7001' }],
+      vinculoAssistencial: [5199],
     });
     try {
       const ex = (await doPortal.get(medico, '/extrato')).json();
@@ -474,7 +490,17 @@ describe('portal do médico externo (M50, etapa 3)', () => {
       solicitacao: id,
     });
     expect(conf.statusCode).toBe(201);
-    const e = await cirurgia.estado({ rede: REDE, hospital: 'aa' }, id);
+    const e = await cirurgia.estado(
+      {
+        cliente: '',
+        estabelecimento: null,
+        usuario: null,
+        correlacao: 't',
+        rede: REDE,
+        hospital: 'aa',
+      } as never,
+      id,
+    );
     expect(e).toMatchObject({ estado: 'confirmado', idPaciente: 1003 });
     // W0-10: o pedido confirmado pelo bloco não se altera pelo portal (409).
     const altConf = await doPortal.post(medico, `/pedidos/${id}/alteracao`, {

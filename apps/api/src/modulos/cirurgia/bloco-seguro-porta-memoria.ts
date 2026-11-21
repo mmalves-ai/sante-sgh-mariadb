@@ -5,20 +5,20 @@
 // lidos na cópia pc (pré-operatório, sala de espera, sala cirúrgica, recuperação, outros; os cinco tipos de
 // movimentação). Nenhum nome aqui é de pessoa real.
 import type {
-  AberturaChecklistSgh,
-  ChecklistLidoSgh,
-  CodigoPainelLido,
-  ConfirmacaoChecklistSgh,
-  DominiosRastreioLidos,
-  MovimentoBlocoSgh,
-  MovimentoLidoSgh,
-} from '@sgh/legado';
-import { recusa } from '@sgh/legado';
+  AberturaChecklist,
+  ChecklistDaCirurgia,
+  CodigoDoPainel,
+  ConfirmacaoChecklist,
+  DominiosRastreio,
+  MovimentoDoBloco,
+  MovimentoNoBloco,
+} from './tipos.js';
+import { recusa } from '@sgh/nucleo';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { GravadorBlocoSeguro, PortaBlocoSeguro } from './bloco-seguro-porta.js';
 import type { PortaCirurgia } from './porta.js';
 
-export const DOMINIOS_RASTREIO_SINTETICOS: DominiosRastreioLidos = {
+export const DOMINIOS_RASTREIO_SINTETICOS: DominiosRastreio = {
   locais: [
     { id: 1, nome: 'PRE OPERATORIO', ativo: true },
     { id: 2, nome: 'SALA DE ESPERA', ativo: true },
@@ -37,11 +37,11 @@ export const DOMINIOS_RASTREIO_SINTETICOS: DominiosRastreioLidos = {
 
 type Mut<T> = { -readonly [K in keyof T]: T[K] };
 interface Estado {
-  checklists: (Mut<Omit<ChecklistLidoSgh, 'confirmacoes'>> & {
-    confirmacoes: (ChecklistLidoSgh['confirmacoes'][number] & { chave: string | null })[];
+  checklists: (Mut<Omit<ChecklistDaCirurgia, 'confirmacoes'>> & {
+    confirmacoes: (ChecklistDaCirurgia['confirmacoes'][number] & { chave: string | null })[];
   })[];
-  movimentos: (MovimentoLidoSgh & { chave: string | null })[];
-  codigos: CodigoPainelLido[];
+  movimentos: (MovimentoDoBloco & { chave: string | null })[];
+  codigos: CodigoDoPainel[];
   seq: number;
 }
 
@@ -52,10 +52,10 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
   constructor(private readonly cirurgia: PortaCirurgia) {}
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    let s = this.porHospital.get(String(c.estabelecimento ?? 0));
     if (!s) {
       s = { checklists: [], movimentos: [], codigos: [], seq: 46_200 };
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(String(c.estabelecimento ?? 0), s);
     }
     return s;
   }
@@ -107,7 +107,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
       },
       checklist: async (agendamento) => {
         const k = s.checklists.find((x) => x.agendamento === agendamento);
-        return k ? (structuredClone(k) as ChecklistLidoSgh) : null;
+        return k ? (structuredClone(k) as ChecklistDaCirurgia) : null;
       },
       confirmacaoPelaChave: async (chave, item) => {
         for (const k of s.checklists) {
@@ -120,7 +120,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
         const ja = s.movimentos.find((x) => x.chave === chave);
         return ja ? { id: ja.id, agendamento: ja.agendamento, sequencia: ja.sequencia } : null;
       },
-      abrirChecklist: async (a: Omit<AberturaChecklistSgh, 'hospital'>) => {
+      abrirChecklist: async (a: Omit<AberturaChecklist, 'hospital'>) => {
         if (s.checklists.some((x) => x.agendamento === a.agendamento))
           throw recusa('checklist-mudou', 'O checklist foi aberto em outro aparelho: recarregue e confira.');
         const id = prox();
@@ -149,7 +149,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
         });
         return { id, versao: 1 };
       },
-      confirmarItens: async (x: Omit<ConfirmacaoChecklistSgh, 'hospital'>) => {
+      confirmarItens: async (x: Omit<ConfirmacaoChecklist, 'hospital'>) => {
         const chave0 = x.chave ? `${x.chave}:${x.itens[0]?.item ?? ''}` : null;
         for (const k of s.checklists) {
           const ja = chave0 ? k.confirmacoes.find((y) => y.chave === chave0) : undefined;
@@ -199,7 +199,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
         const e = (await this.cirurgia.estadosDosAgendamentos(c, [agendamento])).get(agendamento);
         return e && e.agendamento === agendamento ? { id: e.id, estado: e.estado } : null;
       },
-      mover: async (m: Omit<MovimentoBlocoSgh, 'hospital'>) => {
+      mover: async (m: Omit<MovimentoNoBloco, 'hospital'>) => {
         const ja = m.chave ? s.movimentos.find((x) => x.chave === m.chave) : undefined;
         if (ja) {
           if (ja.agendamento !== m.agendamento)
@@ -262,19 +262,20 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
     };
   }
 
-  async dominios(): Promise<DominiosRastreioLidos> {
+  async dominios(): Promise<DominiosRastreio> {
     return structuredClone(DOMINIOS_RASTREIO_SINTETICOS);
   }
 
   async checklist(c: ContextoPortaM18, agendamento: number) {
     const k = this.e(c).checklists.find((x) => x.agendamento === agendamento);
-    return k ? (structuredClone(k) as ChecklistLidoSgh) : null;
+    return k ? (structuredClone(k) as ChecklistDaCirurgia) : null;
   }
 
   async checklists(c: ContextoPortaM18, agendamentos: readonly number[]) {
-    const m = new Map<number, ChecklistLidoSgh>();
+    const m = new Map<number, ChecklistDaCirurgia>();
     for (const k of this.e(c).checklists)
-      if (agendamentos.includes(k.agendamento)) m.set(k.agendamento, structuredClone(k) as ChecklistLidoSgh);
+      if (agendamentos.includes(k.agendamento))
+        m.set(k.agendamento, structuredClone(k) as ChecklistDaCirurgia);
     return m;
   }
 
@@ -285,7 +286,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
   }
 
   async movimentosDe(c: ContextoPortaM18, agendamentos: readonly number[]) {
-    const m = new Map<number, MovimentoLidoSgh[]>(agendamentos.map((a) => [a, []]));
+    const m = new Map<number, MovimentoDoBloco[]>(agendamentos.map((a) => [a, []]));
     for (const x of [...this.e(c).movimentos].sort((a, b) => a.sequencia - b.sequencia))
       m.get(x.agendamento)?.push(structuredClone(x));
     return m;
@@ -302,7 +303,7 @@ export class PortaBlocoSeguroMemoria implements PortaBlocoSeguro {
   }
 
   async codigos(c: ContextoPortaM18, agora: string, agendamentos?: readonly number[]) {
-    const m = new Map<number, CodigoPainelLido>();
+    const m = new Map<number, CodigoDoPainel>();
     for (const x of this.e(c).codigos)
       if (x.validoAte >= agora && (!agendamentos || agendamentos.includes(x.agendamento)))
         m.set(x.agendamento, { ...x });

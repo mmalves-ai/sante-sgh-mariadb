@@ -1,14 +1,13 @@
-// Telemedicina na tela do médico (M50, etapa 4; ficha, seção 7: `PEP > Telemedicina (teleconsulta e
-// teleinterconsulta)`, rota `/pep/telemedicina/:atendimento`; regra 7):
+// Telemedicina na tela do médico (`PEP > Telemedicina`: teleconsulta e teleinterconsulta):
 //   GET  /api/telemedicina?data&minhas                       as teleconsultas do dia e as teleinterconsultas
 //   GET  /api/telemedicina/apoio                             especialidades, unidades, centros de custo, médicos
 //   GET  /api/telemedicina/cid?termo · /atendimentos?termo   buscas da abertura e do pedido da interconsulta
 //   GET  /api/telemedicina/:id                               o detalhe (leitura auditada: dados do paciente)
-//   POST /api/telemedicina/:id/inicio                        abrir a sala e o atendimento (receita do M20)
+//   POST /api/telemedicina/:id/inicio                        abrir a sala e o atendimento (executor do atendimento)
 //   POST /api/telemedicina/:id/encerramento                  encerrar com o motivo
 //   POST /api/telemedicina/interconsultas                    pedir a teleinterconsulta
 //   POST /api/telemedicina/interconsultas/:id/sala | /parecer | /cancelamento
-// As gravações exigem a Idempotency-Key (o executor do M20) e a chave `telemedicina` (POL-3).
+// As gravações exigem a Idempotency-Key (o executor do atendimento) e a chave `telemedicina`.
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
 import {
   type AtendimentoResumo,
@@ -70,7 +69,7 @@ export class TelemedicinaController {
     @Query('termo') termo: string | undefined,
     @Req() req: RequisicaoAutorizada,
   ): Promise<AtendimentoResumo[]> {
-    req.sghAlvo = { tabelaAlvo: 'RECADATE', idAlvo: 'lista-do-dia' };
+    req.sghAlvo = { tabelaAlvo: 'atendimento', idAlvo: 'lista-do-dia' };
     return this.servico.atendimentosAbertos(sessaoDe(req), (termo ?? '').slice(0, 60));
   }
 
@@ -81,7 +80,7 @@ export class TelemedicinaController {
     const d = await this.servico.detalhe(sessaoDe(req), idDaRota(id));
     req.sghAlvo = {
       ...(d.paciente ? { paciente: d.paciente.id } : {}),
-      tabelaAlvo: 'SGH_ATD_TELECONSULTA',
+      tabelaAlvo: 'teleconsulta',
       idAlvo: String(d.id),
     };
     return d;
@@ -91,7 +90,7 @@ export class TelemedicinaController {
   @HttpCode(200)
   @Permissao(REALIZAR)
   @AuditadoNoHandler(
-    'atendimento.abrirSalaTeleconsulta (SGH_) e atendimento.abrirAtendimento pelo executor (cenário teleconsulta), com a SGH_TRILHA',
+    'atendimento.abrirSalaTeleconsulta e atendimento.abrirAtendimento pelo executor (cenário teleconsulta), com a trilha',
   )
   iniciar(
     @Param('id') id: string,
@@ -104,7 +103,7 @@ export class TelemedicinaController {
   @Post(':id/encerramento')
   @HttpCode(200)
   @Permissao(REALIZAR)
-  @AuditadoNoHandler('atendimento.encerrarTeleconsulta (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('atendimento.encerrarTeleconsulta com a trilha na mesma transação')
   encerrar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -116,7 +115,7 @@ export class TelemedicinaController {
   @Post('interconsultas')
   @HttpCode(201)
   @Permissao(REALIZAR)
-  @AuditadoNoHandler('atendimento.solicitarTeleinterconsulta (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('atendimento.solicitarTeleinterconsulta com a trilha na mesma transação')
   solicitar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTeleconsulta> {
     return this.servico.solicitarInterconsulta(sessaoDe(req), corpo(esquemaSolicitarTeleinterconsulta, b));
   }
@@ -124,7 +123,7 @@ export class TelemedicinaController {
   @Post('interconsultas/:id/sala')
   @HttpCode(200)
   @Permissao(REALIZAR)
-  @AuditadoNoHandler('sala da teleinterconsulta aberta pelo convidado (SGH_) com a SGH_TRILHA')
+  @AuditadoNoHandler('sala da teleinterconsulta aberta pelo convidado com a trilha na mesma transação')
   sala(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -136,7 +135,7 @@ export class TelemedicinaController {
   @Post('interconsultas/:id/parecer')
   @HttpCode(200)
   @Permissao(REALIZAR)
-  @AuditadoNoHandler('atendimento.responderTeleinterconsulta (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('atendimento.responderTeleinterconsulta com a trilha na mesma transação')
   responder(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -152,7 +151,7 @@ export class TelemedicinaController {
   @Post('interconsultas/:id/cancelamento')
   @HttpCode(200)
   @Permissao(REALIZAR)
-  @AuditadoNoHandler('teleinterconsulta cancelada por quem pediu (SGH_) com a SGH_TRILHA')
+  @AuditadoNoHandler('teleinterconsulta cancelada por quem pediu com a trilha na mesma transação')
   cancelar(
     @Param('id') id: string,
     @Body() b: unknown,

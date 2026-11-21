@@ -146,19 +146,20 @@ import {
   validarPacoteIps,
 } from '@sgh/dominio-integracao';
 import { dentroDaTaxa, ipParaGravar } from '@sgh/dominio-sadt';
+import { ErroOperacao } from '@sgh/nucleo';
 import {
-  type ContaPortalLida,
-  ErroOperacao,
-  ErroPortalSgh,
+  type ContaPortal,
+  ErroPortal,
   ErroPedido,
-  type LinhaTrilha,
-  type PacienteParaPortalLido,
-  type VinculoPortalLido,
-} from '@sgh/legado';
+  type RegistroTrilhaPortal,
+  type PacientePortal,
+  type VinculoPortal,
+} from '../tipos.js';
+import { logger } from '../../../logger.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { FonteConfiguracao } from '../../config/public-api.js';
 import type { PortaSadt } from '../../sadt/public-api.js';
-import type { ContextoPortal, GravadorPortal, PortaPortalPaciente } from '../porta.js';
+import type { ContextoPortal, ContextoPortalNucleo, GravadorPortal, PortaPortalPaciente } from '../porta.js';
 import type { ArmazemProvas } from './provas.js';
 import { type CanalPaciente, CanalSimulador } from './canal.js';
 import { ligadaNoEstabelecimento, parametroDoEstabelecimento, parametroTexto } from './liberacao.js';
@@ -185,7 +186,25 @@ const resumoConvite = (codigo: string) => sha256(codigo.toUpperCase().replace(/[
 /** O autor na trilha das ações da conta (separa "Você" de "Seu responsável" sem dado pessoal; D-USUARIO-50). */
 export const quemDaConta = (conta: number) => `${USUARIO_PORTAL}.C${conta}`.slice(0, 31);
 /** W0-10 (M1): a área da manifestação quando o paciente não escolhe (a ouvidoria ajusta ao encaminhar). */
-export const AREA_OUVIDORIA_PORTAL = 'Ouvidoria';
+/**
+ * Assunto padrão da manifestação do portal: o código do motivo geral do catálogo da ouvidoria (motivo_manifestacao).
+ * O texto livre que o paciente digita vale como assunto quando bate com um código ou uma descrição do catálogo; senão,
+ * vai no início do relato e a manifestação fica sem motivo, para a triagem da ouvidoria (nunca recusada por isso).
+ */
+/** O código do erro (ErroOperacao ou ErroProblema), sem a mensagem: o log da varredura não leva dado pessoal. */
+function codigoDoErro(e: unknown): string {
+  const x = e as { problema?: { codigo?: string }; extras?: { codigo?: string }; codigo?: string };
+  return x?.problema?.codigo ?? x?.extras?.codigo ?? (typeof x?.codigo === 'string' ? x.codigo : 'erro');
+}
+
+function avisoDaVarredura(operacao: string, e: unknown): void {
+  logger.warn(
+    { modulo: 'portal-paciente', operacao, codigo: codigoDoErro(e) },
+    'Encerramento pela vigência falhou.',
+  );
+}
+
+export const AREA_OUVIDORIA_PORTAL = 'geral';
 /** O instante civil do estabelecimento (AAAA-MM-DDTHH:mm:ss), como a ouvidoria grava. */
 export function instanteLocal(d: Date): string {
   const p = new Intl.DateTimeFormat('en-CA', {
@@ -261,8 +280,9 @@ export interface AtivacaoAberta {
 /** A sessão do portal resolvida no pedido: a conta relida e os titulares vigentes. */
 export interface PortalNoPedido {
   readonly s: SessaoPortalInterna;
-  readonly c: ContextoPortal;
-  readonly conta: ContaPortalLida;
+  /** O contexto do estabelecimento da sessão, com o do núcleo (as portas de agenda, exame e cadastro o pedem). */
+  readonly c: ContextoPortalNucleo;
+  readonly conta: ContaPortal;
   readonly titulares: TitularInterno[];
   readonly ativo: TitularInterno;
 }
@@ -339,7 +359,7 @@ const recusa = (codigo: string, detalhe: string, status = 409): never => {
 /** Erros do adaptador (versão, e-mail em uso) e do executor em Problem Details em português. */
 function traduzir(e: unknown): never {
   if (e instanceof ErroProblema) throw e;
-  if (e instanceof ErroPortalSgh) {
+  if (e instanceof ErroPortal) {
     if (e.codigo === 'email-em-uso')
       throw new ErroProblema(
         'recusa-de-negocio',
@@ -400,7 +420,7 @@ export class ServicoPortalPaciente {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'banco' | 'memoria' {
     return this.porta.destino;
   }
 
@@ -410,6 +430,11 @@ export class ServicoPortalPaciente {
 
   private ctx(hospital: string): ContextoPortal {
     return { rede: this.cfg.rede, hospital };
+  }
+
+  /** O contexto do núcleo do estabelecimento (telas internas da agenda online e do pré-check-in). */
+  contextoDoEstabelecimento(hospital: string): Promise<ContextoPortalNucleo> {
+    return this.porta.contexto(this.ctx(hospital));
   }
 
   private async param(hospital: string, chave: string, padrao: number): Promise<number> {
@@ -472,7 +497,7 @@ export class ServicoPortalPaciente {
       origem?: string | null;
       correlacao?: string;
     },
-  ): LinhaTrilha {
+  ): RegistroTrilhaPortal {
     return {
       rede: this.cfg.rede,
       hospital,
@@ -494,7 +519,7 @@ export class ServicoPortalPaciente {
   private async gravar<T>(
     c: ContextoPortal,
     fn: (g: GravadorPortal) => Promise<T>,
-    trilha: LinhaTrilha | ((r: T) => LinhaTrilha | null) | null,
+    trilha: RegistroTrilhaPortal | ((r: T) => RegistroTrilhaPortal | null) | null,
   ): Promise<T> {
     try {
       return await this.porta.gravar(c, fn, trilha);
@@ -514,7 +539,7 @@ export class ServicoPortalPaciente {
   }
 
   /** Os titulares que a conta pode ver hoje: o próprio (com idade de conta própria) e os representados vigentes. */
-  private async titulares(c: ContextoPortal, conta: ContaPortalLida): Promise<TitularInterno[]> {
+  private async titulares(c: ContextoPortal, conta: ContaPortal): Promise<TitularInterno[]> {
     const hoje = dia(this.agora());
     const idade = await this.idadeContaPropria(c.hospital);
     const r: TitularInterno[] = [];
@@ -557,11 +582,7 @@ export class ServicoPortalPaciente {
     return r;
   }
 
-  private nomeDaConta(
-    conta: ContaPortalLida,
-    titulares: readonly TitularInterno[],
-    p: PacienteParaPortalLido | null,
-  ) {
+  private nomeDaConta(conta: ContaPortal, titulares: readonly TitularInterno[], p: PacientePortal | null) {
     if (conta.tipo === 'responsavel') return primeiroNome(conta.nome);
     return p?.primeiroNome ?? titulares.find((t) => t.vinculo === null)?.primeiroNome ?? '';
   }
@@ -583,7 +604,7 @@ export class ServicoPortalPaciente {
     };
   }
 
-  private async abrirSessao(hospital: string, conta: ContaPortalLida): Promise<SessaoAberta> {
+  private async abrirSessao(hospital: string, conta: ContaPortal): Promise<SessaoAberta> {
     const minutos = await this.minutosSessao(hospital);
     const id = randomBytes(32).toString('base64url');
     const csrf = randomBytes(24).toString('base64url');
@@ -632,7 +653,7 @@ export class ServicoPortalPaciente {
   }
 
   private async resolver(s: SessaoPortalInterna): Promise<PortalNoPedido> {
-    const c = this.ctx(s.hospital);
+    const c = await this.porta.contexto(this.ctx(s.hospital));
     const conta = await this.porta.conta(c, s.conta);
     // A conta bloqueada ou encerrada depois da entrada derruba a sessão na hora.
     if (!conta || conta.situacao !== 'ativa' || (conta.bloqueadoAte && conta.bloqueadoAte > this.agora())) {
@@ -702,7 +723,7 @@ export class ServicoPortalPaciente {
 
   // ── Primeiro acesso: convite, dados e segundo fator ──────────────────────────────────────────────────────────────
 
-  private async nascimentoDaConta(c: ContextoPortal, k: ContaPortalLida): Promise<string | null> {
+  private async nascimentoDaConta(c: ContextoPortal, k: ContaPortal): Promise<string | null> {
     if (k.tipo === 'responsavel') return k.nascimento;
     const p = k.paciente !== null ? await this.porta.paciente(c, k.paciente) : null;
     return p && p.ativo && !p.obito ? p.nascimento : null;
@@ -734,7 +755,7 @@ export class ServicoPortalPaciente {
           this.trilha(hospital, {
             evento: EVENTOS_AUDITAVEIS.portalLogin.codigo,
             operacao: 'portal.criarConta',
-            tabela: 'SGH_POR_CONTA',
+            tabela: 'conta_portal_paciente',
             id: k.id,
             resultado: 'falha',
             estacao: ipParaGravar(ip),
@@ -879,7 +900,7 @@ export class ServicoPortalPaciente {
       this.trilha(a.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalContaAtivada.codigo,
         operacao: 'portal.criarConta',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: a.conta,
         usuario: quemDaConta(a.conta),
         chave: `${VERSAO_TERMO_USO}:${VERSAO_POLITICA}`,
@@ -959,7 +980,7 @@ export class ServicoPortalPaciente {
         this.trilha(hospital, {
           evento: EVENTOS_AUDITAVEIS.portalLogin.codigo,
           operacao: 'portal.entrar',
-          tabela: 'SGH_POR_CONTA',
+          tabela: 'conta_portal_paciente',
           id: k.id,
           resultado: acertou ? 'sucesso' : 'falha',
           usuario: quemDaConta(k.id),
@@ -1006,7 +1027,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalSegundoFatorTrocado.codigo,
         operacao: 'portal.trocarSenha',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: n.conta.id,
         usuario: quemDaConta(n.conta.id),
         chave: 'senha',
@@ -1047,8 +1068,14 @@ export class ServicoPortalPaciente {
    */
   private async abrirTrocaEmail(
     c: ContextoPortal,
-    k: ContaPortalLida,
-    d: { email: string; origem: 'portal' | 'balcao'; motivo: string; por: string; trilha: LinhaTrilha },
+    k: ContaPortal,
+    d: {
+      email: string;
+      origem: 'portal' | 'balcao';
+      motivo: string;
+      por: string;
+      trilha: RegistroTrilhaPortal;
+    },
   ): Promise<TrocaEmailPedida> {
     if (k.situacao !== 'ativa' && k.situacao !== 'bloqueada')
       recusa('conta-nao-ativa', 'Só a conta ativa (ou bloqueada) troca o e-mail de acesso.');
@@ -1056,7 +1083,7 @@ export class ServicoPortalPaciente {
     if (resumo === k.emailResumo) recusa('mesmo-email', 'O e-mail novo é igual ao atual.');
     const outra = await this.porta.contaPorEmail(c, resumo);
     if (outra && outra.id !== k.id)
-      traduzir(new ErroPortalSgh('email-em-uso', 'E-mail já usado em outra conta.'));
+      traduzir(new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.'));
     const canal = await this.canal.disponivel(c.hospital);
     if (!canal.envio)
       return recusa('canal-desligado', canal.motivo ?? 'O envio ao paciente está desligado.', 503);
@@ -1109,7 +1136,7 @@ export class ServicoPortalPaciente {
       trilha: this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalEmailTrocaPedida.codigo,
         operacao: 'portal.trocarEmail',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: n.conta.id,
         usuario: quemDaConta(n.conta.id),
         chave: 'portal:pedido-do-titular',
@@ -1139,7 +1166,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalEmailTrocaPedida.codigo,
         operacao: 'portal.trocarEmail',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: n.conta.id,
         usuario: quemDaConta(n.conta.id),
         chave: 'cancelada',
@@ -1174,7 +1201,7 @@ export class ServicoPortalPaciente {
       this.trilha(hospital, {
         evento: EVENTOS_AUDITAVEIS.portalEmailTrocado.codigo,
         operacao: 'portal.trocarEmail',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         usuario: quemDaConta(k.id),
         paciente: k.paciente,
@@ -1230,7 +1257,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalSegundoFatorTrocado.codigo,
         operacao: 'portal.trocarSegundoFator',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: n.conta.id,
         usuario: quemDaConta(n.conta.id),
         chave: 'autenticador',
@@ -1286,8 +1313,9 @@ export class ServicoPortalPaciente {
     const itens: ItemDocumentoPortal[] = [];
     let haMais = false;
     if (this.sadt && pagina === 1) {
-      const atos = await this.sadt.atosPublicados(n.c);
-      const r = await this.sadt.laudosPortalDoPaciente(n.c, { paciente: t.paciente, reg: null, atos });
+      const cn = await this.porta.contexto(n.c);
+      const atos = await this.sadt.atosPublicados(cn);
+      const r = await this.sadt.laudosPortalDoPaciente(cn, { paciente: t.paciente, reg: null, atos });
       haMais ||= r.cortada;
       for (const l of r.laudos)
         itens.push({
@@ -1348,11 +1376,16 @@ export class ServicoPortalPaciente {
     };
   }
 
-  private trilhaVisto(n: PortalNoPedido, t: TitularInterno, item: AbrirItemPortal, ip: string): LinhaTrilha {
+  private trilhaVisto(
+    n: PortalNoPedido,
+    t: TitularInterno,
+    item: AbrirItemPortal,
+    ip: string,
+  ): RegistroTrilhaPortal {
     return this.trilha(n.c.hospital, {
       evento: EVENTOS_AUDITAVEIS.portalDocumentoVisto.codigo,
       operacao: item.origem === 'resultado' ? 'sadt.registrarVisualizacaoPortal' : 'portal.abrirDocumento',
-      tabela: item.origem === 'resultado' ? 'SILIBERACAOEXAME' : 'SGH_PEP_DOCUMENTO',
+      tabela: item.origem === 'resultado' ? 'resultado_exame' : 'documento_assinado',
       id: item.item,
       usuario: quemDaConta(n.conta.id),
       paciente: t.paciente,
@@ -1367,23 +1400,22 @@ export class ServicoPortalPaciente {
     if (!this.sadt) return naoEncontrado('Resultado não encontrado');
     const sadt = this.sadt;
     const liberacao = Number(item.item);
-    const l = await sadt.laudoPortal(n.c, liberacao);
-    const atos = await sadt.atosPublicados(n.c);
+    const cn = await this.porta.contexto(n.c);
+    const l = await sadt.laudoPortal(cn, liberacao);
+    const atos = await sadt.atosPublicados(cn);
     if (!l || l.paciente !== t.paciente || !atos.includes(l.ato))
       return naoEncontrado('Resultado não encontrado', 'O resultado não está disponível para este acesso.');
     const acao = item.baixar ? 'download' : 'visualizacao';
     if (!l.laudo.visualizado)
       await sadt
         .executar(
-          n.c,
+          cn,
           'sadt.registrarVisualizacaoPortal',
           { liberacao, ip: ipParaGravar(ip), acao },
           {
-            rede: this.cfg.rede,
-            hospital: n.c.hospital,
-            traceId: `portal-paciente-${liberacao}`,
-            usuarioLegado: USUARIO_PORTAL,
-            idempotencyKey: `portal-conta-${n.conta.id}-${liberacao}-${acao}`,
+            ...cn,
+            correlacao: `portal-paciente-${liberacao}`.slice(0, 64),
+            chaveIdempotencia: `portal-conta-${n.conta.id}-${liberacao}-${acao}`.slice(0, 80),
           },
         )
         .catch((e: unknown) => {
@@ -1447,7 +1479,7 @@ export class ServicoPortalPaciente {
 
   private async resumoVinculo(
     c: ContextoPortal,
-    v: VinculoPortalLido,
+    v: VinculoPortal,
     outro: string,
     idade: number,
   ): Promise<VinculoResumo> {
@@ -1477,7 +1509,7 @@ export class ServicoPortalPaciente {
    * titular: o pedido pendente ou recusado não confirma o cadastro de outra pessoa. O pedido encerrado sem decisão
    * recebe a decisão no mesmo instante do fim (UPDATE do banco).
    */
-  private foiAprovado(v: VinculoPortalLido): boolean {
+  private foiAprovado(v: VinculoPortal): boolean {
     if (v.situacao === 'ativo') return true;
     if (v.situacao !== 'encerrado' || !v.decididoEm || !v.encerradoEm) return false;
     return v.decididoEm.getTime() < v.encerradoEm.getTime();
@@ -1564,7 +1596,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalVinculoPedido.codigo,
         operacao: 'portal.vincularResponsavel',
-        tabela: 'SGH_POR_RESPONSAVEL',
+        tabela: 'conta_portal_paciente_dependente',
         id: null,
         resultado: 'falha',
         usuario: quemDaConta(n.conta.id),
@@ -1657,7 +1689,7 @@ export class ServicoPortalPaciente {
         this.trilha(n.c.hospital, {
           evento: EVENTOS_AUDITAVEIS.portalVinculoPedido.codigo,
           operacao: 'portal.vincularResponsavel',
-          tabela: 'SGH_POR_RESPONSAVEL',
+          tabela: 'conta_portal_paciente_dependente',
           id: x.id,
           usuario: por,
           paciente: t.id,
@@ -1687,7 +1719,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalVinculoDecidido.codigo,
         operacao: 'portal.vincularResponsavel',
-        tabela: 'SGH_POR_RESPONSAVEL',
+        tabela: 'conta_portal_paciente_dependente',
         id: v.id,
         usuario: quemDaConta(n.conta.id),
         paciente: v.titular,
@@ -1736,7 +1768,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalConsentimentoRegistrado.codigo,
         operacao: 'portal.registrarConsentimento',
-        tabela: 'SGH_CAD_CONSENTIMENTO',
+        tabela: 'consentimento_titular',
         id,
         usuario: quemDaConta(n.conta.id),
         paciente: t.paciente,
@@ -1910,7 +1942,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalPortabilidadeIps.codigo,
         operacao: 'portal.portabilidadeIps',
-        tabela: 'SGH_AUD_PEDIDO_TITULAR',
+        tabela: 'pedido_titular',
         id: p.id,
         chave: `${protocolo}:ips:${hash}`,
         usuario: quemDaConta(n.conta.id),
@@ -1994,7 +2026,7 @@ export class ServicoPortalPaciente {
         this.trilha(n.c.hospital, {
           evento: EVENTOS_AUDITAVEIS.qualidadeManifestacaoRegistrada.codigo,
           operacao: 'portal.registrarManifestacao',
-          tabela: 'SGH_QUA_OUVIDORIA',
+          tabela: 'manifestacao_ouvidoria',
           id: x.id,
           chave: x.protocolo,
           usuario: quem,
@@ -2212,7 +2244,7 @@ export class ServicoPortalPaciente {
       this.trilha(n.c.hospital, {
         evento: EVENTOS_AUDITAVEIS.portalCopiaProntuario.codigo,
         operacao: 'portal.copiaProntuario',
-        tabela: 'SGH_AUD_COPIA_ATO',
+        tabela: 'solicitacao_copia_prontuario',
         id: geracao!.id,
         chave: `${protocolo}:copia:download`,
         usuario: quemDaConta(n.conta.id),
@@ -2488,7 +2520,10 @@ export class ServicoPortalPaciente {
 
   // ── Lado interno: conta do paciente ──────────────────────────────────────────────────────────────────────────────
 
-  private trilhaInterna(q: QuemInterno, d: Parameters<ServicoPortalPaciente['trilha']>[1]): LinhaTrilha {
+  private trilhaInterna(
+    q: QuemInterno,
+    d: Parameters<ServicoPortalPaciente['trilha']>[1],
+  ): RegistroTrilhaPortal {
     return this.trilha(q.hospital, {
       ...d,
       usuario: q.login,
@@ -2506,7 +2541,7 @@ export class ServicoPortalPaciente {
     return this.resumoConta(k, vinculos.filter((v) => v.situacao === 'ativo').length);
   }
 
-  private resumoConta(k: ContaPortalLida, responsaveis: number): ContaPortalResumo {
+  private resumoConta(k: ContaPortal, responsaveis: number): ContaPortalResumo {
     return {
       conta: String(k.id),
       situacao: k.situacao,
@@ -2587,7 +2622,7 @@ export class ServicoPortalPaciente {
         this.trilhaInterna(q, {
           evento: EVENTOS_AUDITAVEIS.portalContaConvidada.codigo,
           operacao: 'portal.criarConta',
-          tabela: 'SGH_POR_CONTA',
+          tabela: 'conta_portal_paciente',
           id,
           paciente: p.id,
           chave: e.origem,
@@ -2653,7 +2688,7 @@ export class ServicoPortalPaciente {
         this.trilhaInterna(q, {
           evento: EVENTOS_AUDITAVEIS.portalContaConvidada.codigo,
           operacao: 'portal.vincularResponsavel',
-          tabela: 'SGH_POR_CONTA',
+          tabela: 'conta_portal_paciente',
           id,
           paciente: t.id,
           chave: `balcao:${e.tipo}`,
@@ -2662,7 +2697,7 @@ export class ServicoPortalPaciente {
     return this.emitido(conta, codigo, validoAte);
   }
 
-  private async contaParaAgir(q: QuemInterno, conta: string): Promise<ContaPortalLida> {
+  private async contaParaAgir(q: QuemInterno, conta: string): Promise<ContaPortal> {
     const k = await this.porta.conta(this.ctx(q.hospital), Number(conta));
     if (!k) return naoEncontrado('Conta não encontrada');
     return k;
@@ -2680,7 +2715,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalContaBloqueada.codigo,
         operacao: 'portal.bloquearConta',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         paciente: k.paciente,
         chave: `bloqueio:${e.motivo}`,
@@ -2710,7 +2745,7 @@ export class ServicoPortalPaciente {
       trilha: this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalEmailTrocaPedida.codigo,
         operacao: 'portal.trocarEmail',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         paciente: k.paciente,
         chave: `balcao:${e.motivo}`,
@@ -2736,7 +2771,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalEmailTrocaPedida.codigo,
         operacao: 'portal.trocarEmail',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         paciente: k.paciente,
         chave: 'cancelada:balcao',
@@ -2759,7 +2794,7 @@ export class ServicoPortalPaciente {
     return { conta: (await this.resumoAtual(q, k.id))!, convite };
   }
 
-  private async refazerAcesso(q: QuemInterno, k: ContaPortalLida, chave: string): Promise<ConviteEmitido> {
+  private async refazerAcesso(q: QuemInterno, k: ContaPortal, chave: string): Promise<ConviteEmitido> {
     const { codigo, validoAte } = await this.novoConvite(q.hospital);
     await this.gravar(
       this.ctx(q.hospital),
@@ -2774,7 +2809,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalSegundoFatorTrocado.codigo,
         operacao: 'portal.bloquearConta',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         paciente: k.paciente,
         chave,
@@ -2804,7 +2839,7 @@ export class ServicoPortalPaciente {
         this.trilhaInterna(q, {
           evento: EVENTOS_AUDITAVEIS.portalContaBloqueada.codigo,
           operacao: 'portal.bloquearConta',
-          tabela: 'SGH_POR_CONTA',
+          tabela: 'conta_portal_paciente',
           id: k.id,
           paciente: k.paciente,
           chave: 'desbloqueio',
@@ -2834,7 +2869,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalContaEncerrada.codigo,
         operacao: 'portal.encerrarConta',
-        tabela: 'SGH_POR_CONTA',
+        tabela: 'conta_portal_paciente',
         id: k.id,
         paciente: k.paciente,
         chave: e.motivo,
@@ -2860,7 +2895,7 @@ export class ServicoPortalPaciente {
   /** Um vínculo como a conferência o mostra (o titular, o responsável e os sinais do cadastro). */
   private async paraConferir(
     c: ContextoPortal,
-    v: VinculoPortalLido,
+    v: VinculoPortal,
     b: BaseConferencia,
   ): Promise<VinculoParaConferir> {
     const t = await this.porta.paciente(c, v.titular);
@@ -2897,7 +2932,7 @@ export class ServicoPortalPaciente {
   async fila(
     q: QuemInterno,
     f: {
-      situacao: VinculoPortalLido['situacao'] | null;
+      situacao: VinculoPortal['situacao'] | null;
       prontuario?: number | null;
       depoisDe?: number | null;
     },
@@ -2945,7 +2980,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalVinculoDecidido.codigo,
         operacao: 'portal.vincularResponsavel',
-        tabela: 'SGH_POR_RESPONSAVEL',
+        tabela: 'conta_portal_paciente_dependente',
         id: v.id,
         paciente: v.titular,
         chave: 'prova-lida',
@@ -3000,7 +3035,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalVinculoDecidido.codigo,
         operacao: 'portal.vincularResponsavel',
-        tabela: 'SGH_POR_RESPONSAVEL',
+        tabela: 'conta_portal_paciente_dependente',
         id: v.id,
         paciente: v.titular,
         chave: aprovar ? `aprovado:${escopos.join(',')}` : 'recusado',
@@ -3024,7 +3059,7 @@ export class ServicoPortalPaciente {
       this.trilhaInterna(q, {
         evento: EVENTOS_AUDITAVEIS.portalVinculoDecidido.codigo,
         operacao: 'portal.vincularResponsavel',
-        tabela: 'SGH_POR_RESPONSAVEL',
+        tabela: 'conta_portal_paciente_dependente',
         id: v.id,
         paciente: v.titular,
         chave: e.motivo,
@@ -3042,7 +3077,22 @@ export class ServicoPortalPaciente {
       if (emCiclo) return;
       emCiclo = true;
       void (async () => {
-        for (const h of this.cfg.estabelecimentos ?? []) await this.varrerVigencias(h).catch(() => undefined);
+        for (const h of this.cfg.estabelecimentos ?? []) {
+          try {
+            await this.varrerVigencias(h);
+          } catch (e) {
+            const codigo = codigoDoErro(e);
+            logger.warn(
+              { modulo: 'portal-paciente', operacao: 'vigia-vigencia', codigo, estabelecimento: h },
+              'Varredura da vigência do portal falhou.',
+            );
+            // Sem o modelo da conta ou do vínculo no banco, a varredura nunca vai passar: o job para (aviso único).
+            if (codigo === 'recurso-sem-modelo') {
+              this.pararVigia();
+              return;
+            }
+          }
+        }
       })().finally(() => {
         emCiclo = false;
       });
@@ -3102,13 +3152,13 @@ export class ServicoPortalPaciente {
         c,
         (g) => g.encerrarVinculo(v.id, null, { motivo, por: USUARIO_JOB_PORTAL }),
         linha(
-          'SGH_POR_RESPONSAVEL',
+          'conta_portal_paciente_dependente',
           v.id,
           v.titular,
           motivo,
           EVENTOS_AUDITAVEIS.portalVinculoDecidido.codigo,
         ),
-      ).catch(() => undefined);
+      ).catch((e: unknown) => avisoDaVarredura('encerrar-vinculo', e));
       vinculos++;
     }
     for (const k of await this.porta.contasAbertas(c)) {
@@ -3118,8 +3168,14 @@ export class ServicoPortalPaciente {
       await this.gravar(
         c,
         (g) => g.encerrar(k.conta, null, { motivo, por: USUARIO_JOB_PORTAL }),
-        linha('SGH_POR_CONTA', k.conta, k.paciente, motivo, EVENTOS_AUDITAVEIS.portalContaEncerrada.codigo),
-      ).catch(() => undefined);
+        linha(
+          'conta_portal_paciente',
+          k.conta,
+          k.paciente,
+          motivo,
+          EVENTOS_AUDITAVEIS.portalContaEncerrada.codigo,
+        ),
+      ).catch((e: unknown) => avisoDaVarredura('encerrar-conta', e));
       contas++;
     }
     return { vinculos, contas };

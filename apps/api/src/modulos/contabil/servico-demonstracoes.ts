@@ -1,6 +1,6 @@
 // Serviço da contabilidade, etapa 3 (M54-F3): monta o balancete, o diário, a DRE e o balanço a partir das somas lidas,
 // a prévia e o plano da apuração do resultado do exercício, e a prévia e a geração do SPED (ECD e ECF) com as regras
-// puras de @sgh/dominio-contabil. Aqui nada grava: a gravação (na transação SGH_, com a trilha) é do controlador.
+// puras de @sgh/dominio-contabil. Aqui nada grava: a gravação (na transação do Executor, com a trilha) é do controlador.
 import { createHash } from 'node:crypto';
 import {
   type ApoioDemonstracoes,
@@ -49,7 +49,7 @@ import {
   planoDaApuracao,
   type PlanoApuracao,
 } from '@sgh/dominio-contabil';
-import type { ArquivoSpedLido, ContaPlanoLida, FiltroSomasSgh, LancamentoSgh } from '@sgh/legado';
+import type { ArquivoSpedRegistrado, ContaPlanoVersionada, FiltroSomasPorta, LancamentoParaGravar } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContabil, PortaContabil } from './porta.js';
 
@@ -59,7 +59,7 @@ const recusa = (codigo: string, detalhe: string, extra: Record<string, unknown> 
 /** Partidas lidas de uma vez para o SPED (um exercício de hospital cabe; acima disso, recusa em vez de cortar). */
 export const TETO_PARTIDAS_SPED = 1_500_000;
 
-const semCampos = (c: ContaPlanoLida): ContaPlano => ({
+const semCampos = (c: ContaPlanoVersionada): ContaPlano => ({
   empresa: c.empresa,
   codigo: c.codigo,
   nome: c.nome,
@@ -131,7 +131,7 @@ export class ServicoDemonstracoes {
     return (await this.porta.plano(c, empresa)).map(semCampos);
   }
 
-  private async somar(c: ContextoContabil, f: FiltroSomasSgh) {
+  private async somar(c: ContextoContabil, f: FiltroSomasPorta) {
     const r = await this.porta.somas(c, f, TETO_CONTAS_BALANCETE);
     if (r.parcial)
       throw recusa(
@@ -317,7 +317,7 @@ export class ServicoDemonstracoes {
   async planoApurar(
     c: ContextoContabil,
     x: { empresa: number; exercicio: number; contaDestino: string; observacao: string | null },
-  ): Promise<{ lancamento: LancamentoSgh; plano: PlanoApuracao }> {
+  ): Promise<{ lancamento: LancamentoParaGravar; plano: PlanoApuracao }> {
     const { p, ap } = await this.apuracao(c, x.empresa, x.exercicio, x.contaDestino);
     const primeiro = p.impedimentos[0];
     if (primeiro) throw recusa(primeiro.codigo, primeiro.mensagem, { impedimentos: p.impedimentos });
@@ -489,7 +489,7 @@ export class ServicoDemonstracoes {
   }
 }
 
-export const arquivoListado = (a: ArquivoSpedLido): ArquivoSpedListado => ({
+export const arquivoListado = (a: ArquivoSpedRegistrado): ArquivoSpedListado => ({
   id: a.id,
   empresa: a.empresa,
   tipo: a.tipo,

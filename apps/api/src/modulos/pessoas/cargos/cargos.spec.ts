@@ -1,17 +1,37 @@
 // W0-06, parte 4: cargos e salários pela HTTP (permissões pessoas.cargos.*, Zod com motivo, 409 com a contagem e a
 // oferta da inativação). Portas em memória; dados sintéticos; nada conecta a banco.
+// A app migrada monta só o necessário: o cadastro (sessão), a configuração sintética e um módulo de teste com o
+// controller de cargos (o módulo de pessoas é registrado no lote 03-11).
+import { type DynamicModule, Module } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
+import { REGISTRADOR_TRILHA } from '../../../autorizacao/simbolos.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
+import { ArmazemMemoria } from '../../../sessao/armazem.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import { registroDeTeste } from '../../cadastro/teste.spec-util.js';
+import {
+  CACHE_CONFIG,
+  CacheConfig,
+  type ChaveLiberacao as ChaveGravada,
+  FONTE_CONFIGURACAO,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso as PrerequisitoGravado,
+} from '../../config/public-api.js';
+import type { ContextoModulo } from '../../registro.js';
+import { PORTA_PESSOAS } from '../porta.js';
 import { PortaPessoasMemoria } from '../porta-memoria.js';
+import { CargosController } from './cargos.controller.js';
+import { PORTA_CARGOS } from './porta-cargos.js';
 import { PortaCargosMemoria } from './porta-cargos-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = {
+  ...envTeste,
+  AMBIENTE: 'dev',
+  API_MODULOS: 'configuracao_teste,cadastro,cargos_teste',
+};
 const chave: ChaveGravada = {
   id: 'pessoas.colaborador',
   tipo: 'recurso',
@@ -40,15 +60,41 @@ const trilha = new RegistradorTrilhaMemoria();
 const cargos = new PortaCargosMemoria();
 cargos.agoraFixo = '2026-11-18T10:00';
 
+@Module({})
+class ConfiguracaoCargosTeste {}
+@Module({})
+class CargosTeste {}
+
+const moduloConfiguracao = (ctx: ContextoModulo): DynamicModule => ({
+  module: ConfiguracaoCargosTeste,
+  global: true,
+  providers: [
+    {
+      provide: FONTE_CONFIGURACAO,
+      useValue: fonteConfiguracaoMemoria(ctx.trilha, {
+        chavesIniciais: () => [chave],
+        prerequisitosIniciais: () => [conferencia],
+      }),
+    },
+    { provide: CACHE_CONFIG, useValue: new CacheConfig(new ArmazemMemoria()) },
+  ],
+  exports: [FONTE_CONFIGURACAO, CACHE_CONFIG],
+});
+
+const moduloCargos = (ctx: ContextoModulo): DynamicModule => ({
+  module: CargosTeste,
+  controllers: [CargosController],
+  providers: [
+    { provide: PORTA_CARGOS, useValue: cargos },
+    { provide: PORTA_PESSOAS, useValue: new PortaPessoasMemoria() },
+    { provide: REGISTRADOR_TRILHA, useValue: ctx.trilha },
+  ],
+});
+
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    pessoas: new PortaPessoasMemoria(),
-    cargos,
-    configuracao: fonteConfiguracaoMemoria(trilha, {
-      chavesIniciais: () => [chave],
-      prerequisitosIniciais: () => [conferencia],
-    }),
+    registro: registroDeTeste({}, { configuracao_teste: moduloConfiguracao, cargos_teste: moduloCargos }),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();

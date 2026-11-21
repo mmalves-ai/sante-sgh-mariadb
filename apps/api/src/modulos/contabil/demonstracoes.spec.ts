@@ -11,9 +11,18 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { type ContextoModulo, REGISTRO_MODULOS } from '../registro.js';
+import { moduloContabil } from './modulo.js';
+import type { PortaContabil } from './porta.js';
 import { PortaContabilMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+/** O módulo da contabilidade registrado com a porta do teste (o registro real é o do integrador da onda). */
+const registroContabil = (p: PortaContabil) => ({
+  ...REGISTRO_MODULOS,
+  contabil: async () => ({ modulo: (ctx: ContextoModulo) => moduloContabil(ctx, { porta: p }) }),
+});
+
+const env: Record<string, string> = { ...envTeste, API_MODULOS: 'config,contabil', AMBIENTE: 'dev' };
 const trilha = new RegistradorTrilhaMemoria();
 const porta = new PortaContabilMemoria();
 porta.hojeFixo = '2026-11-10';
@@ -41,7 +50,7 @@ for (const c of porta.contas)
   if (c.codigo === '3.1.1.01.0001') Object.assign(c, { referencialTipo: 1, referencialConta: '3.01.01.01' });
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, contabil: porta });
+  app = await criarApp(lerConfiguracao(env), null, env, { trilha, registro: registroContabil(porta) });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });

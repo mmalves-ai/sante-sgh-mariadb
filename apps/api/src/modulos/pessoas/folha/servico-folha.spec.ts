@@ -6,13 +6,6 @@
 // cancelar, versão) que a exportação leva. Nenhuma resposta nem trilha leva o CPF.
 import { createHash } from 'node:crypto';
 import { esquemaLoteExportacaoFolha, type LoteRetornoFolha } from '@sgh/contratos';
-import {
-  type ChaveGravada,
-  type EventoPeriodoLidoSgh,
-  type PrerequisitoGravado,
-  TETO_AFASTAMENTOS,
-  TETO_VINCULOS_FOLHA,
-} from '@sgh/legado';
 import { describe, expect, it, vi } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -25,9 +18,12 @@ import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js
 import { ServicoPessoas } from '../servico.js';
 import { PortaFolhaMemoria } from './porta-folha-memoria.js';
 import { camposDoRetornoBruto, ServicoFolha, vinculosDoLote } from './servico-folha.js';
+import { type ChaveLiberacao, type PrerequisitoRecurso } from '../../config/public-api.js';
+import { type EventoDoPeriodo } from '../ponto/tipos-ponto.js';
+import { TETO_AFASTAMENTOS, TETO_VINCULOS_FOLHA } from './apoio-folha.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -40,7 +36,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -63,7 +59,14 @@ function sessao(login = 'SINT.DP.FOLHA', hospital = 'pc'): SessaoCadastro {
     hospital,
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: {
+      cliente: hospital,
+      estabelecimento: 1,
+      usuario: null,
+      correlacao: 'teste-folha',
+      rede: 'rede-sintetica',
+      hospital,
+    },
     pode: () => true,
   };
 }
@@ -73,7 +76,7 @@ function dubles() {
   const fechados = new Map<number, Record<string, number>>();
   const plantoes: { vinculo: number; plantao: number; inicio: string; fim: string; minutos: number }[] = [];
   const ponto = {
-    eventosDaCompetencia: async (_c: unknown, competencia: string): Promise<EventoPeriodoLidoSgh[]> =>
+    eventosDaCompetencia: async (_c: unknown, competencia: string): Promise<EventoDoPeriodo[]> =>
       [...fechados.entries()].map(([vinculo, eventos], i) => ({
         id: 100 + i,
         vinculo,

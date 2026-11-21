@@ -9,12 +9,15 @@ import {
   type ParametrosObrigacoes,
   REGIMES_SUGERIDOS_OBRIGACOES,
 } from '@sgh/contratos';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
-import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import {
+  type ChaveLiberacao,
+  fonteConfiguracaoMemoria,
+  type PrerequisitoRecurso,
+} from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEsocialMemoria } from '../esocial/porta-esocial-memoria.js';
 import { ServicoEsocial } from '../esocial/servico-esocial.js';
@@ -28,9 +31,16 @@ import { ServicoPessoas } from '../servico.js';
 import { competenciaAnterior, csvApuracaoFgts, ServicoObrigacoes } from './servico-obrigacoes.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
+const CTX = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 1,
+  correlacao: 'teste-obrigacoes',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
 const NIS = '12345678919';
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -43,7 +53,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',

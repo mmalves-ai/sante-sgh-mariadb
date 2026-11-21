@@ -1,0 +1,93 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/suprimentos/apoios.ts",
+    "src/modulos/suprimentos/consignado-manipulacao.spec.ts",
+    "src/modulos/suprimentos/consignado-porta-memoria.ts",
+    "src/modulos/suprimentos/consignado-porta.ts",
+    "src/modulos/suprimentos/consignado.controller.ts",
+    "src/modulos/suprimentos/consignado-porta-propria.ts",
+    "src/modulos/suprimentos/consignado-porta-propria.int.spec.ts",
+    "src/modulos/suprimentos/contrato-permissao-vinculo.spec.ts",
+    "src/modulos/suprimentos/contrato-porta-memoria.ts",
+    "src/modulos/suprimentos/contrato-porta.ts",
+    "src/modulos/suprimentos/contrato.controller.ts",
+    "src/modulos/suprimentos/contrato.spec.ts",
+    "src/modulos/suprimentos/licitacao-documento.int.spec.ts",
+    "src/modulos/suprimentos/licitacao-documento.ts",
+    "src/modulos/suprimentos/licitacao-porta-memoria.spec.ts",
+    "src/modulos/suprimentos/licitacao-porta-memoria.ts",
+    "src/modulos/suprimentos/licitacao-porta.ts",
+    "src/modulos/suprimentos/licitacao.controller.ts",
+    "src/modulos/suprimentos/licitacao.spec.ts",
+    "src/modulos/suprimentos/contrato-porta-propria.ts",
+    "src/modulos/suprimentos/contrato-porta-propria.int.spec.ts",
+    "src/modulos/suprimentos/suprimentos-http.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/suprimentos/modulo.ts e public-api.ts (lote 03-14)",
+      "pedido": "Montar no modulo.ts os controllers ConsignadoController, ContratoController e LicitacaoController com PORTA_CONSIGNADO, PORTA_CONTRATO e PORTA_LICITACAO pela regra do F2-L: com ctx.nucleo, portaConsignadoPropria(nucleo) e portaContratoPropria(nucleo) (de './consignado-porta-propria.js' e './contrato-porta-propria.js'); sem núcleo em dev/ci, PortaConsignadoMemoria(opme de memória), PortaContratoMemoria e PortaLicitacaoMemoria; fora disso, portaConsignadoIndisponivel/portaContratoIndisponivel/portaLicitacaoIndisponivel. Exportar no public-api.ts PortaContratoPropria, portaContratoPropria e portaContratoIndisponivel. O contrato-porta-legado.ts foi apagado; o licitacao-porta-legado.ts continua até a porta própria da licitação (ver avisos). O suprimentos-http.spec-util.ts monta hoje esses controllers por cima do modulo.ts só nos testes HTTP."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/suprimentos/modulo.ts (lote 03-14)",
+      "pedido": "O modulo.ts chama modulosPedidos(ctx.env) com o REGISTRO_MODULOS padrão, que ainda não tem cirurgia nem suprimentos: a chamada lança, cai no catch e o OPME e a manipulação nunca são montados (o mesmo vale em produção até o registro). Além disso o OpmeController e o ManipulacaoController injetam PORTA_CIRURGIA, que o módulo suprimentos não importa (o teste HTTP do lote fornece a porta de memória). Pedido: ler o pedido do ctx (ou do registro passado ao criarApp) e importar/exportar PORTA_CIRURGIA de forma explícita."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/app.module.ts (desmontagem da última onda)",
+      "pedido": "O app.module.ts ainda importa portaContratoLegado e portaLicitacaoLegado (linhas ~722-729 e ~2573-2588) e portaConsignadoLegado: o public-api.ts não os exporta mais. Na desmontagem, trocar pelas fábricas próprias ou remover o bloco."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "semente do comando 'criar novo cliente' (sequencia_negocio)",
+      "pedido": "Criar por estabelecimento as sequências 'remessa_consignada' e 'reposicao_consignada'. Sem elas, a remessa e a reposição do consignado recusam com 'sequencia-nao-configurada' (409)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/suprimentos/consignado.ts e regras/consignado.ts",
+      "pedido": "(1) nfEntrada {ano, mes, doc}: hoje doc = nota_entrada.id e ano/mes = mês da data_entrada; trocar por notaEntrada: id. (2) RemessaParaConferir.classeItem (número da classe) -> opme: boolean | null; a porta própria devolve CLASSE_OPME ou CLASSE_NAO_OPME (-1) até lá. (3) ConsumoConsignado.agendamento -> number | null: hoje o consumo sem agendamento cirúrgico fica fora da lista do consignado."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "contrato_fornecedor (14_FIN/03) — para a porta própria do contrato",
+      "pedido": "Coluna `critico BOOLEAN NOT NULL DEFAULT FALSE COMMENT 'Fornecedor crítico: avaliação a cada 6 meses'` e `observacao VARCHAR(1000) NULL`. O resto do contrato da tela cabe no modelo: gestor e fiscal em gestor_contrato.papel; garantia em garantia_contrato; aditivo e renovação em aditivo_contrato; reajuste em reajuste_contrato (+indice_reajuste); ocorrência, avaliação (notas em dados), exceção, encerramento e rescisão em ocorrencia_contrato; anexo em anexo_contrato; vínculo por pedido_compra.contrato_fornecedor_id e titulo_pagar.contrato_fornecedor_id. Até a coluna existir, a porta própria guarda o crítico e a observação no histórico do contrato (ocorrencia_contrato, registro 'cadastro' em dados) e lê o último registro."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "vínculo do contrato com pedido e título",
+      "pedido": "Tabela `vinculo_contrato_fornecedor` (contrato_fornecedor_id, tipo CHECK IN ('pedido','titulo'), pedido_compra_id NULL, titulo_pagar_id NULL, ocorrencia_contrato_id NULL COMMENT 'Exceção aprovada usada', pedido_origem_vinculo_id NULL, + auditoria; CHECK exatamente um alvo; UNIQUE (pedido_compra_id), UNIQUE (titulo_pagar_id)) ou, no mínimo, as colunas da exceção e do pedido de origem: a coluna contrato_fornecedor_id do pedido e do título não guarda a exceção aprovada nem o pedido de origem do título. Até lá, a porta própria liga pela coluna contrato_fornecedor_id e guarda a exceção usada e o pedido de origem no histórico do contrato (ocorrencia_contrato, registro 'vinculo' em dados)."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "processo_licitatorio (11_SUP/04) — para a porta própria da licitação",
+      "pedido": "Tabela `evento_processo_licitatorio` (processo_licitatorio_id, tipo CHECK IN ('avanco','recurso','decisao_recurso','homologacao','encerramento','documento','registro'), etapa_anterior, etapa_posterior, descricao VARCHAR(2000), referencia VARCHAR(80) NULL COMMENT 'Número da emissão do documento', prazo DATE NULL, usuario_id, ocorrido_em, + auditoria; UNIQUE (processo_licitatorio_id, tipo, referencia)). Sem ela, o histórico, o recurso e o documento emitido (regra 10) não têm onde ficar. Os preços vão em pesquisa_preco(+_item, considerado/motivo_desconsideracao) e as propostas em proposta_licitacao(+_item)."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "catálogo indice_reajuste (carregador versionado, regra 7)",
+      "pedido": "Carregar os índices públicos IPCA, IGPM, INPC e INCC (e OUTRO, para o índice previsto em contrato) em indice_reajuste por carregador versionado. Sem a linha, o cadastro do contrato com esse índice recusa com 'indice-sem-cadastro' (409)."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "saldo_consignado e remessa_consignada_item (razão do estoque)",
+      "pedido": "Nenhuma operação grava saldo_consignado nem remessa_consignada_item.quantidade_consumida/quantidade_devolvida nem reposicao_consignada.remessa_consignada_item_id/local_estoque_id/movimento_estoque_id. A remessa, a devolução (esta porta) e o consumo (porta do OPME) devem lançar o movimento no razão do estoque, que atualiza o saldo_consignado na mesma transação. Até lá a conferência 'saldo do cadastro × controle' (saldoCadastro) mostra divergência falsa para o que entra pelo sistema."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/suprimentos/contrato.ts",
+      "pedido": "VinculoContrato.legado (o id do pedido ou do título) → renomear para alvo; o enum de destino das telas com 'legado' → 'banco' (destinoDoContrato em exames/apoio-gravacao.ts)."
+    }
+  ],
+  "avisos": [
+    "Licitação NÃO migrada neste lote: licitacao-porta-legado.ts continua (importa @sgh/legado) e não há licitacao-porta-propria.ts. Falta a porta própria sobre processo_licitatorio(+_item), pesquisa_preco(+_item) e proposta_licitacao(+_item); sem a tabela evento_processo_licitatorio (DDL pedido) ficam sem onde gravar o recurso e a decisão do recurso, o documento emitido (regra 10) e o histórico das etapas do detalhar.",
+    "Contrato: o crítico, a observação, a exceção usada e o pedido de origem do título ficam no histórico (ocorrencia_contrato.dados) até as colunas pedidas existirem; nenhuma operação do contrato fica indisponível.",
+    "Contrato: o vínculo de título é pelo titulo_pagar inteiro (o modelo liga o contrato no cabeçalho do título, não na parcela).",
+    "Consignado: a remessa e a reposição recusam com 'sequencia-nao-configurada' até as sequências 'remessa_consignada' e 'reposicao_consignada' existirem por estabelecimento; a remessa recusa com 'sem-local-consignado' sem local de estoque do tipo consignado ativo.",
+    "Consignado: a lista de consumos da tela mostra só o consumo com agendamento cirúrgico (ConsumoConsignado.agendamento obrigatório no contrato); a soma do saldo e o limite da devolução já contam todos os consumos.",
+    "licitacao-documento.int.spec.ts falha neste ambiente: o S3 local (127.0.0.1:9318) responde 500 InternalError ao gravar com retenção (gravarComRetencao); o Gotenberg responde. Não é efeito da migração.",
+    "porta-propria.int.spec.ts (estoque, lote 03-14) tem 2 testes vermelhos no conferidor deste lote: são do outro lote da mesma pasta."
+  ]
+}

@@ -2,26 +2,27 @@
 // MESMAS recusas do banco (e-mail e convite únicos por estabelecimento, versão e situação conferidas, quem pediu o
 // vínculo não decide). Pacientes SINTÉTICOS (os do prontuário em memória e um menor de idade), nenhum dado de pessoa.
 // Os documentos vêm do prontuário em memória (M23/M49), quando ligado; a trilha das leituras, da trilha em memória.
+import { recusa } from '@sgh/nucleo';
 import {
-  type ConsentimentoPortalLido,
-  type ContaPortalLida,
-  type DocumentoPortalLido,
+  type ConsentimentoPortal,
+  type ContaPortal,
+  type DocumentoPortal,
   ErroPedido,
-  ErroPortalSgh,
+  ErroPortal,
   type FiltroFilaVinculosPortal,
-  type LeituraTitularLida,
-  type PacienteParaPortalLido,
-  type PedidoPortalLido,
-  type TrocaEmailPortalLida,
-  recusa,
+  type LeituraTitular,
+  type PacientePortal,
+  type PedidoPortal,
+  type TrocaEmailPortal,
   resumoSemEmail,
   TETO_FILA_VINCULOS,
-  type VinculoPortalLido,
-  type AtoCopiaLido,
+  type VinculoPortal,
+  type AtoCopia,
   type CopiaNaFila,
-} from '@sgh/legado';
+} from './tipos.js';
 import type {
   ContextoPortal,
+  ContextoPortalNucleo,
   DominiosConsentimento,
   GravadorPortal,
   ManifestacaoPortalLida,
@@ -55,17 +56,17 @@ export interface DocumentoMemoriaPortal {
 }
 
 interface Estado {
-  contas: ContaPortalLida[];
-  vinculos: VinculoPortalLido[];
-  consentimentos: (ConsentimentoPortalLido & { paciente: number; conta: number | null })[];
-  pedidos: (PedidoPortalLido & { paciente: number; conta: number })[];
-  leituras: (LeituraTitularLida & { paciente: number })[];
+  contas: ContaPortal[];
+  vinculos: VinculoPortal[];
+  consentimentos: (ConsentimentoPortal & { paciente: number; conta: number | null })[];
+  pedidos: (PedidoPortal & { paciente: number; conta: number })[];
+  leituras: (LeituraTitular & { paciente: number })[];
   /** W0-10: os pedidos da troca do e-mail (com o resumo do token). */
-  trocas: (TrocaEmailPortalLida & { tokenResumo: string })[];
+  trocas: (TrocaEmailPortal & { tokenResumo: string })[];
   /** W0-10 (M1): as manifestações à ouvidoria feitas pelo portal (a ouvidoria interna em memória é outra porta). */
   manifestacoes?: (ManifestacaoPortalLida & { paciente: number })[];
   /** W0-10 (M2): os atos da cópia do prontuário (só inclusão), pelo ID do pedido. */
-  atosCopia?: (AtoCopiaLido & { idPedido: string })[];
+  atosCopia?: (AtoCopia & { idPedido: string })[];
   /** W0-10 (M2): o canal de cada pedido (o portal por padrão). */
   canais?: Record<string, string>;
   seq: number;
@@ -84,14 +85,14 @@ const DOMINIOS: DominiosConsentimento = {
   revogacoes: [{ id: 2, descricao: 'Revogação', ativo: true }],
 };
 
-const semToken = (t: TrocaEmailPortalLida & { tokenResumo: string }): TrocaEmailPortalLida => {
+const semToken = (t: TrocaEmailPortal & { tokenResumo: string }): TrocaEmailPortal => {
   const x: Partial<typeof t> = { ...t };
   delete x.tokenResumo;
-  return x as TrocaEmailPortalLida;
+  return x as TrocaEmailPortal;
 };
 
 const versaoVelha = (o: string) =>
-  new ErroPortalSgh('versao-desatualizada', `A conta foi alterada por outra pessoa (${o}); recarregue.`);
+  new ErroPortal('versao-desatualizada', `A conta foi alterada por outra pessoa (${o}); recarregue.`);
 
 /** W0-10 (M1): a ouvidoria interna em memória vista pelo portal (a mesma linha nas duas telas). */
 export interface OuvidoriaInternaMemoria {
@@ -102,6 +103,17 @@ export interface OuvidoriaInternaMemoria {
 
 export class PortaPortalMemoria implements PortaPortalPaciente {
   readonly destino = 'memoria' as const;
+  /** Na memória, o estabelecimento sintético 1 (as portas de memória dos outros módulos não usam o id). */
+  async contexto(c: ContextoPortal): Promise<ContextoPortalNucleo> {
+    return {
+      cliente: c.rede,
+      estabelecimento: 1,
+      usuario: null,
+      correlacao: 'portal-paciente',
+      rede: c.rede,
+      hospital: c.hospital,
+    };
+  }
   private readonly estados = new Map<string, Estado>();
 
   /**
@@ -167,7 +179,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
   }
 
   /** Para os testes e o E2E: uma leitura do prontuário na trilha (o relatório de acessos). */
-  registrarLeitura(c: ContextoPortal, l: LeituraTitularLida & { paciente: number }): void {
+  registrarLeitura(c: ContextoPortal, l: LeituraTitular & { paciente: number }): void {
     this.e(c).leituras.unshift(l);
   }
 
@@ -199,19 +211,19 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
       const x = s.contas.find((k) => k.id === id);
       return x;
     };
-    const trocar = (id: number, m: Partial<ContaPortalLida>) => {
+    const trocar = (id: number, m: Partial<ContaPortal>) => {
       const i = s.contas.findIndex((k) => k.id === id);
       const atual = s.contas[i]!;
       s.contas[i] = { ...atual, ...m, versao: atual.versao + (m.versao === undefined ? 1 : 0) };
     };
-    const trocarV = (id: number, m: Partial<VinculoPortalLido>) => {
+    const trocarV = (id: number, m: Partial<VinculoPortal>) => {
       const i = s.vinculos.findIndex((k) => k.id === id);
       const atual = s.vinculos[i]!;
       s.vinculos[i] = { ...atual, ...m, versao: atual.versao + 1 };
     };
     const conviteUnico = (resumo: string, exceto: number) => {
       if (s.contas.some((k) => k.conviteResumo === resumo && k.id !== exceto))
-        throw new ErroPortalSgh('convite-repetido', 'Código de convite repetido.');
+        throw new ErroPortal('convite-repetido', 'Código de convite repetido.');
     };
     return {
       criarConta: async (x) => {
@@ -292,7 +304,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
             (o) => o.id !== id && o.emailResumo === a.emailResumo && o.emailResumo !== resumoSemEmail(o.id),
           )
         )
-          throw new ErroPortalSgh('email-em-uso', 'E-mail já usado em outra conta.');
+          throw new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.');
         const t = agora();
         trocar(id, {
           situacao: 'ativa',
@@ -338,7 +350,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
           if (x.conta === t.conta && x.situacao === 'pendente')
             Object.assign(x, { situacao: 'cancelada', decididoEm: quando });
         if (s.trocas.some((x) => x.tokenResumo === t.tokenResumo))
-          throw new ErroPortalSgh('convite-repetido', 'Token repetido.');
+          throw new ErroPortal('convite-repetido', 'Token repetido.');
         const id = ++s.seq;
         s.trocas.push({
           id,
@@ -362,15 +374,15 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
         if (!k || k.versao !== versao || !['ativa', 'bloqueada'].includes(k.situacao))
           throw versaoVelha('e-mail');
         if (s.contas.some((o) => o.id !== id && o.emailResumo === x.resumo && o.email !== null))
-          throw new ErroPortalSgh('email-em-uso', 'E-mail já usado em outra conta.');
+          throw new ErroPortal('email-em-uso', 'E-mail já usado em outra conta.');
         const t = s.trocas.find((y) => y.id === troca && y.conta === id && y.situacao === 'pendente');
-        if (!t) throw new ErroPortalSgh('situacao', 'O pedido de troca do e-mail não está mais pendente.');
+        if (!t) throw new ErroPortal('situacao', 'O pedido de troca do e-mail não está mais pendente.');
         trocar(id, { email: x.email, emailResumo: x.resumo });
         Object.assign(t, { situacao: 'confirmada', decididoEm: agora().toISOString() });
       },
       cancelarTrocaEmail: async (troca) => {
         const t = s.trocas.find((y) => y.id === troca && y.situacao === 'pendente');
-        if (!t) throw new ErroPortalSgh('situacao', 'O pedido de troca do e-mail não está mais pendente.');
+        if (!t) throw new ErroPortal('situacao', 'O pedido de troca do e-mail não está mais pendente.');
         Object.assign(t, { situacao: 'cancelada', decididoEm: agora().toISOString() });
       },
       bloquear: async (id, versao, d) => {
@@ -422,10 +434,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
       decidirVinculo: async (id, versao, d) => {
         const v = s.vinculos.find((k) => k.id === id);
         if (!v || v.versao !== versao || v.situacao !== 'pendente')
-          throw new ErroPortalSgh(
-            'versao-desatualizada',
-            'O pedido foi alterado por outra pessoa; recarregue.',
-          );
+          throw new ErroPortal('versao-desatualizada', 'O pedido foi alterado por outra pessoa; recarregue.');
         if (d.por === v.pedidoPor) throw new Error('CHECK SGH_CK_POR_RESP_SEGREGACAO');
         if (d.aprovar)
           trocarV(id, {
@@ -446,10 +455,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
       encerrarVinculo: async (id, versao, d) => {
         const v = s.vinculos.find((k) => k.id === id);
         if (!v || !['pendente', 'ativo'].includes(v.situacao) || (versao !== null && v.versao !== versao))
-          throw new ErroPortalSgh(
-            'versao-desatualizada',
-            'O pedido foi alterado por outra pessoa; recarregue.',
-          );
+          throw new ErroPortal('versao-desatualizada', 'O pedido foi alterado por outra pessoa; recarregue.');
         // Como o UPDATE do banco: o pedido nunca decidido recebe a decisão no mesmo instante do fim.
         const t = agora();
         trocarV(id, {
@@ -587,7 +593,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
     };
   }
 
-  private lido(id: number): PacienteParaPortalLido | null {
+  private lido(id: number): PacientePortal | null {
     const p = PACIENTES_PORTAL_SINTETICOS[id];
     if (!p) return null;
     return {
@@ -700,7 +706,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
   ) {
     const todos = (this.documentosDoProntuario?.(c.hospital) ?? [])
       .filter((d) => d.paciente === p && tipos.includes(d.tipo) && (apenas === null || d.id === apenas))
-      .map((d): DocumentoPortalLido => ({
+      .map((d): DocumentoPortal => ({
         id: d.id,
         tipo: d.tipo,
         paciente: d.paciente,
@@ -760,10 +766,10 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
       })
       .sort((a, b) => Number(!pend(a.situacao)) - Number(!pend(b.situacao)) || +a.prazo - +b.prazo);
   }
-  async atosCopia(c: ContextoPortal, idPedido: string): Promise<AtoCopiaLido[]> {
+  async atosCopia(c: ContextoPortal, idPedido: string): Promise<AtoCopia[]> {
     return (this.e(c).atosCopia ?? [])
       .filter((a) => a.idPedido === idPedido)
-      .map((a): AtoCopiaLido => {
+      .map((a): AtoCopia => {
         const { idPedido: id, ...resto } = a;
         void id;
         return resto;
@@ -782,7 +788,7 @@ export class PortaPortalMemoria implements PortaPortalPaciente {
 function atoMemoria(
   id: number,
   idPedido: string,
-  ato: AtoCopiaLido['ato'],
+  ato: AtoCopia['ato'],
   por: string,
   em: Date,
   d: {
@@ -794,7 +800,7 @@ function atoMemoria(
     meio?: string;
     recebedor?: string | null;
   },
-): AtoCopiaLido & { idPedido: string } {
+): AtoCopia & { idPedido: string } {
   return {
     id: String(id),
     idPedido,

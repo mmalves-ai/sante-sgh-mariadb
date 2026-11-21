@@ -1,18 +1,36 @@
 // W0-06, parte 5b: avaliação de desempenho pela HTTP (permissões pessoas.avaliacao.*, Zod com motivo, 409 com a
 // contagem e a oferta da inativação, ciência só da própria avaliação). Portas em memória; dados sintéticos; nada
 // conecta a banco.
+import { criarAppPessoas, type OpcoesTestePessoas } from '../opcoes-teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../../app.js';
+import { REGISTRO_MODULOS } from '../../registro.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { PortaCargosMemoria } from '../cargos/porta-cargos-memoria.js';
 import { PortaPessoasMemoria } from '../porta-memoria.js';
 import { PortaAvaliacaoMemoria } from './porta-avaliacao-memoria.js';
 
+type OpcoesConfiguracao = NonNullable<Parameters<typeof fonteConfiguracaoMemoria>[1]>;
+type ChaveGravada = ReturnType<NonNullable<OpcoesConfiguracao['chavesIniciais']>>[number];
+type PrerequisitoGravado = ReturnType<NonNullable<OpcoesConfiguracao['prerequisitosIniciais']>>[number];
+
+/**
+ * As portas sintéticas que a bateria HTTP dá ao módulo "pessoas". O OpcoesAppBase não as leva: o lote que registra a
+ * unidade liga estas portas pelo `registro` (o padrão de app-administracao.spec-util). Com o módulo registrado e sem
+ * essa ligação, a bateria recusa rodar, em vez de passar sobre outras portas.
+ */
+interface PortasPessoasTeste {
+  readonly trilha: RegistradorTrilhaMemoria;
+  readonly pessoas: PortaPessoasMemoria;
+  readonly cargos: PortaCargosMemoria;
+  readonly avaliacao: PortaAvaliacaoMemoria;
+  readonly configuracao: ReturnType<typeof fonteConfiguracaoMemoria>;
+}
+function opcoesPessoas(p: PortasPessoasTeste): OpcoesTestePessoas {
+  return p;
+}
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const chave: ChaveGravada = {
   id: 'pessoas.colaborador',
@@ -45,16 +63,19 @@ const avaliacao = new PortaAvaliacaoMemoria(pessoas);
 avaliacao.agoraFixo = '2026-11-18T10:00';
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    pessoas,
-    cargos,
-    avaliacao,
-    configuracao: fonteConfiguracaoMemoria(trilha, {
-      chavesIniciais: () => [chave],
-      prerequisitosIniciais: () => [conferencia],
+  app = await criarAppPessoas(
+    env,
+    opcoesPessoas({
+      trilha,
+      pessoas,
+      cargos,
+      avaliacao,
+      configuracao: fonteConfiguracaoMemoria(trilha, {
+        chavesIniciais: () => [chave],
+        prerequisitosIniciais: () => [conferencia],
+      }),
     }),
-  });
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 120_000);
@@ -95,7 +116,11 @@ const pedir = (s: Sessao) => {
 const P = '/api/pessoas/avaliacoes';
 const MOTIVO = 'Lançado com o dado errado na implantação';
 
-describe('W0-06 parte 5b: avaliação de desempenho pela HTTP', () => {
+// As rotas só existem com o módulo "pessoas" no registro da API (lote que registra a unidade; F2.2): até lá a
+// bateria HTTP fica de fora, explicitamente, e liga sozinha quando o módulo entrar em REGISTRO_MODULOS.
+const PESSOAS_REGISTRADO = 'pessoas' in REGISTRO_MODULOS;
+
+describe.skipIf(!PESSOAS_REGISTRADO)('W0-06 parte 5b: avaliação de desempenho pela HTTP', () => {
   it('o RH mantém competência e ciclo com motivo; a usada recusa a exclusão com a contagem', async () => {
     const rh = pedir(await entrar('SINT.RH'));
     const ap = await rh.get(`${P}/apoio`);

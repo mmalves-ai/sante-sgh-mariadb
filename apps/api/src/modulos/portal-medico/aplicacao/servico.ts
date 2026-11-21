@@ -4,11 +4,11 @@
 // profissional do corpo clínico, decidido por uma pessoa do hospital. Do vínculo saem, no servidor:
 //   - o extrato de produção e repasse: os códigos de prestador do profissional pelo serviço do M33 (o mesmo extrato do
 //     médico interno, regra 12 do M33);
-//   - a agenda cirúrgica: só as cirurgias em que o registro dele é o cirurgião (CCAGENDA.ID_CRM), com o paciente
+//   - a agenda cirúrgica: só as cirurgias em que o registro dele é o cirurgião (o cirurgião do agendamento), com o paciente
 //     mascarado como no mapa do bloco, e os pedidos feitos por esta conta (DP-43: só o que é dele);
-//   - o pedido de cirurgia: nasce "solicitado" em SGH_CC_AGENDA_ESTADO (M18), não ocupa a sala; a secretaria do bloco
+//   - o pedido de cirurgia: nasce "solicitado" no agendamento cirúrgico (M18), não ocupa a sala; a secretaria do bloco
 //     confirma pela agenda do M18 (cirurgia.agendarCirurgia, sem mudança), localizando o cadastro do paciente.
-// Toda leitura e gravação vai à SGH_TRILHA sem dado pessoal. O lado interno lista as contas e liga ou desliga o
+// Toda leitura e gravação vai à trilha de auditoria sem dado pessoal. O lado interno lista as contas e liga ou desliga o
 // profissional (portal.medicoExterno.vincular).
 import {
   type AtoContaMedicoExternoEntrada,
@@ -66,17 +66,7 @@ import {
   reservarPedido,
   ROTULOS_ESTADO,
 } from '@sgh/dominio-cirurgia';
-import {
-  type AcessoPortalLido,
-  type ContextoSgh,
-  type NotificacaoCriticoMedicoLida,
-  type EstadoCirurgiaLido,
-  type VersaoPedidoLida,
-  type LinhaTrilha,
-  type ProfissionalCorpoClinicoLido,
-  type ResultadoLido,
-  type VinculoMedicoExternoLido,
-} from '@sgh/legado';
+import type { ContextoNucleo } from '@sgh/nucleo';
 import { createHash, randomBytes } from 'node:crypto';
 import { ErroProblema } from '../../../problema.filter.js';
 import { problemaDoCadastro } from '../../cadastro/comum.js';
@@ -84,21 +74,42 @@ import type { PortaCirurgia } from '../../cirurgia/public-api.js';
 import type { FonteConfiguracao } from '../../config/public-api.js';
 import type { ServicoRepasse } from '../../repasse/public-api.js';
 import { ligadaNoEstabelecimento, type PortaSadt, type ServicoPortal } from '../../sadt/public-api.js';
-import type { ContextoPortalMedico, PortaPortalMedico } from '../porta.js';
+import { contextoDoEstabelecimento } from '../../cadastro/contexto-nucleo.js';
+import type { ContextoGravacaoPep, ResultadoLido } from '../../pep/tipos-pep.js';
+import type { AcessoPortal } from '../../sadt/public-api.js';
+import {
+  type ContextoPortalMedico,
+  type NotificacaoCriticoMedico,
+  type PortaPortalMedico,
+  type ProfissionalCorpoClinico,
+  type TrilhaPortalMedico,
+  trilhaDoNucleo,
+  type VinculoMedicoExterno,
+} from '../porta.js';
 import { type FonteAssinaturaPortalMedico, sessaoDaAssinaturaRemota } from './assinatura-remota.js';
 import { type CanalMedico, CanalMedicoSimulador, MOTIVO_HALAI_MEDICO_DESLIGADA } from './canal.js';
 
 export const USUARIO_PORTAL_MEDICO = 'SGH.PORTAL';
+type AcessoPortalLido = AcessoPortal;
+type EstadoCirurgiaLido = Awaited<ReturnType<PortaCirurgia['estadosDoPortal']>>[number];
+type VersaoPedidoLida = Awaited<ReturnType<PortaCirurgia['versoesDosPedidos']>>[number];
+type GravadorCirurgia = Parameters<Parameters<PortaCirurgia['gravarSgh']>[2]>[0];
 /** A chave da agenda cirúrgica do M18 (o pedido só vale se a secretaria pode confirmar pelo novo). */
 export const CHAVE_AGENDA_CIRURGICA = 'cirurgia.agenda';
-const TABELA_ACESSO = 'SGH_SADT_PORTAL_ACESSO';
-const TABELA_ESTADO = 'SGH_CC_AGENDA_ESTADO';
+const TABELA_ACESSO = 'conta_portal_profissional_externo';
+const TABELA_ESTADO = 'agendamento_cirurgico';
 /** Pedidos de cirurgia por conta por hora (o portal é superfície pública). */
 const PEDIDOS_POR_HORA = 10;
 const E = EVENTOS_AUDITAVEIS;
 /** W0-10: validade do link de confirmação do e-mail novo. */
 export const TROCA_EMAIL_MEDICO_HORAS = 24;
 const sha256 = (t: string) => createHash('sha256').update(t).digest('hex');
+
+/** A recusa 409 da porta própria para o recurso que o modelo ainda não tem (pedido de DDL registrado). */
+const modeloPendente = (x: unknown): boolean =>
+  typeof x === 'object' &&
+  x !== null &&
+  (x as { problema?: { codigo?: unknown } }).problema?.codigo === 'modelo-pendente';
 
 export type SessaoPortalM26 = ReturnType<ServicoPortal['sessao']>;
 
@@ -116,10 +127,10 @@ export interface FontePacientesPortalMedico {
     paciente: number,
   ): Promise<(ResultadoLido & { readonly critico: boolean })[]>;
   /** W0-10 (M5): a ciência do valor crítico (a do M23: registro novo com a conduta; para o escalonamento). */
-  darCiencia(c: ContextoSgh, paciente: number, exame: number, conduta: string): Promise<number>;
+  darCiencia(c: ContextoGravacaoPep, paciente: number, exame: number, conduta: string): Promise<number>;
 }
 
-const TABELA_PACIENTE = 'HTPACIENTE';
+const TABELA_PACIENTE = 'paciente';
 
 const pacienteDoPortal = (l: LinhaWorklistMedico): PacientePortalMedico => {
   const contar = (tipo: string) => l.pendencias.find((p) => p.tipo === tipo)?.quantidade ?? 0;
@@ -149,13 +160,17 @@ export interface QuemInternoMedico {
   readonly login: string;
   readonly estacao: string;
   readonly correlacao: string;
+  /** O contexto do núcleo da sessão interna (cliente, estabelecimento e usuário por id). */
+  readonly contexto?: ContextoNucleo;
+  /** A Idempotency-Key do pedido de gravação (o clique duplo devolve o mesmo resultado); ausente nas leituras. */
+  readonly idempotencia?: string | null;
 }
 
 interface NoPedido {
   readonly c: ContextoPortalMedico;
   readonly s: SessaoPortalM26;
   readonly conta: AcessoPortalLido;
-  readonly profissional: ProfissionalCorpoClinicoLido | null;
+  readonly profissional: ProfissionalCorpoClinico | null;
 }
 
 const recusar = (codigo: string, titulo: string, detalhe: string, status = 409) =>
@@ -207,12 +222,58 @@ export class ServicoPortalMedico {
     private readonly agora: () => Date = () => new Date(),
   ) {}
 
-  get destino(): 'legado' | 'memoria' {
+  get destino(): 'banco' | 'memoria' {
     return this.porta.destino;
   }
 
+  /** Contexto do núcleo do portal: o estabelecimento do endereço, sem usuário interno (quem age é a conta do portal). */
   private ctx(hospital: string): ContextoPortalMedico {
-    return { rede: this.rede, hospital };
+    return {
+      ...contextoDoEstabelecimento(hospital),
+      usuario: null,
+      correlacao: `portal-medico-${randomBytes(6).toString('hex')}`,
+      rede: this.rede,
+      hospital,
+    };
+  }
+
+  /** Contexto do núcleo da tela interna: o da sessão (cliente, estabelecimento e usuário por id). */
+  private ctxInterno(q: QuemInternoMedico): ContextoPortalMedico {
+    const chave = q.idempotencia ? { chaveIdempotencia: q.idempotencia } : {};
+    return q.contexto
+      ? {
+          ...q.contexto,
+          correlacao: q.correlacao.slice(0, 64) || q.contexto.correlacao,
+          rede: q.rede,
+          hospital: q.hospital,
+          ...chave,
+        }
+      : {
+          // Sessão sem o contexto do núcleo (dev/ci em memória): o estabelecimento pelo código, sem usuário por id.
+          ...contextoDoEstabelecimento(q.hospital),
+          usuario: null,
+          correlacao: q.correlacao.slice(0, 64) || `portal-medico-${randomBytes(6).toString('hex')}`,
+          rede: q.rede,
+          hospital: q.hospital,
+          ...chave,
+        };
+  }
+
+  /** A gravação na agenda do bloco (porta da cirurgia) com a linha da trilha do portal. */
+  private gravarNaCirurgia<T>(
+    c: ContextoPortalMedico,
+    trilha: TrilhaPortalMedico | ((r: T) => TrilhaPortalMedico),
+    fn: (g: GravadorCirurgia) => Promise<T>,
+  ): Promise<T> {
+    // A chave de idempotência do pedido é da gravação do portal: cada gravação na agenda (por exemplo, os pedidos
+    // retirados no encerramento da conta) é uma operação própria da cirurgia, sem reaproveitar a chave.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- a chave sai do contexto de propósito
+    const { chaveIdempotencia: _chave, ...semChave } = c;
+    return this.cirurgia.gravarSgh<T>(
+      semChave,
+      typeof trilha === 'function' ? (r: T) => trilhaDoNucleo(c, trilha(r)) : trilhaDoNucleo(c, trilha),
+      fn as never,
+    );
   }
 
   /** A funcionalidade ligada no estabelecimento (na sessão sintética sem configuração, ligada, como o M26). */
@@ -243,7 +304,7 @@ export class ServicoPortalMedico {
     alvo: { tabela: string; id: string | null },
     acesso: number,
     resultado: 'sucesso' | 'falha' = 'sucesso',
-  ): LinhaTrilha {
+  ): TrilhaPortalMedico {
     return {
       rede: this.rede,
       hospital,
@@ -328,7 +389,7 @@ export class ServicoPortalMedico {
    */
   private async prestadoresDoPortal(
     c: ContextoPortalMedico,
-    p: ProfissionalCorpoClinicoLido,
+    p: ProfissionalCorpoClinico,
   ): Promise<{ prestadores: number[]; retidos: number }> {
     const { prestadores } = codigosDoProfissional(p.registros);
     const donos = await this.porta.donosDosCodigos(c, prestadores);
@@ -596,7 +657,7 @@ export class ServicoPortalMedico {
 
   /** A regra do pedido (data, sala, convênio, procedimento) e o registro de cirurgião do profissional ligado à conta. */
   private async conferirEntradaPedido(
-    p: NoPedido & { profissional: ProfissionalCorpoClinicoLido },
+    p: NoPedido & { profissional: ProfissionalCorpoClinico },
     e: PedidoCirurgiaPortal,
   ): Promise<number> {
     const [r, salas, o, procs] = await Promise.all([
@@ -636,14 +697,14 @@ export class ServicoPortalMedico {
   }
 
   private async gravarPedido(
-    p: NoPedido & { profissional: ProfissionalCorpoClinicoLido },
+    p: NoPedido & { profissional: ProfissionalCorpoClinico },
     s: SessaoPortalM26,
     e: PedidoCirurgiaPortal,
   ): Promise<number> {
     const cirurgiao = await this.conferirEntradaPedido(p, e);
     const usuario = `${USUARIO_PORTAL_MEDICO}.M${s.acesso}`.slice(0, 31);
     try {
-      return await this.cirurgia.gravarSgh(
+      return await this.gravarNaCirurgia(
         p.c,
         (x: number) =>
           this.trilha(
@@ -685,7 +746,7 @@ export class ServicoPortalMedico {
   ): Promise<ResultadoPortalMedico> {
     const p = await this.noPedido(s, sessaoId);
     try {
-      await this.cirurgia.gravarSgh(
+      await this.gravarNaCirurgia(
         p.c,
         this.trilha(
           s.hospital,
@@ -710,7 +771,7 @@ export class ServicoPortalMedico {
 
   /**
    * W0-10: o médico altera o próprio pedido ainda não confirmado (o pedido inteiro, a versão que viu e o motivo). A
-   * versão vigente fica guardada com o motivo (SGH_CC_PEDIDO_VERSAO, script 1147) na mesma transação da trilha; o
+   * versão vigente fica guardada com o motivo (versão do pedido) na mesma transação da trilha; o
    * confirmado, cancelado ou suspenso devolve 409, e a versão desatualizada também.
    */
   async alterar(
@@ -729,7 +790,7 @@ export class ServicoPortalMedico {
     const cirurgiao = await this.conferirEntradaPedido({ ...p, profissional: p.profissional }, e);
     let versao: number;
     try {
-      versao = await this.cirurgia.gravarSgh(
+      versao = await this.gravarNaCirurgia(
         p.c,
         this.trilha(
           s.hospital,
@@ -962,14 +1023,14 @@ export class ServicoPortalMedico {
    * paginadas; os profissionais, as sugestões e os donos dos números saem em lote (uma consulta cada), só da página.
    */
   async contas(q: QuemInternoMedico, f: FiltroContasMedicoExterno): Promise<ContasMedicoExterno> {
-    const c = this.ctx(q.hospital);
+    const c = this.ctxInterno(q);
     const hoje = this.agora().toISOString().slice(0, 10);
     const todos = await this.sadt.autocadastros(c, { desde: somarDias(hoje, -3650) });
     // W0-10: as aprovadas (ativas, bloqueadas e encerradas); as encerradas só pelo filtro próprio.
     const situacaoDe = (a: { situacaoConta?: string }): SituacaoContaMedicoExterno =>
       a.situacaoConta === 'bloqueado' || a.situacaoConta === 'encerrado' ? a.situacaoConta : 'ativo';
     const ativas = todos.filter((a) => a.origem === 'novo' && a.situacao === 'aprovado');
-    const vinculos = new Map<number, VinculoMedicoExternoLido>();
+    const vinculos = new Map<number, VinculoMedicoExterno>();
     for (let k = 0; k < ativas.length; k += 400) {
       const m = await this.porta.vinculos(
         c,
@@ -1062,7 +1123,7 @@ export class ServicoPortalMedico {
   }
 
   buscarProfissionais(q: QuemInternoMedico, texto: string): Promise<{ id: number; nome: string }[]> {
-    return this.porta.buscarProfissionais(this.ctx(q.hospital), texto);
+    return this.porta.buscarProfissionais(this.ctxInterno(q), texto);
   }
 
   /** A linha da trilha do vínculo: ligar e desligar com eventos próprios e o profissional na chave do alvo. */
@@ -1071,7 +1132,7 @@ export class ServicoPortalMedico {
     acesso: number,
     evento: string,
     profissional: number | null,
-  ): LinhaTrilha {
+  ): TrilhaPortalMedico {
     return {
       rede: q.rede,
       hospital: q.hospital,
@@ -1090,7 +1151,7 @@ export class ServicoPortalMedico {
   }
 
   async vincular(q: QuemInternoMedico, acesso: number, profissional: number): Promise<ResultadoPortalMedico> {
-    const c = this.ctx(q.hospital);
+    const c = this.ctxInterno(q);
     const conta = await this.sadt.acessoPorId(c, acesso);
     if (!conta || conta.perfil !== 'medicoExterno')
       throw new ErroProblema('nao-encontrado', 404, 'Conta não encontrada');
@@ -1111,7 +1172,7 @@ export class ServicoPortalMedico {
   }
 
   async desvincular(q: QuemInternoMedico, acesso: number): Promise<ResultadoPortalMedico> {
-    const c = this.ctx(q.hospital);
+    const c = this.ctxInterno(q);
     // O profissional que estava ligado vai à trilha (o UPDATE apaga o vínculo da linha).
     const anterior = (await this.porta.vinculos(c, [acesso])).get(acesso)?.profissional ?? null;
     try {
@@ -1153,7 +1214,7 @@ export class ServicoPortalMedico {
     acesso: number,
     e: AtoContaMedicoExternoEntrada,
   ): Promise<ResultadoAtoContaMedicoExterno> {
-    const c = this.ctx(q.hospital);
+    const c = this.ctxInterno(q);
     const conta = await this.sadt.acessoPorId(c, acesso);
     if (!conta || conta.perfil !== 'medicoExterno')
       throw new ErroProblema('nao-encontrado', 404, 'Conta não encontrada');
@@ -1222,7 +1283,7 @@ export class ServicoPortalMedico {
     if (decisao === 'retirar')
       for (const p of pendentes)
         try {
-          await this.cirurgia.gravarSgh(
+          await this.gravarNaCirurgia(
             c,
             {
               ...this.linhaInterna(q, acesso, E.portalMedicoPedidoRetiradoNoEncerramento.codigo, null),
@@ -1266,7 +1327,7 @@ export class ServicoPortalMedico {
 
   /** O histórico dos atos da conta (bloqueios, desbloqueios, encerramento e trocas). */
   async atosConta(q: QuemInternoMedico, acesso: number): Promise<AtoContaMedicoExternoItem[]> {
-    const c = this.ctx(q.hospital);
+    const c = this.ctxInterno(q);
     const conta = await this.sadt.acessoPorId(c, acesso);
     if (!conta || conta.perfil !== 'medicoExterno')
       throw new ErroProblema('nao-encontrado', 404, 'Conta não encontrada');
@@ -1289,7 +1350,8 @@ export class ServicoPortalMedico {
   private async filaDaConta(p: NoPedido): Promise<WorklistMedico | null> {
     if (!p.profissional) return null;
     return this.fontePacientes().filaDoVinculo(p.c, {
-      cbos: p.profissional.registros.map((r) => r.id),
+      // O vínculo assistencial do profissional (no banco, o profissional_id; ver ProfissionalCorpoClinico).
+      cbos: p.profissional.vinculoAssistencial,
       login: `${USUARIO_PORTAL_MEDICO}.M${p.s.acesso}`,
     });
   }
@@ -1401,10 +1463,7 @@ export class ServicoPortalMedico {
     return avisos.filter((a) => a.paciente.id !== null && daFila.has(a.paciente.id));
   }
 
-  private avisoDoPortal(
-    a: AvisoCritico,
-    n: NotificacaoCriticoMedicoLida | undefined,
-  ): AvisoCriticoPortalMedico {
+  private avisoDoPortal(a: AvisoCritico, n: NotificacaoCriticoMedico | undefined): AvisoCriticoPortalMedico {
     return {
       aviso: a.id,
       paciente: a.paciente.id ?? 0,
@@ -1425,13 +1484,24 @@ export class ServicoPortalMedico {
   }
 
   /** Os avisos de crítico dos pacientes do médico (os sem ciência primeiro); a leitura vai à trilha. */
-  async criticos(s: SessaoPortalM26, sessaoId: string | null): Promise<CriticosPortalMedico> {
+  async criticos(
+    s: SessaoPortalM26,
+    sessaoId: string | null,
+  ): Promise<CriticosPortalMedico & { readonly notificacaoIndisponivel?: string }> {
     const p = await this.noPedido(s, sessaoId);
     const fila = await this.filaDaConta(p);
     if (!fila) return { vinculado: false, avisos: [], pendentes: 0 };
+    // A notificação é só um adorno de cada aviso: se o banco ainda não a tem (409 modelo-pendente), os avisos de crítico
+    // saem assim mesmo (segurança do paciente), com notificacao null e o motivo explícito na resposta.
+    const indisponivel: { motivo: string | null } = { motivo: null };
     const [avisos, notificacoes] = await Promise.all([
       this.avisosDaFila(p.c, fila),
-      this.porta.notificacoesCritico(p.c, s.acesso),
+      this.porta.notificacoesCritico(p.c, s.acesso).catch((x: unknown) => {
+        if (!modeloPendente(x)) throw x;
+        indisponivel.motivo =
+          'A notificação dos avisos ao médico ainda não está disponível neste banco: os avisos aparecem sem ela.';
+        return [] as NotificacaoCriticoMedico[];
+      }),
     ]);
     const porAviso = new Map(notificacoes.map((n) => [n.aviso, n]));
     const lista = avisos
@@ -1451,7 +1521,9 @@ export class ServicoPortalMedico {
         s.acesso,
       ),
     );
-    return { vinculado: true, avisos: lista, pendentes };
+    return indisponivel.motivo
+      ? { vinculado: true, avisos: lista, pendentes, notificacaoIndisponivel: indisponivel.motivo }
+      : { vinculado: true, avisos: lista, pendentes };
   }
 
   /**
@@ -1483,11 +1555,10 @@ export class ServicoPortalMedico {
         `A ciência deste resultado já foi registrada em ${a.ciencia.em.replace('T', ' ').slice(0, 16)}.`,
       );
     const usuario = `${USUARIO_PORTAL_MEDICO}.M${s.acesso}`.slice(0, 31);
-    const contexto: ContextoSgh = {
-      rede: this.rede,
-      hospital: s.hospital,
-      usuarioLegado: usuario,
-      traceId: `portal-medico-${randomBytes(6).toString('hex')}`,
+    const contexto: ContextoGravacaoPep = {
+      ...p.c,
+      usuarioLogin: usuario,
+      traceId: p.c.correlacao,
       estacao: 'portal-medico-externo',
     };
     const id = await this.fontePacientes().darCiencia(contexto, a.paciente.id, a.exame, e.conduta);
@@ -1496,9 +1567,10 @@ export class ServicoPortalMedico {
         s.hospital,
         E.portalMedicoCriticoCiente.codigo,
         `ciência do crítico pelo médico externo (aviso ${a.id})`,
-        { tabela: 'SGH_PEP_RESULT_CIENCIA', id: String(id) },
+        { tabela: 'aviso_valor_critico', id: String(a.id) },
         s.acesso,
       ),
+      chaveNaturalAlvo: `ciencia=${id}`,
       idPaciente: a.paciente.id,
     });
     return { ok: true, id, mensagem: 'Ciência registrada. O aviso não sobe mais ao plantonista.' };
@@ -1522,6 +1594,7 @@ export class ServicoPortalMedico {
       login,
       acesso: p.s.acesso,
       ip,
+      contexto: p.c,
     });
   }
 
@@ -1757,7 +1830,7 @@ export class ServicoPortalMedico {
         const prof = await this.porta.profissional(c, v.profissional);
         if (!prof) continue;
         const fila = await fonte.filaDoVinculo(c, {
-          cbos: prof.registros.map((r) => r.id),
+          cbos: prof.vinculoAssistencial,
           login: `${USUARIO_PORTAL_MEDICO}.M${acesso}`,
         });
         const daFila = new Set(fila.pacientes.map((x) => x.paciente));
@@ -1782,7 +1855,7 @@ export class ServicoPortalMedico {
                 hospital,
                 E.portalMedicoCriticoNotificado.codigo,
                 `notificação do crítico ao médico externo (${envio})`,
-                { tabela: 'SGH_SADT_AVISO_CRITICO', id: String(a.id) },
+                { tabela: 'aviso_valor_critico', id: String(a.id) },
                 acesso,
               ),
               idPaciente: a.paciente.id,

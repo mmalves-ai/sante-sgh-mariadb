@@ -1,12 +1,11 @@
 // W0-06, parte 6b-3: as solicitações do autoatendimento pela HTTP (permissões pessoas.autoatendimento.*, Zod com
 // motivo, desistência só do próprio solicitante, decisão nunca do solicitante, o CID do atestado só com
 // pessoas.atestado.verCid). Portas em memória; dados sintéticos; nada conecta a banco.
+import { criarAppPessoas, type OpcoesTestePessoas } from '../opcoes-teste.spec-util.js';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../../app.js';
+import { REGISTRO_MODULOS } from '../../registro.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
 import { idUsuarioSintetico } from '../../acesso/fonte-sintetica.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
@@ -17,6 +16,26 @@ import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js
 import { ServicoPessoas } from '../servico.js';
 import { PortaAutoatendimentoMemoria } from './porta-autoatendimento-memoria.js';
 
+type OpcoesConfiguracao = NonNullable<Parameters<typeof fonteConfiguracaoMemoria>[1]>;
+type ChaveGravada = ReturnType<NonNullable<OpcoesConfiguracao['chavesIniciais']>>[number];
+type PrerequisitoGravado = ReturnType<NonNullable<OpcoesConfiguracao['prerequisitosIniciais']>>[number];
+
+/**
+ * As portas sintéticas que a bateria HTTP dá ao módulo "pessoas". O OpcoesAppBase não as leva: o lote que registra a
+ * unidade liga estas portas pelo `registro` (o padrão de app-administracao.spec-util). Com o módulo registrado e sem
+ * essa ligação, a bateria recusa rodar, em vez de passar sobre outras portas.
+ */
+interface PortasPessoasTeste {
+  readonly trilha: RegistradorTrilhaMemoria;
+  readonly pessoas: PortaPessoasMemoria;
+  readonly ponto: PortaPontoMemoria;
+  readonly calculoFolha: PortaCalculoFolhaMemoria;
+  readonly autoatendimento: PortaAutoatendimentoMemoria;
+  readonly configuracao: ReturnType<typeof fonteConfiguracaoMemoria>;
+}
+function opcoesPessoas(p: PortasPessoasTeste): OpcoesTestePessoas {
+  return p;
+}
 const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
 const C = PESSOAS_SINTETICAS_M52;
 const RECURSOS = ['pessoas.colaborador', 'pessoas.ponto', 'pessoas.folha'];
@@ -71,7 +90,14 @@ beforeAll(async () => {
         hospital: 'aa',
         rede: '',
         login: 'SINT.RH',
-        porta: { rede: '', hospital: 'aa' },
+        porta: {
+          cliente: 'sintetico',
+          estabelecimento: 1,
+          usuario: null,
+          correlacao: 'teste-l0302',
+          rede: '',
+          hospital: 'aa',
+        },
         pode: () => true,
       },
       {
@@ -89,14 +115,17 @@ beforeAll(async () => {
       },
     )
   ).id;
-  app = await criarApp(lerConfiguracao(env), null, env, {
-    trilha,
-    pessoas,
-    ponto,
-    calculoFolha: calculo,
-    autoatendimento,
-    configuracao,
-  });
+  app = await criarAppPessoas(
+    env,
+    opcoesPessoas({
+      trilha,
+      pessoas,
+      ponto,
+      calculoFolha: calculo,
+      autoatendimento,
+      configuracao,
+    }),
+  );
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 }, 120_000);
@@ -151,7 +180,11 @@ const ajuste = {
 };
 const codigo = (r: { json: () => unknown }) => (r.json() as { codigo?: string }).codigo;
 
-describe('W0-06 parte 6b-3: solicitações do autoatendimento pela HTTP', () => {
+// As rotas só existem com o módulo "pessoas" no registro da API (lote que registra a unidade; F2.2): até lá a
+// bateria HTTP fica de fora, explicitamente, e liga sozinha quando o módulo entrar em REGISTRO_MODULOS.
+const PESSOAS_REGISTRADO = 'pessoas' in REGISTRO_MODULOS;
+
+describe.skipIf(!PESSOAS_REGISTRADO)('W0-06 parte 6b-3: solicitações do autoatendimento pela HTTP', () => {
   it('o colaborador pede e desiste; a desistência só de quem pediu; a decisão nunca do solicitante', async () => {
     const eu = pedir(await entrar(C.ponto.login));
     const gestor = pedir(await entrar('SINT.ESCALA'));

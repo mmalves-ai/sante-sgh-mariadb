@@ -14,7 +14,7 @@
 //   GET  /api/contabil/sped/arquivo?empresa=&id=                     o arquivo decifrado (leitura auditada)
 //   POST /api/contabil/sped/situacao                                 recibo da transmissão ou cancelamento
 // As demonstrações e a apuração exigem a chave `contabil`; o SPED, também a `contabil.sped`. Cada gravação vai com a
-// SGH_TRILHA na mesma transação; nenhuma tabela do banco anterior é escrita (regra 1).
+// trilha_auditoria na mesma transação; nenhuma tabela do banco anterior é escrita (regra 1).
 import {
   Body,
   Controller,
@@ -60,7 +60,7 @@ import {
   TIPOS_ARQUIVO_SPED,
 } from '@sgh/contratos';
 import { reaisBr } from '@sgh/dominio-contabil';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { TrilhaDaGravacao as LinhaTrilha } from '../exames/public-api.js';
 import { z } from 'zod';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { Auditar, AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -73,6 +73,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { gravacaoDaTela } from './gravacao.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -99,7 +100,7 @@ const E = EVENTOS_AUDITAVEIS;
 export const GERADOR_PDF_CONTABIL = Symbol('GERADOR_PDF_CONTABIL');
 export type GeradorPdfContabil = (html: string, titulo: string) => Promise<Uint8Array>;
 type RespostaArquivo = { header(n: string, v: string): unknown };
-/** A chave da parte SPED (SGH_CFG_LIBERACAO; nasce desligada, POL-3). */
+/** A chave da parte SPED (liberação do recurso; nasce desligada, POL-3). */
 export const CHAVE_CONTABIL_SPED = 'contabil.sped' as const;
 
 function filtro<T>(esquema: z.ZodType<T>, q: unknown): T {
@@ -206,7 +207,7 @@ export class DemonstracoesContabilController {
     await reautenticar(this.sessoes, this.resolvedor, req, senha);
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação pelo Executor, com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T>(
     s: SessaoCadastro,
     evento: string,
@@ -221,7 +222,8 @@ export class DemonstracoesContabilController {
         ...(a.diferenca ? { diferenca: a.diferenca.slice(0, 400) } : {}),
       };
     };
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const g = gravacaoDaTela(s, operacao);
+    const r = await this.porta.gravar(g.contexto, g.pedido, linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria') {
@@ -328,7 +330,7 @@ export class DemonstracoesContabilController {
     const dado = await this.dadoParaExportar(s, tipo, q);
     const t = tabelaDaDemonstracao(dado);
     req.sghAlvo = {
-      tabelaAlvo: 'SGH_CTB_LANCAMENTO',
+      tabelaAlvo: 'lancamento_contabil',
       idAlvo: t.arquivo,
       chaveNaturalAlvo: `${tipo}:${formato}`,
     };
@@ -421,7 +423,7 @@ export class DemonstracoesContabilController {
   @HttpCode(200)
   @Permissao(R.apurar.permissao)
   @AuditadoNoHandler(
-    'contabil.apurarResultado (SGH_CTB_LANCAMENTO e SGH_CTB_PARTIDA, tipo apuracao) com a SGH_TRILHA na mesma transação',
+    'contabil.apurarResultado (lancamento_contabil e partida_contabil, tipo apuracao) com a trilha_auditoria na mesma transação',
   )
   async apurar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoApuracao> {
     const e = corpo(esquemaApurarComSenha, b);
@@ -433,7 +435,7 @@ export class DemonstracoesContabilController {
       E.contabilResultadoApurado.codigo,
       'contabil.apurarResultado',
       (x: { id: number }) => ({
-        tabela: 'SGH_CTB_LANCAMENTO',
+        tabela: 'lancamento_contabil',
         id: String(x.id),
         diferenca: `exercicio=${e.exercicio};resultado=${plano.resultado};partidas=${plano.partidas.length}`,
       }),
@@ -489,7 +491,7 @@ export class DemonstracoesContabilController {
   @HttpCode(200)
   @Permissao(R.spedGerar.permissao)
   @AuditadoNoHandler(
-    'contabil.gerarSped (SGH_CTB_ARQUIVO_SPED, arquivo cifrado) com a SGH_TRILHA na mesma transação',
+    'contabil.gerarSped (arquivo_sped_contabil, arquivo cifrado) com a trilha_auditoria na mesma transação',
   )
   async spedGerar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSped> {
     const g = corpo(esquemaGerarSped, b);
@@ -501,7 +503,7 @@ export class DemonstracoesContabilController {
       E.contabilSpedGerado.codigo,
       'contabil.gerarSped',
       (x: { id: number; numero: number }) => ({
-        tabela: 'SGH_CTB_ARQUIVO_SPED',
+        tabela: 'arquivo_sped_contabil',
         id: String(x.id),
         diferenca: `tipo=${g.tipo};exercicio=${g.exercicio};numero=${x.numero};linhas=${p.gerado.linhas};hash=${p.hash}`,
       }),
@@ -540,7 +542,7 @@ export class DemonstracoesContabilController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<ArquivoSpedBaixado> {
     const f = corpo(esquemaArquivoSped, filtro(esquemaConsultaArquivo, q));
-    req.sghAlvo = { tabelaAlvo: 'SGH_CTB_ARQUIVO_SPED', idAlvo: String(f.id), chaveNaturalAlvo: 'arquivo' };
+    req.sghAlvo = { tabelaAlvo: 'arquivo_sped_contabil', idAlvo: String(f.id), chaveNaturalAlvo: 'arquivo' };
     const s = await this.exigirSped(req);
     const cifra = this.exigirCifra();
     const a = await this.porta.conteudoSped(s.porta, f.empresa, f.id);
@@ -567,7 +569,7 @@ export class DemonstracoesContabilController {
   @HttpCode(200)
   @Permissao(R.spedSituacao.permissao)
   @AuditadoNoHandler(
-    'contabil.situacaoSped (SGH_CTB_ARQUIVO_SPED: recibo ou cancelamento) com a SGH_TRILHA na mesma transação',
+    'contabil.situacaoSped (arquivo_sped_contabil: recibo ou cancelamento) com a trilha_auditoria na mesma transação',
   )
   async spedSituacao(
     @Body() b: unknown,
@@ -579,7 +581,7 @@ export class DemonstracoesContabilController {
       s,
       E.contabilSpedSituacao.codigo,
       'contabil.situacaoSped',
-      () => ({ tabela: 'SGH_CTB_ARQUIVO_SPED', id: String(x.id), diferenca: `acao=${x.acao}` }),
+      () => ({ tabela: 'arquivo_sped_contabil', id: String(x.id), diferenca: `acao=${x.acao}` }),
       (g) =>
         g.situacaoArquivoSped({
           empresa: x.empresa,

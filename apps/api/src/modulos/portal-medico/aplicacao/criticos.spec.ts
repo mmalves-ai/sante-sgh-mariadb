@@ -88,9 +88,9 @@ function montar(o: { canal?: ServicoPortalMedico['canal'] } = {}) {
     filaDoVinculo: async (_c, v) => fila(v.cbos.includes(5001) ? [MEU] : []),
     resultadosDoPaciente: async () => [],
     darCiencia: async (c, paciente, exame, conduta) => {
-      ciencias.push({ usuario: c.usuarioLegado, paciente, exame, conduta });
+      ciencias.push({ usuario: c.usuarioLogin, paciente, exame, conduta });
       const a = avisos.find((x) => x.exame === exame)!;
-      avisos[avisos.indexOf(a)] = { ...a, ciencia: { usuario: c.usuarioLegado, em: '2026-11-18T10:01:00' } };
+      avisos[avisos.indexOf(a)] = { ...a, ciencia: { usuario: c.usuarioLogin, em: '2026-11-18T10:01:00' } };
       return 77;
     },
   };
@@ -109,15 +109,21 @@ function montar(o: { canal?: ServicoPortalMedico['canal'] } = {}) {
   return { s, porta, avisos, ciencias };
 }
 
+/** Contexto do núcleo de teste (memória: o estabelecimento pelo código). */
+const ctxT = (rede: string, hospital: string) => ({
+  cliente: '',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede,
+  hospital,
+});
+
 const sessao = (acesso = ACESSO) =>
   ({ hospital: H, perfil: 'medicoExterno', acesso, nome: 'M' }) as unknown as SessaoPortalM26;
 
 async function ligar(porta: PortaPortalMedicoMemoria, acesso: number, profissional: number) {
-  await porta.gravar(
-    { rede: 'rede', hospital: H },
-    (g) => g.vincular({ acesso, profissional, por: 'T' }),
-    null,
-  );
+  await porta.gravar(ctxT('rede', H), (g) => g.vincular({ acesso, profissional, por: 'T' }), null);
 }
 
 describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
@@ -160,8 +166,9 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
     ]);
     expect(porta.trilhas.at(-1)).toMatchObject({
       evento: 'portal.medico.criticoCiente',
-      tabelaAlvo: 'SGH_PEP_RESULT_CIENCIA',
-      idAlvo: '77',
+      tabelaAlvo: 'aviso_valor_critico',
+      idAlvo: '1',
+      chaveNaturalAlvo: 'ciencia=77',
       idPaciente: MEU,
     });
     // Com a ciência, o aviso não volta a pedir ciência (e a vigia do SADT para o escalonamento).
@@ -185,12 +192,12 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
       link: '/medico-externo/criticos',
     });
     expect(JSON.stringify(caixa[0])).not.toMatch(/PACIENTE|POTASSIO|7,1/);
-    expect(await porta.notificacoesCritico({ rede: 'rede', hospital: H }, ACESSO)).toEqual([
+    expect(await porta.notificacoesCritico(ctxT('rede', H), ACESSO)).toEqual([
       { aviso: 1, envio: 'simulador', motivo: null, em: expect.any(String) },
     ]);
-    expect(await porta.notificacoesCritico({ rede: 'rede', hospital: H }, OUTRA)).toEqual([]);
+    expect(await porta.notificacoesCritico(ctxT('rede', H), OUTRA)).toEqual([]);
     expect(porta.trilhas.filter((t) => t.evento === 'portal.medico.criticoNotificado')).toEqual([
-      expect.objectContaining({ idAlvo: '1', tabelaAlvo: 'SGH_SADT_AVISO_CRITICO', idPaciente: MEU }),
+      expect.objectContaining({ idAlvo: '1', tabelaAlvo: 'aviso_valor_critico', idPaciente: MEU }),
     ]);
     const r = await s.criticos(sessao(), null);
     expect(r.avisos[0]?.notificacao).toMatchObject({ envio: 'simulador' });
@@ -213,7 +220,7 @@ describe('W0-10 (M5): aviso de resultado crítico ao médico externo', () => {
     await ligar(porta, ACESSO, 6801);
     expect(await s.notificarCriticos(H)).toEqual({ contas: 1, notificados: 1 });
     expect(enviou).toBe(0);
-    expect(await porta.notificacoesCritico({ rede: 'rede', hospital: H }, ACESSO)).toEqual([
+    expect(await porta.notificacoesCritico(ctxT('rede', H), ACESSO)).toEqual([
       { aviso: 1, envio: 'desligado', motivo: MOTIVO_HALAI_MEDICO_DESLIGADA, em: expect.any(String) },
     ]);
   });

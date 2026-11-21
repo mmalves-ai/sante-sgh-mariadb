@@ -31,7 +31,7 @@ export const esquemaConviteEmitido = z.object({
   conta: idTexto,
   codigo: z.string().regex(/^[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$/),
   validoAte: instante,
-  destino: z.enum(['legado', 'memoria']),
+  destino: z.enum(['banco', 'memoria']),
 });
 export type ConviteEmitido = z.infer<typeof esquemaConviteEmitido>;
 

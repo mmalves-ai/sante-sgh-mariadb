@@ -58,7 +58,7 @@ import { PORTA_ESCALA, type PortaEscala } from './porta-escala.js';
 import { ServicoEscala } from './servico-escala.js';
 
 const TRILHA_PLANTAO =
-  'SGH_PES_PLANTAO, SGH_PES_ESCALA (versão) e SGH_PES_ESCALA_EVENTO com a SGH_TRILHA na mesma transação';
+  'plantao, escala (versão) e publicacao_escala com a trilha_auditoria na mesma transação';
 
 @Controller('pessoas')
 export class EscalaController {
@@ -101,7 +101,7 @@ export class EscalaController {
   @Post('escalas')
   @HttpCode(200)
   @Permissao('pessoas.escala.montar')
-  @AuditadoNoHandler('SGH_PES_ESCALA e SGH_PES_ESCALA_EVENTO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('escala e publicacao_escala com a trilha_auditoria na mesma transação')
   criarEscala(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.criarEscala(sessaoDe(req), corpo(esquemaCriarEscala, b));
   }
@@ -115,7 +115,9 @@ export class EscalaController {
   @Post('escalas/:escala/cobertura')
   @HttpCode(200)
   @Permissao('pessoas.escala.montar')
-  @AuditadoNoHandler('SGH_PES_ESCALA e SGH_PES_ESCALA_EVENTO com a SGH_TRILHA (e a SGH_OUTBOX se publicada)')
+  @AuditadoNoHandler(
+    'escala e publicacao_escala com a trilha_auditoria (e a integracao_mensagem se publicada)',
+  )
   cobertura(
     @Param('escala') escala: string,
     @Body() b: unknown,
@@ -185,7 +187,9 @@ export class EscalaController {
   @Post('escalas/:escala/publicacao')
   @HttpCode(200)
   @Permissao('pessoas.escala.publicar')
-  @AuditadoNoHandler('SGH_PES_ESCALA, SGH_PES_ESCALA_EVENTO e SGH_OUTBOX com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'escala, publicacao_escala e integracao_mensagem com a trilha_auditoria na mesma transação',
+  )
   publicar(
     @Param('escala') escala: string,
     @Body() b: unknown,
@@ -201,7 +205,7 @@ export class EscalaController {
   @HttpCode(200)
   @Permissao('pessoas.escala.montar')
   @AuditadoNoHandler(
-    'SGH_HIST_EXCLUSAO (retrato de cada linha) e o DELETE de SGH_PES_ESCALA, SGH_PES_PLANTAO e SGH_PES_ESCALA_EVENTO com a SGH_TRILHA na mesma transação',
+    'o retrato na trilha e o DELETE de escala, plantao e publicacao_escala com a trilha_auditoria na mesma transação',
   )
   excluirEscala(
     @Param('escala') escala: string,
@@ -218,7 +222,7 @@ export class EscalaController {
   @HttpCode(200)
   @Permissao('pessoas.escala.publicar')
   @AuditadoNoHandler(
-    'SGH_PES_ESCALA (cancelada), SGH_PES_PLANTAO, SGH_PES_ESCALA_EVENTO e SGH_OUTBOX com a SGH_TRILHA na mesma transação',
+    'escala (cancelada), plantao, publicacao_escala e integracao_mensagem com a trilha_auditoria na mesma transação',
   )
   cancelarEscala(
     @Param('escala') escala: string,
@@ -263,7 +267,7 @@ export class EscalaController {
   @Post('regimes')
   @HttpCode(200)
   @Permissao('pessoas.regime.editar')
-  @AuditadoNoHandler('SGH_PES_REGIME com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('regime_jornada com a trilha_auditoria na mesma transação')
   incluirRegime(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.incluirRegime(sessaoDe(req), corpo(esquemaIncluirRegime, b));
   }
@@ -271,7 +275,7 @@ export class EscalaController {
   @Post('regimes/atribuicao')
   @HttpCode(200)
   @Permissao('pessoas.regime.editar')
-  @AuditadoNoHandler('SGH_PES_REGIME_VINCULO com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('vigencia_regime_colaborador com a trilha_auditoria na mesma transação')
   atribuirRegime(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoEscala> {
     return this.servico.atribuirRegime(sessaoDe(req), corpo(esquemaAtribuirRegime, b));
   }
@@ -279,7 +283,7 @@ export class EscalaController {
   @Post('regimes/vigencias/:vigencia/anulacao')
   @HttpCode(200)
   @Permissao('pessoas.regime.editar')
-  @AuditadoNoHandler('SGH_PES_REGIME_VINCULO (anulação) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('vigencia_regime_colaborador (anulação) com a trilha_auditoria na mesma transação')
   anularVigencia(
     @Param('vigencia') vigencia: string,
     @Body() b: unknown,
@@ -294,7 +298,7 @@ export class EscalaController {
   @Post('regimes/:regime')
   @HttpCode(200)
   @Permissao('pessoas.regime.editar')
-  @AuditadoNoHandler('SGH_PES_REGIME com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('regime_jornada com a trilha_auditoria na mesma transação')
   alterarRegime(
     @Param('regime') regime: string,
     @Body() b: unknown,

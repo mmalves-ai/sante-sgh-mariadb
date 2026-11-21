@@ -16,7 +16,6 @@ import {
   PARENTESCOS_DEPENDENTE,
   type ParentescoDependente,
   SITUACOES_HABILITACAO,
-  SITUACOES_PROFISSIONAL_LEGADO,
   TIPOS_EVENTO_HISTORICO,
   TIPOS_VINCULO,
   type CorrecaoColaboradorLida,
@@ -577,12 +576,8 @@ const tipoRescisao = (c: number) => a.value?.tiposRescisao.find((x) => x.codigo 
         <h2 id="pes-ficha-assist">{{ t('pessoas.ficha.assistencial') }}</h2>
         <p v-if="!f.profissional">{{ t('pessoas.ficha.semProfissional') }}</p>
         <template v-else>
-          <p v-if="f.profissional.situacaoLegado" data-testid="ficha-situacao-cadastro">
-            {{ t('pessoas.ficha.situacaoCadastro') }}:
-            {{ SITUACOES_PROFISSIONAL_LEGADO[f.profissional.situacaoLegado] }}
-            <span class="secundario"
-              >({{ t('pessoas.ficha.aConfirmar') }}: {{ t('pessoas.ficha.aConfirmarAjuda') }})</span
-            >
+          <p v-if="f.profissional.situacao" data-testid="ficha-situacao-cadastro">
+            {{ t('pessoas.ficha.situacaoCadastro') }}: {{ f.profissional.situacao }}
           </p>
           <p v-if="f.profissional.registros.length === 0">{{ t('pessoas.conselho.semRegistros') }}</p>
           <table v-else class="tabela" data-testid="tabela-registros">

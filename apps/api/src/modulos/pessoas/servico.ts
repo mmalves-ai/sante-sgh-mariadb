@@ -56,7 +56,6 @@ import {
   cpfParaFiltro,
   decidirAdmissao,
   diasEntre,
-  legendaSituacaoProfissional,
   limiteCargaSemanal,
   mascararCpf,
   piorSituacao,
@@ -64,7 +63,6 @@ import {
   situacaoHabilitacao,
   vinculoAtivo,
 } from '@sgh/dominio-pessoas';
-import type { EventoEsocialSghLido, ProfissionalLido, UsuarioLidoPessoa, VinculoPesLido } from '@sgh/legado';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import type { RegistradorTrilha } from '../../autorizacao/trilha.js';
 import { ErroProblema } from '../../problema.filter.js';
@@ -74,6 +72,25 @@ import type { CacheConfig, FonteConfiguracao } from '../config/public-api.js';
 import { ApoioGravacao } from '../exames/public-api.js';
 import type { CifraCpf } from './cifra-cpf.js';
 import type { CentroCustoPessoas, GravadorPessoas, PortaPessoas } from './porta.js';
+
+/** O vínculo, o profissional e a conta como a porta da gestão de pessoas os lê. */
+type VinculoPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
+type ProfissionalPessoa = Awaited<ReturnType<PortaPessoas['profissionais']>>[number];
+type UsuarioPessoa = NonNullable<Awaited<ReturnType<PortaPessoas['usuarioPorId']>>>;
+
+/** O evento do eSocial na fila do vínculo (o que a correção de matrícula ou admissão lê da fila do eSocial). */
+export interface EventoEsocialNaFila {
+  readonly id: number;
+  readonly evento: string;
+  readonly situacao: string;
+  readonly recibo: string | null;
+  readonly eventoAnterior: number | null;
+  readonly motivo: string | null;
+  readonly criadoEm: string;
+  readonly versao: number;
+  /** Empresa (estabelecimento empregador) do evento. */
+  readonly empresa: number;
+}
 
 const E = EVENTOS_AUDITAVEIS;
 export const CHAVE_PESSOAS_COLABORADOR = 'pessoas.colaborador';
@@ -152,7 +169,7 @@ export function chaveDoBloqueio(base: string, usuario: number): string {
  * vínculo (o ServicoEsocial atende; nulo nos testes e nas montagens sem a folha). Nada sai do dev.
  */
 export interface FilaVinculoEsocial {
-  eventosVinculo(s: SessaoCadastro, vinculo: number): Promise<EventoEsocialSghLido[]>;
+  eventosVinculo(s: SessaoCadastro, vinculo: number): Promise<EventoEsocialNaFila[]>;
   gerarTrabalhador(s: SessaoCadastro, x: GerarEventoTrabalhadorEntrada): Promise<ResultadoGeracaoEsocial>;
   descartar(s: SessaoCadastro, id: number, x: DescartarEventoEsocialEntrada): Promise<unknown>;
   excluir(s: SessaoCadastro, id: number, x: ExcluirEventoEsocialEntrada): Promise<ResultadoGeracaoEsocial>;
@@ -212,9 +229,9 @@ export class ServicoPessoas {
     return this.cifra;
   }
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPessoa> {
     const v = await this.porta.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital) throw naoEncontrado();
+    if (!v || v.estabelecimento !== s.porta.estabelecimento) throw naoEncontrado();
     return v;
   }
 
@@ -260,7 +277,7 @@ export class ServicoPessoas {
 
   private async registrosComValidade(
     s: SessaoCadastro,
-    profs: readonly ProfissionalLido[],
+    profs: readonly ProfissionalPessoa[],
     hoje: string,
     janela: number,
     comUnidades = false,
@@ -362,10 +379,10 @@ export class ServicoPessoas {
    */
   private async usuariosDaPessoa(
     s: SessaoCadastro,
-    v: VinculoPesLido,
+    v: VinculoPessoa,
     estrito = false,
-  ): Promise<UsuarioLidoPessoa[]> {
-    const porId = new Map<number, UsuarioLidoPessoa>();
+  ): Promise<UsuarioPessoa[]> {
+    const porId = new Map<number, UsuarioPessoa>();
     const cpf = cpfDe(this.cifra, v.cpfCifrado);
     if (estrito && v.cpfCifrado && !cpf) throw cpfIlegivel();
     if (cpf)
@@ -430,7 +447,7 @@ export class ServicoPessoas {
       profissional: prof
         ? {
             id: prof.id,
-            situacaoLegado: legendaSituacaoProfissional(prof.situacao)?.codigo ?? null,
+            situacao: prof.situacao || null,
             registros: regs.get(prof.id) ?? [],
           }
         : null,
@@ -532,7 +549,7 @@ export class ServicoPessoas {
       profissional: e.profissional,
       usuario: e.usuario,
     };
-    const paraDominio = (vs: readonly VinculoPesLido[]) =>
+    const paraDominio = (vs: readonly VinculoPessoa[]) =>
       vs.map((v) => ({
         id: v.id,
         tipo: v.tipo as TipoVinculo,
@@ -641,6 +658,13 @@ export class ServicoPessoas {
           { admissao: atual.admissao, ultimaVigencia: await g.ultimaVigencia(v.id) },
         );
         if (!m.ok) throw recusaRegra(m.recusa, m.mensagem, ['vigencia']);
+        // Vínculo sem centro de custo e mudança sem lotação: a gravação do vínculo exige o centro de custo.
+        if (m.nova.centroCusto === null)
+          throw recusaRegra(
+            'lotacao-sem-centro-de-custo',
+            'Este vínculo não tem centro de custo: informe a lotação, com o centro de custo, junto com a mudança.',
+            ['lotacao.centroCusto'],
+          );
         await g.alterarVinculo({
           id: v.id,
           versao: e.versao,
@@ -842,7 +866,7 @@ export class ServicoPessoas {
     s: SessaoCadastro,
     vinculo: number,
     campos: readonly string[],
-  ): Promise<{ aceito: EventoEsocialSghLido | null; naoEnviados: EventoEsocialSghLido[] }> {
+  ): Promise<{ aceito: EventoEsocialNaFila | null; naoEnviados: EventoEsocialNaFila[] }> {
     if (!this.esocial || !(campos.includes('matricula') || campos.includes('admissao')))
       return { aceito: null, naoEnviados: [] };
     const fila = await this.esocial.eventosVinculo(s, vinculo);
@@ -1175,7 +1199,7 @@ export class ServicoPessoas {
       try {
         await this.apoio.executar(s, OPERACAO_BLOQUEIO, { login: u.login }, 'Usuário bloqueado.', {
           reautenticadoEm,
-          idempotencyKey: chaveDoBloqueio(base, id),
+          chaveIdempotencia: chaveDoBloqueio(base, id),
         });
         feitos.set(u.login, 'bloqueado');
       } catch (x) {
@@ -1345,13 +1369,13 @@ export class ServicoPessoas {
 }
 
 function lotacao(
-  v: VinculoPesLido,
+  v: VinculoPessoa,
   cc: Map<number, CentroCustoPessoas>,
   un: Map<number, string>,
 ): ColaboradorResumo['lotacao'] {
   return {
     centroCusto: v.centroCusto,
-    centroCustoNome: cc.get(v.centroCusto)?.nome ?? null,
+    centroCustoNome: v.centroCusto === null ? null : (cc.get(v.centroCusto)?.nome ?? null),
     unidade: v.unidade,
     unidadeNome: v.unidade !== null ? (un.get(v.unidade) ?? null) : null,
     setor: v.setor,

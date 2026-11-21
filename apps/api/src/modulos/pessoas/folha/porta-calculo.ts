@@ -1,10 +1,8 @@
-// Porta do cálculo mensal da folha, fatia F2 (M53.3; ficha do M53, seções 4 a 6, regras 7 e 8): o que a API do cálculo
-// lê e grava, independente de onde (a API não escreve SQL; fronteira Nx). O ponto fechado, o sobreaviso realizado, os
-// afastamentos, as rubricas e as tabelas legais vêm das portas que já os leem (ponto, realizado, interface, rubricas);
-// desta, o que é do cálculo:
-//   - `legado`: leituras de @sgh/legado em transação READ ONLY; gravações numa transação só SGH_ com a SGH_TRILHA junto
-//     (nenhuma tabela do outro sistema: o cálculo não tem receita de gravação no legado);
-//   - `memoria`: a sessão sintética de dev/ci (E2E); nada vai à cópia;
+// Porta do cálculo mensal da folha (M53.3 a M53.8): o que a API do cálculo lê e grava, independente de onde (a API não
+// escreve SQL). O ponto fechado, o sobreaviso realizado, os afastamentos, as rubricas e as tabelas legais vêm das portas
+// que já os leem; desta, o que é do cálculo:
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-calculo-propria.ts);
+//   - `memoria`: a sessão sintética de dev/ci (E2E);
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 import type {
   ApuracaoFolha,
@@ -16,37 +14,37 @@ import type {
   SituacaoRescisao,
   TipoProcessoFolha,
 } from '@sgh/contratos';
-import type {
-  CodigosCatalogosObrigacoes,
-  FiltroObrigacoesSgh,
-  NovaObrigacaoSgh,
-  NovosParametrosObrigacoesSgh,
-  ObrigacaoPesLida,
-  FechamentoFolhaLido,
-  FiltroFechamentosFolhaSgh,
-  ItemRubricaProcessoLido,
-  NovoFechamentoFolhaSgh,
-  DependentesDoVinculo,
-  DesligadoLido,
-  FeriasNaCompetenciaLida,
-  FiltroRescisoesSgh,
-  NovaRescisaoSgh,
-  RescisaoPesLida,
-  TipoRescisaoLido,
-  FeriasPesLida,
-  FiltroFeriasSgh,
-  HistoricoFolhaLido,
-  NovaFeriasSgh,
-  OrigemAdiantamentoDecimo,
-  FiltroProcessosFolhaSgh,
-  LinhaCalculoSgh,
-  NovoProcessoFolhaSgh,
-  NovoSalarioSgh,
-  ProcessoFolhaLido,
-  ResumoVinculoProcessoLido,
-  SalarioPesLido,
-  VinculoCalculoLido,
-} from '@sgh/legado';
+import {
+  type CodigosCatalogosObrigacoes,
+  type DependentesDoVinculo,
+  type FechamentoDaFolha,
+  type FeriasDoVinculo,
+  type FeriasNaCompetencia,
+  type FiltroFechamentosDaFolha,
+  type FiltroFeriasDaFolha,
+  type FiltroObrigacoesDaFolha,
+  type FiltroProcessosDaFolha,
+  type FiltroRescisoesDaFolha,
+  type HistoricoDaFolha,
+  type ItemRubricaDoProcesso,
+  type LinhaCalculoDoVinculo,
+  type NovaObrigacaoDaFolha,
+  type NovaRescisaoDaFolha,
+  type NovasFerias,
+  type NovoFechamentoDaFolha,
+  type NovoProcessoDaFolha,
+  type NovoSalarioDoVinculo,
+  type NovosParametrosObrigacoes,
+  type ObrigacaoDaFolha,
+  type OrigemAdiantamentoDecimo,
+  type ProcessoDaFolha,
+  type RescisaoDaFolha,
+  type ResumoVinculoDoProcesso,
+  type SalarioDoVinculo,
+  type TipoRescisaoDaFolha,
+  type VinculoDesligado,
+  type VinculoDoCalculo,
+} from './tipos-folha.js';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../../exames/public-api.js';
 
 export const PORTA_CALCULO_FOLHA = Symbol('PORTA_CALCULO_FOLHA');
@@ -54,11 +52,11 @@ export const PORTA_CALCULO_FOLHA = Symbol('PORTA_CALCULO_FOLHA');
 export type ContextoCalculoFolha = ContextoPortaM18;
 type SemHospital<T> = Omit<T, 'hospital'>;
 
-/** As gravações SGH_ do cálculo numa transação só SGH_, com as releituras dentro dela. */
+/** As gravações do cálculo numa transação, com as releituras dentro dela. */
 export interface GravadorCalculoFolha {
   /** As vigências do salário dos vínculos, lidas na própria transação (conferência do cálculo depois da trava). */
-  salarios(vinculos: readonly number[]): Promise<SalarioPesLido[]>;
-  incluirSalario(x: SemHospital<NovoSalarioSgh>): Promise<number>;
+  salarios(vinculos: readonly number[]): Promise<SalarioDoVinculo[]>;
+  incluirSalario(x: SemHospital<NovoSalarioDoVinculo>): Promise<number>;
   parametros(empresa: number): Promise<ParametrosFolhaLidos[]>;
   incluirParametros(x: ParametrosFolha & { readonly por: string }): Promise<number>;
   /**
@@ -70,22 +68,22 @@ export interface GravadorCalculoFolha {
     competencia: string,
     tipo?: TipoProcessoFolha,
     intervalo?: { readonly de: string; readonly ate: string } | null,
-  ): Promise<{ vigente: ProcessoFolhaLido | null; proximoNumero: number }>;
-  incluirProcesso(x: SemHospital<NovoProcessoFolhaSgh>): Promise<number>;
-  incluirLinhas(processo: number, linhas: readonly LinhaCalculoSgh[]): Promise<number>;
+  ): Promise<{ vigente: ProcessoDaFolha | null; proximoNumero: number }>;
+  incluirProcesso(x: SemHospital<NovoProcessoDaFolha>): Promise<number>;
+  incluirLinhas(processo: number, linhas: readonly LinhaCalculoDoVinculo[]): Promise<number>;
   situacaoProcesso(x: {
     id: number;
     versao: number;
-    de: ProcessoFolhaLido['situacao'];
-    para: ProcessoFolhaLido['situacao'];
+    de: ProcessoDaFolha['situacao'];
+    para: ProcessoDaFolha['situacao'];
     motivo: string | null;
     por: string;
   }): Promise<void>;
-  processo(id: number): Promise<ProcessoFolhaLido | null>;
-  resumoVinculos(processo: number): Promise<ResumoVinculoProcessoLido[]>;
+  processo(id: number): Promise<ProcessoDaFolha | null>;
+  resumoVinculos(processo: number): Promise<ResumoVinculoDoProcesso[]>;
   // M53.4 (F3): as frações de férias do vínculo relidas com trava, a inclusão e a troca de situação.
-  feriasDoVinculoComTrava(vinculo: number): Promise<FeriasPesLida[]>;
-  incluirFerias(x: SemHospital<NovaFeriasSgh>): Promise<number>;
+  feriasDoVinculoComTrava(vinculo: number): Promise<FeriasDoVinculo[]>;
+  incluirFerias(x: SemHospital<NovasFerias>): Promise<number>;
   situacaoFerias(x: {
     id: number;
     versao: number;
@@ -98,8 +96,8 @@ export interface GravadorCalculoFolha {
   // M53.5 (F4): o vínculo (desligamento relido) e as rescisões dele com trava, a inclusão e a troca de situação.
   rescisoesDoVinculoComTrava(
     vinculo: number,
-  ): Promise<{ desligamento: string | null; tipoRescisao: number | null; rescisoes: RescisaoPesLida[] }>;
-  incluirRescisao(x: SemHospital<NovaRescisaoSgh>): Promise<number>;
+  ): Promise<{ desligamento: string | null; tipoRescisao: number | null; rescisoes: RescisaoDaFolha[] }>;
+  incluirRescisao(x: SemHospital<NovaRescisaoDaFolha>): Promise<number>;
   situacaoRescisao(x: {
     id: number;
     versao: number;
@@ -114,20 +112,20 @@ export interface GravadorCalculoFolha {
     empresa: number,
     apuracao: ApuracaoFolha,
     periodo: string,
-  ): Promise<{ vigente: FechamentoFolhaLido | null; proximoNumero: number }>;
-  processosCalculadosComTrava(empresa: number, de: string, ate: string): Promise<ProcessoFolhaLido[]>;
-  incluirFechamento(x: SemHospital<NovoFechamentoFolhaSgh>): Promise<number>;
+  ): Promise<{ vigente: FechamentoDaFolha | null; proximoNumero: number }>;
+  processosCalculadosComTrava(empresa: number, de: string, ate: string): Promise<ProcessoDaFolha[]>;
+  incluirFechamento(x: SemHospital<NovoFechamentoDaFolha>): Promise<number>;
   reabrirFechamento(x: { id: number; versao: number; motivo: string; por: string }): Promise<void>;
   // M53.8 (F7): os parâmetros das obrigações (nova vigência) e a obrigação gerada (as em vigor com trava, a inclusão
   // com o arquivo cifrado, a substituição, a entrega e o cancelamento pela versão).
-  incluirParametrosObrigacoes(x: SemHospital<NovosParametrosObrigacoesSgh>): Promise<number>;
+  incluirParametrosObrigacoes(x: SemHospital<NovosParametrosObrigacoes>): Promise<number>;
   obrigacoesEmVigorComTrava(
     empresa: number,
     tipo: TipoObrigacao,
     periodo: string,
-  ): Promise<{ vigentes: ObrigacaoPesLida[]; proximoNumero: number }>;
-  obrigacaoComTrava(id: number): Promise<ObrigacaoPesLida | null>;
-  incluirObrigacao(x: SemHospital<NovaObrigacaoSgh>): Promise<number>;
+  ): Promise<{ vigentes: ObrigacaoDaFolha[]; proximoNumero: number }>;
+  obrigacaoComTrava(id: number): Promise<ObrigacaoDaFolha | null>;
+  incluirObrigacao(x: SemHospital<NovaObrigacaoDaFolha>): Promise<number>;
   substituirObrigacao(x: { id: number; versao: number; por: string }): Promise<void>;
   registrarEntregaObrigacao(x: {
     id: number;
@@ -142,42 +140,42 @@ export interface GravadorCalculoFolha {
 }
 
 export interface PortaCalculoFolha extends PortaGravacaoM18<GravadorCalculoFolha> {
-  vinculos(c: ContextoCalculoFolha, inicio: string, fim: string): Promise<VinculoCalculoLido[]>;
+  vinculos(c: ContextoCalculoFolha, inicio: string, fim: string): Promise<VinculoDoCalculo[]>;
   dependentes(
     c: ContextoCalculoFolha,
     vinculos: readonly number[],
     data: string,
   ): Promise<Map<number, DependentesDoVinculo>>;
-  salarios(c: ContextoCalculoFolha, vinculos: readonly number[]): Promise<SalarioPesLido[]>;
+  salarios(c: ContextoCalculoFolha, vinculos: readonly number[]): Promise<SalarioDoVinculo[]>;
   parametros(c: ContextoCalculoFolha, empresa: number): Promise<ParametrosFolhaLidos[]>;
-  processos(c: ContextoCalculoFolha, f: FiltroProcessosFolhaSgh): Promise<ProcessoFolhaLido[]>;
-  processo(c: ContextoCalculoFolha, id: number): Promise<ProcessoFolhaLido | null>;
-  resumoVinculos(c: ContextoCalculoFolha, processo: number): Promise<ResumoVinculoProcessoLido[]>;
-  linhasDoVinculo(c: ContextoCalculoFolha, processo: number, vinculo: number): Promise<LinhaCalculoSgh[]>;
+  processos(c: ContextoCalculoFolha, f: FiltroProcessosDaFolha): Promise<ProcessoDaFolha[]>;
+  processo(c: ContextoCalculoFolha, id: number): Promise<ProcessoDaFolha | null>;
+  resumoVinculos(c: ContextoCalculoFolha, processo: number): Promise<ResumoVinculoDoProcesso[]>;
+  linhasDoVinculo(
+    c: ContextoCalculoFolha,
+    processo: number,
+    vinculo: number,
+  ): Promise<LinhaCalculoDoVinculo[]>;
   // M53.4 (F3): férias, histórico das folhas mensais, adiantamentos do 13º e férias com recibo na competência.
-  ferias(c: ContextoCalculoFolha, f: FiltroFeriasSgh): Promise<FeriasPesLida[]>;
-  feriasPorId(c: ContextoCalculoFolha, id: number): Promise<FeriasPesLida | null>;
+  ferias(c: ContextoCalculoFolha, f: FiltroFeriasDaFolha): Promise<FeriasDoVinculo[]>;
+  feriasPorId(c: ContextoCalculoFolha, id: number): Promise<FeriasDoVinculo | null>;
   historico(
     c: ContextoCalculoFolha,
     vinculos: readonly number[],
     de: string,
     ate: string,
-  ): Promise<HistoricoFolhaLido[]>;
+  ): Promise<HistoricoDaFolha[]>;
   adiantamentosDecimo(
     c: ContextoCalculoFolha,
     empresa: number,
     ano: number,
     origens?: readonly OrigemAdiantamentoDecimo[],
   ): Promise<Map<number, number>>;
-  feriasNaCompetencia(
-    c: ContextoCalculoFolha,
-    inicio: string,
-    fim: string,
-  ): Promise<FeriasNaCompetenciaLida[]>;
+  feriasNaCompetencia(c: ContextoCalculoFolha, inicio: string, fim: string): Promise<FeriasNaCompetencia[]>;
   // M53.5 (F4): rescisões, desligados, processamentos que já pagaram o vínculo, FGTS depositado e tipos de rescisão.
-  rescisoes(c: ContextoCalculoFolha, f: FiltroRescisoesSgh): Promise<RescisaoPesLida[]>;
-  rescisaoPorId(c: ContextoCalculoFolha, id: number): Promise<RescisaoPesLida | null>;
-  desligados(c: ContextoCalculoFolha, de: string, ate: string): Promise<DesligadoLido[]>;
+  rescisoes(c: ContextoCalculoFolha, f: FiltroRescisoesDaFolha): Promise<RescisaoDaFolha[]>;
+  rescisaoPorId(c: ContextoCalculoFolha, id: number): Promise<RescisaoDaFolha | null>;
+  desligados(c: ContextoCalculoFolha, de: string, ate: string): Promise<VinculoDesligado[]>;
   processosDoVinculo(
     c: ContextoCalculoFolha,
     vinculo: number,
@@ -186,16 +184,16 @@ export interface PortaCalculoFolha extends PortaGravacaoM18<GravadorCalculoFolha
     ate: string,
   ): Promise<{ processo: number; competencia: string }[]>;
   fgtsDepositado(c: ContextoCalculoFolha, vinculo: number): Promise<number>;
-  tiposRescisao(c: ContextoCalculoFolha): Promise<TipoRescisaoLido[]>;
+  tiposRescisao(c: ContextoCalculoFolha): Promise<TipoRescisaoDaFolha[]>;
   // M53.7 (F6).
-  fechamentos(c: ContextoCalculoFolha, f: FiltroFechamentosFolhaSgh): Promise<FechamentoFolhaLido[]>;
-  fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoFolhaLido | null>;
-  itensRubricaDoProcesso(c: ContextoCalculoFolha, processo: number): Promise<ItemRubricaProcessoLido[]>;
+  fechamentos(c: ContextoCalculoFolha, f: FiltroFechamentosDaFolha): Promise<FechamentoDaFolha[]>;
+  fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoDaFolha | null>;
+  itensRubricaDoProcesso(c: ContextoCalculoFolha, processo: number): Promise<ItemRubricaDoProcesso[]>;
   // M53.8 (F7): parâmetros das obrigações, obrigações geradas (sem o conteúdo), o conteúdo cifrado de uma (a rota de
   // baixar) e os códigos dos catálogos oficiais da SEFIP, do CAGED e da RAIS.
   parametrosObrigacoes(c: ContextoCalculoFolha, empresa: number | null): Promise<ParametrosObrigacoesLidos[]>;
-  obrigacoes(c: ContextoCalculoFolha, f: FiltroObrigacoesSgh): Promise<ObrigacaoPesLida[]>;
-  obrigacao(c: ContextoCalculoFolha, id: number): Promise<ObrigacaoPesLida | null>;
+  obrigacoes(c: ContextoCalculoFolha, f: FiltroObrigacoesDaFolha): Promise<ObrigacaoDaFolha[]>;
+  obrigacao(c: ContextoCalculoFolha, id: number): Promise<ObrigacaoDaFolha | null>;
   conteudoObrigacao(c: ContextoCalculoFolha, id: number): Promise<string | null>;
   catalogosObrigacoes(c: ContextoCalculoFolha): Promise<CodigosCatalogosObrigacoes>;
 }

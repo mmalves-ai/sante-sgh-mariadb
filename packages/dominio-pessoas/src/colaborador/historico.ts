@@ -8,7 +8,8 @@ export interface SituacaoFuncional {
   readonly cargo: string;
   readonly funcao: string | null;
   readonly cargaSemanalHoras: number;
-  readonly centroCusto: number;
+  /** Nulo: vínculo sem centro de custo (o modelo permite; a lotação nova sempre traz um). */
+  readonly centroCusto: number | null;
   readonly unidade: number | null;
   readonly setor: string | null;
 }
@@ -41,7 +42,11 @@ export type ResultadoMudanca =
     };
 
 const lotacaoTexto = (l: Pick<SituacaoFuncional, 'centroCusto' | 'unidade' | 'setor'>): string =>
-  [`centro de custo ${l.centroCusto}`, l.unidade === null ? null : `unidade ${l.unidade}`, l.setor]
+  [
+    l.centroCusto === null ? 'sem centro de custo' : `centro de custo ${l.centroCusto}`,
+    l.unidade === null ? null : `unidade ${l.unidade}`,
+    l.setor,
+  ]
     .filter((x): x is string => x !== null && x !== '')
     .join(' · ');
 

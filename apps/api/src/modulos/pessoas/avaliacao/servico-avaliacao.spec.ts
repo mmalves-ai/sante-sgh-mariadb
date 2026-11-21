@@ -3,7 +3,6 @@
 // escala de notas; avaliação com as competências do cargo, nota até a escala, finalização, ciência só do próprio (ou
 // registrada pelo RH), correção por versão nova (a anterior intacta); alerta de experiência de 45 e 90 dias; PDI ligado
 // ao curso com o histórico. Portas em memória (nada conecta a banco); dados sintéticos.
-import type { ChaveGravada, CursoPesLido, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -17,6 +16,11 @@ import { ServicoPessoas } from '../servico.js';
 import type { PortaTreinamento } from '../treinamento/porta-treinamento.js';
 import { PortaAvaliacaoMemoria } from './porta-avaliacao-memoria.js';
 import { PERMISSOES_AVALIACAO, ServicoAvaliacao } from './servico-avaliacao.js';
+
+type OpcoesConfiguracao = NonNullable<Parameters<typeof fonteConfiguracaoMemoria>[1]>;
+type ChaveGravada = ReturnType<NonNullable<OpcoesConfiguracao['chavesIniciais']>>[number];
+type PrerequisitoGravado = ReturnType<NonNullable<OpcoesConfiguracao['prerequisitosIniciais']>>[number];
+type CursoTreinamento = Awaited<ReturnType<PortaTreinamento['cursos']>>[number];
 
 const C = PESSOAS_SINTETICAS_M52;
 const chave = (c: string): ChaveGravada => ({
@@ -41,7 +45,14 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const CTX = { rede: 'rede-sintetica', hospital: 'pc' };
+const CTX = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: null,
+  correlacao: 'teste-l0302',
+  rede: 'rede-sintetica',
+  hospital: 'pc',
+};
 let k = 0;
 const sessao = (login = 'SINT.RH', pode: (p: string) => boolean = () => true): SessaoCadastro => ({
   req: {
@@ -70,9 +81,9 @@ const codigo = async (p: Promise<unknown>) => {
 };
 
 const MOTIVO = 'Lançado com o dado errado na implantação';
-const CURSO = { id: 7001, titulo: 'Comunicação com o paciente', ativo: true } as CursoPesLido;
+const CURSO = { id: 7001, titulo: 'Comunicação com o paciente', ativo: true } as CursoTreinamento;
 /** Curso que só a porta dos treinamentos conhece (o PDI em memória o lê por `porta.treinamento`). */
-const CURSO2 = { id: 7002, titulo: 'Passagem de plantão segura', ativo: true } as CursoPesLido;
+const CURSO2 = { id: 7002, titulo: 'Passagem de plantão segura', ativo: true } as CursoTreinamento;
 
 async function montar() {
   const pessoas = new PortaPessoasMemoria();
@@ -190,8 +201,8 @@ describe('W0-06 parte 5b: competências', () => {
     await svc.desligarCompetenciaCargo(s, { cargo, competencia: k2, motivo: MOTIVO });
     expect((await svc.competenciasDoCargo(s, cargo)).map((x) => x.competencia)).not.toContain(k2);
     expect(porta.exclusoes('pc').map((x) => x.tabela)).toEqual([
-      'SGH_PES_COMPETENCIA',
-      'SGH_PES_CARGO_COMPETENCIA',
+      'competencia_avaliacao',
+      'cargo_competencia',
     ]);
   });
 });
@@ -340,7 +351,7 @@ describe('W0-06 parte 5b: ciclo e avaliação', () => {
     const { svc, porta, s, ciclo, vinculo } = await preparar();
     const id = (await svc.abrir(s, { ciclo, vinculo, marco: null, avaliador: null })).id;
     await svc.excluir(s, { avaliacao: id, versao: 0, motivo: MOTIVO });
-    expect(porta.exclusoes('pc').filter((x) => x.tabela === 'SGH_PES_AVAL_ITEM')).toHaveLength(2);
+    expect(porta.exclusoes('pc').filter((x) => x.tabela === 'avaliacao_desempenho_item')).toHaveLength(2);
     expect(await codigo(svc.abrir(s, { ciclo, vinculo, marco: 45, avaliador: null }))).toBe(
       'marco-so-experiencia',
     );

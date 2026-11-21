@@ -109,7 +109,7 @@ export class PortalPacienteInternoController implements OnApplicationBootstrap, 
   onApplicationBootstrap(): void {
     const amb = (process.env['AMBIENTE'] ?? 'dev').trim();
     if (
-      this.portal.destino !== 'legado' ||
+      this.portal.destino !== 'banco' ||
       amb === 'dev' ||
       amb === 'ci' ||
       process.env['PORTAL_VIGENCIA'] === 'nao'

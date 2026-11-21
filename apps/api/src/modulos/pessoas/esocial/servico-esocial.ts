@@ -94,14 +94,6 @@ import {
   xmlDoEvento,
   xmlParaConferencia,
 } from '@sgh/dominio-pessoas';
-import {
-  type EmpregadorEsocialSghLido,
-  type EventoEsocialSghLido,
-  TETO_EVENTOS_ESOCIAL,
-  TETO_LOTES_ESOCIAL,
-  type LoteEsocialSghLido,
-  type VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -112,13 +104,25 @@ import type { PortaCalculoFolha } from '../folha/porta-calculo.js';
 import type { PortaFolha } from '../folha/porta-folha.js';
 import type { PortaPessoas } from '../porta.js';
 import type { PortaRubricas } from '../rubricas/porta-rubricas.js';
-import type { ContextoEsocial, GravadorEsocial, PortaEsocial } from './porta-esocial.js';
+import {
+  type ContextoEsocial,
+  type GravadorEsocial,
+  type PortaEsocial,
+  type RegistroEventoEsocial,
+  type RegistroLoteEsocial,
+  TETO_EVENTOS_ESOCIAL,
+  TETO_LOTES_ESOCIAL,
+  type VigenciaEmpregadorEsocial,
+} from './porta-esocial.js';
 import { eventoAceito, loteEmProcessamento, type Ocorrencia } from './transmissor/soap-esocial.js';
 import {
   type DisponibilidadeTransmissor,
   ErroTransmissorEsocial,
   type EventoParaTransmitir,
 } from './transmissor/transmissor-esocial.js';
+
+/** O vínculo como a porta de pessoas o lê. */
+type VinculoDoCadastro = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
 
 /** Sem o transmissor real (POL-3): o motivo que a tela mostra em `producao`. */
 export const TRANSMISSOR_DESLIGADO: DisponibilidadeTransmissor = {
@@ -177,7 +181,7 @@ const tipoVinculo = (t: string): TipoVinculoTrabalho =>
 
 /** O resumo do evento para a API (sem o XML; nenhum dado pessoal). */
 export const paraResumoEsocial = (
-  x: EventoEsocialSghLido,
+  x: RegistroEventoEsocial,
   matricula: string | null,
 ): EventoEsocialResumo => ({
   id: x.id,
@@ -208,7 +212,7 @@ export const paraResumoEsocial = (
   versao: x.versao,
 });
 
-const paraLote = (l: LoteEsocialSghLido): LoteEsocial => ({
+const paraLote = (l: RegistroLoteEsocial): LoteEsocial => ({
   id: l.id,
   empresa: l.empresa,
   grupo: l.grupo,
@@ -224,7 +228,7 @@ const paraLote = (l: LoteEsocialSghLido): LoteEsocial => ({
 });
 
 /** Os parâmetros gravados (JSON) validados pelo contrato; vigência corrompida não entra em conta. */
-export function empregadorDaLinha(x: EmpregadorEsocialSghLido): EmpregadorEsocialLido | null {
+export function empregadorDaLinha(x: VigenciaEmpregadorEsocial): EmpregadorEsocialLido | null {
   let extra: unknown;
   try {
     extra = JSON.parse(x.parametros);
@@ -396,7 +400,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialEmpregadorGravado.codigo,
       P.gerar,
-      (r: number) => ({ tabela: 'SGH_PES_ESOCIAL_EMPREGADOR', id: String(r), chave: `${empresa}:${inicio}` }),
+      (r: number) => ({ tabela: 'cadastro_empregador', id: String(r), chave: `${empresa}:${inicio}` }),
       async (g) => {
         const vs = (await g.empregadores(null))
           .map(empregadorDaLinha)
@@ -432,7 +436,7 @@ export class ServicoEsocial {
   // ── Ficha do eSocial do colaborador ─────────────────────────────────────────────────────────────────────────
 
   /** Uso do módulo (os periódicos do M53.7). */
-  async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoDoCadastro> {
     const v = await this.pessoas.vinculo(s.porta, id);
     if (!v) throw naoEncontrado('Colaborador');
     return v;
@@ -477,7 +481,7 @@ export class ServicoEsocial {
       E.pessoasEsocialFichaGravada.codigo,
       P.gerar,
       (r: { id: number }) => ({
-        tabela: 'SGH_PES_ESOCIAL_FICHA',
+        tabela: 'vinculo_trabalho',
         id: String(r.id),
         chave: `vinculo:${vinculo}`,
       }),
@@ -563,7 +567,7 @@ export class ServicoEsocial {
       E.pessoasEsocialEventoGerado.codigo,
       P.gerar,
       (r: Map<EventoMontado, number>) => ({
-        tabela: 'SGH_PES_ESOCIAL_EVENTO',
+        tabela: 'evento_esocial',
         id: [...r.values()].join(',').slice(0, 40),
         chave: `${empresa}:${montados.map((m) => m.evento).join(',')}`.slice(0, 120),
       }),
@@ -592,13 +596,14 @@ export class ServicoEsocial {
                 `Já há um ${m.evento} em andamento para este registro (evento ${repetido[0]!.id}): use a retificação, a exclusão ou descarte o anterior.`,
               );
           }
-          const id = await g.proximoIdEvento();
-          const idEsocial = m.montagem.idEsocial.slice(0, 17) + agora + String(pad5(id)).padStart(5, '0');
+          const sequencial = await g.proximoSequencialEvento();
+          const idEsocial =
+            m.montagem.idEsocial.slice(0, 17) + agora + String(pad5(sequencial)).padStart(5, '0');
           const xml = xmlDoEvento(m.montagem.raiz).replace(
             `Id="${m.montagem.idEsocial}"`,
             `Id="${idEsocial}"`,
           );
-          await g.incluirEvento(id, {
+          const id = await g.incluirEvento({
             empresa,
             evento: m.evento,
             grupo: definicaoEventoEsocial(m.evento).grupo,
@@ -699,7 +704,11 @@ export class ServicoEsocial {
 
   /** O trabalhador para o evento na data: CPF decifrado e nome só aqui (nunca em resposta), ficha e salário vigente. */
   /** Uso do módulo (os periódicos do M53.7). */
-  async trabalhadorPara(s: SessaoCadastro, v: VinculoPesLido, data: string): Promise<TrabalhadorParaEvento> {
+  async trabalhadorPara(
+    s: SessaoCadastro,
+    v: VinculoDoCadastro,
+    data: string,
+  ): Promise<TrabalhadorParaEvento> {
     const cifra = this.exigirCifra();
     const [f, salarios] = await Promise.all([
       this.porta.ficha(this.ctx(s), v.id),
@@ -730,7 +739,7 @@ export class ServicoEsocial {
     id: number | null,
     evento: EventoEsocial,
     vinculo: number,
-  ): Promise<EventoEsocialSghLido | null> {
+  ): Promise<RegistroEventoEsocial | null> {
     if (id === null) return null;
     const r = await this.porta.evento(this.ctx(s), id);
     if (!r) throw naoEncontrado('Evento');
@@ -870,7 +879,7 @@ export class ServicoEsocial {
   }
 
   /** Revisão W0-06: o S-2200/S-2300 do vínculo na fila, de todas as situações (a correção cadastral os confere). */
-  async eventosVinculo(s: SessaoCadastro, vinculo: number): Promise<EventoEsocialSghLido[]> {
+  async eventosVinculo(s: SessaoCadastro, vinculo: number): Promise<RegistroEventoEsocial[]> {
     return this.porta.eventos(this.ctx(s), {
       eventos: ['S-2200', 'S-2300'],
       origem: 'vinculo',
@@ -886,7 +895,7 @@ export class ServicoEsocial {
   }
 
   /** Os S-2210 do acidente na fila, de todas as situações (o original, o retificador e o descartado ficam guardados). */
-  async eventosCat(s: SessaoCadastro, acidente: number): Promise<EventoEsocialSghLido[]> {
+  async eventosCat(s: SessaoCadastro, acidente: number): Promise<RegistroEventoEsocial[]> {
     return this.porta.eventos(this.ctx(s), { evento: 'S-2210', origem: 'acidente', referencia: acidente });
   }
 
@@ -900,7 +909,7 @@ export class ServicoEsocial {
       readonly empresa: number;
       readonly vinculo: number;
       readonly cat: CatParaEvento;
-      readonly retificar: EventoEsocialSghLido | null;
+      readonly retificar: RegistroEventoEsocial | null;
       readonly gravar: boolean;
     },
   ): Promise<ResultadoGeracaoEsocial> {
@@ -941,11 +950,11 @@ export class ServicoEsocial {
 
   private async matriculas(
     s: SessaoCadastro,
-    xs: readonly EventoEsocialSghLido[],
+    xs: readonly RegistroEventoEsocial[],
   ): Promise<Map<number, string | null>> {
     const ids = [...new Set(xs.map((x) => x.vinculo).filter((v): v is number => v !== null))].slice(0, 200);
     const vs = await Promise.all(ids.map((id) => this.pessoas.vinculo(s.porta, id)));
-    return new Map(vs.filter((v): v is VinculoPesLido => !!v).map((v) => [v.id, v.matricula]));
+    return new Map(vs.filter((v): v is VinculoDoCadastro => !!v).map((v) => [v.id, v.matricula]));
   }
 
   async listarEventos(s: SessaoCadastro, f: FiltroEventosEsocial): Promise<ListaEventosEsocial> {
@@ -1003,7 +1012,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialEventoDescartado.codigo,
       P.gerar,
-      { tabela: 'SGH_PES_ESOCIAL_EVENTO', id: String(id), chave: 'descarte' },
+      { tabela: 'evento_esocial', id: String(id), chave: 'descarte' },
       async (g) => {
         const [ev] = await g.eventosComTrava([id]);
         if (!ev || ev.versao !== x.versao)
@@ -1116,7 +1125,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialLoteGravado.codigo,
       P.transmitir,
-      (r: number) => ({ tabela: 'SGH_PES_ESOCIAL_LOTE', id: String(r), chave: 'montado' }),
+      (r: number) => ({ tabela: 'lote_esocial', id: String(r), chave: 'montado' }),
       async (g) => {
         const evs = await g.eventosComTrava([...new Set(x.eventos)]);
         if (evs.length !== new Set(x.eventos).size) throw naoEncontrado('Evento');
@@ -1205,7 +1214,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialLoteGravado.codigo,
       P.transmitir,
-      { tabela: 'SGH_PES_ESOCIAL_LOTE', id: String(id), chave: 'enviado' },
+      { tabela: 'lote_esocial', id: String(id), chave: 'enviado' },
       async (g) => {
         const l = await g.loteComTrava(id);
         if (!l) throw naoEncontrado('Lote');
@@ -1262,7 +1271,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialLoteGravado.codigo,
       P.transmitir,
-      { tabela: 'SGH_PES_ESOCIAL_LOTE', id: String(id), chave: 'cancelado' },
+      { tabela: 'lote_esocial', id: String(id), chave: 'cancelado' },
       async (g) => {
         const l = await g.loteComTrava(id);
         if (!l) throw naoEncontrado('Lote');
@@ -1360,7 +1369,7 @@ export class ServicoEsocial {
       s,
       E.pessoasEsocialLoteGravado.codigo,
       P.transmitir,
-      { tabela: 'SGH_PES_ESOCIAL_LOTE', id: String(id), chave: 'retorno' },
+      { tabela: 'lote_esocial', id: String(id), chave: 'retorno' },
       async (g) => {
         const l = await g.loteComTrava(id);
         if (!l) throw naoEncontrado('Lote');
@@ -1409,8 +1418,8 @@ export class ServicoEsocial {
 
   // ── Pendências do outro sistema e conciliação ───────────────────────────────────────────────────────────────
 
-  async pendenciasLegado(s: SessaoCadastro, empresa: number | null): Promise<PendenciasLegadoEsocial> {
-    return painelPendenciasLegado(await this.porta.pendenciasLegado(this.ctx(s), empresa));
+  async pendenciasMigradas(s: SessaoCadastro, empresa: number | null): Promise<PendenciasLegadoEsocial> {
+    return painelPendenciasLegado(await this.porta.pendenciasMigradas(this.ctx(s), empresa));
   }
 
   private async calcularConciliacao(
@@ -1423,7 +1432,7 @@ export class ServicoEsocial {
     const [vs, cnpjs, pend] = await Promise.all([
       this.vigencias(s),
       this.porta.cnpjs(c),
-      this.porta.pendenciasLegado(c, f.empresa),
+      this.porta.pendenciasMigradas(c, f.empresa),
     ]);
     const mesmaRaiz = empresasDaMesmaRaiz(cnpjs, f.empresa);
     const empresas = [f.empresa, ...mesmaRaiz];
@@ -1484,7 +1493,7 @@ export class ServicoEsocial {
       E.pessoasEsocialConciliacaoConferida.codigo,
       P.transmitir,
       (id: number) => ({
-        tabela: 'SGH_PES_ESOCIAL_CONCILIA',
+        tabela: 'conciliacao_esocial',
         id: String(id),
         chave: `${x.empresa}:${x.competencia}`,
       }),

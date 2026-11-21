@@ -18,12 +18,29 @@ import type {
   RegistrarEventoContratoEntrada,
   TipoVinculoContrato,
 } from '@sgh/contratos';
-import type { EventoGravado, VinculoGravado } from '@sgh/legado';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 
 export const PORTA_CONTRATO = Symbol('PORTA_CONTRATO');
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** O evento gravado no contrato (o valor calculado no reajuste). */
+export interface EventoContratoGravado {
+  readonly evento: number;
+  readonly contrato: number;
+  readonly tipo: string;
+  readonly valor: number | null;
+  readonly repetido: boolean;
+}
+
+/** Os vínculos gravados (pedido ou parcelas de título) com o saldo do contrato antes e depois. */
+export interface VinculoContratoGravado {
+  readonly contrato: number;
+  readonly vinculos: readonly number[];
+  readonly saldoAntes: number;
+  readonly saldoDepois: number;
+  readonly repetido: boolean;
+}
+
+/** As gravações numa transação, com a trilha junto. */
 export interface GravadorContrato {
   criar(m: { entrada: CriarContratoEntrada; usuario: string }): Promise<{ id: number; repetido: boolean }>;
   alterar(m: {
@@ -35,14 +52,14 @@ export interface GravadorContrato {
     contrato: number;
     entrada: RegistrarEventoContratoEntrada;
     usuario: string;
-  }): Promise<EventoGravado>;
+  }): Promise<EventoContratoGravado>;
   vincular(m: {
     contrato: ContratoDoVinculo;
     tipo: TipoVinculoContrato;
     ids: readonly number[];
     usuario: string;
     chave: string;
-  }): Promise<VinculoGravado>;
+  }): Promise<VinculoContratoGravado>;
 }
 
 export interface FornecedorContrato {

@@ -4,6 +4,7 @@
 // "como"), as tarifas por hora, o relatório dos realizados aprovados do prestador com as contas e o lançamento no
 // repasse pela receita `repasse.lancarEvento`, origem `plantao` (chave `pessoas.repassePlantao`, desligada até a DP-33,
 // e o evento de repasse no parâmetro). As regras ficam em @sgh/dominio-pessoas.
+import { type RegistroPlantaoParaRealizado, type RegistroRealizado } from './tipos.js';
 import {
   type ApoioRealizado,
   CHAVE_PESSOAS_PLANTAO_REALIZADO,
@@ -42,7 +43,6 @@ import {
   valoracoesPelaTarifa,
   valorRealizado,
 } from '@sgh/dominio-pessoas';
-import type { PlantaoParaRealizadoLido, RealizadoPesLido } from '@sgh/legado';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../../autorizacao/estacao.js';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -115,7 +115,7 @@ const reais = (v: number) =>
   `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** Revisão W0-06: estornado e lançado no repasse, sem o lançamento negativo ligado (o estorno ficou no meio). */
-const estornoPendente = (r: RealizadoPesLido): boolean =>
+const estornoPendente = (r: RegistroRealizado): boolean =>
   r.situacao === 'estornado' && r.lancamento !== null && (r.estorno?.lancamento ?? null) === null;
 const mensagemDe = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
@@ -199,7 +199,7 @@ export class ServicoRealizado {
     };
   }
 
-  private realizadoResposta(r: RealizadoPesLido): RealizadoResposta {
+  private realizadoResposta(r: RegistroRealizado): RealizadoResposta {
     return {
       id: r.id,
       inicio: r.inicio,
@@ -225,7 +225,7 @@ export class ServicoRealizado {
   }
 
   /** O realizado em vigor do plantão: o aprovado; senão o informado; senão o recusado mais recente. */
-  private emVigor(rs: readonly RealizadoPesLido[]): RealizadoPesLido | null {
+  private emVigor(rs: readonly RegistroRealizado[]): RegistroRealizado | null {
     const ordem = ['aprovado', 'informado', 'recusado', 'estornado'];
     for (const s of ordem) {
       const r = rs.filter((x) => x.situacao === s).sort((a, b) => b.id - a.id)[0];
@@ -249,7 +249,7 @@ export class ServicoRealizado {
       s.porta,
       ps.map((p) => p.plantao),
     );
-    const porPlantao = new Map<number, RealizadoPesLido[]>();
+    const porPlantao = new Map<number, RegistroRealizado[]>();
     for (const r of rs) porPlantao.set(r.plantao, [...(porPlantao.get(r.plantao) ?? []), r]);
     const como = emComo(s);
     const proprios = new Set(doLogin);
@@ -309,7 +309,7 @@ export class ServicoRealizado {
     return { competencia: f.competencia, itens, contagem: cont, limitado };
   }
 
-  private async plantaoOu404(s: SessaoCadastro, id: number): Promise<PlantaoParaRealizadoLido> {
+  private async plantaoOu404(s: SessaoCadastro, id: number): Promise<RegistroPlantaoParaRealizado> {
     const p = await this.porta.plantao(s.porta, id);
     if (!p) throw naoEncontrado('Plantão');
     return p;
@@ -339,7 +339,7 @@ export class ServicoRealizado {
       s,
       E.pessoasRealizadoRegistrado.codigo,
       CHAVE_PESSOAS_PLANTAO_REALIZADO,
-      (y: { id: number }) => ({ tabela: 'SGH_PES_PLANTAO_REALIZADO', id: String(y.id) }),
+      (y: { id: number }) => ({ tabela: 'plantao', id: String(y.id) }),
       async (g) => {
         const p = await g.plantao(e.plantao);
         if (!p) throw naoEncontrado('Plantão');
@@ -381,7 +381,7 @@ export class ServicoRealizado {
       s,
       E.pessoasRealizadoDecidido.codigo,
       CHAVE_PESSOAS_PLANTAO_REALIZADO,
-      { tabela: 'SGH_PES_PLANTAO_REALIZADO', id: String(e.realizado) },
+      { tabela: 'plantao', id: String(e.realizado) },
       async (g) => {
         const x = await g.realizado(e.realizado);
         if (!x) throw naoEncontrado('Realizado');
@@ -430,11 +430,11 @@ export class ServicoRealizado {
   /**
    * W0-06: estorno do realizado APROVADO, com o motivo (matriz, linha "Financeiro (repasses)": o lançamento de plantão
    * no repasse se estorna; se o repasse já foi apurado, recusa e encaminha para a devolução da apuração).
-   *   - não lançado: só SGH_ (fica fora do relatório do repasse; a coordenação registra de novo se for o caso);
+   *   - não lançado: só no banco (fica fora do relatório do repasse; a coordenação registra de novo se for o caso);
    *   - lançado, com a apuração do repasse da competência já conferida, aprovada ou titulada: 409
    *     `repasse-apurado`, com o caminho da devolução da apuração;
    *   - lançado e não apurado: o lançamento negativo pela receita `repasse.lancarEvento`, origem `estorno`, na
-   *     competência seguinte à do original (ou na corrente, se posterior), ligado ao realizado. O estorno SGH_ vem
+   *     competência seguinte à do original (ou na corrente, se posterior), ligado ao realizado. O estorno no banco vem
    *     antes (trava o realizado contra o lançamento duplo) e volta se a receita recusar.
    */
   async estornar(s: SessaoCadastro, e: EstornarRealizadoEntrada): Promise<ResultadoF6> {
@@ -451,7 +451,7 @@ export class ServicoRealizado {
         s,
         E.pessoasRealizadoEstornado.codigo,
         CHAVE_PESSOAS_PLANTAO_REALIZADO,
-        { tabela: 'SGH_PES_PLANTAO_REALIZADO', id: String(x.id) },
+        { tabela: 'plantao', id: String(x.id) },
         async (g) => {
           const y = await g.realizado(x.id);
           if (!y || y.situacao !== 'aprovado' || y.lancamento !== null)
@@ -462,7 +462,7 @@ export class ServicoRealizado {
       return { id: x.id, mensagem: 'Realizado estornado: fica fora do repasse.' };
     }
     if (!s.pode(P.aprovar) || !s.pode(P.lancar)) throw semPermissao();
-    const alvoSgh = { tabela: 'SGH_PES_PLANTAO_REALIZADO', id: String(x.id) };
+    const alvoSgh = { tabela: 'plantao', id: String(x.id) };
     if (pendente) {
       // Conciliação: o negativo que a receita já lançou (a falha foi na ligação) só se liga; nunca se lança de novo.
       const ligado = await this.apoio.sgh(
@@ -525,7 +525,7 @@ export class ServicoRealizado {
     const { hoje } = await this.porta.relogio(s.porta);
     const seguinte = competenciaSeguinte(competencia);
     const destino = hoje.slice(0, 7) > seguinte ? hoje.slice(0, 7) : seguinte;
-    // 1. O estorno SGH_ (trava o realizado: o segundo pedido simultâneo é recusado como desatualizado). Daqui até a
+    // 1. O estorno no banco (trava o realizado: o segundo pedido simultâneo é recusado como desatualizado). Daqui até a
     // ligação (3), o realizado fica "estorno pendente de lançamento" (estornado e lançado, sem o negativo ligado): a
     // tela o mostra e o mesmo pedido de estorno o concilia (liga o negativo já lançado ou o lança).
     if (!pendente)
@@ -540,7 +540,7 @@ export class ServicoRealizado {
           await g.estornarRealizado({ id: x.id, versao: e.versao, motivo, por: s.login });
         },
       );
-    // 2. O lançamento negativo pela receita; recusado, o estorno SGH_ volta.
+    // 2. O lançamento negativo pela receita; recusado, o estorno no banco volta.
     let lancamento: number;
     try {
       const r = await this.apoioRepasse.executar(
@@ -620,7 +620,7 @@ export class ServicoRealizado {
         correlacao: correlacaoDaRequisicao(s.req, E.pessoasRealizadoEstornado.codigo).slice(0, 64),
         recurso: CHAVE_PESSOAS_PLANTAO_REALIZADO,
         resultado: 'falha',
-        tabelaAlvo: 'SGH_PES_PLANTAO_REALIZADO',
+        tabelaAlvo: 'plantao',
         idAlvo: String(id),
         chaveNaturalAlvo: `estorno pendente: ${detalhe}`.slice(0, 120),
       })
@@ -648,7 +648,7 @@ export class ServicoRealizado {
       E.pessoasTarifaPlantaoGravada.codigo,
       CHAVE_PESSOAS_PLANTAO_REALIZADO,
       (y: { id: number; valorados: number }) => ({
-        tabela: 'SGH_PES_TARIFA_PLANTAO',
+        tabela: 'valor_hora_plantao',
         id: String(y.id),
         chave: y.valorados > 0 ? `realizados-valorados:${y.valorados}` : null,
       }),
@@ -693,7 +693,7 @@ export class ServicoRealizado {
       s,
       E.pessoasTarifaPlantaoGravada.codigo,
       CHAVE_PESSOAS_PLANTAO_REALIZADO,
-      { tabela: 'SGH_PES_TARIFA_PLANTAO', id: String(e.tarifa) },
+      { tabela: 'valor_hora_plantao', id: String(e.tarifa) },
       async (g) => g.encerrarTarifa({ id: e.tarifa, fim: e.fim, por: s.login }),
     );
     return { id: e.tarifa, mensagem: 'Vigência da tarifa encerrada.' };

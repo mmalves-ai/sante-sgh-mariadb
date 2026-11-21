@@ -18,9 +18,6 @@
 //   POST /api/suprimentos/kits/:id/conferencia | kits/:id/reposicao | inventarios | inventarios/:id/contagens|decisao|balanco
 //   GET  /api/suprimentos/sugestao-compra?local; POST sugestao-compra/pedido; POST pontos-pedido
 //   POST /api/suprimentos/documentos/desconsolidar; POST /api/suprimentos/notas/xml (pré-preenchimento pela NF-e)
-//   GET  /api/suprimentos/onda3/painel?dia&local          M41: efeito no estoque dos documentos do novo (agregado)
-//   GET  /api/suprimentos/onda3/conferencia-numerica?dia&local  M41: saldo e preço médio dos itens movidos pelo novo
-//   POST /api/suprimentos/onda3/conferencia-numerica      M41: compara o lido na outra estação com o lido aqui
 import {
   Body,
   Controller,
@@ -35,8 +32,6 @@ import {
   Res,
 } from '@nestjs/common';
 import {
-  type ConferenciaNumericaOnda3,
-  type PainelOnda3,
   type AprovacaoPendente,
   type ApoioSuprimentos,
   CODIGOS_TIPO_DOCUMENTO,
@@ -100,16 +95,14 @@ import { csv, exigir, idDaRota, type SessaoCadastro, sessaoDe } from '../cadastr
 import {
   CACHE_CONFIG,
   type CacheConfig,
-  CRITERIO_LIGAR_SETOR,
-  type CriterioLigarSetor,
   FONTE_CONFIGURACAO,
   type FonteConfiguracao,
 } from '../config/public-api.js';
-import { ServicoOnda3 } from './onda3.js';
 import { corpo, inteiroOuNulo } from '../exames/public-api.js';
 import { ApoiosSuprimentos } from './apoios.js';
 import { lerXmlNota, type NotaDoXml } from './nfe-xml.js';
 import { type ContextoSuprimentos, PORTA_SUPRIMENTOS, type PortaSuprimentos } from './porta.js';
+import { comChave } from './operacoes.js';
 import { ServicoSuprimentos } from './servico.js';
 
 const ctx = (s: SessaoCadastro): ContextoSuprimentos => s.porta;
@@ -194,47 +187,14 @@ const esquemaGerarPedido = z
 export class SuprimentosController {
   readonly apoios: ApoiosSuprimentos;
   readonly servico: ServicoSuprimentos;
-  readonly onda3: ServicoOnda3;
   constructor(
     @Inject(PORTA_SUPRIMENTOS) private readonly porta: PortaSuprimentos,
     @Inject(REGISTRADOR_TRILHA) private readonly trilha: RegistradorTrilha,
     @Optional() @Inject(FONTE_CONFIGURACAO) fonteConfiguracao: FonteConfiguracao | null = null,
     @Optional() @Inject(CACHE_CONFIG) cache: CacheConfig | null = null,
-    @Optional() @Inject(CRITERIO_LIGAR_SETOR) criterio: CriterioLigarSetor | null = null,
   ) {
     this.apoios = new ApoiosSuprimentos(porta, trilha, fonteConfiguracao, cache);
     this.servico = new ServicoSuprimentos(porta, this.apoios);
-    this.onda3 = new ServicoOnda3(porta, fonteConfiguracao);
-    // M41 (regra 1): a tela de chaves e o lote do painel de migração conferem a prescrição em uso por aqui.
-    if (criterio) {
-      criterio.regraFarmacia = (c, _tipo, chave) => this.onda3.motivoLigar(c, chave);
-      criterio.mapaRegra1 = (c) => this.onda3.regra1(c);
-    }
-  }
-
-  // ── Onda 3 (M41): o efeito dos documentos do novo no estoque e a conferência numérica ────────────────────
-
-  @Get('onda3/painel')
-  @Permissao('suprimentos.saldo.ler')
-  painelOnda3(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<PainelOnda3> {
-    return this.onda3.painel(sessaoDe(req), q);
-  }
-
-  @Get('onda3/conferencia-numerica')
-  @Permissao('suprimentos.saldo.ler')
-  retratoNumerico(
-    @Query() q: Record<string, string>,
-    @Req() req: RequisicaoAutorizada,
-  ): Promise<ConferenciaNumericaOnda3> {
-    return this.onda3.retratoNumerico(sessaoDe(req), q);
-  }
-
-  @Post('onda3/conferencia-numerica')
-  @HttpCode(200)
-  @Permissao('suprimentos.saldo.ler')
-  @AuditadoNoHandler('Não muda estado: compara o retrato informado com a leitura de agora (nada grava)')
-  conferirNumerica(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ConferenciaNumericaOnda3> {
-    return this.onda3.conferir(sessaoDe(req), b);
   }
 
   // ── Situação, apoio e buscas ─────────────────────────────────────────────────────────────────────────
@@ -482,7 +442,7 @@ export class SuprimentosController {
   @Post('requisicoes/:ano/:mes/:doc/autorizar')
   @HttpCode(200)
   @Permissao('suprimentos.requisicao.autorizar')
-  @AuditadoNoHandler('a autorização da requisição (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a autorização da requisição com a trilha na mesma transação')
   autorizar(
     @Param('ano') ano: string,
     @Param('mes') mes: string,
@@ -588,7 +548,7 @@ export class SuprimentosController {
   @Post('transferencias/envios')
   @HttpCode(200)
   @Permissao('suprimentos.transferencia.enviar')
-  @AuditadoNoHandler('o envio da transferência (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o envio da transferência com a trilha na mesma transação')
   enviar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSuprimentos> {
     return this.servico.enviarTransferencia(sessaoDe(req), corpo(esquemaEnviarTransferencia, b));
   }
@@ -596,7 +556,7 @@ export class SuprimentosController {
   @Post('transferencias/envios/:id/receber')
   @HttpCode(200)
   @Permissao('suprimentos.transferencia.receber')
-  @AuditadoNoHandler('suprimentos.transferir pelo executor e a divergência (SGH_) com a SGH_TRILHA')
+  @AuditadoNoHandler('suprimentos.transferir pelo executor e a divergência com a trilha')
   receber(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -612,7 +572,7 @@ export class SuprimentosController {
   @Post('transferencias/envios/:id/cancelar')
   @HttpCode(200)
   @Permissao('suprimentos.transferencia.enviar')
-  @AuditadoNoHandler('o cancelamento do envio (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o cancelamento do envio com a trilha na mesma transação')
   cancelarEnvio(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -717,7 +677,7 @@ export class SuprimentosController {
   @HttpCode(200)
   @Permissao('suprimentos.cotacao.escolher')
   @AuditadoNoHandler(
-    'suprimentos.definirVencedorCotacao pelo executor (trilha e a escolha SGH_ na mesma transação)',
+    'suprimentos.definirVencedorCotacao pelo executor (trilha e a escolha na mesma transação)',
   )
   vencedor(
     @Param('ano') ano: string,
@@ -739,7 +699,7 @@ export class SuprimentosController {
   @Post('pedidos/:ano/:doc/aprovacao')
   @HttpCode(200)
   @Permissao('suprimentos.pedido.aprovar')
-  @AuditadoNoHandler('a aprovação por alçada (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a aprovação por alçada com a trilha na mesma transação')
   aprovar(
     @Param('ano') ano: string,
     @Param('doc') doc: string,
@@ -797,15 +757,15 @@ export class SuprimentosController {
   @Post('pontos-pedido')
   @HttpCode(200)
   @Permissao('suprimentos.sugestao.gerarPedido')
-  @AuditadoNoHandler('o prazo e o estoque de segurança (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('o prazo e o estoque de segurança com a trilha na mesma transação')
   async pontoPedido(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSuprimentos> {
     const s = sessaoDe(req);
     const p = corpo(esquemaPontoPedidoItem, b);
     await this.apoios.apoios.compras.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosPontoPedidoDefinido.codigo,
       'suprimentos.compras',
-      { tabela: 'SGH_SUP_PONTO_PEDIDO', id: `${p.item}/${p.local}` },
+      { tabela: 'saldo_estoque', id: `${p.item}/${p.local}` },
       (g) =>
         g.definirPontoPedido({
           item: p.item,
@@ -966,7 +926,7 @@ export class SuprimentosController {
   @Post('kits/:id/conferencia')
   @HttpCode(200)
   @Permissao('suprimentos.kit.repor')
-  @AuditadoNoHandler('a conferência do carrinho (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a conferência do carrinho com a trilha na mesma transação')
   async conferirCarrinho(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -975,10 +935,10 @@ export class SuprimentosController {
     const s = sessaoDe(req);
     const e = corpo(esquemaConferirCarrinho, { ...((b ?? {}) as object), kitRastreavel: idDaRota(id) });
     const r = await this.apoios.apoios.kits.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosKitReposto.codigo,
       'suprimentos.kits',
-      (x: number) => ({ tabela: 'SGH_SUP_CARRINHO_CONFERENCIA', id: String(x) }),
+      (x: number) => ({ tabela: 'movimento_kit_rastreavel', id: String(x) }),
       (g) =>
         g.conferirCarrinho({
           kit: e.kitRastreavel,
@@ -1037,25 +997,42 @@ export class SuprimentosController {
   @Post('inventarios')
   @HttpCode(200)
   @Permissao('suprimentos.inventario.aprovar')
-  @AuditadoNoHandler('a abertura do inventário (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a abertura do inventário com a trilha na mesma transação')
   async abrirInventario(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSuprimentos> {
     const s = sessaoDe(req);
     const e = corpo(esquemaAbrirInventario, b);
-    const r = await this.porta.relogio(ctx(s));
-    const saldos = await this.porta.saldos(ctx(s), { local: e.local, hoje: r.hoje, alertaDias: 0 });
-    let itens = saldos.itens.map((x) => ({ item: x.item, saldo: x.quantidade }));
-    if (e.tipo === 'ciclico' && e.itens.length) itens = itens.filter((x) => e.itens.includes(x.item));
+    // No banco, a porta lê o saldo do local na mesma transação (o geral pega todo o saldo; o cíclico, a curva ou os
+    // itens escolhidos); na memória de dev/ci, o saldo vem da leitura.
+    let itens: { item: number; saldo: number }[];
+    if (this.porta.destino === 'banco')
+      itens = e.tipo === 'ciclico' ? e.itens.map((item) => ({ item, saldo: 0 })) : [];
+    else {
+      const r = await this.porta.relogio(ctx(s));
+      const saldos = await this.porta.saldos(ctx(s), { local: e.local, hoje: r.hoje, alertaDias: 0 });
+      itens = saldos.itens.map((x) => ({ item: x.item, saldo: x.quantidade }));
+      if (e.tipo === 'ciclico' && e.itens.length) itens = itens.filter((x) => e.itens.includes(x.item));
+    }
     const limitePct =
       (await this.apoios.apoios.inventario.parametro(s, 'suprimentos.inventarioLimiteDivergenciaPct')) || 5;
     const id = await this.apoios.apoios.inventario.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosInventarioAberto.codigo,
       'suprimentos.inventario',
-      (x: number) => ({ tabela: 'SGH_SUP_INVENTARIO', id: String(x) }),
-      (g) => g.abrirInventario({ local: e.local, tipo: e.tipo, limitePct, itens, usuario: s.login }),
+      (x: number) => ({ tabela: 'inventario_estoque', id: String(x) }),
+      (g) =>
+        g.abrirInventario({
+          local: e.local,
+          tipo: e.tipo,
+          ...(e.curva ? { curva: e.curva } : {}),
+          limitePct,
+          itens,
+          usuario: s.login,
+        }),
     );
     return {
-      mensagem: `Inventário ${id} aberto com ${itens.length} item(ns): a contagem é cega.`,
+      mensagem: itens.length
+        ? `Inventário ${id} aberto com ${itens.length} item(ns): a contagem é cega.`
+        : `Inventário ${id} aberto com o saldo do local: a contagem é cega.`,
       repetida: false,
       ids: { inventario: id },
       avisos: [],
@@ -1065,7 +1042,7 @@ export class SuprimentosController {
   @Post('inventarios/:id/contagens')
   @HttpCode(200)
   @Permissao('suprimentos.inventario.contar')
-  @AuditadoNoHandler('a contagem (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a contagem com a trilha na mesma transação')
   async contar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1075,10 +1052,10 @@ export class SuprimentosController {
     const e = corpo(esquemaRegistrarContagem, b);
     const inventario = idDaRota(id);
     const r = await this.apoios.apoios.inventario.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosContagemRegistrada.codigo,
       'suprimentos.inventario',
-      { tabela: 'SGH_SUP_INV_CONTAGEM', id: `${inventario}/${e.item}` },
+      { tabela: 'inventario_estoque_item', id: `${inventario}/${e.item}` },
       (g) => g.registrarContagem({ inventario, item: e.item, quantidade: e.quantidade, usuario: s.login }),
     );
     return {
@@ -1092,7 +1069,7 @@ export class SuprimentosController {
   @Post('inventarios/:id/decisao')
   @HttpCode(200)
   @Permissao('suprimentos.inventario.aprovar')
-  @AuditadoNoHandler('a decisão do inventário (SGH_) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('a decisão do inventário com a trilha na mesma transação')
   async decidir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -1102,10 +1079,10 @@ export class SuprimentosController {
     const e = corpo(esquemaDecidirInventario, b);
     const inventario = idDaRota(id);
     await this.apoios.apoios.inventario.sgh(
-      s,
+      comChave(s),
       EVENTOS_AUDITAVEIS.suprimentosInventarioDecidido.codigo,
       'suprimentos.inventario',
-      { tabela: 'SGH_SUP_INVENTARIO', id: String(inventario) },
+      { tabela: 'inventario_estoque', id: String(inventario) },
       (g) =>
         g.decidirInventario({
           inventario,

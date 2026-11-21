@@ -3,7 +3,7 @@
 // afastamentos, eventos do ponto fechado e plantões realizados aprovados), o arquivo do lote (recriado do estado gravado
 // e conferido pelo SHA-256; nunca guardado, porque leva o CPF), a importação do retorno com a conferência nos dois
 // sentidos e o plano de títulos (o lançamento é do F8), e o afastamento do colaborador. Toda gravação confere a chave
-// `pessoas.folhaExterna` e a permissão, vai numa transação só SGH_ com a trilha e nunca toca tabela do outro sistema.
+// `pessoas.folhaExterna` e a permissão, vai numa transação só, com a trilha, nas tabelas do modelo próprio.
 // Nenhuma resposta traz CPF ou nome: o CPF só sai no arquivo do lote, com permissão sensível e trilha.
 import { createHash } from 'node:crypto';
 import {
@@ -54,16 +54,6 @@ import {
   type PlantaoParaFolha,
   type VinculoParaFolha,
 } from '@sgh/dominio-pessoas';
-import {
-  type AfastamentoPesLido,
-  type EventoPeriodoLidoSgh,
-  type LinhaResumoFolhaSgh,
-  type LoteFolhaLido,
-  TETO_AFASTAMENTOS,
-  TETO_LOTES_FOLHA,
-  TETO_PLANTOES_REALIZADO,
-  TETO_VINCULOS_FOLHA,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -74,6 +64,15 @@ import type { PortaRealizado } from '../escala/porta-realizado.js';
 import type { PortaPonto } from '../ponto/porta-ponto.js';
 import type { PortaPessoas } from '../porta.js';
 import type { ContextoFolha, GravadorFolha, PortaFolha } from './porta-folha.js';
+import { type AfastamentoFolha, type LinhaResumoDaFolha, type LoteDaFolha } from './tipos-folha.js';
+import { type EventoDoPeriodo } from '../ponto/tipos-ponto.js';
+import {
+  TETO_AFASTAMENTOS,
+  TETO_LOTES_FOLHA,
+  TETO_PLANTOES_REALIZADO,
+  TETO_VINCULOS_FOLHA,
+  exigirCentroCusto,
+} from './apoio-folha.js';
 
 const E = EVENTOS_AUDITAVEIS;
 export const PERMISSOES_FOLHA = {
@@ -126,7 +125,7 @@ const semChaveCpf = () =>
     { codigo: 'sem-chave-cpf' },
   );
 
-const paraEvento = (e: EventoPeriodoLidoSgh): EventoPeriodoLido => ({
+const paraEvento = (e: EventoDoPeriodo): EventoPeriodoLido => ({
   id: e.id,
   acao: e.acao,
   ref: e.ref,
@@ -158,7 +157,7 @@ export function vinculosDoLote(t: string | null): { vinculo: number; centroCusto
 }
 
 /** A linha da lista (sem CPF, sem nome). */
-export function resumoDoLote(l: LoteFolhaLido): ResumoLoteFolha {
+export function resumoDoLote(l: LoteDaFolha): ResumoLoteFolha {
   const situacao = (SITUACOES_LOTE_FOLHA as readonly string[]).includes(l.situacao)
     ? (l.situacao as SituacaoLoteFolha)
     : 'recusado';
@@ -318,7 +317,7 @@ export class ServicoFolha {
     ]);
     const tipoDoPlantao = new Map(plantoes.map((p) => [p.plantao, p.tipo]));
 
-    const paraFolha: VinculoParaFolha[] = vinculos.map((v) => {
+    const paraFolha: VinculoParaFolha[] = exigirCentroCusto(vinculos, 'da exportação').map((v) => {
       const k = v.profissional !== null ? conselhos.get(v.profissional) : undefined;
       const conselho =
         k && k.sigla && k.numero !== null && k.uf && /^[A-Z]{2}$/.test(k.uf)
@@ -338,7 +337,7 @@ export class ServicoFolha {
       };
     });
 
-    const porVinculo = new Map<number, EventoPeriodoLidoSgh[]>();
+    const porVinculo = new Map<number, EventoDoPeriodo[]>();
     for (const e of eventosPeriodo) porVinculo.set(e.vinculo, [...(porVinculo.get(e.vinculo) ?? []), e]);
     const fechamentos = new Map<number, Readonly<Record<string, number>>>();
     const horas = new Map<number, Readonly<Record<string, number>>>();
@@ -608,7 +607,7 @@ export class ServicoFolha {
         let linhas = 0;
         if (ok) {
           const cc = new Map(vinculos.map((v) => [v.vinculo, v.centroCusto]));
-          const ls: LinhaResumoFolhaSgh[] = [];
+          const ls: LinhaResumoDaFolha[] = [];
           for (const col of retorno.colaboradores) {
             const soma = (n: string) =>
               col.rubricas.filter((x) => x.natureza === n).reduce((t, x) => t + x.valor, 0);
@@ -622,7 +621,7 @@ export class ServicoFolha {
               vencimento: retorno.vencimentoLiquido,
             });
           }
-          const encargos = new Map<string, LinhaResumoFolhaSgh>();
+          const encargos = new Map<string, LinhaResumoDaFolha>();
           for (const en of retorno.encargos) {
             const k = `${en.tipo}|${en.vencimento}|${en.centroCusto ?? ''}`;
             const a = encargos.get(k);
@@ -667,12 +666,13 @@ export class ServicoFolha {
 
   private async vinculoOu404(s: SessaoCadastro, id: number) {
     const v = await this.pessoas.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital) throw naoEncontrado('Colaborador');
+    // A porta de pessoas já lê só o estabelecimento da sessão.
+    if (!v) throw naoEncontrado('Colaborador');
     return v;
   }
 
   private resposta(
-    a: AfastamentoPesLido,
+    a: AfastamentoFolha,
     motivos: ReadonlyMap<number, string>,
     matricula: string | null,
   ): AfastamentoResposta {

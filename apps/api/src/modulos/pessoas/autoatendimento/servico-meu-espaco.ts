@@ -19,7 +19,6 @@ import {
   situacaoAso,
   situacaoVacinas,
 } from '@sgh/dominio-pessoas';
-import type { OcupacionalLido, VacinaLida, VinculoPesLido } from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -41,7 +40,7 @@ function somarDias(dia: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
-const asoLido = (x: OcupacionalLido): AsoLido => ({
+const asoLido = (x: ExameOcupacional): AsoLido => ({
   id: x.id,
   tipo: x.tipo ?? -1,
   data: x.data,
@@ -49,7 +48,7 @@ const asoLido = (x: OcupacionalLido): AsoLido => ({
   proximo: x.proximo,
   retifica: x.retifica,
 });
-const vacinaLida = (x: VacinaLida): RegistroVacinaLido => ({
+const vacinaLida = (x: VacinaAplicada): RegistroVacinaLido => ({
   id: x.id,
   registro: x.registro,
   vacina: x.vacina,
@@ -59,15 +58,21 @@ const vacinaLida = (x: VacinaLida): RegistroVacinaLido => ({
   retifica: x.retifica,
 });
 
+/** O vínculo de trabalho como a porta de pessoas devolve. */
+export type VinculoColaborador = NonNullable<Awaited<ReturnType<PortaPessoas['vinculo']>>>;
+type ExameOcupacional = Awaited<ReturnType<PortaSesmt['ocupacional']>>[number];
+type VacinaAplicada = Awaited<ReturnType<PortaSesmt['vacinas']>>[number];
+
 /** Os vínculos do login no estabelecimento (o escopo do autosserviço; também o do holerite, M53.3). */
 export async function vinculosDoLogin(
   pessoas: PortaPessoas,
   ponto: PortaPonto,
   s: SessaoCadastro,
-): Promise<VinculoPesLido[]> {
+): Promise<VinculoColaborador[]> {
   const ids = await ponto.vinculosDoLogin(s.porta, s.login);
   const vs = await Promise.all(ids.map((id) => pessoas.vinculo(s.porta, id)));
-  return vs.filter((v): v is VinculoPesLido => v !== null && v.hospital === s.hospital);
+  // A porta de pessoas já lê só o estabelecimento da sessão.
+  return vs.filter((v): v is VinculoColaborador => v !== null);
 }
 
 export class ServicoMeuEspaco {
@@ -102,7 +107,7 @@ export class ServicoMeuEspaco {
   }
 
   /** Os vínculos do login no estabelecimento (o escopo do autosserviço), com a situação. */
-  vinculosDoLogin(s: SessaoCadastro): Promise<VinculoPesLido[]> {
+  vinculosDoLogin(s: SessaoCadastro): Promise<VinculoColaborador[]> {
     return vinculosDoLogin(this.pessoas, this.ponto, s);
   }
 

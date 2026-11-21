@@ -1,5 +1,5 @@
 // Porta do cálculo mensal da folha em memória (M53.3): a sessão sintética de dev/ci e o E2E. Os registros vivem por
-// estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai à cópia do banco. Os vínculos e os
+// estabelecimento, numa cópia por transação (o erro no meio desfaz tudo). Nada vai ao banco. Os vínculos e os
 // dependentes vêm da gestão de pessoas em memória. As regras de banco que importam ao teste também valem aqui: vigência
 // única por início, número único do processamento, situação e versão na troca, linha única por vínculo e papel.
 import {
@@ -9,32 +9,31 @@ import {
   type ParametrosObrigacoesLidos,
   type TipoProcessoFolha,
 } from '@sgh/contratos';
+import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
 import {
   type CodigosCatalogosObrigacoes,
-  type FiltroObrigacoesSgh,
-  type ObrigacaoPesLida,
   type DependentesDoVinculo,
-  type FechamentoFolhaLido,
-  type FiltroFechamentosFolhaSgh,
-  type ItemRubricaProcessoLido,
-  type DesligadoLido,
-  ErroOperacao,
-  type FiltroRescisoesSgh,
-  type RescisaoPesLida,
-  type TipoRescisaoLido,
-  type FeriasNaCompetenciaLida,
-  type FeriasPesLida,
-  type FiltroFeriasSgh,
-  type HistoricoFolhaLido,
+  type FechamentoDaFolha,
+  type FeriasDoVinculo,
+  type FeriasNaCompetencia,
+  type FiltroFechamentosDaFolha,
+  type FiltroFeriasDaFolha,
+  type FiltroObrigacoesDaFolha,
+  type FiltroProcessosDaFolha,
+  type FiltroRescisoesDaFolha,
+  type HistoricoDaFolha,
+  type ItemRubricaDoProcesso,
+  type LinhaCalculoDoVinculo,
+  type ObrigacaoDaFolha,
   PAPEIS_HISTORICO_FOLHA,
-  type FiltroProcessosFolhaSgh,
-  type LinhaCalculoSgh,
-  type LinhaTrilha,
-  type ProcessoFolhaLido,
-  type ResumoVinculoProcessoLido,
-  type SalarioPesLido,
-  type VinculoCalculoLido,
-} from '@sgh/legado';
+  type ProcessoDaFolha,
+  type RescisaoDaFolha,
+  type ResumoVinculoDoProcesso,
+  type SalarioDoVinculo,
+  type TipoRescisaoDaFolha,
+  type VinculoDesligado,
+  type VinculoDoCalculo,
+} from './tipos-folha.js';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { ContextoCalculoFolha, GravadorCalculoFolha, PortaCalculoFolha } from './porta-calculo.js';
@@ -49,15 +48,15 @@ const desatualizado = () =>
 
 interface Estado {
   seq: number;
-  salarios: SalarioPesLido[];
+  salarios: SalarioDoVinculo[];
   parametros: ParametrosFolhaLidos[];
-  processos: ProcessoFolhaLido[];
-  linhas: (LinhaCalculoSgh & { processo: number })[];
-  ferias: FeriasPesLida[];
-  rescisoes: RescisaoPesLida[];
-  fechamentos: FechamentoFolhaLido[];
+  processos: ProcessoDaFolha[];
+  linhas: (LinhaCalculoDoVinculo & { processo: number })[];
+  ferias: FeriasDoVinculo[];
+  rescisoes: RescisaoDaFolha[];
+  fechamentos: FechamentoDaFolha[];
   parametrosObrigacoes: ParametrosObrigacoesLidos[];
-  obrigacoes: (ObrigacaoPesLida & { conteudo: string })[];
+  obrigacoes: (ObrigacaoDaFolha & { conteudo: string })[];
 }
 const novo = (): Estado => ({
   seq: 5330,
@@ -146,13 +145,13 @@ export const CATALOGOS_OBRIGACOES_SINTETICOS: CodigosCatalogosObrigacoes = {
   admissoesRais: ['1', '2', '3', '4', '5'],
 };
 
-function obrigacaoSemConteudo(o: ObrigacaoPesLida & { conteudo: string }): ObrigacaoPesLida {
+function obrigacaoSemConteudo(o: ObrigacaoDaFolha & { conteudo: string }): ObrigacaoDaFolha {
   const x: Partial<typeof o> = { ...o, totais: { ...o.totais }, fechamentos: [...o.fechamentos] };
   delete x.conteudo;
-  return x as ObrigacaoPesLida;
+  return x as ObrigacaoDaFolha;
 }
 
-/** O período do processamento está fechado (a mesma conferência do gravador do legado). */
+/** O período do processamento está fechado (a mesma conferência da porta do banco). */
 const periodoFechado = (s: Estado, empresa: number, tipo: TipoProcessoFolha, competencia: string) => {
   const apuracao = APURACAO_DO_TIPO[tipo];
   const periodo = apuracao === 'anual' ? competencia.slice(0, 4) : competencia;
@@ -188,8 +187,8 @@ const PAPEIS_DO_RESUMO = [
   'multaFgts',
 ] as const;
 
-function resumir(linhas: readonly LinhaCalculoSgh[]): ResumoVinculoProcessoLido[] {
-  const por = new Map<number, LinhaCalculoSgh[]>();
+function resumir(linhas: readonly LinhaCalculoDoVinculo[]): ResumoVinculoDoProcesso[] {
+  const por = new Map<number, LinhaCalculoDoVinculo[]>();
   for (const l of linhas) por.set(l.vinculo, [...(por.get(l.vinculo) ?? []), l]);
   return [...por.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -205,7 +204,7 @@ function resumir(linhas: readonly LinhaCalculoSgh[]): ResumoVinculoProcessoLido[
     }));
 }
 
-const filtra = (p: ProcessoFolhaLido, f: FiltroProcessosFolhaSgh) =>
+const filtra = (p: ProcessoDaFolha, f: FiltroProcessosDaFolha) =>
   (f.empresa === undefined || p.empresa === f.empresa) &&
   (f.competencia === undefined || p.competencia === f.competencia) &&
   (f.situacao === undefined || p.situacao === f.situacao) &&
@@ -215,7 +214,7 @@ const filtra = (p: ProcessoFolhaLido, f: FiltroProcessosFolhaSgh) =>
   (f.competenciaDe === undefined || p.competencia >= f.competenciaDe) &&
   (f.competenciaAte === undefined || p.competencia <= f.competenciaAte);
 
-const filtraFerias = (x: FeriasPesLida, f: FiltroFeriasSgh) =>
+const filtraFerias = (x: FeriasDoVinculo, f: FiltroFeriasDaFolha) =>
   (f.vinculo === undefined || x.vinculo === f.vinculo) &&
   (f.empresa === undefined || x.empresa === f.empresa) &&
   (f.de === undefined || x.fim >= f.de) &&
@@ -231,8 +230,8 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   constructor(private readonly pessoas: PortaPessoas | null = null) {}
 
   private e(c: ContextoCalculoFolha): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    let s = this.estados.get(String(c.estabelecimento));
+    if (!s) this.estados.set(String(c.estabelecimento), (s = novo()));
     return s;
   }
   private agora(): string {
@@ -610,7 +609,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(String(c.estabelecimento), s);
     return r;
   }
 
@@ -618,9 +617,9 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
     return [...ps].sort((a, b) => b.inicio.localeCompare(a.inicio));
   }
 
-  async vinculos(c: ContextoCalculoFolha, inicio: string, fim: string): Promise<VinculoCalculoLido[]> {
+  async vinculos(c: ContextoCalculoFolha, inicio: string, fim: string): Promise<VinculoDoCalculo[]> {
     if (!this.pessoas) return [];
-    const r: VinculoCalculoLido[] = [];
+    const r: VinculoDoCalculo[] = [];
     let depois: number | undefined;
     for (;;) {
       const p = await this.pessoas.listarVinculos(c, {
@@ -666,7 +665,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   async parametros(c: ContextoCalculoFolha, empresa: number) {
     return this.ordenar(this.e(c).parametros.filter((p) => p.empresa === empresa));
   }
-  async processos(c: ContextoCalculoFolha, f: FiltroProcessosFolhaSgh) {
+  async processos(c: ContextoCalculoFolha, f: FiltroProcessosDaFolha) {
     return this.e(c)
       .processos.filter((p) => filtra(p, f))
       .sort(
@@ -682,7 +681,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   async linhasDoVinculo(c: ContextoCalculoFolha, processo: number, vinculo: number) {
     return this.e(c)
       .linhas.filter((l) => l.processo === processo && l.vinculo === vinculo)
-      .map((l): LinhaCalculoSgh => {
+      .map((l): LinhaCalculoDoVinculo => {
         const { processo, ...resto } = l;
         void processo;
         return resto;
@@ -690,7 +689,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   }
 
   // ── M53.4 (F3) ──────────────────────────────────────────────────────────────────────────────────────────────
-  async ferias(c: ContextoCalculoFolha, f: FiltroFeriasSgh): Promise<FeriasPesLida[]> {
+  async ferias(c: ContextoCalculoFolha, f: FiltroFeriasDaFolha): Promise<FeriasDoVinculo[]> {
     return this.e(c)
       .ferias.filter((x) => filtraFerias(x, f))
       .sort((a, b) =>
@@ -699,7 +698,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
           : a.inicio.localeCompare(b.inicio) || a.id - b.id,
       );
   }
-  async feriasPorId(c: ContextoCalculoFolha, id: number): Promise<FeriasPesLida | null> {
+  async feriasPorId(c: ContextoCalculoFolha, id: number): Promise<FeriasDoVinculo | null> {
     return this.e(c).ferias.find((x) => x.id === id) ?? null;
   }
   async historico(
@@ -707,7 +706,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
     vinculos: readonly number[],
     de: string,
     ate: string,
-  ): Promise<HistoricoFolhaLido[]> {
+  ): Promise<HistoricoDaFolha[]> {
     const s = this.e(c);
     const vs = new Set(vinculos);
     const comp = new Map(
@@ -718,7 +717,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
         )
         .map((p) => [p.id, p.competencia]),
     );
-    const soma = new Map<string, HistoricoFolhaLido>();
+    const soma = new Map<string, HistoricoDaFolha>();
     for (const l of s.linhas) {
       const competencia = comp.get(l.processo);
       if (!competencia || !vs.has(l.vinculo) || !PAPEIS_HISTORICO_FOLHA.includes(l.papel)) continue;
@@ -762,9 +761,9 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
     c: ContextoCalculoFolha,
     inicio: string,
     fim: string,
-  ): Promise<FeriasNaCompetenciaLida[]> {
+  ): Promise<FeriasNaCompetencia[]> {
     const s = this.e(c);
-    const out: FeriasNaCompetenciaLida[] = [];
+    const out: FeriasNaCompetencia[] = [];
     for (const f of s.ferias) {
       if (f.situacao !== 'calculada' || f.processo === null || f.inicio > fim || f.fim < inicio) continue;
       const p = s.processos.find((x) => x.id === f.processo && x.situacao === 'calculada');
@@ -785,7 +784,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   }
 
   // ── M53.5 (F4) ──────────────────────────────────────────────────────────────────────────────────────────────
-  async rescisoes(c: ContextoCalculoFolha, f: FiltroRescisoesSgh): Promise<RescisaoPesLida[]> {
+  async rescisoes(c: ContextoCalculoFolha, f: FiltroRescisoesDaFolha): Promise<RescisaoDaFolha[]> {
     return this.e(c)
       .rescisoes.filter(
         (r) =>
@@ -797,13 +796,13 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
       )
       .sort((a, b) => b.desligamento.localeCompare(a.desligamento) || b.id - a.id);
   }
-  async rescisaoPorId(c: ContextoCalculoFolha, id: number): Promise<RescisaoPesLida | null> {
+  async rescisaoPorId(c: ContextoCalculoFolha, id: number): Promise<RescisaoDaFolha | null> {
     return this.e(c).rescisoes.find((r) => r.id === id) ?? null;
   }
-  async desligados(c: ContextoCalculoFolha, de: string, ate: string): Promise<DesligadoLido[]> {
+  async desligados(c: ContextoCalculoFolha, de: string, ate: string): Promise<VinculoDesligado[]> {
     if (!this.pessoas) return [];
     const s = this.e(c);
-    const out: DesligadoLido[] = [];
+    const out: VinculoDesligado[] = [];
     let depois: number | undefined;
     for (;;) {
       const p = await this.pessoas.listarVinculos(c, {
@@ -859,11 +858,11 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
       .reduce((a, l) => a + l.valor, 0);
   }
   /** Os tipos de rescisão da sessão sintética (os oito do cadastro do pc, com o saque e a causa). */
-  async tiposRescisao(): Promise<TipoRescisaoLido[]> {
+  async tiposRescisao(): Promise<TipoRescisaoDaFolha[]> {
     return TIPOS_RESCISAO_SINTETICOS.map((t) => ({ ...t }));
   }
   // ── M53.7 (F6) ──────────────────────────────────────────────────────────────────────────────────────────────
-  async fechamentos(c: ContextoCalculoFolha, f: FiltroFechamentosFolhaSgh): Promise<FechamentoFolhaLido[]> {
+  async fechamentos(c: ContextoCalculoFolha, f: FiltroFechamentosDaFolha): Promise<FechamentoDaFolha[]> {
     return this.e(c)
       .fechamentos.filter(
         (x) =>
@@ -878,14 +877,11 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
           b.periodo.localeCompare(a.periodo) || a.apuracao.localeCompare(b.apuracao) || b.numero - a.numero,
       );
   }
-  async fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoFolhaLido | null> {
+  async fechamento(c: ContextoCalculoFolha, id: number): Promise<FechamentoDaFolha | null> {
     return this.e(c).fechamentos.find((x) => x.id === id) ?? null;
   }
-  async itensRubricaDoProcesso(
-    c: ContextoCalculoFolha,
-    processo: number,
-  ): Promise<ItemRubricaProcessoLido[]> {
-    const por = new Map<string, ItemRubricaProcessoLido>();
+  async itensRubricaDoProcesso(c: ContextoCalculoFolha, processo: number): Promise<ItemRubricaDoProcesso[]> {
+    const por = new Map<string, ItemRubricaDoProcesso>();
     for (const l of this.e(c).linhas) {
       if (
         l.processo !== processo ||
@@ -913,7 +909,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
       .parametrosObrigacoes.filter((x) => empresa === null || x.empresa === empresa)
       .sort((a, b) => a.empresa - b.empresa || b.inicio.localeCompare(a.inicio));
   }
-  async obrigacoes(c: ContextoCalculoFolha, f: FiltroObrigacoesSgh): Promise<ObrigacaoPesLida[]> {
+  async obrigacoes(c: ContextoCalculoFolha, f: FiltroObrigacoesDaFolha): Promise<ObrigacaoDaFolha[]> {
     return this.e(c)
       .obrigacoes.filter(
         (x) =>
@@ -928,7 +924,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
       )
       .map(obrigacaoSemConteudo);
   }
-  async obrigacao(c: ContextoCalculoFolha, id: number): Promise<ObrigacaoPesLida | null> {
+  async obrigacao(c: ContextoCalculoFolha, id: number): Promise<ObrigacaoDaFolha | null> {
     const o = this.e(c).obrigacoes.find((x) => x.id === id);
     return o ? obrigacaoSemConteudo(o) : null;
   }
@@ -940,7 +936,7 @@ export class PortaCalculoFolhaMemoria implements PortaCalculoFolha {
   }
 }
 
-const TIPOS_RESCISAO_SINTETICOS: readonly TipoRescisaoLido[] = [
+const TIPOS_RESCISAO_SINTETICOS: readonly TipoRescisaoDaFolha[] = [
   { id: 1, nome: 'Demissão sem justa causa', saque: '01', causa: 3 },
   { id: 2, nome: 'Demissão por justa causa', saque: '00', causa: 1 },
   { id: 3, nome: 'Demissão por término de contrato de trabalho', saque: '04', causa: 3 },

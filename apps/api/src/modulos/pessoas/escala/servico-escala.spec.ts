@@ -1,8 +1,8 @@
 // M52.2: o serviço da escala sobre as portas EM MEMÓRIA (dados SINTÉTICOS; nada conecta a banco): regimes e a vigência
 // do regime, a escala do setor, a montagem com as regras de bloqueio (regra 3 conselho no dia; 5 interjornada; 6 limite
 // do contrato; 7 sobreposição na Rede, sem a escala alheia), a publicação (furo com justificativa, conselho vencido
-// bloqueia) e a mudança da escala publicada só com motivo (regra 8), com a trilha da escala e a SGH_OUTBOX.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+// bloqueia) e a mudança da escala publicada só com motivo (regra 8), com a trilha da escala e a integracao_mensagem.
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/public-api.js';
 import { EVENTO_ESCALA_ALTERADA, EVENTO_ESCALA_PUBLICADA } from '@sgh/contratos';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
@@ -12,11 +12,11 @@ import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js';
 import { ServicoPessoas } from '../servico.js';
-import { PortaEscalaMemoria } from './porta-escala-memoria.js';
+import { CONTEXTO_SINTETICO, PortaEscalaMemoria } from './porta-escala-memoria.js';
 import { janelaDoPlantao, ServicoEscala } from './servico-escala.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -29,7 +29,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -65,7 +65,12 @@ function sessao(hospital = 'pc', login = 'SINT.ESCALA'): SessaoCadastro {
     hospital,
     rede: 'rede-sintetica',
     login,
-    porta: { rede: 'rede-sintetica', hospital },
+    porta: {
+      ...CONTEXTO_SINTETICO,
+      estabelecimento: hospital === 'pc' ? 1 : 2,
+      rede: 'rede-sintetica',
+      hospital,
+    },
     pode: () => true,
   };
 }

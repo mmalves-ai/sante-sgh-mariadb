@@ -10,13 +10,13 @@
 //     com o valor pela tarifa; o relatório ao repasse traz só o prestador; o lançamento fica desligado sem a chave e o
 //     evento, e com eles lança e liga os realizados; a tela do repasse recusa a origem plantão.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+import { chaveFuncao } from '@sgh/dominio-pessoas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { criarApp } from '../../../app.js';
+import { criarAppPessoas } from '../opcoes-teste.spec-util.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
-import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/configuracao-fonte.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEscalaMemoria } from '../escala/porta-escala-memoria.js';
 import { PortaRealizadoMemoria } from '../escala/porta-realizado-memoria.js';
@@ -25,8 +25,9 @@ import { PortaPontoMemoria } from '../ponto/porta-ponto-memoria.js';
 import { PortaSesmtMemoria } from '../sesmt/porta-sesmt-memoria.js';
 import { PortaTreinamentoMemoria } from './porta-treinamento-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string, ligada = true): ChaveGravada => ({
+// O repasse sobe junto: a tela dele recusa o lançamento do plantão (só pela gestão de pessoas).
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'pessoas,repasse' };
+const chave = (c: string, ligada = true): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -39,7 +40,7 @@ const chave = (c: string, ligada = true): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -73,7 +74,7 @@ const RECURSOS = [
   'pessoas.plantaoRealizado',
   'pessoas.repassePlantao',
 ];
-const chaves: ChaveGravada[] = RECURSOS.map((r) => chave(r));
+const chaves: ChaveLiberacao[] = RECURSOS.map((r) => chave(r));
 // O evento de repasse do plantão definido (com a chave ligada); o lançamento desligado é provado em servico-f6.spec.
 const parametros: { chave: string; valor: string }[] = [
   { chave: 'pessoas.repasse.eventoPlantao', valor: '40' },
@@ -96,7 +97,7 @@ const cfg = fonteConfiguracaoMemoria(trilha, {
 });
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, {
+  app = await criarAppPessoas(env, {
     trilha,
     pessoas,
     escala,
@@ -147,8 +148,16 @@ const pedir = (s: Sessao) => {
 const P = '/api/pessoas';
 const T = `${P}/treinamentos`;
 const R = `${P}/realizado`;
-const ctx = { rede: '', hospital: 'aa' };
+const ctx = {
+  cliente: 'sintetico',
+  estabelecimento: 1,
+  usuario: 1,
+  correlacao: 'teste-f6',
+  rede: '',
+  hospital: 'aa',
+};
 
+const FUNCAO_SINTETICA = 'Assistência sintética F6';
 let colab = 0;
 let outro = 0;
 let medico = 0;
@@ -169,7 +178,8 @@ async function admitir(
     tipo,
     admissao: '2026-08-01',
     cargo: 'Técnico de enfermagem',
-    funcao: null,
+    // A função dá o público do curso obrigatório: o público por unidade ainda não tem lugar no banco (modelo-pendente).
+    funcao: FUNCAO_SINTETICA,
     cargaSemanalHoras: 36,
     lotacao: { centroCusto: 9521, unidade: 1, setor: 'Posto 1' },
     matricula: null,
@@ -212,8 +222,20 @@ describe('gestão de pessoas, fatia F6, pela HTTP', { timeout: 180_000 }, () => 
       obrigatorio: true,
       alvos: [{ tipo: 'unidade', valor: '1' }],
     });
-    expect(curso.statusCode, curso.body).toBe(200);
-    const idCurso = curso.json().id as number;
+    // O público por unidade ainda não tem lugar no cadastro do banco: a memória recusa igual (modelo-pendente).
+    expect(curso.json().codigo).toBe('modelo-pendente');
+    const cursoFuncao = await rh.post(`${T}/cursos`, {
+      codigo: 'NR32-BIO',
+      titulo: 'Riscos biológicos (NR-32)',
+      conteudo: 'Precauções padrão, perfurocortantes e conduta no acidente.',
+      categoria: 'nr32',
+      cargaMinimaMin: 240,
+      validadeMeses: 12,
+      obrigatorio: true,
+      alvos: [{ tipo: 'funcao', valor: chaveFuncao(FUNCAO_SINTETICA) }],
+    });
+    expect(cursoFuncao.statusCode, cursoFuncao.body).toBe(200);
+    const idCurso = cursoFuncao.json().id as number;
     const dup = await rh.post(`${T}/cursos`, {
       codigo: 'NR32-BIO',
       titulo: 'Outro',
@@ -225,7 +247,7 @@ describe('gestão de pessoas, fatia F6, pela HTTP', { timeout: 180_000 }, () => 
       alvos: [],
     });
     expect(dup.json().codigo).toBe('codigo-repetido');
-    // Painel: os três ativos da unidade 1 com o curso pendente.
+    // Painel: os três ativos da função com o curso pendente.
     const p0 = (await rh.get(`${T}/situacao?situacao=todas`)).json();
     expect(p0.contagem).toMatchObject({ colaboradores: 3, pendentes: 3 });
     const pop = await rh.post(`${T}/pops`, {

@@ -179,7 +179,7 @@ export class TissController {
   async guias(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<GuiaLida[]> {
     const s = sessaoDe(req);
     const comp = lerCompetencia(q['competencia']);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAEXT', idAlvo: `guias ${q['competencia'] ?? ''}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar', idAlvo: `guias ${q['competencia'] ?? ''}` };
     return this.porta.guias(ctx(s), {
       convenio: inteiroOuNulo(q['convenio']),
       ano: comp?.ano ?? null,
@@ -200,7 +200,7 @@ export class TissController {
     const s = sessaoDe(req);
     const id = idDaRota(conta);
     const convenio = await this.servico.exigirEscopoConta(s, id);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAEXT', idAlvo: String(id) };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar', idAlvo: String(id) };
     const guias = await this.porta.guias(ctx(s), {
       convenio,
       ano: null,
@@ -240,7 +240,7 @@ export class TissController {
     this.servico.exigirEscopoConvenio(s, convenio);
     const tipoGuia = inteiroOuNulo(q['tipoGuia']) ?? 2;
     const comp = lerCompetencia(q['competencia']);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAEXT', idAlvo: `prontas ${convenio}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar', idAlvo: `prontas ${convenio}` };
     return this.porta.contasProntas(ctx(s), {
       convenio,
       tipoGuia,
@@ -282,7 +282,7 @@ export class TissController {
     const s = sessaoDe(req);
     const lote = idDaRota(id);
     await this.servico.exigirEscopoLote(s, lote);
-    req.sghAlvo = { tabelaAlvo: 'FCTISSLOTEPROT', idAlvo: String(lote) };
+    req.sghAlvo = { tabelaAlvo: 'lote_tiss', idAlvo: String(lote) };
     const l = await this.porta.lote(ctx(s), lote, await this.porta.hoje(ctx(s)));
     if (!l) throw new ErroProblema('nao-encontrado', 404, 'Lote não encontrado');
     return l;
@@ -306,7 +306,9 @@ export class TissController {
   @Post('lotes/:id/envio')
   @HttpCode(200)
   @Permissao('faturamento.lote.enviar')
-  @AuditadoNoHandler('envio do lote (simulador fora de produção) com a SGH_TRILHA na transação SGH_')
+  @AuditadoNoHandler(
+    'envio do lote (simulador fora de produção) com a trilha_auditoria na mesma transação (entidade lote_tiss)',
+  )
   envio(@Param('id') id: string, @Req() req: RequisicaoAutorizada) {
     return this.servico.enviarLote(sessaoDe(req), idDaRota(id));
   }
@@ -393,14 +395,16 @@ export class TissController {
     const d = await this.porta.demonstrativo(ctx(s), idDaRota(id));
     if (!d) throw new ErroProblema('nao-encontrado', 404, 'Demonstrativo não encontrado');
     this.servico.exigirEscopoConvenio(s, d.convenio);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_DEMONSTRATIVO', idAlvo: id };
+    req.sghAlvo = { tabelaAlvo: 'demonstrativo_analise_conta', idAlvo: id };
     return d;
   }
 
   @Post('demonstrativos')
   @HttpCode(200)
   @Permissao('faturamento.demonstrativo.importar')
-  @AuditadoNoHandler('importação do demonstrativo em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'importação do demonstrativo com a trilha_auditoria na mesma transação (entidade demonstrativo_analise_conta)',
+  )
   importar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTiss> {
     return this.servico.importarDemonstrativo(sessaoDe(req), corpo(esquemaImportarDemonstrativo, b));
   }
@@ -418,7 +422,7 @@ export class TissController {
     const estado = (['todas', 'com-glosa', 'em-recurso', 'nao-conciliadas'] as const).find(
       (e) => e === q['estado'],
     );
-    req.sghAlvo = { tabelaAlvo: 'FCLANEXT', idAlvo: `glosas ${comp.ano}-${comp.mes}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar_item', idAlvo: `glosas ${comp.ano}-${comp.mes}` };
     return this.porta.grade(ctx(s), {
       convenios: this.servico.convenios(s, inteiroOuNulo(q['convenio'])),
       convenio: inteiroOuNulo(q['convenio']),
@@ -440,7 +444,7 @@ export class TissController {
     const s = sessaoDe(req);
     const id = idDaRota(conta);
     await this.servico.exigirEscopoConta(s, id);
-    req.sghAlvo = { tabelaAlvo: 'FCLANEXT', idAlvo: `conta ${id}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar_item', idAlvo: `conta ${id}` };
     return this.porta.itensDaConta(
       ctx(s),
       id,
@@ -456,7 +460,7 @@ export class TissController {
     const s = sessaoDe(req);
     const item = idDaRota(id);
     await this.servico.exigirEscopoItem(s, item);
-    req.sghAlvo = { tabelaAlvo: 'SGH_FAT_GLOSA_DECISAO', idAlvo: String(item) };
+    req.sghAlvo = { tabelaAlvo: 'glosa_item', idAlvo: String(item) };
     const ev = await this.porta.evidenciaDoItem(ctx(s), item);
     if (!ev)
       throw new ErroProblema(
@@ -496,7 +500,7 @@ export class TissController {
   @Post('glosas/decisao')
   @HttpCode(200)
   @Permissao('faturamento.glosa.decidir')
-  @AuditadoNoHandler('decisão da glosa em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('decisão da glosa em glosa_item com a trilha_auditoria na mesma transação')
   decidir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTiss> {
     return this.servico.decidirGlosa(sessaoDe(req), corpo(esquemaDecidirGlosa, b));
   }
@@ -518,7 +522,9 @@ export class TissController {
   @Post('endpoints')
   @HttpCode(200)
   @Permissao('integracao.tiss.editar')
-  @AuditadoNoHandler('endpoint TISS em SGH_ com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler(
+    'canal de envio em endpoint_tiss_fonte_pagadora com a trilha_auditoria na mesma transação',
+  )
   editarEndpoint(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoTiss> {
     return this.servico.editarEndpoint(sessaoDe(req), corpo(esquemaEditarEndpointTiss, b));
   }
@@ -550,7 +556,7 @@ export class TissController {
   async exportar(@Query() q: Record<string, string>, @Req() req: RequisicaoAutorizada): Promise<string> {
     const s = sessaoDe(req);
     const p = await this.periodo(s, q);
-    req.sghAlvo = { tabelaAlvo: 'FCLANEXT', idAlvo: `painel ${p.de}:${p.ate}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar_item', idAlvo: `painel ${p.de}:${p.ate}` };
     const r = await this.servico.painel(s, p.de, p.ate);
     const n = (v: number) => v.toFixed(2).replace('.', ',');
     const linhas = [
@@ -584,7 +590,7 @@ export class TissController {
     @Req() req: RequisicaoAutorizada,
   ): Promise<string> {
     const r = await this.acompanhamento.exportar(sessaoDe(req), q);
-    req.sghAlvo = { tabelaAlvo: 'FCCTAEXT', idAlvo: `competencia ${r.competencia}` };
+    req.sghAlvo = { tabelaAlvo: 'conta_hospitalar', idAlvo: `competencia ${r.competencia}` };
     return r.csv;
   }
 

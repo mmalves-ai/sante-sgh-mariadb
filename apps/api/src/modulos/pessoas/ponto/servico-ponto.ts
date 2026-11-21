@@ -3,7 +3,7 @@
 // cada colaborador (apuração contra a escala publicada, ajustes, banco de horas, trilha do período), os ajustes com o
 // aprovador, o fechamento e a reabertura com o lançamento no banco, a ciência do próprio espelho, o acerto do banco, a
 // regra do banco de cada regime e o AEJ. Toda gravação confere a chave `pessoas.ponto` e a permissão, relê o
-// colaborador do estabelecimento da sessão e vai numa transação só SGH_ com a trilha. As regras ficam em
+// colaborador do estabelecimento da sessão e vai numa transação só com a trilha. As regras ficam em
 // @sgh/dominio-pessoas; o CPF do arquivo vira HMAC na hora e nunca é gravado nem devolvido.
 import { createHash } from 'node:crypto';
 import {
@@ -95,15 +95,6 @@ import {
   validarAfd,
   zeroEventos,
 } from '@sgh/dominio-pessoas';
-import type {
-  AjustePontoLido,
-  ArquivoAfdLido,
-  EventoPeriodoLidoSgh,
-  MovimentoBancoLidoSgh,
-  RegimePesLido,
-  RegraBancoLida,
-  VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -111,8 +102,18 @@ import type { CacheConfig, FonteConfiguracao } from '../../config/public-api.js'
 import { ApoioGravacao } from '../../exames/public-api.js';
 import type { CifraCpf } from '../cifra-cpf.js';
 import type { PortaEscala } from '../escala/porta-escala.js';
-import type { PortaPessoas } from '../porta.js';
+import type { PortaPessoas, VinculoColaborador } from '../porta.js';
 import type { GravadorPonto, PortaPonto } from './porta-ponto.js';
+import type {
+  AjustePonto,
+  ArquivoRelogio,
+  EventoDoPeriodo,
+  MovimentoBancoHoras,
+  RegraBancoDoRegime,
+} from './tipos-ponto.js';
+
+/** O regime de jornada como a porta da escala o devolve. */
+type RegimeEscala = NonNullable<Awaited<ReturnType<PortaEscala['regime']>>>;
 
 const E = EVENTOS_AUDITAVEIS;
 export const PERMISSOES_PONTO = {
@@ -182,7 +183,7 @@ function lerEventos(totais: string): Partial<MinutosPorEvento> {
 const rotulos = (xs: readonly { codigo: number; nome: string }[]) =>
   new Map(xs.map((x) => [x.codigo, x.nome]));
 const sha256 = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
-const paraEvento = (e: EventoPeriodoLidoSgh): EventoPeriodoLido => ({
+const paraEvento = (e: EventoDoPeriodo): EventoPeriodoLido => ({
   id: e.id,
   acao: e.acao,
   ref: e.ref,
@@ -190,7 +191,7 @@ const paraEvento = (e: EventoPeriodoLidoSgh): EventoPeriodoLido => ({
   registradoPor: e.registradoPor,
   registradoEm: e.registradoEm,
 });
-const paraAjuste = (a: AjustePontoLido): AjusteLido => ({
+const paraAjuste = (a: AjustePonto): AjusteLido => ({
   id: a.id,
   tipo: a.tipo as TipoAjuste,
   dia: a.dia,
@@ -215,19 +216,19 @@ interface ParametrosPonto {
 
 /** Tudo o que o espelho de um vínculo numa competência junta (a tela, o fechamento, a ciência e o AEJ usam). */
 interface Apurado {
-  readonly v: VinculoPesLido;
+  readonly v: VinculoColaborador;
   readonly competencia: string;
   readonly dias: readonly string[];
   readonly hmac: string | null;
-  readonly regime: RegimePesLido | null;
-  readonly regra: RegraBancoLida | null;
+  readonly regime: RegimeEscala | null;
+  readonly regra: RegraBancoDoRegime | null;
   readonly apuracao: ApuracaoPeriodo;
   readonly originais: readonly { id: number; instante: string; numeroRep: string }[];
   readonly posteriores: number;
-  readonly ajustes: readonly AjustePontoLido[];
-  readonly eventos: readonly EventoPeriodoLidoSgh[];
+  readonly ajustes: readonly AjustePonto[];
+  readonly eventos: readonly EventoDoPeriodo[];
   readonly estado: EstadoPeriodo;
-  readonly movimentos: readonly MovimentoBancoLidoSgh[];
+  readonly movimentos: readonly MovimentoBancoHoras[];
   readonly plantoes: readonly { id: number; inicio: string; fim: string }[];
 }
 
@@ -367,9 +368,9 @@ export class ServicoPonto {
 
   // ── Colaborador ─────────────────────────────────────────────────────────────────────────────────────────────
 
-  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoPesLido> {
+  private async vinculoOu404(s: SessaoCadastro, id: number): Promise<VinculoColaborador> {
     const v = await this.pessoas.vinculo(s.porta, id);
-    if (!v || v.hospital !== s.hospital) throw naoEncontrado('Colaborador');
+    if (!v) throw naoEncontrado('Colaborador');
     return v;
   }
 
@@ -388,7 +389,7 @@ export class ServicoPonto {
   }
 
   private colaborador(
-    v: VinculoPesLido,
+    v: VinculoColaborador,
     unidades: Map<number, string>,
     regime: string | null,
   ): ColaboradorPonto {
@@ -407,7 +408,7 @@ export class ServicoPonto {
 
   // ── Arquivo do relógio (regra 12) ───────────────────────────────────────────────────────────────────────────
 
-  private resumoArquivo(a: ArquivoAfdLido, modelos: Map<number, string>): ArquivoAfdResumo {
+  private resumoArquivo(a: ArquivoRelogio, modelos: Map<number, string>): ArquivoAfdResumo {
     return {
       id: a.id,
       nome: a.nome,
@@ -427,7 +428,7 @@ export class ServicoPonto {
     };
   }
 
-  private detalheArquivo(a: ArquivoAfdLido, modelos: Map<number, string>): ArquivoAfdDetalhe {
+  private detalheArquivo(a: ArquivoRelogio, modelos: Map<number, string>): ArquivoAfdDetalhe {
     let falhas: { codigo: FalhaAfd; linha: number | null }[] = [];
     try {
       const x: unknown = a.falhas ? JSON.parse(a.falhas) : [];
@@ -496,7 +497,7 @@ export class ServicoPonto {
       s,
       E.pessoasAfdImportado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_AFD_ARQUIVO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'arquivo_ponto', id: String(x.id) }),
       async (g) => {
         if (await g.arquivoPorHash(hash))
           throw recusaRegra(
@@ -611,7 +612,7 @@ export class ServicoPonto {
     const dias = diasDaCompetencia(competencia);
     const de = dias[0]!;
     const ate = dias[dias.length - 1]!;
-    const r: VinculoPesLido[] = [];
+    const r: VinculoColaborador[] = [];
     let depois: number | undefined;
     for (let i = 0; i < 25; i++) {
       const pg = await this.pessoas.listarVinculos(s.porta, {
@@ -647,7 +648,7 @@ export class ServicoPonto {
       `${de}T00:00`,
       `${somarDias(ate, 1)}T12:00`,
     );
-    const porVinculo = new Map<number, EventoPeriodoLidoSgh[]>();
+    const porVinculo = new Map<number, EventoDoPeriodo[]>();
     for (const e of eventos) porVinculo.set(e.vinculo, [...(porVinculo.get(e.vinculo) ?? []), e]);
     const linhas: LinhaPainelPonto[] = vs.map((v) => {
       const est = estadoDoPeriodo((porVinculo.get(v.id) ?? []).map(paraEvento));
@@ -697,7 +698,7 @@ export class ServicoPonto {
 
   // ── Apuração e espelho (regras 11, 13 e 14) ─────────────────────────────────────────────────────────────────
 
-  private async apurar(s: SessaoCadastro, v: VinculoPesLido, competencia: string): Promise<Apurado> {
+  private async apurar(s: SessaoCadastro, v: VinculoColaborador, competencia: string): Promise<Apurado> {
     const todos = diasDaCompetencia(competencia);
     const dias = todos.filter((d) => d >= v.admissao && (v.desligamento === null || d <= v.desligamento));
     const de = todos[0]!;
@@ -790,7 +791,7 @@ export class ServicoPonto {
     };
   }
 
-  private regraDominio(r: RegraBancoLida | null): RegraBanco | null {
+  private regraDominio(r: RegraBancoDoRegime | null): RegraBanco | null {
     return r
       ? {
           destino: r.destino as DestinoBanco,
@@ -836,7 +837,7 @@ export class ServicoPonto {
     );
   }
 
-  private eventoResposta(e: EventoPeriodoLidoSgh): EventoPeriodoResposta {
+  private eventoResposta(e: EventoDoPeriodo): EventoPeriodoResposta {
     return {
       id: e.id,
       acao: e.acao,
@@ -1056,7 +1057,7 @@ export class ServicoPonto {
     const ids = await this.porta.vinculosDoLogin(s.porta, s.login);
     const unidades = await this.nomesUnidades(s);
     const vs = (await Promise.all(ids.map((id) => this.pessoas.vinculo(s.porta, id)))).filter(
-      (v): v is VinculoPesLido => !!v && v.hospital === s.hospital,
+      (v): v is VinculoColaborador => !!v,
     );
     const escolhido = vs.find((v) => v.id === vinculo) ?? vs[0] ?? null;
     const lista = vs.map((v) => ({
@@ -1103,7 +1104,7 @@ export class ServicoPonto {
       s,
       E.pessoasAjustePontoLancado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_PONTO_AJUSTE', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'ajuste_ponto', id: String(x.id) }),
       async (g) => {
         await g.travarPessoa(v.pessoa);
         const eventos = (await g.eventosPeriodo(v.id)).filter((x) => x.competencia === competencia);
@@ -1160,7 +1161,7 @@ export class ServicoPonto {
       s,
       E.pessoasAjustePontoDecidido.codigo,
       CHAVE_PESSOAS_PONTO,
-      { tabela: 'SGH_PES_PONTO_AJUSTE', id: String(atual.id) },
+      { tabela: 'ajuste_ponto', id: String(atual.id) },
       async (g) => {
         await g.travarPessoa(v.pessoa);
         const a = await g.ajuste(atual.id);
@@ -1207,7 +1208,7 @@ export class ServicoPonto {
       s,
       E.pessoasPontoFechado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_PONTO_FECHAMENTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'fechamento_ponto', id: String(x.id) }),
       async (g) => {
         await g.travarPessoa(v.pessoa);
         // Releitura na transação: ninguém fechou nem lançou ajuste entre a apuração e aqui.
@@ -1278,7 +1279,7 @@ export class ServicoPonto {
       s,
       E.pessoasPontoFechado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_PONTO_FECHAMENTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'fechamento_ponto', id: String(x.id) }),
       async (g) => {
         await g.travarPessoa(v.pessoa);
         const todos = await g.eventosPeriodo(v.id);
@@ -1335,7 +1336,7 @@ export class ServicoPonto {
       s,
       E.pessoasPontoCiencia.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_PONTO_FECHAMENTO', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'fechamento_ponto', id: String(x.id) }),
       async (g) => {
         const eventos = (await g.eventosPeriodo(v.id)).filter((x) => x.competencia === e.competencia);
         const estado = estadoDoPeriodo(eventos.map(paraEvento));
@@ -1379,7 +1380,7 @@ export class ServicoPonto {
       s,
       E.pessoasBancoHorasAlterado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_BANCO_HORAS', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'movimento_banco_horas', id: String(x.id) }),
       async (g) => {
         await g.travarPessoa(v.pessoa);
         const eventos = (await g.eventosPeriodo(v.id)).filter((x) => x.competencia === e.competencia);
@@ -1404,7 +1405,7 @@ export class ServicoPonto {
     return { id: r.id, mensagem: 'Acerto lançado no banco de horas.' };
   }
 
-  private regraResposta(r: RegraBancoLida): RegraBancoResposta {
+  private regraResposta(r: RegraBancoDoRegime): RegraBancoResposta {
     return {
       regime: r.regime,
       destino: r.destino as DestinoBanco,
@@ -1425,12 +1426,12 @@ export class ServicoPonto {
   async situacaoRegraBanco(s: SessaoCadastro, e: SituacaoRegraBancoEntrada): Promise<ResultadoPonto> {
     await this.apoio.exigirLiberacao(s);
     const regime = await this.escala.regime(s.porta, e.regime);
-    if (!regime || regime.hospital !== s.hospital) throw naoEncontrado('Regime');
+    if (!regime) throw naoEncontrado('Regime');
     const r = await this.apoio.sgh(
       s,
       E.pessoasBancoHorasAlterado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_BANCO_REGRA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'regra_banco_horas', id: String(x.id) }),
       async (g) => {
         const atual = (await g.regrasBanco()).find((x) => x.regime === e.regime) ?? null;
         if (!atual) throw naoEncontrado('Regra do banco de horas');
@@ -1449,7 +1450,7 @@ export class ServicoPonto {
         });
         // O motivo e o autor da mudança anterior ficam no histórico (a linha da regra só guarda a última).
         await g.registrarCorrecao({
-          tabela: 'SGH_PES_BANCO_REGRA',
+          tabela: 'regra_banco_horas',
           registro: id,
           operacao: e.ativo ? 'banco.regra.reativada' : 'banco.regra.desativada',
           antes: {
@@ -1495,7 +1496,7 @@ export class ServicoPonto {
       s,
       E.pessoasAjustePontoDesistido.codigo,
       CHAVE_PESSOAS_PONTO,
-      { tabela: 'SGH_PES_PONTO_AJUSTE', id: String(atual.id) },
+      { tabela: 'ajuste_ponto', id: String(atual.id) },
       async (g) => {
         const a = await g.ajuste(atual.id);
         if (!a || a.situacao !== 'pendente')
@@ -1511,7 +1512,7 @@ export class ServicoPonto {
     const regras = await this.porta.regrasBanco(s.porta);
     const correcoes = await this.porta.correcoes(
       s.porta,
-      'SGH_PES_BANCO_REGRA',
+      'regra_banco_horas',
       regras.map((r) => r.id),
     );
     const regimeDe = new Map(regras.map((r) => [r.id, r.regime]));
@@ -1534,12 +1535,12 @@ export class ServicoPonto {
   async gravarRegraBanco(s: SessaoCadastro, e: RegraBancoEntrada): Promise<ResultadoPonto> {
     await this.apoio.exigirLiberacao(s);
     const regime = await this.escala.regime(s.porta, e.regime);
-    if (!regime || regime.hospital !== s.hospital) throw naoEncontrado('Regime');
+    if (!regime) throw naoEncontrado('Regime');
     const r = await this.apoio.sgh(
       s,
       E.pessoasBancoHorasAlterado.codigo,
       CHAVE_PESSOAS_PONTO,
-      (x: { id: number }) => ({ tabela: 'SGH_PES_BANCO_REGRA', id: String(x.id) }),
+      (x: { id: number }) => ({ tabela: 'regra_banco_horas', id: String(x.id) }),
       async (g) => {
         const atual = (await g.regrasBanco()).find((x) => x.regime === e.regime) ?? null;
         if (atual && e.versao === null)
@@ -1584,7 +1585,7 @@ export class ServicoPonto {
       this.porta.eventosDaCompetencia(s.porta, competencia),
       this.porta.arquivosDoPeriodo(s.porta, dias[0]!, dias[dias.length - 1]!),
     ]);
-    const porVinculo = new Map<number, EventoPeriodoLidoSgh[]>();
+    const porVinculo = new Map<number, EventoDoPeriodo[]>();
     for (const e of eventos) porVinculo.set(e.vinculo, [...(porVinculo.get(e.vinculo) ?? []), e]);
     const fechados = [...porVinculo.entries()]
       .filter(([, xs]) => estadoDoPeriodo(xs.map(paraEvento)).estado === 'fechado')
@@ -1721,7 +1722,7 @@ export class ServicoPonto {
   /** Os eventos de ponto para a folha (os 13 tipos de integração) dos períodos fechados da competência, sem CPF. */
   async eventosFolha(s: SessaoCadastro, competencia: string): Promise<string> {
     const eventos = await this.porta.eventosDaCompetencia(s.porta, competencia);
-    const porVinculo = new Map<number, EventoPeriodoLidoSgh[]>();
+    const porVinculo = new Map<number, EventoDoPeriodo[]>();
     for (const e of eventos) porVinculo.set(e.vinculo, [...(porVinculo.get(e.vinculo) ?? []), e]);
     const linhas = ['vinculo;matricula;competencia;evento;minutos'];
     for (const [id, xs] of [...porVinculo.entries()].sort((a, b) => a[0] - b[0])) {

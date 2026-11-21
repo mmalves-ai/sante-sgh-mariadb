@@ -3,17 +3,17 @@
 //                                             desligada: a tela mostra a descrição e o pré-requisito; POL-3)
 //   GET  /api/contabil/fatos/apoio            o mesmo apoio para a tela dos fatos (contabil.fato.ler, sem a do plano)
 //   GET  /api/contabil/plano?empresa=         o plano na ordem da árvore e os problemas do plano
-//   POST /api/contabil/plano/contas           contabil.incluirConta (SGH_CTB_PLANO_CONTA)
+//   POST /api/contabil/plano/contas           contabil.incluirConta (conta_contabil)
 //   POST /api/contabil/plano/contas/alterar   contabil.alterarConta (versão vista; a trilha leva os campos mudados)
 //   GET  /api/contabil/regras?empresa=&origem=&tipoFato=   as versões (publicada e substituídas)
 //   POST /api/contabil/regras/simular         a regra (rascunho) aplicada aos fatos de uma competência, sem gravar
 //                                             (devolve os fatos um a um: exige contabil.fato.ler e contabil.plano.ler)
-//   POST /api/contabil/regras/publicar        contabil.publicarRegra (crítica: senha de novo; SGH_CTB_REGRA só INSERT)
+//   POST /api/contabil/regras/publicar        contabil.publicarRegra (crítica: senha de novo; versao_regra_contabilizacao só INSERT)
 //   GET  /api/contabil/fatos                  os fatos lidos dos módulos, paginados (≤ 200)
 //   GET  /api/contabil/fatos/resumo           por fonte: marca, última leitura e as contagens por situação
 //   POST /api/contabil/periodos/reprocessar   a conferência do reprocessamento (regra 2); sem `somenteConferir`,
 //                                             grava a situação recalculada dos fatos (crítica: senha de novo)
-// Tudo exige a chave `contabil`, menos os dois apoios. Cada gravação vai com a SGH_TRILHA na mesma transação; nenhuma tabela do
+// Tudo exige a chave `contabil`, menos os dois apoios. Cada gravação vai com a trilha_auditoria na mesma transação; nenhuma tabela do
 // banco anterior é escrita (regra 1).
 import { Body, Controller, Get, HttpCode, Inject, Optional, Post, Query, Req } from '@nestjs/common';
 import {
@@ -42,7 +42,7 @@ import {
   ROTAS_CONTABIL_F1 as R,
   type SimulacaoRegra,
 } from '@sgh/contratos';
-import type { LinhaTrilha } from '@sgh/legado';
+import type { TrilhaDaGravacao as LinhaTrilha } from '../exames/public-api.js';
 import { z } from 'zod';
 import { correlacaoDaRequisicao, estacaoDaRequisicao } from '../../autorizacao/estacao.js';
 import { AuditadoNoHandler, Permissao } from '../../autorizacao/decoradores.js';
@@ -55,6 +55,7 @@ import { ErroProblema } from '../../problema.filter.js';
 import type { ServicoSessao } from '../../sessao/servico-sessao.js';
 import { SERVICO_SESSAO } from '../acesso/acesso.controller.js';
 import { linhaTrilha, problemaDoCadastro, type SessaoCadastro, sessaoDe } from '../cadastro/comum.js';
+import { gravacaoDaTela } from './gravacao.js';
 import {
   CACHE_CONFIG,
   type CacheConfig,
@@ -132,7 +133,7 @@ export class ContabilController {
     await reautenticar(this.sessoes, this.resolvedor, req, senha);
   }
 
-  /** Gravação SGH_ com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
+  /** Gravação pelo Executor, com a trilha na mesma transação (na memória, a trilha pelo registrador da API). */
   private async gravar<T>(
     s: SessaoCadastro,
     evento: string,
@@ -147,7 +148,8 @@ export class ContabilController {
         ...(a.diferenca ? { diferenca: a.diferenca.slice(0, 400) } : {}),
       };
     };
-    const r = await this.porta.gravarSgh(s.porta, linha, fn).catch((e: unknown) => {
+    const g = gravacaoDaTela(s, operacao);
+    const r = await this.porta.gravar(g.contexto, g.pedido, linha, fn).catch((e: unknown) => {
       throw problemaDoCadastro(e);
     });
     if (this.porta.destino === 'memoria') {
@@ -209,7 +211,7 @@ export class ContabilController {
   @Post(R.incluirConta.caminho)
   @HttpCode(200)
   @Permissao(R.incluirConta.permissao)
-  @AuditadoNoHandler('contabil.incluirConta (SGH_CTB_PLANO_CONTA) com a SGH_TRILHA na mesma transação')
+  @AuditadoNoHandler('contabil.incluirConta (conta_contabil) com a trilha_auditoria na mesma transação')
   async incluirConta(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoContaPlano> {
     const conta = corpo(esquemaIncluirConta, b);
     const s = await this.exigirChave(req);
@@ -218,7 +220,11 @@ export class ContabilController {
       s,
       E.contabilContaIncluida.codigo,
       'contabil.incluirConta',
-      () => ({ tabela: 'SGH_CTB_PLANO_CONTA', chave: `${conta.empresa}:${conta.codigo}` }),
+      (x: { id: number; versao: number }) => ({
+        tabela: 'conta_contabil',
+        id: String(x.id),
+        chave: `${conta.empresa}:${conta.codigo}`,
+      }),
       (g) => g.incluirConta({ conta, usuario: s.login }),
     );
     const plano = await this.servico.plano(s.porta, conta.empresa);
@@ -235,7 +241,7 @@ export class ContabilController {
   @HttpCode(200)
   @Permissao(R.alterarConta.permissao)
   @AuditadoNoHandler(
-    'contabil.alterarConta (SGH_CTB_PLANO_CONTA, versão vista; os campos mudados na trilha) com a SGH_TRILHA na mesma transação',
+    'contabil.alterarConta (conta_contabil, versão vista; os campos mudados na trilha) com a trilha_auditoria na mesma transação',
   )
   async alterarConta(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoContaPlano> {
     const e = corpo(esquemaAlterarConta, b);
@@ -246,7 +252,7 @@ export class ContabilController {
       E.contabilContaAlterada.codigo,
       'contabil.alterarConta',
       () => ({
-        tabela: 'SGH_CTB_PLANO_CONTA',
+        tabela: 'conta_contabil',
         chave: `${e.empresa}:${e.codigo}`,
         diferenca: `campos=${campos.join(',')};versao=${e.versao}`,
       }),
@@ -281,7 +287,7 @@ export class ContabilController {
   @HttpCode(200)
   @Permissao(R.simular.permissao)
   @AuditadoNoHandler(
-    'a simulação não grava: lê os fatos da competência e aplica a regra em memória (nenhuma escrita, nem em SGH_)',
+    'a simulação não grava: lê os fatos da competência e aplica a regra em memória (nenhuma escrita, nem no banco)',
   )
   async simular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<SimulacaoRegra> {
     const e = corpo(esquemaSimular, b);
@@ -300,7 +306,7 @@ export class ContabilController {
   @HttpCode(200)
   @Permissao(R.publicar.permissao)
   @AuditadoNoHandler(
-    'contabil.publicarRegra (SGH_CTB_REGRA, só inclusão; a versão anterior fica) com a SGH_TRILHA na mesma transação',
+    'contabil.publicarRegra (versao_regra_contabilizacao, só inclusão; a versão anterior fica) com a trilha_auditoria na mesma transação',
   )
   async publicar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoPublicacaoRegra> {
     const e = corpo(esquemaPublicarComSenha, b);
@@ -312,7 +318,7 @@ export class ContabilController {
       E.contabilRegraPublicada.codigo,
       'contabil.publicarRegra',
       (x: { id: number; versao: number }) => ({
-        tabela: 'SGH_CTB_REGRA',
+        tabela: 'versao_regra_contabilizacao',
         id: String(x.id),
         diferenca: `origem=${e.regra.origem};tipo=${e.regra.tipoFato};versao=${e.regra.versao}`,
       }),
@@ -368,7 +374,7 @@ export class ContabilController {
   @HttpCode(200)
   @Permissao(R.reprocessar.permissao)
   @AuditadoNoHandler(
-    'contabil.reprocessarPeriodo (conferência sem gravar; ou a situação dos fatos em SGH_CTB_FATO) com a SGH_TRILHA na mesma transação',
+    'contabil.reprocessarPeriodo (conferência sem gravar; ou a situação dos fatos em fato_contabil) com a trilha_auditoria na mesma transação',
   )
   async reprocessar(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoReprocessamento> {
     const e = corpo(esquemaReprocessarComSenha, b);
@@ -388,7 +394,7 @@ export class ContabilController {
         s,
         E.contabilPeriodoReprocessado.codigo,
         'contabil.reprocessarPeriodo',
-        () => ({ tabela: 'SGH_CTB_FATO', chave: `${e.empresa}:${e.competencia}`, diferenca }),
+        () => ({ tabela: 'fato_contabil', chave: `${e.empresa}:${e.competencia}`, diferenca }),
         async (g) => {
           // D-CORRIDA-542: cada mudança grava só se a situação ainda for a lida (o worker ou o Contabilizar pode ter
           // contabilizado o fato depois da leitura); a que não grava conta em `mudaramDurante`.
@@ -397,7 +403,7 @@ export class ContabilController {
         },
       );
     else
-      // Só conferência (ou nada a gravar): a trilha pelo registrador da API, sem transação SGH_ (vale na cópia só leitura).
+      // Só conferência (ou nada a gravar): a trilha pelo registrador da API, sem transação de gravação (vale na cópia só leitura).
       await this.trilha.registrar({
         evento: E.contabilPeriodoReprocessado.codigo,
         rede: s.rede,
@@ -407,7 +413,7 @@ export class ContabilController {
         correlacao: correlacaoDaRequisicao(s.req, 'contabil.reprocessarPeriodo').slice(0, 64),
         recurso: 'contabil',
         resultado: 'sucesso',
-        tabelaAlvo: 'SGH_CTB_FATO',
+        tabelaAlvo: 'fato_contabil',
         idAlvo: `${e.empresa}:${e.competencia}`,
       });
     if (!e.somenteConferir && resultado.parcial)

@@ -1,12 +1,12 @@
 // Solicitações do autoatendimento do colaborador e a fila do gestor (W0-06, parte 6b-2; M3 de mercado; matriz, linhas
 // "Ponto e escala", "Profissional / usuário" e o atestado pela LGPD):
 //   - pedir e desistir é do próprio vínculo (o vínculo sai do login; nunca o de outra pessoa); a desistência só da
-//     pendente e só por quem pediu (o banco confere de novo, CHECK `SGH_CK_PES_SOLIC_QUEM`);
+//     pendente e só por quem pediu (o banco confere de novo, CHECK da solicitação);
 //   - decidir é de outra pessoa (nunca o próprio solicitante nem o próprio vínculo) e só da pendente;
 //   - a aprovação grava o efeito NA MESMA transação da decisão (D-W006-SOLIC-EFEITO): férias viram a programação em
-//     SGH_PES_FERIAS conferida como a tela da folha (`ServicoFeriasFolha.prepararProgramacao`); abono e atestado viram
+//     ferias_colaborador conferida como a tela da folha (`ServicoFeriasFolha.prepararProgramacao`); abono e atestado viram
 //     ajustes `justificativa` aprovados, um por dia; o ajuste de ponto nasce pendente com a solicitação e é decidido com
-//     ela; a alteração cadastral vira a correção com o valor anterior (SGH_PES_CORRECAO e o histórico);
+//     ela; a alteração cadastral vira a correção com o valor anterior (correcao_registro e o histórico);
 //   - o atestado: toda leitura grava o acesso com a finalidade; o CID só com `pessoas.atestado.verCid` e pedido expresso.
 // Chaves de liberação (proibido criar chave nova): a do cadastro de colaboradores para pedir, desistir e decidir; a do
 // ponto para o que vira ajuste; a da folha para as férias (conferida na programação).
@@ -35,14 +35,6 @@ import {
   recusaDecisaoSolicitacao,
   recusaDesistenciaSolicitacao,
 } from '@sgh/dominio-pessoas';
-import type {
-  AjustePontoLido,
-  AjusteDaSolicitacaoLido,
-  DadosSolicitacaoSgh,
-  EventoPeriodoLidoSgh,
-  SolicitacaoPesLida,
-  VinculoPesLido,
-} from '@sgh/legado';
 import type { RegistradorTrilha } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
@@ -54,8 +46,13 @@ import type { PortaPonto } from '../ponto/porta-ponto.js';
 import { CHAVE_PESSOAS_COLABORADOR } from '../servico.js';
 import type { GravadorAutoatendimento, PortaAutoatendimento } from './porta-autoatendimento.js';
 import { vinculosDoLogin } from './servico-meu-espaco.js';
+import type { DadosSolicitacao, SolicitacaoRegistrada, AjusteDaSolicitacao } from './tipos.js';
+import { type VinculoColaborador } from './servico-meu-espaco.js';
 
 const E = EVENTOS_AUDITAVEIS;
+
+type AjustePonto = Awaited<ReturnType<GravadorAutoatendimento['ponto']['ajustes']>>[number];
+type EventoPeriodo = Awaited<ReturnType<GravadorAutoatendimento['ponto']['eventosPeriodo']>>[number];
 
 export const PERMISSOES_AUTOATENDIMENTO = {
   solicitar: 'pessoas.autoatendimento.solicitar',
@@ -102,7 +99,7 @@ function naoComo(s: SessaoCadastro): void {
     );
 }
 
-const paraEvento = (e: EventoPeriodoLidoSgh) => ({
+const paraEvento = (e: EventoPeriodo) => ({
   id: e.id,
   acao: e.acao,
   ref: e.ref,
@@ -110,7 +107,7 @@ const paraEvento = (e: EventoPeriodoLidoSgh) => ({
   registradoPor: e.registradoPor,
   registradoEm: e.registradoEm,
 });
-const paraAjuste = (a: AjustePontoLido): AjusteLido => ({
+const paraAjuste = (a: AjustePonto): AjusteLido => ({
   id: a.id,
   tipo: a.tipo as TipoAjuste,
   dia: a.dia,
@@ -136,9 +133,9 @@ function somarDias(dia: string, n: number): string {
 }
 const mesmo = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
 
-/** A forma gravada (1067) do pedido validado pelo contrato. */
-function dadosDoPedido(e: IncluirSolicitacaoEntrada, v: VinculoPesLido): DadosSolicitacaoSgh {
-  const vazio: DadosSolicitacaoSgh = {
+/** Os dados do pedido validado pelo contrato. */
+function dadosDoPedido(e: IncluirSolicitacaoEntrada, v: VinculoColaborador): DadosSolicitacao {
+  const vazio: DadosSolicitacao = {
     tipo: e.tipo,
     inicio: null,
     fim: null,
@@ -216,15 +213,15 @@ export class ServicoAutoatendimento {
 
   // ── Leituras ────────────────────────────────────────────────────────────────────────────────────────────────
 
-  private async meus(s: SessaoCadastro): Promise<VinculoPesLido[]> {
+  private async meus(s: SessaoCadastro): Promise<VinculoColaborador[]> {
     return vinculosDoLogin(this.pessoas, this.ponto, s);
   }
 
   private async resposta(
     s: SessaoCadastro,
-    x: SolicitacaoPesLida,
-    v: VinculoPesLido | null,
-    ajustes: readonly AjusteDaSolicitacaoLido[],
+    x: SolicitacaoRegistrada,
+    v: VinculoColaborador | null,
+    ajustes: readonly AjusteDaSolicitacao[],
     proprios: ReadonlySet<number>,
   ): Promise<SolicitacaoPessoaResposta> {
     const pendente = x.situacao === 'pendente';
@@ -268,7 +265,7 @@ export class ServicoAutoatendimento {
 
   private async lista(
     s: SessaoCadastro,
-    xs: readonly SolicitacaoPesLida[],
+    xs: readonly SolicitacaoRegistrada[],
     proprios: ReadonlySet<number>,
   ): Promise<ListaSolicitacoesPessoa> {
     const corte = xs.slice(0, TETO_LISTA);
@@ -283,7 +280,7 @@ export class ServicoAutoatendimento {
         ),
       ),
     ]);
-    const porId = new Map(vs.filter((v): v is VinculoPesLido => v !== null).map((v) => [v.id, v]));
+    const porId = new Map(vs.filter((v): v is VinculoColaborador => v !== null).map((v) => [v.id, v]));
     return {
       hoje,
       itens: await Promise.all(
@@ -317,7 +314,7 @@ export class ServicoAutoatendimento {
     return this.lista(s, xs, proprios);
   }
 
-  private async solicitacaoOu404(s: SessaoCadastro, id: number): Promise<SolicitacaoPesLida> {
+  private async solicitacaoOu404(s: SessaoCadastro, id: number): Promise<SolicitacaoRegistrada> {
     const x = await this.porta.solicitacao(s.porta, id);
     if (!x) throw naoEncontrada();
     return x;
@@ -384,7 +381,7 @@ export class ServicoAutoatendimento {
       s,
       E.pessoasSolicitacaoGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      (r: number) => ({ tabela: 'SGH_PES_SOLICITACAO', id: String(r) }),
+      (r: number) => ({ tabela: 'solicitacao_colaborador', id: String(r) }),
       async (g) => {
         const n = await g.incluirSolicitacao({ ...dados, vinculo: v.id, por: s.login });
         if (e.tipo === 'atestado') await g.incluirAtestado({ ...e.atestado, solicitacao: n, por: s.login });
@@ -478,7 +475,7 @@ export class ServicoAutoatendimento {
       s,
       E.pessoasSolicitacaoGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      { tabela: 'SGH_PES_SOLICITACAO', id: String(x.id), chave: 'desistencia' },
+      { tabela: 'solicitacao_colaborador', id: String(x.id), chave: 'desistencia' },
       async (g) => {
         await g.desistirSolicitacao({ id: x.id, versao: e.versao, motivo, por: s.login });
         for (const a of await g.ajustesDaSolicitacao(x.id))
@@ -492,7 +489,11 @@ export class ServicoAutoatendimento {
   // ── Decisão do gestor ───────────────────────────────────────────────────────────────────────────────────────
 
   /** Férias: a empresa (a única, se não veio) e o período aquisitivo (o mais antigo com saldo, se não veio). */
-  private async programacaoDasFerias(s: SessaoCadastro, x: SolicitacaoPesLida, e: DecidirSolicitacaoEntrada) {
+  private async programacaoDasFerias(
+    s: SessaoCadastro,
+    x: SolicitacaoRegistrada,
+    e: DecidirSolicitacaoEntrada,
+  ) {
     let empresa = e.empresa;
     if (empresa === null) {
       const es = (await this.ferias.apoioTela(s)).empresas;
@@ -568,7 +569,7 @@ export class ServicoAutoatendimento {
       s,
       E.pessoasSolicitacaoGravada.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      { tabela: 'SGH_PES_SOLICITACAO', id: String(x.id), chave: aprovar ? 'aprovacao' : 'recusa' },
+      { tabela: 'solicitacao_colaborador', id: String(x.id), chave: aprovar ? 'aprovacao' : 'recusa' },
       async (g) => {
         const atual = await g.solicitacao(x.id);
         if (!atual || atual.versao !== e.versao || atual.situacao !== 'pendente') throw desatualizada();
@@ -716,7 +717,7 @@ export class ServicoAutoatendimento {
       s,
       E.pessoasAtestadoLido.codigo,
       CHAVE_PESSOAS_COLABORADOR,
-      { tabela: 'SGH_PES_ATESTADO_ACESSO', id: String(x.id) },
+      { tabela: 'atestado_colaborador_acesso', id: String(x.id) },
       (g) =>
         g.atestado({ solicitacao: x.id, verCid: e.verCid, finalidade: e.finalidade.trim(), por: s.login }),
     );

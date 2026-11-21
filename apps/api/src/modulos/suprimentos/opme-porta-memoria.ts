@@ -20,7 +20,9 @@ import {
   qtd3,
   situacaoDepoisDaEtapa,
 } from '@sgh/dominio-suprimentos';
-import { type ConsumoOpmeLido, type ContextoOperacao, ErroOperacao, recusa } from '@sgh/legado';
+import { type ContextoOperacao, ErroOperacao, recusa } from '@sgh/nucleo';
+import type { ConsumoOpmeLeitura } from './opme-porta.js';
+import { chaveMemoria, loginDaOperacao } from './operacoes.js';
 import type { ContextoPortaM18 } from '../exames/public-api.js';
 import type { GravadorOpme, PortaOpme } from './opme-porta.js';
 
@@ -109,7 +111,7 @@ interface Estado {
     etapas: Mut<SolicitacaoOpme['etapas'][number]>[];
     chave: string | null;
   })[];
-  consumos: (Mut<ConsumoOpmeLido> & { chave: string | null; local: number })[];
+  consumos: (Mut<ConsumoOpmeLeitura> & { chave: string | null; local: number })[];
   conta: { conta: number; item: number; quantidade: number }[];
   chaves: Map<string, number>;
   seq: number;
@@ -135,7 +137,7 @@ export class PortaOpmeMemoria implements PortaOpme {
   private readonly porHospital = new Map<string, Estado>();
 
   private e(c: ContextoPortaM18): Estado {
-    let s = this.porHospital.get(c.hospital);
+    let s = this.porHospital.get(chaveMemoria(c));
     if (!s) {
       s = {
         itens: structuredClone(ITENS_OPME_SINTETICOS) as ItemSintetico[],
@@ -147,7 +149,7 @@ export class PortaOpmeMemoria implements PortaOpme {
         seq: 46_300,
         doc: 8_800,
       };
-      this.porHospital.set(c.hospital, s);
+      this.porHospital.set(chaveMemoria(c), s);
     }
     return s;
   }
@@ -158,7 +160,7 @@ export class PortaOpmeMemoria implements PortaOpme {
 
   async executar(c: ContextoPortaM18, op: string, entradaBruta: unknown, ctx: ContextoOperacao) {
     const s = this.e(c);
-    const chave = `${op}:${ctx.idempotencyKey}`;
+    const chave = `${op}:${ctx.chaveIdempotencia}`;
     const ja = s.chaves.get(chave);
     if (ja !== undefined) return { resultado: { id: ja }, repetida: true, trilha: null };
     let resultado: Record<string, number>;
@@ -166,12 +168,12 @@ export class PortaOpmeMemoria implements PortaOpme {
       const a = esquemaRegistrarSaida.safeParse(entradaBruta);
       if (!a.success)
         throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.');
-      resultado = this.saida(s, a.data, ctx.usuarioLegado);
+      resultado = this.saida(s, a.data, loginDaOperacao(ctx));
     } else if (op === 'suprimentos.registrarDevolucao') {
       const a = esquemaRegistrarDevolucao.safeParse(entradaBruta);
       if (!a.success)
         throw new ErroOperacao(400, 'entrada-invalida', 'Dados inválidos', 'Confira os campos indicados.');
-      resultado = this.devolucao(s, a.data, ctx.usuarioLegado);
+      resultado = this.devolucao(s, a.data, loginDaOperacao(ctx));
     } else throw new Error(`Operação ${op} fora do OPME em memória.`);
     s.chaves.set(chave, resultado['id'] as number);
     return { resultado, repetida: false, trilha: null };
@@ -450,7 +452,7 @@ export class PortaOpmeMemoria implements PortaOpme {
     return structuredClone(resto);
   }
 
-  private cons(x: Estado['consumos'][number]): ConsumoOpmeLido {
+  private cons(x: Estado['consumos'][number]): ConsumoOpmeLeitura {
     const { chave: _c, local: _l, ...resto } = x;
     void _c;
     void _l;

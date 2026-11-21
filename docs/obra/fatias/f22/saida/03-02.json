@@ -1,0 +1,97 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/autoatendimento/meu-espaco.controller.ts",
+    "src/modulos/pessoas/autoatendimento/meu-holerite.controller.ts",
+    "src/modulos/pessoas/autoatendimento/minhas-ferias.controller.ts",
+    "src/modulos/pessoas/autoatendimento/porta-autoatendimento-memoria.ts",
+    "src/modulos/pessoas/autoatendimento/porta-autoatendimento.ts",
+    "src/modulos/pessoas/autoatendimento/porta-propria.int.spec.ts",
+    "src/modulos/pessoas/autoatendimento/porta-propria.ts",
+    "src/modulos/pessoas/autoatendimento/servico-autoatendimento.spec.ts",
+    "src/modulos/pessoas/autoatendimento/servico-autoatendimento.ts",
+    "src/modulos/pessoas/autoatendimento/servico-meu-espaco.ts",
+    "src/modulos/pessoas/autoatendimento/solicitacoes.controller.ts",
+    "src/modulos/pessoas/autoatendimento/solicitacoes.spec.ts",
+    "src/modulos/pessoas/autoatendimento/tipos.ts",
+    "src/modulos/pessoas/avaliacao/avaliacao.controller.ts",
+    "src/modulos/pessoas/avaliacao/avaliacao.spec.ts",
+    "src/modulos/pessoas/avaliacao/massa.spec-util.ts",
+    "src/modulos/pessoas/avaliacao/porta-avaliacao-memoria.ts",
+    "src/modulos/pessoas/avaliacao/porta-avaliacao.ts",
+    "src/modulos/pessoas/avaliacao/porta-propria.int.spec.ts",
+    "src/modulos/pessoas/avaliacao/porta-propria.ts",
+    "src/modulos/pessoas/avaliacao/servico-avaliacao.spec.ts",
+    "src/modulos/pessoas/avaliacao/servico-avaliacao.ts",
+    "src/modulos/pessoas/avaliacao/tipos.ts",
+    "src/modulos/pessoas/infra/autoatendimento-escopo.int.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "competencia_avaliacao",
+      "motivo": "Competência por estabelecimento (nome único, descrição, ativo, motivo da situação, versão), hoje só existe criterio_avaliacao preso a um modelo da rede. Sem ela: incluir/alterar/inativar/excluir competência recusam modelo-pendente.",
+      "ddl": "CREATE TABLE competencia_avaliacao (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, nome VARCHAR(150) NOT NULL, descricao VARCHAR(1000) NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, motivo_situacao VARCHAR(500) NULL, criterio_avaliacao_id BIGINT UNSIGNED NULL COMMENT 'Critério do modelo que a competência alimenta', origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, UNIQUE KEY uq_competencia_avaliacao_estabelecimento_nome (estabelecimento_id, nome), CONSTRAINT ck_competencia_avaliacao_origem CHECK (origem IN ('sistema','migracao','integracao')), CONSTRAINT ck_competencia_avaliacao_inativa CHECK (ativo = TRUE OR motivo_situacao IS NOT NULL)) COMMENT='Competência avaliada no estabelecimento'; FKs para estabelecimento e criterio_avaliacao (RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "cargo_competencia",
+      "motivo": "Ligação competência-cargo (as competências que a avaliação do cargo leva). Sem ela: ligar/desligar recusam modelo-pendente e a abertura da avaliação fica indisponível (o serviço recusa avaliacao-sem-competencias).",
+      "ddl": "CREATE TABLE cargo_competencia (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, cargo_id BIGINT UNSIGNED NOT NULL, competencia_avaliacao_id BIGINT UNSIGNED NOT NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, UNIQUE KEY uq_cargo_competencia (cargo_id, competencia_avaliacao_id)) COMMENT='Competências avaliadas em cada cargo'; FKs para cargo e competencia_avaliacao (RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "avaliacao_desempenho",
+      "motivo": "Abertura e correção da avaliação como o produto faz: versão nova com a anterior visível (a chave única atual impede), marco de experiência, cargo na data e o modo/observação da ciência. Sem isso: incluirAvaliacao e corrigirAvaliacao recusam modelo-pendente; lançar notas, finalizar, dar ciência e excluir o rascunho funcionam. Também quem finalizou e quem deu ou registrou a ciência (finalizada_por_usuario_id, ciencia_por_usuario_id): até lá a porta lê quem finalizou, o autor, o modo e a observação da ciência da trilha da própria operação (dados.avaliacaoEvento = 'finalizacao' | 'ciencia'); sem trilha (dado migrado), a ficha mostra nulo.",
+      "ddl": "ALTER TABLE avaliacao_desempenho ADD COLUMN avaliacao_anterior_id BIGINT UNSIGNED NULL, ADD COLUMN numero_versao SMALLINT UNSIGNED NOT NULL DEFAULT 1, ADD COLUMN motivo_correcao VARCHAR(500) NULL, ADD COLUMN marco_experiencia_dias SMALLINT UNSIGNED NULL, ADD COLUMN cargo_id BIGINT UNSIGNED NULL, ADD COLUMN finalizada_por_usuario_id BIGINT UNSIGNED NULL, ADD COLUMN ciencia_por_usuario_id BIGINT UNSIGNED NULL, ADD COLUMN ciencia_modo VARCHAR(20) NULL, ADD COLUMN ciencia_observacao VARCHAR(500) NULL, ADD CONSTRAINT ck_avaliacao_desempenho_marco CHECK (marco_experiencia_dias IS NULL OR marco_experiencia_dias IN (45,90)), ADD CONSTRAINT ck_avaliacao_desempenho_ciencia_modo CHECK (ciencia_modo IS NULL OR ciencia_modo IN ('proprio','registrada')), ADD CONSTRAINT ck_avaliacao_desempenho_correcao CHECK (avaliacao_anterior_id IS NULL OR motivo_correcao IS NOT NULL), DROP INDEX uq_avaliacao_desempenho_ciclo_avaliacao_colaborador_avaliador_co, ADD UNIQUE KEY uq_avaliacao_desempenho_versao (ciclo_avaliacao_id, colaborador_id, avaliador_colaborador_id, tipo, numero_versao), ADD UNIQUE KEY uq_avaliacao_desempenho_anterior (avaliacao_anterior_id), ADD CONSTRAINT ck_avaliacao_desempenho_finalizacao CHECK (situacao <> 'concluida' OR finalizada_por_usuario_id IS NOT NULL OR origem <> 'sistema'), ADD CONSTRAINT ck_avaliacao_desempenho_ciencia CHECK (ciencia_colaborador_em IS NULL OR origem <> 'sistema' OR (ciencia_por_usuario_id IS NOT NULL AND ciencia_modo IS NOT NULL)); FKs avaliacao_anterior_id -> avaliacao_desempenho, cargo_id -> cargo, finalizada_por_usuario_id -> usuario, ciencia_por_usuario_id -> usuario (RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ciclo_avaliacao",
+      "motivo": "Motivo da mudança de situação do ciclo (encerrar, cancelar, reabrir). Hoje vai só na trilha da operação e a ficha mostra motivoSituacao nulo.",
+      "ddl": "ALTER TABLE ciclo_avaliacao ADD COLUMN motivo_situacao VARCHAR(500) NULL;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "plano_desenvolvimento",
+      "motivo": "PDI (ação ligada à avaliação, à competência e ao curso, com prazo, situação e conclusão). Sem ela: incluir/alterar/concluir PDI recusam modelo-pendente; a leitura é vazia (nada pode existir).",
+      "ddl": "CREATE TABLE plano_desenvolvimento (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, vinculo_trabalho_id BIGINT UNSIGNED NOT NULL, avaliacao_desempenho_id BIGINT UNSIGNED NULL, competencia_avaliacao_id BIGINT UNSIGNED NULL, curso_id BIGINT UNSIGNED NULL, acao VARCHAR(1000) NOT NULL, prazo DATE NOT NULL, situacao VARCHAR(20) NOT NULL DEFAULT 'aberta', concluida_em DATE NULL, motivo_situacao VARCHAR(500) NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, CONSTRAINT ck_plano_desenvolvimento_situacao CHECK (situacao IN ('aberta','concluida','cancelada')), CONSTRAINT ck_plano_desenvolvimento_conclusao CHECK (situacao <> 'concluida' OR concluida_em IS NOT NULL), CONSTRAINT ck_plano_desenvolvimento_motivo CHECK (situacao = 'aberta' OR motivo_situacao IS NOT NULL), CONSTRAINT ck_plano_desenvolvimento_origem CHECK (origem IN ('sistema','migracao','integracao')), KEY ix_plano_desenvolvimento_vinculo (vinculo_trabalho_id, prazo)) COMMENT='Plano de desenvolvimento individual'; FKs para estabelecimento, vinculo_trabalho, avaliacao_desempenho, competencia_avaliacao e curso (RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "atestado_colaborador / atestado_colaborador_acesso",
+      "motivo": "Atestado do autoatendimento (dado de saúde, CID restrito; LGPD arts. 11 e 46) e a trilha de cada leitura (quem, quando, finalidade, se viu o CID). Sem elas: pedir solicitação do tipo atestado e ler o atestado recusam modelo-pendente; a lista de acessos é vazia (nada pode existir).",
+      "ddl": "CREATE TABLE atestado_colaborador (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, solicitacao_colaborador_id BIGINT UNSIGNED NOT NULL, emitido_em DATE NOT NULL, dias SMALLINT UNSIGNED NOT NULL, cid10_id BIGINT UNSIGNED NULL, emitente VARCHAR(150) NOT NULL, registro_conselho VARCHAR(30) NULL, arquivo_id BIGINT UNSIGNED NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, UNIQUE KEY uq_atestado_colaborador_solicitacao (solicitacao_colaborador_id), CONSTRAINT ck_atestado_colaborador_dias CHECK (dias BETWEEN 1 AND 365)) COMMENT='Atestado do colaborador (CID restrito)'; CREATE TABLE atestado_colaborador_acesso (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, atestado_colaborador_id BIGINT UNSIGNED NOT NULL, usuario_id BIGINT UNSIGNED NOT NULL, acessado_em DATETIME(3) NOT NULL, viu_cid BOOLEAN NOT NULL DEFAULT FALSE, finalidade VARCHAR(200) NOT NULL, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, KEY ix_atestado_colaborador_acesso (atestado_colaborador_id, acessado_em)) COMMENT='Trilha de leitura do atestado (LGPD)'; FKs para solicitacao_colaborador, cid10 (catálogo oficial), arquivo, atestado_colaborador e usuario (RESTRICT)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "solicitacao_colaborador",
+      "motivo": "Melhoria: o vínculo de trabalho do pedido como FK (hoje vai em dados.vinculo, filtrado por JSON_VALUE).",
+      "ddl": "ALTER TABLE solicitacao_colaborador ADD COLUMN vinculo_trabalho_id BIGINT UNSIGNED NULL, ADD KEY ix_solicitacao_colaborador_vinculo (vinculo_trabalho_id, solicitado_em), ADD CONSTRAINT fk_solicitacao_colaborador_vinculo_trabalho_id FOREIGN KEY (vinculo_trabalho_id) REFERENCES vinculo_trabalho (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "integracao",
+      "motivo": "Ligar a PortaAutoatendimentoPropria(nucleo, efeitos) quando as portas próprias do ponto, da folha (férias) e de pessoas tiverem gravadores sobre TxOperacao: `efeitos.gravadores(tx, est)` devolve { ponto, folha, pessoas } e `efeitos.tabelas` as tabelas deles. Sem isso, aprovar férias/abono/ajuste/alteração cadastral e pedir ajuste de ponto recusam modelo-pendente (a recusa sem efeito e a desistência sem ajuste funcionam)."
+    },
+    {
+      "tipo": "integracao",
+      "motivo": "Fábrica no modulo.ts da unidade pessoas (lote que registra): PORTA_AVALIACAO = new PortaAvaliacaoPropria(ctx.nucleo) e PORTA_AUTOATENDIMENTO = new PortaAutoatendimentoPropria(ctx.nucleo, efeitos) quando ctx.nucleo existe; memória só em dev/ci. As baterias HTTP (avaliacao.spec, solicitacoes.spec) ligam sozinhas quando 'pessoas' entrar em REGISTRO_MODULOS."
+    },
+    {
+      "tipo": "leitura",
+      "motivo": "Histórico de correções (antes/depois/motivo) da avaliação: hoje gravado na trilha_auditoria da operação; a leitura `correcoes` devolve vazio até a porta da auditoria expor a consulta por entidade e id."
+    },
+    {
+      "tipo": "cadastro",
+      "motivo": "tipo_solicitacao_colaborador com os códigos ferias, abono, atestado, ajuste_ponto, alteracao_cadastral e modelo_avaliacao vigente por tipo/escala precisam vir na carga inicial do cliente (comando criar novo cliente): sem eles o pedido recusa cadastro-pendente e o ciclo recusa modelo-avaliacao-ausente."
+    },
+    {
+      "tipo": "integracao",
+      "motivo": "Baterias HTTP avaliacao.spec e solicitacoes.spec: as portas sintéticas agora são tipadas (PortasPessoasTeste) e não passam mais por cast; como OpcoesAppBase não as leva, o lote que registrar 'pessoas' deve ligá-las pelo `registro` (padrão app-administracao.spec-util: registro.pessoas -> modulo(ctx, portas)). Enquanto isso não for feito, com 'pessoas' em REGISTRO_MODULOS a bateria falha de propósito no beforeAll (nunca roda sobre outras portas)."
+    },
+    {
+      "tipo": "aviso",
+      "motivo": "Divergência memória x banco no alterarCiclo: a porta própria recusa mudar tipo/escala de ciclo com avaliações (escala-com-avaliacoes), porque os itens são critérios do modelo atual; a memória ainda aceita reduzir a escala quando nenhuma nota passa do novo máximo (escala-com-notas). Sugestão: levar a regra ao ServicoAvaliacao (recusar a troca de escala com avaliações, como já faz com o tipo)."
+    }
+  ]
+}

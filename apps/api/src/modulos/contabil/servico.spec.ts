@@ -1,13 +1,15 @@
-// Serviço e portas da contabilidade (M54.1) sem HTTP: a porta da cópia só leitura recusa gravar (403), a indisponível
+// Serviço e portas da contabilidade (M54.1) sem HTTP: a porta própria sem estabelecimento recusa gravar sem abrir
+// transação (409), a indisponível
 // dá 503 em tudo, a origem tem de ser a do tipo de fato, os campos mudados vão à trilha só pelos nomes e a simulação
 // avisa quando a competência passa do teto. Dados sintéticos.
 import { describe, expect, it } from 'vitest';
+import { ErroOperacao } from '@sgh/nucleo';
 import { ErroProblema } from '../../problema.filter.js';
-import { portaContabilIndisponivel, portaContabilLegado } from './porta-legado.js';
+import { portaContabilIndisponivel, PortaContabilPropria } from './porta-propria.js';
 import { PLANO_SINTETICO, PortaContabilMemoria } from './porta-memoria.js';
 import { camposAlterados, impressaoDaRegra, ServicoContabil, TETO_FATOS_COMPETENCIA } from './servico.js';
 
-const C = { rede: 'sint', hospital: 'aa' };
+const C = { rede: 'sint', hospital: 'aa', cliente: 'sint', estabelecimento: 1, usuario: null, correlacao: 'teste' };
 
 const status = async (p: Promise<unknown>) => {
   try {
@@ -15,26 +17,30 @@ const status = async (p: Promise<unknown>) => {
     return 200;
   } catch (e) {
     if (e instanceof ErroProblema) return e.getStatus();
+    if (e instanceof ErroOperacao) return e.problema.status;
     throw e;
   }
 };
 
 describe('portas da contabilidade', () => {
-  it('na cópia só leitura a gravação é recusada sem abrir transação; a indisponível dá 503', async () => {
+  it('sem estabelecimento na sessão a gravação é recusada sem abrir transação; a indisponível dá 503', async () => {
     let abriu = false;
     const nucleo = {
       lerSomente: () => Promise.resolve(null as never),
-      gravarSgh: () => {
-        abriu = true;
-        return Promise.resolve(null as never);
-      },
+      criarExecutor: () => ({
+        executar: () => {
+          abriu = true;
+          return Promise.resolve(null as never);
+        },
+      }),
     };
-    const p = portaContabilLegado(nucleo as never, { sghSoLeitura: true });
-    expect(await status(p.gravarSgh(C, {} as never, () => Promise.resolve(1)))).toBe(403);
+    const p = new PortaContabilPropria(nucleo as never);
+    expect(p.destino).toBe('banco');
+    expect(await status(p.gravar({ ...C, estabelecimento: null }, { operacao: 'contabil.teste', pedido: null }, {} as never, () => Promise.resolve(1)))).toBe(409);
     expect(abriu).toBe(false);
     const i = portaContabilIndisponivel();
     expect(await status(i.plano(C, 1))).toBe(503);
-    expect(await status(i.gravarSgh(C, {} as never, () => Promise.resolve(1)))).toBe(503);
+    expect(await status(i.gravar(C, { operacao: 'contabil.teste', pedido: null }, {} as never, () => Promise.resolve(1)))).toBe(503);
   });
 });
 

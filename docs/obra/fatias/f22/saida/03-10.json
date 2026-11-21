@@ -1,0 +1,91 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/rubricas/porta-rubricas-memoria.ts",
+    "src/modulos/pessoas/rubricas/porta-rubricas.ts",
+    "src/modulos/pessoas/rubricas/rubricas-http.spec.ts",
+    "src/modulos/pessoas/rubricas/rubricas.controller.ts",
+    "src/modulos/pessoas/rubricas/rubricas.int.spec.ts",
+    "src/modulos/pessoas/rubricas/rubricas.spec.ts",
+    "src/modulos/pessoas/rubricas/servico-rubricas.ts",
+    "src/modulos/pessoas/infra/segregacao-ocupacional.int.spec.ts",
+    "src/modulos/pessoas/servico.spec.ts",
+    "src/modulos/pessoas/servico.ts",
+    "src/modulos/pessoas/sesmt/crud-sesmt.spec.ts",
+    "src/modulos/pessoas/sesmt/documentos-sesmt.ts",
+    "src/modulos/pessoas/sesmt/porta-sesmt-memoria.ts",
+    "src/modulos/pessoas/sesmt/porta-sesmt.ts",
+    "src/modulos/pessoas/sesmt/servico-sesmt.ts",
+    "src/modulos/pessoas/sesmt/sesmt.controller.ts",
+    "src/modulos/pessoas/sesmt/sesmt.int.spec.ts",
+    "src/modulos/pessoas/sesmt/sesmt.spec.ts",
+    "src/modulos/pessoas/rubricas/porta-rubricas-propria.ts",
+    "src/modulos/pessoas/sesmt/porta-sesmt-propria.ts",
+    "src/modulos/pessoas/sesmt/massa-sesmt.spec-util.ts",
+    "src/modulos/pessoas/sesmt/contexto-teste.spec-util.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (nova tabela sorologia_exposicao)",
+      "pedido": "Acompanhamento sorológico do acidente com material biológico (marcos d0/d30/d90/d180). A porta já grava e lê nesta tabela (porta-sesmt-propria.ts).",
+      "ddl": "CREATE TABLE sorologia_exposicao (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  exposicao_biologica_id BIGINT UNSIGNED NOT NULL,\n  marco VARCHAR(10) NOT NULL COMMENT 'd0, d30, d90, d180 (PCDT de PEP)',\n  data_prevista DATE NOT NULL,\n  data_realizada DATE NULL,\n  resultado VARCHAR(20) NULL,\n  observacao VARCHAR(500) NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_sorologia_exposicao_marco CHECK (marco IN ('d0','d30','d90','d180')),\n  CONSTRAINT ck_sorologia_exposicao_resultado CHECK (resultado IS NULL OR resultado IN ('sem-alteracao','soroconversao','nao-realizada')),\n  CONSTRAINT ck_sorologia_exposicao_realizada CHECK (data_realizada IS NULL OR resultado IS NOT NULL),\n  CONSTRAINT ck_sorologia_exposicao_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_sorologia_exposicao_marco (exposicao_biologica_id, marco)\n) COMMENT='Marco do acompanhamento sorológico depois da exposição a material biológico';\nALTER TABLE sorologia_exposicao ADD CONSTRAINT fk_sorologia_exposicao_exposicao_biologica_id FOREIGN KEY (exposicao_biologica_id) REFERENCES exposicao_biologica (id) ON DELETE RESTRICT;",
+      "impacto": "Sem a tabela: registrar acidente COM material biológico falha (o serviço inclui os marcos) com 409 modelo-pendente; registrar resultado de sorologia indisponível; a leitura devolve sem marcos."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH comunicacao_acidente",
+      "pedido": "Encerramento do acidente sem material biológico, unidade/setor do acidente, observação e conselho do emitente da CAT, prazo registrado.",
+      "ddl": "ALTER TABLE comunicacao_acidente\n  ADD COLUMN setor_funcional_id BIGINT UNSIGNED NULL AFTER ambiente_trabalho_id,\n  ADD COLUMN prazo_comunicacao DATE NULL COMMENT 'Prazo legal da CAT calculado no registro',\n  ADD COLUMN encerrado_em DATETIME(3) NULL, ADD COLUMN encerrado_por BIGINT UNSIGNED NULL,\n  ADD COLUMN motivo_encerramento VARCHAR(500) NULL,\n  ADD COLUMN observacao VARCHAR(1000) NULL,\n  ADD COLUMN emitente_conselho_classe_id BIGINT UNSIGNED NULL,\n  ADD CONSTRAINT ck_comunicacao_acidente_encerramento CHECK (encerrado_em IS NULL OR motivo_encerramento IS NOT NULL);",
+      "impacto": "Sem as colunas: encerrar acidente SEM material biológico responde 409 modelo-pendente; unidade, observação da CAT e conselho do emitente saem nulos."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH exposicao_biologica",
+      "pedido": "Situação, data e observação da profilaxia pós-exposição. Hoje a porta guarda a situação em exposicao_biologica.conduta (provisório, documentado no cabeçalho) e não guarda data nem observação.",
+      "ddl": "ALTER TABLE exposicao_biologica\n  ADD COLUMN situacao_profilaxia VARCHAR(20) NOT NULL DEFAULT 'nao-indicada',\n  ADD COLUMN profilaxia_em DATE NULL, ADD COLUMN observacao_profilaxia VARCHAR(500) NULL,\n  ADD CONSTRAINT ck_exposicao_biologica_situacao_profilaxia CHECK (situacao_profilaxia IN ('nao-indicada','indicada','iniciada','recusada'));",
+      "impacto": "Data e observação da profilaxia não persistem até o DDL; trocar conduta por situacao_profilaxia na porta quando aplicado."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH vacina_colaborador e aso",
+      "pedido": "Título do anti-HBs e o vínculo explícito da retificação (hoje o anterior sai por excluido_em e o motivo vai à trilha).",
+      "ddl": "ALTER TABLE vacina_colaborador ADD COLUMN titulo_anti_hbs DECIMAL(9,2) NULL COMMENT 'mUI/mL, quando dose = sorologia', ADD COLUMN retifica_vacina_colaborador_id BIGINT UNSIGNED NULL;\nALTER TABLE aso ADD COLUMN retifica_aso_id BIGINT UNSIGNED NULL, ADD COLUMN motivo_retificacao VARCHAR(500) NULL;",
+      "impacto": "Registrar anti-HBs responde 409 modelo-pendente até o DDL."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (novas tabelas leitura_dosimetria e exposicao_quimioterapico)",
+      "pedido": "Dosimetria (NR-32, radiação ionizante) e exposição a quimioterápico do SESMT.",
+      "ddl": "CREATE TABLE leitura_dosimetria (id, vinculo_trabalho_id, periodo_inicio DATE, periodo_fim DATE, dosimetro VARCHAR(40), dose_msv DECIMAL(9,4), observacao, + colunas padrão ADR 0002);\nCREATE TABLE exposicao_quimioterapico (id, vinculo_trabalho_id, data_exposicao DATE, agente VARCHAR(150), duracao_minutos SMALLINT, observacao, + colunas padrão ADR 0002);",
+      "impacto": "Registrar dosimetria ou exposição a quimioterápico responde 409 modelo-pendente."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH rubrica",
+      "pedido": "Incidências internas da rubrica sem coluna no modelo (DSR, salário-família, vale-transporte, pensão, RAIS, informe de rendimentos).",
+      "ddl": "ALTER TABLE rubrica ADD COLUMN incide_dsr BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN incide_salario_familia BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN incide_vale_transporte BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN incide_pensao BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN incide_rais BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN incide_informe_rendimentos BOOLEAN NOT NULL DEFAULT FALSE;",
+      "impacto": "A tela mostra essas incidências como falsas até o DDL (documentado no cabeçalho da porta)."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/pessoas/modulo.ts (lote que registra pessoas)",
+      "pedido": "Usar PortaSesmtPropria(ctx.nucleo) e PortaRubricasPropria(ctx.nucleo) quando houver núcleo (memória só em dev/ci sem núcleo); portaSesmtIndisponivel/portaRubricasIndisponivel saem de porta-*-propria.ts. As baterias HTTP (sesmt.spec.ts e rubricas-http.spec.ts) já rodam pelo `registro` do criarApp com módulo de teste; quando o modulo.ts de pessoas existir, podem passar a usá-lo."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "FilaCatEsocial/FilaVinculoEsocial (lote 03-05, esocial)",
+      "pedido": "Os serviços de pessoas e do SESMT leem a fila pelo tipo estrutural EventoEsocialNaFila (id, evento, situacao, recibo, eventoAnterior, motivo, criadoEm, versao, empresa); o tipo do evento do serviço do eSocial precisa ter esses campos."
+    },
+    {
+      "tipo": "aviso-fora-da-lista",
+      "alvo": "packages/dominio-pessoas/src/folha/incidencias.ts (+spec), packages/dominio-pessoas/src/colaborador/historico.ts e vinculo.ts, packages/contratos/src/pessoas/respostas.ts",
+      "pedido": "Editados por este lote (fora da .lista), a pedido do revisor: marcasTributoRubrica (regra única das marcas de tributo, com teste); centroCusto anulável em SituacaoFuncional, VinculoExistente e LotacaoLida (sem sentinela -id/0). A tela FichaColaboradorTela.vue já trata nulo (mCentro é number|null)."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "apps/api/src/modulos/pessoas/porta.ts (lote 03-09), GravadorPessoas.alterarVinculo",
+      "pedido": "Aceitar centroCusto nulo só se o vínculo continuar sem centro de custo; hoje servico.ts recusa com 'lotacao-sem-centro-de-custo' a mudança de um vínculo sem centro de custo que não traga a lotação nova (com a lotação, grava normalmente)."
+    }
+  ]
+}

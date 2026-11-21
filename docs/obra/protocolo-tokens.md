@@ -200,3 +200,12 @@ estratégia e a melhora quando os números pedirem.
 - completude geral e por etapa, em %;
 - previsão de término;
 - trabalhos feitos desde o último relatório, com detalhes.
+
+23. **Meta de completude verificada desde o início** (2026-11-21, conector rodada 1).
+    - A primeira rodada das fatias do conector foi barata (cerca de 1,2 M por fatia), mas carregou só 34% das
+      tabelas, porque cada agente podia "bloquear com motivo".
+    - Toda rodada nasce com:
+      - o **verificador de completude** (por exemplo, `cobertura_conector.py --falhar-se-bloqueada`, ou o
+        contador de 501 da F2.4) rodando na autoconferência do lote e no integrador;
+      - a regra "decida pela melhor prática e registre para o dono", em vez de "bloqueie".
+    - **Retrabalho evitado é a maior economia.**

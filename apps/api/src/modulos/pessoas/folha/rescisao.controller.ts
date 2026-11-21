@@ -64,7 +64,7 @@ import { PORTA_FOLHA, type PortaFolha } from './porta-folha.js';
 import { PERMISSOES_RESCISAO_FOLHA as P, ServicoRescisaoFolha } from './servico-rescisao.js';
 
 const E = EVENTOS_AUDITAVEIS;
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha de auditoria na mesma transação`;
 
 @Controller('pessoas/folha')
 export class RescisaoFolhaController {
@@ -116,9 +116,7 @@ export class RescisaoFolhaController {
   @Post('rescisoes')
   @HttpCode(200)
   @Permissao(P.calcular)
-  @AuditadoNoHandler(
-    NA_TABELA('SGH_PES_RESCISAO, SGH_PES_FOLHA_PROCESSO, SGH_PES_FOLHA_CALCULO e SGH_PES_FERIAS'),
-  )
+  @AuditadoNoHandler(NA_TABELA('rescisao, calculo_folha e programacao_ferias'))
   calcular(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCalculoRescisao> {
     return this.servico.calcular(sessaoDe(req), corpo(esquemaCalcularRescisao, b));
   }
@@ -129,7 +127,7 @@ export class RescisaoFolhaController {
   @Auditar(E.pessoasRescisaoLida.codigo)
   detalhe(@Param('id') id: string, @Req() req: RequisicaoAutorizada): Promise<DetalheRescisao> {
     const r = idDaRota(id);
-    req.sghAlvo = { tabelaAlvo: 'SGH_PES_RESCISAO', idAlvo: String(r), chaveNaturalAlvo: 'detalhe' };
+    req.sghAlvo = { tabelaAlvo: 'rescisao', idAlvo: String(r), chaveNaturalAlvo: 'detalhe' };
     return this.servico.detalhe(sessaoDe(req), r);
   }
 
@@ -143,7 +141,7 @@ export class RescisaoFolhaController {
     @Res({ passthrough: false }) res: RespostaPdf,
   ) {
     const r = idDaRota(id);
-    req.sghAlvo = { tabelaAlvo: 'SGH_PES_RESCISAO', idAlvo: String(r), chaveNaturalAlvo: 'termo' };
+    req.sghAlvo = { tabelaAlvo: 'rescisao', idAlvo: String(r), chaveNaturalAlvo: 'termo' };
     const { detalhe, matricula } = await this.servico.termo(sessaoDe(req), r);
     return responderPdf(
       this.pdf,
@@ -157,7 +155,7 @@ export class RescisaoFolhaController {
   @Post('rescisoes/:id/cancelamento')
   @HttpCode(200)
   @Permissao(P.calcular)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_RESCISAO e SGH_PES_FOLHA_PROCESSO'))
+  @AuditadoNoHandler(NA_TABELA('rescisao e calculo_folha'))
   cancelar(
     @Param('id') id: string,
     @Body() b: unknown,

@@ -45,7 +45,7 @@ import { PORTA_CARGOS, type PortaCargos } from './porta-cargos.js';
 import { PERMISSOES_CARGOS, ServicoCargos } from './servico-cargos.js';
 
 const P = PERMISSOES_CARGOS;
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha de auditoria na mesma transação`;
 
 @Controller('pessoas/cargos')
 export class CargosController {
@@ -88,7 +88,7 @@ export class CargosController {
   @Post()
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO'))
+  @AuditadoNoHandler(NA_TABELA('cargo'))
   incluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCargos> {
     return this.servico.incluirCargo(sessaoDe(req), corpo(esquemaIncluirCargo, b));
   }
@@ -96,7 +96,7 @@ export class CargosController {
   @Post('situacao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO, SGH_PES_CARGO_FAIXA ou SGH_PES_VAGA e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('cargo, faixa_salarial ou quadro_vaga, com o motivo e o valor anterior'))
   situacao(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCargos> {
     return this.servico.situacao(sessaoDe(req), corpo(esquemaSituacaoCargos, b));
   }
@@ -104,7 +104,7 @@ export class CargosController {
   @Post('exclusao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_HIST_EXCLUSAO (retrato) e o DELETE do lançado por engano'))
+  @AuditadoNoHandler(NA_TABELA('exclusão do lançado por engano, com o retrato'))
   excluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCargos> {
     return this.servico.excluir(sessaoDe(req), corpo(esquemaExcluirCargos, b));
   }
@@ -112,7 +112,7 @@ export class CargosController {
   @Post('faixas')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO_FAIXA'))
+  @AuditadoNoHandler(NA_TABELA('faixa_salarial'))
   incluirFaixa(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCargos> {
     return this.servico.incluirFaixa(sessaoDe(req), corpo(esquemaIncluirFaixaSalarial, b));
   }
@@ -120,7 +120,7 @@ export class CargosController {
   @Post('faixas/:faixa/versao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO_FAIXA (versão nova e o fim da anterior) e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('faixa_salarial (versão nova e o fim da anterior)'))
   versaoFaixa(
     @Param('faixa') faixa: string,
     @Body() b: unknown,
@@ -135,7 +135,7 @@ export class CargosController {
   @Post('vagas')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_VAGA'))
+  @AuditadoNoHandler(NA_TABELA('quadro_vaga'))
   incluirVaga(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoCargos> {
     return this.servico.incluirVaga(sessaoDe(req), corpo(esquemaIncluirVaga, b));
   }
@@ -143,7 +143,7 @@ export class CargosController {
   @Post('vagas/:vaga/versao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_VAGA (versão nova e o fim da anterior) e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('quadro_vaga (versão nova e o fim da anterior)'))
   versaoVaga(
     @Param('vaga') vaga: string,
     @Body() b: unknown,
@@ -158,7 +158,7 @@ export class CargosController {
   @Post(':cargo/alteracao')
   @HttpCode(200)
   @Permissao(P.gerir)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_CARGO e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('cargo, com o motivo e o valor anterior'))
   alterar(
     @Param('cargo') cargo: string,
     @Body() b: unknown,

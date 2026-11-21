@@ -1,22 +1,22 @@
 // W0-06, parte 2 (programa CRUD completo; aceite 4): o estorno do plantão realizado aprovado, com motivo.
-//   - não lançado: só SGH_ (fica fora do repasse);
+//   - não lançado: só no banco (fica fora do repasse);
 //   - lançado, com a apuração do repasse da competência já conferida, aprovada ou titulada: 409 `repasse-apurado`,
 //     que indica a devolução da apuração, sem gravar nada;
 //   - lançado e não apurado: o lançamento negativo pela receita (origem `estorno`, competência seguinte, apontando o
 //     original), ligado ao realizado; a receita que recusa desfaz o estorno.
 // Portas EM MEMÓRIA; dados SINTÉTICOS.
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/public-api.js';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
 import type { SessaoCadastro } from '../../cadastro/comum.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { PortaPessoasMemoria } from '../porta-memoria.js';
-import { PortaEscalaMemoria } from './porta-escala-memoria.js';
+import { CONTEXTO_SINTETICO, PortaEscalaMemoria } from './porta-escala-memoria.js';
 import { PortaRealizadoMemoria } from './porta-realizado-memoria.js';
 import { ServicoRealizado } from './servico-realizado.js';
 
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -29,7 +29,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -39,7 +39,7 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
   alteradoEm: '2026-10-25T10:00:00',
 });
 
-const ctx = { rede: '', hospital: 'aa' };
+const ctx = { ...CONTEXTO_SINTETICO, estabelecimento: 2, rede: '', hospital: 'aa' };
 let k = 0;
 const sessao = (login: string, pode: (c: string) => boolean = () => true): SessaoCadastro =>
   ({

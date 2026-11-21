@@ -1,5 +1,5 @@
 // M31 (TISS, competência, demonstrativos, glosa e recurso) pela HTTP, com a sessão real sobre a fonte sintética e a
-// porta EM MEMÓRIA (nada conecta a banco): permissões pelas opções do legado (403 sem elas), liberação (POL-3), o lote
+// porta EM MEMÓRIA (nada conecta a banco): permissões pelas opções do perfil (403 sem elas), liberação (POL-3), o lote
 // 04.03.00 validado no XSD e guardado (numeração do contador), o envio ao simulador fora de produção, o protocolo que
 // congela o lote, a competência, o demonstrativo digitado e o XML (idempotentes), a baixa, a decisão, o recurso e o
 // desfecho, o painel com as duas réguas e os textos de produto. Dados sintéticos.
@@ -10,9 +10,11 @@ import { criarApp } from '../../app.js';
 import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
+import { moduloConfiguracaoDeTeste } from '../cadastro/teste.spec-util.js';
+import { modulo } from './modulo.js';
 import { PortaTissMemoria } from './porta-memoria.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'configuracao_teste,tiss' };
 const trilha = new RegistradorTrilhaMemoria();
 const tiss = new PortaTissMemoria({ estado: () => 'verde' });
 let app: NestFastifyApplication;
@@ -21,9 +23,10 @@ let chave = 0;
 beforeAll(async () => {
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    tiss,
-    armazemXmlTiss: tiss.armazem,
-    vigia: null,
+    registro: {
+      configuracao_teste: async () => ({ modulo: (ctx) => moduloConfiguracaoDeTeste(ctx) }),
+      tiss: async () => ({ modulo: (ctx) => modulo(ctx, { porta: tiss, armazem: tiss.armazem }) }),
+    },
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -257,7 +260,7 @@ describe('pós-fechamento pela HTTP (memória)', () => {
     });
     const lidas = trilha.eventos.filter((e) => e.evento === 'faturamento.evidencia.lida');
     expect(lidas).toHaveLength(antes + 1);
-    expect(lidas.at(-1)).toMatchObject({ tabelaAlvo: 'SGH_FAT_GLOSA_DECISAO', idAlvo: String(casado.item) });
+    expect(lidas.at(-1)).toMatchObject({ tabelaAlvo: 'glosa_item', idAlvo: String(casado.item) });
     // Quem só consulta a glosa vê a grade, mas não a evidência.
     const leitor = await entrar('SINT.TISS.LEITOR');
     expect((await get(leitor, '/tiss/glosas/contas/9201')).statusCode).toBe(200);

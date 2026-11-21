@@ -1,0 +1,56 @@
+{
+  "lote": "03-03",
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/cargos/porta-cargos.ts",
+    "src/modulos/pessoas/cargos/porta-cargos-memoria.ts",
+    "src/modulos/pessoas/cargos/porta-propria.ts",
+    "src/modulos/pessoas/cargos/servico-cargos.ts",
+    "src/modulos/pessoas/cargos/cargos.controller.ts",
+    "src/modulos/pessoas/cargos/cargos.spec.ts",
+    "src/modulos/pessoas/cargos/servico-cargos.spec.ts",
+    "src/modulos/pessoas/cargos/porta-propria.int.spec.ts",
+    "src/modulos/pessoas/cifra-cpf.ts",
+    "src/modulos/pessoas/cifra-cpf.spec.ts",
+    "src/modulos/pessoas/crud-colaborador.spec.ts",
+    "src/modulos/pessoas/crud-colaborador-esocial.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "quadro_vaga",
+      "pedido": "CREATE TABLE quadro_vaga (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, estabelecimento_id BIGINT UNSIGNED NOT NULL, cargo_id BIGINT UNSIGNED NOT NULL, centro_custo_id BIGINT UNSIGNED NOT NULL, quantidade SMALLINT UNSIGNED NOT NULL, vigencia_inicio DATE NOT NULL, vigencia_fim DATE NULL, quadro_vaga_anterior_id BIGINT UNSIGNED NULL COMMENT 'Versão que esta substitui', motivo_alteracao VARCHAR(400) NULL, ativo BOOLEAN NOT NULL DEFAULT TRUE, motivo_situacao VARCHAR(400) NULL, origem VARCHAR(20) NOT NULL DEFAULT 'sistema', criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL, CONSTRAINT ck_quadro_vaga_quantidade CHECK (quantidade BETWEEN 1 AND 9999), CONSTRAINT ck_quadro_vaga_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio), CONSTRAINT ck_quadro_vaga_anterior CHECK (quadro_vaga_anterior_id IS NULL OR motivo_alteracao IS NOT NULL), CONSTRAINT ck_quadro_vaga_origem CHECK (origem IN ('sistema','migracao','integracao')), UNIQUE KEY uq_quadro_vaga_vigencia (estabelecimento_id, cargo_id, centro_custo_id, vigencia_inicio), UNIQUE KEY uq_quadro_vaga_anterior (quadro_vaga_anterior_id), KEY ix_quadro_vaga_cargo (cargo_id), KEY ix_quadro_vaga_centro_custo (centro_custo_id)) COMMENT='Quadro de vagas aprovado por cargo e centro de custo, com vigência e versão'; FKs RESTRICT para estabelecimento, cargo, centro_custo e quadro_vaga (anterior).",
+      "motivo": "a tela Cargos e salários mantém o quadro aprovado (quantidade por cargo e centro de custo, versão a partir de uma data). A tabela vaga do modelo é a requisição de recrutamento (setor, solicitante, aprovação), outro conceito. Sem esta tabela: GET /api/pessoas/cargos lista vagasAprovadas = 0 e a ficha sem vagas; POST /api/pessoas/cargos/vagas, /vagas/:vaga/versao e situação/exclusão com alvo 'vaga' respondem 409 modelo-pendente."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "faixa_salarial",
+      "pedido": "ALTER TABLE faixa_salarial ADD COLUMN vigencia_inicio DATE NULL COMMENT 'Início desta versão da faixa (nulo: a da tabela salarial)', ADD COLUMN vigencia_fim DATE NULL, ADD COLUMN faixa_salarial_anterior_id BIGINT UNSIGNED NULL COMMENT 'Versão que esta substitui', ADD COLUMN motivo_alteracao VARCHAR(400) NULL, ADD COLUMN ativo BOOLEAN NOT NULL DEFAULT TRUE, ADD COLUMN motivo_situacao VARCHAR(400) NULL, ADD CONSTRAINT ck_faixa_salarial_vigencia CHECK (vigencia_fim IS NULL OR vigencia_inicio IS NULL OR vigencia_fim >= vigencia_inicio), ADD UNIQUE KEY uq_faixa_salarial_anterior (faixa_salarial_anterior_id), ADD CONSTRAINT fk_faixa_salarial_anterior_id FOREIGN KEY (faixa_salarial_anterior_id) REFERENCES faixa_salarial (id) ON DELETE RESTRICT; e trocar uq_faixa_salarial_tabela_salarial_id_cargo_id_nivel_degrau por (tabela_salarial_id, cargo_id, nivel, degrau, vigencia_inicio). Alternativa (decisão do dono): a tela passa a reajustar pela vigência da tabela_salarial inteira, como o modelo já faz, e o contrato troca faixa/nivel (texto) por nivel/degrau (número).",
+      "motivo": "o contrato da tela versiona cada faixa (valor a partir de uma data, a anterior acaba na véspera, inativação com motivo) e usa faixa+nível em texto; o modelo versiona a tabela salarial inteira e usa nível+degrau numérico. Hoje a porta própria LÊ as faixas do modelo (faixa=nivel, nível=degrau, vigência da tabela), mas POST /api/pessoas/cargos/faixas, /faixas/:faixa/versao e situação/exclusão com alvo 'faixa' respondem 409 modelo-pendente."
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "lote 03-11 (pessoas/modulo.ts)",
+      "pedido": "prover PORTA_CARGOS = ctx.nucleo ? new PortaCargosPropria(ctx.nucleo) : fontes sintéticas (dev/ci) ? new PortaCargosMemoria() : portaCargosIndisponivel() (as três em cargos/porta-propria.ts, porta-cargos-memoria.ts e porta-cargos.ts), e o CargosController. A ligação da memória de pessoas ao quadro (quadroDeCargos) passa a chamar cargos.cargo(<ContextoNucleo do estabelecimento>, id): a porta de cargos não recebe mais rede/hospital em texto.",
+      "motivo": "o lote 03-03 não registra módulo; portaCargosLegado foi apagado (app.module antigo ainda o importa até a desmontagem)."
+    },
+    {
+      "tipo": "cobertura",
+      "alvo": "lotes 03-04, 03-06, 03-08, 03-09, 03-10 e 03-02",
+      "pedido": "os specs de integração sobre a cópia do sistema de origem foram apagados: aplicacao/calculo-folha.int.spec.ts e calculo-folha-falha.int.spec.ts (cálculo mensal e falha no meio desfaz tudo: 03-06), crud-w006.int.spec.ts (escala, realizado, treinamento, ponto, eSocial, folha, rubricas, SESMT, avaliação, colaborador; a parte de cargos foi para cargos/porta-propria.int.spec.ts), crud-w006-solicitacoes.int.spec.ts (autoatendimento e férias: 03-02/03-06), crud-w006-indicadores.int.spec.ts (03-08), desligar.int.spec.ts (desligamento ligado ao acesso e conselho do dia: 03-09/03-10). Cada lote dono da porta cobre o mesmo contrato no seu porta-*-propria.int.spec.ts.",
+      "motivo": "importavam portas *-legado de outros lotes (apagadas em paralelo) e somenteSgh (convivência proibida pelo ADR 0003); não havia como reescrevê-los sem as portas próprias desses lotes."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "integrador",
+      "pedido": "crud-colaborador.spec.ts e crud-colaborador-esocial.spec.ts (deste lote) passaram em 2026-11-21 sobre o estado atual de pessoas/servico.ts; o vermelho restante do conferidor 03-03 é só esocial/porta-esocial-propria.int.spec.ts (4 casos), arquivo de outro lote da onda 3 que cai na pasta pessoas.",
+      "motivo": "registro do estado ao fechar a correção da revisão."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "dono / integrador",
+      "pedido": "Enquanto o DDL de quadro_vaga não existe, PortaCargosPropria.vagas() e vaga() respondem vazio/null (a lista mostra vagasAprovadas = 0) e incluir/versionar/inativar/excluir vaga do quadro respondem 409 modelo-pendente; o mesmo para incluir/versionar/inativar/excluir faixa salarial (a leitura das faixas do modelo funciona).",
+      "motivo": "dívida declarada, não silenciosa (pedidos DDL acima)."
+    }
+  ]
+}

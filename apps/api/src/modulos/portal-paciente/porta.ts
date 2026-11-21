@@ -1,32 +1,34 @@
 // Porta do portal do paciente (M50, etapa 1): o que o serviço lê e grava, independente de onde (a API não escreve SQL;
-// fronteira Nx). Todas as gravações são SÓ do novo (SGH_POR_CONTA, SGH_POR_RESPONSAVEL, SGH_CAD_CONSENTIMENTO do M11 e
-// SGH_AUD_PEDIDO_TITULAR do M10), com a SGH_TRILHA na mesma transação; nenhuma tabela do legado é tocada. Do legado só se
-// lê o paciente pela PK e pelo prontuário (situação, nascimento, óbito, unificação, primeiro nome), os domínios do
-// consentimento e os nomes de quem acessou o prontuário (TBUSERS pela PK).
-//   - `legado`: o núcleo (READ ONLY nas leituras; transação SGH_ nas gravações);
+// fronteira Nx). Implementações:
+//   - `banco`: a porta própria sobre o MariaDB do cliente (porta-propria.ts), pelo @sgh/nucleo;
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com as mesmas recusas;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo.
 import type {
-  AtoCopiaLido,
+  AtoCopia,
   AtivacaoPortal,
   CopiaNaFila,
-  ConsentimentoPortalLido,
-  ContaPortalLida,
-  DocumentoPortalLido,
+  ConsentimentoPortal,
+  ContaPortal,
+  DocumentoPortal,
   FiltroFilaVinculosPortal,
   ItemDominioPortal,
-  LeituraTitularLida,
-  LinhaTrilha,
+  LeituraTitular,
+  RegistroTrilhaPortal,
   NovaContaPortal,
   NovaTrocaEmailPortal,
-  TrocaEmailPortalLida,
+  TrocaEmailPortal,
   NovoVinculoPortal,
-  PacienteParaPortalLido,
-  PedidoPortalLido,
-  VinculoPortalLido,
-} from '@sgh/legado';
+  PacientePortal,
+  PedidoPortal,
+  VinculoPortal,
+} from './tipos.js';
+
+import type { ContextoNucleo } from '@sgh/nucleo';
 
 export const PORTA_PORTAL_PACIENTE = Symbol('PORTA_PORTAL_PACIENTE');
+
+/** O contexto do núcleo do estabelecimento do portal (o id resolvido pelo código), para as portas de outros módulos. */
+export type ContextoPortalNucleo = ContextoNucleo & { readonly rede: string; readonly hospital: string };
 
 export interface ContextoPortal {
   readonly rede: string;
@@ -56,7 +58,7 @@ export interface PedidoParaGravar {
   readonly identidadeVerificada: boolean;
 }
 
-type TrilhaPedidoPortal = Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>;
+type TrilhaPedidoPortal = Omit<RegistroTrilhaPortal, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>;
 
 /** W0-10 (M2): o pedido de acesso aberto como cópia do prontuário (portal ou balcão), com o ato da solicitação. */
 export interface CopiaParaGravar {
@@ -133,7 +135,7 @@ export interface GravadorPortal {
   /** `portal.registrarPedidoTitular`: o escritor do M10 (que grava a própria trilha) e a conta que abriu. */
   registrarPedido(
     p: PedidoParaGravar,
-    trilha: Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>,
+    trilha: Omit<RegistroTrilhaPortal, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>,
   ): Promise<{
     id: string;
     protocolo: string;
@@ -152,7 +154,7 @@ export interface GravadorPortal {
       por: string;
       conferir: (situacao: string) => string | null;
     },
-    trilha: Omit<LinhaTrilha, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>,
+    trilha: Omit<RegistroTrilhaPortal, 'tabelaAlvo' | 'idAlvo' | 'chaveNaturalAlvo'>,
   ): Promise<void>;
   /**
    * W0-10 (M1): a manifestação à ouvidoria interna pelo portal (o escritor da ouvidoria do W0-04, canal "portal",
@@ -200,7 +202,7 @@ export interface ManifestacaoPortalLida {
   readonly canceladaEm?: string | null;
 }
 
-export type TrilhaDaGravacao<T> = LinhaTrilha | ((r: T) => LinhaTrilha | null) | null;
+export type TrilhaDaGravacao<T> = RegistroTrilhaPortal | ((r: T) => RegistroTrilhaPortal | null) | null;
 
 export interface DominiosConsentimento {
   readonly signatarios: (ItemDominioPortal & { readonly ativo: boolean })[];
@@ -209,50 +211,52 @@ export interface DominiosConsentimento {
 }
 
 export interface PortaPortalPaciente {
-  readonly destino: 'legado' | 'memoria';
+  readonly destino: 'banco' | 'memoria';
+  /** O contexto do núcleo do estabelecimento da sessão (as portas de SADT, agenda e cadastro o pedem). */
+  contexto(c: ContextoPortal): Promise<ContextoPortalNucleo>;
   /** Uma transação SGH_ com a trilha junto (a função devolve null quando nada foi gravado: sem linha de trilha). */
   gravar<T>(
     c: ContextoPortal,
     fn: (g: GravadorPortal) => Promise<T>,
     trilha: TrilhaDaGravacao<T>,
   ): Promise<T>;
-  paciente(c: ContextoPortal, id: number): Promise<PacienteParaPortalLido | null>;
-  pacientesPorProntuario(c: ContextoPortal, prontuario: number): Promise<PacienteParaPortalLido[]>;
+  paciente(c: ContextoPortal, id: number): Promise<PacientePortal | null>;
+  pacientesPorProntuario(c: ContextoPortal, prontuario: number): Promise<PacientePortal[]>;
   capacidadesCivis(c: ContextoPortal): Promise<ItemDominioPortal[]>;
-  conta(c: ContextoPortal, id: number): Promise<ContaPortalLida | null>;
-  contaPorEmail(c: ContextoPortal, emailResumo: string): Promise<ContaPortalLida | null>;
-  contaPorConvite(c: ContextoPortal, conviteResumo: string): Promise<ContaPortalLida | null>;
-  trocaEmailPorToken(c: ContextoPortal, tokenResumo: string): Promise<TrocaEmailPortalLida | null>;
-  trocaEmailPendente(c: ContextoPortal, conta: number): Promise<TrocaEmailPortalLida | null>;
-  contaDoPaciente(c: ContextoPortal, paciente: number): Promise<ContaPortalLida | null>;
+  conta(c: ContextoPortal, id: number): Promise<ContaPortal | null>;
+  contaPorEmail(c: ContextoPortal, emailResumo: string): Promise<ContaPortal | null>;
+  contaPorConvite(c: ContextoPortal, conviteResumo: string): Promise<ContaPortal | null>;
+  trocaEmailPorToken(c: ContextoPortal, tokenResumo: string): Promise<TrocaEmailPortal | null>;
+  trocaEmailPendente(c: ContextoPortal, conta: number): Promise<TrocaEmailPortal | null>;
+  contaDoPaciente(c: ContextoPortal, paciente: number): Promise<ContaPortal | null>;
   contasAbertas(c: ContextoPortal): Promise<{ conta: number; paciente: number; versao: number }[]>;
-  vinculosDaConta(c: ContextoPortal, conta: number): Promise<VinculoPortalLido[]>;
-  vinculosDoTitular(c: ContextoPortal, paciente: number): Promise<VinculoPortalLido[]>;
-  vinculo(c: ContextoPortal, id: number): Promise<VinculoPortalLido | null>;
+  vinculosDaConta(c: ContextoPortal, conta: number): Promise<VinculoPortal[]>;
+  vinculosDoTitular(c: ContextoPortal, paciente: number): Promise<VinculoPortal[]>;
+  vinculo(c: ContextoPortal, id: number): Promise<VinculoPortal | null>;
   /** Uma página da fila da conferência (por ordem de chegada; TETO_FILA_VINCULOS por página). */
   filaVinculos(
     c: ContextoPortal,
     f: FiltroFilaVinculosPortal,
-  ): Promise<{ itens: VinculoPortalLido[]; haMais: boolean }>;
-  vinculosAtivos(c: ContextoPortal): Promise<VinculoPortalLido[]>;
+  ): Promise<{ itens: VinculoPortal[]; haMais: boolean }>;
+  vinculosAtivos(c: ContextoPortal): Promise<VinculoPortal[]>;
   guardiaoConfere(c: ContextoPortal, titular: number, responsavel: number): Promise<boolean>;
   dominiosConsentimento(c: ContextoPortal): Promise<DominiosConsentimento>;
-  consentimentos(c: ContextoPortal, paciente: number): Promise<ConsentimentoPortalLido[]>;
-  pedidos(c: ContextoPortal, conta: number, paciente: number): Promise<PedidoPortalLido[]>;
+  consentimentos(c: ContextoPortal, paciente: number): Promise<ConsentimentoPortal[]>;
+  pedidos(c: ContextoPortal, conta: number, paciente: number): Promise<PedidoPortal[]>;
   documentos(
     c: ContextoPortal,
     paciente: number,
     tipos: readonly string[],
     pagina: number,
     apenas?: number | null,
-  ): Promise<{ itens: DocumentoPortalLido[]; haMais: boolean }>;
+  ): Promise<{ itens: DocumentoPortal[]; haMais: boolean }>;
   leituras(
     c: ContextoPortal,
     paciente: number,
     eventos: readonly string[],
     de: string,
     ate: string,
-  ): Promise<{ itens: LeituraTitularLida[]; haMais: boolean }>;
+  ): Promise<{ itens: LeituraTitular[]; haMais: boolean }>;
   nomes(c: ContextoPortal, logins: readonly string[]): Promise<Map<string, string>>;
   /** W0-10 (M1): as manifestações do paciente feitas pelo portal (as mais recentes primeiro). */
   manifestacoes(c: ContextoPortal, paciente: number): Promise<ManifestacaoPortalLida[]>;
@@ -264,11 +268,12 @@ export interface PortaPortalPaciente {
     f: { readonly pendentes: boolean; readonly idPaciente?: number },
   ): Promise<CopiaNaFila[]>;
   /** W0-10 (M2): os atos de uma cópia, em ordem. */
-  atosCopia(c: ContextoPortal, idPedido: string): Promise<AtoCopiaLido[]>;
+  atosCopia(c: ContextoPortal, idPedido: string): Promise<AtoCopia[]>;
 }
 
 export const METODOS_PORTA_PORTAL: ReadonlySet<string> = new Set([
   'gravar',
+  'contexto',
   'paciente',
   'pacientesPorProntuario',
   'capacidadesCivis',

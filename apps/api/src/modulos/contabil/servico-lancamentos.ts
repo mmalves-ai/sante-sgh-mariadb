@@ -1,6 +1,6 @@
 // Serviço da contabilidade, etapa 2 (M54-F2): monta as respostas (lançamentos, razão, conciliação, períodos) e os
 // planos de gravação (manual, estorno, contabilização dos fatos) com as regras puras de @sgh/dominio-contabil. A
-// gravação em si (na transação SGH_, com a trilha) é do controlador; aqui nada grava.
+// gravação em si (na transação do Executor, com a trilha) é do controlador; aqui nada grava.
 import {
   type ApoioLancamentos,
   CODIGOS_TIPO_LANCAMENTO,
@@ -39,14 +39,14 @@ import {
   recusaDaReabertura,
   resumoDaContabilizacao,
 } from '@sgh/dominio-contabil';
-import type { ContaPlanoLida, FiltroLancamentosSgh, LancamentoLido } from '@sgh/legado';
+import type { ContaPlanoVersionada, FiltroLancamentosPorta, LancamentoRegistrado } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
 import type { ContextoContabil, PortaContabil } from './porta.js';
 
 const recusa = (codigo: string, detalhe: string) =>
   new ErroProblema('recusa-de-negocio', 409, 'Operação recusada', detalhe, { codigo });
 
-const semCampos = (c: ContaPlanoLida): ContaPlano => ({
+const semCampos = (c: ContaPlanoVersionada): ContaPlano => ({
   empresa: c.empresa,
   codigo: c.codigo,
   nome: c.nome,
@@ -65,7 +65,7 @@ const periodosDoDominio = (
 ) =>
   ps.map((p): PeriodoContabil => ({ empresa: p.empresa, competencia: p.competencia, situacao: p.situacao }));
 
-function listado(l: LancamentoLido): LancamentoListado {
+function listado(l: LancamentoRegistrado): LancamentoListado {
   return {
     id: l.id,
     empresa: l.empresa,
@@ -123,7 +123,7 @@ export class ServicoLancamentos {
 
   async lancamentos(
     c: ContextoContabil,
-    f: FiltroLancamentosSgh,
+    f: FiltroLancamentosPorta,
     pagina: number,
     tamanho: number,
   ): Promise<LancamentosContabeis> {

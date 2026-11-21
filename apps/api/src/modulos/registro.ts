@@ -49,8 +49,10 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   cadastro: () => import('./cadastro/modulo.js'),
   carga: () => import('./carga/modulo.js'),
   catalogos: () => import('./catalogos/modulo.js'),
+  cirurgia: () => import('./cirurgia/modulo.js'),
   config: () => import('./config/modulo.js'),
   consultas: () => import('./consultas/modulo.js'),
+  contabil: () => import('./contabil/modulo.js'),
   contratualizacao: () => import('./contratualizacao/modulo.js'),
   custos: () => import('./custos/modulo.js'),
   digitalizacao: () => import('./digitalizacao/modulo.js'),
@@ -70,7 +72,10 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   orcamento: () => import('./orcamento/modulo.js'),
   patrimonio: () => import('./patrimonio/modulo.js'),
   pep: () => import('./pep/modulo.js'),
+  pessoas: () => import('./pessoas/modulo.js'),
   'plataforma-onboarding': () => import('./plataforma-onboarding/modulo.js'),
+  'portal-medico': () => import('./portal-medico/modulo.js'),
+  'portal-paciente': () => import('./portal-paciente/modulo.js'),
   portaria: () => import('./portaria/modulo.js'),
   precos: () => import('./precos/modulo.js'),
   qualidade: () => import('./qualidade/modulo.js'),
@@ -82,7 +87,10 @@ export const REGISTRO_MODULOS: Readonly<Record<string, CarregadorModulo>> = Obje
   sadt: () => import('./sadt/modulo.js'),
   sessoes: () => import('./sessoes/modulo.js'),
   suporte: () => import('./suporte/modulo.js'),
+  suprimentos: () => import('./suprimentos/modulo.js'),
   sus: () => import('./sus/modulo.js'),
+  telemedicina: () => import('./telemedicina/modulo.js'),
+  tiss: () => import('./tiss/modulo.js'),
 });
 
 export class ErroModulos extends Error {

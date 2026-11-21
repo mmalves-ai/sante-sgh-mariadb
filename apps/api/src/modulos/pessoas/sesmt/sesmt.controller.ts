@@ -92,7 +92,7 @@ type GeradorPdf = (html: string, titulo: string) => Promise<Buffer>;
 type Resposta = { header(n: string, v: string): unknown; send(b: unknown): unknown };
 
 const E = EVENTOS_AUDITAVEIS;
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha_auditoria na mesma transação`;
 
 @Controller('pessoas/sesmt')
 export class SesmtController {
@@ -205,7 +205,7 @@ export class SesmtController {
   @Post('aso/:vinculo')
   @HttpCode(200)
   @Permissao('pessoas.ocupacional.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_OCUPACIONAL'))
+  @AuditadoNoHandler(NA_TABELA('aso'))
   registrarAso(
     @Param('vinculo') v: string,
     @Body() b: unknown,
@@ -229,7 +229,7 @@ export class SesmtController {
   @Post('vacinas/:vinculo')
   @HttpCode(200)
   @Permissao('pessoas.vacinacao.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_VACINA'))
+  @AuditadoNoHandler(NA_TABELA('vacina_colaborador'))
   registrarVacina(
     @Param('vinculo') v: string,
     @Body() b: unknown,
@@ -260,7 +260,7 @@ export class SesmtController {
   @Post('acidentes')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE e SGH_PES_ACID_SOROLOGIA'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente e exposicao_biologica'))
   registrarAcidente(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSesmt> {
     return this.servico.registrarAcidente(sessaoDe(req), corpo(esquemaRegistrarAcidente, b));
   }
@@ -268,7 +268,7 @@ export class SesmtController {
   @Post('acidentes/:id/profilaxia')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente'))
   profilaxia(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -283,7 +283,7 @@ export class SesmtController {
   @Post('acidentes/:id/sorologia')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACID_SOROLOGIA'))
+  @AuditadoNoHandler(NA_TABELA('sorologia_exposicao'))
   sorologia(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -298,7 +298,7 @@ export class SesmtController {
   @Post('acidentes/:id/cat')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente'))
   emitirCat(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -313,7 +313,7 @@ export class SesmtController {
   @Post('acidentes/:id/encerramento')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente'))
   encerrar(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -355,7 +355,7 @@ export class SesmtController {
   @Post('riscos')
   @HttpCode(200)
   @Permissao('pessoas.risco.editar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_RISCO_FUNCAO'))
+  @AuditadoNoHandler(NA_TABELA('risco_funcao'))
   incluirRisco(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSesmt> {
     return this.servico.incluirLinhaRisco(sessaoDe(req), corpo(esquemaLinhaRisco, b));
   }
@@ -363,7 +363,7 @@ export class SesmtController {
   @Post('riscos/:id/encerramento')
   @HttpCode(200)
   @Permissao('pessoas.risco.editar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_RISCO_FUNCAO'))
+  @AuditadoNoHandler(NA_TABELA('risco_funcao'))
   encerrarRisco(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -406,7 +406,7 @@ export class SesmtController {
   @Post('epi/:vinculo')
   @HttpCode(200)
   @Permissao('pessoas.epi.entregar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_EPI_ENTREGA'))
+  @AuditadoNoHandler(NA_TABELA('entrega_epi'))
   registrarEpi(
     @Param('vinculo') v: string,
     @Body() b: unknown,
@@ -423,7 +423,7 @@ export class SesmtController {
   @Post('acidentes/:id/retificacao')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente e trilha_auditoria'))
   retificarAcidente(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -438,7 +438,7 @@ export class SesmtController {
   @Post('acidentes/:id/anulacao')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ACIDENTE e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('comunicacao_acidente e trilha_auditoria'))
   anularAcidente(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -453,7 +453,7 @@ export class SesmtController {
   @Post('acidentes/:id/esocial')
   @HttpCode(200)
   @Permissao('pessoas.acidente.registrar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ESOCIAL_EVENTO'))
+  @AuditadoNoHandler(NA_TABELA('evento_esocial'))
   gerarCatEsocial(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -468,7 +468,7 @@ export class SesmtController {
   @Post('epi/entregas/:id/cancelamento')
   @HttpCode(200)
   @Permissao('pessoas.epi.entregar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_EPI_ENTREGA e SGH_PES_CORRECAO'))
+  @AuditadoNoHandler(NA_TABELA('entrega_epi e trilha_auditoria'))
   cancelarEpi(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -483,7 +483,7 @@ export class SesmtController {
   @Post('epi/entregas/:id/assinatura')
   @HttpCode(200)
   @Permissao('pessoas.epi.entregar')
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_EPI_ENTREGA'))
+  @AuditadoNoHandler(NA_TABELA('entrega_epi'))
   assinar(
     @Param('id') id: string,
     @Body() b: unknown,

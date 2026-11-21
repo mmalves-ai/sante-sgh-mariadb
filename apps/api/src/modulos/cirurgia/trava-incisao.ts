@@ -80,7 +80,7 @@ export class TravaIncisao {
         correlacao: correlacaoDaRequisicao(s.req, evento).slice(0, 64),
         recurso: P.checklistConfirmar,
         resultado,
-        tabelaAlvo: 'SGH_CC_CHECKLIST',
+        tabelaAlvo: 'checklist_cirurgia_segura',
         idAlvo: alvo,
         ...(chaveNatural ? { chaveNaturalAlvo: chaveNatural.slice(0, 120) } : {}),
       })

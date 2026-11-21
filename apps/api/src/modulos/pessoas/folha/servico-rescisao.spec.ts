@@ -5,7 +5,6 @@
 // gravar, a pendência da folha mensal que já pagou o mês e a chave desligada.
 import type { ParametrosFolha, RubricaFolha, TabelaLegalFolha } from '@sgh/contratos';
 import { PAPEIS_CALCULO_FOLHA, TIPO_DO_PAPEL } from '@sgh/contratos';
-import type { ChaveGravada, EventoPeriodoLidoSgh, PrerequisitoGravado } from '@sgh/legado';
 import { describe, expect, it } from 'vitest';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { ErroProblema } from '../../../problema.filter.js';
@@ -26,9 +25,11 @@ import {
   MENSAGEM_RECUSA_RESCISAO,
   ServicoRescisaoFolha,
 } from './servico-rescisao.js';
+import { type ChaveLiberacao, type PrerequisitoRecurso } from '../../config/public-api.js';
+import { type EventoDoPeriodo } from '../ponto/tipos-ponto.js';
 
 const C = PESSOAS_SINTETICAS_M52;
-const chave = (c: string): ChaveGravada => ({
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -41,7 +42,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -63,7 +64,14 @@ function sessao(pode: (p: string) => boolean = () => true): SessaoCadastro {
     hospital: 'pc',
     rede: 'rede-sintetica',
     login: 'SINT.DP.RESCISAO',
-    porta: { rede: 'rede-sintetica', hospital: 'pc' },
+    porta: {
+      cliente: 'pc',
+      estabelecimento: 1,
+      usuario: null,
+      correlacao: 'teste-folha',
+      rede: 'rede-sintetica',
+      hospital: 'pc',
+    },
     pode,
   };
 }
@@ -168,7 +176,7 @@ function montar(ligada = true) {
   relogio('2026-10-25T10:00:00');
   const fechados = new Set<number>();
   const ponto = {
-    eventosDaCompetencia: async (_c: unknown, competencia: string): Promise<EventoPeriodoLidoSgh[]> =>
+    eventosDaCompetencia: async (_c: unknown, competencia: string): Promise<EventoDoPeriodo[]> =>
       [...fechados].map((vinculo, i) => ({
         id: 100 + i,
         vinculo,
@@ -259,7 +267,14 @@ const valor = (ls: readonly { papel: string; valor: number }[], papel: string) =
   ls.find((l) => l.papel === papel)?.valor ?? 0;
 
 async function desligar(m: ReturnType<typeof montar>, v: number, data: string, tipoRescisao = 2) {
-  const c = { rede: 'rede-sintetica', hospital: 'pc' };
+  const c = {
+    cliente: 'pc',
+    estabelecimento: 1,
+    usuario: null,
+    correlacao: 'teste-folha',
+    rede: 'rede-sintetica',
+    hospital: 'pc',
+  };
   const lido = await m.pessoas.vinculo(c, v);
   await m.pessoas.gravarSgh(c, {} as never, async (g) => {
     await g.desligarVinculo({

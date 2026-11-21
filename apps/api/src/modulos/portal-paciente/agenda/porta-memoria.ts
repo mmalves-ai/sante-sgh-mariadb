@@ -1,19 +1,18 @@
 // Porta da etapa 2 do portal EM MEMÓRIA (M50): a sessão sintética de dev/ci (E2E) e os testes da API. As mesmas recusas
 // do banco (versão desatualizada, o conferido que não muda, a marcação já paga, a confirmação repetida que não paga duas
 // vezes, a segunda resposta da pesquisa) e o mesmo caixa do portal (um pagamento por confirmação). Nada vai à cópia.
+import { ErroPortal, type RegistroTrilhaPortal } from '../tipos.js';
 import {
-  type ConciliacaoPortalLida,
-  type ConfigAgendaOnlineLida,
+  type ConciliacaoPortal,
+  type ConfigAgendaOnline,
   conferirConciliacaoPortal,
-  ErroPortalSgh,
-  type LinhaTrilha,
   MINUTOS_RESERVA_CONFERENCIA,
   OPERADOR_CAIXA_PORTAL,
-  type PagamentoPortalLido,
+  type PagamentoPortal,
   type PagamentoTesourariaPortal,
-  type PesquisaPortalLida,
-  type PreCheckinLido,
-} from '@sgh/legado';
+  type PesquisaPortal,
+  type PreCheckinOnline,
+} from './tipos.js';
 import type {
   ContextoAgendaOnline,
   GravadorAgendaOnline,
@@ -22,17 +21,17 @@ import type {
 } from './porta.js';
 
 /** O pré-check-in guardado, com o instante da reserva da conferência (a leitura confere se ainda vale). */
-type PreGuardado = PreCheckinLido & { reservadoEm?: number };
+type PreGuardado = PreCheckinOnline & { reservadoEm?: number };
 
 interface Estado {
-  configs: ConfigAgendaOnlineLida[];
+  configs: ConfigAgendaOnline[];
   precheckins: PreGuardado[];
-  pagamentos: PagamentoPortalLido[];
-  pesquisas: (PesquisaPortalLida & { paciente: number; conta: number })[];
+  pagamentos: PagamentoPortal[];
+  pesquisas: (PesquisaPortal & { paciente: number; conta: number })[];
   /** Os pagamentos gravados no caixa do portal (M30), um por confirmação aprovada. */
   caixa: { id: number; transacao: string; valor: number; forma: string }[];
   /** W0-10: os atos da tesouraria (só inclusão). */
-  conciliacoes: ConciliacaoPortalLida[];
+  conciliacoes: ConciliacaoPortal[];
   seq: number;
 }
 
@@ -48,19 +47,19 @@ function tesourariaDe(s: Estado, id: number): PagamentoTesourariaPortal | null {
 }
 
 const versaoVelha = () =>
-  new ErroPortalSgh('versao-desatualizada', 'O registro foi alterado por outra pessoa; recarregue.');
+  new ErroPortal('versao-desatualizada', 'O registro foi alterado por outra pessoa; recarregue.');
 const carimbo = (d: Date) => d.toISOString().slice(0, 23);
 
 export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
   readonly destino = 'memoria' as const;
   private readonly estados = new Map<string, Estado>();
   /** As linhas de trilha das gravações (para os testes). */
-  readonly trilhas: LinhaTrilha[] = [];
+  readonly trilhas: RegistroTrilhaPortal[] = [];
 
   constructor(
     private readonly agora: () => Date = () => new Date(),
     /** Configurações de partida da sessão sintética (as agendas sintéticas liberadas no portal). */
-    private readonly semente: (hospital: string) => ConfigAgendaOnlineLida[] = () => [],
+    private readonly semente: (hospital: string) => ConfigAgendaOnline[] = () => [],
   ) {}
 
   private e(c: ContextoAgendaOnline): Estado {
@@ -108,7 +107,7 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
     );
   }
 
-  private visto(k: PreGuardado): PreCheckinLido {
+  private visto(k: PreGuardado): PreCheckinOnline {
     const x: PreGuardado = structuredClone(k);
     delete x.reservadoEm;
     return { ...x, reservadoPor: this.reservaVale(k) ? k.reservadoPor : null };
@@ -120,8 +119,8 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
     return {
       async gravarConfig(x) {
         const i = s.configs.findIndex((k) => k.tipo === x.tipo && k.agenda === x.agenda);
-        const base: ConfigAgendaOnlineLida = {
-          id: i >= 0 ? (s.configs[i] as ConfigAgendaOnlineLida).id : ++s.seq,
+        const base: ConfigAgendaOnline = {
+          id: i >= 0 ? (s.configs[i] as ConfigAgendaOnline).id : ++s.seq,
           tipo: x.tipo,
           agenda: x.agenda,
           nomeAgenda: x.nomeAgenda,
@@ -153,12 +152,9 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
         const i = s.precheckins.findIndex((k) => k.tipo === p.tipo && k.marcacao === p.marcacao);
         const atual = s.precheckins[i];
         if (atual?.situacao === 'conferido')
-          throw new ErroPortalSgh(
-            'situacao',
-            'O pré-check-in desta marcação já foi conferido pela recepção.',
-          );
+          throw new ErroPortal('situacao', 'O pré-check-in desta marcação já foi conferido pela recepção.');
         if (atual && reservaVale(atual))
-          throw new ErroPortalSgh(
+          throw new ErroPortal(
             'situacao',
             'A recepção está conferindo o seu pré-check-in agora: aguarde alguns minutos para mudar.',
           );
@@ -240,13 +236,13 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
         const t = agora().getTime();
         for (const x of s.pagamentos.filter((k) => k.tipo === p.tipo && k.marcacao === p.marcacao)) {
           if (x.situacao !== 'pendente' && x.situacao !== 'confirmado') continue;
-          if (x.situacao === 'confirmado') throw new ErroPortalSgh('situacao', 'Esta marcação já está paga.');
+          if (x.situacao === 'confirmado') throw new ErroPortal('situacao', 'Esta marcação já está paga.');
           if (x.situacao === 'pendente' && new Date(x.expiraEm).getTime() > t)
-            throw new ErroPortalSgh('situacao', 'Já existe um pagamento em andamento para esta marcação.');
+            throw new ErroPortal('situacao', 'Já existe um pagamento em andamento para esta marcação.');
           if (x.situacao === 'pendente') Object.assign(x, { situacao: 'expirado', versao: x.versao + 1 });
         }
         if (s.pagamentos.some((k) => k.transacao === p.transacao))
-          throw new ErroPortalSgh('situacao', 'Transação do gateway repetida.');
+          throw new ErroPortal('situacao', 'Transação do gateway repetida.');
         const id = ++s.seq;
         s.pagamentos.push({
           id,
@@ -273,12 +269,12 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
       async confirmarPagamento(x) {
         const i = s.pagamentos.findIndex((k) => k.transacao === x.transacao);
         const atual = s.pagamentos[i];
-        if (!atual) throw new ErroPortalSgh('nao-encontrado', 'Pagamento não encontrado.');
+        if (!atual) throw new ErroPortal('nao-encontrado', 'Pagamento não encontrado.');
         const tardia = atual.situacao === 'expirado' && x.resultado === 'aprovado';
         if (atual.situacao !== 'pendente' && !tardia) return { mudou: false, pagamento: atual };
-        let novo: PagamentoPortalLido;
+        let novo: PagamentoPortal;
         if (x.resultado === 'aprovado') {
-          const daMarcacao = (k: PagamentoPortalLido) =>
+          const daMarcacao = (k: PagamentoPortal) =>
             k.id !== atual.id && k.tipo === atual.tipo && k.marcacao === atual.marcacao;
           const paga = s.pagamentos.some((k) => daMarcacao(k) && k.situacao === 'confirmado');
           if (!paga && tardia)
@@ -307,10 +303,10 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
       },
       async registrarConciliacao(n) {
         const t = tesourariaDe(s, n.pagamento);
-        if (!t) throw new ErroPortalSgh('nao-encontrado', 'Pagamento não encontrado.');
+        if (!t) throw new ErroPortal('nao-encontrado', 'Pagamento não encontrado.');
         const r = conferirConciliacaoPortal(t, n);
-        if (r) throw new ErroPortalSgh('situacao', r.mensagem);
-        const ato: ConciliacaoPortalLida = {
+        if (r) throw new ErroPortal('situacao', r.mensagem);
+        const ato: ConciliacaoPortal = {
           id: ++s.seq,
           pagamento: n.pagamento,
           acao: n.acao,
@@ -325,7 +321,7 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
       },
       async responderPesquisa(r) {
         if (s.pesquisas.some((k) => k.tipo === r.tipo && k.marcacao === r.marcacao))
-          throw new ErroPortalSgh('situacao', 'A pesquisa deste atendimento já foi respondida.');
+          throw new ErroPortal('situacao', 'A pesquisa deste atendimento já foi respondida.');
         const id = ++s.seq;
         s.pesquisas.unshift({
           id,
@@ -433,7 +429,7 @@ export class PortaAgendaOnlineMemoria implements PortaAgendaOnline {
  * A semente da sessão sintética (D-SEMENTE-50): a agenda sintética 902 (cardiologia, particular e uma operadora) já
  * liberada no portal, com o pré-check-in e o valor do particular; as outras ficam para a tela de configuração.
  */
-export function sementeAgendaOnline(): ConfigAgendaOnlineLida[] {
+export function sementeAgendaOnline(): ConfigAgendaOnline[] {
   return [
     {
       id: 1,

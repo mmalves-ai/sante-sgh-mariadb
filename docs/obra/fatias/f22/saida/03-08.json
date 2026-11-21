@@ -1,0 +1,80 @@
+{
+ "registrar": [],
+ "fecho_tsconfig": [
+  "src/modulos/pessoas/indicadores/indicadores.controller.ts",
+  "src/modulos/pessoas/indicadores/indicadores.spec.ts",
+  "src/modulos/pessoas/indicadores/porta-indicadores-memoria.ts",
+  "src/modulos/pessoas/indicadores/porta-indicadores.ts",
+  "src/modulos/pessoas/indicadores/semente-indicadores.ts",
+  "src/modulos/pessoas/indicadores/servico-indicadores.spec.ts",
+  "src/modulos/pessoas/indicadores/servico-indicadores.ts",
+  "src/modulos/pessoas/indicadores/porta-indicadores-propria.ts",
+  "src/modulos/pessoas/indicadores/porta-indicadores-propria.spec.ts",
+  "src/modulos/pessoas/indicadores/porta-indicadores-propria.int.spec.ts",
+  "src/modulos/pessoas/obrigacoes/obrigacoes-http.spec.ts",
+  "src/modulos/pessoas/obrigacoes/obrigacoes.controller.ts",
+  "src/modulos/pessoas/obrigacoes/servico-obrigacoes.spec.ts",
+  "src/modulos/pessoas/obrigacoes/servico-obrigacoes.ts",
+  "src/modulos/pessoas/pessoas.controller.ts",
+  "src/modulos/pessoas/pessoas.spec.ts",
+  "src/modulos/pessoas/indicadores/apropriacao-indicadores.ts",
+  "src/modulos/pessoas/indicadores/apropriacao-indicadores.spec.ts",
+  "src/modulos/pessoas/indicadores/indicadores-autorizacao.spec.ts",
+  "src/modulos/pessoas/opcoes-teste.spec-util.ts"
+ ],
+ "pedidos": [
+  {
+   "tipo": "fiacao",
+   "motivo": "porta-indicadores-legado.ts foi apagado. app.module.ts (linhas ~597-600, 2874-2876; desmontagem) e pessoas/public-api.ts (linha 183, fora da lista) devem usar `new PortaIndicadoresPessoasPropria(nucleo)` de indicadores/porta-indicadores-propria.ts (export da classe, de NucleoIndicadores e de lerBaseIndicadores(ler, estabelecimentoId, hospital, recorte)). O módulo 'pessoas' (lote que o registrar) liga PORTA_INDICADORES_PESSOAS à própria quando ctx.nucleo existe e à PortaIndicadoresPessoasMemoria(SEMENTE_INDICADORES_PESSOAS) só em dev/ci sem núcleo."
+  },
+  {
+   "tipo": "fiacao",
+   "motivo": "aplicacao/crud-w006-indicadores.int.spec.ts (outro lote) importa lerBaseIndicadores de '../indicadores/porta-indicadores-legado.js' (apagado): trocar para '../indicadores/porta-indicadores-propria.js'; a assinatura agora é lerBaseIndicadores(ler, estabelecimentoId, hospital, recorte)."
+  },
+  {
+   "tipo": "contrato",
+   "arquivo": "apps/api/src/modulos/pessoas/indicadores/porta-indicadores.ts",
+   "motivo": "Feito no lote: destino 'legado' | 'memoria' -> 'banco' | 'memoria'; ContextoIndicadores passou de ContextoPortaM18 (ContextoNucleo, sem hospital) a ContextoPorta de cadastro/porta.ts (núcleo + rede + hospital), que a sessão já entrega em s.porta."
+  },
+  {
+   "tipo": "tipos",
+   "motivo": "servico-obrigacoes.ts deixou de importar FechamentoFolhaLido/ObrigacaoPesLida/ProcessoFolhaLido/VinculoCalculoLido e passou a derivá-los da porta do cálculo (GravadorCalculoFolha['obrigacaoComTrava'|'fechamentoEmVigorComTrava'|'processo'] e PortaCalculoFolha['vinculos']); TETO_OBRIGACOES (300) agora é exportado por servico-obrigacoes.ts. Se o lote 03-06 renomear esses métodos de folha/porta-calculo.ts, ajustar os quatro aliases no topo do arquivo (é o único ponto)."
+  },
+  {
+   "tipo": "remocao",
+   "motivo": "pessoas.controller.ts: tirado o RAIZ_FIM_COEXISTENCIA (módulo coexistencia removido na onda 2; FontesLoginPainel.raizFim já era sem uso). Fora da lista: tirar o provider RAIZ_FIM_COEXISTENCIA do app.module.ts (linha ~3868) e o campo opcional raizFim de administracao/login-painel.ts."
+  },
+  {
+   "tipo": "renomear",
+   "motivo": "Fora da lista: o contrato FichaColaborador.profissional.situacaoLegado (packages/contratos/src/pessoas/respostas.ts:154, SituacaoProfissionalLegado) e a asserção em pessoas.spec.ts:~230 ({ situacaoLegado: 'F' }) -> nome de negócio (ex.: situacaoProfissional) quando o lote do cadastro de pessoas mexer no contrato."
+  },
+  {
+   "tipo": "decisao",
+   "arquivo": "apps/api/src/modulos/pessoas/indicadores/porta-indicadores-propria.ts",
+   "motivo": "Revisão do lote (achados de 21/11): (1) ausência do ponto = itens de apuracao_ponto_item dos dias ligados ao fechamento fechado/assinado/integrado à folha, natureza do tipo_hora em ('falta','abono') e destino em ('folha','banco_horas','abonado','descontado') — atraso (débito), falta e falta abonada; o 'informativo' não conta; previstas = Σ apuracao_ponto.minutos_previstos. Fechamento sem apuração diária (carga consolidada) cai na estimativa trabalhadas − extras + horas_falta. Não precisa de DDL: tipo_hora.natureza 'falta' cobre atraso e falta (a distinção não muda o absenteísmo). (2) Setor do fato = lotação vigente na data do fato (tabela lotacao, última operação por vínculo+setor+centro+início, sem 'exclusao'), com rateio pelo percentual_rateio normalizado para horas e valores e lotação principal para contagens; sem lotação vigente, o setor do cadastro do vínculo. (3) Acidente: limites do período convertidos para UTC no fuso do estabelecimento; a data do acidente para a lotação é a local. Regras puras em indicadores/apropriacao-indicadores.ts, com spec."
+  },
+  {
+   "tipo": "dominio",
+   "arquivo": "apps/api/src/modulos/pessoas/indicadores/apropriacao-indicadores.ts",
+   "motivo": "Regras puras do painel (contaComoAusencia, horasDoFechamento, setoresNaData, setorPrincipalNaData, somarPorSetor, inicioDoDiaNoFuso, dataNoFuso). Mover o arquivo e o spec para packages/dominio-pessoas/src/indicadores/apropriacao.ts e exportar no index do pacote (o lote não edita o índice); depois trocar o import na porta própria (um ponto)."
+  },
+  {
+   "tipo": "conferidor",
+   "arquivo": "tools/obra/conferir-lote-f22.sh",
+   "motivo": "Com --estrito (fechamento da onda), falhar quando o vitest do lote reportar spec pulado (skipped > 0) — hoje indicadores.spec.ts, obrigacoes/obrigacoes-http.spec.ts e pessoas.spec.ts ficam pulados por describe.skipIf(!PESSOAS_REGISTRADO) e o conferidor sai verde. Enquanto isso, a autorização (403 sem pessoas.indicadores.ler, negação na trilha, 401 sem sessão) e o isolamento (403 fora-do-estabelecimento) do painel rodam já em indicadores/indicadores-autorizacao.spec.ts, sobre a guarda real e o controlador com a porta em memória."
+  },
+  {
+   "tipo": "registro",
+   "motivo": "Lote que registrar 'pessoas' em REGISTRO_MODULOS: o modulo.ts deve aceitar as opções de teste tipadas em pessoas/opcoes-teste.spec-util.ts (OpcoesTestePessoas: pessoas, indicadoresPessoas, cifraCpf, configuracao), pelo ContextoModulo. Os três specs HTTP já não fazem cast: sobem a app por criarAppPessoas, que confere (conferirOpcoesPessoas) que cada porta passada é a injetada — opção ignorada falha o teste com o nome dela."
+  },
+  {
+   "tipo": "testes",
+   "motivo": "Apagados por testarem a cópia do sistema de origem por portas de outros lotes: aplicacao/obrigacoes.int.spec.ts, aplicacao/plantao-agora.int.spec.ts e infra/outbox-custo-pessoal.int.spec.ts. Não há como refazê-los neste lote: a porta própria do cálculo (03-06) recusa as obrigações com modelo-pendente até o DDL de obrigacao_trabalhista/arquivo_obrigacao/obrigacao_fechamento/parametro_obrigacao pedido em 03-06.json; a porta-escala-propria (03-04) não implementa plantoesNoInstante; o custo de pessoal por centro depende do DDL fato_contabil_folha pedido em 03-07.json (títulos: 03-11)."
+  },
+  {
+   "tipo": "cobertura-obrigatoria",
+   "alvo": "03-06, 03-04, 03-07 e 03-11 (fatias e fechamento da onda 3)",
+   "motivo": "Item OBRIGATÓRIO nas fatias dos lotes donos, com contrato de efeito sobre o MariaDB (linhas, versão, trilha, integracao_mensagem): 03-06 — geração e entrega de FGTS Digital, SEFIP, CAGED e RAIS de ponta a ponta (servico-obrigacoes.ts grava pelo GravadorCalculoFolha); 03-04 — plantão no instante, sobreaviso, troca aprovada e dimensionamento com classificação; 03-07/03-11 — evento do custo de pessoal na integracao_mensagem com os fatos por centro de custo. Bloquear o fechamento da onda 3 com --estrito enquanto esses três contratos de efeito não existirem."
+  }
+ ]
+}

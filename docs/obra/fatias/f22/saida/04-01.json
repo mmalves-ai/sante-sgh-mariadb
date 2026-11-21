@@ -1,0 +1,90 @@
+{
+  "registrar": [
+    "contabil"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/contabil/bloqueio-periodo.spec.ts",
+    "src/modulos/contabil/bloqueio-periodo.ts",
+    "src/modulos/contabil/contabil.controller.ts",
+    "src/modulos/contabil/contabil.spec.ts",
+    "src/modulos/contabil/demonstracoes-pdf.int.spec.ts",
+    "src/modulos/contabil/demonstracoes.controller.ts",
+    "src/modulos/contabil/demonstracoes.spec.ts",
+    "src/modulos/contabil/exportar-demonstracoes.spec.ts",
+    "src/modulos/contabil/exportar-demonstracoes.ts",
+    "src/modulos/contabil/gravacao.ts",
+    "src/modulos/contabil/lancamentos.controller.ts",
+    "src/modulos/contabil/lancamentos.spec.ts",
+    "src/modulos/contabil/memoria-demonstracoes.ts",
+    "src/modulos/contabil/memoria-lancamentos.ts",
+    "src/modulos/contabil/modulo.ts",
+    "src/modulos/contabil/porta-memoria.ts",
+    "src/modulos/contabil/porta-propria.int.spec.ts",
+    "src/modulos/contabil/porta-propria.ts",
+    "src/modulos/contabil/porta.ts",
+    "src/modulos/contabil/public-api.ts",
+    "src/modulos/contabil/servico-demonstracoes.ts",
+    "src/modulos/contabil/servico-lancamentos.ts",
+    "src/modulos/contabil/servico.spec.ts",
+    "src/modulos/contabil/servico.ts",
+    "src/modulos/contabil/tipos.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "versao_regra_contabil",
+      "motivo": "Versões publicadas das regras de contabilização (conteúdo canônico JSON, impressão SHA-256, justificativa, vigência, prioridade, estabelecimento/evento). Sem ela, regras() e publicarRegra recusam com 'modelo-pendente' (409) no banco: ficam indisponíveis a lista de regras, a simulação, a publicação, a contabilização automática dos fatos (Contabilizar) e o reprocessamento do período. A recusa substitui a lista vazia, que marcaria todo fato como 'sem regra' e tiraria os contabilizados do lançamento.",
+      "ddl": "CREATE TABLE versao_regra_contabil (\n  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  estabelecimento_id BIGINT UNSIGNED NOT NULL,\n  evento_contabil_id BIGINT UNSIGNED NOT NULL COMMENT 'Tipo de fato a que a regra se aplica',\n  nome VARCHAR(60) NOT NULL,\n  numero_versao SMALLINT UNSIGNED NOT NULL,\n  prioridade SMALLINT UNSIGNED NOT NULL DEFAULT 100,\n  vigencia_inicio DATE NOT NULL,\n  vigencia_fim DATE NULL,\n  conteudo JSON NOT NULL COMMENT 'Forma canônica da regra (condições e partidas)',\n  impressao CHAR(64) NOT NULL COMMENT 'SHA-256 da forma canônica',\n  justificativa VARCHAR(500) NOT NULL,\n  situacao VARCHAR(30) NOT NULL DEFAULT 'publicada',\n  publicada_em DATETIME(3) NOT NULL,\n  publicador_usuario_id BIGINT UNSIGNED NULL,\n  origem VARCHAR(20) NOT NULL DEFAULT 'sistema',\n  criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL,\n  versao INT UNSIGNED NOT NULL DEFAULT 1, excluido_em DATETIME(3) NULL, excluido_por BIGINT UNSIGNED NULL,\n  CONSTRAINT ck_versao_regra_contabil_situacao CHECK (situacao IN ('publicada','substituida')),\n  CONSTRAINT ck_versao_regra_contabil_vigencia CHECK (vigencia_fim IS NULL OR vigencia_fim >= vigencia_inicio),\n  CONSTRAINT ck_versao_regra_contabil_conteudo CHECK (JSON_VALID(conteudo)),\n  CONSTRAINT ck_versao_regra_contabil_origem CHECK (origem IN ('sistema','migracao','integracao')),\n  UNIQUE KEY uq_versao_regra_contabil_versao (estabelecimento_id, evento_contabil_id, nome, numero_versao),\n  KEY ix_versao_regra_contabil_evento_contabil (evento_contabil_id),\n  KEY ix_versao_regra_contabil_publicador_usuario (publicador_usuario_id)\n) COMMENT='Versão publicada e imutável de uma regra de contabilização de fatos, com conteúdo canônico e impressão';\nALTER TABLE versao_regra_contabil\n  ADD CONSTRAINT fk_versao_regra_contabil_estabelecimento_id FOREIGN KEY (estabelecimento_id) REFERENCES estabelecimento (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_versao_regra_contabil_evento_contabil_id FOREIGN KEY (evento_contabil_id) REFERENCES evento_contabil (id) ON DELETE RESTRICT,\n  ADD CONSTRAINT fk_versao_regra_contabil_publicador_usuario_id FOREIGN KEY (publicador_usuario_id) REFERENCES usuario (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lancamento_contabil, fato_contabil",
+      "motivo": "Regra e versão que geraram o lançamento automático e a situação do fato (hoje regraId/regra devolvidos nulos; o reprocessamento não distingue mudança de versão de regra).",
+      "ddl": "ALTER TABLE lancamento_contabil ADD COLUMN versao_regra_contabil_id BIGINT UNSIGNED NULL COMMENT 'Versão da regra que gerou o lançamento automático' AFTER fato_contabil_id, ADD KEY ix_lancamento_contabil_versao_regra (versao_regra_contabil_id), ADD CONSTRAINT fk_lancamento_contabil_versao_regra_contabil_id FOREIGN KEY (versao_regra_contabil_id) REFERENCES versao_regra_contabil (id) ON DELETE RESTRICT;\nALTER TABLE fato_contabil ADD COLUMN versao_regra_contabil_id BIGINT UNSIGNED NULL COMMENT 'Versão da regra aplicada na última situação' AFTER motivo, ADD KEY ix_fato_contabil_versao_regra (versao_regra_contabil_id), ADD CONSTRAINT fk_fato_contabil_versao_regra_contabil_id FOREIGN KEY (versao_regra_contabil_id) REFERENCES versao_regra_contabil (id) ON DELETE RESTRICT;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "arquivo_sped_contabil",
+      "motivo": "Gravar o arquivo SPED gerado: leiaute, linhas e parâmetros da geração; o conteúdo vai ao armazém de objetos pela tabela arquivo (arquivo_id já existe). Sem isto, gravarArquivoSped e conteudoSped respondem 'modelo-pendente' e o arquivo gerado não é guardado.",
+      "ddl": "ALTER TABLE arquivo_sped_contabil ADD COLUMN leiaute VARCHAR(10) NULL COMMENT 'Versão do leiaute oficial escrito' AFTER finalidade, ADD COLUMN leiaute_conferido BOOLEAN NOT NULL DEFAULT FALSE AFTER leiaute, ADD COLUMN quantidade_linhas INT UNSIGNED NULL AFTER leiaute_conferido, ADD COLUMN parametros JSON NULL COMMENT 'Parâmetros da geração, sem dado de pessoa' AFTER quantidade_linhas, ADD CONSTRAINT ck_arquivo_sped_contabil_parametros CHECK (parametros IS NULL OR JSON_VALID(parametros));",
+      "observacao": "A porta precisa também da guarda do conteúdo (armazém S3 como no financeiro): proposta de lote seguinte, com ARMAZEM_CONTABIL."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conciliacao_conta_contabil",
+      "motivo": "O modelo admite uma conciliação por conta e competência (uq_conciliacao_conta_contabil_conta_periodo); a tela concilia grupos de partidas, várias vezes no mês. Hoje a segunda conciliação ativa da mesma conta no mês é recusada com mensagem de negócio (a desfeita é reaproveitada).",
+      "ddl": "ALTER TABLE conciliacao_conta_contabil DROP INDEX uq_conciliacao_conta_contabil_conta_periodo, ADD KEY ix_conciliacao_conta_contabil_conta_periodo (estabelecimento_id, conta_contabil_id, periodo_contabil_id);"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "periodo_contabil",
+      "motivo": "Observação do encerramento (hoje só na trilha).",
+      "ddl": "ALTER TABLE periodo_contabil ADD COLUMN observacao_encerramento VARCHAR(500) NULL AFTER encerrante_usuario_id;"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "estabelecimento",
+      "motivo": "NIRE e data do NIRE para o registro 0000/I030 da ECD (hoje nulos).",
+      "ddl": "ALTER TABLE estabelecimento ADD COLUMN nire VARCHAR(11) NULL COMMENT 'Número de identificação do registro de empresas na junta comercial' AFTER inscricao_municipal, ADD COLUMN data_nire DATE NULL AFTER nire, ADD CONSTRAINT ck_estabelecimento_nire CHECK (nire IS NULL OR nire REGEXP '^[0-9]{11}$');"
+    },
+    {
+      "tipo": "app.module",
+      "motivo": "app.module.ts ainda importa portaContabilLegado de modulos/contabil/public-api.js (removido); a contabilidade passa a ser montada por modulos/contabil/modulo.ts. Tirar as linhas do app.module na desmontagem."
+    },
+    {
+      "tipo": "permissao",
+      "arquivo": "packages/contratos/src/permissoes/contabil.ts",
+      "motivo": "Nova permissão 'contabil.plano.rede' (gravar no plano de contas compartilhado pela rede). Sem ela, incluir/alterar conta só passa no plano usado apenas pelo estabelecimento da sessão (porta própria recusa 403 'plano-da-rede'); o administrador da plataforma passa pela regra geral. Conceder ao perfil gestor contábil da rede."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/contabil/lancamentos.ts (SITUACOES_PERIODO) e packages/dominio-contabil",
+      "motivo": "Levar a situação 'bloqueado' e o bloqueadoAte do periodo_contabil ao contrato do período e ao domínio (regra hoje pura em apps/api/src/modulos/contabil/bloqueio-periodo.ts, aplicada na transação). Até lá o período bloqueado aparece 'aberto' com o aviso na observação, e o lançamento nele é recusado ('periodo-bloqueado' / 'data-bloqueada')."
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/contabil (conta do plano)",
+      "motivo": "Expor conta_contabil.aceita_lancamento_manual na conta do plano (tela e problemasDoLancamentoManual), hoje só conferida na gravação ('conta-sem-lancamento-manual')."
+    }
+  ]
+}

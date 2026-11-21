@@ -45,7 +45,7 @@ import { PERMISSOES_AUTOATENDIMENTO, ServicoAutoatendimento } from './servico-au
 
 const P = PERMISSOES_AUTOATENDIMENTO;
 const E = EVENTOS_AUDITAVEIS;
-const NA_TABELA = (t: string) => `${t} com a SGH_TRILHA na mesma transação`;
+const NA_TABELA = (t: string) => `${t} com a trilha_auditoria na mesma transação`;
 const com = (b: unknown, x: Record<string, number>) => ({ ...(b as object), ...x });
 
 /** O serviço das duas rotas (o pedido do colaborador e a fila do gestor), sobre as mesmas portas. */
@@ -97,7 +97,7 @@ export class MinhasSolicitacoesController extends BaseSolicitacoes {
   @Post()
   @HttpCode(200)
   @Permissao(P.solicitar)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_SOLICITACAO (e o ajuste pendente ou o atestado)'))
+  @AuditadoNoHandler(NA_TABELA('solicitacao_colaborador (e o ajuste pendente ou o atestado)'))
   incluir(@Body() b: unknown, @Req() req: RequisicaoAutorizada): Promise<ResultadoSolicitacaoPessoa> {
     return this.servico.incluir(sessaoDe(req), corpo(esquemaIncluirSolicitacao, b));
   }
@@ -105,7 +105,7 @@ export class MinhasSolicitacoesController extends BaseSolicitacoes {
   @Post(':id/desistencia')
   @HttpCode(200)
   @Permissao(P.solicitar)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_SOLICITACAO (e o ajuste pendente ligado)'))
+  @AuditadoNoHandler(NA_TABELA('solicitacao_colaborador (e o ajuste pendente ligado)'))
   desistir(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -120,7 +120,7 @@ export class MinhasSolicitacoesController extends BaseSolicitacoes {
   @Post(':id/atestado')
   @HttpCode(200)
   @Permissao(P.solicitar)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ATESTADO_ACESSO'))
+  @AuditadoNoHandler(NA_TABELA('atestado_colaborador_acesso'))
   atestado(
     @Param('id') id: string,
     @Body() b: unknown,
@@ -160,7 +160,9 @@ export class FilaSolicitacoesController extends BaseSolicitacoes {
   @HttpCode(200)
   @Permissao(P.aprovar)
   @AuditadoNoHandler(
-    NA_TABELA('SGH_PES_SOLICITACAO e o efeito (SGH_PES_FERIAS, ajustes do ponto ou SGH_PES_CORRECAO)'),
+    NA_TABELA(
+      'solicitacao_colaborador e o efeito (ferias_colaborador, ajustes do ponto ou correcao_registro)',
+    ),
   )
   decidir(
     @Param('id') id: string,
@@ -176,7 +178,7 @@ export class FilaSolicitacoesController extends BaseSolicitacoes {
   @Post(':id/atestado')
   @HttpCode(200)
   @Permissao(P.aprovar)
-  @AuditadoNoHandler(NA_TABELA('SGH_PES_ATESTADO_ACESSO'))
+  @AuditadoNoHandler(NA_TABELA('atestado_colaborador_acesso'))
   atestado(
     @Param('id') id: string,
     @Body() b: unknown,

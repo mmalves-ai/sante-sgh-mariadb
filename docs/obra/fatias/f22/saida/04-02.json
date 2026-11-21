@@ -1,0 +1,146 @@
+{
+  "lote": "04-02",
+  "apagados": [
+    "apps/api/src/modulos/portal-medico/porta-legado.ts",
+    "apps/api/src/modulos/portal-medico/aplicacao/medico-externo.autorizacao.int.spec.ts"
+  ],
+  "registrar": [
+    "'portal-medico': () => import('./portal-medico/modulo.js'),"
+  ],
+  "fecho_tsconfig": [
+    "src/modulos/portal-medico/aplicacao/assinatura-remota.spec.ts",
+    "src/modulos/portal-medico/aplicacao/assinatura-remota.ts",
+    "src/modulos/portal-medico/aplicacao/canal.spec.ts",
+    "src/modulos/portal-medico/aplicacao/canal.ts",
+    "src/modulos/portal-medico/aplicacao/criticos.spec.ts",
+    "src/modulos/portal-medico/aplicacao/servico.ts",
+    "src/modulos/portal-medico/porta-memoria.ts",
+    "src/modulos/portal-medico/porta.ts",
+    "src/modulos/portal-medico/portal-medico-interno.controller.ts",
+    "src/modulos/portal-medico/portal-medico.controller.ts",
+    "src/modulos/portal-medico/portal-medico.spec.ts",
+    "src/modulos/portal-medico/public-api.ts",
+    "src/modulos/portal-medico/porta-propria.ts",
+    "src/modulos/portal-medico/porta-propria.int.spec.ts",
+    "src/modulos/portal-medico/regras-conta.ts",
+    "src/modulos/portal-medico/regras-conta.spec.ts",
+    "src/modulos/portal-medico/modulo.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/sadt/modulo.ts, repasse/modulo.ts, pep/modulo.ts",
+      "pedido": "O portal-medico injeta SERVICO_PORTAL e PORTA_SADT (sadt), PORTA_REPASSE (repasse) e SERVICO_DOCUMENTOS, PORTA_PRESCRICAO, PORTA_WORKLIST (pep). Esses módulos exportam os tokens mas não são globais: montar os três com global: true (como a cirurgia) ou equivalente. Sem sadt/repasse a partida do portal-medico recusa com mensagem; sem pep, 'meus pacientes' responde 503. O portal-medico.spec.ts já monta os três como globais no teste.",
+      "bloqueia": [
+        "todo o portal-medico na API migrada (partida)"
+      ]
+    },
+    {
+      "tipo": "leitura-de-outro-lote",
+      "alvo": "apps/api/src/modulos/sadt/porta-propria.ts (02-09)",
+      "pedido": "acessoPorId e autocadastros seguem 409 modelo-pendente no banco: toda rota do portal do médico externo (noPedido) e a lista interna das contas dependem deles. A conta do médico é conta_portal_profissional_externo (id = acesso); a situação do modelo traduz para a tela por regras-conta.ts (situacaoDaTela). Escrever essas leituras na porta própria do sadt.",
+      "bloqueia": [
+        "extrato",
+        "agenda",
+        "pedido de cirurgia",
+        "contas",
+        "vincular (a conta é conferida antes pelo sadt)"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ato_conta_portal_profissional_externo (nova)",
+      "ddl": "CREATE TABLE ato_conta_portal_profissional_externo (id BIGINT UNSIGNED AUTO_INCREMENT PK, conta_portal_profissional_externo_id BIGINT UNSIGNED NOT NULL FK RESTRICT, ato VARCHAR(20) NOT NULL CHECK IN ('bloqueio','desbloqueio','encerramento','troca_senha','troca_email'), situacao_anterior VARCHAR(30) NOT NULL CHECK IN ('pendente','ativa','bloqueada','suspensa','encerrada'), motivo VARCHAR(250) NULL, pedidos_pendentes SMALLINT UNSIGNED NOT NULL DEFAULT 0, decisao_pedidos VARCHAR(10) NULL CHECK IN ('retirar','manter'), CHECK (ato NOT IN ('bloqueio','desbloqueio','encerramento') OR motivo IS NOT NULL), CHECK (pedidos_pendentes = 0 OR decisao_pedidos IS NOT NULL), realizado_por_usuario_id BIGINT UNSIGNED NULL FK usuario, realizado_em DATETIME(3) NOT NULL, origem, criado_em/criado_por/alterado_em/alterado_por/versao (ADR 0002; sem exclusão: fato histórico), KEY (conta_portal_profissional_externo_id, realizado_em)",
+      "bloqueia": [
+        "atosConta (histórico dos atos: 409 modelo-pendente; o ato em si já grava a situação e vai à trilha com o motivo)"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "troca_email_conta_portal (nova, a mesma pedida pelo 03-12) com a conta do médico",
+      "ddl": "A tabela pedida pelo 03-12 (troca_email_conta_portal) com conta_portal_paciente_id NULL e conta_portal_profissional_externo_id NULL FK, CHECK ((conta_portal_paciente_id IS NULL) + (conta_portal_profissional_externo_id IS NULL) = 1), envio CHECK IN ('simulador','halai'); UNIQUE de uma pendente por conta (coluna gerada).",
+      "bloqueia": [
+        "pedirTrocaEmail",
+        "cancelarTrocaEmail",
+        "confirmarTrocaEmail",
+        "trocaEmailPendente",
+        "trocaEmailPorToken"
+      ]
+    },
+    {
+      "tipo": "integracao",
+      "alvo": "provedor de identidade da conta do portal (conta_portal_profissional_externo.usuario_id)",
+      "pedido": "A senha da conta do médico externo fica no provedor de identidade (comentário do DDL); a troca de senha pelo portal precisa da porta do provedor (ou de usuario.senha_resumo pela conta usuario_id). Até lá trocarSenha responde 409 modelo-pendente.",
+      "bloqueia": [
+        "trocarSenha"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "aviso_valor_critico_tentativa (coluna nova) + carga de canal_notificacao",
+      "ddl": "ADD conta_portal_profissional_externo_id BIGINT UNSIGNED NULL FK RESTRICT + UNIQUE (aviso_valor_critico_id, conta_portal_profissional_externo_id) para uma notificação por aviso e conta; e o canal_notificacao codigo='portal_medico' na carga inicial do criar_cliente. resultado guarda o envio ('simulador','halai','desligado') e observacao o motivo do desligado.",
+      "bloqueia": [
+        "notificarCritico (a vigia de notificação do crítico ao médico externo só roda na memória)",
+        "a marca 'notificado' em cada aviso da tela de críticos (a tela sai com notificacao null e notificacaoIndisponivel; os avisos não ficam indisponíveis)"
+      ]
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "documento-assinatura (M49) na API migrada",
+      "pedido": "A fila de assinatura remota do portal (FonteAssinaturaPortalMedico) só é ligada quando o serviço da assinatura de documentos estiver montado na API migrada; o modulo.ts deixa portal.assinatura = null (as rotas de assinatura respondem 503 com o motivo existente).",
+      "bloqueia": [
+        "assinaturasPortal",
+        "iniciarAssinatura",
+        "concluirAssinatura"
+      ]
+    },
+    {
+      "tipo": "desmontagem",
+      "alvo": "apps/api/src/app.module.ts",
+      "pedido": "O app.module.ts importa portaPortalMedicoLegado (linha ~428 e ~2913), que saiu do public-api: trocar pelo portaPortalMedicoPropria ou remover o bloco na desmontagem. Também usava ContextoPortalMedico {rede,hospital}: agora é o ContextoNucleo com rede/hospital."
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "destino da porta",
+      "feito": "PortaPortalMedico.destino e ServicoPortalMedico.destino: 'legado' -> 'banco'."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conta_portal_profissional_externo (chave do profissional vigente)",
+      "ddl": "ALTER TABLE conta_portal_profissional_externo ADD profissional_vigente_id BIGINT UNSIGNED AS (IF(situacao <> 'encerrada' AND autorizada_em IS NOT NULL AND excluido_em IS NULL, profissional_id, NULL)) STORED COMMENT 'Profissional da conta vigente (autorizada, não encerrada, não excluída): um profissional numa só conta vigente', DROP INDEX uq_conta_portal_profissional_externo_profissional, ADD KEY ix_conta_portal_profissional_externo_profissional (profissional_id), ADD UNIQUE KEY uq_conta_portal_profissional_externo_profissional_vigente (profissional_vigente_id)",
+      "motivo": "O UNIQUE em profissional_id prende o médico à primeira conta para sempre: a conta desligada guarda o profissional (de quem a conta era) e a encerrada é fato histórico. A porta já filtra a outra conta por situacao IN ('ativa','bloqueada','suspensa') AND autorizada_em IS NOT NULL e trata a violação de uq_*_vigente como 'profissional-em-outra-conta'. profissional_id segue NOT NULL (avaliado: a conta desligada continua sendo do mesmo médico; a vigência é pela autorização e pela situação, não por apagar o profissional). O nome do UNIQUE novo precisa conter 'vigente'.",
+      "bloqueia": [
+        "religar o profissional a outra conta depois de desligar ou encerrar a antiga (hoje 409 modelo-pendente com o motivo; o int.spec cobre os dois estados do banco)"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "conta_portal_profissional_externo.pessoa_fisica_id (comentário)",
+      "ddl": "ALTER TABLE conta_portal_profissional_externo MODIFY pessoa_fisica_id BIGINT UNSIGNED NOT NULL COMMENT 'Pessoa do médico dono da conta (a mesma do profissional ligado); quem autoriza fica em autorizada_por_usuario_id'",
+      "motivo": "Decisão do lote: a coluna é a pessoa do médico. O vincular grava pessoa_fisica_id junto com profissional_id (contrato de efeito no int.spec). O comentário atual ('Pessoa do hospital que liga a conta') contradiz autorizada_por_usuario_id. Confirmar com o integrador."
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "packages/dominio-cirurgia/src/pedido-portal.ts (registroDoPedido)",
+      "pedido": "Comparar o número da inscrição (r.numero, sem zeros à esquerda) com conta.numero, e não r.codigo. RegistroDoProfissional.numero agora vem nas duas portas (memória e banco). No banco o resultado de hoje está certo por acaso (todos os registros têm id = profissional_id, e validos[0] é o mesmo profissional), mas o contrato fica explícito."
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "pep (aplicacao/worklist-medico.ts filaDoVinculo e a porta própria de documentos)",
+      "pedido": "O vínculo da fila do portal é ProfissionalCorpoClinico.vinculoAssistencial: no banco é o profissional_id; na memória, as ocupações sintéticas (cboDe). Renomear o campo 'cbos' de filaDoVinculo para 'profissionais' (profissional_id) e, na porta própria de documentos do pep, filtrar 'meus pacientes' e críticos por profissional_id. Até lá a fila do portal no banco depende da porta de documentos do pep, ainda na memória.",
+      "bloqueia": [
+        "'meus pacientes' e críticos do portal no banco, quando a porta de documentos do pep for para o banco sem essa troca"
+      ]
+    },
+    {
+      "tipo": "contrato",
+      "alvo": "packages/contratos/src/portal-medico/portal-medico.ts (CriticosPortalMedico)",
+      "pedido": "Acrescentar 'readonly notificacaoIndisponivel?: string' (o motivo quando a notificação ainda não existe no banco). O servico já devolve o campo; a tela pode mostrar o aviso."
+    },
+    {
+      "tipo": "web",
+      "alvo": "telas internas do portal do médico (vincular, desvincular, ato da conta)",
+      "pedido": "Enviar a Idempotency-Key nas três gravações. O controlador interno a lê (opcional, formato [A-Za-z0-9._:-]{8,80}) e a leva ao ContextoPortalMedico.chaveIdempotencia; sem ela, cada clique é uma gravação nova."
+    }
+  ]
+}

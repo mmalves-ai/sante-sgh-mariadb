@@ -42,9 +42,9 @@ import {
   somarMinutos,
   sobreposicoesNoMapa,
 } from '@sgh/dominio-cirurgia';
-import type { AgendamentoLido, EstadoCirurgiaLido, FiltroRealizadas, SalaLida } from '@sgh/legado';
+import type { AgendamentoDaSala, FiltroRealizadas, PedidoCirurgia, SalaDoBloco } from './tipos.js';
 import { ErroProblema } from '../../problema.filter.js';
-import type { ContextoPortaM18 } from '../exames/public-api.js';
+import { type ContextoPortaM18, destinoDoContrato } from '../exames/public-api.js';
 import type { PortaCirurgia } from './porta.js';
 
 const ROTULO_RECURSO = new Map<string, string>(RECURSOS_SALA.map((r) => [r.coluna, r.rotulo]));
@@ -52,7 +52,7 @@ const hhmmDe = (inicio: string) => inicio.slice(11, 16);
 const rotuloOperacao = (op: string) => (op === 'A' ? 'Inclusão' : op === 'R' ? 'Remarcação' : op);
 const PEDIATRA = { funcao: 'pediatra', cod: '__SEM_COD__', id: 'ID_TBCBOPRO_PEDIATRA' };
 
-export function salaResposta(s: SalaLida): SalaCirurgica {
+export function salaResposta(s: SalaDoBloco): SalaCirurgica {
   return {
     codigo: s.codigo,
     nome: s.nome,
@@ -72,7 +72,7 @@ export class ServicoCirurgia {
   constructor(private readonly porta: PortaCirurgia) {}
 
   /** A sala existe e o login está entre os usuários permitidos dela (a mesma lista do outro sistema). */
-  async exigirSalaPermitida(c: ContextoPortaM18, login: string, sala: number): Promise<SalaLida> {
+  async exigirSalaPermitida(c: ContextoPortaM18, login: string, sala: number): Promise<SalaDoBloco> {
     const s = (await this.porta.salas(c, login)).find((x) => x.codigo === sala);
     if (!s)
       throw new ErroProblema('entrada-invalida', 400, 'Sala inexistente', 'A sala cirúrgica não existe.', {
@@ -117,8 +117,8 @@ export class ServicoCirurgia {
   }
 
   private agendamentoResposta(
-    a: AgendamentoLido,
-    e: EstadoCirurgiaLido | undefined,
+    a: AgendamentoDaSala,
+    e: PedidoCirurgia | undefined,
     n: Nomes,
     sobrepostos: Set<number>,
   ): AgendamentoCirurgico {
@@ -160,7 +160,7 @@ export class ServicoCirurgia {
   }
 
   private solicitacaoResposta(
-    e: EstadoCirurgiaLido,
+    e: PedidoCirurgia,
     n: Nomes,
     paciente: string,
     completo = false,
@@ -223,7 +223,7 @@ export class ServicoCirurgia {
   }
 
   private ocupacao(
-    a: Pick<AgendamentoLido, 'id' | 'sala' | 'inicio' | 'duracaoMin' | 'intervaloMin'>,
+    a: Pick<AgendamentoDaSala, 'id' | 'sala' | 'inicio' | 'duracaoMin' | 'intervaloMin'>,
   ): OcupacaoSala {
     return {
       id: a.id,
@@ -247,7 +247,7 @@ export class ServicoCirurgia {
       this.porta.estadosDoPeriodo(c, f.inicio, ate),
     ]);
     const salasMapa = salas.filter((s) => !f.salas || f.salas.includes(s.codigo));
-    const porAg = new Map<number, EstadoCirurgiaLido>();
+    const porAg = new Map<number, PedidoCirurgia>();
     for (const e of estados)
       if (e.agendamento !== null && !porAg.has(e.agendamento)) porAg.set(e.agendamento, e);
     const solicitacoes = estados.filter(
@@ -306,11 +306,11 @@ export class ServicoCirurgia {
       sobreposicoes: sobre.length,
       datasImpossiveis: ags.itens.filter((a) => !a.inicio || dataImpossivel(a.inicio)).length,
       preparoMinimoMin: f.preparoMinimoMin,
-      destino: this.porta.destino,
+      destino: destinoDoContrato(this.porta.destino),
     };
   }
 
-  async exigirAgendamento(c: ContextoPortaM18, id: number): Promise<AgendamentoLido> {
+  async exigirAgendamento(c: ContextoPortaM18, id: number): Promise<AgendamentoDaSala> {
     const a = await this.porta.agendamento(c, id);
     if (!a)
       throw new ErroProblema(
@@ -322,7 +322,7 @@ export class ServicoCirurgia {
     return a;
   }
 
-  async exigirEstado(c: ContextoPortaM18, id: number): Promise<EstadoCirurgiaLido> {
+  async exigirEstado(c: ContextoPortaM18, id: number): Promise<PedidoCirurgia> {
     const e = await this.porta.estado(c, id);
     if (!e)
       throw new ErroProblema(
@@ -347,7 +347,7 @@ export class ServicoCirurgia {
     }));
   }
 
-  private motivo(e: EstadoCirurgiaLido | undefined) {
+  private motivo(e: PedidoCirurgia | undefined) {
     if (!e?.motivo) return null;
     return {
       codigo: e.motivo,

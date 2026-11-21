@@ -10,17 +10,18 @@ import { RegistradorTrilhaMemoria } from '../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../configuracao.js';
 import { envTeste, SENHA } from '../../sessao/teste.spec-util.js';
 import { PortaCadastroMemoria } from '../cadastro/porta-memoria.js';
-import { portaCirurgiaIndisponivel } from './porta-legado.js';
+import { moduloCirurgia } from './modulo.js';
+import { portaCirurgiaIndisponivel } from './porta-propria.js';
 import { fimDoBloco, PortaCirurgiaMemoria } from './porta-memoria.js';
 
 const HOJE = '2026-10-21'; // quarta-feira
 const AMANHA = '2026-10-22';
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'cirurgia' };
 const trilha = new RegistradorTrilhaMemoria();
 const cadastro = new PortaCadastroMemoria();
 const cirurgia = new PortaCirurgiaMemoria(
   null,
-  (c, ids) => cadastro.lerPacientes(c, ids),
+  (c, ids) => cadastro.lerPacientes({ ...c, rede: '', hospital: '' }, ids),
   () => ({
     hoje: HOJE,
     hhmm: '0600',
@@ -30,7 +31,10 @@ let app: NestFastifyApplication;
 let chave = 0;
 
 beforeAll(async () => {
-  app = await criarApp(lerConfiguracao(env), null, env, { trilha, cadastro, cirurgia });
+  app = await criarApp(lerConfiguracao(env), null, env, {
+    trilha,
+    registro: { cirurgia: async () => ({ modulo: (ctx) => moduloCirurgia(ctx, { cirurgia }) }) },
+  });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
@@ -479,9 +483,16 @@ describe('histórico da agenda por período', () => {
 describe('porta indisponível', () => {
   it('fora de dev/ci sem o núcleo: 503 em tudo', async () => {
     const p = portaCirurgiaIndisponivel();
-    await expect(p.salas({ rede: 'r', hospital: 'h' }, 'X')).rejects.toThrow(/indispon/i);
+    await expect(
+      p.salas({ cliente: 'memoria', estabelecimento: 1, usuario: null, correlacao: 'teste' }, 'X'),
+    ).rejects.toThrow(/indispon/i);
     expect(
-      (await p.podeGravar({ rede: 'r', hospital: 'h' }, 'cirurgia.agendarCirurgia', 'X')).motivo,
+      (
+        await p.podeGravar(
+          { cliente: 'memoria', estabelecimento: 1, usuario: null, correlacao: 'teste' },
+          'cirurgia.agendarCirurgia',
+        )
+      ).motivo,
     ).toMatch(/não está configurado/);
   });
 });

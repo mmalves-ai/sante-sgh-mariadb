@@ -14,6 +14,7 @@ import type {
   CriarLicitacaoEntrada,
   DescartarPrecoLicitacaoEntrada,
   EncerrarLicitacaoEntrada,
+  EtapaLicitacao,
   FiltroLicitacoes,
   HomologarLicitacaoEntrada,
   LicitacaoDetalhe,
@@ -27,7 +28,6 @@ import type {
   SituacaoPropostaLicitacaoEntrada,
 } from '@sgh/contratos';
 import type { DocumentoEmitidoLicitacao } from '@sgh/contratos/regras-suprimentos';
-import type { LicitacaoGravacao } from '@sgh/legado';
 import type { ContextoPortaM18, PortaGravacaoM18 } from '../exames/public-api.js';
 import type { FornecedorContrato, UsuarioContrato } from './contrato-porta.js';
 
@@ -38,7 +38,16 @@ interface Base {
   readonly parametros: ParametrosLicitacao;
 }
 
-/** Gravações só do novo (SGH_), numa transação com a SGH_TRILHA junto. */
+/** O resultado comum das gravações do processo. */
+export interface LicitacaoGravacao {
+  readonly licitacao: number;
+  /** O registro gravado (o processo, o preço, a proposta ou o evento). */
+  readonly registro: number;
+  readonly etapa: EtapaLicitacao;
+  readonly repetido: boolean;
+}
+
+/** As gravações numa transação, com a trilha junto. */
 export interface GravadorLicitacao {
   criar(m: Base & { entrada: CriarLicitacaoEntrada }): Promise<LicitacaoGravacao>;
   alterar(m: Base & { id: number; entrada: AlterarLicitacaoEntrada }): Promise<LicitacaoGravacao>;

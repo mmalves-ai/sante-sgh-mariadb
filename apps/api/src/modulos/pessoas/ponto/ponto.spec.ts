@@ -5,20 +5,38 @@
 // espelho (o RH não dá a ciência por ele); quem não tem o ponto não vê.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { linhaCabecalhoAfd, linhaMarcacaoAfd, linhaTrailerAfd } from '@sgh/dominio-pessoas';
-import type { ChaveGravada, PrerequisitoGravado } from '@sgh/legado';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { criarApp } from '../../../app.js';
 import { RegistradorTrilhaMemoria } from '../../../autorizacao/trilha.js';
 import { lerConfiguracao } from '../../../configuracao.js';
 import { envTeste, SENHA } from '../../../sessao/teste.spec-util.js';
+import type { ChaveLiberacao, PrerequisitoRecurso } from '../../config/configuracao-fonte.js';
 import { fonteConfiguracaoMemoria } from '../../config/public-api.js';
 import { CifraCpf } from '../cifra-cpf.js';
 import { PortaEscalaMemoria } from '../escala/porta-escala-memoria.js';
 import { PESSOAS_SINTETICAS_M52, PortaPessoasMemoria } from '../porta-memoria.js';
 import { PortaPontoMemoria } from './porta-ponto-memoria.js';
+import type { DynamicModule } from '@nestjs/common';
+import type { CarregadorModulo } from '../../registro.js';
+import { FONTE_CONFIGURACAO, type FonteConfiguracao } from '../../config/configuracao-fonte.js';
+import { PORTA_ESCALA } from '../escala/porta-escala.js';
+import { CIFRA_CPF_PESSOAS, PessoasController } from '../pessoas.controller.js';
+import { PORTA_PESSOAS } from '../porta.js';
+import { PontoController } from './ponto.controller.js';
+import { PORTA_PONTO } from './porta-ponto.js';
 
-const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev' };
-const chave = (c: string): ChaveGravada => ({
+/** Contexto da porta em memória pelo código do estabelecimento da sessão sintética. */
+const ctxMem = (hospital: string) => ({
+  cliente: 'memoria',
+  estabelecimento: null,
+  usuario: null,
+  correlacao: 'teste',
+  rede: 'rede-sintetica',
+  hospital,
+});
+
+const env: Record<string, string> = { ...envTeste, AMBIENTE: 'dev', API_MODULOS: 'todos' };
+const chave = (c: string): ChaveLiberacao => ({
   id: c,
   tipo: 'recurso',
   chave: c,
@@ -31,7 +49,7 @@ const chave = (c: string): ChaveGravada => ({
   alteradoPor: 'SINT.ADMIN',
   alteradoEm: '2026-10-25T10:00:00',
 });
-const cumprido = (recurso: string): PrerequisitoGravado => ({
+const cumprido = (recurso: string): PrerequisitoRecurso => ({
   recurso,
   tipo: 'aprovacao',
   situacao: 'cumprido',
@@ -42,6 +60,26 @@ const cumprido = (recurso: string): PrerequisitoGravado => ({
 });
 
 let app: NestFastifyApplication;
+
+/** Registro de teste: colaboradores e ponto sobre as portas em memória (o módulo pessoas é montado num lote seguinte). */
+class ModuloTestePonto {}
+function registroTestePonto(configuracao: FonteConfiguracao): Readonly<Record<string, CarregadorModulo>> {
+  return {
+    pessoas: async () => ({
+      modulo: (): DynamicModule => ({
+        module: ModuloTestePonto,
+        controllers: [PessoasController, PontoController],
+        providers: [
+          { provide: PORTA_PESSOAS, useValue: pessoas },
+          { provide: PORTA_ESCALA, useValue: escala },
+          { provide: PORTA_PONTO, useValue: ponto },
+          { provide: CIFRA_CPF_PESSOAS, useValue: new CifraCpf(Buffer.alloc(32, 7)) },
+          { provide: FONTE_CONFIGURACAO, useValue: configuracao },
+        ],
+      }),
+    }),
+  };
+}
 const trilha = new RegistradorTrilhaMemoria();
 const pessoas = new PortaPessoasMemoria();
 pessoas.hojeFixo = '2026-10-25';
@@ -54,14 +92,12 @@ beforeAll(async () => {
   const recursos = ['pessoas.colaborador', 'pessoas.escala', 'pessoas.ponto'];
   app = await criarApp(lerConfiguracao(env), null, env, {
     trilha,
-    pessoas,
-    escala,
-    ponto,
-    cifraCpf: new CifraCpf(Buffer.alloc(32, 7)),
-    configuracao: fonteConfiguracaoMemoria(trilha, {
-      chavesIniciais: () => recursos.map(chave),
-      prerequisitosIniciais: () => recursos.map(cumprido),
-    }),
+    registro: registroTestePonto(
+      fonteConfiguracaoMemoria(trilha, {
+        chavesIniciais: () => recursos.map(chave),
+        prerequisitosIniciais: () => recursos.map(cumprido),
+      }),
+    ),
   });
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
@@ -148,9 +184,9 @@ describe('ponto, fatia F4, pela HTTP', { timeout: 180_000 }, () => {
     });
     expect(adm.statusCode).toBe(200);
     const vinculo = adm.json().id as number;
-    const v = (await pessoas.vinculo({ rede: '', hospital: 'aa' }, vinculo))!;
-    const c = { rede: '', hospital: 'aa' };
-    const regime = await escala.gravarSgh(c, {} as never, async (g) => {
+    const v = (await pessoas.vinculo(ctxMem('aa'), vinculo))!;
+    const c = ctxMem('aa');
+    const regime = await escala.gravarSgh<number>(c, {} as never, async (g) => {
       const r = await g.incluirRegime({
         codigo: '12x36',
         nome: 'Plantão 12 por 36',

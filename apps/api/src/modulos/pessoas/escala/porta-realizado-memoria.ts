@@ -2,18 +2,17 @@
 // memória (só as publicadas) e o colaborador da gestão de pessoas em memória; o realizado e as tarifas vivem por
 // estabelecimento, numa cópia por transação. O lançamento no repasse é simulado com as mesmas recusas da receita
 // (aprovado, com valor, ainda não lançado, do prestador, na competência, a soma igual ao valor). Nada vai à cópia.
-import { VINCULOS_PRESTADOR } from '@sgh/contratos';
 import {
-  ErroOperacao,
-  type LinhaTrilha,
-  type PlantaoParaRealizadoLido,
-  type RealizadoPesLido,
-  type TarifaPlantaoPesLida,
-} from '@sgh/legado';
+  type RegistroPlantaoParaRealizado,
+  type RegistroRealizado,
+  type RegistroTarifaPlantao,
+} from './tipos.js';
+import { ErroOperacao, type LinhaTrilha } from '@sgh/nucleo';
+import { VINCULOS_PRESTADOR } from '@sgh/contratos';
 import type { GravacaoFeita } from '../../exames/public-api.js';
 import type { PortaPessoas } from '../porta.js';
 import type { PortaEscala } from './porta-escala.js';
-import { PortaEscalaMemoria } from './porta-escala-memoria.js';
+import { chaveDe, PortaEscalaMemoria } from './porta-escala-memoria.js';
 import type { ContextoRealizado, GravadorRealizado, PortaRealizado } from './porta-realizado.js';
 
 const recusa = (codigo: string, mensagem: string) =>
@@ -26,8 +25,8 @@ const desatualizado = () =>
 
 interface Estado {
   seq: number;
-  realizados: RealizadoPesLido[];
-  tarifas: TarifaPlantaoPesLida[];
+  realizados: RegistroRealizado[];
+  tarifas: RegistroTarifaPlantao[];
   lancamentos: number;
 }
 const novo = (): Estado => ({ seq: 5270, realizados: [], tarifas: [], lancamentos: 99_000 });
@@ -80,8 +79,8 @@ export class PortaRealizadoMemoria implements PortaRealizado {
   }
 
   private e(c: ContextoRealizado): Estado {
-    let s = this.estados.get(c.hospital);
-    if (!s) this.estados.set(c.hospital, (s = novo()));
+    let s = this.estados.get(chaveDe(c));
+    if (!s) this.estados.set(chaveDe(c), (s = novo()));
     return s;
   }
 
@@ -133,7 +132,7 @@ export class PortaRealizadoMemoria implements PortaRealizado {
       throw recusa('valor-diferente-dos-plantoes', 'O valor não é a soma dos plantões realizados.');
     const lancamento = ++s.lancamentos;
     for (const r of rs) Object.assign(r!, { lancamento, lancadoPor: 'memoria' });
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveDe(c), s);
     this.lancados.push(x as unknown as Record<string, unknown>);
     return { resultado: { lancamento, valor: x.valor }, repetida: false, trilha: null };
   }
@@ -153,7 +152,7 @@ export class PortaRealizadoMemoria implements PortaRealizado {
         'O estorno entra numa competência posterior à do lançamento original.',
       );
     const lancamento = ++s.lancamentos;
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveDe(c), s);
     this.lancados.push({ ...(x as unknown as Record<string, unknown>), lancamento });
     return { resultado: { lancamento, valor: x.valor }, repetida: false, trilha: null };
   }
@@ -296,7 +295,7 @@ export class PortaRealizadoMemoria implements PortaRealizado {
       },
     };
     const r = await fn(g);
-    this.estados.set(c.hospital, s);
+    this.estados.set(chaveDe(c), s);
     return r;
   }
 
@@ -307,7 +306,7 @@ export class PortaRealizadoMemoria implements PortaRealizado {
 
   private async todosPlantoes(c: ContextoRealizado, cs: readonly string[], unidade?: number) {
     if (!this.escala) return [];
-    const r: PlantaoParaRealizadoLido[] = [];
+    const r: RegistroPlantaoParaRealizado[] = [];
     for (const competencia of cs) {
       const es = await this.escala.escalas(c, {
         competencia,
@@ -369,7 +368,7 @@ export class PortaRealizadoMemoria implements PortaRealizado {
       : null;
   }
   async plantoesPorIds(c: ContextoRealizado, ids: readonly number[]) {
-    const r: PlantaoParaRealizadoLido[] = [];
+    const r: RegistroPlantaoParaRealizado[] = [];
     for (const id of new Set(ids)) {
       const p = await this.plantao(c, id);
       if (p) r.push(p);

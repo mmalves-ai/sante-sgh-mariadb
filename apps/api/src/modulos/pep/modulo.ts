@@ -118,6 +118,8 @@ export async function moduloPep(ctx: ContextoModulo, opcoes: OpcoesModuloPep = {
   const rede = opcoes.rede ?? (await portasDaRede(ctx)).mpi;
   return {
     module: ModuloPep,
+    // Global: o portal-medico injeta as portas deste módulo (montagem da onda 4).
+    global: true,
     controllers: [
       ProntuarioController,
       AcessosProntuarioController,

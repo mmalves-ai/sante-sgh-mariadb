@@ -1,0 +1,73 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "src/modulos/pessoas/treinamento/tipos-treinamento.ts",
+    "src/modulos/pessoas/treinamento/modelo-curso.ts",
+    "src/modulos/pessoas/treinamento/porta-treinamento.ts",
+    "src/modulos/pessoas/treinamento/porta-treinamento-memoria.ts",
+    "src/modulos/pessoas/treinamento/porta-treinamento-propria.ts",
+    "src/modulos/pessoas/treinamento/porta-treinamento-propria.int.spec.ts",
+    "src/modulos/pessoas/treinamento/servico-treinamento.ts",
+    "src/modulos/pessoas/treinamento/treinamento.controller.ts",
+    "src/modulos/pessoas/treinamento/treinamento-modulo.ts",
+    "src/modulos/pessoas/treinamento/documentos-f6.ts",
+    "src/modulos/pessoas/treinamento/crud-treinamento.spec.ts",
+    "src/modulos/pessoas/treinamento/f6.spec.ts",
+    "src/modulos/pessoas/treinamento/servico-f6.spec.ts"
+  ],
+  "pedidos": [
+    {
+      "tipo": "montagem",
+      "alvo": "apps/api/src/modulos/pessoas/modulo.ts",
+      "pedido": "Montar o módulo pessoas (lote registrador 03-11) quando os lotes 03-02 a 03-10 fecharem: juntar a parte dos treinamentos `parteTreinamento(ctx)` de apps/api/src/modulos/pessoas/treinamento/treinamento-modulo.ts (controller TreinamentoController e o provider PORTA_TREINAMENTO, que injeta PORTA_PESSOAS) às portas próprias irmãs (pessoas, escala, realizado, ponto, sesmt, avaliação, cargos, folha, cálculo, integração, autoatendimento, indicadores, rubricas, eSocial) com a regra do F2-L, e incluir `pessoas: () => import('./pessoas/modulo.js'),` em REGISTRO_MODULOS. Sem isso o f6.spec.ts (HTTP da F6) não passa: ele usa as opções `pessoas/escala/ponto/sesmt/treinamento/realizado` do criarApp antigo, que o OpcoesAppBase não tem mais; depois da montagem, trocar por `registro` com o módulo pessoas sobre as portas em memória e o ctx `{ rede, hospital }` (linha 150) por ContextoNucleo."
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (presenca_treinamento)",
+      "pedido": "ALTER TABLE presenca_treinamento ADD COLUMN vinculo_trabalho_id BIGINT UNSIGNED NULL (FK vinculo_trabalho, ON DELETE RESTRICT, índice), ADD COLUMN concluido_em DATE NULL COMMENT 'Data da conclusão do colaborador na turma', ADD COLUMN observacao VARCHAR(400) NULL, CHECK (concluido_em IS NULL OR situacao = 'presente'). Hoje a porta marca a conclusão pelos minutos cumpridos e guarda a data real informada na trilha_auditoria da gravação (dados_depois.concluido_em), lida de lá; com a coluna, migrar esse valor da trilha, grava a observação em justificativa_ausencia e acha o vínculo pelo colaborador (o mais recente não desligado).",
+      "prioridade": "alta"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (turma_treinamento)",
+      "pedido": "ALTER TABLE turma_treinamento ADD COLUMN documento_qualidade_versao_id BIGINT UNSIGNED NULL (FK documento_qualidade_versao, índice) COMMENT 'Versão do POP trabalhada na turma'. Hoje a versão escolhida vai à trilha_auditoria da inclusão e da alteração do POP da turma (dados_depois.pop_versao) e é lida de lá; nenhuma gravação posterior muda a versão (antes era deduzida pela última gravação da turma, o que gravava ciência da versão errada). Com a coluna, migrar o valor da trilha.",
+      "prioridade": "alta"
+    },
+    {
+      "tipo": "ddl",
+      "alvo": "db/migracoes/15_RH (curso)",
+      "pedido": "Público e categoria do curso: (a) estender ck_curso_tipo com 'procedimento_operacional' e 'gestao' (ou trocar o contrato CATEGORIAS_CURSO pelo vocabulário do modelo); (b) curso_publico_alvo (id, curso_id FK, estabelecimento_id FK, setor_funcional_id NULL FK, funcao_id NULL FK, CHECK exatamente um dos dois ou nenhum = todo o estabelecimento, colunas de auditoria e versao) ou ADD COLUMN obrigatorio BOOLEAN NOT NULL DEFAULT FALSE. Até lá recusam com 409 `modelo-pendente`: incluir/alterar curso com categoria `pop` ou `gestao`, com público por unidade, obrigatório para todo o estabelecimento (sem funções) e público em curso não obrigatório. PRIORIDADE ALTA: sem isso, no banco fica indisponível o uso central do NR-32: 'curso obrigatório para todo o estabelecimento ou por setor'. Só o público por função funciona. A memória (dev/ci) recusa igual desde a correção (modelo-curso.ts), então os testes não escondem a falta.",
+      "prioridade": "alta"
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "apps/api/src/modulos/pessoas/public-api.ts e infra/autoatendimento-escopo.int.spec.ts",
+      "pedido": "porta-treinamento-legado.ts foi apagado: exportar de ./treinamento/porta-treinamento-propria.js (PortaTreinamentoPropria, portaTreinamentoIndisponivel) e de ./treinamento/treinamento-modulo.js; portaTreinamentoNaTransacao não existe mais (testes sobre a cópia saem)."
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "apps/api/src/modulos/pessoas/infra/outbox-custo-pessoal.int.spec.ts",
+      "pedido": "titulos-folha.spec-util.ts (e titulos-folha.int.spec.ts) foram apagados: eram testes sobre a cópia do sistema de origem (MFCONPAG, SGH_PES_FOLHA_*, transação desfeita). O lote da integração da folha (folha/porta-integracao-propria) deve cobrir no MariaDB o contrato de efeito equivalente: um título por destino, soma = líquido + encargos com as parcelas impressas, a repetição recusada e a falha no segundo título desfazendo tudo (títulos, apropriações, registro e outbox)."
+    },
+    {
+      "tipo": "outro-lote",
+      "alvo": "apps/api/src/modulos/pessoas/escala (porta-escala-propria)",
+      "pedido": "sobreposicao-rede.int.spec.ts foi apagado (duas cópias do sistema de origem). O lote da escala deve provar no MariaDB a regra 7 do M52: plantão de outro estabelecimento da rede na mesma hora recusa com `sobreposicao-rede` sem expor a escala alheia; fora do horário entra; a consulta ao outro estabelecimento devolve só início e fim."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "PortaTreinamento",
+      "pedido": "A porta ganhou `unidades(c)` (setores do estabelecimento, no mesmo espaço da lotação do vínculo). Dublês de PortaTreinamento em avaliacao/ e autoatendimento/ (outros lotes) precisam do método se forem tipados por inteiro."
+    },
+    {
+      "tipo": "aviso",
+      "alvo": "apps/api/src/modulos/enfermagem/gravacao-direta.ts (todas as portas próprias com gravação direta)",
+      "pedido": "A recusa de negócio que o serviço lança dentro de gravarSgh (ErroProblema de recusaRegra/recusar) sai do Executor como ErroOperacao 500 e o problemaDoCadastro a devolve como 'Erro inesperado' (provado no int spec do treinamento: conclusao-fora-do-periodo virava 500). A PortaTreinamentoPropria repassa o erro original; o certo é corrigir uma vez em gravacaoDireta (repassar o erro não ErroOperacao lançado pela fn) e conferir as outras portas próprias da onda."
+    },
+    {
+      "tipo": "montagem",
+      "alvo": "onda 3 (--estrito)",
+      "pedido": "Tratar o f6.spec.ts como bloqueante na montagem do pessoas/modulo.ts (ele já foi ajustado para o público por função e espera modelo-pendente no público por unidade). A onda só fecha quando os lotes da escala e da integração da folha entregarem os specs de substituição de sobreposicao-rede e titulos-folha: até lá, a regra 7 do M52 e o contrato de efeito dos títulos da folha estão sem teste."
+    }
+  ]
+}
