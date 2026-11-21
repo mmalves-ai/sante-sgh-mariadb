@@ -24,8 +24,8 @@ python3 -I conector/verificar_mapa.py > "$LOG/verificador.log" 2>&1 \
 python3 -I tools/obra/fatiar_conector.py --conferir > "$LOG/fatiar.log" 2>&1 \
   || ERROS+=("fatiar_conector --conferir: $(tail -3 "$LOG/fatiar.log" | paste -sd ';' -)")
 
-if [ "$MOD" = exemplo ]; then
-  TESTE=test_carga_mapa.py
+if [ "${MOD#exemplo}" != "$MOD" ]; then  # exemplo, exemplo_l5: provas do próprio motor
+  TESTE=test_carga_mapa${MOD#exemplo}.py
 else
   TESTE=test_$MOD.py
   [ -f "conector/mapa/declarado/colunas.d/$F.tsv" ] || ERROS+=("sem declarações: conector/mapa/declarado/colunas.d/$F.tsv")

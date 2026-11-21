@@ -44,7 +44,9 @@ def montar():
     for c in d["colunas"]:
         cols.setdefault(c["tabela"], []).append(c)
     decl = {}
-    for c in d["colunas_decl"]:
+    for c in d["colunas_decl"]:  # só o colunas.tsv comum: as colunas.d das fatias não mudam a fatia gerada
+        if c.get("_arquivo", "declarado/colunas.tsv") != "declarado/colunas.tsv":
+            continue
         decl.setdefault(c["tabela"], []).append(c)
     ddl = d["ddl"]
     fatias = []

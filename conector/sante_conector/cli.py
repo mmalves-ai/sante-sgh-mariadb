@@ -3,7 +3,9 @@
 Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   listar                                  .fdb da pasta autorizada, com aceite/motivo
   validar <relativo>                      caminho + cabeçalho
-  sintetica <arquivo.fdb> [--versao N] [--mapa]  gera a imagem sintética do cliente de exemplo (no trabalho)
+  sintetica <arquivo.fdb> [--versao N] [--mapa] [--fatias L5-01,...|lotes]  gera a imagem sintética do cliente de
+                                                  exemplo (no trabalho); `--fatias lotes` junta todas as fatias dos
+                                                  lotes de domínio (sintetica_d/l<lote>_<n>.py)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
   dicionario <relativo> --saida ARQ        dicionário de colunas (tabela|coluna|tipo|bytes|escala|obrigatória|subtipo),
@@ -24,6 +26,7 @@ Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -46,7 +49,7 @@ def main(argv=None):
     sub.add_parser("listar")
     p = sub.add_parser("validar"); p.add_argument("relativo")
     p = sub.add_parser("sintetica"); p.add_argument("arquivo"); p.add_argument("--versao", type=int, default=1)
-    p.add_argument("--mapa", action="store_true")
+    p.add_argument("--mapa", action="store_true"); p.add_argument("--fatias", default="")
     p = sub.add_parser("registrar"); p.add_argument("relativo")
     p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia")); p.add_argument("--sem-gstat", action="store_true")
     p.add_argument("--sha256", action="store_true"); p.add_argument("--saida")
@@ -125,7 +128,9 @@ def main(argv=None):
         return _json(v)
     if a.cmd == "sintetica":
         from . import sintetica
-        return _json(sintetica.gerar(a.arquivo, a.versao, mapa=a.mapa))
+        fatias = ([f for f in sintetica.fatias_disponiveis() if re.fullmatch(r"l\d+_\d+", f)]
+                  if a.fatias == "lotes" else [f for f in a.fatias.split(",") if f])
+        return _json(sintetica.gerar(a.arquivo, a.versao, mapa=a.mapa, fatias=fatias))
     if a.cmd == "conferir-fatia":
         from . import conferencia
         r = conferencia.conferir(a.fatia)

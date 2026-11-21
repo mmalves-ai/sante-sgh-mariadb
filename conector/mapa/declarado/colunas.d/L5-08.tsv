@@ -1,0 +1,6 @@
+tabela	coluna	destino	regra	depara	via	motivo
+FPMOTAFAST	ID	motivo_afastamento.codigo	texto			L5-08: o código do motivo do hospital vira o código de negócio (texto; a chave fica também no conector_origem). codigo_esocial fica NULL: a origem não liga o motivo ao código oficial (o cliente completa pelo painel)
+FPMOTAFAST	DESCRICAO	motivo_afastamento.descricao	texto			L5-08: descrição do motivo (só as pontas aparadas); vazia ou nula recusa a linha (NOT NULL sem padrão)
+FPHSTDIAAFAST	=dias_afastamento_empresa	tabela_legal_vigencia.tipo_tabela				L5-08: histórico dos dias de afastamento a cargo do empregador vira a tabela legal desse tipo
+FPHSTDIAAFAST	DATA_VIGENCIA	tabela_legal_vigencia.vigencia_inicio	data			L5-08: início da vigência; data sentinela fica NULL e recusa a linha (NOT NULL). Fim implícito na origem (vale até a próxima): vigencia_fim fica NULL até a regra genérica de vigência implícita pedida em saida/L5-08.json
+FPHSTDIAAFAST	NUM_DIA	tabela_legal_vigencia.quantidade_dias	inteiro			L5-08: dias a cargo do empregador; negativo recusa a linha (SMALLINT UNSIGNED)

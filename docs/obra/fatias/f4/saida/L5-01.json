@@ -1,0 +1,70 @@
+{
+ "fatia": "L5-01",
+ "pedidos": [
+  {
+   "arquivo": "tools/obra/fatiar_conector.py",
+   "mudanca": "--conferir não deve comparar o trecho 'Já declaradas' (lido de colunas.d): gerar a comparação sem colunas_decl, ou só conferir cobertura",
+   "motivo": "toda fatia que declara colunas faz TODAS as fatias L5..L8 e o indice.tsv aparecerem como 'arquivo diferente do gerado'; a autoconferência de qualquer fatia falha por causa das outras"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + conector/sante_conector/carga_mapa.py (planejar)",
+   "mudanca": "aceitar referência DECLARADA: campo opcional 'referencia' em CAMPOS_DECL (vazio = gerada); planejar usa c.get('referencia') or g.get('referencia'); verificador confere que a tabela referenciada existe na origem",
+   "motivo": "colunas de login (VARCHAR(31): USUARIO, USUARIO_ACEITE, USUARIO_INCLUSAO, NOME_USUARIO) apontam para TBUSERS pela chave NOME, mas a referência gerada só vem de ID_<tabela>; sem isso usuario_id (NOT NULL) recusa todas as linhas de DIPERMPS, PRLOCPACDEFAULT, PRTERMOACEITE, TBAGEUSE, TBCTRPRTUSU, TBDICIONARIO_TBUSERS, CCCADCIR_EXCLUSAO, SIPACAGD_EXCLUSAO; idem TBAGEUSE.TPAGE -> categoria de agenda"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/declarado/valores.tsv (novo)",
+   "mudanca": "de-para de VALORES próprio do lote: declarado/valores.tsv (tabela, coluna, valor_origem, valor_destino, motivo), aplicado depois da regra (codigo_char); valor sem par vira pendência valor_fora_do_dominio; opcionalmente valor_destino '#ref:<tabela>.<codigo>' resolvendo id por código num cadastro do produto",
+   "motivo": "PRLOCPACDEFAULT.TP_ATENDIMENTO_DEFAULT -> tipo_atendimento_padrao, PREMAILCFG.CONEXAO_SSL -> seguranca, PRTERMOCAD.ATIVO -> situacao, TBCTRPRTUSU.OPCAO -> tipo_documento_clinico_id, DIPERMPS.ATO/PS/MODULO -> acao e escopo; o docstring do codigo_char já diz que o de-para próprio do lote dá o valor, mas o motor não tem onde declarar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial '#sha256:<COLUNA>' (SHA-256 hex do texto convertido da coluna)",
+   "motivo": "termo_uso_versao.hash_texto CHAR(64) NOT NULL (PRTERMOCAD) é a prova do texto aceito; sem isso o termo e todos os aceites (PRTERMOACEITE, pai_pendente) recusam"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial '#retrato' (JSON das colunas lidas, já convertidas pelas regras, sem credencial) e '#estabelecimento' (id do único estabelecimento carregado do cliente; vários: pendência)",
+   "motivo": "registro_excluido exige dados JSON NOT NULL e estabelecimento_id NOT NULL; CCCADCIR_EXCLUSAO e SIPACAGD_EXCLUSAO não têm nenhum dos dois na origem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ cofre de segredos)",
+   "mudanca": "coluna especial '#cofre:<COLUNA>': grava o segredo no cofre e põe só a referência no destino; sem cofre configurado, pendência credencial_aguarda_cofre e a linha entra com exige_autenticacao conforme decisão",
+   "motivo": "PREMAILCFG -> servidor_email: CHECK ck_servidor_email_autenticacao exige referencia_cofre; a senha nunca pode ir para a tabela (motivo do mapa)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'minutos_em_timestamp' (TIMESTAMP 1899-12-30 HH:MM vira minutos inteiros) e conversão de período com unidade em outra coluna (D/M/A -> dias); SOLIC_TERMO_ACEITE_PERIODICO -> exige_aceite_periodico (booleano_sn) e PERIOD_REUTILIZACAO_SENHA -> senhas_recentes_bloqueadas (unidade a confirmar)",
+   "motivo": "TBCFGLOGIN fica FORA da carga até estas conversões e o piso do pedido 12: carregar com o padrão do destino trocaria em silêncio exigência de aceite periódico, inatividade, aviso de fim de sessão e reutilização de senha, e a conciliação por contagem diria ok"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador) ou declarado/descartes.tsv",
+   "mudanca": "rever destinos: TBDIGITAR e TBDIGITAR_CNSCADPAC são listas de opções (ID, DESCRICAO), não regras: viram valores de 'exigencia' (de-para), sem linha própria; FPCON: o motivo do mapa diz que as 5 linhas não migram -> descarte declarado; PRLOCPACDEFAULT -> configuracao_setor_prontuario exige setor_funcional_id NOT NULL que a origem não tem (destino só preferencia_usuario); TBCFGLOGIN -> termo_uso_versao não tem texto (a exigência de aceite já fica em politica_senha); DIPERMPS -> perfil_acao é por perfil e a origem é por usuário",
+   "motivo": "com o destino atual essas tabelas não têm carga honesta; ficaram sem coluna declarada (fora da carga) até a decisão"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "detectar colisão de caixa por domínio declarado (coluna de código com UNIQUE no destino e colação sem caixa) com sentinela.colisoes_caixa ANTES de gravar: pendência codigo_colisao_caixa nas DUAS linhas do grupo (nenhuma gravada), independente da ordem de leitura e estável no diferencial",
+   "motivo": "o brief manda codigo_colisao_caixa, mas carga_mapa não chama colisoes_caixa: TBGRUUSU 'ADMINISTRACAO'/'Administracao' vira restricao_destino_1062 só na segunda, e qual fica depende da ordem (sintética: hoje 1062 x1; com a regra, codigo_colisao_caixa x2 e 6 gravados)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial '#codigo_derivado:<COLUNA>:<n>' — usa o valor quando cabe em n caracteres; acima disso, prefixo + resumo estável (ex.: 21 caracteres + '~' + 8 hex do sha256 do valor), com pendência informativa codigo_derivado (gravidade baixa)",
+   "motivo": "TBGRUUSU.NOME VARCHAR(50) é a chave da origem e perfil_acesso.codigo é VARCHAR(30): nome acima de 30 recusa o perfil inteiro (restricao_destino_1406), embora caiba em nome VARCHAR(150)"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (gerador) + conector/mapa/tabelas.tsv / carga.ORDEM",
+   "mudanca": "TBUSERS.GRUPO como chave_origem com referência TBGRUUSU (pela chave NOME), e TBGRUUSU carregada antes de TBUSERS (mover para L3 antes da ordem 2, ou usuario_perfil em duas fases); caso sintético: usuário com perfil recusado gera pai_pendente com a raiz",
+   "motivo": "hoje TBUSERS (L3) grava usuario_perfil antes de existir perfil_acesso (L5) e GRUPO é 'texto' sem referência: perfil recusado nunca propaga pai_pendente aos usuários"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (ou carga_mapa.py)",
+   "mudanca": "regra genérica 'piso:<n>' para inteiro: valor abaixo de n é ELEVADO a n com pendência informativa valor_elevado_ao_minimo (baixa), em vez de recusar a linha",
+   "motivo": "TBCFGLOGIN.QTD_MINIMA_CARACTERES < 8 recusaria pelo CHECK ck_politica_senha_tamanho a política inteira (validade, aviso, tentativas, domínio, complexidade); o domínio (politica-senha.ts, politicaEfetiva) eleva para 8 e mantém o resto. Junto com o pedido 7, libera TBCFGLOGIN, hoje fora da carga"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador) ou declarado/descartes.tsv",
+   "mudanca": "rever destino de PRTPNOTIFEMAIL: é tipo/evento de notificação (aviso por evento), não canal de entrega; candidatos: regra/finalidade de aviso ou finalidade_email; nunca canal_notificacao com tipo_canal fixo",
+   "motivo": "canal_notificacao é o canal (central, email, sms, whatsapp, push, painel); carregar 3 'canais email' com nome de evento é destino que não corresponde. Fora da carga até a decisão"
+  }
+ ]
+}

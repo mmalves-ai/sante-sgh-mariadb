@@ -22,6 +22,7 @@ REGRAS = {
     "booleano_sn": "S/N, T/F, V/F, Y/N e 1/0 viram booleano; vazio vira NULL; outro valor: pendência valor_fora_do_dominio",
     "booleano_01": "inteiro 0/1 vira booleano; outro valor: pendência valor_fora_do_dominio",
     "booleano": "booleano nativo da origem",
+    "booleano_ai": "A (ativo) vira TRUE, I (inativo) FALSE; vazio vira NULL; outro valor: pendência valor_fora_do_dominio",
     "data": "DATE; 1899-12-30, 1900-01-01 e ano < 1800 viram NULL com pendência data_sentinela",
     "data_hora": "TIMESTAMP com destino DATETIME; data sentinela com hora 00:00 vira NULL com pendência data_sentinela; "
                  "data sentinela com hora preenchida vira NULL com pendência hora_sem_data (o lote declara "
@@ -31,6 +32,7 @@ REGRAS = {
     "hora": "TIME, sem conversão",
     "hora_hhmm": "inteiro HHMM vira TIME; fora de 0..2359 ou minuto >= 60: pendência hora_invalida",
     "inteiro": "inteiro, sem conversão",
+    "inteiro_zero_nulo": "inteiro em que 0 é a convenção de 'sem valor' (ex.: sem limite): 0 vira NULL, sem pendência",
     "decimal": "NUMERIC com a escala da origem, sem perda",
     "flutuante": "DOUBLE/FLOAT vira DECIMAL pelo texto do valor (sem ruído binário)",
     "blob": "BLOB binário (SUB_TYPE 0): bytes originais, nunca convertidos, com sha256 guardado para a conciliação",
@@ -170,6 +172,13 @@ def aplicar(regra, v):
         if s in FALSO:
             return False, None
         return None, "valor_fora_do_dominio"
+    if regra == "booleano_ai":
+        s = (_txt(v, "pontas") or "").upper()
+        if not s:
+            return None, None
+        return ({"A": True, "I": False}[s], None) if s in ("A", "I") else (None, "valor_fora_do_dominio")
+    if regra == "inteiro_zero_nulo":
+        return (None if v == 0 else v), None
     if regra == "booleano_01":
         if v in (0, 1):
             return bool(v), None

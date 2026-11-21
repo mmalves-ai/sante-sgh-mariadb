@@ -1,0 +1,6 @@
+tabela	coluna	destino	regra	depara	via	motivo
+FPVACINA	COD_VAC	vacina_ocupacional.codigo	texto			L5-11: código da vacina ocupacional (chave da origem) (código numérico como texto: destino VARCHAR; com inteiro a soma de controle diverge)
+FPVACINA	DESCRICAO	vacina_ocupacional.descricao	texto			L5-11: nula recusa a linha (NOT NULL no destino)
+POTPCONTTEMP	ID	tipo_contrato_temporario.codigo	texto			L5-11 (código numérico como texto: destino VARCHAR; com inteiro a soma de controle diverge)
+POTPCONTTEMP	NOME	tipo_contrato_temporario.descricao	texto_nome			L5-11
+POTPCONTTEMP	LIMITE_HORA_SEMANAL	tipo_contrato_temporario.limite_horas_semanais	inteiro			L5-11: fora de 1..44 (inclusive 0, provável sentinela de sem limite) recusa a linha pelo CHECK do destino com restricao_destino_4025, rastreada; pedida regra genérica de faixa que grave NULL com valor_fora_do_dominio (saida/L5-11.json)

@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (canon) / carga.py (fmt)",
+   "mudanca": "na soma de controle, normalizar o valor da origem pelo tipo da coluna de destino: inteiro gravado em coluna CHAR/VARCHAR deve entrar como texto (str), igual ao que é relido do banco",
+   "motivo": "inteiro da origem em coluna de texto do destino dá conciliação divergente (canon(1)='1' contra fmt('1')='b31'); a fatia contornou com regra texto em FPTIPORESC.ID, mas a regra genérica falta"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS)",
+   "mudanca": "acrescentar o catálogo oficial codigo_esocial (tabela codigo_esocial, por tabela do eSocial + código) ao de-para oficial",
+   "motivo": "FPTIPORESC.ID_FPMOTDESLIG -> tipo_rescisao.motivo_desligamento_codigo_esocial_id só pode ser resolvido pelo de-para oficial do eSocial (tabela 19); hoje fica não declarada"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/catalogos.tsv",
+   "mudanca": "preencher coluna_codigo: FPMOTDESLIG ID; FPMOTESTABILI ID; FPMTCANCELAVI ID; FPNIVELESTAG ID; FPOCOR_SEFIP COD_OCOR_SEF; FPPROCESSOTEOR ID; FPPROCTRAB_ESOCIAL_CR COD_RECEITA; FPRESC_CAGED COD_RES_CAG; FPRESC_CAUSA COD_CAUS_DEM; FPRESC_RAIS COD_RAIS; FPRESC_SEFIP COD_SEFIP; FPSAQUE COD_SAQ; FPTEMPO_RESID_TRAB_IMIGRANTE ID; FPTIPOAVISO ID; FPTIPO_CONTRATO COD_TP_CONT; FPTPACIDTRANS COD_FPTPACIDTRANS; FPTPAVISORESC ID; FPTPDEFICIEN ID",
+   "motivo": "o motivo diz 'o lote declara a coluna' e a coluna de código está vazia; catalogos.tsv é compartilhado"
+  },
+  {
+   "arquivo": "gerador do mapa (conector/mapa/tabelas.tsv via mapa.py / analise)",
+   "mudanca": "nas tabelas mistas FPMOTDESLIG, FPMOTESTABILI, FPMTCANCELAVI, FPNIVELESTAG, FPOCOR_SEFIP, FPPROCESSOTEOR, FPPROCTRAB_ESOCIAL_CR, FPRESC_CAGED, FPRESC_CAUSA, FPRESC_RAIS, FPRESC_SEFIP, FPSAQUE, FPTEMPO_RESID_TRAB_IMIGRANTE, FPTIPOAVISO, FPTIPO_CONTRATO, FPTPACIDTRANS, FPTPAVISORESC, FPTPDEFICIEN, tirar de tabelas_destino o destino não oficial (desligamento, estabilidade_colaborador, aviso_previo, estagio_colaborador, risco_funcao, processo_trabalhista, tipo_rescisao, rescisao, estrangeiro_colaborador, vinculo_trabalho, comunicacao_acidente, deficiencia_colaborador): estratégia depara_catalogo_oficial",
+   "motivo": "são listas de códigos oficiais do eSocial/RAIS/CAGED/SEFIP; nenhuma linha delas vira registro do destino transacional (o destino só usa o código por de-para). A fatia não declara coluna delas, então não são carregadas"
+  },
+  {
+   "arquivo": "gerador do mapa (FPTPACESSORIA)",
+   "mudanca": "FPTPACESSORIA: tratar como domínio de valores de assessoria_externa.tipo (descarte declarado com motivo ou de-para de valores), não como linha de assessoria_externa",
+   "motivo": "a tabela é a lista de tipos de assessoria (5 linhas, só ID e NOME); assessoria_externa exige estabelecimento, razão social, CNPJ/CPF e data de início, que a origem não tem nessa tabela"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "de-para de valores declarado por lote (código da origem -> valor do domínio do destino, num .tsv por fatia), para situacao_colaborador.categoria (por FPSIT_FUNC.COD_SIT) e tipo_rescisao.iniciativa (por FPTIPORESC.ID_FPRESC_CAUSA); código sem par vira pendência valor_fora_do_dominio",
+   "motivo": "as duas colunas são NOT NULL sem padrão e a origem não as traz direto; a fatia grava o literal 'outro' até haver o de-para de valores (o sentinela.REGRAS cita 'o de-para próprio do lote', que o motor ainda não tem)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "aplicar sentinela.colisoes_caixa aos códigos codigo_char com destino de chave única: pendência codigo_colisao_caixa em vez de restricao_destino_1062",
+   "motivo": "o brief promete codigo_colisao_caixa; hoje a colisão 'a'/'A' em FPSIT_FUNC.COD_SIT sai como restricao_destino_1062 (a imagem sintética espera 1062; trocar o esperado quando o motor mudar)"
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py (--conferir)",
+   "mudanca": "a seção 'Já declaradas' da fatia não deve tornar o .md 'diferente do gerado' quando a própria fatia declara colunas em colunas.d (ou o integrador regenera as fatias após integrar)",
+   "motivo": "o passo 2 da autoconferência acusa fatias de outros agentes (L5-10, L5-11) diferentes do gerado assim que declaram colunas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + colunas.d/L5-07.tsv e L5-09.tsv",
+   "mudanca": "prefixo de domínio declarado no mapa para códigos de origens diferentes no mesmo destino com código único (ex.: especial '=prefixo:<texto>' aplicado à coluna de código): FPCONDFUNC.ID e FPSIT_FUNC.COD_SIT gravam situacao_colaborador.codigo; ou separar a condição em outro destino",
+   "motivo": "achado alto da avaliação da L5-09: código numérico da situação ('1') choca com a condição 1 (L5-07) e a linha é recusada (restricao_destino_1062); quem busca a situação pelo código cai na condição. A imagem sintética da L5-09 agora REQUER a L5-07 e mostra o choque (esperado 1062: 2); trocar o esperado quando o prefixo existir"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "antes de inserir uma tabela, aplicar sentinela.colisoes_caixa ao conjunto dos códigos codigo_char cujo destino tem chave única sem caixa (VARCHAR sem _bin): as duas linhas do par viram pendência codigo_colisao_caixa (nenhuma gravada) e os filhos ganham pai_pendente",
+   "motivo": "reforço do pedido anterior (achado alto): hoje a primeira linha do par ('A') é gravada e só a segunda é recusada com 1062; um filho com 'a' acharia 'A'. Ao aplicar, trocar o esperado de l5_09.py: FPSIT_FUNC gravados 5, codigo_colisao_caixa 2, restricao_destino_1062 1"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py + carga_mapa.py",
+   "mudanca": "de-para oficial de conferência (guarda o código, não o id) contra codigo_esocial por tabela oficial: tipo_rescisao.codigo_rais, codigo_caged, codigo_sefip, codigo_saque_fgts e codigo_causa_afastamento; código ausente vira pendência catalogo_codigo_inexistente sem recusar a linha",
+   "motivo": "achado médio: os códigos oficiais entram como inteiro/texto livre, sem conferência. Na imagem sintética, FPTIPORESC usa RAIS 11 a 18 e o catálogo falso tem 11 a 13: ao aplicar, esperar catalogo_codigo_inexistente para os tipos 4, 6 e 8 (14, 16, 18; 15 é recusado por NOT NULL e 17 por faixa) no esperado de l5_09.py"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "pendência de revisão por linha (ex.: classificacao_pendente, gravidade baixa) quando a coluna é preenchida por literal provisório declarado (ex.: categoria/iniciativa '=outro'), para o painel listar o que o cliente precisa classificar",
+   "motivo": "achado médio: situação e tipo de rescisão entram com indicadores no padrão do destino (ativos, sem multa, fora da folha) e nada sinaliza a revisão"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_valores, literal '=<texto>')",
+   "mudanca": "converter o literal declarado pelo tipo da coluna de destino (BOOLEAN/inteiro: int; decimal: Decimal) antes de gravar e de entrar na soma de controle",
+   "motivo": "a fatia tentou '=0' em situacao_colaborador.ativo e tipo_rescisao.ativo (entrar inativo até a revisão do cliente) e a conciliação divergiu: canon('0')='b30' contra o 0 relido. Ao aplicar, declarar em colunas.d/L5-09.tsv: FPSIT_FUNC =0 situacao_colaborador.ativo e FPTIPORESC =0 tipo_rescisao.ativo"
+  }
+ ]
+}

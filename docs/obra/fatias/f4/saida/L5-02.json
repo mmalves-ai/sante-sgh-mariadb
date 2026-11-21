@@ -1,0 +1,64 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (via tools/obra/gerar_mapa_conector.py) + conector/mapa/declarado/descartes.tsv",
+   "mudanca": "Decidir o destino de TBOPCOES, TBPAPEL_TBOPCOES, TBPERUSU e TBMODULO: (a) opção de menu nunca em acao_sistema; carregar em tela_sistema (depende da referência TBOPCOES.MODULO e de um módulo de destino) ou descartar com justificativa; (b) o vínculo papel x opção e perfil x opção vai por um de-para declarado opção -> código de ação do contrato do produto (ex.: declarado/opcao_acao.tsv), com pendência 'acao_sem_equivalente' quando faltar; (c) TBMODULO não grava em modulo_sistema (catálogo do produto): de-para declarado módulo da origem -> módulo do produto, ou descarte justificado",
+   "motivo": "acao_sistema e modulo_sistema são 'carregados com o produto' (DDL e dominios-catalogo.ts:92-93); tools/db/carregar_acoes.py:83 inativa toda ação fora do contrato (vaivém com o Sincronizar, em que a origem vence), sessao/fonte-propria.ts:321-345 resolve permissões pelo código do contrato (código numérico da origem não concede nada; papéis pareceriam migrados sem estar) e o administrador receberia ~7 mil permissões inúteis. Até a decisão, a L5-02 não carrega TBMODULO, TBOPCOES nem TBPAPEL_TBOPCOES"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "Regra genérica 'texto_resumo' (corta no tamanho do destino, na fronteira de palavra, com pendência informativa 'texto_resumido' que não recusa a linha), para usar quando o texto integral já vai para outra coluna",
+   "motivo": "TBLGPDANONMOT.DESCRICAO (até 999) não cabe em base_legal_tratamento.descricao (150) e recusava a base legal inteira (1406), deixando pai_pendente nos registros de anonimização. Provisório: descricao recebe o código (cliente revisa) e explicacao o texto integral; com a regra, descricao passa a DESCRICAO/texto_resumo"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL) + conector/verificar_mapa.py",
+   "mudanca": "Permitir declarar a referência de uma coluna em colunas.d (ex.: regra chave_origem com a tabela pai no campo via, ou coluna nova 'referencia'), valendo por cima da gerada; inclusive referência pelo login (TBUSERS tem chave NOME)",
+   "motivo": "TBOPCOES.MODULO (-> TBMODULO), TBSGHCONEXAO.MODULO/USUARIO, TBMENSAG.USUARIO/ORIGEM, TBPERMISSAO_SUS.ID_TBUSERS e TBPERUSU.GRUPO (-> TBGRUUSU) são referências sem referência gerada (o gerador só reconhece ID_<TABELA>); sem isso tela_sistema.modulo_sistema_id, ultimo_acesso_usuario, mensagem_interna, usuario_permissao_sus e perfil_acao (todas NOT NULL na referência) não carregam"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial para o estabelecimento da execução (ex.: '@estabelecimento': id do estabelecimento padrão do cliente ou do vínculo da origem)",
+   "motivo": "mensagem_interna, ultimo_acesso_usuario e usuario_permissao_sus exigem estabelecimento_id NOT NULL e a origem não o tem por linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Desdobrar uma linha em várias (uma por coluna-indicador: instrumento/funcionalidade/operação declarados por coluna)",
+   "motivo": "TBPERMISSAO_SUS tem 34 colunas S/N por permissão; usuario_permissao_sus guarda uma linha por (instrumento, funcionalidade, operação)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "Regra genérica de de-para de valores por tabela declarada (código da origem -> domínio do destino, ex.: declarado/valores.tsv), com valor sem de-para virando pendência valor_fora_do_dominio",
+   "motivo": "tipo_certificado.modalidade/repositorio (TBTIPOCERTIFICADO.NOME), nivel_criticidade_auditoria.severidade (TBNVLCRITICID), regra_obrigatoriedade_campo.campo/exigencia (TBDIGITAR_FILIACAO) e oid_icp.oid/tipo_oid (TBTIPOOID) exigem valor do domínio que a origem só traz como nome livre; inventar literal seria deformar o dado"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "Regra 'inteiro_zero_nulo' (0 vira NULL, sem pendência)",
+   "motivo": "TBPAPEL.QTDE_MAX_USUARIO_VINC usa 0 como 'sem limite'; papel_seguranca.limite_usuarios tem CHECK > 0 e recusaria o papel (e em cadeia os vínculos papel x opção). A coluna ficou fora da declaração até a regra existir"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/descartes.tsv",
+   "mudanca": "Descarte justificado de TBMOVTERMSTATUS, TBPROCBACKUP e TBSITBACKUP como domínio de valor (vira CHECK de consentimento_titular.situacao, verificacao_backup.processo e .situacao), e de-para desses ids no lote que carregar os termos e as verificações",
+   "motivo": "são listas de situação/tipo; os destinos do mapa são tabelas de movimento que exigem paciente, datas e operação: nenhuma linha destas tabelas cria um registro de destino"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (via tools/obra/gerar_mapa_conector.py)",
+   "mudanca": "Rever TBEVENTOS: não gravar em acao_sistema (catálogo do produto); tipo_acao_auditavel exige categoria/acao_trilha sem fonte; sugerir tipo_acao_auditavel com tela pela opção quando a referência à tela existir",
+   "motivo": "acao_sistema é carregada com o produto; evitar literal inventado; TBEVENTOS ficou sem declaração"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv",
+   "mudanca": "TBLGPDANONUSERFUNCAO: tirar encarregado_dados dos destinos (ou documentar que não é alimentado por esta tabela)",
+   "motivo": "encarregado_dados exige pessoa, e-mail público e vigência, que a tabela de funções não tem"
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py (ou regenerar docs/obra/fatias/f4/ na integração)",
+   "mudanca": "No --conferir, ignorar a seção 'Já declaradas' (que muda a cada colunas.d novo) ou regenerar as fatias depois de integrar as declarações",
+   "motivo": "com qualquer colunas.d/<fatia>.tsv presente todas as fatias acusam 'arquivo diferente do gerado' (o gerador passou a embutir as declarações); é o único erro da autoconferência da L5-02"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (se TBOPCOES voltar a ser carregada)",
+   "mudanca": "Campo cosmético não recusa a linha: regra 'inteiro_nao_negativo' (negativo vira NULL/padrão com pendência informativa) para a posição no menu; título nulo cai num valor declarado (ex.: coluna alternativa NOME no campo via)",
+   "motivo": "INDICE negativo (1264) e TITULO nulo recusavam a opção e, em cascata, todos os vínculos papel x opção e perfil x opção (pai_pendente)"
+  }
+ ]
+}

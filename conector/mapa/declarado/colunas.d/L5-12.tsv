@@ -1,0 +1,28 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBTABIRR	=irrf	tabela_legal_vigencia.tipo_tabela				a tabela da origem é a do IRRF (cabeçalho por vigência); as faixas (F1 a acima) e as do INSS e salário-família da mesma linha pedem grupo repetido e literal tipado no motor; salário mínimo, contribuinte individual e teto do INSS são outras vigências (tipos salario_minimo, inss_contribuinte_individual, teto_inss) da mesma linha e pedem o mesmo grupo repetido no destino principal (saida/L5-12.json)
+TBTABIRR	DTA_INSS_IRRF	tabela_legal_vigencia.vigencia_inicio	data			data de início da vigência (chave da origem)
+TBTABIRR	ISENTO	tabela_legal_vigencia.isencao_ate	flutuante			limite da faixa isenta do IRRF
+TBTABIRR	DESC_DEP	tabela_legal_vigencia.deducao_dependente	flutuante			dedução por dependente
+TBTABIRR	DESC_SIMPLIFICADO	tabela_legal_vigencia.desconto_simplificado	decimal			desconto simplificado mensal
+TBTABIRR	F1_INICIO_26	tabela_legal_vigencia.reducao_de	flutuante			início da faixa com redução do IRRF (lei de 2026); nulo nas vigências anteriores
+TBTABIRR	F1_FIM_26	tabela_legal_vigencia.reducao_ate	flutuante			fim da faixa com redução do IRRF (lei de 2026); reducao_ate < reducao_de é recusada pelo CHECK do destino
+TBTABIRR	ACIMA_26	tabela_legal_vigencia.sem_reducao_acima_de	flutuante			acima deste rendimento não há redução do IRRF (lei de 2026)
+TBTABIRR	ISENTO_26		flutuante			não carregada por ora: limite da isenção pela redução de 2026 não tem coluna no modelo (isencao_ate já recebe ISENTO, a faixa isenta da tabela); coluna pedida em saida/L5-12.json
+TBTABIRR	REDUCAO_26		flutuante			não carregada por ora: valor da redução de 2026 não tem coluna no modelo; coluna pedida em saida/L5-12.json
+TBTABIRR	SAL_MIN		decimal			não carregada por ora: é a vigência tipo salario_minimo (valor_referencia) da mesma data; pede o grupo repetido no destino principal (saida/L5-12.json)
+TBTABIRR	CONTR_IND		decimal			não carregada por ora: vigência tipo inss_contribuinte_individual (alíquota/faixa), pede o grupo repetido no destino principal (saida/L5-12.json)
+TBTABIRR	TETO_CONTR_IND		decimal			não carregada por ora: teto da vigência inss_contribuinte_individual; pede o grupo repetido no destino principal (saida/L5-12.json)
+TBTABIRR	CONTR_IND_FINS		decimal			não carregada por ora: contribuinte individual com fins (segunda vigência inss_contribuinte_individual da data); o modelo tem uma por tipo e data, pede grupo repetido e decisão do tipo (saida/L5-12.json)
+TBTABIRR	TETO_CONTR_IND_FINS		decimal			não carregada por ora: teto da vigência anterior (CONTR_IND_FINS); mesmo pedido (saida/L5-12.json)
+TBTABIRR	INSS_TETO_PF		decimal			não carregada por ora: teto do INSS da pessoa física, vigência tipo teto_inss (teto); pede o grupo repetido no destino principal (saida/L5-12.json)
+TBTABIRR	VLR_ACIMA_F4		decimal			não carregada por ora: valor acima da última faixa do INSS (teto da tabela inss); entra com as faixas do INSS pelo grupo repetido (saida/L5-12.json)
+TBTABIRR	INSS_PERC_PF		decimal			não carregada por ora: percentual do INSS do autônomo pessoa física; entra na vigência inss_contribuinte_individual pelo grupo repetido (saida/L5-12.json)
+TBTABIRR	ISENTO_PJ		decimal			descartada: retenção de imposto sobre pagamento a pessoa jurídica não é tabela legal da folha; sem destino no modelo (registrado em saida/L5-12.json)
+TBTABIRR	ALIQ_PJ		decimal			descartada: alíquota de retenção sobre pessoa jurídica; sem destino no modelo (registrado em saida/L5-12.json)
+TBTABIRR	INSS_PERC_PJ		decimal			descartada: percentual de INSS retido de pessoa jurídica; sem destino no modelo (registrado em saida/L5-12.json)
+PEJUSTIF	COD_JUSTIF	justificativa_ponto.codigo	texto			código da justificativa como texto (destino VARCHAR); LIMITAÇÃO DO MODELO, não erro do dado: a origem é única por empresa + código e o destino tem UNIQUE(codigo) global; o código repetido em outra empresa vira restricao_destino_1062 até o escopo por mantenedora pedido em saida/L5-12.json
+PEJUSTIF	NOME	justificativa_ponto.descricao	texto_nome			descrição (sem nome: recusa pelo NOT NULL do destino)
+PEJUSTIF	COD_EMP		inteiro			não carregada por ora: a justificativa não tem escopo por empresa no modelo (UNIQUE(codigo) global); pedido de mantenedora_id e UNIQUE(mantenedora_id, codigo) em saida/L5-12.json
+TBTPTRIBUTO	ID	tributo_folha.codigo	texto			código do tributo como texto (destino VARCHAR); chave da origem, sem referência
+TBTPTRIBUTO	NOME	tributo_folha.descricao	texto_nome			descrição do tributo
+TBTPTRIBUTO	=outro	tributo_folha.tipo				a origem não classifica o tributo: entra como outro e o cliente reclassifica na tela (sem trava)

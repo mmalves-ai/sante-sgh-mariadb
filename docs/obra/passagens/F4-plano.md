@@ -500,3 +500,37 @@ pulado no container: o do mapa do repositório, que roda no host); `python3 -I t
   - **Ponta a ponta:** 2 de 4 testes falham também no HEAD, sem esta correção. Os estabelecimentos são recusados
     com `restricao_destino_4025` (CHECK do DDL novo depois do merge da F2.2), e o Sincronizar herda isso. É
     pendência do L3, fora deste lote.
+
+## 13. Integração do L5 (2026-11-21, tentativa 1): prova verde
+
+12 fatias (L5-01 a L5-12) integradas. Prova: `tools/obra/conferir-fatia-f4.sh` ok nas 12 fatias, em `exemplo` e
+`exemplo_l5`; `verificar_mapa` ok; `fatiar_conector --conferir` ok; `conector.sh testes` 160 testes ok (1 pulado);
+ponta a ponta do painel (`ponta-a-ponta.int.spec.ts`, 4 testes) agora com todas as fatias dos lotes na imagem
+sintética (`conector.sh sintetica ... --mapa --fatias lotes`): 55 entidades, 55 conferidas (L3 + L5).
+Cobertura: 44 das 250 tabelas carregáveis do L5 com colunas declaradas.
+
+Aplicado (genérico, com prova em `sintetica_d/exemplo_l5.py` e `testes/test_carga_mapa_l5.py`):
+- `fatiar_conector --conferir` ignora `colunas.d` (só o `colunas.tsv` comum entra na fatia gerada) — pedido de todas;
+- 1364 em `carga.ERROS_LINHA` (L5-05, L5-11, L5-12);
+- literal e valor da origem no tipo do destino antes de gravar e da soma (`carga_mapa.tipar`) (L5-04, 07, 09, 12);
+- referência declarada na via: `ref:<TABELA>` (login pela chave do pai) (L5-01, 02, 03, 04, 06, 12);
+- `@estabelecimento` (único do cliente; nenhum ou vários: recusa `estabelecimento_indefinido`) (L5-02, 03, 04, 05, 06);
+- de-para de valores próprio: `depara=valores` + `declarado/valores.tsv` (tabela, coluna, destino, valor_origem,
+  valor_destino, motivo), verificado; sem par: NULL com `valor_fora_do_dominio` (L5-01, 02, 05, 06, 07, 09, 10, 11, 12);
+- literal presumido `=~<texto>` com pendência baixa `valor_presumido` (L5-04, 09, 10, 11);
+- `codigo_char` em chave única sem caixa: `codigo_colisao_caixa` nas linhas do grupo, antes de gravar (L5-01, 04, 05,
+  09, 10); esperados de L5-04, L5-05 e L5-09 ajustados ao efeito real;
+- `#seq:<COLUNA>` (L5-03); regras `booleano_ai` (L5-04) e `inteiro_zero_nulo` (L5-02).
+- Correção achada no ponta a ponta: o DDL da F2.2 (`ck_estabelecimento_codigo_formato`) recusava o estabelecimento do
+  L3; `carga.codigo_estabelecimento` deriva o código no formato do modelo, com pendência baixa `codigo_derivado`.
+
+Fica para a próxima rodada (decisão do dono ou mecanismo maior; as fatias seguem fora da carga nessas tabelas): destinos
+a rever no gerador (TBOPCOES/TBMODULO/TBEVENTOS em catálogo do produto, listas de domínio como TBDIGITAR, TBTIPOREPRE,
+TBTPPERM_RICADPAC, FPTPACESSORIA, TBTPCONSTRUT, POBANCOHRTP etc., PRTPNOTIFEMAIL, CDTPENDERECO, TBEMPHOS em
+pessoa_juridica); desdobrar coluna em linhas (TBPERMISSAO_SUS, TBUSUCPL, PEPARAM, grupo repetido de faixas); catálogo
+oficial `codigo_esocial` (carregador e `depara.CATALOGOS`) e `coluna_codigo` em `catalogos.tsv`; de-para oficial
+pela linha-pai do catálogo; especiais `#sha256`, `#retrato`, `#cofre`, `#codigo_derivado`, `=@data_carga`,
+`{COLUNA}` composto; regras `piso:<n>`, `minutos_em_timestamp`, `texto_resumo`, cpf/cnpj, faixa, data recorrente;
+destino secundário opcional; adoção pela chave natural ou CPF; pendência por linha para tabela sem declaração;
+histórico com vigência implícita; colunas novas no DDL de RH (redução do IRRF 2026, justificativa por mantenedora);
+TBGRUUSU antes de TBUSERS. Pedidos completos em `docs/obra/fatias/f4/saida/L5-*.json`.

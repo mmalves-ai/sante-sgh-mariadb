@@ -73,6 +73,41 @@ CAMPOS_TABELAS = ["tabela", "tipo", "destinos", "tabelas_destino", "destinos_ofi
                   "col_alteracao", "estrategia", "depende_de", "dep_fora_do_mapa", "motivo"]
 CAMPOS_COLUNAS = ["tabela", "coluna", "forma", "obrigatoria", "regra", "referencia", "depara"]
 CAMPOS_DECL = ["tabela", "coluna", "destino", "regra", "depara", "via", "motivo"]
+# de-para de VALORES próprio (código da origem -> valor do domínio do destino), para coluna declarada com depara
+# `valores`; `valor_origem` vazio casa o nulo. Valor sem par: NULL com pendência valor_fora_do_dominio.
+CAMPOS_VALORES = ["tabela", "coluna", "destino", "valor_origem", "valor_destino", "motivo"]
+DEPARA_VALORES = "valores"
+
+
+def erros_referencia_e_valores(colunas_decl, valores, origem):
+    """Referência declarada (`ref:<TABELA>` na via) aponta tabela da origem; coluna com depara `valores` tem pares em
+    declarado/valores.tsv e todo par tem coluna declarada; valor de origem sem repetição. Só nomes."""
+    erros = []
+    dv = {(c["tabela"], c["coluna"], c.get("destino")) for c in colunas_decl if c.get("depara") == DEPARA_VALORES}
+    com_par = {(v["tabela"], v["coluna"], v["destino"]) for v in valores}
+    for c in colunas_decl:
+        rd = referencia_declarada(c)
+        if rd and rd not in origem:
+            erros.append("referência declarada a tabela inexistente na origem: %s.%s" % (c["tabela"], c["coluna"]))
+    for k in sorted(dv - com_par):
+        erros.append("de-para de valores sem par em declarado/valores.tsv: %s.%s -> %s" % k)
+    vistos = set()
+    for v in valores:
+        k = (v["tabela"], v["coluna"], v["destino"])
+        if k not in dv:
+            erros.append("declarado/valores.tsv sem coluna declarada com depara valores: %s.%s -> %s" % k)
+        if (k, v["valor_origem"]) in vistos:
+            erros.append("declarado/valores.tsv com valor de origem repetido: %s.%s -> %s" % k)
+        vistos.add((k, v["valor_origem"]))
+    return erros
+
+
+def referencia_declarada(c):
+    """Tabela da origem declarada no campo `via` como `ref:<TABELA>` (vale por cima da referência gerada)."""
+    for x in (c.get("via") or "").split(";"):
+        if x.startswith("ref:"):
+            return x[4:]
+    return ""
 COLUNAS_D = "declarado/colunas.d"
 
 
@@ -370,7 +405,7 @@ def propor_quebras(ciclos, arestas, linhas):
 
 # ---------------- verificador ----------------
 def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes, colunas, colunas_decl,
-                    catalogos_decl, oficiais_decl=()):
+                    catalogos_decl, oficiais_decl=(), valores=()):
     """Lista de erros (vazia = mapa válido). Só nomes de tabela/coluna e regras; nunca valores."""
     erros = []
     ofi = oficiais(ddl, oficiais_decl)
@@ -452,7 +487,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
             continue
         if c.get("regra") and c["regra"] not in sentinela.REGRAS:
             erros.append("regra declarada desconhecida: %s.%s" % (t, c["coluna"]))
-        if c.get("depara") and c["depara"] not in depara.CATALOGOS:
+        if c.get("depara") and c["depara"] not in depara.CATALOGOS and c["depara"] != DEPARA_VALORES:
             erros.append("de-para declarado desconhecido: %s.%s" % (t, c["coluna"]))
         dest = c.get("destino") or ""
         if dest:
@@ -474,6 +509,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
                 elif regra in sentinela.REGRAS_TIME and tipo and tipo != "TIME":
                     erros.append("regra %s com destino %s (esperado TIME): %s.%s -> %s" % (regra, tipo, t, c["coluna"],
                                                                                          dest))
+    erros += erros_referencia_e_valores(colunas_decl, valores, vol)
     # catálogos oficiais: alvo existe no DDL; tabelas declaradas existem e são carregáveis
     usados = {c.get("depara") for c in colunas + colunas_decl} | {c["catalogo"] for c in catalogos_decl}
     for nome, cat in depara.CATALOGOS.items():
@@ -513,7 +549,7 @@ def carregar(raiz=RAIZ):
                 tabelas=ler("tabelas.tsv"), deps=ler("dependencias.tsv"), ciclos_decl=ler("declarado/ciclos.tsv"),
                 descartes=ler("declarado/descartes.tsv"), colunas=ler("colunas.tsv"),
                 colunas_decl=ler_colunas_declaradas(d), catalogos_decl=ler("declarado/catalogos.tsv"),
-                oficiais_decl=ler("declarado/oficiais.tsv"))
+                oficiais_decl=ler("declarado/oficiais.tsv"), valores=ler("declarado/valores.tsv"))
 
 
 def verificar(raiz=RAIZ):
@@ -531,7 +567,8 @@ def carregar_execucao(d=None):
         raise FileNotFoundError("mapa do conector ausente: %s" % (d / "tabelas.tsv"))
     ler = lambda n: ler_tsv(d / n) if (d / n).exists() else []  # noqa: E731
     return {"tabelas": ler_tsv(d / "tabelas.tsv"), "descartes": ler_tsv(d / "declarado/descartes.tsv"),
-            "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv")}
+            "colunas": ler("colunas.tsv"), "colunas_decl": ler_colunas_declaradas(d), "deps": ler("dependencias.tsv"),
+            "valores": ler("declarado/valores.tsv")}
 
 
 def tabelas_sem_mapa(contagens, tabelas, descartes):

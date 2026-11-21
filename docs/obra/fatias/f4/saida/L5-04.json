@@ -1,0 +1,74 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "docs/obra/fatias/f4/*.md e indice.tsv (tools/obra/fatiar_conector.py)",
+   "mudanca": "regenerar as fatias depois de integrar os colunas.d, ou o --conferir ignorar o bloco das colunas já declaradas",
+   "motivo": "com colunas.d/L5-04.tsv o --conferir acusa 'L5-04: arquivo diferente do gerado' e 'indice.tsv diferente do gerado' (mesmo pedido da L5-07); é o único erro da autoconferência da L5-04"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "na soma de controle, converter o valor da origem pelo tipo da coluna de destino antes do canon (inteiro gravado em VARCHAR vira texto)",
+   "motivo": "contornado na L5-04 com regra texto nos códigos numéricos (7 tabelas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "aplicar sentinela.colisoes_caixa aos códigos codigo_char de um domínio antes de gravar: pendência codigo_colisao_caixa em vez de restricao_destino_1062",
+   "motivo": "FPTPTEL: códigos 'C' e 'c' colidem no código único do destino (collation ai_ci); hoje a segunda linha cai como restricao_destino_1062. Até lá a regra do brief NÃO está atendida; o esperado da L5-04 acompanha o motor (MOTOR_APLICA_COLISAO) e passa a exigir codigo_colisao_caixa sozinho quando a regra for aplicada. TBCLINICA.COD (codigo_char) tem o mesmo risco"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
+   "mudanca": "CDTPENDERECO: destino tipo_endereco em vez de endereco_pessoa",
+   "motivo": "a tabela é o domínio da finalidade do endereço; endereco_pessoa exige dono e logradouro. Contornado com via=tipo_endereco no colunas.d"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra genérica de domínio compartilhado: casar pelo código já gravado (registrar o conector_origem no id existente) ou prefixo de código por tabela da origem",
+   "motivo": "dois cadastros no mesmo destino com código único: FPECIV/TBECIV (estado_civil), TBCLASSC/TBFONTE_PAGADORA (classe_fonte_pagadora), FPTPTEL/TBTIPOTELEFONE (tipo_telefone), TBESCOLARIDADE/TBGRAU_INST (nivel_escolaridade), FAMEDSOL/TBMEDSOL (solicitante_externo); FPECIV e TBFONTE_PAGADORA ficaram fora da carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regras cpf e cnpj: inteiro/DOUBLE/texto vira só dígitos com zeros à esquerda (11/14), dígito verificador conferido, pendência cpf_invalido/cnpj_invalido",
+   "motivo": "CPF em BIGINT/DOUBLE perde os zeros à esquerda e cai na restrição do destino (GETABFUN, FAMEDSOL, SITECNIC, SHTECNIC, RESEGUR, REPACAGN, SIPACAGN)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "pessoa física já existente pelo CPF reaproveitada (sem 1062), destino secundário opcional (pulado quando as colunas obrigatórias dele vêm nulas) e ordem de destinos via declarável (pessoa_fisica antes de profissional, com @id)",
+   "motivo": "GETABFUN (pessoa_fisica + conta_bancaria_credor só quando há banco), SITECNIC (profissional exige pessoa_fisica gravada antes)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "especial @estabelecimento (estabelecimento do cliente, único ou pela coluna de unidade) para destinos com estabelecimento_id obrigatório",
+   "motivo": "REPACAGN e SIPACAGN (pre_cadastro) ficaram fora: estabelecimento_id NOT NULL sem coluna na origem"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (gerador) ou colunas.d",
+   "mudanca": "referência declarável por coluna (via/referencia) para colunas inteiras que apontam outra tabela sem prefixo ID_",
+   "motivo": "TBESPPRO (ESP -> especialidade, PROCTO -> item faturável; vigência_inicio obrigatória sem origem), RESEGUR (REG -> cobertura do paciente), TBCBOPRO (conselho em TBSIGLACONSPROF, fora do mapa; sequência obrigatória) ficaram fora"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador do mapa)",
+   "mudanca": "revisar destinos não aplicáveis: SHTECNIC (só marcador: descarte com motivo), ato_transfusional, responsavel_laudo_setor, telefone_colaborador, regra_retencao, codigo_esocial",
+   "motivo": "destinos que a linha da origem não preenche (exigem paciente, bolsa, setor, colaborador, tributo); hoje sem coluna declarada"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py e carga_mapa.py",
+   "mudanca": "regra genérica de feriado/data recorrente: ano 9999 = todo ano. Mesma coluna de origem (DATA) declarável para várias colunas de destino com regras distintas: 'recorrencia_ano_9999' (9999 -> 'anual', senão 'data_unica'), 'data_sem_ano_9999' (9999 -> NULL, sem pendência), 'dia_do_mes' e 'mes' (só no ano 9999). Esperado na imagem sintética da L5-04 quando existir: TBFERIAD 8 lidas, 6 gravadas (2 anuais, ids 7 e 8, com dia/mes e data NULL; 4 data_unica), pendências data_sentinela 1, restricao_destino_4025 1, valor_fora_do_dominio 1, restricao_destino_1048 1",
+   "motivo": "TBFERIAD usa o ano 9999 como 'todo ano' (feriado fixo); gravar como data_unica em 9999-MM-DD faria o feriado fixo virar dia útil. TBFERIAD ficou fora da carga até lá"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "literal presumido no colunas.d (ex.: '=~nacional', '=~outro'): grava o literal e registra por linha a pendência baixa 'valor_presumido' (com a coluna de destino na regra, ex. valor_presumido_abrangencia), contada no resumo e no painel",
+   "motivo": "TBCLASSC.natureza (usada pelo faturamento: o público entra como 'outro'), TBCLINICA.natureza e TBFERIAD.abrangencia (feriado municipal bloquearia todos os estabelecimentos) não vêm da origem; o cliente precisa ser cobrado a reclassificar. Hoje TBCLASSC entra com '=outro' sem pendência (5 linhas na imagem sintética)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'booleano_ai': A (ativo) -> TRUE, I (inativo) -> FALSE, vazio -> NULL, outro -> valor_fora_do_dominio",
+   "motivo": "TBCLINICA.SITUACAO -> clinica_assistencial.ativo: sem a regra, a clínica inativa entraria ativa (padrão do destino) e a mudança de situação não entraria no hash. TBCLINICA ficou fora; esperado quando existir: 4 gravadas, a 'O' com ativo=FALSE"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (domínio compartilhado, mesmo pedido acima)",
+   "mudanca": "chave de negócio declarável diferente da chave física (TBECIV: código = COD) com fusão das linhas de mesmo código num só id do destino (todas as chaves da origem apontam esse id no conector_origem) e descrição neutra declarada",
+   "motivo": "TBECIV tem uma linha por sexo do mesmo COD; as referências (RICADPAC.ECIV, PSBENEFI.ECIV) apontam pelo COD. Gravar ID como código duplicaria o domínio e trocaria o significado. TBECIV ficou fora"
+  }
+ ]
+}

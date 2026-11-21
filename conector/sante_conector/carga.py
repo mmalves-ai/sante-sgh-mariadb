@@ -76,7 +76,7 @@ AGORA = "UTC_TIMESTAMP(3)"
 HASH_ZERO = b"\0" * 16
 RECUSADO = "-"
 # erros de restrição do banco que recusam só a linha (o resto, como conexão perdida, derruba a execução)
-ERROS_LINHA = {1048, 1062, 1264, 1292, 1366, 1406, 1452, 3819, 4025}
+ERROS_LINHA = {1048, 1062, 1264, 1292, 1364, 1366, 1406, 1452, 3819, 4025}
 ENT_FILHA = {"RECADATE": "atendimento_ficha", "REALTA": "atendimento_alta"}
 # entidade de destino de cada tabela (o resumo que sai para o painel nunca leva nome de tabela da origem)
 ENTIDADE_DA_TABELA = dict({t: m["entidade"] for t, m in MAPA.items()}, RECADATE="atendimento_ficha",
@@ -231,6 +231,17 @@ def chave_txt(v):
     if isinstance(v, (bytes, bytearray)):
         return cp1252_para_texto(v).rstrip(" ")
     return str(v)
+
+
+def codigo_estabelecimento(chave):
+    """Código do estabelecimento no formato do modelo (ck_estabelecimento_codigo_formato: letra minúscula seguida de 1
+    a 9 letras ou dígitos). A chave da origem que já cabe fica igual; senão: minúsculas, só [a-z0-9], prefixo 'e'
+    quando não começa por letra, no máximo 10 caracteres (colisão: recusa codigo_duplicado, como antes)."""
+    c = re.sub(r"[^a-z0-9]", "", chave.lower())
+    if not c[:1].isalpha():
+        c = "e" + c
+    c = c[:10]
+    return c if len(c) >= 2 else (c + "0")
 
 
 # ---------------- carga ----------------
@@ -457,7 +468,9 @@ class Carga:
             razao = txt(l["NOME"], 150) or txt(l["NOME_HOT"], 150)
             if not razao:
                 self._recusar("TBHOSPIT", chave, "estabelecimento", h, "nome_ausente", "critica"); continue
-            codigo = chave[:30]
+            codigo = codigo_estabelecimento(chave)
+            if codigo != chave:
+                self._pendencia("TBHOSPIT", chave, "codigo_derivado", "baixa")
             if self._existe("estabelecimento", "codigo", codigo):
                 self._recusar("TBHOSPIT", chave, "estabelecimento", h, "codigo_duplicado", "critica"); continue
             doc, ruim = cnpj(l["CGC"])

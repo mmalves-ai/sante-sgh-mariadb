@@ -1,0 +1,64 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial `@estabelecimento` (id do estabelecimento da imagem/cliente, resolvido pelo conector_origem da tabela do hospital carregada no L3) para destinos com estabelecimento_id NOT NULL",
+   "motivo": "TBCONVEN -> configuracao_tiss_fonte_pagadora e fonte_pagadora_estabelecimento, TBEMPHOSLOGO -> logotipo_estabelecimento e HTTBHOSPIT -> trilha_auditoria.entidade_id ficam sem carga: a origem não traz o estabelecimento na linha; TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência derivada: `chave_origem` que resolve o pai e grava o id de OUTRO destino do pai ou de uma coluna do pai (ex.: TBCBOPRO -> inscricao_conselho.profissional_id), declarada como `via` na coluna",
+   "motivo": "TBCBOPRO_TBCONVEN -> profissional_fonte_pagadora e TBMEDESP -> profissional_especialidade exigem profissional_id NOT NULL e a origem só aponta a inscrição no conselho; HTATENDRESP -> responsavel_paciente exige paciente_id e a origem aponta o atendimento; TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py",
+   "mudanca": "coluna `referencia` em declarado/colunas.d (referência declarada por cima da gerada) e referência por coluna que não é a chave do pai (ex.: login do usuário)",
+   "motivo": "TBMEDESP.ESP aponta TBESPEC.COD sem referência gerada; HTPRONTUNIF.USUARIO_UNIFICACAO aponta o usuário pelo login (unificado_por_usuario_id NOT NULL); TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "destino secundário opcional: falha de restrição num destino que não é o principal vira pendência daquele destino sem recusar o principal",
+   "motivo": "TBPROFIS -> profissional_dado_fiscal e conta_bancaria_profissional (CHECK de favorecido e meio de pagamento) recusariam o profissional inteiro; ficaram sem declaração; TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna especial `{json}` (retrato JSON das colunas lidas da linha, com o SHA-256 disponível como `{json_sha256}`) para colunas JSON de versão e trilha; hash calculado por linha, nunca literal",
+   "motivo": "HTCONVEN, HTPACIENTE e HTPROFIS ficaram sem carga (declarações comentadas): retrato '{}' e hash_dados constante não provam integridade, fazem toda versão parecer repetida (ix_paciente_versao_hash) e o diferencial nunca regravaria o retrato vazio. HTPACTELEFONE e HTPROFISTEL só cabem como parte do retrato do pai"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra de desdobramento (uma linha da origem vira N linhas do destino, uma por coluna declarada, com de-para de valores declarado)",
+   "motivo": "ATPARAMGERAL (uma linha por módulo com dezenas de DIGITAR_*) -> regra_campo_cadastro (uma linha por campo, exigencia no domínio obrigatorio/opcional/oculto); TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "literal de data da carga (ex.: `=@data_carga`) para vigencia_inicio NOT NULL sem origem",
+   "motivo": "RICADPAC_TBCONVEN -> cobertura_paciente e TBCBOPRO_TBCONVEN exigem vigencia_inicio NOT NULL e a origem não tem data; TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "BLOB binário para o armazenamento de arquivos (mecanismo `arquivo`), gravando arquivo_id",
+   "motivo": "TBEMPHOSLOGO.LOGO_EMPRESA/LOGO_PREFEITURA -> logotipo_estabelecimento.arquivo_id NOT NULL; TBCONVEN.CLASSE -> fonte_pagadora.classe_fonte_pagadora_id e HTCONVEN.CLASSIFICACAO -> fonte_pagadora_versao.classe_fonte_pagadora_id apontam TBCLASSC (L5 ordem 67) e a referência gerada veio vazia (declarações prontas, comentadas)"
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py",
+   "mudanca": "de-para oficial pela chave estrangeira: quando a coluna é o ID da tabela-catálogo da origem (ex.: TBCBOSUS_TBESPEC.ID_TBCBOSUS -> TBCBOSUS), resolver o código pelo coluna_codigo de declarado/catalogos.tsv na linha pai (ID -> TBCBOSUS.COD -> ocupacao_cbo.codigo_cbo), nunca pelo valor do ID",
+   "motivo": "ID_TBCBOSUS é a chave substituta de TBCBOSUS (tabelas.tsv: chave ID; catalogos.tsv: código em COD): o de-para pelo valor recusaria as 131 linhas (catalogo_codigo_invalido) ou ligaria a ocupação errada sem pendência. TBCBOSUS_TBESPEC ficou sem carga (declaração comentada); a sintética já traz TBCBOSUS com ID diferente do COD e PREPARO_DESTINO_ADIADO"
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py",
+   "mudanca": "gerar as fatias só com declarado/colunas.tsv (ignorar colunas.d) ou regerar as fatias no integrador",
+   "motivo": "o passo --conferir da autoconferência falha em todas as fatias L5 assim que os agentes gravam colunas.d (arquivo diferente do gerado); não é erro da fatia"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e conector/sante_conector/mapa.py",
+   "mudanca": "de-para de valores declarado na coluna (ex.: depara `valores:A=ativo;I=inativo`), aceito pelo verificador; valor fora do mapa: pendência valor_fora_do_dominio (NOT NULL com padrão: o padrão, com a pendência); e derivação declarada de situação inativa quando a data de inativação vier preenchida (ex.: `=inativo` condicionado a coluna não nula)",
+   "motivo": "TBCONVEN.SITUACAO -> fonte_pagadora.situacao (ativa/suspensa/inativa) e TBPROFIS.SITUACAO -> profissional.situacao (ativo/inativo/suspenso/afastado): sem a regra, toda fonte entra ativa e o profissional desligado entra ativo com data de inativação (contraditório). TBCONVEN, TBPROFIS e a filha TBMEDSOL_CODCON ficaram sem carga até a regra existir (linha recusada por pai ausente não é refeita pelo diferencial). Os códigos de origem precisam ser confirmados na imagem de referência por contagem por valor. Situação inativa sem data recai no CHECK ck_profissional_inativacao (recusa 4025): decidir se vira pendência com a data da carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra `codigo_numerico_6` (ou largura declarada): inteiro vira texto com zeros à esquerda; zero, negativo ou acima da largura: NULL com pendência valor_fora_do_dominio",
+   "motivo": "TBCONVEN.REG_ANS (INTEGER) -> fonte_pagadora.registro_ans: registro da agência tem 6 dígitos e muitos começam com zero; a regra texto gravaria '5711' em vez de '005711' (quebra guia e lote TISS e a busca por ix_fonte_pagadora_registro_ans). A sintética já traz um registro com zero à esquerda"
+  }
+ ]
+}

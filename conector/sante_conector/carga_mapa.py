@@ -19,6 +19,19 @@ Mesmas garantias do L3 (herda `carga.Carga`):
   NULL com pendência `pai_inexistente` (coluna NOT NULL no destino recusa a linha pela restrição). Autorreferência e
   aresta declarada em duas fases (`declarado/ciclos.tsv`): a linha entra com NULL e a referência é gravada no fim
   (fase 2), por UPDATE;
+- colunas especiais (L5): `=<texto>` literal convertido ao tipo do destino; `=~<texto>` literal PRESUMIDO (grava e
+  deixa por linha a pendência baixa `valor_presumido`, para o cliente revisar); `@estabelecimento` id do único
+  estabelecimento do cliente (nenhum ou vários: recusa com `estabelecimento_indefinido`; com coluna de unidade na
+  origem, use a referência declarada); `#seq:<COLUNA>` 1..n dentro do mesmo valor da coluna, na ordem da chave
+  (contada em toda leitura, estável no diferencial);
+- referência declarada no campo `via` (`ref:<TABELA>`, ex.: login do usuário pela chave do pai), por cima da gerada;
+- de-para de valores próprio (`depara=valores`, pares em `declarado/valores.tsv` por tabela, coluna e destino):
+  aplicado depois da regra; valor sem par vira NULL com `valor_fora_do_dominio`;
+- código `codigo_char` gravado em coluna de chave única do destino sem distinção de caixa: os grupos que só diferem
+  pela caixa (`sentinela.colisoes_caixa`) são recusados TODOS com `codigo_colisao_caixa` antes de gravar (nenhum
+  vence pela ordem de leitura);
+- valor da origem convertido ao tipo do destino antes da soma de controle (inteiro gravado em texto entra como
+  texto, literal numérico entra como número);
 - vários destinos por tabela: o primeiro destino declarado (na ordem de `tabelas_destino`) é o principal; cada um
   dos outros é uma entidade com chave `<chave>/<tabela destino>` em `conector_origem`; `@id` liga ao principal;
 - coluna `origem` do destino, se existir e não for declarada, recebe 'migracao'; `criado_em` vem do relógio do banco;
@@ -37,7 +50,7 @@ import decimal
 import hashlib
 import time
 
-from . import carga, depara, sentinela
+from . import carga, depara, mapa, sentinela
 from .carga import AGORA, ErroCarga, chave_txt, soma
 from .leitor import hash_linha
 from .pendencia import Propagador
@@ -45,10 +58,32 @@ from .texto import texto_para_cp1252
 
 VERSAO = "mapa-2026-11-21"
 LOTE_COMMIT = 2000
-GRAVIDADE_REGRA = {"data_sentinela": "baixa", "hora_com_data": "baixa", "hora_sem_data": "media",
+GRAVIDADE_REGRA = {"valor_presumido": "baixa", "codigo_colisao_caixa": "media", "estabelecimento_indefinido": "alta",
+                   "data_sentinela": "baixa", "hora_com_data": "baixa", "hora_sem_data": "media",
                    "valor_fora_do_dominio": "media", "hora_invalida": "media", "catalogo_codigo_inexistente": "media",
                    "catalogo_codigo_invalido": "media", "pai_inexistente": "media"}
 TIPOS_INT = (7, 8, 16)
+INT_DESTINO = {"tinyint", "smallint", "mediumint", "int", "bigint"}
+DEC_DESTINO = {"decimal"}
+TXT_DESTINO = {"char", "varchar", "text", "tinytext", "mediumtext", "longtext"}
+
+
+def tipar(x, tipo):
+    """Valor no tipo da coluna de destino (o que o banco devolve na releitura): literal numérico em coluna numérica
+    vira número; inteiro ou decimal em coluna de texto vira texto. Sem tipo conhecido, fica como está."""
+    if x is None or tipo is None or isinstance(x, bool):
+        return x
+    if tipo in INT_DESTINO and isinstance(x, str):
+        return int(x)
+    if tipo in DEC_DESTINO and isinstance(x, (str, int, float)):
+        return decimal.Decimal(str(x))
+    if tipo in TXT_DESTINO and isinstance(x, (int, decimal.Decimal)):
+        return str(x)
+    return x
+
+
+def _especial(nome):
+    return nome[:1] in ("=", "@", "#")
 
 
 def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
@@ -57,6 +92,9 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
     geradas = {}
     for c in mapa_exec.get("colunas", []):
         geradas.setdefault(c["tabela"], {})[c["coluna"]] = c
+    valores = {}
+    for v in mapa_exec.get("valores", []):
+        valores.setdefault((v["tabela"], v["coluna"], v["destino"]), {})[v["valor_origem"]] = v["valor_destino"]
     decl = {}
     for c in mapa_exec.get("colunas_decl", []):
         if (c.get("destino") or "").count(".") == 1:
@@ -79,15 +117,20 @@ def planejar(mapa_exec, presentes, excluir=frozenset(carga.ORDEM)):
         for c in decl[t]:
             dt, dc = c["destino"].split(".")
             g = geradas.get(t, {}).get(c["coluna"], {})
-            cols[dt].append({"coluna": c["coluna"], "destino": dc, "regra": c.get("regra") or g.get("regra") or "",
-                             "depara": c.get("depara") or g.get("depara") or "",
-                             "referencia": g.get("referencia") or ""})
+            rd = mapa.referencia_declarada(c)
+            dp = c.get("depara") or g.get("depara") or ""
+            cols[dt].append({"coluna": c["coluna"], "destino": dc,
+                             "regra": c.get("regra") or ("chave_origem" if rd else g.get("regra") or ""),
+                             "depara": dp, "referencia": rd or g.get("referencia") or "",
+                             "valores": valores.get((t, c["coluna"], c["destino"]), {}) if dp == "valores" else None})
         chave = [x for x in (r.get("chave") or "").split(",") if x]
         lidas = list(chave)
         for dt in dts:
             for c in cols[dt]:
-                if c["coluna"][:1] not in ("=", "@") and c["coluna"] not in lidas:
-                    lidas.append(c["coluna"])
+                nome = c["coluna"].split(":", 1)[1] if c["coluna"].startswith("#seq:") else c["coluna"]
+                if (nome == c["coluna"] and _especial(nome)) or nome in lidas:
+                    continue
+                lidas.append(nome)
         plano.append({"tabela": t, "chave": chave, "destinos": dts, "colunas": cols, "lidas": lidas,
                       "estrategia": r.get("estrategia", ""),
                       "duas_fases": {p for f, p in quebras if f == t} | {t}})
@@ -134,6 +177,8 @@ class CargaMapa(carga.Carga):
         self.usadas = set(entidades_usadas)
         self.plano = []
         self.cont.update(fase2_gravadas=0, fase2_pendentes=0)
+        self.seq = {}                       # posição da linha no grupo de `#seq:<COLUNA>` (linha atual)
+        self._estab = False
         self.por_tabela = {}
 
     # ----- destino -----
@@ -146,6 +191,45 @@ class CargaMapa(carga.Carga):
             self.info[dt] = {c: (n == "YES", t, p, n != "YES" and d is not None and d != "NULL")
                              for c, n, t, p, d in rs}
         return self.info[dt]
+
+    def _estabelecimento(self):
+        """Id do único estabelecimento do cliente (None: nenhum ou vários). Nunca fixo por cliente."""
+        if self._estab is False:
+            ids = [r[0] for r in self._todas("SELECT id FROM estabelecimento LIMIT 2")] if self._um(
+                "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND"
+                " TABLE_NAME='estabelecimento'") else []
+            self._estab = ids[0] if len(ids) == 1 else None
+        return self._estab
+
+    def _unicos_sem_caixa(self, dt):
+        """Colunas de `dt` com índice único de uma coluna só e colação que não distingue caixa."""
+        rs = self._todas("SELECT s.INDEX_NAME, MIN(s.COLUMN_NAME), COUNT(*), MIN(c.COLLATION_NAME) FROM"
+                         " information_schema.STATISTICS s JOIN information_schema.COLUMNS c ON"
+                         " c.TABLE_SCHEMA=s.TABLE_SCHEMA AND c.TABLE_NAME=s.TABLE_NAME AND c.COLUMN_NAME=s.COLUMN_NAME"
+                         " WHERE s.TABLE_SCHEMA=DATABASE() AND s.TABLE_NAME=%s AND s.NON_UNIQUE=0"
+                         " GROUP BY s.INDEX_NAME", (dt,))
+        return {col for _, col, n, coll in rs if n == 1 and coll and not coll.endswith("_bin")
+                and "_cs" not in coll}
+
+    def _colisoes(self, p):
+        """Chaves das linhas cujo código `codigo_char` colide pela caixa num destino de chave única sem caixa."""
+        alvo = [c["coluna"] for dt in p["destinos"] for c in p["colunas"][dt]
+                if c["regra"] == "codigo_char" and not _especial(c["coluna"]) and c["destino"] in self._unicos_sem_caixa(dt)]
+        if not alvo:
+            return set()
+        por_col = {c: {} for c in alvo}
+        for linha, ch_sem in self._linhas_mapa(p):
+            chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
+            for c in alvo:
+                x = sentinela.aplicar("codigo_char", linha[c])[0]
+                if x is not None:
+                    por_col[c].setdefault(x, []).append(chave)
+        saida = set()
+        for c, cods in por_col.items():
+            for grupo in sentinela.colisoes_caixa(cods):
+                for cod in grupo:
+                    saida.update(cods[cod])
+        return saida
 
     def _depara(self, cat):
         if cat not in self.deparas:
@@ -220,8 +304,17 @@ class CargaMapa(carga.Carga):
             v, cs = {}, []
             for c in p["colunas"][dt]:
                 nome, dc = c["coluna"], c["destino"]
-                if nome.startswith("="):
+                if nome.startswith("=~"):
+                    x = nome[2:]
+                    pend.append(("valor_presumido", "baixa"))
+                elif nome.startswith("="):
                     x = nome[1:]
+                elif nome == "@estabelecimento":
+                    x = self._estabelecimento()
+                    if x is None:
+                        return None, None, pend, ("estabelecimento_indefinido", "alta"), []
+                elif nome.startswith("#seq:"):
+                    x = self.seq[nome[5:]]
                 elif nome == "@id":
                     v[dc] = None  # preenchido na gravação (id do principal); fora do resumo
                     continue
@@ -247,7 +340,15 @@ class CargaMapa(carga.Carga):
                         x, pr = sentinela.aplicar(regra, raw)
                         if pr:
                             pend.append((pr, GRAVIDADE_REGRA.get(pr, "media")))
+                    if c.get("valores") is not None and not pr:
+                        k = "" if x is None else ("1" if x is True else "0" if x is False else str(x))
+                        if k in c["valores"]:
+                            x = c["valores"][k] or None
+                        elif x is not None:
+                            x = None
+                            pend.append(("valor_fora_do_dominio", "media"))
                 ic = info.get(dc) or (True, None, None, False)
+                x = tipar(x, ic[1])
                 if x is None and ic[3]:  # NOT NULL com padrão: o destino decide; o resumo usa o valor relido
                     cs.append(_PADRAO(dc))
                     continue
@@ -274,10 +375,17 @@ class CargaMapa(carga.Carga):
         t, dts = p["tabela"], p["destinos"]
         ents = [self._nome_ent(t, dt) for dt in dts]
         chaves_sec = lambda k: [k] + ["%s/%s" % (k, dt) for dt in dts[1:]]  # noqa: E731
+        colide = self._colisoes(p)
+        seqs = [c["coluna"][5:] for dt in dts for c in p["colunas"][dt] if c["coluna"].startswith("#seq:")]
+        cont_seq = {}
         inicio, n = time.monotonic(), 0
         for linha, ch_sem in self._linhas_mapa(p):
             n += 1
             chave = ch_sem or "|".join(self._chave(linha[c]) for c in p["chave"])
+            for col in seqs:
+                k = (col, self._chave(linha[col]))
+                cont_seq[k] = cont_seq.get(k, 0) + 1
+                self.seq[col] = cont_seq[k]
             h = bytes.fromhex(hash_linha([linha[c] for c in p["lidas"]]))
             sit, ant = self._situacao(t, chave, h)
             if sit != "nova":
@@ -288,7 +396,10 @@ class CargaMapa(carga.Carga):
                 elif ant[3]:
                     self.prop.registrar(t, chave, ant[3], ant[4] or "alta")
                 continue
-            vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
+            if chave in colide:
+                vals, campos, pend, recusa, adiadas = None, None, [], ("codigo_colisao_caixa", "media"), []
+            else:
+                vals, campos, pend, recusa, adiadas = self._valores(p, linha, chave)
             if recusa:
                 self._recusar(t, chave, ents[0], h, *recusa)
                 self.prop.registrar(t, chave, *recusa)

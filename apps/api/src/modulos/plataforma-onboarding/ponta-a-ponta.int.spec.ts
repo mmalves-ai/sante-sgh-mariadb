@@ -113,7 +113,7 @@ describe.skipIf(SEM_BANCO)(
       const adm = valor(BANCO, 'SELECT MAX(id) FROM administrador_plataforma');
       req = { sgh: { sessao: { usuario: { id: `plataforma:${adm}`, ator: 'plataforma' } } } } as never;
       mkdirSync(ORIGENS, { recursive: true });
-      execFileSync(resolve(RAIZ, 'conector/conector.sh'), ['sintetica', `/saida/${ARQUIVO}`, '--mapa'], {
+      execFileSync(resolve(RAIZ, 'conector/conector.sh'), ['sintetica', `/saida/${ARQUIVO}`, '--mapa', '--fatias', 'lotes'], {
         env: ENV_CONECTOR,
         stdio: ['ignore', 'ignore', 'pipe'],
       });

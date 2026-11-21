@@ -1,0 +1,18 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBGRUUSU	NOME	perfil_acesso.codigo	texto			código do perfil = chave da origem preservada (só as pontas aparadas; espaços internos distinguem chaves); acima de 30 caracteres recusa (restricao_destino_1406) até o código derivado (pedido no L5-01.json)
+TBGRUUSU	NOME	perfil_acesso.nome	texto_nome			nome do perfil
+TBGRUUSU	ATIVO	perfil_acesso.ativo	booleano_sn			S/N; vazio fica com o padrão do destino (ativo)
+PREMAILMODULO	ID	finalidade_email.codigo	texto			código da finalidade = id da origem em texto (soma de controle em texto dos dois lados)
+PREMAILMODULO	NOME	finalidade_email.descricao	texto_nome			descrição da finalidade
+PRTIPO_JUSTIF_EXPORTACAO	ID	tipo_justificativa_exportacao.codigo	texto			código = id da origem em texto
+PRTIPO_JUSTIF_EXPORTACAO	JUSTIFICATIVA_EXPORTACAO	tipo_justificativa_exportacao.descricao	texto			descrição (obrigatória no destino: vazia recusa com restricao_destino_1048)
+PRTIPO_JUSTIF_EXPORTACAO	JUSTIFICATIVA_EXPORTACAO	tipo_justificativa_exportacao.texto_padrao	texto			o texto da origem também é o texto sugerido
+RPMATRIZ_GUT_TIPO	ID	dimensao_priorizacao_gut.codigo	texto			código = id da origem em texto
+RPMATRIZ_GUT_TIPO	NOME	dimensao_priorizacao_gut.descricao	texto_nome			gravidade, urgência ou tendência (vazio recusa: restricao_destino_1048)
+RPMATRIZ_GUT_DESCRICAO	ID	grau_priorizacao_gut.codigo	texto			código = id da origem em texto
+RPMATRIZ_GUT_DESCRICAO	NOME	grau_priorizacao_gut.descricao	texto_nome			descrição do grau
+RPMATRIZ_GUT_DESCRICAO	ID_RPMATRIZ_GUT_TIPO	grau_priorizacao_gut.dimensao_priorizacao_gut_id				dimensão pelo conector_origem (gerada: chave_origem)
+RPMATRIZ_GUT_DESCRICAO	PONTO	grau_priorizacao_gut.pontuacao	inteiro			pontuação 1 a 5 (fora disso recusa pelo CHECK: restricao_destino_4025)
+TBCENARIO	ID	cenario_alerta.codigo	texto			código = id da origem em texto
+TBCENARIO	NOME	cenario_alerta.descricao	texto_nome			descrição do cenário
+TBCENARIO	=migracao	cenario_alerta.verificador				a origem não tem o verificador do domínio: marca migracao até o cliente associar

@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga.py",
+   "mudanca": "incluir 1364 (campo NOT NULL sem padrão ausente do INSERT) em ERROS_LINHA",
+   "motivo": "hoje uma tabela cujo destino tem NOT NULL sem padrão que a origem não supre derruba a carga inteira em vez de recusar só a linha; bloqueia declarar FPEVENTO, FPLOTTRIBCAD, FPREMESSA, FPRESP, FPPARAM, FPPARAMVIG, FPTPEVENTOAUT_TBEMPHOS e FPRUBRICA*_FPEVENTO com recusa honesta por linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "literal '=<texto>' convertido ao tipo da coluna de destino antes de gravar e de entrar no resumo (ex.: '=1' em SMALLINT vira int 1)",
+   "motivo": "'=1' em faixa_tabela_legal.sequencia fazia a soma de controle divergir (texto na origem, inteiro relido do destino); por isso a faixa do IRRF ficou fora desta fatia"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL)",
+   "mudanca": "grupo repetido: uma linha da origem gera N linhas num destino secundário (ex.: sufixo '#<n>' no destino, faixa_tabela_legal#1..#4, cada uma com seu literal de sequência e @id), com linha omitida quando todas as colunas do grupo forem nulas",
+   "motivo": "TBTABIRR guarda numa linha as faixas do IRRF (F1, F2, F3, acima), do INSS (F1 a F4) e do salário-família; sem isso só o cabeçalho da vigência é carregado. O mesmo serve a destino secundário opcional (formula_rubrica só quando a fórmula existir)"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (CAMPOS_DECL) + carga_mapa.planejar",
+   "mudanca": "referência declarável por coluna (ex.: campo 'referencia' em colunas.d ou 'ref:<TABELA>' em via), valendo por cima da gerada, para código não-ID que é a chave do pai",
+   "motivo": "FPEVENTO.TP_EVENTO é a chave de FPTP_EVENTO (tipo_rubrica) e TP_REFER a de FPTP_REFER (tipo_referencia_rubrica); a geração por nome só liga colunas ID_*; rubrica.tipo_rubrica_id e tipo_referencia_rubrica_id são NOT NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra genérica de estabelecimento: resolver o estabelecimento_id do cliente a partir do código de empresa da origem (COD_EMP / ID_TBEMPHOS), pelo conector_origem da empresa, sem valor fixo por cliente",
+   "motivo": "rubrica, lotacao_tributaria, competencia_folha, responsavel_legal_empregador, lancamento_automatico_rubrica e cadastro_empregador exigem estabelecimento_id NOT NULL; a origem só traz a empresa (TBEMPHOS, que vira mantenedora, entidade diferente)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (ou depara próprio do lote)",
+   "mudanca": "de-para próprio de valores por coluna (código da origem para valor de domínio do destino, ex.: FECHADA S/N para competencia_folha.situacao fechada/aberta)",
+   "motivo": "codigo_char grava o código cru; sem de-para de valores não há como preencher colunas de domínio com CHECK"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/catalogos.tsv",
+   "mudanca": "preencher coluna_codigo: STFIL_PREV=COD_FIL, STLOCAL=ID, STRESULT=COD_RES, STTPASO=ID, STTPMEDIDAS=COD_TP",
+   "motivo": "as 5 tabelas são só o catálogo oficial (codigo_esocial); o de-para pelo código precisa da coluna; o destino não oficial do mapa (comunicacao_acidente, exame_ocupacional, aso, medida_controle_risco) é transacional e não recebe linha de tabela de códigos"
+  },
+  {
+   "arquivo": "tools/obra/gerar_mapa_conector.py / conector/mapa/tabelas.tsv (regra de geração)",
+   "mudanca": "TBTPCONSTRUT e TBTPCOOPERAT: tratar como domínio (de-para para cadastro_empregador.construtora e indicador_cooperativa) e não como tabela carregável em cadastro_empregador",
+   "motivo": "são listas de códigos referenciadas por TBEMPHOS; uma linha delas não é um cadastro de empregador (estabelecimento_id e vigência NOT NULL)"
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py",
+   "mudanca": "--conferir ignorar colunas.d (ou o integrador regenerar as fatias depois de integrar)",
+   "motivo": "a fatia inclui 'Já declaradas', então as declarações da própria fatia (L5-09 a L5-12 e outras) fazem o md e o indice.tsv divergirem do gerado e o passo 2 da autoconferência falha para todas"
+  },
+  {
+   "arquivo": "db/migracoes/15_RH/03_tabelas.sql (tabela_legal_vigencia)",
+   "mudanca": "acrescentar duas colunas DECIMAL(15,2) NULL para a redução do IRRF de 2026: o limite de rendimento em que a redução zera o imposto (ex.: isencao_reducao_ate) e o valor da redução (ex.: valor_reducao), com CHECK >= 0",
+   "motivo": "TBTABIRR.ISENTO_26 e REDUCAO_26 não têm coluna no modelo; isencao_ate já recebe ISENTO (faixa isenta da tabela). F1_INICIO_26, F1_FIM_26 e ACIMA_26 já entram em reducao_de, reducao_ate e sem_reducao_acima_de"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py (CAMPOS_DECL)",
+   "mudanca": "o grupo repetido (pedido acima) valer também para o destino PRINCIPAL: uma linha da origem gera várias linhas de tabela_legal_vigencia com tipo_tabela literal diferente e a mesma vigencia_inicio, omitida quando todas as colunas do grupo forem nulas",
+   "motivo": "a mesma linha da TBTABIRR traz, além do IRRF, as vigências salario_minimo (SAL_MIN em valor_referencia), inss_contribuinte_individual (CONTR_IND, TETO_CONTR_IND em teto, INSS_PERC_PF), teto_inss (INSS_TETO_PF em teto) e inss (VLR_ACIMA_F4 com as faixas F1 a F4); hoje só a vigência 'irrf' é carregada. CONTR_IND_FINS/TETO_CONTR_IND_FINS são uma segunda vigência inss_contribuinte_individual na mesma data: o UNIQUE(tipo_tabela, vigencia_inicio) pede um tipo novo no CHECK (ex.: inss_contribuinte_individual_fins) ou decisão do dono de descartar"
+  },
+  {
+   "arquivo": "(registro, sem mudança de código)",
+   "mudanca": "descarte declarado de TBTABIRR.ISENTO_PJ, ALIQ_PJ e INSS_PERC_PJ (colunas sem destino, motivo em colunas.d/L5-12.tsv)",
+   "motivo": "retenção de IRRF e INSS sobre pagamento a pessoa jurídica não é tabela legal da folha e não tem destino no modelo; se o produto passar a reter na contratação de PJ (EFD-REINF), o destino é outra entidade"
+  },
+  {
+   "arquivo": "db/migracoes/15_RH/02_tabelas.sql (justificativa_ponto) + colunas.d/L5-12.tsv",
+   "mudanca": "escopo da justificativa por mantenedora: coluna mantenedora_id BIGINT UNSIGNED NULL com FK para mantenedora e troca de UNIQUE(codigo) por UNIQUE(mantenedora_id, codigo); depois, declarar PEJUSTIF.COD_EMP -> justificativa_ponto.mantenedora_id com referência a TBEMPHOS (pede a referência declarável já pedida). Alternativa: decisão registrada do dono de unificar os códigos entre empresas (aí a recusa continua e vira tarefa do cliente)",
+   "motivo": "na origem o código é único por empresa (COD_EMP + COD_JUSTIF); o UNIQUE(codigo) global do destino recusa com restricao_destino_1062 a justificativa de uma segunda empresa com o mesmo código, a que fica depende da ordem de carga e os registros de ponto que apontam para ela caem em pai_pendente em cadeia. É LIMITAÇÃO DO MODELO, não erro do dado; até a mudança, a pendência 1062 da PEJUSTIF deve ser apresentada assim no painel"
+  }
+ ]
+}

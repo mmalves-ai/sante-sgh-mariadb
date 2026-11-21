@@ -1,0 +1,21 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBGENERO_SOCIAL	CODIGO	identidade_de_genero.codigo	texto			código numérico da origem gravado como texto (código de negócio)
+TBGENERO_SOCIAL	NOME	identidade_de_genero.descricao	texto_nome			descrição; vazia recusa a linha (NOT NULL)
+TBGENERO_SOCIAL	ATIVO	identidade_de_genero.ativo	booleano_sn			S/N; vazio ou fora do domínio fica com o padrão do destino (ativo)
+TBGRAU_INST	COD_GRAU	nivel_escolaridade.codigo	codigo_char			código de 1 caractere, caixa preservada; colisão de caixa deve virar codigo_colisao_caixa nas duas linhas (pedido ao motor); até lá a segunda linha lida é recusada por 1062
+TBGRAU_INST	DESCRICAO	nivel_escolaridade.descricao	texto			descrição (só as pontas aparadas)
+TBGRAU_INST	COD_ESOCIAL	nivel_escolaridade.codigo_esocial	texto			código da escolaridade no eSocial
+TBGRUCONVEN	COD	grupo_fonte_pagadora.codigo	texto			código numérico da origem gravado como texto
+TBGRUCONVEN	NOME	grupo_fonte_pagadora.descricao	texto_nome			descrição do grupo
+TBPARENTE	COD_PAR	tipo_parentesco.codigo	texto			código numérico da origem gravado como texto
+TBPARENTE	NOME	tipo_parentesco.descricao	texto_nome			descrição do parentesco
+TBPESQUIPLANO	ID	situacao_posse_plano.codigo	texto			a origem só tem o id: vira o código de negócio
+TBPESQUIPLANO	NOME	situacao_posse_plano.descricao	texto_nome			descrição da resposta
+TBRELIG	COD	crenca_religiosa.codigo	texto			código numérico da origem gravado como texto
+TBRELIG	NOME	crenca_religiosa.descricao	texto_nome			descrição da crença
+TBTIPOATEUNIDADE	ID	perfil_unidade.codigo	texto			a origem só tem o id: vira o código de negócio
+TBTIPOATEUNIDADE	NOME	perfil_unidade.descricao	texto_nome			descrição do perfil
+TBTIPOATEUNIDADE	=outro	perfil_unidade.categoria				categoria assistencial não existe na origem: entra como 'outro' (valor neutro do modelo) e o cliente reclassifica
+TBVULNERABILIDADE_SOCIAL	CODIGO	condicao_vulnerabilidade.codigo	texto			código numérico da origem gravado como texto
+TBVULNERABILIDADE_SOCIAL	DESCRICAO	condicao_vulnerabilidade.descricao	texto			descrição da condição
+TBVULNERABILIDADE_SOCIAL	ATIVO	condicao_vulnerabilidade.ativo	booleano_sn			S/N

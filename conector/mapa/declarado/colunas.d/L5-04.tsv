@@ -1,0 +1,16 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBCOMPLEXIDADE_HOSPITALAR	ID	complexidade_estabelecimento.codigo	texto			L5-04: número do nível vira o código (único), como texto: a soma de controle compara o texto gravado
+TBCOMPLEXIDADE_HOSPITALAR	NOME	complexidade_estabelecimento.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha (restrição do destino)
+TBPORTE_HOSPITALAR	ID	porte_estabelecimento.codigo	texto			L5-04: número do porte vira o código (único), como texto
+TBPORTE_HOSPITALAR	NOME	porte_estabelecimento.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha
+CDTPENDERECO	ID	tipo_endereco.codigo	texto		tipo_endereco	L5-04: a origem é o domínio de finalidade do endereço (tipo_endereco), não o endereço da pessoa: endereco_pessoa exige dono e logradouro
+CDTPENDERECO	NOME	tipo_endereco.descricao	texto_nome		tipo_endereco	L5-04: descrição obrigatória; nula recusa só a linha
+FPTPTEL	ID	tipo_telefone.codigo	codigo_char			L5-04: código de 1 caractere com a caixa preservada. Regra do brief (codigo_colisao_caixa) AINDA NÃO ATENDIDA pelo motor: a colisão cai como restricao_destino_1062 (pedido em saida/L5-04.json)
+FPTPTEL	NOME	tipo_telefone.descricao	texto_nome			L5-04: descrição obrigatória
+TBCAPACIDADE_CIVIL	ID	capacidade_civil.codigo	texto			L5-04: número vira o código (único), como texto
+TBCAPACIDADE_CIVIL	DESCRICAO	capacidade_civil.descricao	texto			L5-04: descrição obrigatória
+TBCLASSC	COD	classe_fonte_pagadora.codigo	texto			L5-04: número da classe vira o código (único), como texto
+TBCLASSC	NOME	classe_fonte_pagadora.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha
+TBCLASSC	=outro	classe_fonte_pagadora.natureza				L5-04: natureza PRESUMIDA (a origem não classifica); o faturamento usa a natureza: o cliente reclassifica antes de faturar. Pendência valor_presumido por linha pedida ao integrador; contagem na saída da fatia
+TBESCOLARIDADE	ID	nivel_escolaridade.codigo	texto			L5-04: número do nível vira o código (único), como texto
+TBESCOLARIDADE	NOME	nivel_escolaridade.descricao	texto_nome			L5-04: descrição obrigatória; nula recusa só a linha

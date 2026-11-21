@@ -1,0 +1,59 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/mapa.py; conector/sante_conector/carga_mapa.py; conector/verificar_mapa.py",
+   "mudanca": "Referência declarada em colunas.d: aceitar no campo `via` o valor `ref:<TABELA_ORIGEM>` (ou um campo novo `referencia`) e usá-lo em carga_mapa.planejar no lugar da referência gerada (`c.get('referencia') or g.get('referencia')`); o verificador confere que a tabela existe na origem. A chave do pai segue `carga._chave` (texto aparado), casando com a chave NOME de TBUSERS.",
+   "motivo": "Colunas de login VARCHAR(31) (USUARIO, ID_TBUSERS, ID_TBUSER) não recebem referência gerada (110 colunas USUARIO no mapa). Sem isso usuario_id (NOT NULL) fica sem valor e bloqueia 10 tabelas da L5-03: TBUNIUSE, TBUSERCON, TBUSERSCOMPL, TBUSERS_TBPAPEL, TBUSERS_TBALERTA, TBLOCAL_TBUSERS, TBUSUCPL, TBUSERS_TBCONVEN, TBHISTSENHA e TBCABTRILHA (CHECK ck_evento_auditoria_autor exige usuario_id). Serve também a TBUNIUSE.UNID e TBUSERCON.CONV (inteiros sem referência gerada; CONV aponta TBCONVEN) e TBUSUCPL.EMPRESA."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial `#seq:<COLUNA_PAI>`: grava 1..n dentro do mesmo valor da coluna pai, na ordem da chave de leitura (estável entre execuções).",
+   "motivo": "alerta_gatilho.sequencia, evento_auditoria_alerta.sequencia e evento_auditoria_registro.sequencia são NOT NULL sem padrão e com UNIQUE (pai, sequencia); a origem não tem a coluna. Bloqueia TBALERTA_TBOPCOES_TBEVENTOS, TBLANTRALERTA e TBLANTRILHASGH."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial `@estabelecimento`: id do estabelecimento do cliente (único carregado de TBHOSPIT; mais de um sem coluna de empresa vira pendência), para destino com estabelecimento_id NOT NULL sem coluna na origem.",
+   "motivo": "assinatura_alerta, exportacao_documento, usuario_acao_excecao e usuario_vinculo_profissional exigem estabelecimento_id e a origem não o traz (exceto TBUSUCPL.EMPRESA, coberto pela referência declarada)."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado: via mapa_analise/gerador)",
+   "mudanca": "TBTIPOREPRE (→ consentimento_titular) e TBTPPERM_RICADPAC (→ restricao_prontuario, restricao_prontuario_autorizado): trocar a estratégia para de-para de domínio (valor de campo: tipo_signatario e modo) ou descarte justificado, sem destino de linha.",
+   "motivo": "O próprio motivo do mapa diz que viram campo do registro pai; uma linha delas não forma um consentimento nem uma restrição (paciente_id, numero, motivo etc. NOT NULL). Por isso a L5-03 não as declarou."
+  },
+  {
+   "arquivo": "decisão do dono (registrar no plano)",
+   "mudanca": "TBUSUCPL (cerca de 170 indicadores de permissão por usuário e empresa) → usuario_acao_excecao: exige despivotar cada indicador em uma linha por ação do sistema (efeito conceder/negar), com de-para indicador → acao_sistema. Decidir entre um mecanismo genérico de despivotar no motor ou carga só de usuario_vinculo_profissional (ID_TBCBOPRO) e descarte justificado dos indicadores. TBHISTSENHA → historico_senha: decidir se os resumos de senha antigos migram (algoritmo NOT NULL desconhecido) ou se a tabela é descartada.",
+   "motivo": "Não há regra genérica que transforme colunas em linhas nem que identifique o algoritmo do resumo da senha de origem."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (ou mapa de referência)",
+   "mudanca": "TBCABTRILHA.ID_HTPACIENTE aponta HTPACIENTE, cujo destino principal é paciente_versao; evento_auditoria.paciente_id precisa do paciente. Referência pela coluna do pai (ex.: `ref:HTPACIENTE>paciente_id`) ou declarar só atendimento_id.",
+   "motivo": "Gravar o id da versão em paciente_id seria id de outro domínio."
+  },
+  {
+   "arquivo": "tools/obra/fatiar_conector.py (integrador)",
+   "mudanca": "Regenerar as fatias depois de integrar colunas.d: a fatia gerada inclui as declaradas, então `--conferir` acusa 'arquivo diferente do gerado' para toda fatia que já declarou (hoje L5-03, L5-05, L5-07, L5-08, L5-09, L5-10, L5-11 e indice.tsv).",
+   "motivo": "Único erro restante da autoconferência da L5-03; não é da fatia."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py; conector/mapa/declarado (formato novo de de-para de domínio)",
+   "mudanca": "De-para de valor de domínio pela tabela referenciada (genérico, nunca por tabela): `via=dominio:<TABELA_REF>.<COLUNA>` + arquivo declarado de pares valor_origem -> valor_destino (ex.: TBSEXO.SIGLA F->feminino, M->masculino, ausente->todos; valor sem par vira pendência valor_fora_do_dominio). E coluna calculada genérica de duração em minutos (`#minutos:<COL_HORAS>,<COL_MINUTOS>`), com `repeticao` derivada (>0 -> 'intervalo', 0/NULL -> padrão do destino).",
+   "motivo": "TBALERTA -> regra_alerta foi RETIRADA da carga: sem isso ID_TBSEXO, REPETIR_HORAS/REPETIR_MINUTOS e TP_EXIBICAO se perdem e a regra muda de significado (alerta de um só sexo passa a valer para 'todos'; repetição a cada N minutos passa a 'sempre'). Declaração pronta para quando houver a via: ID->codigo (texto), NOME->nome (texto_nome), ID_TBCENARIO->cenario_alerta_id (chave_origem), DESCRICAO_ALERTA->mensagem (texto_longo), IDADE_INICIAL/IDADE_FINAL->idade_minima_anos/idade_maxima_anos, DATA_CAD_INICIO->vigencia_inicio (data), ATIVO->ativo (booleano_sn), ID_TBSEXO->sexo_aplicavel (de-para), REPETIR_*->repeticao+intervalo_repeticao_minutos. Descartes a registrar em declarado/descartes.tsv: GRAVAR_LOG (o destino sempre audita), REPETIR_ACRITERIODOUSR e ALERTA_MENSAL (sem coluna no destino; 'a critério do usuário' a decidir pelo dono), ORIGEM (sistema/usuário: candidato a `editavel`, domínio da origem a confirmar no PSQL). A sintética da fatia já traz os casos (sexo 1 e 2, 150 e 45 minutos)."
+  },
+  {
+   "arquivo": "decisão do dono / PSQL da origem (antes de declarar TBALERTA)",
+   "mudanca": "Confirmar como a origem marca faixa etária aberta em IDADE_INICIAL/IDADE_FINAL (0, 999 ou NULL). Se for 0 no limite superior (ou 999), pedir regra genérica de sentinela de faixa (ex.: `inteiro_limite_aberto`: marcador vira NULL com registro) e TP_EXIBICAO -> gravidade/bloqueante (de-para de domínio, valores 0..2 a confirmar).",
+   "motivo": "Com `inteiro` puro, IDADE_FINAL=0 com IDADE_INICIAL>0 é recusado pelo CHECK (4025) e 0..0 grava alerta só para recém-nascido, sem pendência. Não há PSQL nem agregado disponível na pasta para TBALERTA (2 linhas na imagem de referência). A sintética traz 0..12, 0..0 e 30..0."
+  },
+  {
+   "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + carga_mapa.py",
+   "mudanca": "De-para de catálogo oficial a partir de id interno da origem: `via=ref:TBCONSPROF>CODIGO` (busca o código na tabela de origem pelo id e aplica o de-para `conselho_classe`), com o catálogo `conselho_classe` acrescentado a depara.CATALOGOS; código ausente vira pendência catalogo_codigo_*. E TBTIPOOID (L5-02, ordem 46, hoje destino oid_icp) vira de-para de domínio para oid_icp.tipo_oid (valores do CHECK: politica, cpf, cnpj, nome, data_nascimento, titulo_eleitor, registro_conselho, uf_conselho, especialidade, cnes, responsavel, outro), não linha de oid_icp.",
+   "motivo": "TBOID.ID_TBCONSPROF é id interno (não o código do conselho) e depara.CATALOGOS não tem conselho_classe; ID_TBTIPOOID não tem via. Hoje todas as linhas de TBOID (85 na imagem de referência) entram com tipo_oid='outro' (a validação de certificado não usa) e conselho_classe_id NULL; o motivo está no colunas.d. Ao declarar as colunas, as linhas aparecem alteradas e o Sincronizar corrige."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado: mapa_analise/gerador) e L5-02",
+   "mudanca": "tipo_acao_auditavel com uma só alimentadora: TBTPACAOAUDIT (o próprio catálogo de tipos de ação auditável, ordem 1093). Tirar tipo_acao_auditavel dos destinos de TBEVENTOS (ordem 36; fica só acao_sistema). Alternativa, se o dono quiser as duas: regra genérica de espaço de código por origem (prefixo declarado na coluna, ex.: `=prefixo:<texto>` combinado com a chave), nunca por tabela.",
+   "motivo": "As duas têm chave inteira; a L5-03 grava codigo = ID ('1'..'29') sob uq_tipo_acao_auditavel_codigo. Se a L5-02 declarar TBEVENTOS no mesmo padrão, os ids 1..29 colidem (restricao_destino_1062) e os filhos de TBCABTRILHA ficam pendentes. A L5-02 também registrou que TBEVENTOS -> tipo_acao_auditavel não tem fonte para categoria/acao_trilha. O teste test_l5_03 acusa qualquer outra declaração em tipo_acao_auditavel."
+  }
+ ]
+}

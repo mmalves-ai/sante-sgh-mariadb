@@ -1,0 +1,17 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBLEITORBIOME	ID	modelo_leitor_biometrico.codigo	texto			L5-02: o número do modelo vira o código (único); texto para casar com o VARCHAR do destino na soma
+TBLEITORBIOME	NOME	modelo_leitor_biometrico.descricao	texto_nome			L5-02: nome do modelo; vazio recusa só a linha (NOT NULL no destino)
+TBLGPDANONMOT	ID	base_legal_tratamento.codigo	texto			L5-02: o número do motivo vira o código (único)
+TBLGPDANONMOT	ID	base_legal_tratamento.descricao	texto			L5-02: provisório até a regra genérica de resumo (pedido no L5-02.json): a descrição curta recebe o código e o cliente revisa; o texto integral vai para a explicação, sem recusar a linha
+TBLGPDANONMOT	DESCRICAO	base_legal_tratamento.explicacao	texto			L5-02: texto integral do motivo (até 999 na origem; cabe nos 1000 da explicação)
+TBLGPDANONMOT	ATIVO	base_legal_tratamento.ativo	booleano_sn			L5-02: S/N; nulo fica com o padrão do destino
+TBLGPDANONUSERFUNCAO	ID	funcao_responsavel_lgpd.codigo	texto			L5-02: o número da função vira o código; encarregado_dados não é alimentado por esta tabela (exige pessoa, e-mail e vigência)
+TBLGPDANONUSERFUNCAO	DESCRICAO	funcao_responsavel_lgpd.descricao	texto			L5-02: descrição da função
+TBLGPDANONUSERFUNCAO	ATIVO	funcao_responsavel_lgpd.ativo	booleano_sn			L5-02: S/N
+TBPAPEL	COD_PAPEL	papel_seguranca.codigo	texto			L5-02: código do papel (único; repetido recusa só a linha)
+TBPAPEL	NOME	papel_seguranca.nome	texto_nome			L5-02: nome do papel; nulo recusa só a linha
+TBPAPEL	=migracao	papel_seguranca.origem				L5-02: papel trazido pelo conector (distingue dos papéis do produto)
+TBTERMCONREVTP	ID	tipo_termo_lgpd.codigo	texto			L5-02: o número do tipo de termo vira o código
+TBTERMCONREVTP	DESCRICAO	tipo_termo_lgpd.descricao	texto			L5-02: descrição do tipo de termo
+TBTERMCONREVTP	ATIVO	tipo_termo_lgpd.ativo	booleano_sn			L5-02: S/N
+TBTERMCONREVTP	=outra	tipo_termo_lgpd.finalidade				L5-02: a origem não classifica a finalidade; entra como outra e o cliente reclassifica
