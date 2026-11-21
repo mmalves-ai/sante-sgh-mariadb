@@ -1,117 +1,82 @@
-// M44 (etapa 2), regra 11, no `worker`: a reserva vencida expira UMA vez, com a solicitação reservada de volta à
-// análise e a trilha; a solicitação que já mudou não volta; a linha travada por outro consumidor faz este desistir sem
-// erro; o relógio é injetado. As leituras e gravações do núcleo são dublês (nada conecta a banco); a prova sobre a
-// cópia é a nir-reserva.int.spec.ts.
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// M44 (etapa 2), regra 11, no `worker` (lote F2.2 05-15): a reserva vencida expira UMA vez, a solicitação reservada ou
+// a caminho volta à análise; o segundo ciclo não expira de novo; o consumidor que perde a disputa desiste sem erro; a
+// falha de leitura de um estabelecimento não para o ciclo. A porta própria é um dublê (nada conecta a banco); a prova
+// sobre o MariaDB é a nir-reserva.int.spec.ts.
+import { describe, expect, it } from 'vitest';
+import type { PortaNir } from './nir-reserva-propria.js';
+import { cicloExpiracao, expiracaoLigada, NirReservaService } from './nir-reserva.service.js';
+import type { AlvoEstabelecimento } from './servico-worker.js';
 
-const estado = {
-  vigentes: new Map<number, { solicitacao: number; validaAte: string }>(),
-  solicitacoes: new Map<number, string>(),
-  trilha: [] as string[],
-  transicoes: [] as string[],
-  travada: false,
-  agoraLido: '' as string,
-};
+const EST: AlvoEstabelecimento = { cliente: 'cli_teste', id: 7, codigo: 'pc', fuso: 'America/Sao_Paulo' };
+const AGORA = new Date('2026-10-24T13:00:00.000Z');
 
-vi.mock('@sgh/legado', () => ({
-  relogioRecepcao: async () => ({ hoje: '2026-10-24', agora: '2026-10-24T10:00:00' }),
-  reservasVencidasNir: async (_l: unknown, _cod: string, agora: string) => {
-    estado.agoraLido = agora;
-    return [...estado.vigentes.entries()]
-      .filter(([, r]) => r.validaAte < agora)
-      .map(([id, r]) => ({ id, solicitacao: r.solicitacao, bloco: 'B1', acomodacao: '101', leito: 'A' }));
-  },
-  encerrarReservaSgh: async (_e: unknown, r: { reserva: number; vencidaEm: string }) => {
-    if (estado.travada) throw new Error('lock conflict on no wait transaction');
-    const x = estado.vigentes.get(r.reserva);
-    if (!x || x.validaAte >= r.vencidaEm) return 0;
-    estado.vigentes.delete(r.reserva);
-    return 1;
-  },
-  solicitacaoNir: async (_e: unknown, _cod: string, id: number) =>
-    estado.solicitacoes.has(id) ? { estado: estado.solicitacoes.get(id) } : null,
-  transicionarSolicitacaoSgh: async (_e: unknown, t: { solicitacao: number; para: string }) => {
-    estado.transicoes.push(`${t.solicitacao}>${t.para}`);
-    estado.solicitacoes.set(t.solicitacao, t.para);
-    return 1;
-  },
-  gravarTrilha: async (_e: unknown, l: { evento: string; idAlvo: string }) => {
-    estado.trilha.push(`${l.evento}:${l.idAlvo}`);
-    return { id: '1', hash: 'h' };
-  },
-  somenteSgh: (e: unknown) => e,
-  ehTravaOcupada: (x: unknown) => x instanceof Error && /lock conflict/.test(x.message),
-  lerCodigos: () => ['pc'],
-  lerConfiguracaoNucleo: () => ({ bibliotecaCliente: null }),
-  NucleoLegado: class {},
-}));
-vi.mock('@sgh/legado/nativo', () => ({ criarDriverNativo: () => ({}) }));
-
-const { cicloExpiracao, expiracaoLigada, NirReservaService } = await import('./nir-reserva.service.js');
-type Nucleo = Parameters<typeof cicloExpiracao>[0];
-
-const nucleo = {
-  rede: 'rede',
-  lerSomente: async <T>(_c: unknown, fn: (l: never) => Promise<T>) => fn({} as never),
-  gravarSgh: async <T>(_c: unknown, fn: (e: never) => Promise<T>) => fn({} as never),
-  encerrar: async () => undefined,
-} as unknown as Nucleo;
-
-beforeEach(() => {
-  estado.vigentes = new Map([
-    [1, { solicitacao: 10, validaAte: '2026-10-24T09:00:00' }],
-    [2, { solicitacao: 20, validaAte: '2026-10-24T11:00:00' }],
-    [3, { solicitacao: 30, validaAte: '2026-10-24T09:30:00' }],
+function porta(opcoes: { travada?: boolean } = {}) {
+  const vigentes = new Map([
+    [1, { solicitacao: 10, validaAte: '2026-10-24T12:00:00.000Z' }],
+    [2, { solicitacao: 20, validaAte: '2026-10-24T14:00:00.000Z' }],
+    [3, { solicitacao: 30, validaAte: '2026-10-24T12:30:00.000Z' }],
   ]);
-  estado.solicitacoes = new Map([
+  const solicitacoes = new Map([
     [10, 'reservado'],
     [20, 'reservado'],
     [30, 'em_transito'],
   ]);
-  estado.trilha = [];
-  estado.transicoes = [];
-  estado.travada = false;
-});
+  const p: PortaNir = {
+    estabelecimentos: async () => [EST],
+    vencidas: async (_e, agora) =>
+      [...vigentes.entries()]
+        .filter(([, r]) => r.validaAte < agora.toISOString())
+        .map(([id, r]) => ({ id, solicitacao: r.solicitacao, leito: id, validaAte: r.validaAte })),
+    expirar: async (_e, id, agora) => {
+      if (opcoes.travada) return { expirou: false, voltouAnalise: false };
+      const r = vigentes.get(id);
+      if (!r || r.validaAte >= agora.toISOString()) return { expirou: false, voltouAnalise: false };
+      vigentes.delete(id);
+      const volta = ['reservado', 'em_transito'].includes(solicitacoes.get(r.solicitacao) ?? '');
+      if (volta) solicitacoes.set(r.solicitacao, 'em_analise');
+      return { expirou: true, voltouAnalise: volta };
+    },
+  };
+  return { p, vigentes, solicitacoes };
+}
 
 describe('expiração das reservas do NIR', () => {
-  it('as vencidas no relógio injetado expiram uma vez; a reservada e a em trânsito voltam à análise (regra 11)', async () => {
-    const r = await cicloExpiracao(nucleo, 'pc', '2026-10-24T10:00:00');
-    expect(r).toEqual({ vencidas: 2, expiradas: 2 });
-    expect(estado.transicoes).toEqual(['10>em_analise', '30>em_analise']);
-    expect(estado.trilha).toEqual([
-      'internacao.reservaLeito.expirada:1',
-      'internacao.reservaLeito.expirada:3',
-    ]);
-    expect(estado.vigentes.has(2)).toBe(true);
-    // Segundo ciclo (ou segundo consumidor depois do primeiro): nada mais.
-    expect(await cicloExpiracao(nucleo, 'pc', '2026-10-24T10:00:00')).toEqual({ vencidas: 0, expiradas: 0 });
+  it('as vencidas expiram uma vez; a reservada e a em trânsito voltam à análise (regra 11)', async () => {
+    const { p, vigentes, solicitacoes } = porta();
+    expect(await cicloExpiracao(p, EST, AGORA)).toEqual({ vencidas: 2, expiradas: 2, voltaramAnalise: 2 });
+    expect(solicitacoes.get(10)).toBe('em_analise');
+    expect(solicitacoes.get(30)).toBe('em_analise');
+    expect(vigentes.has(2)).toBe(true);
+    expect(await cicloExpiracao(p, EST, AGORA)).toEqual({ vencidas: 0, expiradas: 0, voltaramAnalise: 0 });
   });
 
-  it('o relógio do banco sem injeção; a linha travada por outro consumidor: desiste sem erro', async () => {
-    await cicloExpiracao(nucleo, 'pc');
-    expect(estado.agoraLido).toBe('2026-10-24T10:00:00');
-    estado.vigentes.set(9, { solicitacao: 90, validaAte: '2026-10-24T08:00:00' });
-    estado.travada = true;
-    expect(await cicloExpiracao(nucleo, 'pc', '2026-10-24T10:00:00')).toEqual({ vencidas: 1, expiradas: 0 });
-    estado.travada = false;
-    const outro = {
-      ...nucleo,
-      gravarSgh: async () => Promise.reject(new Error('falha de rede')),
-    } as unknown as Nucleo;
-    await expect(cicloExpiracao(outro, 'pc', '2026-10-24T10:00:00')).rejects.toThrow('falha de rede');
+  it('o consumidor que perde a disputa (linha travada) desiste sem erro', async () => {
+    expect(await cicloExpiracao(porta({ travada: true }).p, EST, AGORA)).toEqual({
+      vencidas: 2,
+      expiradas: 0,
+      voltaramAnalise: 0,
+    });
   });
 
-  it('ligado fora de dev/ci; em dev/ci só com NIR_EXPIRACAO=ligado; o serviço com o núcleo de teste', async () => {
+  it('ligado fora de dev/ci; em dev/ci só com NIR_EXPIRACAO=ligado; o serviço com a porta de teste', async () => {
     expect(expiracaoLigada({ AMBIENTE: 'producao' })).toBe(true);
     expect(expiracaoLigada({ AMBIENTE: 'producao', NIR_EXPIRACAO: 'desligado' })).toBe(false);
     expect(expiracaoLigada({ AMBIENTE: 'dev' })).toBe(false);
     expect(expiracaoLigada({ AMBIENTE: 'ci', NIR_EXPIRACAO: 'ligado' })).toBe(true);
     const s = new NirReservaService();
     expect(await s.ciclo()).toEqual([]);
-    s.usar(nucleo);
-    expect(await s.ciclo('2026-10-24T10:00:00')).toEqual([{ estabelecimento: 'pc', expiradas: 2 }]);
-    s.usar({ ...nucleo, lerSomente: async () => Promise.reject(new Error('x')) } as unknown as Nucleo);
-    expect(await s.ciclo('2026-10-24T10:00:00')).toEqual([]);
+    const plataforma = { lerPlataforma: async () => [] as never, encerrar: async () => undefined };
+    const antes = process.env['WORKER_CLIENTES'];
+    process.env['WORKER_CLIENTES'] = 'cli_teste';
+    try {
+      s.usar(plataforma, () => porta().p);
+      expect(await s.ciclo(AGORA)).toEqual([{ cliente: 'cli_teste', estabelecimento: 'pc', expiradas: 2 }]);
+      s.usar(plataforma, () => ({ ...porta().p, vencidas: async () => Promise.reject(new Error('x')) }));
+      expect(await s.ciclo(AGORA)).toEqual([]);
+    } finally {
+      if (antes === undefined) delete process.env['WORKER_CLIENTES'];
+      else process.env['WORKER_CLIENTES'] = antes;
+    }
     await s.onApplicationShutdown();
   });
 });

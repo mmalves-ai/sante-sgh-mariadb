@@ -1,0 +1,77 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    "apps/worker/tsconfig.migrado.json (já aplicado pelo lote, leitura-modificação-escrita): src/servico-worker.ts, src/censo-fechamento-propria.ts, src/censo-fechamento-propria.int.spec.ts, src/nir-reserva-propria.ts, src/classificacao-estouro-propria.ts, src/contratos-vencimento-propria.ts, src/contratos-vencimento-propria.int.spec.ts, src/indice-busca-propria.ts, src/indice-busca-propria.int.spec.ts e os arquivos da lista 05-15 que existem"
+  ],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: retrato das conexões do outro sistema e uso do dia 'no novo x no anterior' (M37/M43) eram convivência com o sistema de origem; sem equivalente no banco próprio.",
+      "arquivos": [
+        "apps/worker/src/coexistencia-retrato.ts",
+        "apps/worker/src/coexistencia-retrato.spec.ts"
+      ]
+    },
+    {
+      "tipo": "edicao-outro-lote",
+      "arquivo": "apps/worker/src/worker.module.ts",
+      "lote": "05-17 ou integrador",
+      "pedido": "Tirar CoexistenciaRetratoService (import, SERVICOS['coexistencia-retrato'] e providers) e então apagar apps/worker/src/coexistencia-retrato.service.ts (hoje classe vazia que só avisa no log)."
+    },
+    {
+      "tipo": "ddl",
+      "convencao": "ADR 0002",
+      "tabela": "marca_processamento",
+      "modulo": "02_ADM",
+      "motivo": "A leitura incremental do índice de busca (worker indice-busca) guarda a marca (instante e id da última mudança lida) em memória; ao reiniciar recomeça 1 h antes do último índice gravado. Sem a tabela, um backlog maior que o lote pode ficar para a conferência horária.",
+      "ddl": "CREATE TABLE marca_processamento (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, processo VARCHAR(60) NOT NULL, chave VARCHAR(60) NOT NULL, marca_em DATETIME(3) NULL, marca_id BIGINT UNSIGNED NOT NULL DEFAULT 0, criado_em DATETIME(3) NOT NULL, criado_por BIGINT UNSIGNED NULL, alterado_em DATETIME(3) NULL, alterado_por BIGINT UNSIGNED NULL, versao INT UNSIGNED NOT NULL DEFAULT 1, UNIQUE KEY uq_marca_processamento_processo_chave (processo, chave)) COMMENT='Marca da leitura incremental dos processos automáticos (worker)';"
+    },
+    {
+      "tipo": "ddl",
+      "convencao": "ADR 0002",
+      "tabela": "fechamento_censo",
+      "modulo": "07_INT",
+      "motivo": "A versão do cálculo e a hora de fechamento vão no JSON resumo; coluna própria facilitaria a reabertura e a comparação.",
+      "ddl": "ALTER TABLE fechamento_censo ADD COLUMN versao_calculo SMALLINT UNSIGNED NULL, ADD COLUMN hora_fechamento TINYINT UNSIGNED NULL, ADD CONSTRAINT ck_fechamento_censo_hora CHECK (hora_fechamento IS NULL OR hora_fechamento BETWEEN 1 AND 24);"
+    },
+    {
+      "tipo": "observacao",
+      "arquivo": "apps/api/src/modulos/internacao/fonte-propria.ts",
+      "pedido": "censoFechado() ainda devolve null: o worker passa a gravar fechamento_censo/fechamento_censo_unidade com o resumo (linhas do motor) por unidade; a API pode ler o retrato daí (lote do módulo internacao)."
+    },
+    {
+      "tipo": "observacao",
+      "arquivo": "apps/worker/src/email.service.ts",
+      "pedido": "A carga 'alerta-suporte' na fila comum não traz 'rede'; o consumidor completa com o cliente dono da fila. Conferir se a API deve gravar a rede na carga."
+    },
+    {
+      "tipo": "ddl",
+      "convencao": "ADR 0002",
+      "modulo": "03_CAD",
+      "tabela": "paciente, pessoa_fisica, profissional, solicitante_externo",
+      "motivo": "Leitura incremental do índice de busca (worker indice-busca, a cada BUSCA_VIGIA_MS) agora filtra por faixas indexáveis (coluna >= marca, unidas); sem os índices cada faixa ainda varre a tabela inteira. Bloqueia o custo em produção com a base migrada, não a função.",
+      "ddl": "ALTER TABLE paciente ADD KEY ix_paciente_criado_em (criado_em), ADD KEY ix_paciente_alterado_em (alterado_em); ALTER TABLE pessoa_fisica ADD KEY ix_pessoa_fisica_criado_em (criado_em), ADD KEY ix_pessoa_fisica_alterado_em (alterado_em); ALTER TABLE profissional ADD KEY ix_profissional_criado_em (criado_em), ADD KEY ix_profissional_alterado_em (alterado_em); ALTER TABLE solicitante_externo ADD KEY ix_solicitante_externo_criado_em (criado_em), ADD KEY ix_solicitante_externo_alterado_em (alterado_em);"
+    },
+    {
+      "tipo": "parametro",
+      "lote": "contratos (packages/contratos/src/parametros/definicoes.ts) ou integrador",
+      "pedido": "Definir os parâmetros de nível rede, tipo texto (lista de e-mails separados por vírgula), com a carga em parametro_definicao: alerta.email.auditoria, alerta.email.encarregado, alerta.email.plantao, alerta.email.ti, alerta.email.responsavelTecnico. O worker (email.service.ts) já os lê por cliente em parametro_valor (nível rede, vigente).",
+      "operacao_indisponivel": "Em produção, enquanto o cliente não tiver alerta.email.auditoria (ou o papel específico) configurado, os alertas por e-mail desse cliente (quebra de vidro, sessão 'como', leitura do prontuário, chamado, tabela vazia, divergência de gravação) são recusados na fila com ErroDestinatarioNaoConfigurado (falha visível, nunca entregues a uma caixa comum)."
+    },
+    {
+      "tipo": "edicao-outro-lote",
+      "lote": "contratos (packages/contratos/src/internacao/leitos.ts e parametros/definicoes.ts)",
+      "pedido": "Remover TIPOS_INTENSIVA_PADRAO ([3,7,8,9,17], códigos do sistema de origem) e o parâmetro internacao.acomodacao.intensiva: a terapia intensiva vem de categoria_acomodacao.tipo = 'terapia_intensiva' / terapia_intensiva. O worker do censo já não os lê; conferir os outros usuários (painel de leitos da API) e trocar pela categoria."
+    },
+    {
+      "tipo": "edicao-outro-lote",
+      "lote": "dominio-suprimentos",
+      "pedido": "Levar a antecedência própria do contrato (contrato_fornecedor.dias_alerta_vencimento como faixa a mais quando não coincide com 90/60/30) para alertaDeVencimento do domínio; hoje está na regra pura alertasDoDia de apps/worker/src/contratos-vencimento.service.ts, com teste."
+    },
+    {
+      "tipo": "edicao-outro-lote",
+      "lote": "contratos (MovimentoInternacao em packages/contratos/src/internacao/leitos.ts)",
+      "pedido": "Opcional: renomear o campo 'bloco' de PosicaoLeito/LinhaCenso para 'unidade' (o worker já põe ali o código da unidade de internação; o nome é herança do sistema de origem)."
+    }
+  ]
+}

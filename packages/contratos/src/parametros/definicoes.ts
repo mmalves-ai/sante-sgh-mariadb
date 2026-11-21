@@ -80,6 +80,73 @@ export interface DefinicaoParametro {
  * variáveis de ambiente (POL-1): o M10 liga cada consumidor ao resolvedor; até lá, a variável vale como o
  * padrão do registro.
  */
+/** Lista de e-mails separados por vírgula (vazio permitido: o papel cai na auditoria do cliente). */
+const FORMATO_LISTA_EMAIL = '^([^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,}(\\s*,\\s*[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]{2,})*)?$';
+
+/** Destinatários dos alertas por e-mail, por papel (lidos pelo worker em parametro_valor, nível rede, vigente). */
+const PARAMETROS_ALERTA_EMAIL: readonly DefinicaoParametro[] = [
+  {
+    chave: 'alerta.email.auditoria',
+    modulo: 'alerta',
+    descricao: 'E-mails do papel auditoria (quebra de vidro, sessão em nome de outro, leitura do prontuário e o papel sem endereço próprio) que recebem os alertas do sistema (separados por vírgula)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['rede'],
+    critico: true,
+    formato: { expressao: FORMATO_LISTA_EMAIL, mensagem: 'Informe e-mails válidos separados por vírgula.' },
+    dono: 'auditoria',
+    origem: 'F2.2 lote 05-15: o destinatário dos alertas é configuração do cliente, não variável do servidor',
+  },
+  {
+    chave: 'alerta.email.encarregado',
+    modulo: 'alerta',
+    descricao: 'E-mails do papel encarregado de dados (LGPD) que recebem os alertas do sistema (separados por vírgula)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['rede'],
+    critico: true,
+    formato: { expressao: FORMATO_LISTA_EMAIL, mensagem: 'Informe e-mails válidos separados por vírgula.' },
+    dono: 'encarregado de dados',
+    origem: 'F2.2 lote 05-15: o destinatário dos alertas é configuração do cliente, não variável do servidor',
+  },
+  {
+    chave: 'alerta.email.plantao',
+    modulo: 'alerta',
+    descricao: 'E-mails do papel plantão técnico (chamados graves) que recebem os alertas do sistema (separados por vírgula)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['rede'],
+    critico: true,
+    formato: { expressao: FORMATO_LISTA_EMAIL, mensagem: 'Informe e-mails válidos separados por vírgula.' },
+    dono: 'TI',
+    origem: 'F2.2 lote 05-15: o destinatário dos alertas é configuração do cliente, não variável do servidor',
+  },
+  {
+    chave: 'alerta.email.ti',
+    modulo: 'alerta',
+    descricao: 'E-mails do papel TI do hospital (avisos técnicos) que recebem os alertas do sistema (separados por vírgula)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['rede'],
+    critico: true,
+    formato: { expressao: FORMATO_LISTA_EMAIL, mensagem: 'Informe e-mails válidos separados por vírgula.' },
+    dono: 'TI',
+    origem: 'F2.2 lote 05-15: o destinatário dos alertas é configuração do cliente, não variável do servidor',
+  },
+  {
+    chave: 'alerta.email.responsavelTecnico',
+    modulo: 'alerta',
+    descricao: 'E-mails do papel responsável técnico que recebem os alertas do sistema (separados por vírgula)',
+    tipo: 'texto',
+    padrao: '',
+    niveis: ['rede'],
+    critico: true,
+    formato: { expressao: FORMATO_LISTA_EMAIL, mensagem: 'Informe e-mails válidos separados por vírgula.' },
+    dono: 'direção técnica',
+    origem: 'F2.2 lote 05-15: o destinatário dos alertas é configuração do cliente, não variável do servidor',
+  },
+];
+
 export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   {
     chave: 'acesso.bloqueioInatividadeSegundos',
@@ -2234,6 +2301,8 @@ export const PARAMETROS_NOVOS: readonly DefinicaoParametro[] = [
   ...PARAMETROS_HORA_CONFIAVEL,
   // W0-07: limiares da sugestão de sepse no PA e a OS em leito (ver parametros/pa-leitos.ts).
   ...PARAMETROS_PA_LEITOS,
+  // F2.2 onda 5d (pedido do lote 05-15): destinatários dos alertas por papel, no nível da rede.
+  ...PARAMETROS_ALERTA_EMAIL,
 ];
 
 export function definicaoParametro(chave: string): DefinicaoParametro | undefined {

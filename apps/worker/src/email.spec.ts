@@ -2,8 +2,17 @@
 // provado contra um servidor SMTP falso em loopback (nada sai da máquina).
 import { createServer, type Server } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { dadosDoJobOutbox } from '@sgh/legado';
-import { mensagemDoAlerta, mensagemDoAlertaLeitura, mensagemDoAlertaSuporte } from './email.service.js';
+import {
+  destinoAlertaChamado,
+  dominioDoCliente,
+  enderecosDoValor,
+  ErroDestinatarioNaoConfigurado,
+  mensagemDoAlerta,
+  mensagemDoAlertaLeitura,
+  mensagemDoAlertaSuporte,
+  resolverDestino,
+} from './email.service.js';
+import { dadosDoJobOutbox } from './relay-outbox.js';
 import { enviarSmtp, montarMensagem } from './smtp.js';
 
 const job = {
@@ -103,21 +112,22 @@ describe('fila email: alerta ao Auditor (regra 8)', () => {
     };
     const ev = {
       id: '1',
-      rede: 'rede-teste',
-      hospital: 'plat',
+      cliente: 'rede_teste',
+      hospital: 'aa',
       tipo: 'alerta-suporte',
       chave: 'k',
       carga,
       tentativas: 0,
     };
-    const m = mensagemDoAlertaSuporte(dadosDoJobOutbox(ev), 'a@b.invalid', 'c@d.invalid');
+    const m = mensagemDoAlertaSuporte(dadosDoJobOutbox(ev), 'a@b.invalid', 'c@d.invalid', ev.cliente);
     expect(m.assunto).toBe('Acesso do suporte técnico nº 4242 (aa)');
     expect(m.texto).toContain('Usuário (ID) em nome de quem: 900123');
+    expect(dominioDoCliente('rede_teste')).toBe('rede-teste');
     const antiga = Object.fromEntries(
       Object.entries(carga).filter(([k]) => !['idUsuario', 'inicio', 'fim'].includes(k)),
     );
     expect(() =>
-      mensagemDoAlertaSuporte(dadosDoJobOutbox({ ...ev, carga: antiga }), 'a@b.invalid', 'c@d.invalid'),
+      mensagemDoAlertaSuporte(dadosDoJobOutbox({ ...ev, carga: antiga }), 'a@b.invalid', 'c@d.invalid', ev.cliente),
     ).toThrow(/fora do formato/);
   });
 
@@ -132,5 +142,38 @@ describe('fila email: alerta ao Auditor (regra 8)', () => {
     await expect(enviarSmtp('http://x', mensagemDoAlerta(job, 'a@b.invalid', 'c@d.invalid'))).rejects.toThrow(
       /smtp/,
     );
+  });
+});
+
+describe('fila email: destinatário por cliente (nunca uma caixa comum a todos)', () => {
+  const PROD = { AMBIENTE: 'producao', AUDITORIA_EMAIL: 'caixa-comum@x.invalid', ENCARREGADO_EMAIL: 'dpo-comum@x.invalid' };
+  const A = { auditoria: ['auditor@cliente-a.invalid'], encarregado: ['dpo@cliente-a.invalid'] };
+  const B = { auditoria: ['auditor@cliente-b.invalid'] };
+
+  it('em produção cada cliente usa a própria configuração; a variável de ambiente é ignorada', () => {
+    expect(resolverDestino(A, PROD, 'cliente-a', ['auditoria'])).toEqual(['auditor@cliente-a.invalid']);
+    expect(resolverDestino(B, PROD, 'cliente-b', ['auditoria'])).toEqual(['auditor@cliente-b.invalid']);
+    expect(destinoAlertaChamado(A, PROD, 'cliente-a', 'dado-pessoal')).toEqual(['dpo@cliente-a.invalid']);
+    // Sem encarregado configurado, cai na auditoria do próprio cliente, não na do ambiente.
+    expect(destinoAlertaChamado(B, PROD, 'cliente-b', 'dado-pessoal')).toEqual(['auditor@cliente-b.invalid']);
+    expect(resolverDestino({ ...A, ti: ['ti@cliente-a.invalid'] }, PROD, 'cliente-a', ['ti', 'responsavelTecnico'])).toEqual([
+      'ti@cliente-a.invalid',
+      'auditor@cliente-a.invalid',
+    ]);
+  });
+
+  it('em produção, cliente sem destinatário: recusa visível (nunca um endereço comum)', () => {
+    expect(() => resolverDestino({}, PROD, 'cliente-c', ['auditoria'])).toThrow(ErroDestinatarioNaoConfigurado);
+  });
+
+  it('fora de produção, a variável desvia para a captura; sem nada, o endereço .invalid do cliente', () => {
+    expect(resolverDestino(A, { AMBIENTE: 'dev', AUDITORIA_EMAIL: 'captura@local.invalid' }, 'cliente-a', ['auditoria'])).toEqual([
+      'captura@local.invalid',
+    ]);
+    expect(resolverDestino({}, { AMBIENTE: 'homolog' }, 'cliente-c', ['plantao'])).toEqual(['auditoria@cliente-c.invalid']);
+  });
+
+  it('o valor do parâmetro aceita vários endereços e descarta o malformado', () => {
+    expect(enderecosDoValor('a@b.invalid; c@d.invalid, sem-arroba ,a@b.invalid')).toEqual(['a@b.invalid', 'c@d.invalid']);
   });
 });

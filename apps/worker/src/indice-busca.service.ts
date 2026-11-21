@@ -1,66 +1,66 @@
-// Leitura incremental do índice de busca do cadastro (ficha do M11, seção 4): a cada BUSCA_VIGIA_MS (padrão
-// 5 s), por estabelecimento configurado, o que nasceu ou mudou no SPDATA (retratos HTPACIENTE e HTPROFIS, com a
-// janela atrás da marca para os commits fora de ordem; solicitantes novos e a varredura que pega a troca de
-// nome) entra em SGH_BUSCA_NOME (meta: em até 10 s na busca por nome). Os pacientes reindexados vão à fila de
-// duplicidades pela regra pura do escore (regra 6: "cadastros novos feitos no SPDATA entram pela leitura
-// incremental"). A cada BUSCA_CONFERENCIA_MS (padrão 1 h), a conferência por contagem (índice × tabela) vai
-// ao log quando diverge. Ligado fora de dev/ci; em dev/ci só com BUSCA_VIGIA=ligado (a cópia é compartilhada:
-// a carga inicial é `pnpm cadastro:indexar`, sob a trava). Log só com contagens.
-import { resolve } from 'node:path';
+// Leitura incremental do índice de busca do cadastro (ficha do M11, seção 4; lote F2.2 05-15): a cada BUSCA_VIGIA_MS
+// (padrão 5 s), por cliente, o que nasceu ou mudou no cadastro próprio (paciente, profissional e solicitante) depois da
+// marca entra no índice de busca por nome (meta: em até 10 s na busca por nome); o excluído sai. Os pacientes
+// reindexados vão à fila de duplicidades pela regra pura do escore (regra 6). A cada BUSCA_CONFERENCIA_MS (padrão 1 h),
+// a conferência por contagem (índice × cadastro) e, quando diverge, o reparo (indexa o que falta e tira os órfãos), com
+// o aviso no log. Ligado fora de dev/ci; em dev/ci só com BUSCA_VIGIA=ligado. Log só com contagens.
+// O par da fila de duplicidades é avaliado pela mesma regra pura do escore da API (escoreDuplicidade e entraNaFila, com
+// nome, nascimento, mãe, CPF e telefone); o candidato é o de mesma chave fonética da primeira e da última palavra do nome.
+// Melhoria: a marca é por cliente e entidade (instante e id da última mudança lida), em ordem estável: dois cadastros
+// com o mesmo instante não se perdem; a conferência repara em vez de só avisar.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { entraNaFila, escoreDuplicidade } from '@sgh/dominio-cadastro';
+import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
+import { clientesDoWorker } from './clientes-worker.js';
 import {
   type AvaliarPar,
-  ENTIDADES_BUSCA_LEGADO,
-  lerCodigos,
-  lerConfiguracaoNucleo,
-  lerInteiroAmbiente,
-  NucleoLegado,
-  type PacienteLido,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+  ENTIDADES_BUSCA,
+  type EntidadeBusca,
+  type MarcaIndice,
+  type PortaIndiceBusca,
+  PortaIndiceBuscaPropria,
+} from './indice-busca-propria.js';
 import { logger } from './logger.js';
+import { type NucleoServico, servicoLigado } from './servico-worker.js';
+
+/** Cadastros lidos por entidade em cada ciclo. */
+export const LOTE_VIGIA = 500;
 
 /** O vigia roda? Fora de dev/ci, sempre (salvo BUSCA_VIGIA=desligado); em dev/ci, só com BUSCA_VIGIA=ligado. */
 export function vigiaLigado(env: NodeJS.ProcessEnv): boolean {
-  const pedido = (env['BUSCA_VIGIA'] ?? '').trim();
-  if (pedido === 'desligado') return false;
-  const ambiente = (env['AMBIENTE'] ?? '').trim();
-  return ambiente === 'dev' || ambiente === 'ci' ? pedido === 'ligado' : true;
+  return servicoLigado(env, 'BUSCA_VIGIA');
 }
 
-const comparavel = (p: PacienteLido) => ({
-  id: p.id,
-  nome: p.nome,
-  nascimento: p.nascimento,
-  mae: p.mae,
-  cpf: p.cpf,
-  telefones: [p.telefone, p.celular],
-});
-
-/** A regra pura do escore (a mesma do "Atualizar a fila" da API): null fica fora da fila. */
+/** A regra pura do escore (escoreDuplicidade e entraNaFila, as mesmas do "Atualizar a fila" da API; os candidatos diferem: aqui, a chave fonética do nome). null fica fora da fila. */
 export const avaliarPar: AvaliarPar = (a, b) => {
-  const e = escoreDuplicidade(comparavel(a), comparavel(b));
+  const e = escoreDuplicidade(a, b);
   return entraNaFila(e) ? { escore: e.escore, criterios: e.criterios } : null;
 };
 
-/** O que o worker precisa do núcleo (o teste usa um dublê). */
-export type NucleoVigia = Pick<
-  NucleoLegado,
-  'cicloIndiceBusca' | 'alimentarFilaDuplicidade' | 'contagemIndiceBusca' | 'encerrar'
->;
+export interface ResultadoVigia {
+  readonly cliente: string;
+  readonly entidade: EntidadeBusca;
+  readonly lidos: number;
+  readonly palavras: number;
+  readonly marca: string | null;
+}
+
+export type FabricaPortaIndice = (cliente: string) => PortaIndiceBusca;
 
 @Injectable()
 export class IndiceBuscaService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: NucleoVigia | null = null;
+  private nucleo: NucleoServico | null = null;
+  private fabrica: FabricaPortaIndice | null = null;
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
   private conferenciaMs = 3_600_000;
   private ultimaConferencia = 0;
+  private readonly marcas = new Map<string, MarcaIndice>();
 
-  /** Teste: o núcleo e o intervalo da conferência sem subir o driver. */
-  usar(nucleo: NucleoVigia, conferenciaMs = 3_600_000): void {
+  /** Teste: o núcleo, a porta e o intervalo da conferência sem subir o banco. */
+  usar(nucleo: NucleoServico, fabrica: FabricaPortaIndice, conferenciaMs = 3_600_000): void {
     this.nucleo = nucleo;
+    this.fabrica = fabrica;
     this.conferenciaMs = conferenciaMs;
   }
 
@@ -68,23 +68,9 @@ export class IndiceBuscaService implements OnApplicationBootstrap, OnApplication
     if (!vigiaLigado(process.env)) return;
     try {
       const intervalo = lerInteiroAmbiente(process.env, 'BUSCA_VIGIA_MS', 5_000, 1_000, 600_000);
-      this.conferenciaMs = lerInteiroAmbiente(
-        process.env,
-        'BUSCA_CONFERENCIA_MS',
-        3_600_000,
-        60_000,
-        86_400_000,
-      );
-      process.env['SGH_PROCESSO'] ??= 'worker';
-      this.nucleo = new NucleoLegado({
-        env: process.env,
-        driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(process.env).bibliotecaCliente }),
-        pastaHomologada: resolve(
-          process.cwd(),
-          process.env['SCHEMA_HOMOLOGADO_DIR'] ?? 'tools/schema-check/homologado',
-        ),
-        aviso: (m, c) => logger.warn(c, m),
-      });
+      const conferencia = lerInteiroAmbiente(process.env, 'BUSCA_CONFERENCIA_MS', 3_600_000, 60_000, 86_400_000);
+      const nucleo = new NucleoProprio({ env: process.env });
+      this.usar(nucleo, (cliente) => new PortaIndiceBuscaPropria(nucleo, cliente), conferencia);
       this.temporizador = setInterval(() => void this.ciclo(), intervalo);
       this.temporizador.unref();
     } catch (e) {
@@ -92,65 +78,67 @@ export class IndiceBuscaService implements OnApplicationBootstrap, OnApplication
     }
   }
 
-  async ciclo(): Promise<void> {
-    if (this.rodando || !this.nucleo) return;
+  async ciclo(): Promise<ResultadoVigia[]> {
+    const nucleo = this.nucleo;
+    const fabrica = this.fabrica;
+    if (this.rodando || !nucleo || !fabrica) return [];
     this.rodando = true;
+    const r: ResultadoVigia[] = [];
     try {
-      for (const cod of lerCodigos(process.env)) {
-        try {
-          const rs = await this.nucleo.cicloIndiceBusca(cod);
-          for (const r of rs)
-            if (r.lidos > 0 || r.reparados > 0)
-              logger.info(
-                {
-                  estabelecimento: cod,
-                  entidade: r.entidade,
-                  lidos: r.lidos,
-                  indexados: r.indexados,
-                  atrasados: r.atrasados,
-                  reparados: r.reparados,
-                  marca: r.marca,
-                },
-                'vigia do índice de busca',
-              );
-          const pacientes = rs.find((r) => r.entidade === 'paciente')?.ids ?? [];
-          if (pacientes.length > 0) {
-            const novos = await this.nucleo.alimentarFilaDuplicidade(cod, pacientes, avaliarPar);
-            if (novos > 0) logger.info({ estabelecimento: cod, novos }, 'fila de duplicidades: pares novos');
+      const clientes = await clientesDoWorker(nucleo, process.env, 'indice-busca');
+      for (const cliente of clientes) {
+        const porta = fabrica(cliente);
+        for (const entidade of ENTIDADES_BUSCA) {
+          try {
+            const k = `${cliente}:${entidade}`;
+            const marca = this.marcas.get(k) ?? { em: await porta.marcaInicial(entidade), id: 0 };
+            const lidos = await porta.mudados(entidade, marca, LOTE_VIGIA);
+            const palavras = await porta.indexar(entidade, lidos);
+            const ultimo = lidos.at(-1);
+            const nova = ultimo ? { em: ultimo.mudouEm, id: ultimo.id } : marca;
+            this.marcas.set(k, nova);
+            r.push({ cliente, entidade, lidos: lidos.length, palavras, marca: nova.em });
+            if (lidos.length > 0)
+              logger.info({ cliente, entidade, lidos: lidos.length, palavras }, 'vigia do índice de busca');
+            const pacientes = entidade === 'paciente' ? lidos.filter((x) => !x.excluido).map((x) => x.id) : [];
+            if (pacientes.length > 0) {
+              const novos = await porta.alimentarFila(pacientes, avaliarPar);
+              if (novos > 0) logger.info({ cliente, novos }, 'fila de duplicidades: pares novos');
+            }
+          } catch (e) {
+            logger.warn({ cliente, entidade, erro: e instanceof Error ? e.name : 'erro' }, 'vigia do índice de busca: ciclo falhou');
           }
-        } catch (e) {
-          logger.warn(
-            { estabelecimento: cod, erro: e instanceof Error ? e.name : 'erro' },
-            'vigia do índice de busca: ciclo falhou',
-          );
         }
       }
-      await this.conferir();
+      await this.conferir(clientes, fabrica);
+    } catch (e) {
+      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'vigia do índice de busca: clientes indisponíveis');
     } finally {
       this.rodando = false;
     }
+    return r;
   }
 
-  /** Conferência por contagem (entidades no índice × linhas da tabela), no máximo uma vez por intervalo. */
-  private async conferir(): Promise<void> {
-    if (!this.nucleo || Date.now() - this.ultimaConferencia < this.conferenciaMs) return;
+  /** Conferência por contagem (índice × cadastro) e reparo, no máximo uma vez por intervalo. */
+  private async conferir(clientes: readonly string[], fabrica: FabricaPortaIndice): Promise<void> {
+    if (Date.now() - this.ultimaConferencia < this.conferenciaMs) return;
     this.ultimaConferencia = Date.now();
-    for (const cod of lerCodigos(process.env))
-      for (const entidade of ENTIDADES_BUSCA_LEGADO) {
+    for (const cliente of clientes) {
+      const porta = fabrica(cliente);
+      for (const entidade of ENTIDADES_BUSCA) {
         try {
-          const c = await this.nucleo.contagemIndiceBusca(cod, entidade);
-          if (c.indice !== c.legado)
-            logger.warn(
-              { estabelecimento: cod, entidade, indice: c.indice, legado: c.legado },
-              'índice de busca diverge da tabela: rode pnpm cadastro:indexar',
-            );
-        } catch (e) {
+          const c = await porta.contagem(entidade);
+          if (c.indice === c.cadastro) continue;
+          const reparados = await porta.reparar(entidade, 1000);
           logger.warn(
-            { estabelecimento: cod, entidade, erro: e instanceof Error ? e.name : 'erro' },
-            'conferência do índice de busca falhou',
+            { cliente, entidade, indice: c.indice, cadastro: c.cadastro, reparados },
+            'índice de busca divergia do cadastro: reparado',
           );
+        } catch (e) {
+          logger.warn({ cliente, entidade, erro: e instanceof Error ? e.name : 'erro' }, 'conferência do índice de busca falhou');
         }
       }
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {

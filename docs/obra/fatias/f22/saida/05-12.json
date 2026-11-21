@@ -1,0 +1,67 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    {
+      "arquivo": "apps/worker/tsconfig.migrado.json",
+      "acrescentar": [
+        "src/contabil/contabilizacao.ts",
+        "src/contabil/contabilizacao.spec.ts",
+        "src/contabil/dourado.spec.ts",
+        "src/contabil/leitura-fatos.service.ts",
+        "src/contabil/leitura-fatos.spec.ts",
+        "src/contabil/porta-propria.ts",
+        "src/contabil/porta-propria.int.spec.ts"
+      ],
+      "motivo": "já acrescentados pelo lote (comando do brief, seção 3); conferir que nenhum lote paralelo sobrescreveu"
+    }
+  ],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: os 4 specs testavam funções da cópia do sistema de origem (trava da cópia, núcleo e driver antigos, tabelas espelho, leitura incremental por faixa de chave das tabelas do outro sistema). Não há o que portar ao MariaDB; o mapa diz onde cada cenário tem prova ou que não tem.",
+      "arquivos": {
+        "demonstracoes.int.spec.ts": {
+          "cenario": "somas por conta, balancete, diário, apuração do resultado gravada como lançamento, arquivo SPED (substituição, recibo, cancelamento recusado), empresa para o SPED",
+          "onde": "somas e razão: apps/api/src/modulos/contabil/porta-propria.int.spec.ts ('lançamento: ... razão, somas'); empresa do SPED e recusa do arquivo: mesmo spec ('modelo pendente: regras e arquivo SPED recusados'); regras puras do balancete, da apuração e do SPED: dominio-contabil demonstracoes.spec.ts e sped.spec.ts. SEM COBERTURA no banco: apuração gravada como lançamento tipo apuracao e diário paginado (cobertura-a-conferir); arquivo SPED gravado, substituído e transmitido em modelo-pendente (operacoes-indisponiveis, pedido do lote 04-01)"
+        },
+        "dourado.int.spec.ts": {
+          "cenario": "de-para da exportação lido da cópia alimentando o lote da exportação e o motor da contabilização",
+          "onde": "o dourado sintético continua em apps/worker/src/contabil/dourado.spec.ts (mesmo de-para no lote e no motor); a leitura do de-para do estabelecimento: apps/api/src/modulos/contabil/porta-propria.int.spec.ts ('apoio: ... de-para do estabelecimento'). A leitura do de-para na cópia é convivência pura"
+        },
+        "fatos.int.spec.ts": {
+          "cenario": "leitura incremental das fontes (linha nova, alterada por fora, reprocessamento idempotente)",
+          "onde": "algoritmo puro: dominio-contabil ciclo.spec.ts e fatos.spec.ts. A varredura das tabelas do outro sistema saiu (ADR 0003): no modelo próprio o fato nasce na transação do módulo que o publica. SEM COBERTURA: nenhum módulo grava fato_contabil hoje (ver pedido 'publicacao-fatos'); reprocessamento depende das regras publicadas (modelo-pendente, pedido 04-01)"
+        },
+        "lancamentos.int.spec.ts": {
+          "cenario": "(a) lançamento manual, conciliação e desfazer, estorno único, encerramento, recusa no encerrado, reabertura; (b) contabilização de um fato pelo worker",
+          "onde": "(a) apps/api/src/modulos/contabil/porta-propria.int.spec.ts: 'lançamento: ... estorno', 'conciliação: ... desfaz com justificativa', 'período: encerra ..., recusa lançar no encerrado e reabre', 'fato contabilizado: o lançamento automático vem na mesma transação'. (b) SEM COBERTURA, operação indisponível: apps/worker/src/contabil/porta-propria.int.spec.ts prova a recusa modelo-pendente da leitura e da gravação da contabilização automática (operacoes-indisponiveis)"
+        }
+      }
+    },
+    {
+      "tipo": "operacoes-indisponiveis",
+      "operacoes": [
+        "contabilização automática dos fatos pendentes pelo worker (PortaContabilWorkerPropria.ler e .gravar recusam modelo-pendente)"
+      ],
+      "motivo": "(1) as versões publicadas das regras de contabilização não têm tabela (mesmo pedido de DDL do lote 04-01: versao_regra_contabilizacao); (2) a gravação do lote (lançamento automático com partidas, situação do fato, trilha) só existe na porta da API"
+    },
+    {
+      "tipo": "refatoracao",
+      "id": "gravacao-contabil-comum",
+      "pedido": "Mover a gravação da contabilização (marcarSituacao e gravarLancamento de apps/api/src/modulos/contabil/porta-propria.ts, com as operações do Executor e as regras de período e estorno) para um pacote comum (ex.: packages/persistencia ou um módulo contabil do núcleo de gravação) e usá-la no worker em PortaContabilWorkerPropria.gravar, sem cópia de SQL. Depois, implementar ler (candidatos, registrados, lançamentos dos fatos, plano, de-para, regras publicadas, períodos) sobre as mesmas leituras da API."
+    },
+    {
+      "tipo": "modelo",
+      "id": "publicacao-fatos",
+      "pedido": "Nenhum código grava fato_contabil (só o spec da API). A leitura incremental das tabelas do outro sistema saiu (ADR 0003). Cada módulo de origem (financeiro: título a pagar/receber e movimento bancário; suprimentos: saída e nota de entrada; faturamento: receita da conta; folha; patrimônio: depreciação e impairment) tem de publicar o fato na transação do próprio documento, com evento_contabil e a impressão do domínio. Sem isso, a geração automática de fatos contábeis fica indisponível."
+    },
+    {
+      "tipo": "dominio",
+      "pedido": "packages/dominio-contabil: ciclo.ts, fontes.ts (DERIVADORES por tabela do outro sistema) e ItemDeParaExportacao (comentários com nomes de tabelas de origem) ficaram sem uso no worker; avaliar a remoção ou a reescrita sobre as entidades do modelo no lote do domínio."
+    },
+    {
+      "tipo": "ambiente",
+      "pedido": "CONTABIL_EMPRESA saiu (a empresa contábil é o estabelecimento); o worker usa WORKER_CLIENTES ou os clientes da plataforma (clientes-worker.ts). Atualizar o manual de implantação."
+    }
+  ]
+}

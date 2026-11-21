@@ -1,228 +1,222 @@
-// Alerta diário de vencimento dos contratos com fornecedores no `worker` (M55, etapa 3; ficha, seção 4: "Contratos a
-// vencer: agregado diário no worker"; regra 5): por estabelecimento com a chave `contratos` ligada, numa transação curta
-// READ ONLY, lê os contratos ativos com o fim vigente (SGH_SUP_CONTRATO e os aditivos de prazo e as renovações) e, para
-// cada contrato que cruzou 90, 60 ou 30 dias do fim ou venceu, grava um aviso na central (SGH_ADM_AVISO) ao gestor e ao
-// fiscal, com a trilha, numa transação SGH_. Uma vez por faixa: a chave do objeto leva o contrato, o fim vigente e a
-// faixa (a central não grava duas vezes o mesmo destinatário, evento e objeto); o aditivo de prazo ou a renovação muda
-// o fim e reabre os alertas. A cada hora (o primeiro ciclo do dia avisa; os seguintes não repetem). Ligado fora de
-// dev/ci; em dev/ci só com CONTRATOS_ALERTA_DIARIO=ligado (a cópia é compartilhada). Log só com contagens.
-import { resolve } from 'node:path';
+// Alerta diário de vencimento dos contratos com fornecedores no `worker` (M55, etapa 3; ficha, seção 4; regra 5; lote
+// F2.2 05-15): por cliente e estabelecimento com a chave `contratos` ligada, lê os contratos vigentes com o fim da
+// vigência e o gestor e o fiscal vigentes pela porta própria; para cada contrato que cruzou 90, 60 ou 30 dias do fim ou
+// venceu (regra pura do domínio), grava um aviso na central de avisos a cada destinatário, com a trilha. Uma vez por
+// faixa e por fim (a chave leva o contrato, o fim e a faixa): o aditivo de prazo ou a renovação muda o fim e reabre os
+// alertas. A cada hora (o primeiro ciclo do dia avisa; os seguintes não repetem). Ligado fora de dev/ci; em dev/ci só
+// com CONTRATOS_ALERTA_DIARIO=ligado. Log só com contagens.
+// Melhoria: o dia do alerta é o dia civil do fuso do estabelecimento; o contrato em alerta sem gestor principal, gestor
+// nem fiscal vigente é contado e avisado no log (ninguém receberia o aviso).
+// Melhoria: a antecedência própria do contrato (dias_alerta_vencimento) é uma faixa a mais, uma vez por fim, quando não
+// coincide com 90, 60 ou 30; o assunto e a mensagem próprios do contrato vão ao título e ao texto do aviso.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import {
-  CHAVE_LIBERACAO_CONTRATOS,
-  EVENTOS_AUDITAVEIS,
-  type FaixaVigencia,
-  FAIXAS_VIGENCIA,
-} from '@sgh/contratos';
+import { DIAS_ALERTA_VENCIMENTO, FAIXAS_VIGENCIA, type FaixaVigencia } from '@sgh/contratos';
 import { alertaDeVencimento } from '@sgh/dominio-suprimentos';
+import { NucleoProprio } from '@sgh/nucleo';
 import {
   type ContratoParaAlerta,
-  contratosParaAlerta,
-  gravarAviso,
-  gravarTrilha,
-  lerChavesLiberacao,
-  lerCodigos,
-  lerConfiguracaoNucleo,
-  NucleoLegado,
-  somenteSgh,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+  type PortaContratos,
+  PortaContratosPropria,
+  TIPO_AVISO_CONTRATO,
+} from './contratos-vencimento-propria.js';
 import { logger } from './logger.js';
+import {
+  type AlvoEstabelecimento,
+  diaEHoraLocal,
+  type NucleoServico,
+  servicoLigado,
+  voltaPorEstabelecimento,
+} from './servico-worker.js';
 
-const USUARIO_ALERTA = 'SGH-WORKER';
-export const TIPO_AVISO_CONTRATO = 'contrato-vencimento';
+export { TIPO_AVISO_CONTRATO };
+export type { ContratoParaAlerta };
 
 export function alertaContratosLigado(env: NodeJS.ProcessEnv): boolean {
-  const pedido = (env['CONTRATOS_ALERTA_DIARIO'] ?? '').trim();
-  if (pedido === 'desligado') return false;
-  const ambiente = (env['AMBIENTE'] ?? '').trim();
-  return ambiente === 'dev' || ambiente === 'ci' ? pedido === 'ligado' : true;
+  return servicoLigado(env, 'CONTRATOS_ALERTA_DIARIO');
 }
-
-export type NucleoContratos = Pick<NucleoLegado, 'lerSomente' | 'gravarSgh' | 'rede' | 'encerrar'>;
 
 export interface AlertaContrato {
   readonly contrato: number;
   readonly numero: string;
-  readonly faixa: FaixaVigencia;
+  /** A faixa padrão (90, 60, 30 dias, vencido) ou a antecedência própria do contrato. */
+  readonly faixa: FaixaVigencia | 'antecedencia-contrato';
   readonly fim: string;
-  /** O gestor e o fiscal (sem repetir). */
-  readonly destinatarios: readonly string[];
-  /** A chave do objeto na central: o contrato, o fim vigente e a faixa (uma vez por faixa e por fim). */
+  readonly destinatarios: readonly number[];
+  /** A chave do aviso: o contrato, o fim vigente e a faixa (uma vez por faixa e por fim). */
   readonly chave: string;
   readonly titulo: string;
+  readonly texto: string;
 }
 
+type EntradaAlerta = Parameters<typeof alertaDeVencimento>[0];
 const dataBr = (d: string) => d.split('-').reverse().join('/');
+/** A situação do cadastro na forma da regra do domínio (vigente = ativo). */
+const situacaoDaRegra = (s: string) => (s === 'vigente' ? 'ativo' : s) as EntradaAlerta['situacao'];
 
-/** Os alertas do dia (regra pura sobre o que foi lido): só quem cruzou 90, 60 ou 30 dias ou venceu. */
+const DIA_MS = 86_400_000;
+const diasAte = (fim: string, hoje: string) => Math.round((Date.parse(`${fim}T00:00:00Z`) - Date.parse(`${hoje}T00:00:00Z`)) / DIA_MS);
+
+/** O título e o texto do aviso: o assunto e a mensagem próprios do contrato, quando preenchidos. */
+function textos(c: ContratoParaAlerta, padrao: string, quando: string): { titulo: string; texto: string } {
+  const titulo = (c.assunto ? `${c.assunto} (${quando})` : padrao).slice(0, 200);
+  return { titulo, texto: c.mensagem ?? titulo };
+}
+
+/**
+ * Os alertas do dia (regra pura sobre o que foi lido): quem cruzou 90, 60 ou 30 dias ou venceu (regra do domínio) e,
+ * à parte, quem entrou na antecedência própria do contrato (dias_alerta_vencimento, quando não é uma das padrão).
+ */
 export function alertasDoDia(contratos: readonly ContratoParaAlerta[], hoje: string): AlertaContrato[] {
   const out: AlertaContrato[] = [];
   for (const c of contratos) {
+    const destinatarios = [...new Set(c.destinatarios)];
     const faixa = alertaDeVencimento({
-      situacao: c.situacao,
+      situacao: situacaoDaRegra(c.situacao),
       inicio: c.inicio,
       fim: c.fim,
       hoje,
       faixaJaAvisada: null,
     });
-    if (!faixa) continue;
-    const rotulo = FAIXAS_VIGENCIA.find((f) => f.codigo === faixa)?.rotulo ?? faixa;
-    out.push({
-      contrato: c.id,
-      numero: c.numero,
-      faixa,
-      fim: c.fim,
-      destinatarios: [...new Set([c.gestor.toUpperCase(), c.fiscal.toUpperCase()])],
-      chave: `${c.id}:${c.fim}:${faixa}`,
-      titulo:
-        faixa === 'vencido'
-          ? `Contrato ${c.numero} vencido em ${dataBr(c.fim)}`
-          : `Contrato ${c.numero}: ${rotulo.toLowerCase()} (${dataBr(c.fim)})`,
-    });
+    if (faixa) {
+      const rotulo = FAIXAS_VIGENCIA.find((f) => f.codigo === faixa)?.rotulo ?? faixa;
+      const vencido = faixa === 'vencido';
+      out.push({
+        contrato: c.id,
+        numero: c.numero,
+        faixa,
+        fim: c.fim,
+        destinatarios,
+        chave: `${c.id}:${c.fim}:${faixa}`,
+        ...textos(
+          c,
+          vencido
+            ? `Contrato ${c.numero} vencido em ${dataBr(c.fim)}`
+            : `Contrato ${c.numero}: ${rotulo.toLowerCase()} (${dataBr(c.fim)})`,
+          vencido ? `vencido em ${dataBr(c.fim)}` : `vence em ${dataBr(c.fim)}`,
+        ),
+      });
+    }
+    const dias = c.diasAlerta;
+    const restam = diasAte(c.fim, hoje);
+    if (
+      dias !== null &&
+      dias > 0 &&
+      !(DIAS_ALERTA_VENCIMENTO as readonly number[]).includes(dias) &&
+      c.situacao === 'vigente' &&
+      c.inicio <= hoje &&
+      restam >= 0 &&
+      restam <= dias
+    )
+      out.push({
+        contrato: c.id,
+        numero: c.numero,
+        faixa: 'antecedencia-contrato',
+        fim: c.fim,
+        destinatarios,
+        chave: `${c.id}:${c.fim}:antecedencia-${dias}`,
+        ...textos(c, `Contrato ${c.numero}: vence em até ${dias} dias (${dataBr(c.fim)})`, `vence em ${dataBr(c.fim)}`),
+      });
   }
   return out;
 }
 
-/** Lê (READ ONLY) os alertas do dia num estabelecimento; vazio com a funcionalidade desligada. */
-export async function alertasPendentes(
-  nucleo: NucleoContratos,
-  cod: string,
-  hoje: string | null = null,
-): Promise<{ ligada: boolean; hoje: string; alertas: AlertaContrato[] }> {
-  const ctx = { rede: nucleo.rede, hospital: cod, traceId: 'contratos-vencimento' };
-  return nucleo.lerSomente(ctx, async (l) => {
-    const chaves = await lerChavesLiberacao(l, cod);
-    const ligada = chaves.some(
-      (c) => c.chave === CHAVE_LIBERACAO_CONTRATOS && c.tipo === 'recurso' && c.ligada === true,
-    );
-    if (!ligada) return { ligada, hoje: hoje ?? '', alertas: [] };
-    const lido = await contratosParaAlerta(l, cod, hoje);
-    const dia = hoje ?? lido.hoje;
-    return { ligada, hoje: dia, alertas: alertasDoDia(lido.contratos, dia) };
-  });
-}
-
-/** Grava os avisos de UM contrato com a trilha; devolve quantos avisos novos (0: já avisado nesta faixa). */
-export async function avisarContrato(
-  nucleo: NucleoContratos,
-  cod: string,
-  a: AlertaContrato,
-): Promise<number> {
-  const ctx = { rede: nucleo.rede, hospital: cod, traceId: 'contratos-vencimento' };
-  return nucleo.gravarSgh(ctx, async (e0) => {
-    const e = somenteSgh(e0);
-    let novos = 0;
-    for (const login of a.destinatarios) {
-      const id = await gravarAviso(e, {
-        rede: nucleo.rede,
-        hospital: cod,
-        login,
-        tipo: TIPO_AVISO_CONTRATO,
-        gravidade: 'atencao',
-        modulo: 'suprimentos',
-        evento: EVENTOS_AUDITAVEIS.contratoAlertaVencimento.codigo,
-        titulo: a.titulo,
-        link: '/suprimentos/contratos',
-        objetoTabela: 'SGH_SUP_CONTRATO',
-        objetoChave: a.chave,
-      });
-      if (id !== null) novos++;
-    }
-    if (novos > 0)
-      await gravarTrilha(e, {
-        rede: nucleo.rede,
-        hospital: cod,
-        usuario: USUARIO_ALERTA,
-        evento: EVENTOS_AUDITAVEIS.contratoAlertaVencimento.codigo,
-        recurso: 'suprimentos.contrato',
-        operacao: 'suprimentos.alertarVencimentoContrato',
-        tabelaAlvo: 'SGH_SUP_CONTRATO',
-        idAlvo: String(a.contrato),
-        chaveNaturalAlvo: a.chave,
-        resultado: 'sucesso',
-        estacao: 'SGH-WORKER:contratos',
-        correlacao: a.chave.slice(0, 64),
-        origem: 'SGH-WORKER:contratos',
-      });
-    return novos;
-  });
-}
-
-/** Um ciclo num estabelecimento: os contratos em alerta e os avisos novos gravados. */
+/** Um ciclo num estabelecimento: os contratos em alerta, os avisos novos e os sem destinatário. */
 export async function cicloContratos(
-  nucleo: NucleoContratos,
-  cod: string,
-  hoje: string | null = null,
-): Promise<{ ligada: boolean; emAlerta: number; avisos: number }> {
-  const p = await alertasPendentes(nucleo, cod, hoje);
+  porta: PortaContratos,
+  est: AlvoEstabelecimento,
+  agora: Date = new Date(),
+): Promise<{ ligada: boolean; emAlerta: number; avisos: number; semDestinatario: number }> {
+  if (!(await porta.ligada(est, agora))) return { ligada: false, emAlerta: 0, avisos: 0, semDestinatario: 0 };
+  const hoje = diaEHoraLocal(agora, est.fuso).data;
+  const alertas = alertasDoDia(await porta.contratos(est, hoje), hoje);
   let avisos = 0;
-  for (const a of p.alertas) avisos += await avisarContrato(nucleo, cod, a);
-  return { ligada: p.ligada, emAlerta: p.alertas.length, avisos };
+  let semDestinatario = 0;
+  for (const a of alertas) {
+    if (a.destinatarios.length === 0) {
+      semDestinatario++;
+      continue;
+    }
+    avisos += await porta.avisar(est, {
+      contrato: a.contrato,
+      chave: a.chave,
+      titulo: a.titulo,
+      texto: a.texto,
+      destinatarios: a.destinatarios,
+    });
+  }
+  return { ligada: true, emAlerta: alertas.length, avisos, semDestinatario };
 }
+
+export type FabricaPortaContratos = (cliente: string) => PortaContratos;
 
 @Injectable()
 export class ContratosVencimentoService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: NucleoContratos | null = null;
+  private nucleo: NucleoServico | null = null;
+  private fabrica: FabricaPortaContratos | null = null;
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
 
-  /** Teste: o núcleo sem subir o driver. */
-  usar(nucleo: NucleoContratos): void {
+  /** Teste: o núcleo e a porta sem subir o banco. */
+  usar(nucleo: NucleoServico, fabrica: FabricaPortaContratos): void {
     this.nucleo = nucleo;
+    this.fabrica = fabrica;
   }
 
   onApplicationBootstrap(): void {
     if (!alertaContratosLigado(process.env)) return;
     try {
-      process.env['SGH_PROCESSO'] ??= 'worker';
-      this.nucleo = new NucleoLegado({
-        env: process.env,
-        driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(process.env).bibliotecaCliente }),
-        pastaHomologada: resolve(
-          process.cwd(),
-          process.env['SCHEMA_HOMOLOGADO_DIR'] ?? 'tools/schema-check/homologado',
-        ),
-        aviso: (m, c) => logger.warn(c, m),
-      });
+      const nucleo = new NucleoProprio({ env: process.env });
+      this.usar(nucleo, (cliente) => new PortaContratosPropria(nucleo, cliente));
       void this.ciclo();
       this.temporizador = setInterval(() => void this.ciclo(), 3_600_000);
       this.temporizador.unref();
     } catch (e) {
-      logger.error(
-        { erro: e instanceof Error ? e.message : 'erro' },
-        'alerta de vencimento dos contratos não subiu',
-      );
+      logger.error({ erro: e instanceof Error ? e.message : 'erro' }, 'alerta de vencimento dos contratos não subiu');
     }
   }
 
   async ciclo(
-    hoje: string | null = null,
-  ): Promise<{ estabelecimento: string; emAlerta: number; avisos: number }[]> {
-    if (this.rodando || !this.nucleo) return [];
+    agora: Date = new Date(),
+  ): Promise<{ cliente: string; estabelecimento: string; emAlerta: number; avisos: number }[]> {
+    const nucleo = this.nucleo;
+    const fabrica = this.fabrica;
+    if (this.rodando || !nucleo || !fabrica) return [];
     this.rodando = true;
-    const r: { estabelecimento: string; emAlerta: number; avisos: number }[] = [];
     try {
-      for (const cod of lerCodigos(process.env)) {
-        try {
-          const x = await cicloContratos(this.nucleo, cod, hoje);
-          r.push({ estabelecimento: cod, emAlerta: x.emAlerta, avisos: x.avisos });
-          if (x.avisos > 0)
-            logger.info(
-              { estabelecimento: cod, emAlerta: x.emAlerta, avisos: x.avisos },
-              'vencimento de contratos avisado',
-            );
-        } catch (e) {
+      const voltas = await voltaPorEstabelecimento(
+        nucleo,
+        process.env,
+        'contratos-vencimento',
+        fabrica,
+        (porta, est) => cicloContratos(porta, est, agora),
+        (cliente, estabelecimento, e) =>
           logger.warn(
-            { estabelecimento: cod, erro: e instanceof Error ? e.name : 'erro' },
+            { cliente, estabelecimento, erro: e instanceof Error ? e.name : 'erro' },
             'alerta de vencimento dos contratos falhou',
+          ),
+      );
+      for (const v of voltas) {
+        const x = v.resultado;
+        if (x.avisos > 0)
+          logger.info(
+            { cliente: v.cliente, estabelecimento: v.estabelecimento, emAlerta: x.emAlerta, avisos: x.avisos },
+            'vencimento de contratos avisado',
           );
-        }
+        if (x.semDestinatario > 0)
+          logger.warn(
+            { cliente: v.cliente, estabelecimento: v.estabelecimento, semDestinatario: x.semDestinatario },
+            'contrato em alerta sem gestor nem fiscal vigente (sem aviso)',
+          );
       }
+      return voltas.map((v) => ({
+        cliente: v.cliente,
+        estabelecimento: v.estabelecimento,
+        emAlerta: v.resultado.emAlerta,
+        avisos: v.resultado.avisos,
+      }));
     } finally {
       this.rodando = false;
     }
-    return r;
   }
 
   async onApplicationShutdown(): Promise<void> {
