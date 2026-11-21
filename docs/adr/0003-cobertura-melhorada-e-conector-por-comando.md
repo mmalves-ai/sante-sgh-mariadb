@@ -59,3 +59,12 @@ novos atrasados pela virada de um hospital.
    - O conector é o **motor** que o painel aciona.
    - A linha de comando existe só como ferramenta interna de teste. Nunca é o fluxo do dono.
    - O arquivo apontado **nunca é alterado nem copiado inteiro** (regra 4).
+
+8. **Onboarding genérico (dono, 2026-11-21).** A ProntoCardio é só o primeiro cliente.
+   - O painel atende **quantos clientes o administrador quiser criar**.
+   - Cada cliente tem o seu banco. Pode apontar o seu próprio arquivo Firebird, ou nenhum, e importar ou
+     sincronizar de forma independente.
+   - Só uma execução por cliente de cada vez. Clientes diferentes podem rodar em paralelo, até o limite da
+     máquina.
+   - O isolamento entre clientes é total.
+   - Nada é fixo para nenhum cliente: nem nome, nem caminho, nem mapeamento.
