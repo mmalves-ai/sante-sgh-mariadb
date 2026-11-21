@@ -1,58 +1,54 @@
-# RETOMADA (2026-11-21, 4h10)
+# RETOMADA: pausa pedida pelo dono (2026-11-21, 10h50)
 
-Leia este arquivo primeiro. Depois o `docs/ESTADO.md` e o `AGENTS.md`.
-- O protocolo de tokens é obrigatório, com as regras 20 a 22.
-- Relatório a cada 50 minutos, com a seção Economia (`tools/obra/medir_consumo.py`), os termos da saúde
-  explicados e o fluxo do dono sempre por painel.
-- Ordem do dono: não parar até completar o sistema.
+**Motivo da pausa:** consumo de tokens alto por falha de orquestração. Foram cerca de 1,4 bilhão equivalentes
+desde a retomada, dos quais cerca de 600 a 700 M eram evitáveis. Análise abaixo e em `docs/obra/consumo.md`.
 
-## No GitHub
+Leia este arquivo primeiro. Depois o `docs/ESTADO.md`, o `AGENTS.md` e o protocolo de tokens (regras 1 a 24).
 
-- F0, F1, F2.1 e F2-L (login).
-- F2.2 ondas 1 a 4: 39 módulos ligados (`eba07ff`).
-- F4 L1 a L4: abridor, fila e motor, painel de onboarding, mapa e verificador (`3f493f4`).
-- ADR 0003, itens 1 a 9.
+## Regra nova do dono para retomar
 
-## Rodando agora (workflows desta sessão; não relance)
+**Nada é lançado sem orçamento aprovado.**
+- Todo workflow com estimativa acima de **50 M equivalentes** vai antes ao dono, com a estimativa e o porquê.
+- Ordem obrigatória:
+  1. mudança compartilhada (motor ou modelo) primeiro, num agente sequencial;
+  2. fatias uma vez só, com o verificador de completude ativo;
+  3. conferência.
+- Lotes de cerca de 15 arquivos, com roteiro fixo de turnos.
+- O revisor lê só o diff, e o corretor recebe só os achados.
+- Teto: se o gasto passar 30% acima da estimativa, o workflow para e o orquestrador reporta.
 
-- **F2.2, ondas finais** (`f22-ondas-finais`): as fatias foram geradas de novo com lotes de até 20 arquivos
-  (regra 22). A numeração recomeçou:
-  - onda 2: acesso, administração, **remoção da coexistência e do `onda0`** e SADT;
-  - onda 3: cirurgia, pessoas, portal do paciente, suprimentos, telemedicina e TISS;
-  - onda 4: contábil e portal do médico;
-  - ondas 5a a 5d: testes, ferramentas, worker e a desmontagem do `app.module`.
+## Estado
 
-  Os pedidos das ondas 1 a 4 antigas estão em `docs/obra/fatias/f22/arquivo-ondas-1a4/`.
-- **F4 L5 a L8** (`f4-conector-l5-l8`), no worktree `../sante-sgh-wt/f4`, branch `f4-conector`: carga de todas
-  as áreas em 57 fatias. Depois, faça o merge no `main`, como no L3: mescle o `main` no branch, resolva o
-  `registro.ts` e faça o fast-forward.
-- O worker do conector está no ar (`conector/conector.sh worker`) para o painel.
+| Trilha | Onde parou | Onde está o trabalho |
+|---|---|---|
+| F2.2/F2.3 | Ondas 1 a 5c integradas em `main`. **Onda 5d não integrada**: lotes 05-12, 05-15 e 05-17 (worker contábil, raiz e relatórios) | Branch **`f22-onda5d-wip`** (`6bc9831`, também no GitHub). Em `main` restam 32 arquivos com o legado, que são exatamente os da 5d |
+| F4 conector | Rodada 4: primeiro agente (pedidos de motor) com commit. Faltam os pedidos de modelo, as fatias restantes, a conferência, o L9 (Sincronizar) e o L10 (conciliação) | Branch **`f4-conector`** (`b521a64`, no GitHub; worktree `../sante-sgh-wt/f4`). Cobertura: **836 carregam, 285 descarte, 64 bloqueadas** de 1.185 |
+| Painel | No ar com o conector da rodada 2 (`main`, `ff19cc8`) | Web 5310 e API 3310; o worker do conector segue rodando |
 
-## Dívida da F2.2, a fechar antes de declarar a F2 pronta (F2.4)
+## Primeiro passo da próxima sessão
 
-Medido por script em 2026-11-21:
-- 360 pedidos dos lotes: 163 de DDL, 63 de contrato, 19 de sementes no `criar_cliente` e 115 outros;
-- 77 arquivos de produção ainda respondem 501 ou "modelo-pendente".
+1. **Fechar a F2.2:**
+   - mescle `f22-onda5d-wip` no `main`;
+   - rode a integração da 5d com um agente só: conferidor estrito dos 3 lotes, tsc, vitest, `contar-legado` = 0
+     e commit;
+   - estimativa: 3 a 5 M.
+2. **Trazer ao dono os planos com orçamento,** antes de lançar:
+   - **F4 restante:** modelo, 64 bloqueadas, L9 e L10;
+   - **F2.4,** a dívida: 360 pedidos, cerca de 77 arquivos com 501 ou "modelo-pendente", contratos no vocabulário
+     antigo, licitação e sementes do `criar_cliente`;
+   - a lista curta de decisões de modelo para o dono aprovar.
 
-Exemplos:
-- domínios básicos não semeados no cliente novo (sexo, tipos, situações da agenda);
-- contratos ainda em HHMM, S/N e `destino: 'legado'`;
-- tabela de feriado;
-- busca fonética.
+## Pendências do dono
 
-**F2.4:** classificar por script, aplicar o DDL e as sementes, trocar os contratos para vocabulário neutro e zerar
-os 501. A prova é um verificador que conta 501 e "modelo-pendente" até chegar a 0.
-
-## Pendências
-
-- **Decisão do dono:** segundo fator no login do administrador da plataforma. Recomendado: sim.
-- O dono ainda não criou a ProntoCardio no painel.
-- Bancos de teste `f22_o1` a `f22_o5` e `teste_*` aparecem na lista do painel. Apague-os ao fim da F2.2.
-- O orquestrador desta sessão passou de 1.000 turnos, mas custa cerca de 43 mil equivalentes por turno, cerca de
-  2% do total. Passe a orquestração para uma sessão nova quando os dois workflows acima terminarem.
+- Segundo fator no login do administrador da plataforma (recomendado: sim).
+- Revisar `docs/obra/passagens/F4-decisoes-destino.md` (no branch `f4-conector`).
+- Criar a ProntoCardio no painel e importar, quando quiser.
 
 ## Ambiente
 
-- MariaDB `127.0.0.1:3410`, Oracle de referência, web `0.0.0.0:5310` e API `127.0.0.1:3310`
-  (`API_MODULOS=todos tools/dev/subir-login.sh`).
-- Disco: cerca de 236 GB livres, depois que o volume do ensaio do `new-sgh` foi apagado com autorização do dono.
+- MariaDB `127.0.0.1:3410`.
+- Web `https://192.168.0.104:5310`.
+- API `127.0.0.1:3310`: `API_MODULOS=todos tools/dev/subir-login.sh`.
+- Worker do conector: `conector/conector.sh worker`.
+- Disco: cerca de 231 GB livres.
+- O vigia de disco e o temporizador de relatório foram parados na pausa.

@@ -31,3 +31,25 @@ cada uma com construir, revisão adversarial e correção.
 - **Qualidade:** 4 achados altos e 23 médios, todos corrigidos. Conferência final independente verde.
 - **Custo maior que no núcleo:** cada lote precisava medir o fecho de imports de uma API de cerca de 700
   arquivos.
+
+## 2026-11-21: análise do dono, "consumo elevadíssimo" (pausa)
+
+| Trabalho | Agentes | Custo equivalente |
+|---|---|---|
+| SIGTAP, núcleo, login, conector L1 a L4 | 36 | 52 M |
+| F2.2 ondas 1 a 4 | 98 | 363 M |
+| F2.2 ondas finais | 158 | 284 M |
+| Conector L5 a L8, rodada 1 | 175 | 135 M |
+| Conector rodadas 2 e 3 (retrabalho) | 318 | 512 M |
+| Orquestrador | — | 48 M |
+| **Total** | **cerca de 790** | **cerca de 1,4 bilhão** |
+
+**Evitável: cerca de 600 a 700 M.** Causas:
+
+1. **Conector sem meta de completude desde o início.** A rodada 1 chegou a só 34% e exigiu duas rodadas de
+   retrabalho. A rodada 3 refez fatias que dependiam de mudanças compartilhadas ainda não aplicadas
+   (regras 23 e 24).
+2. **Lotes de 20 a 40 arquivos sem roteiro de turnos** nas ondas 1 e 2 da F2.2: 256 turnos e 9,5 M por
+   construtor (regras 20 a 22).
+3. **Três agentes por lote, sempre:** o corretor custa quase tanto quanto o construtor.
+4. **Workflows lançados sem orçamento aprovado.** Daqui em diante, acima de 50 M, só com aprovação do dono.
