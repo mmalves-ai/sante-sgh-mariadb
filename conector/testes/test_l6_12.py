@@ -26,7 +26,9 @@ CARREGADAS = {"PRPRESC", "PRLANGERAL", "PRPRESCPROCED", "PRPRESCDIETA", "PRCARAC
 # cadastros de outras fatias lidos por chave alternativa/encadeada e carregados pela declaração delas
 DE_OUTRAS = {"PRHEMOTLAN", "TBUNIDADEMEDIDA", "PREVOLUCAO", "PRPADEVOL", "PRRESPOSTA", "PRTPASSINATURA"}
 # lidas só pela encadeada terminada em coluna, sem carga (TBPRINC: descarte catalogo_oficial na L7-07)
-SO_LEITURA = {"TBPRINC", "PRPERGUNTA", "PRCADRESP", "PRASSINATURA_CAB"}
+# rodada 4: PRASSINATURA_CAB passa a carregar (L6-11, documento do prontuário) e TBPRINC também (L7-07,
+# principio_ativo_cliente): só lidas ficam a pergunta e o catálogo de respostas
+SO_LEITURA = {"PRPERGUNTA", "PRCADRESP"}
 DESCARTES = {"PRASS_DOC_PREXAMEASS", "PRCABEC_MONITORIZACAO", "PRPLANPRESC", "PRCABEVOLTMP",
              "PRALERGIAPACTMP", "PRALERGIAPACTMP_TBPRINC"}
 # o anexo do prontuário só existe como binário na origem: bloqueada até o mecanismo de arquivo (#arquivo, M4)
@@ -279,8 +281,9 @@ class ConferenciaL612(unittest.TestCase):
                            T0 + datetime.timedelta(hours=1), "Tipo de assinatura falso", 2),
                           (ext[("RICADPAC", "2")], None, "documento_migrado", 2, T0 + datetime.timedelta(hours=2),
                            "Tipo de assinatura falso", 1)])
-        # opção criada pela resposta, uma por campo x código (as respostas 3, 4 e 7 adotam)
-        self.assertEqual(tuple(lido["opcao"]), (2, 2, "Resposta falsa 1"))
+        # rodada 4: as opções da origem (PRRESPOSTA) carregam pela L6-11 (por_pai: uma por campo de cada modelo da
+        # pergunta), antes das respostas; a resposta adota a opção do campo x código
+        self.assertEqual(tuple(lido["opcao"]), (4, 4, "Resposta falsa 1"))
         # princípio pelo código DCB no catálogo oficial (zeros à esquerda normalizados)
         self.assertEqual(lido["princ"], ["00777", "01234"])
 

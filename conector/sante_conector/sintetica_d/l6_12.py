@@ -14,8 +14,9 @@ pais externos. A alergia lê paciente, atendimento, data e autor do registro cl�
 hemocomponente vêm por chave alternativa (sigla); o campo do modelo da resposta, pela opção -> pergunta -> ligação.
 O princípio ativo da alergia (PRALERGIAPAC_TBPRINC) vem do catálogo oficial DCB pelo código guardado no princípio
 da origem (TBPRINC, intermediária: encadeada terminada em coluna + `cod:principio_ativo.codigo_dcb`); o catálogo
-oficial é preparado no destino (nunca gravado pelo conector). O documento do prontuário nasce do primeiro evento de
-assinatura de cada cabeçalho (PRASSINATURA_CAB, só lido: secundário agrupado); a opção respondida, da própria
+oficial é preparado no destino (nunca gravado pelo conector). O documento do prontuário nasce do cabeçalho da
+assinatura (PRASSINATURA_CAB, carregado pela declaração da L6-11: autor do primeiro evento, situação do último) e o
+evento aponta o documento por ref:PRASSINATURA_CAB; a opção respondida, da própria
 resposta (secundário adotado por campo x código). Descartes (sem_carga.tsv) entram só com a forma.
 """
 import csv
@@ -417,14 +418,14 @@ def linhas(r, ins):
               CONTEUDO_XML=("Declaro, para os devidos fins, documento falso %d." % i).encode("cp1252") if texto else None,
               REGISTRO_VALIDO=valido, ID_PRATESTREQIMP_ORIG_CORREC=1 if i == 5 else None, ID_TBPROFIS_ACOMP_RESP=1,
               **extra)
-    # cabeçalhos da assinatura (lidos na origem: o documento do prontuário nasce do primeiro evento de cada um) e o
+    # cabeçalhos da assinatura (rodada 4: carregados pela declaração da L6-11, que cria o documento do prontuário) e o
     # tipo de assinatura (carregado pela L6-07: pai externo, lido também pela descrição do título)
     linha("PRTPASSINATURA", ID=1, DESCRICAO="Tipo de assinatura falso", ORDEM_MEDICA="N")
     for i, pac, atd in ((1, 101, 201), (2, 102, None)):
         linha("PRASSINATURA_CAB", ID=i, ID_PRTPASSINATURA=1, ID_TABELA=500 + i, ID_HTPACIENTE=pac, ID_HTATENDIMENTO=atd)
-    # eventos de assinatura: 1 e 2 normais (criam os documentos 1 e 2); 3 cabeçalho nunca visto (paciente NULL: o
-    # documento recusa NOT NULL e o evento junto); 4 do documento 1 sem momento do evento (NOT NULL); 5 segundo
-    # evento do documento 1 (usa o documento já criado: dois eventos, um documento)
+    # eventos de assinatura: 1 e 2 normais (documentos dos cabeçalhos 1 e 2); 3 cabeçalho nunca visto
+    # (pai_inexistente, NOT NULL); 4 do documento 1 sem momento do evento (NOT NULL); 5 segundo evento do documento 1
+    # (dois eventos, um documento)
     for i, cab, ev in [(1, 1, 1), (2, 2, 2), (3, 9, 3), (4, 1, None), (5, 1, 4)]:
         linha("PRASSINATURA_DOC", ID=i, ID_PRASSINATURA_CAB=cab, ID_PRTPDOCUMENTO=1, ID_PRSITDOCUMENTO=1,
               ID_TBCBOPRO=301 + i % 2, DATA_HORA_EVENTO=None if ev is None else _h(ev), DATA_HORA_GRAVACAO=_h(9))
@@ -469,7 +470,7 @@ ESPERADO = {
                                                 "valor_presumido": 4}},
     "PRCONTEVOL": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1}},
     "PREVOLPAC": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 5, "pai_ambiguo": 2,
-                                                "adotado_existente": 2, "restricao_destino_1048": 2,
+                                                "adotado_existente": 4, "restricao_destino_1048": 2,
                                                 "hora_invalida": 1}},
     "PRALERGIAPAC": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
                                                    "restricao_destino_4025": 2}},
@@ -480,5 +481,6 @@ ESPERADO = {
     # ck_alergia_paciente_principio_principio (4025) recusa a linha, no lugar do NOT NULL (1048)
     "PRATESTREQIMP": {"gravados": 4, "pendencias": {"valor_presumido": 6, "restricao_destino_1048": 1,
                                                     "restricao_destino_4025": 1}},
-    "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 4, "restricao_destino_1048": 2}},
+    # rodada 4: o documento é do cabeçalho (ref:PRASSINATURA_CAB): 3 cabeçalho nunca visto (pai_inexistente + 1048)
+    "PRASSINATURA_DOC": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}},
 }

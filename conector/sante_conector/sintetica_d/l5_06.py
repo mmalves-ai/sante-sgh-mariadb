@@ -286,8 +286,9 @@ PREPARO_DESTINO = PREPARO_SEXO + ("INSERT INTO ocupacao_cbo (codigo_cbo, descric
                    " ('223505', 'Ocupação exemplo três', UTC_TIMESTAMP(3)), ('225170', 'Ocupação exemplo quatro', UTC_TIMESTAMP(3))")
 
 # carregadas pelo mapa (colunas.d/L5-06.tsv), na ordem do mapa com a aresta TBCBOPRO_TBCONVEN -> TBPROFIS
-CARREGADAS = ["ATPARAMGERAL", "TBCONVEN", "TBMEDSOL_CODCON", "TBPROFIS", "TBCBOPRO_TBCONVEN", "TBESPEC",
-              "TBCBOSUS_TBESPEC", "TBMEDESP", "RICADPAC_TBCONVEN", "HTCONVEN", "HTPACIENTE", "HTPROFIS", "HTATENDRESP",
+# r4 (conferidor): TBESPEC vem antes (ciclo da L8-16) e TBMEDESP depois do profissional (dependência declarada)
+CARREGADAS = ["TBESPEC", "TBCBOSUS_TBESPEC", "ATPARAMGERAL", "TBCONVEN", "TBMEDSOL_CODCON", "TBPROFIS",
+              "TBCBOPRO_TBCONVEN", "TBMEDESP", "RICADPAC_TBCONVEN", "HTCONVEN", "HTPACIENTE", "HTPROFIS", "HTATENDRESP",
               "HTPACTELEFONE", "HTPROFISTEL", "HTPRONTUNIF", "HTTBCBOPRO", "HTTBCBOPRO_TBUNIDAD", "HTTBHOSPIT"]
 # sem carga: só o descarte de produto (TBEMPHOSLOGO, em declarado/sem_carga.tsv)
 SEM_CARGA = ["TBEMPHOSLOGO"]

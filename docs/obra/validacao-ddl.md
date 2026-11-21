@@ -2,7 +2,7 @@
 
 | Item | Valor |
 |---|---:|
-| banco | f4r4_val |
+| banco | validacao |
 | tabelas_criadas | 3608 |
 | catalogo | 3602 |
 | faltam | 0 |

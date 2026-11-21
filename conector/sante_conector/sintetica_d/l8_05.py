@@ -5,10 +5,11 @@ TBCONVEN_TBTISSPARDEF, TBEMIREF, TBENTCON, TBVLRTHM e, novas na rodada 3, TBTIPP
 12_FAT/11), TBTISS (parâmetros TISS, versão pelo cadastro de versões da origem e de-para oficial versao_tiss),
 TBVLRDTH (valor da diária pela chave alternativa composta TAB+OPE), FCCTAEXT (conta) e FCDIAEXT (segurado da conta,
 carteira lida da conta na origem).
-COMENTADAS (declaração pronta, BLOQUEADA com motivo em colunas.d/L8-05.tsv): TBSEGUIA (regra inteiro_mais_um e tipo
-'lote'), TBINTCRC (dimensões do de-para no modelo), FCCTAAUD (dependência da conta, total nulo e conclusão condicional),
-TBPERMEM e TBEMIREFMATMED (pai TBMATMED, L8-03) e RPLANRPA (linhas da L8-02). As três primeiras mantêm as linhas
-específicas na imagem; as outras, a forma. RPLANRPA entra na imagem desta fatia e no esperado só quando a L8-02 a
+Rodada 4: carregam TBSEGUIA (regra inteiro_mais_um e tipo 'lote'), TBINTCRC (tipo de conta e de lançamento no
+de-para; ato e subtipo específicos ficam fora pelo so_se até o modelo) e FCCTAAUD (dependência da conta, total nulo e
+conclusão só com AUDITADA = S).
+COMENTADAS (declaração pronta, BLOQUEADA com motivo em colunas.d/L8-05.tsv): TBPERMEM e TBEMIREFMATMED (pai TBMATMED,
+L8-03) e RPLANRPA (linhas da L8-02). Entram só com a forma. RPLANRPA entra na imagem desta fatia e no esperado só quando a L8-02 a
 retirar da dela e a declaração daqui for descomentada (sem tabela duplicada na imagem conjunta).
 SO_ORIGEM: TBVERSAOTISS (catálogo oficial, só lido pela referência encadeada).
 PAIS_EXTERNOS: TBCONVEN (L5-06), TBCTRDTH (L8-03), TBUSERS (L3), TBCLASSI (L8-02), TBTABTHM (L8-04, chave TAB|COD),
@@ -306,10 +307,10 @@ if RPLANRPA_ATIVA:
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 CARREGADAS = ("TBTIPPLANO", "TBTABDTH", "TBTPPROFPROC", "TBCODATI", "TBCODATI_TBUSERS", "TBCONVEN_TBTISSPARDEF",
               "TBEMIREF", "TBENTCON", "TBVLRTHM", "TBTIPPLCONV", "TBTISS", "TBVLRDTH",
-              "FCCTAEXT", "FCDIAEXT") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
+              "FCCTAEXT", "FCDIAEXT", "TBSEGUIA", "TBINTCRC", "FCCTAAUD") + (("RPLANRPA",) if RPLANRPA_ATIVA else ())
 # declaração pronta e comentada (BLOQUEADA, motivo na linha); as três primeiras com linhas específicas na imagem
-COMENTADAS = ("TBSEGUIA", "TBINTCRC", "FCCTAAUD", "TBPERMEM", "TBEMIREFMATMED")
-COM_LINHAS = ("TBSEGUIA", "TBINTCRC", "FCCTAAUD")
+COMENTADAS = ("TBPERMEM", "TBEMIREFMATMED")
+COM_LINHAS = ()
 # só lida pela referência encadeada (cadastro de versões TISS da origem, catálogo oficial nunca gravado)
 SO_ORIGEM = ("TBVERSAOTISS",)
 DESCARTES = ("TBTPOBRIGAMAT", "TBTPPERFILUNIBH", "TBTPTRATUNIBH", "TBTPCLASSIFUNIBH",
@@ -331,7 +332,8 @@ def _ddl():
 DDL = _ddl()
 PAIS_EXTERNOS = {"TBCONVEN": ["1", "2"], "TBCTRDTH": ["1", "2"], "TBUSERS": ["ANA.EX", "BRUNO.EX"],
                  "TBCLASSI": ["1", "2"], "TBTABTHM": ["1|10", "1|11"],
-                 "RECADATE": ["500", "501"], "TBLOCCON": ["1"]}
+                 "RECADATE": ["500", "501"], "TBLOCCON": ["1"],
+                 "TBTPLANC": ["1", "2"], "TBITEDES": ["1|1|1"]}
 if RPLANRPA_ATIVA:  # RPA da L8-02 e lançamento de repasse da L8-01
     PAIS_EXTERNOS.update({"RPRPA": ["1", "2"], "RPLANEVE": ["10", "11"]})
 # id de destino dado pela conferência a cada pai externo: 1, 2... na ordem das tabelas (nome) e das chaves
@@ -428,10 +430,9 @@ def linhas(r, ins):
     for conv, ent, pag in [(1, dt(2025, 2, 10), dt(2025, 3, 15)), (1, dt(2025, 3, 10), None),
                            (2, dt(2025, 2, 10), dt(2025, 1, 5)), (9, dt(2025, 2, 10), None)]:
         _ins(ins, "TBENTCON", CONV=conv, ENTREGA=ent, PAGAMENTO=pag)
-    # (BLOQUEADA, só presença na imagem; esperado de quando a regra inteiro_mais_um e o tipo 'lote' existirem)
-    # contadores: 2 sem números (padrão 1); 3 tipo 7 fora do de-para (valor_fora_do_dominio + 1048); 4 lote zero
-    # (CHECK: 4025); 5 lote não numérico (padrão 1 com valor_fora_do_dominio, gravado); 6 tipo 0, o contador geral
-    # do lote, sem tipo no modelo (valor_fora_do_dominio + 1048, até o pedido de modelo)
+    # contadores (último usado -> próximo): 1 lote 121, transação 46; 2 sem números (padrão 1); 3 tipo 7 fora do de-para
+    # (valor_fora_do_dominio + 1048); 4 lote zero (próximo 1, gravado); 5 lote não numérico (padrão 1 com
+    # valor_fora_do_dominio, gravado); 6 tipo 0, o contador geral do lote (tipo lote)
     for conv, tg, lote, seq in [(1, 1, "120", "45"), (1, 2, None, None), (2, 7, "5", "5"), (2, 1, "0", "3"),
                                 (2, 2, "L12", "9"), (2, 0, "7", "7")]:
         _ins(ins, "TBSEGUIA", CONV=conv, TIPO_GUIA=tg, NUM_LOTE=lote, SEQ_TRANSACAO=seq)
@@ -441,13 +442,16 @@ def linhas(r, ins):
                                          (1, 11, dt(2025, 1, 1), None, None, None),
                                          (2, 99, dt(2025, 1, 1), 1.0, None, None)]:
         _ins(ins, "TBVLRTHM", TAB=tab, COD=cod, DATA=data, VALOR_CH=ch, VALOR_CO=co, VALOR_ANES=anes)
-    # (BLOQUEADA até as dimensões do de-para no modelo; só presença na imagem)
     # de-para da conta de receita: 1 com natureza; 2 sem natureza (vale para a fonte); 3 conta zero (sem conta: CHECK
-    # 4025); 4 fonte nunca vista (pai_inexistente + CHECK 4025); 5 natureza nunca vista (pai_inexistente, gravado)
-    for conv, tc, tl, g, sg, it, cta in [(1, "I", 1, 1, 1, 1, 3101), (2, "E", 1, None, None, None, 3102),
-                                         (1, "E", 2, None, None, None, 0), (9, "I", 1, None, None, None, 3103),
-                                         (2, "I", 3, 9, 9, 9, 3104)]:
-        _ins(ins, "TBINTCRC", EMPRESA=1, CONV=conv, TIPO_CONTA=tc, TIPO_LANC=tl, TIPO_ATO=0, SUBTIPO_DIARIA=0,
+    # 4025); 4 fonte nunca vista (pai_inexistente + CHECK 4025); 5 natureza e tipo de lançamento nunca vistos
+    # (pai_inexistente, gravado); 6 tipo de lançamento 0 = todos (NULL), tipo de conta X fora do de-para (NULL com
+    # valor_fora_do_dominio, gravado); 7 tipo de ato específico (aguarda_dimensao_no_modelo, nunca gravada)
+    for conv, tc, tl, g, sg, it, cta, ato in [(1, "I", 1, 1, 1, 1, 3101, 0), (2, "E", 1, None, None, None, 3102, 0),
+                                              (1, "E", 2, None, None, None, 0, 0),
+                                              (9, "I", 1, None, None, None, 3103, 0),
+                                              (2, "I", 3, 9, 9, 9, 3104, 0), (2, "X", 0, None, None, None, 3105, 0),
+                                              (1, "A", 1, None, None, None, 3106, 2)]:
+        _ins(ins, "TBINTCRC", EMPRESA=1, CONV=conv, TIPO_CONTA=tc, TIPO_LANC=tl, TIPO_ATO=ato, SUBTIPO_DIARIA=0,
              GRUPO=g, SUBGRUPO=sg, ITEM=it, CTA_CONTABIL=cta)
     # diária por plano e local: 1 com local; 2 todos os locais; 3 sem diária (1048); 4 fonte nunca vista
     # (pai_inexistente + 1048); 5 plano recusado (TBTIPPLANO 4: pai_pendente); 6 local nunca visto (NULL, gravado)
@@ -488,9 +492,9 @@ def linhas(r, ins):
              FECHADA=fech, DATA_FEC=dfec, USU_FEC=ufec, TOTAL_CONTA=150.75 * i, DESCONTO=D("1.50"),
              SENHA="AUT%d" % i, MATRICULA="CART-%d" % i, ID_TBTIPPLANO=1, SERIE="EX", VAL_SENHA=dt(2025, 12, 31),
              OBS=("Observacao exemplo %d" % i).encode("cp1252"))
-    # (BLOQUEADA até a dependência, o total nulo e a conclusão condicional; só presença na imagem)
-    # auditorias (cópia do cabeçalho antes da auditoria): 1 e 2 gravam; 3 conta recusada (pai_pendente); 4 conta
-    # nunca vista (pai_inexistente + 1048); 5 sem auditor (CHECK 4025); 6 sem data (1048)
+    # auditorias (cópia do cabeçalho antes da auditoria): 1 (concluída, resultado presumido) e 2 (em andamento) gravam;
+    # 3 conta recusada (pai_pendente); 4 conta nunca vista (pai_inexistente + 1048); 5 sem auditor (CHECK 4025);
+    # 6 sem data (1048)
     for ano, mes, tc, cod, usu, dgra, aud in [
             (2025, 1, "E", 100, "ANA.EX", ts(2025, 1, 20, 10, 0), "S"),
             (2025, 1, "A", 101, "BRUNO.EX", ts(2025, 1, 21, 11, 0), "N"),
@@ -543,6 +547,14 @@ def linhas(r, ins):
         "FCDIAEXT": {"gravados": 2, "pendencias": {"pai_ambiguo": 2, "pai_inexistente": 2, "pai_pendente": 1,
                                                    "restricao_destino_1048": 2}},
     }
+    esperado.update({
+        "TBSEGUIA": {"gravados": 5, "pendencias": {"valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
+        "TBINTCRC": {"gravados": 4, "pendencias": {"restricao_destino_4025": 2, "pai_inexistente": 2,
+                                                   "valor_fora_do_dominio": 1, "aguarda_dimensao_no_modelo": 1}},
+        "FCCTAAUD": {"gravados": 2, "pendencias": {"pai_pendente": 1, "pai_inexistente": 2,
+                                                   "restricao_destino_1048": 2, "restricao_destino_4025": 1,
+                                                   "valor_presumido": 4}},
+    })
     if RPLANRPA_ATIVA:
         esperado["RPLANRPA"] = {"gravados": 2, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 1}}
     return esperado

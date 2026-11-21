@@ -5,19 +5,24 @@ TBEMIREF	REF_DESC	referencia_emissao_matmed.origem_descricao	S	referencia	L8-05:
 TBEMIREF	REF_DESC	referencia_emissao_matmed.origem_descricao	N	proprio	L8-05: N = descrição própria do hospital
 TBEMIREF	REF_VALOR_PFB	referencia_emissao_matmed.preco_base	S	preco_fabrica	L8-05: S = preço de fábrica
 TBEMIREF	REF_VALOR_PFB	referencia_emissao_matmed.preco_base	N	preco_maximo_consumidor	L8-05: N = preço máximo ao consumidor (padrão do produto)
-#TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	1	consulta	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
-#TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	2	sp_sadt	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
-#TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	3	resumo_internacao	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
-#TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	4	honorario	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
+TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	1	consulta	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
+TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	2	sp_sadt	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
+TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	3	resumo_internacao	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
+TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	4	honorario	L8-05: tipo de guia do cadastro de tipos da origem (TBTISSTPGUIA); evidência: código antigo do lote TISS
+TBSEGUIA	TIPO_GUIA	sequencial_guia.tipo_guia	0	lote	L8-05 r4: tipo 0 = contador geral do lote e do recurso (evidência: código antigo do lote TISS); tipo lote do modelo (12_FAT/12)
 FCCTAEXT	TIPO_CTA	conta_hospitalar.tipo_conta_id	A	ambulatorial	L8-05 r3: tipo de conta ambulatorial (código do catálogo-base)
 FCCTAEXT	TIPO_CTA	conta_hospitalar.tipo_conta_id	E	externa	L8-05 r3: tipo de conta externa (código do catálogo-base)
 FCCTAEXT	TIPO_CTA	conta_hospitalar.tipo_conta_id	U	urgencia	L8-05 r3: tipo de conta urgência (código do catálogo-base)
 FCCTAEXT	TIPO_CTA	conta_hospitalar.tipo_conta_id	I	internacao	L8-05 r3: tipo de conta internação (código do catálogo-base)
+TBINTCRC	TIPO_CONTA	depara_conta_externa.tipo_conta_id	A	ambulatorial	L8-05 r4: tipo de conta ambulatorial (código do catálogo-base, como a conta)
+TBINTCRC	TIPO_CONTA	depara_conta_externa.tipo_conta_id	E	externa	L8-05 r4: tipo de conta externa (código do catálogo-base, como a conta)
+TBINTCRC	TIPO_CONTA	depara_conta_externa.tipo_conta_id	U	urgencia	L8-05 r4: tipo de conta urgência (código do catálogo-base, como a conta)
+TBINTCRC	TIPO_CONTA	depara_conta_externa.tipo_conta_id	I	internacao	L8-05 r4: tipo de conta internação (código do catálogo-base, como a conta)
 FCCTAEXT	TIPO_CTA	conta_hospitalar.natureza	A	ambulatorial	L8-05 r3: natureza da conta pelo tipo
 FCCTAEXT	TIPO_CTA	conta_hospitalar.natureza	E	externo	L8-05 r3: natureza da conta pelo tipo
 FCCTAEXT	TIPO_CTA	conta_hospitalar.natureza	U	pronto_atendimento	L8-05 r3: natureza da conta pelo tipo
 FCCTAEXT	TIPO_CTA	conta_hospitalar.natureza	I	internacao	L8-05 r3: natureza da conta pelo tipo
 FCCTAEXT	FECHADA	conta_hospitalar.situacao	S	fechada	L8-05 r3: conta fechada
 FCCTAEXT	FECHADA	conta_hospitalar.situacao	N	aberta	L8-05 r3: conta aberta
-#FCCTAAUD	AUDITADA	auditoria_conta.situacao	S	concluida	L8-05 r3: auditoria concluída
-#FCCTAAUD	AUDITADA	auditoria_conta.situacao	N	em_andamento	L8-05 r3: auditoria em andamento
+FCCTAAUD	AUDITADA	auditoria_conta.situacao	S	concluida	L8-05 r3: auditoria concluída
+FCCTAAUD	AUDITADA	auditoria_conta.situacao	N	em_andamento	L8-05 r3: auditoria em andamento

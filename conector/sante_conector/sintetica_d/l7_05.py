@@ -17,8 +17,11 @@ Rodada 3 (conferidor): horários padrão por número de doses (GEHORMED, uma lin
 horario_padrao_dose) e lote dispensado por documento (GECTRVMM: movimento_lote do movimento de saída, com o lote
 físico adotado pelo insumo e número em lote_insumo). O movimento (GELANSAI) e o lote (GEVALMEM) são de outras fatias e
 não estão nesta imagem: recusa visível; a prova positiva vem na carga integrada.
-Fora da carga (3, entram na imagem para provar que nada é gravado): compras e terceiros (descarte) e consumo por
-centro de custo (BLOQUEADA: destino principal agrupado pedido ao motor). Pedidos em saida/L7-05.json.
+Rodada 4: consumo por centro de custo (GEKONCDC) somado por ano, mês, centro de custo e insumo (`agrupar:` no destino
+principal, documentos no retrato do grupo). O centro de custo (L8-11) e o documento de saída (L7-07) não estão nesta
+imagem: recusa visível (pai_inexistente + 1048 do local NOT NULL); a prova positiva do agrupamento é a do motor
+(exemplo_r4, EX4_KON) e a carga integrada.
+Fora da carga (2, entram na imagem para provar que nada é gravado): compras e terceiros (descarte).
 Itens do estoque inicial e descrição do serviço: o insumo (unidade) e o item de compra são de outras fatias e não
 estão nesta imagem: recusa visível (pai_inexistente); a prova positiva vem na carga integrada.
 Ordem: o local de estoque (GELOCARM) vem hoje DEPOIS de documentos, estoque inicial e reposição (aresta pedida); o
@@ -29,6 +32,7 @@ autorreferência a local recusado e a local nunca visto (fase 2), login sem usu�
 catálogo (catalogo_codigo_inexistente), 0 como "sem valor" (NULL), nome com espaços repetidos.
 """
 import datetime
+import re
 import decimal
 from pathlib import Path
 
@@ -81,6 +85,16 @@ CREATE TABLE GEHORMED (H11 SMALLINT, H21 SMALLINT, H22 SMALLINT, H31 SMALLINT, H
 CREATE TABLE GEITEACAODOSE (ID SMALLINT NOT NULL, NOME VARCHAR(10), PRIMARY KEY (ID));
 CREATE TABLE GEKITS (COD SMALLINT NOT NULL, NOME VARCHAR(70), PERMITIR_LANCAR_QTDE_SUPE_ITEM CHAR(1), PRIMARY KEY 
   (COD));
+CREATE TABLE TBCENCUS ("COD" INTEGER NOT NULL, "NOME" VARCHAR(50), "SIGLA" VARCHAR(8), "LOCCON" SMALLINT, "ENDERECO"
+  VARCHAR(45), "BAIRRO" VARCHAR(30), "CIDADE" VARCHAR(30), "UF" VARCHAR(2), "FONE" VARCHAR(15), "CEP" INTEGER, "INSCR"
+  VARCHAR(15), "PERC_MEDC" DOUBLE PRECISION, "PERC_MEDO" DOUBLE PRECISION, "RC_INI" INTEGER, "RC_FIN" INTEGER,
+  "REF_CONT" VARCHAR(10), "GRUPO" SMALLINT, "FORMULA" SMALLINT, "CLASSIF" SMALLINT, "SITUACAO" VARCHAR(1), "PRODUTIVO"
+  VARCHAR(1), "UNIDADE" SMALLINT, "CGC" BIGINT, "REP_MAT" NUMERIC(9,2), "REP_MED" NUMERIC(9,2), "CONTABIL" BIGINT,
+  "TIP_PRECO" VARCHAR(1), "UNIMEN" SMALLINT, "MOVIMENTACAO" VARCHAR(1), "LUCRO_ESP" NUMERIC(9,2), "INVEST"
+  NUMERIC(9,2), "RISCOS" NUMERIC(9,2), "LOCARM" SMALLINT, "COB_PERC" VARCHAR(1), "ID" INTEGER NOT NULL,
+  "DATA_HORA_GRAV" TIMESTAMP, "CUSTO_VAR_COMPOE_ITEM_PROD" CHAR(1), "ID_CHCRITICIDADE" SMALLINT,
+  "PERMITIR_EVOLUCAO_GRUPO_PEP" CHAR(1), "COD_APURASUS" BIGINT, "INDICADOR_PRODUCAO" INTEGER,
+  "CODIGO_EXTERNO_ITEM_PRODUCAO" BIGINT, PRIMARY KEY ("COD"));
 CREATE TABLE GEKONCDC (ANO SMALLINT NOT NULL, MES SMALLINT NOT NULL, CDC INTEGER NOT NULL, DATA DATE NOT NULL, ITEM 
   INTEGER NOT NULL, DOC INTEGER NOT NULL, QTDE NUMERIC(18,3), VALOR NUMERIC(18,2), PRIMARY KEY 
   (ANO,MES,CDC,DATA,ITEM,DOC));
@@ -100,6 +114,10 @@ CHAR(1), DATA_HORA_INCLUSAO TIMESTAMP, ID_GEKITS_PADRAO SMALLINT, ID_USUARIO_CAD
   ID_USUARIO_ATUALIZA_KIT VARCHAR(31), UTILIZACAO_TOTAL CHAR(1), PRIMARY KEY (ID));
 """
 
+# centro de custo (L8-11) carregado AQUI pela declaração de lá (mesma forma e as mesmas linhas da imagem da L8-11, mais
+# o local de estoque padrão do 11): só para a prova positiva do consumo por centro de custo; conferido pela conciliação
+PAIS_NA_IMAGEM = ("TBCENCUS",)
+_COLS_TBCENCUS = re.findall(r'"(\w+)"\s+[A-Z]', DDL[DDL.index("CREATE TABLE TBCENCUS"):DDL.index("CREATE TABLE GEKONCDC")])
 PAIS_EXTERNOS = {"TBUSERS": ["almox.exemplo", "farm.exemplo"], "GEITENS": ["1", "2"], "GETPLANCTO": ["1", "2"]}
 PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY);"
                    " INSERT INTO estabelecimento (id) SELECT 1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM estabelecimento);"
@@ -113,11 +131,11 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
 
 CARREGADAS = ("GECAPELAMP", "GEDESCOM", "GEGRUPOMP", "GECAPELAMP_GEGRUPOMP", "GEGRUPOS", "GEITEACAODOSE", "GEKITS",
               "GELOCARM", "GEKITRAS", "GEATUALIZASALDO", "GECADTRA", "GEESTINI", "GEGERSEQ", "GELIMLOC",
-              "GELANTRA", "GEFECMES", "GEARMLOC", "GECONITL", "GELANESI", "GEDESPDS", "GEHORMED", "GECTRVMM")
+              "GELANTRA", "GEFECMES", "GEARMLOC", "GECONITL", "GELANESI", "GEDESPDS", "GEHORMED", "GECTRVMM",
+              "GEKONCDC")
 FORMAS_BLOQUEADAS = {
     'GECADTER': ('VARCHAR', 'DATE', 'INTEGER'),
     'GECOMPRA': ('INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC', 'NUMERIC', 'VARCHAR', 'NUMERIC'),
-    'GEKONCDC': ('SMALLINT', 'SMALLINT', 'INTEGER', 'DATE', 'INTEGER', 'INTEGER', 'NUMERIC', 'NUMERIC'),
 }
 BLOQUEADAS = tuple(FORMAS_BLOQUEADAS)
 
@@ -361,6 +379,22 @@ def linhas(r, ins):
         {"gravados": 0, "pendencias": {"pai_pendente": 3, "pai_inexistente": 5, "restricao_destino_1048": 1}}
     esp["GEDESPDS"] = {"gravados": 0, "pendencias": {"pai_inexistente": 2}}
     esp["GEHORMED"] = {"gravados": 10, "pendencias": {"hora_invalida": 1, "sem_item_a_gravar": 1}}
+    # --- consumo por centro de custo: centros como na L8-11 (11 com o local 1 como estoque padrão; 12 sem local; 13
+    # sem nome, recusado lá); dois documentos do mesmo grupo (2025/3, centro 11, insumo 1: soma 3.500 e 17.50, os dois
+    # documentos no JSON), um de outro insumo e um de outro mês (3 grupos gravados); 5: centro 12 sem local padrão e o
+    # documento de saída fora da imagem (local NOT NULL: 1048)
+    for c, n, sit, um, ap, loc in [(11, "Centro  Administrativo", "A", 7, 0, 1), (12, "Centro Cirúrgico", "I", 0, 1234567, None),
+                                   (13, None, "A", 0, None, None), (14, "Centro Lavanderia", "X", 0, None, None)]:
+        v = dict(COD=c, NOME=n, SIGLA="C%d" % c, SITUACAO=sit, ID=500 + c, UNIMEN=um, COD_APURASUS=ap, LOCARM=loc)
+        ins("TBCENCUS", [v.get(k) for k in _COLS_TBCENCUS])
+    for x in [(2025, 3, 11, datetime.date(2025, 3, 5), 1, 100, D("2.000"), D("10.00")),
+              (2025, 3, 11, datetime.date(2025, 3, 9), 1, 101, D("1.500"), D("7.50")),
+              (2025, 3, 11, datetime.date(2025, 3, 9), 2, 101, D("4.000"), D("8.00")),
+              (2025, 4, 11, datetime.date(2025, 4, 2), 1, 102, D("1.000"), D("5.00")),
+              (2025, 4, 12, datetime.date(2025, 4, 3), 1, 103, D("2.000"), D("4.00"))]:
+        ins("GEKONCDC", list(x))
+    # "gravados" conta as linhas da origem gravadas (4, em 3 grupos: test_l7_05 confere as somas)
+    esp["GEKONCDC"] = {"gravados": 4, "pendencias": {"pai_inexistente": 5, "restricao_destino_1048": 1}}
     esp["GECTRVMM"] = {"gravados": 0, "pendencias": {"pai_inexistente": 7, "restricao_destino_1048": 3}}
 
     return dict(esp, **{

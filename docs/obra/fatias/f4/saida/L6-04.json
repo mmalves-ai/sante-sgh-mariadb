@@ -61,6 +61,22 @@
    "arquivo": "(medição na carga real, sem mudança de código por ora)",
    "mudanca": "contar, na imagem de referência, agendas de exame (SIAGENDA) cujo NOME coincide com o de uma agenda de consultas (REAGENDA) e NOME+CRM repetidos na própria SIAGENDA (só contagens); se houver, regra de nome único com sufixo (ex.: '#texto_composto:NOME,= (exames)') e pendência para o cliente revisar",
    "motivo": "agenda_servico tem UNIQUE (estabelecimento, nome) para consultas e exames juntos; a colisão recusa a agenda com 1062 e, em cadeia, grade, convênios, horários e marcações dela. O código de leitura do new-sgh, medido na cópia, junta agenda, grade e horários de exame só por NOME+CRM (CRM 0): o nome é a identidade da agenda de exames"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py (#data_hora_mais)",
+   "mudanca": "aceitar '#data_hora_mais:<DATA>,<HORA>' (dois argumentos): sem coluna de minutos na origem, a duração vem só da ref: da via (encadeada terminada em coluna ou @coluna do destino do pai)",
+   "motivo": "SIPACAGI (horário de exame) não guarda duração; hoje a declaração usa a própria DATA como coluna de minutos anulada por data_fim_aberta:1801 (funciona, provado na conferência). Com a forma de 2 argumentos, trocar só a linha em colunas.d/L6-04.tsv (fim_em de horario_agenda e de bloqueio_agenda).",
+   "rodada": 4
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (condicao) + carga_mapa.py",
+   "mudanca": "condição com OU em destino_se/se: (ex.: 'destino_se:SITUACAO=HR,Q,P|LIVRE=N' e E entre termos, ex. 'LIVRE=N&PACIENTE=')",
+   "motivo": "REPACAGI/SIPACAGI: o horário LIVRE N sem paciente e sem situação de bloqueio hoje carrega como 'cancelado' (indisponível, r4b); com OU/E ele cria o bloqueio da agenda com o motivo próprio 'bloqueado_na_origem' (adotado como os outros), como o horário HR, Q, P"
+  },
+  {
+   "arquivo": "trilha F2.2: db/migracoes/05_AGE/01_tabelas.sql (marcacao_horario)",
+   "mudanca": "coluna 'senha_autorizacao VARCHAR(20) NULL' (número de autorização da fonte pagadora informado na marcação, antes da guia)",
+   "motivo": "REPACAGD/SIPACAGD.SENHA_SOL: o nome é de segredo para o motor (fora do #retrato), mas é dado de cobrança; sem coluna fica sem carga (zero em 100% das marcações de exame do perfil do sistema anterior)"
   }
  ],
  "atendidos_da_rodada_anterior": [

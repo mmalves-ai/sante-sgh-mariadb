@@ -56,6 +56,7 @@ _PAI_DDL.update({
                         " ID_PRCADSTATUSORDEM_MEDICA INTEGER, SEARCH_MACHINE_REPLICATED TIMESTAMP,"
                         " DOCUMENTO_XML_IMPRESSAO BLOB SUB_TYPE 1, CLASSIFICACAO_RISCO CHAR(1), LEGADO VARCHAR(1) NOT"
                         " NULL, ARQUIVO_EXPORTADO VARCHAR(100));"})
+_PAI_DDL["HTATENDIMENTO"] = _PAI_DDL["HTATENDIMENTO"].replace("MATRICULA", "ID_TBCBOPRO_ASSISTENTE INTEGER, MATRICULA", 1)
 _PAI_COLS = {t: list(_sint._colunas_create(d.rstrip(";"))) for t, d in _PAI_DDL.items()}
 UNIDADES = [(1, 10, "Miligrama", "MG", "mg", "A"), (2, 10, "Mililitro", "ML", "mL", "A"),
             (4, 11, "Unidade internacional", "UI", "UI", "A")]
@@ -253,11 +254,12 @@ FORMAS = {
 CARREGADAS = ("PRLOCAL_ASSISTENCIA", "TBCBARAREACAOADVERSA", "PRPROTGERALESP", "PREVOLUCAO", "PREVOLESPEC",
               "PREVOLTIPOACO", "PRITEMNAOPAD", "PRITEMNAOPAD_GETABVIA", "PRKITMED", "PRITENSKITMED", "PRKITSOLITENS",
               "PRFAVORITO", "PRMANCHESTER", "PRITEM_GEITENS", "PRITEMNAOPAD_TBPRINC", "TBALERGIA_TBPRINC",
-              "PRPADEVOL", "PRFORMULCOMP")
+              "PRPADEVOL", "PRFORMULCOMP", "PRASSINATURA_CAB", "TBKITPRO", "PRRESPOSTA")
 # rodada 3 (revisão): BLOQUEADAS com a declaração pronta e comentada (sem_carga.tsv): a forma e as linhas entram na
 # imagem (provam a declaração quando o mecanismo chegar), mas a tabela não é carregada. PRRESPOSTA (forma da L6-10)
 # também fica só como pai lido na origem.
-BLOQUEADAS = ("PRASSINATURA_CAB", "TBKITPRO", "PRRESPOSTA")
+# rodada 4: as três carregam (min:/max: do evento, agrupar:PROCTO no principal, por_pai)
+BLOQUEADAS = ()
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
 
@@ -295,6 +297,9 @@ PAIS_EXTERNOS = {"PRTPCOMP": ["1", "2"], "TBESPEC": ["1", "2", "3"], "TBTIPOACOM
                  # (L6-07): pontas das referências, dados como já carregados
                  "TBALERGIA": ["1", "2"], "TBPROFIS": ["1", "2"], "RICADPAC": ["1", "2"], "ATCABECATEND": ["1"],
                  "PRSITDOCUMENTO": ["1", "2"]}
+# rodada 4: a inscrição no conselho da imagem é a da requerida L7-07 (TBCBOPRO 1 -> profissional 501; as linhas da
+# TBCBOPRO desta fatia são omitidas porque a L7-07 já define a tabela): o profissional 501 é dado como carregado
+PAIS_EXTERNOS["TBPROFIS"] = PAIS_EXTERNOS["TBPROFIS"] + ["501"]
 # donas dos pais lidos na origem (referência por chave alternativa e encadeada); dados delas usados abaixo:
 # TBUNIDADEMEDIDA sigla MG (1), ML (2), UI (4) carregadas, X (3) recusada; GEITENS 101-106, 111, 112 carregados, 107
 # sem nome, 108 pai_pendente; GEUNIPRESC 1 (101, ML) e 2 (101, CX); TBPROENF 1 e 5 carregados, 4 sem nome (recusado);
@@ -321,7 +326,11 @@ PREPARO_DESTINO = ("CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGN
                    "INSERT IGNORE INTO tipo_movimento_estoque (codigo) VALUES ('migracao_entrada'), ('migracao_saida');\n"
                    "CREATE TABLE IF NOT EXISTS tipo_entrada_estoque (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,"
                    " codigo VARCHAR(40) NOT NULL UNIQUE);\n"
-                   "INSERT IGNORE INTO tipo_entrada_estoque (codigo) VALUES ('migracao');")
+                   "INSERT IGNORE INTO tipo_entrada_estoque (codigo) VALUES ('migracao');\n"
+                   # situação do documento (cadastro do produto, achado por cod: no cabeçalho sem evento): SEM a semente
+                   # nativa migrado_sem_assinatura, pedida à F2.2 (saida/L6-11.json): prova a recusa visível até lá
+                   "CREATE TABLE IF NOT EXISTS situacao_documento_prontuario (id BIGINT UNSIGNED AUTO_INCREMENT"
+                   " PRIMARY KEY, codigo VARCHAR(30) NOT NULL UNIQUE);")
 
 
 def _falso(tipo, i):
@@ -400,7 +409,7 @@ def _rodada3(ins):
     for cod, desc in [(1, "Sim exemplo"), (2, "Não exemplo")]:
         _pai(ins, "PRCADRESP", COD=cod, DESCRICAO=desc)
     # opções: rótulo pelo catálogo de respostas (1) ou pelo texto (2; 4 com COD nunca visto: pai_inexistente e vale o
-    # texto); 3 pergunta em dois modelos (pai_ambiguo + 1048); 5 pergunta sem campo (pai_inexistente + 1048)
+    # texto); 3 pergunta em dois modelos (por_pai: uma opção em cada campo); 5 pergunta sem campo (pai_inexistente)
     for i, pg, cod, txt, ordem in [(1, 2, 1, None, 1), (2, 2, None, b"Talvez exemplo", 2), (3, 1, 2, None, 1),
                                    (4, 3, 7, b"Outro exemplo", 1), (5, 9, 1, None, 1)]:
         _ins(ins, "PRRESPOSTA", ID_RESPOSTA=i, ID_PRPERGUNTA=pg, COD=cod, CONTEVOL=txt, ATIVO="S", ORDEM=ordem)
@@ -408,22 +417,26 @@ def _rodada3(ins):
     for i, pac in [(10, 1), (11, 2), (12, 9)]:
         _pai(ins, "HTPACIENTE", ID=i, ID_RICADPAC=pac, DATA_HORA_HISTORICO=T(2025, 1, 2, 8, 0), ID_TBSEXO=1)
     _pai(ins, "HTATENDIMENTO", ID=20, ID_ATCABECATEND=1, DATA_HORA_HISTORICO=T(2025, 1, 2, 8, 0),
-         DATA_HORA_ENTRADA=T(2025, 1, 2, 8, 0), ID_HTCONVEN=1)
+         DATA_HORA_ENTRADA=T(2025, 1, 2, 8, 0), ID_HTCONVEN=1, ID_TBCBOPRO_ASSISTENTE=1)
     for i, desc in [(1, "Evolução exemplo"), (2, "Prescrição exemplo")]:
         _pai(ins, "PRTPASSINATURA", ID=i, DESCRICAO=desc, ORDEM_MEDICA="N")
     for i, prof in [(100, 1), (101, 2)]:
         _pai(ins, "TBCBOPRO", ID=i, ID_TBCBOSUS=1, UF="SP", COD=1000 + i, ID_TBPROFIS=prof, VINC_EMPR="S")
-    # eventos de assinatura: cabeçalho 2 com dois eventos (ambíguo até o primeiro/último filho); 4 sem evento
-    for i, cab, sit, cbo, dia in [(1, 1, 1, 100, 3), (2, 2, 1, 100, 4), (3, 2, 2, 101, 5), (4, 3, 2, 101, 6),
-                                  (5, 5, 2, 100, 7)]:
+    # eventos de assinatura: cabeçalho 2 com dois eventos (autor e momento do primeiro, situação do último); 4 sem evento
+    for i, cab, sit, cbo, dia in [(1, 1, 1, 1, 3), (2, 2, 1, 1, 4), (3, 2, 2, 1, 5), (4, 3, 2, 1, 6),
+                                  (5, 5, 2, 1, 7), (6, 7, 2, 1, 8), (7, 7, 1, 1, 8)]:
         _pai(ins, "PRASSINATURA_DOC", ID=i, ID_PRASSINATURA_CAB=cab, ID_PRTPDOCUMENTO=1, ID_PRSITDOCUMENTO=sit,
              ID_TBCBOPRO=cbo, DATA_HORA_EVENTO=T(2025, 1, dia, 9, 15), DATA_HORA_EVENTO_UTC="falso",
              DATA_HORA_GRAVACAO=T(2025, 1, dia, 9, 20), DATA_HORA_GRAVACAO_UTC="falso", LEGADO="N")
-    # cabeçalhos: 1 completo com documento consolidado; 2 dois eventos (pai_ambiguo nas 4 colunas do evento + 1048);
-    # 3 paciente nunca visto (pai_inexistente + 1048); 4 sem evento (pai_inexistente + 1048); 5 sem atendimento
+    # cabeçalhos: 1 completo com documento consolidado; 2 dois eventos (primeiro e último, sem ambiguidade);
+    # 3 paciente nunca visto (pai_inexistente + 1048); 4 sem evento, com atendimento (autor = assistente, momento =
+    # entrada; situação nativa migrado_sem_assinatura ainda sem semente: codigo_inexistente_destino + 1048); 5 sem
+    # atendimento; 6 sem evento e sem atendimento (sem autor: recusa); 7 dois eventos no MESMO instante (6 situação 2,
+    # 7 situação 1): situação atual = a do maior ID (7)
     for i, tp, tab, pac, at, doc in [(1, 1, 500, 10, 20, "Documento exemplo\nassinado"), (2, 1, 501, 11, None, None),
-                                     (3, 2, 502, 12, None, None), (4, 2, 503, 10, None, None),
-                                     (5, 2, 504, 11, None, None)]:
+                                     (3, 2, 502, 12, None, None), (4, 2, 503, 10, 20, None),
+                                     (5, 2, 504, 11, None, None), (6, 1, 505, 11, None, None),
+                                     (7, 1, 506, 10, None, None)]:
         _ins(ins, "PRASSINATURA_CAB", ID=i, ID_PRTPASSINATURA=tp, ID_TABELA=tab, ID_HTPACIENTE=pac,
              ID_HTATENDIMENTO=at, DOCUMENTO_CONSOLIDADO=doc.encode("cp1252") if doc else None)
 
@@ -563,6 +576,17 @@ def linhas(r, ins):
         "PRPADEVOL": {"gravados": 4, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 3,
                                                    "valor_fora_do_dominio": 1, "valor_presumido": 7}},
         "PRFORMULCOMP": {"gravados": 3, "pendencias": {"pai_inexistente": 2, "restricao_destino_1048": 2}},
+        # rodada 4
+        # cabeçalho 2: autor, momento e gravação pelo menor evento e situação pelo maior ID (pendência baixa da escolha);
+        # 7 dois eventos no mesmo instante (situação do maior ID); 3 paciente nunca visto; 4 sem evento com atendimento
+        # (autor, momento e gravação pelo atendimento; situação sem semente nativa: pai_inexistente + 1048); 6 sem evento
+        # nem atendimento (sem autor: recusa); 3, 4 e 6 recusados (1048)
+        "PRASSINATURA_CAB": {"gravados": 4, "pendencias": {"pai_inexistente": 9, "restricao_destino_1048": 3,
+                                                          "escolha_pelo_menor": 6, "escolha_pelo_maior": 2}},
+        # itens gravados 1, 2, 4 em dois kits (cuidados 1 e 5); 7 deixa pai_inexistente nas 5 referências da unidade
+        "TBKITPRO": {"gravados": 3, "pendencias": {"adotado_existente": 2, "pai_inexistente": 5, "pai_pendente": 1,
+                                                  "restricao_destino_1048": 2, "restricao_destino_4025": 1}},
+        "PRRESPOSTA": {"gravados": 5, "pendencias": {"pai_inexistente": 2}},
         "PRMANCHESTER": {"gravados": 6, "pendencias": {"restricao_destino_1048": 2, "restricao_destino_1406": 1,
                                                       "restricao_destino_1062": 1, "valor_fora_do_dominio": 3}},
     }

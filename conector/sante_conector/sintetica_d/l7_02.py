@@ -27,8 +27,8 @@ Dados 100% falsos (nomes, códigos, logins e identificadores inventados). Carreg
   (TBCBOPRO entra só com a forma do dicionário, TBPROFIS é pai externo); hospital sem setor (1048); outro hospital com
   o mesmo setor e responsável adota a linha (adotado_existente).
 Não carregadas (NAO_CARREGADAS: na imagem, sem coluna com destino): descartadas com motivo de produto em
-`declarado/sem_carga.tsv` (SIPACSVISIMG sem_valor; SIPAR* de usuário e SIFORMUL mecanismo_do_produto; SIFORMUL tem a
-declaração pronta comentada, pedidos 2 e 3 do L7-02.json).
+`declarado/sem_carga.tsv` (SIPACSVISIMG sem_valor; SIPAR* de usuário mecanismo_do_produto). SIFORMUL passou à L7-03 na rodada 4 (conferidor): a
+fórmula liga ao analito no exame que a SITABELE grava lá (ref:SITABELE(EXAME,CODELE)/exame_analito).
 """
 import datetime
 import re
@@ -42,8 +42,6 @@ CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL PRIMARY KEY, "ID_TBCBOSUS" INTEGER 
 CREATE TABLE SICTRPSR ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(40), PRIMARY KEY ("COD"));
 CREATE TABLE SIESPEC ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(50), "INTERFACE" VARCHAR(50), "ATIVO" CHAR(1), PRIMARY
   KEY ("COD"));
-CREATE TABLE SIFORMUL ("ATO" INTEGER NOT NULL, "CODELE" INTEGER NOT NULL, "EXAME" VARCHAR(4) NOT NULL, "FORMULA"
-  BLOB SUB_TYPE 1, PRIMARY KEY ("ATO", "CODELE", "EXAME"));
 CREATE TABLE SIKITEXA ("COD" SMALLINT NOT NULL, "NOME" VARCHAR(30) NOT NULL, "GERARBATERIAEXAME" VARCHAR(1),
   "HORA_SUGERIDA_COLETA_PEP" TIMESTAMP, "ATIVO" CHAR(1), PRIMARY KEY ("COD"));
 CREATE TABLE SIKITITE ("ATO" SMALLINT NOT NULL, "EXAME" VARCHAR(4) NOT NULL, "KIT" SMALLINT NOT NULL, "QTDE"
@@ -251,7 +249,7 @@ CREATE TABLE SIPARULT ("USUARIO" VARCHAR(31) NOT NULL, "DIGCLI" CHAR(1), "DIGCDC
 CARREGADAS = ("SICTRPSR", "SIESPEC", "SIKITEXA", "SIKITITE", "SIMATERI", "SIMETODO", "SIMODULO", "SIOBSERV",
               "SIPACSMODALID", "SIPARGER")
 AGUARDAM_REGRA = ()
-DESCARTADAS = ("SIFORMUL", "SIPACSVISIMG", "SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX",
+DESCARTADAS = ("SIPACSVISIMG", "SIPARANA", "SIPAREND", "SIPARHEM", "SIPARLAB", "SIPAROUT", "SIPARRX",
                "SIPARTM", "SIPARULT")
 NAO_CARREGADAS = DESCARTADAS
 # só a forma, para a referência encadeada (inscrição -> profissional); a tabela é de outra fatia (L5)
@@ -321,8 +319,6 @@ def linhas(r, ins):
         ins("SIKITITE", list(x))
     # não carregadas: formas da origem só para a imagem (dependem dos pedidos do L7-02.json)
     f = formas()
-    for x in [(1, 10, "GLI", "(A+B)/2".encode("cp1252")), (1, 11, "CRE", None)]:
-        ins("SIFORMUL", list(x))
     # SIOBSERV: (1,3) texto longo (codigo_derivado); (1,2) sem título nem texto (1048); (2,2) o mesmo texto de (1,1)
     # em outro setor: mesmo código derivado (1062)
     longo = "Amostra coletada fora do prazo de estabilidade; repetir a coleta.".encode("cp1252")

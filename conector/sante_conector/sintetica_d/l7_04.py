@@ -50,13 +50,13 @@ CREATE TABLE TBCBOPRO (ID INTEGER NOT NULL PRIMARY KEY, ID_TBCBOSUS INTEGER NOT 
   AXREG_ID_ANESTHESIOLOGISTS BIGINT, ID_DIGITAL VARCHAR(36));
 CREATE TABLE SICADATE (ID DOUBLE PRECISION NOT NULL PRIMARY KEY, CONV SMALLINT NOT NULL, DATA DATE,
   SENHACONV VARCHAR(20), VALSENHA DATE, UNIDADE SMALLINT, ID_ATCABECATEND BIGINT NOT NULL,
-  ID_TBCBOPRO_SOLICITANTE INTEGER, ID_TBMEDSOL INTEGER, DATA_HORA_INCLUSAO TIMESTAMP);
+  ID_TBCBOPRO_SOLICITANTE INTEGER, ID_TBMEDSOL INTEGER, DATA_HORA_INCLUSAO TIMESTAMP, DATA_AUT DATE);
 CREATE TABLE SILANEXA (ID DOUBLE PRECISION NOT NULL PRIMARY KEY, ID_SICADATE DOUBLE PRECISION NOT NULL,
   ATO SMALLINT NOT NULL, EXAME VARCHAR(4) NOT NULL, SEQUENCIA SMALLINT NOT NULL, COLETA DATE, ENTREGA DATE,
   MATERIAL SMALLINT, OBS BLOB SUB_TYPE 1, QTDE INTEGER, URG VARCHAR(1), PENDTEXTO VARCHAR(50), RECIPIENTE SMALLINT,
   ID_TBCBOEXECUTANTE INTEGER, DATA_HORA_LIBERA_EXAME TIMESTAMP, USUARIOLIB VARCHAR(31),
   DATA_HORA_SUSPENSAO_PEP TIMESTAMP, USUARIO_SUSPENSAO_PEP VARCHAR(31), PAGO VARCHAR(1), RECOLETA VARCHAR(1),
-  CIDPRIN VARCHAR(4));
+  CIDPRIN VARCHAR(4), JUSTIFICATIVA_SUSPENSAO_PEP BLOB SUB_TYPE 1, DTEMIRES DATE, HREMIRES VARCHAR(5), HRCOL TIME);
 CREATE TABLE SIASSLAUDO_IMP_SILANEXA (ID INTEGER NOT NULL PRIMARY KEY, ID_SIASSLAUDO_IMPRESSAO INTEGER,
   ID_SILANEXA DOUBLE PRECISION);
 CREATE TABLE SILIBERACAOEXAME (ID INTEGER NOT NULL PRIMARY KEY, LOTE INTEGER NOT NULL, ID_SILANEXA DOUBLE PRECISION
@@ -101,7 +101,7 @@ PAIS_EXTERNOS = {"SIKITEXA": ["1", "2"], "TBUSERS": ["USR_L704_A", "USR_L704_B"]
                  "TBUNIDAD": ["3"], "TBCONVEN": ["5"], "SIMODULO": ["1", "2"],
                  "SITABPRO": ["1|HEM", "1|GLI", "2|RXT"], "SIMATERI": ["4"], "SIRECIPI": ["6"],
                  "SITABELE": ["HEM|1", "HEM|2", "GLI|1", "RXT|1"], "SIASSLAUDO_IMPRESSAO": ["11"],
-                 "SIMETODO": ["3"], "PRASSINATURA_CAB": ["21", "22"], "PRLOCAL_ASSISTENCIA": ["1"],
+                 "SIMETODO": ["3"], "PRASSINATURA_CAB": ["21", "22"], "TBMEDSOL": ["7"], "PRLOCAL_ASSISTENCIA": ["1"],
                  # bolsa e cadastros do hemocentro (L7-01), variáveis de fórmula (L7-03) e a faixa do analito HEM|1
                  # (secundário faixa_referencia do SITABELE, L7-03)
                  "SHBOLSA": ["1", "2"], "SHMOV": ["1", "2"], "SHMOTDEV": ["1"], "SIVARFORMULA": ["1", "2"]}
@@ -207,8 +207,12 @@ DADOS = [
         [9.0, 5, _d(2025, 3, 9), None, None, 3, 7001, 501, None, _t(2025, 3, 9, 8, 15)],
         [10.0, 5, _d(2025, 3, 10), None, None, 3, 7001, 501, None, _t(2025, 3, 10, 8, 15)],
         [11.0, 5, _d(2025, 3, 11), None, None, 3, 7001, 501, None, _t(2025, 3, 11, 8, 15)]],             # exame 111
-     {"gravados": 5, "pendencias": {"valor_presumido": 11, "pai_ambiguo": 1, "pai_inexistente": 4,
-                                    "data_sentinela": 1, "restricao_destino_1048": 6}}),
+     # rodada 4 (DDL 10_SADT/09): setor anulável (2 e 7 gravam, setor NULL), solicitante externo (4 grava); 5 sem
+     # nenhum solicitante (profissional nunca visto): CHECK de exatamente um (4025); 3 paciente e 8 data (1048);
+     # data sentinela na inclusão e na data concorrente (2)
+     {"gravados": 8, "pendencias": {"valor_presumido": 11, "pai_ambiguo": 1, "pai_inexistente": 4,
+                                    "data_sentinela": 2, "restricao_destino_1048": 2,
+                                    "restricao_destino_4025": 1}}),
     # ID, ID_SICADATE, ATO, EXAME, SEQUENCIA, COLETA, ENTREGA, MATERIAL, OBS, QTDE, URG, PENDTEXTO, RECIPIENTE,
     # ID_TBCBOEXECUTANTE, DATA_HORA_LIBERA_EXAME
     ("SILANEXA", [
@@ -223,13 +227,14 @@ DADOS = [
         [108.0, 8.0, 1, "HEM", 1, None, None, None, None, 1, "N", None, None, None, None],
         [109.0, 9.0, 1, "ZZZ", 1, None, None, None, None, 1, "N", None, None, None, None],
         [110.0, 10.0, 1, "GLI", 1, None, None, 99, None, None, "N", None, None, None, None],
-        [111.0, 11.0, 1, "HEM", 1, None, None, None, None, 1, "N", None, None, None, None]],
+        [111.0, 11.0, 1, "HEM", 1, _d(2025, 3, 12), None, None, None, 1, "N", None, None, None, None]],
      # + usuário da liberação nunca visto (107) e PAGO fora do domínio (110); situação 'liberado' só no 101
-     {"gravados": 4, "pendencias": {"pai_pendente": 6, "pai_inexistente": 4, "valor_elevado_ao_minimo": 1,
+     # rodada 4: só os exames das requisições 3, 5 e 8 (recusadas) ficam pai_pendente
+     {"gravados": 7, "pendencias": {"pai_pendente": 3, "pai_inexistente": 4, "valor_elevado_ao_minimo": 1,
                                     "valor_fora_do_dominio": 2, "restricao_destino_1048": 1}}),
     ("SIASSLAUDO_IMP_SILANEXA", [[1, 11, 101.0], [2, 11, 107.0], [3, 11, 101.0], [4, 12, 110.0], [5, 11, 102.0]],
-     {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 1, "restricao_destino_1048": 1,
-                                    "pai_pendente": 1}}),
+     {"gravados": 3, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 1,  # 102 grava (rodada 4)
+                                    "restricao_destino_1048": 1}}),
     ("SILIBERACAOEXAME", [
         [1, 7, 101.0, _t(2025, 3, 2, 11, 0), "USR_L704_A", _t(2025, 3, 3, 8, 0), "10.0.0.1"],
         [2, 8, 107.0, _t(2025, 3, 7, 11, 0), "USR_L704_NAO_EXISTE", None, None],
@@ -290,12 +295,17 @@ for _tab, _ls, _ in DADOS:
             if _v[0] not in (3.0, 9.0):
                 _v[16] = _v[16] or _dt.datetime.combine(_v[2], _dt.time(9, 0))
 # colunas acrescentadas no fim de cada linha (as demais linhas ficam com nulo):
-# SILANEXA: USUARIOLIB, DATA_HORA_SUSPENSAO_PEP, USUARIO_SUSPENSAO_PEP, PAGO, RECOLETA, CIDPRIN
+# SILANEXA: USUARIOLIB, DATA_HORA_SUSPENSAO_PEP, USUARIO_SUSPENSAO_PEP, PAGO, RECOLETA, CIDPRIN,
+#   JUSTIFICATIVA_SUSPENSAO_PEP, DTEMIRES, HREMIRES (rodada 4), HRCOL (rodada 4, revisão: hora da coleta); SICADATE: DATA_AUT (rodada 4)
 # SIRES01: METODO, ID_TBCBOPRO_EMISSOR, ID_SIHISTVLREFEXAME; SIRES01_DELETE: ID_SILANEXA
 EXTRA = {
-    "SILANEXA": (6, {101.0: ["USR_L704_A", None, None, "S", "N", None],
-                     107.0: ["USR_L704_NAO_EXISTE", None, None, None, "S", None],      # liberador nunca visto
-                     110.0: [None, _t(2025, 3, 11, 8, 0), "USR_L704_B", "X", None, None]}),  # suspenso; PAGO fora
+    "SILANEXA": (10, {101.0: ["USR_L704_A", None, None, "S", "N", None, None, _d(2025, 3, 2), "1030",
+                             _Hora("07:45")],  # emitido; coleta às 07:45 (data + hora)
+                     107.0: ["USR_L704_NAO_EXISTE", None, None, None, "S", None, None, None, None, None],  # liberador nunca visto
+                     110.0: [None, _t(2025, 3, 11, 8, 0), "USR_L704_B", "X", None, None,             # suspenso; PAGO fora
+                             "Pedido em duplicidade,  suspenso".encode("cp1252"), None, None, None]}),
+    # DATA_AUT: autorização da operadora (requisição 1)
+    "SICADATE": (1, {1.0: [_d(2025, 3, 1)]}),
     # METODO, ID_TBCBOPRO_EMISSOR, ID_SIHISTVLREFEXAME, DATARES, HORA
     "SIRES01": (5, {1.0: [3, 501, 1, None, None],     # método, emissor e referência do exame da época
                     2.0: [77, None, None, None, None],  # método nunca visto: pai_inexistente (analito)
@@ -312,12 +322,13 @@ for _tab, _ls, _ in DADOS:
         for _v in _ls:
             _v.extend(_m.get(_v[0], [None] * _n))
 # SIRES01: linhas gravadas 1, 3, 5, 9 e 2 (adotada): resultados dos exames 101 (liberado), 107, 110 e 111 (digitados)
-ESPERADO_SIRES01 = {"gravados": 5, "pendencias": {
+# rodada 4: o exame 102 grava (requisição 2 com setor NULL), e a linha 6 também; a referência da época do exame
+# vai também a resultado_exame.referencia_texto (+1 pai_inexistente na linha 3, referência 9 nunca vista)
+ESPERADO_SIRES01 = {"gravados": 6, "pendencias": {
     "adotado_existente": 1,        # linha 2 adota o resultado do exame 101 (a 7 adota mas é recusada pelo 1062)
-    "pai_inexistente": 11,         # usuário e emissor (3), referência da época nas 3 colunas e unidade (5), exame,
+    "pai_inexistente": 12,         # usuário e emissor (3), referência da época nas 3 colunas e unidade (5), exame,
                                    # paciente, situação e liberação pelo exame (8), método (2)
     "codigo_inexistente_destino": 1,  # unidade da época fora do cadastro de unidades (9)
-    "pai_pendente": 1,             # exame 102 recusado (6)
     "restricao_destino_4025": 1,   # analito sem valor (4)
     "restricao_destino_1062": 1,   # analito repetido no resultado (7)
     "restricao_destino_1048": 1}}  # exame nunca visto (8); sem evento, a 3 e a 9 gravam pelas concorrentes  # exame nunca visto (8); sem momento do evento (9)
@@ -342,7 +353,8 @@ ASSINATURA_EXAME = [
     [10, 907, 101.0, 1]]     # mesmo exame e documento da 1 (evento 6 -> 21): 1062
 # só a ordem certa (exame e cabeçalho antes do vínculo: pedido de dependências em saida/L7-04.json) é aceita: na
 # ordem errada a conciliação falha, em vez de aceitar zero gravados
-ESPERADO_ASSINATURA = {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 4, "pai_ambiguo": 1,
+ESPERADO_ASSINATURA = {"gravados": 5, "pendencias": {"pai_inexistente": 4,  # 102 grava (rodada 4)
+                                                      "pai_ambiguo": 1,
                                                      "restricao_destino_1048": 4, "restricao_destino_1062": 1}}
 # SIRESVAR: ID, ID_SILANEXA, CODIGOVARFORMULA, VALOR. Resultados gravados: exames 101, 107, 110, 111; 102 recusado
 VARIAVEIS = [[1.0, 101.0, 1, 4.5], [2.0, 101.0, 2, 30.0],
@@ -353,8 +365,8 @@ VARIAVEIS = [[1.0, 101.0, 1, 4.5], [2.0, 101.0, 2, 30.0],
              [7.0, 111.0, 1, 2.0],
              [8.0, 999.0, 1, 1.0],        # exame nunca visto: pai_inexistente + 1048
              [10.0, 110.0, 1, 7.25]]
-ESPERADO_VARIAVEIS = {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 2,
-                                                    "restricao_destino_1048": 3, "pai_pendente": 1}}
+ESPERADO_VARIAVEIS = {"gravados": 5, "pendencias": {"restricao_destino_1062": 1, "pai_inexistente": 2,
+                                                    "restricao_destino_1048": 3}}  # 102 grava (rodada 4)
 
 
 def linhas(r, ins):

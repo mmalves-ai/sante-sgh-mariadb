@@ -122,33 +122,43 @@ SICANAGE	HR_CAN					guardada no retrato da trilha (dados_antes) até o destino d
 SICANAGE	USU_AGE					guardada no retrato da trilha (dados_antes) até o destino definitivo
 SICANAGE	CONV					guardada no retrato da trilha (dados_antes) até o destino definitivo
 SICANAGE	ID_TBMOTCANCCAD					guardada no retrato da trilha (dados_antes) até o destino definitivo
-#REPACAGI	@estabelecimento	horario_agenda.estabelecimento_id				declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): único estabelecimento
-#REPACAGI	NOME	horario_agenda.agenda_servico_id			ref:REAGENDA.(NOME,CRM)=(NOME,CRM)	declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): agenda pelo nome e o número do conselho da agenda
-#REPACAGI	DATA	horario_agenda.data_referencia	data			declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): data do horário
-#REPACAGI	#data_hora:DATA,HORA	horario_agenda.inicio_em				declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): início: data + hora HHMM
-#REPACAGI	#data_hora_mais:DATA,HORA,DURACAO	horario_agenda.fim_em				declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): fim: início + duração HHMM do horário (sem duração na linha: a da agenda)
-#REPACAGI	PACIENTE	horario_agenda.situacao	preenchido	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): com paciente o horário está OCUPADO (no sistema anterior vaga = PACIENTE vazio, estado-horario.ts): 1 -> ocupado; sem paciente -> nulo e vale a coluna concorrente seguinte
-#REPACAGI	SITUACAO	horario_agenda.situacao	codigo_char	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): coluna concorrente: sem paciente, situação de horário reservado, feriado ou manutenção (HR, Q, P) -> bloqueado; as situações de marcação -> nulo (vale LIVRE)
-#REPACAGI	LIVRE	horario_agenda.situacao	codigo_char	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): coluna concorrente: S -> livre, N -> bloqueado. Bloqueado exige bloqueio_agenda_id (CHECK): o bloqueio criado pela linha pede gravação condicional (pedido); até lá a linha bloqueada é recusada, visível (4025)
-#REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	preenchido	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): 1 vaga ocupada com paciente, 0 sem; a marcação em si (paciente, convênio, procedimento) é REPACAGD (L6-04)
-#REPACAGI	TIPOHR	horario_agenda.tipo_horario	codigo_char	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): N -> regular, E -> encaixe (horário novo num minuto livre, nunca vaga pública)
-#REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	codigo_char	valores		declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): N -> 0, E -> 1 (o encaixe da origem tem hora própria: não divide o início com outro horário)
-#REPACAGI	TELEATENDIMENTO	horario_agenda.teleatendimento	booleano_sn			declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): S/N
-#REPACAGI	USUARIO	horario_agenda.criado_por			ref:TBUSERS	declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): quem gerou ou alterou o horário, pelo login
-#REPACAGI	HORA					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): lida por #data_hora
-#REPACAGI	DURACAO					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): lida por #data_hora_mais
-#REPACAGI	CRM					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): lida para achar a agenda (nome e número do conselho)
-#REPACAGI	RETORNO					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): dado da marcação (retorno): vai pela marcação REPACAGD (L6-04), que lê o horário
-#REPACAGI	CONV					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): fonte pagadora da marcação: REPACAGD (L6-04)
-#REPACAGI	PROCED					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): procedimento da marcação: REPACAGD (L6-04)
-#REPACAGI	TIPO					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): tipo da marcação: REPACAGD (L6-04)
-#REPACAGI	APAC					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): marca de APAC da marcação: REPACAGD (L6-04)
-#REPACAGI	DATA_CTR					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): data de controle da marcação (quando foi marcada): REPACAGD (L6-04)
-#REPACAGI	HORA_CTR					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): hora de controle da marcação: REPACAGD (L6-04)
-#REPACAGI	DATA_SIT					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): data da situação da marcação: REPACAGD (L6-04)
-#REPACAGI	HORA_SIT					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): hora da situação da marcação: REPACAGD (L6-04)
-#REPACAGI	UNID					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): unidade: no produto é da agenda (agenda_servico.unidade_assistencial_id, REAGENDA)
-#REPACAGI	HR_PLANEJA					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): hora de planejamento da programação de terapia do sistema anterior, sem equivalente no horário (a fase do tratamento entra pela marcação)
-#REPACAGI	AOL_HORARIO					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): id do horário na integração de agenda online do sistema anterior: identificador externo sem uso (a integração é refeita pelo modo online da agenda)
-#REPACAGI	COD_AGENDA_GERCON					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): id da agenda na regulação externa do sistema anterior: identificador externo; a integração de regulação é refeita no produto
-#REPACAGI	ID_DIGITAL_VIDEOTELEPHONY					declaração pronta, comentada até o motor ter a regra do fim do horário (início + duração: #data_hora_mais pedido em saida/L6-03.json): id da sala de teleatendimento do fornecedor anterior: identificador externo sem uso (sala nova no produto)
+REPACAGI	@estabelecimento	horario_agenda.estabelecimento_id				L6-03 r4: único estabelecimento
+REPACAGI	NOME	horario_agenda.agenda_servico_id			ref:REAGENDA.(NOME,CRM)=(NOME,CRM)	L6-03 r4: agenda pelo nome e o número do conselho da agenda
+REPACAGI	DATA	horario_agenda.data_referencia	data			L6-03 r4: data do horário
+REPACAGI	#data_hora:DATA,HORA	horario_agenda.inicio_em				L6-03 r4: início: data + hora HHMM
+REPACAGI	#data_hora_mais:DATA,HORA,DURACAO	horario_agenda.fim_em	minutos_hhmm		ref:REAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos	L6-03 r4: fim = início + duração HHMM do horário (minutos_hhmm); sem duração na linha, a da agenda (@duracao_horario_minutos)
+REPACAGI	PACIENTE	horario_agenda.situacao	preenchido	valores		L6-03 r4: com paciente o horário está OCUPADO (no sistema anterior vaga = PACIENTE vazio, estado-horario.ts): 1 -> ocupado; sem paciente -> nulo e vale a coluna concorrente seguinte
+REPACAGI	SITUACAO	horario_agenda.situacao	codigo_char	valores		L6-03 r4: coluna concorrente: sem paciente, situação de horário reservado, feriado ou manutenção (HR, Q, P) -> bloqueado, com o bloqueio da agenda criado pela própria linha (bloqueio_agenda, destino_se); as situações de marcação -> nulo (vale LIVRE)
+REPACAGI	LIVRE	horario_agenda.situacao	codigo_char	valores		L6-03 r4b: concorrente: S -> livre; N (sem paciente e sem situação de bloqueio HR, Q, P) -> cancelado: horário fechado à marcação sem motivo registrado, carregado e indisponível (decisão em F4-decisoes-destino.md)
+REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	preenchido	valores		L6-03 r4: 1 vaga ocupada com paciente, 0 sem; a marcação em si (paciente, convênio, procedimento) é REPACAGD (L6-04)
+REPACAGI	TIPOHR	horario_agenda.tipo_horario	codigo_char	valores		L6-03 r4: N -> regular, E -> encaixe (horário novo num minuto livre, nunca vaga pública)
+REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	codigo_char	valores		L6-03 r4: N -> 0, E -> 1 (o encaixe da origem tem hora própria: não divide o início com outro horário)
+REPACAGI	TELEATENDIMENTO	horario_agenda.teleatendimento	booleano_sn			L6-03 r4: S/N
+REPACAGI	USUARIO	horario_agenda.criado_por			ref:TBUSERS	L6-03 r4: quem gerou ou alterou o horário, pelo login
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	codigo_char	valores	motivo_bloqueio_agenda;antes;adotar:codigo;destino_se:SITUACAO=HR,Q,P	L6-03 r4 (decisão em F4-decisoes-destino.md): motivo do bloqueio pela situação do horário (HR reservado, Q feriado, P manutenção); criado na 1ª linha, adotado nas outras
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	codigo_char	valores	motivo_bloqueio_agenda	L6-03 r4 (decisão em F4-decisoes-destino.md): descrição do motivo pela situação
+REPACAGI	@estabelecimento	bloqueio_agenda.estabelecimento_id			bloqueio_agenda;antes;destino_se:SITUACAO=HR,Q,P	L6-03 r4 (decisão em F4-decisoes-destino.md): o horário bloqueado na origem (HR, Q, P) vira um bloqueio da agenda no intervalo do horário (o CHECK exige o bloqueio)
+REPACAGI	NOME	bloqueio_agenda.agenda_servico_id			ref:REAGENDA.(NOME,CRM)=(NOME,CRM)	L6-03 r4 (decisão em F4-decisoes-destino.md): agenda do horário
+REPACAGI	@id:motivo_bloqueio_agenda	bloqueio_agenda.motivo_bloqueio_agenda_id				L6-03 r4 (decisão em F4-decisoes-destino.md): motivo criado ou adotado pela linha
+REPACAGI	#data_hora:DATA,HORA	bloqueio_agenda.inicio_em				L6-03 r4 (decisão em F4-decisoes-destino.md): início do bloqueio = início do horário
+REPACAGI	#data_hora_mais:DATA,HORA,DURACAO	bloqueio_agenda.fim_em	minutos_hhmm		ref:REAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos	L6-03 r4 (decisão em F4-decisoes-destino.md): fim do bloqueio = fim do horário
+REPACAGI	USUARIO	bloqueio_agenda.responsavel_usuario_id			ref:TBUSERS	L6-03 r4 (decisão em F4-decisoes-destino.md): quem bloqueou: o usuário do horário
+REPACAGI	NOME	bloqueio_agenda.responsavel_usuario_id			ref:REAGENDA.(NOME,CRM)=(NOME,CRM)>USUARIO>TBUSERS	L6-03 r4 (decisão em F4-decisoes-destino.md): concorrente: sem usuário no horário, o responsável pela agenda (quem a criou)
+REPACAGI	@id:bloqueio_agenda	horario_agenda.bloqueio_agenda_id				L6-03 r4 (decisão em F4-decisoes-destino.md): bloqueio que fechou o horário (CHECK ck_horario_agenda_bloqueio)
+REPACAGI	HORA					L6-03 r4: lida por #data_hora
+REPACAGI	DURACAO					L6-03 r4: lida por #data_hora_mais
+REPACAGI	CRM					L6-03 r4: lida para achar a agenda (nome e número do conselho)
+REPACAGI	RETORNO					L6-03 r4: dado da marcação (retorno): vai pela marcação REPACAGD (L6-04), que lê o horário
+REPACAGI	CONV					L6-03 r4: fonte pagadora da marcação: REPACAGD (L6-04)
+REPACAGI	PROCED					L6-03 r4b: o procedimento marcado carrega pela marcação (REPACAGD, L6-04: marcacao_horario_item.item_faturavel_id pelo código do procedimento); o do horário é cópia do da marcação no sistema anterior
+REPACAGI	TIPO					L6-03 r4: tipo da marcação: REPACAGD (L6-04)
+REPACAGI	APAC					L6-03 r4: marca de APAC da marcação: REPACAGD (L6-04)
+REPACAGI	DATA_CTR					L6-03 r4: data de controle da marcação (quando foi marcada): REPACAGD (L6-04)
+REPACAGI	HORA_CTR					L6-03 r4: hora de controle da marcação: REPACAGD (L6-04)
+REPACAGI	DATA_SIT					L6-03 r4: data da situação da marcação: REPACAGD (L6-04)
+REPACAGI	HORA_SIT					L6-03 r4: hora da situação da marcação: REPACAGD (L6-04)
+REPACAGI	UNID					L6-03 r4: unidade: no produto é da agenda (agenda_servico.unidade_assistencial_id, REAGENDA)
+REPACAGI	HR_PLANEJA					L6-03 r4: hora de planejamento da programação de terapia do sistema anterior, sem equivalente no horário (a fase do tratamento entra pela marcação)
+REPACAGI	AOL_HORARIO					L6-03 r4: id do horário na integração de agenda online do sistema anterior: identificador externo sem uso (a integração é refeita pelo modo online da agenda)
+REPACAGI	COD_AGENDA_GERCON					L6-03 r4: id da agenda na regulação externa do sistema anterior: identificador externo; a integração de regulação é refeita no produto
+REPACAGI	ID_DIGITAL_VIDEOTELEPHONY					L6-03 r4: id da sala de teleatendimento do fornecedor anterior: identificador externo sem uso (sala nova no produto)

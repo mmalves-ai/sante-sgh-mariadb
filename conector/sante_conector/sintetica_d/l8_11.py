@@ -155,18 +155,27 @@ CREATE TABLE MFADIFOR_TBCBOPRO ("ID_MFADIFOR" INTEGER NOT NULL, "ID_TBCBOPRO" IN
 CREATE TABLE TBCBOPRO ("ID" INTEGER NOT NULL, "ID_TBCBOSUS" INTEGER NOT NULL, "UF" VARCHAR(2) NOT NULL, "COD" INTEGER
   NOT NULL, "ID_TBPROFIS" INTEGER NOT NULL, "VINC_EMPR" VARCHAR(1) NOT NULL, "CONS_PROF" VARCHAR(7), "ATIVO" VARCHAR(1),
   "COMP_INICIAL" INTEGER, "COMP_FINAL" INTEGER, "ATENDE_SUS" CHAR(1), "CRM_DIGITO" VARCHAR(1), PRIMARY KEY ("ID"));
+CREATE TABLE MFLANGSI ("EMPRESA" INTEGER NOT NULL, "FORN" BIGINT NOT NULL, "DOC" INTEGER NOT NULL, "TIPO" CHAR(1) NOT
+  NULL, "GRUPO" INTEGER NOT NULL, "SUBGRUPO" INTEGER NOT NULL, "ITEM" INTEGER NOT NULL, "VALOR" NUMERIC(18,2) NOT NULL,
+  "CDC" INTEGER, "TP_LAN" SMALLINT NOT NULL, "DATA" DATE NOT NULL, "SERIE" VARCHAR(3) NOT NULL, "PERAPUR" VARCHAR(7),
+  PRIMARY KEY ("EMPRESA", "TP_LAN", "FORN", "DATA", "DOC", "TIPO", "SERIE", "GRUPO", "SUBGRUPO", "ITEM"));
+CREATE TABLE MFPARAM ("EMPRESA" INTEGER NOT NULL, "ANOPRO" SMALLINT NOT NULL, "MESPRO" SMALLINT NOT NULL, "HOSP" SMALLINT, "DES_EMI_CHE_PAG" CHAR(1), "TETO_INSS" NUMERIC(9,2), "ALI_MAX_INSS" NUMERIC(4,2), "DIAS_EXTRATO" SMALLINT, "DOC_NF_REC" CHAR(1), "COMP_CHE" VARCHAR(1), "BAI_EMI_CHE" CHAR(1), "ALIQ_CPMF" NUMERIC(4,2), "ALIQ_PIS" NUMERIC(4,2), "HIST_PAD_PAG" CHAR(1), "NMESES" SMALLINT, "QTDE_DIA_VENC" INTEGER, "COD_OPE_IR" INTEGER, "COD_OPE_INSS" INTEGER, "COD_OPE_ISS" INTEGER, "COD_OPE_PIS" INTEGER, "COD_OPE_CPMF" INTEGER, "SEQ_AP" INTEGER, "IMP_AP" CHAR(1), "COD_OPE_COFINS" INTEGER, "COD_OPE_CSLL" INTEGER, "COD_OPE_IPI" INTEGER, "COD_OPE_FGTS" INTEGER, "COD_OPE_ACRES" INTEGER, "COD_OPE_DESC" INTEGER, "ALERTA_VENC" CHAR(1), "DIG_GSI" CHAR(1), "INT_LAN" CHAR(1), "ALIQ_COFINS" NUMERIC(9,2), "ALIQ_CSLL" NUMERIC(9,2), "AUT_ELET" CHAR(1), "COD_OPE_INSS2" INTEGER, "COD_OPE_INSS3" INTEGER, "COD_OPE_INSS4" INTEGER, "COD_OPE_INSS5" INTEGER, "ABERTURA_CAIXA" DATE, "IDE_CDC_PAG" CHAR(1), "CDC_CRE_PAG" INTEGER, "CDC_BCO_PAG" INTEGER, "COD_OPE_CHE_COMP" INTEGER, "OLD_GRAV_IMP_MAN_PAG" CHAR(1), "INT_PAG" CHAR(1), "INT_REC" CHAR(1), "COFINSH" SMALLINT, "CPMFH" SMALLINT, "CSLLH" SMALLINT, "FGTSH" SMALLINT, "PISH" SMALLINT, "IPIH" SMALLINT, "IRH" SMALLINT, "ISSH" SMALLINT, "INSSH" SMALLINT, "INSS2H" SMALLINT, "INSS3H" SMALLINT, "INSS4H" SMALLINT, "INSS5H" SMALLINT, "CHEQUEH" SMALLINT, "COD_OPE_GLOSAS" INTEGER, "COD_OPE_OUTROS" INTEGER, "GLOSASH" SMALLINT, "OUTROSH" SMALLINT, "COD_OPE_AF" INTEGER, "INT_CHE_COMP_PAG" CHAR(1), "GRAV_DOC_NF_PAG" CHAR(1), "GRAV_NOME_COMPL_REC" CHAR(1), "RODOU" INTEGER, "GRAV_DOC_NF_REC" CHAR(1), "IDE_CDC_REC" CHAR(1), "HIST_PAD_REC" CHAR(1), "GRAV_OBS_COMPL_PAG" CHAR(1), "GRAV_OBS_COMPL_REC" CHAR(1), "CDC_DEV_REC" INTEGER, "CDC_BCO_REC" INTEGER, "CDC_GLO_REC" INTEGER, "GRAV_CHE_BOR_PAG" CHAR(1), "CONS_PAG_CREDOR_LAN_PAG" CHAR(1), "INT_BAI_CONT_REC" CHAR(1), "INT_MAN_CONT_REC" CHAR(1), "GRAV_NOME_COMPL_PAG" CHAR(1), "HIST_PAD_LAN" CHAR(1), "IDE_CDC_LAN" CHAR(1), "CODOPECREDNIDEN" INTEGER, "INT_CREDN_IDE" VARCHAR(1), "INF_HIST_COMP" VARCHAR(1), "USA_EMPENHO" VARCHAR(1), "DATA_PGTO_CHEQUE" VARCHAR(1), "DIG_SERIE_REC" VARCHAR(1), "DIG_TIPO_DOC_REC" VARCHAR(1), "GER_REP_BAIXA_INTEG" CHAR(1), "GRAV_REF_COMPL_PAG" CHAR(1), "GRAV_NOME_EMP_MED_COMPL_PAG" CHAR(1), "REST_CTA_USU" CHAR(1), "RECIBO_PACIENTE_COMPL" CHAR(1), "INT_DOC_CHE_SEP" CHAR(1), "TIPO_PGTO_OBRIG" CHAR(1) NOT NULL, "GRAV_NF_COMPL_REC" CHAR(1), "LISTAR_DOC_BAIXADOS_POR_CNI" CHAR(1), "ROTINA" CHAR(1), "EXIBE_TELA_CUSTO_LAN" CHAR(1), "EXIBE_TELA_CUSTO_REC" CHAR(1), "EXIBE_TELA_CUSTO_PAG" CHAR(1), "EMITIR_RECIBO_NAO_PAGOS" CHAR(1) NOT NULL, "INCLUIR_USUARIO_RECIBO" CHAR(1) NOT NULL, "EMITIR_RECIBO_MEIA_FOLHA" CHAR(1) NOT NULL, "ADICIONAR_CPF_RECIBO" CHAR(1) NOT NULL, "REPLICAR_REF_PARCELA" CHAR(1) NOT NULL, "EXIBIR_DOC_APARTIR" DATE, "INCLUIR_PRONTUARIO_RECIBO" CHAR(1), "REPLICAR_DOCUMENTO" CHAR(1), "INTEGRAR_COLAB_PGTO_A_VISTA" CHAR(1), "CONSIDERAR_INTEGR_SAIDA_LANC" CHAR(1), "INCLUIR_NOME_PACIENTE_DEVEDOR" CHAR(1), "INCLUIR_HIST_EMISSAO_CHEQUE" CHAR(1), "UTILIZAR_DATA_ENT_CONTA_PAGAR" CHAR(1), "MODELO_EMISSAO_CHEQUE" SMALLINT, "INCLUIR_TP_PGTO_COMPL_CTA_PAG" CHAR(1), "ORDEM_GRAV_DOC_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_OBS_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_BORD_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_FORN_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_REF_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_EMP_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_TP_PG_COMPL_CTA_PAG" SMALLINT, "ORDEM_GRAV_DOC_COMPL_CTA_REC" SMALLINT, "ORDEM_GRAV_OBS_COMPL_CTA_REC" SMALLINT, "ORDEM_GRAV_CONV_COMPL_CTA_REC" SMALLINT, "ORDEM_GRAV_REC_COMPL_CTA_REC" SMALLINT, "ORDEM_GRAV_NF_COMPL_CTA_REC" SMALLINT, "GRUPO_TBITEDES" INTEGER NOT NULL, "SUBGRUPO_TBITEDES" INTEGER NOT NULL, "ITEM_TBITEDES" INTEGER NOT NULL, "DIGITAR_COND_CONTR_ORDEM_PGTO" SMALLINT, "ORDEM_PGTO_FORNEC" SMALLINT, "ORDEM_PGTO_PROTESTO" SMALLINT, "ORDEM_PGTO_JUROS" SMALLINT, "ORDEM_PGTO_MULTA" SMALLINT, "OLD_GRAVAR_IMPOST_MANUT_CTA_REC" CHAR(1), "INTEGRAR_IMP_CONTA_CONT_FORN" CHAR(1), "INDIVID_PARTIDA_DOC_INT_CHEQUE" CHAR(1), "IMPRIMIR_RELAT_DADOS_CABEC" SMALLINT, PRIMARY KEY ("EMPRESA"));
+CREATE TABLE TBINTIMP ("EMPRESA" SMALLINT NOT NULL, "TIPO_CTA" SMALLINT NOT NULL, "TIPO" VARCHAR(1) NOT NULL, "DT_VIG_I" DATE, "DT_VIG_F" DATE, "COFINS" NUMERIC(9,2), "ISS" NUMERIC(9,2), "PIS" NUMERIC(9,2), "CSLL" NUMERIC(9,2), "COFINS_C" INTEGER, "ISS_C" INTEGER, "PIS_C" INTEGER, "CSLL_C" INTEGER, "FGTS_C" INTEGER, "IPI_C" INTEGER, "IRRF_C" INTEGER, "INSS_C" INTEGER, "IRRF" NUMERIC(9,2), "PIS_COFINS_CSLL" NUMERIC(9,2), "COD_MFREFDES_PIS_COFINS_CSLL" INTEGER, "ALIQUOTA_ADICIONAL_INSS" NUMERIC(9,2), "ALIQUOTA_CBS" NUMERIC(9,2), "ALIQUOTA_IBS" NUMERIC(9,2), "CODIGO_CBS" INTEGER, "CODIGO_IBS" INTEGER, PRIMARY KEY ("EMPRESA", "TIPO_CTA", "TIPO"));
 """
 CARREGADAS = ("TBAGEBAN", "TBCTABAN", "MFBORDER", "MFCTAUSU", "TBCENCUS", "TBCLIENT", "MFREFDES", "TBGRUDES",
-              "MFADIFOR", "MFLANCTO", "MFSALATU", "MFSALDOS")
-NAO_CARREGADAS = ("MFCONPAG", "MFCONPAG_TBCBOPRO", "MFCTAREC", "MFPAGADF", "SDMFCONPAG", "MFDESACR", "TBFINCODRECOL",
-                  "TBINDNIF")
-SO_ORIGEM = ("TBBANCOS", "TBUSERS", "MFADIFOR_TBCBOPRO", "TBCBOPRO")
+              "MFADIFOR", "MFLANCTO", "MFSALATU", "MFSALDOS", "TBINTIMP", "MFPARAM", "MFCTAREC")
+NAO_CARREGADAS = ("TBFINCODRECOL", "TBINDNIF")
+# MFCONPAG e afins são da L8-12 (carregam lá): aqui só lidos, como as demais de fora da fatia
+SO_ORIGEM = ("TBBANCOS", "TBUSERS", "MFADIFOR_TBCBOPRO", "TBCBOPRO", "MFCONPAG", "MFCONPAG_TBCBOPRO", "MFPAGADF",
+             "SDMFCONPAG", "MFDESACR", "MFLANGSI")
 PROPRIAS = ()
 # fornecedores e profissionais de fora da fatia (L7, L5), dados como já carregados
 PAIS_EXTERNOS = {"TBUSERS": ["usr.um", "usr.dois"], "TBITEDES": ["1|1|1"], "TBFORNEC": [10, 11, 12],
-                 "TBPROFIS": [700, 701]}
+                 "TBPROFIS": [700, 701], "TBCONVEN": [5], "MFCABECLANC": [1]}
 # destino principal desdobrado (um item por lado): linhas da origem que gravaram ao menos um item
-LINHAS_COM_ITEM = {"MFLANCTO": 6}
+LINHAS_COM_ITEM = {"MFLANCTO": 6, "TBINTIMP": 2, "MFPARAM": 1}
+# linhas recusadas pelo domínio (exige_dominio: valor_fora_do_dominio), além das recusas por restrição
+RECUSAS_POR_DOMINIO = {"MFCTAREC": 1}
 PREPARO_DESTINO = """
 CREATE TABLE IF NOT EXISTS estabelecimento (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, nome VARCHAR(40) NOT NULL);
 INSERT INTO estabelecimento (nome) VALUES ('Unidade exemplo');
@@ -177,6 +186,24 @@ INSERT INTO banco (codigo_compensacao, codigo_ispb, descricao, vigencia_inicio, 
   ('104', '00000104', 'Banco ficticio dois', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3)),
   ('237', '00000237', 'Banco ficticio tres', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3)),
   ('341', '00000341', 'Banco ficticio quatro', '2020-01-01', 'exemplo', UTC_TIMESTAMP(3));
+CREATE TABLE IF NOT EXISTS tributo (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL,
+  descricao VARCHAR(150) NOT NULL, esfera VARCHAR(30) NOT NULL, forma_apuracao VARCHAR(30) NOT NULL,
+  incidencia VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);
+INSERT INTO tributo (codigo, descricao, esfera, forma_apuracao, incidencia, criado_em)
+  SELECT x.c, x.c, 'federal', 'mensal', 'retido', UTC_TIMESTAMP(3) FROM (SELECT 'IRRF' AS c UNION ALL SELECT 'ISS'
+  UNION ALL SELECT 'PIS' UNION ALL SELECT 'COFINS' UNION ALL SELECT 'CSLL' UNION ALL SELECT 'CSRF') x
+  WHERE NOT EXISTS (SELECT 1 FROM tributo t WHERE t.codigo = x.c);
+CREATE TABLE IF NOT EXISTS modulo_sistema (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, codigo VARCHAR(30) NOT NULL,
+  descricao VARCHAR(150) NOT NULL, criado_em DATETIME(3) NOT NULL);
+INSERT INTO modulo_sistema (codigo, descricao, criado_em) SELECT 'financeiro', 'Financeiro', UTC_TIMESTAMP(3) FROM DUAL
+  WHERE NOT EXISTS (SELECT 1 FROM modulo_sistema WHERE codigo = 'financeiro');
+CREATE TABLE IF NOT EXISTS parametro_definicao (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  chave VARCHAR(100) NOT NULL, modulo_sistema_id BIGINT UNSIGNED NOT NULL, descricao VARCHAR(500) NOT NULL,
+  tipo VARCHAR(30) NOT NULL, criado_em DATETIME(3) NOT NULL);
+INSERT INTO parametro_definicao (chave, modulo_sistema_id, descricao, tipo, criado_em)
+  SELECT x.c, (SELECT MIN(id) FROM modulo_sistema WHERE codigo = 'financeiro'), x.c, 'inteiro', UTC_TIMESTAMP(3)
+  FROM (SELECT 'financeiro.mesesConsulta' AS c UNION ALL SELECT 'financeiro.diasVencimentoPadrao') x
+  WHERE NOT EXISTS (SELECT 1 FROM parametro_definicao d WHERE d.chave = x.c);
 """
 
 
@@ -355,10 +382,57 @@ def linhas(r, ins):
             continue
         for k in (1, 2):
             ins(t, _linha(f[t], {f[t][0][0]: k}, r))
+    # alíquotas de retenção (tributos semeados no PREPARO; CBS fora da semente): 1 IRRF e ISS, fim aberto 2999;
+    # 2 quatro tributos, sem início (vigência da carga); 3 tipo X (padrão todas, valor_fora_do_dominio) e CBS sem
+    # tributo no destino (codigo_inexistente_destino + 1048: linha recusada); 4 nenhuma alíquota (sem_item_a_gravar);
+    # 5 alíquota acima de 100 (CHECK 4025)
+    for e, tc, tp, vi, vf, al in [
+            (1, 1, "M", D(2020, 1, 1), D(2999, 12, 31), {"IRRF": M("1.50"), "ISS": M("5.00")}),
+            (1, 1, "E", None, None, {"PIS": M("0.65"), "COFINS": M("3.00"), "CSLL": M("1.00"),
+                                     "PIS_COFINS_CSLL": M("4.65")}),
+            (1, 2, "X", D(2021, 1, 1), None, {"IRRF": M("1.00"), "ALIQUOTA_CBS": M("0.90")}),
+            (2, 1, "M", D(2021, 1, 1), None, {}),
+            (2, 2, "E", D(2021, 1, 1), D(2024, 12, 31), {"IRRF": M("150.00")}),
+            # 6: difere da 1 só pelo TIPO_CTA (mesmo tributo, pessoa e vigência): chave única recusa (1062, visível)
+            (1, 3, "M", D(2020, 1, 1), D(2999, 12, 31), {"IRRF": M("2.00")})]:
+        put("TBINTIMP", EMPRESA=e, TIPO_CTA=tc, TIPO=tp, DT_VIG_I=vi, DT_VIG_F=vf, **al)
+    # títulos a receber (parcela = linha; título = grupo EMPRESA, DEV, COD, DOC, SERIE): 1 e 2 parcelas do mesmo
+    # título do convênio 5 (natureza pelo maior rateio); 3 cliente 1, recebida; 4 DEV T sem sentido medido
+    # (valor_fora_do_dominio, recusada); 5 convênio sem rateio (natureza pai_inexistente + 1048)
+    for i, dev, cod, doc, parc, val, pg, vpg in [(901, "E", 5, 100, 1, M("100.00"), None, None),
+                                                 (902, "E", 5, 100, 2, M("50.00"), None, None),
+                                                 (903, "C", 1, 200, 1, M("80.00"), D(2025, 3, 10), M("80.00")),
+                                                 (904, "T", 5, 300, 1, M("10.00"), None, None),
+                                                 (905, "E", 5, 400, 1, M("20.00"), None, None)]:
+        put("MFCTAREC", ID=i, EMPRESA=1, DEV=dev, COD=cod, APRES=D(2025, 2, 1), DOC=doc, PARC=parc,
+            VENC=D(2025, 3, parc), VALOR=val, PGTO=pg, VLR_PAG=vpg, SERIE="A", TIPO_DOC="B", RECIBO=1,
+            ID_MFCTAREC=i, ID_MFCABECLANC=1, ID_MFTIPOLANC=1, FLUXO=1)
+    for cod, doc, tp, g, v in [(5, 100, "E", 1, M("120.00")), (5, 100, "E", 2, M("30.00")), (1, 200, "C", 1, M("80.00")),
+                               (5, 300, "T", 1, M("10.00"))]:
+        put("MFLANGSI", EMPRESA=1, FORN=cod, DOC=doc, TIPO=tp, SERIE="A", TP_LAN=2, DATA=D(2025, 2, 1), GRUPO=g,
+            SUBGRUPO=1, ITEM=1, VALOR=v)
+    # parâmetros: 1 dois inteiros; 2 outra empresa no mesmo estabelecimento (1062: a mesma definição e vigência)
+    for e, nm, qd in [(1, 12, 30), (2, 6, None)]:
+        put("MFPARAM", EMPRESA=e, ANOPRO=2025, MESPRO=1, NMESES=nm, QTDE_DIA_VENC=qd, TIPO_PGTO_OBRIG="N",
+            GRUPO_TBITEDES=1, SUBGRUPO_TBITEDES=1, ITEM_TBITEDES=1)
     return {t: {"gravados": e["gravados"], "pendencias": dict(e["pendencias"])} for t, e in ESPERADO.items()}
 
 
 ESPERADO = {
+    # títulos a receber: hoje as 4 linhas válidas caem com 1048 (tipo de documento nulo: o motor grava o título
+    # agrupado antes do tipo de documento que ele cita; pedido 20 da L8-11, provado: 3 parcelas com a ordem corrigida);
+    # 904 DEV T fora do domínio (recusa visível); 905 sem rateio (pai_inexistente + 1048); escolha_pelo_maior: o maior
+    # rateio do documento 100; valor_presumido: tipo de origem avulso presumido por linha
+    "MFCTAREC": {"gravados": 0, "pendencias": {"escolha_pelo_maior": 2, "pai_inexistente": 1,
+                                               "restricao_destino_1048": 4, "valor_fora_do_dominio": 1,
+                                               "valor_presumido": 4}},
+    # gravados = itens (alíquotas e parâmetros)
+    "TBINTIMP": {"gravados": 6, "pendencias": {"valor_presumido": 5, "vigencia_sem_fonte": 1,
+                                               "restricao_destino_1062": 1,
+                                               "valor_fora_do_dominio": 1, "codigo_inexistente_destino": 1,
+                                               "restricao_destino_1048": 1, "sem_item_a_gravar": 1,
+                                               "restricao_destino_4025": 1}},
+    "MFPARAM": {"gravados": 2, "pendencias": {"vigencia_sem_fonte": 2, "restricao_destino_1062": 1}},
     "TBAGEBAN": {"gravados": 5, "pendencias": {"adotado_existente": 1, "catalogo_codigo_inexistente": 1,
                                                "restricao_destino_1048": 2, "valor_fora_do_dominio": 2}},
     "TBCTABAN": {"gravados": 7, "pendencias": {"pai_pendente": 1, "restricao_destino_1048": 1,
@@ -391,3 +465,4 @@ ESPERADO = {
                                                "restricao_destino_1048": 1, "restricao_destino_4025": 1,
                                                "sem_item_a_gravar": 1}},
 }
+

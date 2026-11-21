@@ -13,7 +13,7 @@
    "sql": "-- 10_SADT/02_tabelas.sql (interface_equipamento):\nCONSTRAINT ck_interface_equipamento_alvo CHECK (equipamento_analitico_id IS NOT NULL OR laboratorio_apoio_id IS NOT NULL OR ativo = FALSE)\n-- 10_SADT/02 ou 03_tabelas.sql (laboratorio_apoio):\nempresa_fornecedora_id BIGINT UNSIGNED NULL,\nCONSTRAINT ck_laboratorio_apoio_empresa CHECK (empresa_fornecedora_id IS NOT NULL OR ativo = FALSE)\n-- conector/mapa/tabelas.tsv: SITPEQV com laboratorio_apoio nos destinos (secundário 'antes')",
    "bloqueia": "SITPEQV e SITBEXHP (L7-03); em cadeia SITBEXEQ, SIRES01/SILANEXA (interface), SIMATHP e SITBELHP (L8-16). Última trava da fatia L7-03 junto do pedido 19 (L7-02 carregar SIFORMUL, pai de SIVARFORMULA).",
    "atendido_parcial": "rodada 4 (DDL): db/migracoes/10_SADT/09; falta na fatia: descomentar #SITPEQV e #SITBEXHP; não aplicado: (3) laboratorio_apoio nos destinos de SITPEQV é do gerador do mapa",
-   "atendido": "rodada 4 (DDL): db/migracoes/10_SADT/09; falta na fatia: descomentar #SITPEQV e #SITBEXHP"
+   "atendido": "rodada 4: DDL 10_SADT/09 e declaração da fatia ativa (SITPEQV com laboratorio_apoio secundário antes/opcional/adotar:codigo, SITBEXHP); ambas CARREGAM"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
@@ -104,7 +104,8 @@
   {
    "arquivo": "fatia L7-02 (colunas.d/L7-02.tsv, sem_carga.tsv linha SIFORMUL, declarado/dependencias.tsv)",
    "mudanca": "Reabrir SIFORMUL como CARREGA: tirar o descarte (as travas citadas caíram: a L7-03 grava exame_analito e ref:T/<destino> existe), descomentar a declaração pronta (formula_calculo.codigo espera #concat, pedido 8, ou outra regra de código único) e declarar a aresta de ordem SIFORMUL -> SITABELE (ordem 467 < 491).",
-   "motivo": "SIVARFORMULA (19 variáveis) agora CARREGA pela L7-03 (formula_calculo_id por ref:SIFORMUL.(ATO,EXAME)=(ATO,EXAME), fonte 'digitado' presumida) e só está BLOQUEADA por pai_nao_carregado:SIFORMUL. Conferida na sintética com a SIFORMUL como pai externo (3 gravadas, 2 recusadas)."
+   "motivo": "SIVARFORMULA (19 variáveis) agora CARREGA pela L7-03 (formula_calculo_id por ref:SIFORMUL.(ATO,EXAME)=(ATO,EXAME), fonte 'digitado' presumida) e só está BLOQUEADA por pai_nao_carregado:SIFORMUL. Conferida na sintética com a SIFORMUL como pai externo (3 gravadas, 2 recusadas).",
+   "atendido": "rodada 4 (conferidor): SIFORMUL passou à L7-03 e carrega (#codigo_derivado:ATO+EXAME+CODELE:30, analito pela ref:SITABELE(EXAME,CODELE)/exame_analito); SIVARFORMULA e SIRESVAR deixam de estar bloqueadas"
   },
   {
    "arquivo": "fatia L7-04 (sem_carga.tsv linhas SIRESVAR e SIHISTVLREFELEMENTO)",

@@ -65,12 +65,30 @@ FCORCAME	=~emitido	orcamento_particular.situacao				L8-01: situação PRESUMIDA 
 FCORCAME	DATA_REALIZ	orcamento_particular.realizado_em	data			L8-01: data em que o procedimento orçado foi realizado
 #--- FCEMPAUDPLANSERV: descarte em declarado/sem_carga.tsv (motivo lá e em F4-decisoes-destino.md, L8-01)
 #--- FCPROCUNIBHMED: descarte em declarado/sem_carga.tsv (motivo lá e em F4-decisoes-destino.md, L8-01)
-#--- FCREFUND: BLOQUEADA (sem_carga.tsv: pai TBMATMED não carregado e filtro de linha); NÃO é descarte licenciado: 1.065.998 das 1.077.674 linhas (agregado) são de tabelas sem marca Brasíndice/Simpro
-#FCREFUND	TAB	preco_referencia_matmed.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF,COD_ALFA)=(TAB,COD,CLASSIF,COD_ALFA);so_se:TBCTRMEM(TAB)>REF_BRA=F;so_se:TBCTRMEM(TAB)>REF_SIMP=F	L8-01 r3 (correção): PRONTA, comentada até TBMATMED carregar (L8-03, bloqueada pelo filtro de linha). Item pela chave alternativa composta do item (tabela, código, classificação, código alfa); filtro de linha pela tabela pai (pedido; valores da origem T/F, não S/N)
-#FCREFUND	DATA	preco_referencia_matmed.vigencia_inicio	data			L8-01 r3 (correção): PRONTA: vigência do preço = DATA
-#FCREFUND	DATA	preco_referencia_matmed.ocorrido_em	data			L8-01 r3 (correção): PRONTA: a origem só guarda a vigência (DATE em DATETIME pelo tipar)
-#FCREFUND	VALOR	preco_referencia_matmed.preco_maximo_consumidor	decimal_nao_negativo			L8-01 r3 (correção): PRONTA: preço de cobrança do item na tabela (5 casas na origem, 4 no destino); vazio: CHECK 'algum preço' recusa (visível)
-#FCREFUND	@id:edicao_referencia_matmed	preco_referencia_matmed.edicao_referencia_matmed_id				L8-01 r3 (correção): PRONTA: edição de migração agrupada por tabela e data (secundário antes;agrupar:TAB,DATA; fonte pela ref:TBCTRMEM/fonte_referencia_matmed, pedida à L8-03)
+#--- FCREFUND (r4): CARREGA o histórico de preço das tabelas PRÓPRIAS do hospital (marcas Brasíndice e Simpro N, F ou vazias); a de referência comercial é pulada com licenca_nao_comprovada (baixa, regra 7)
+FCREFUND	#codigo_derivado:TAB:30:matmed_	fonte_referencia_matmed.codigo	texto		fonte_referencia_matmed;antes;adotar:codigo	L8-01 r4: a tabela própria do hospital é a fonte do preço (código matmed_<tabela>, o mesmo prefixo de tabela_preco); a 2ª linha da mesma tabela ADOTA a fonte
+FCREFUND	TAB	fonte_referencia_matmed.descricao			ref:TBCTRMEM@descricao	L8-01 r4: nome da fonte = o nome da tabela de preço que a TBCTRMEM gravou (o que o cliente vê)
+FCREFUND	=~Tabela própria de mat/med	fonte_referencia_matmed.descricao				L8-01 r4: tabela sem nome: nome presumido (valor_presumido)
+FCREFUND	=propria	fonte_referencia_matmed.tipo_fonte				L8-01 r4: tabela própria do hospital (exige_licenca fica FALSE: as licenciadas são puladas pelo filtro)
+FCREFUND	@id:fonte_referencia_matmed	edicao_referencia_matmed.fonte_referencia_matmed_id			edicao_referencia_matmed;antes;agrupar:TAB	L8-01 r4: uma edição de MIGRAÇÃO por tabela (os preços de datas diferentes cabem nela: a chave do preço tem a vigência)
+FCREFUND	=migracao	edicao_referencia_matmed.numero_edicao				L8-01 r4: edição de migração
+FCREFUND	#grupo_min:DATA	edicao_referencia_matmed.vigencia_inicio	data			L8-01 r4: a vigência mais antiga dos preços da tabela
+FCREFUND	#grupo_contar	edicao_referencia_matmed.quantidade_itens				L8-01 r4: preços da tabela na origem
+FCREFUND	=ativa	edicao_referencia_matmed.situacao				L8-01 r4: edição vigente
+FCREFUND	=inclusao	edicao_referencia_matmed.operacao				L8-01 r4: inclusão pela migração
+FCREFUND	=@data_carga	edicao_referencia_matmed.ocorrido_em				L8-01 r4: momento da carga
+FCREFUND	TAB	preco_referencia_matmed.item_referencia_matmed_id			ref:TBMATMED.(TAB,COD,CLASSIF,COD_ALFA)=(TAB,COD,CLASSIF,COD_ALFA);preco_referencia_matmed;principal;so_se:TAB>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada;so_se:TAB>TBCTRMEM>REF_SIMP=N,F,!licenca_nao_comprovada	L8-01 r4: item pela chave alternativa composta do item (tabela, código, classificação, código alfa); filtro de linha pela tabela pai (valores da origem T/F; N e vazio também valem como próprios)
+FCREFUND	@id:edicao_referencia_matmed	preco_referencia_matmed.edicao_referencia_matmed_id				L8-01 r4: edição de migração da tabela
+FCREFUND	DATA	preco_referencia_matmed.vigencia_inicio	data			L8-01 r4: vigência do preço = DATA
+FCREFUND	DATA	preco_referencia_matmed.ocorrido_em	data			L8-01 r4: a origem só guarda a vigência (DATE em DATETIME pelo tipar)
+FCREFUND	VALOR	preco_referencia_matmed.preco_maximo_consumidor	decimal_nao_negativo			L8-01 r4: preço de cobrança do item na tabela (5 casas na origem, 4 no destino); vazio: CHECK 'algum preço' recusa (visível)
+FCREFUND	#retrato:*	preco_referencia_matmed.dados				L8-01 r4: retrato completo da linha (nome, unidade, laboratório, códigos TISS e Unimed do preço)
+FCREFUND	NOME		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
+FCREFUND	UNIDADE		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
+FCREFUND	LABORA		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
+FCREFUND	UNIMED_BRASIL		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
+FCREFUND	EQUIVALENCIA_TISS		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
+FCREFUND	COD_DESPESA_TISS		texto			L8-01 r4: sem coluna própria: do item (item_referencia_matmed) e no retrato do preço (dados)
 FCTPPGTONFSE	#codigo_derivado:ID:30:nfse_	condicao_pagamento.codigo			condicao_pagamento	L8-01 r3 (correção): condição de pagamento da nota de serviço vira cadastro do produto (condicao_pagamento, não atributo da nota): código de negócio = chave com prefixo de domínio nfse_ (não colide com condições de compras ou de contas a pagar)
 FCTPPGTONFSE	NOME	condicao_pagamento.descricao	texto_nome		condicao_pagamento	L8-01 r3 (correção): nome da condição; espaços repetidos colapsados; vazio recusa (NOT NULL)
 FCTPPGTONFSE	=contas_receber	condicao_pagamento.finalidade			condicao_pagamento	L8-01 r3 (correção): a nota de serviço cobra a fonte pagadora: finalidade contas a receber; parcelas, prazo e data-base ficam com o padrão do produto (1, 0, emissão): a origem só tem o nome, e o cliente ajusta no painel

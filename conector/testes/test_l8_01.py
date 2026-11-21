@@ -17,12 +17,14 @@ CARREGADAS = {"FCTPMOTGLOSA": "grupo_motivo_glosa", "RPDEDUTIVEL": "tipo_deducao
               "FCHORATE": "horario_normal_tabela", "FCGUIAS": "guia_fonte_pagadora", "FCORCPAD": "modelo_orcamento",
               "FCORLAME": "orcamento_particular_item", "RPEVENTOESOC": "evento_repasse_incidencia",
               "RPLANEVE": "lancamento_repasse", "RPLANEVE_COMPOSICAOBASE": "lancamento_repasse_base",
-              "FCTPPGTONFSE": "condicao_pagamento", "RECONTAS": "conta_hospitalar_etapa"}
+              "FCTPPGTONFSE": "condicao_pagamento", "RECONTAS": "conta_hospitalar_etapa",
+              "FCREFUND": "preco_referencia_matmed"}
 DESCARTES = {"FCEMPAUDPLANSERV": "sem_valor", "FCPROCUNIBHMED": "sem_valor", "RPLANEVE_TBCBOPRO": "duplicado",
              "RPPARAM": "mecanismo_do_produto"}
-# r3 (correção): FCREFUND não é licenciado (99% de tabelas próprias, por agregado): bloqueada só pelo pai TBMATMED
-BLOQUEADAS = {"FCREFUND"}
-EXTRAS = {"RPLANEVE": ["favorecido_repasse"]}  # destino secundário declarado pela via
+# r4: FCREFUND carrega (preço das tabelas próprias; as de referência comercial são puladas pelo filtro de linha)
+BLOQUEADAS = set()
+EXTRAS = {"RPLANEVE": ["favorecido_repasse"],
+          "FCREFUND": ["fonte_referencia_matmed", "edicao_referencia_matmed"]}  # destino secundário declarado pela via
 CONTA = "FCCTAEXT.(ANOPRO,MESPRO,TIPO_CTA,COD)=(ANOPRO,MESPRO,TIPO_CTA,CONTA)"
 PROF = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 
@@ -69,12 +71,13 @@ class L801(unittest.TestCase):
             self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("descarte", causa), t)
             self.assertTrue(sc[t]["motivo"], t)
         # o preço das tabelas PRÓPRIAS do hospital nunca é descartado como licenciado (regra 7 vale só para as marcadas)
-        self.assertEqual((sc["FCREFUND"]["situacao"], sc["FCREFUND"]["causa"]), ("bloqueada", "pai_nao_carregado:TBMATMED"))
+        self.assertNotIn("FCREFUND", sc)
         self.assertNotIn("FCTPPGTONFSE", sc)
         self.assertNotIn("RECONTAS", sc)
-        pronta = [l for l in _decl() if l.startswith("#FCREFUND\t")]
+        pronta = [l for l in _decl() if l.startswith("FCREFUND\t")]
         self.assertTrue(any("ref:TBMATMED.(TAB,COD,CLASSIF,COD_ALFA)=(TAB,COD,CLASSIF,COD_ALFA)" in l for l in pronta))
         self.assertTrue(any("preco_referencia_matmed.vigencia_inicio" in l for l in pronta))
+        self.assertTrue(any("so_se:TAB>TBCTRMEM>REF_BRA=" in l and "!licenca_nao_comprovada" in l for l in pronta))
 
     def test_competencia_por_modulo_e_ano_mes(self):
         for t, mod in (("FAPARUSU", "sus_ambulatorial"), ("FCPARUSU", "fonte_pagadora"),
@@ -217,7 +220,8 @@ class L801(unittest.TestCase):
         self.assertEqual(set(esp), set(CARREGADAS))
         for t, e in esp.items():
             recusas = sum(n for r, n in e["pendencias"].items()
-                          if r.startswith("restricao_destino_") or r in ("pai_pendente", "sem_item_a_gravar"))
+                          if r.startswith("restricao_destino_") or r in ("pai_pendente", "sem_item_a_gravar",
+                                                                               "licenca_nao_comprovada"))
             linhas_gravadas = {"FCHORATE": 1}.get(t, e["gravados"])  # pares: gravados = itens (seis de uma linha)
             self.assertEqual(linhas_gravadas + recusas, lidas.count(t), t)
         self.assertTrue(set(l8_01.PAIS_EXTERNOS) >= {"TBCONVEN", "TBUSERS", "TBPROFIS", "RPEVENTO"})

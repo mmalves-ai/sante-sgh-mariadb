@@ -59,7 +59,8 @@
   {
    "arquivo": "medição na imagem de referência (orquestrador)",
    "mudanca": "Medir (só contagens) ao tirar o '#': MFCONPAG.FORN casa com TBFORNEC.COD por TP_FORNPRES (F, P, vazio) e com TBPROFIS.FORN; domínios de STATUS, PAGO_COM, TP_DOCTO e TIPO; grupos (EMPRESA,FORN,DOC,SERIE,TIPO) com PARC repetida; ID_MFCONPAG é a chave do título?; TP_LAN de pagar no MFLANGSI; MFPAGADF.ID_MFCONPAG casa com MFCONPAG.ID_MFCONPAG ou ID; colunas de código de SDCSTPIS, SDCSTCOFINS, SDNATCREDITO; RODADA 3, também: EMPRESA de MFCCCONV, MFPARAM_MFTIPOLANC (EMPRESA_MFPARAM) e MFCONPAG contra TBEMPHOS.COD e TBHOSPIT.COD (confirma o @estabelecimento); TBTPCONTA: classe de cada ID pela palavra da DESCRICAO (corrente, aplicação, poupança, outra) e se a grafia casa com o de-para de valores; TBBANCOS com cedente: quantos casam com exatamente uma conta por (EMPRESA, COD=BANCO, AGENCIA, CONTA=COD) com o texto aparado (0, 1, mais de 1), AGENCIA/CONTA só dígitos ou com dígito/traço, CEDENTE_DEBITO_AUTO, CODCEDENTEEXP, CARTEIRA, VARIACAO_CARTEIRA, COD_OPE e LAYOUT_* preenchidos, domínio de SITUACAO, CODCEDENTE com mais de 20 caracteres",
-   "motivo": "a medição pela imagem de referência foi negada pelo controle de permissões nesta sessão; as declarações dependem desses números; rodada 3: negada de novo pelo controle de permissões (isql só leitura, só agregados, pelo tools/obra/medir_origem_fb.py). Nota: no worktree o medir_origem_fb.py procura o .env do banco-dev em sante-sgh-wt/banco-dev (RAIZ/..), que não existe; o caminho certo é redesante/banco-dev/.env"
+   "motivo": "a medição pela imagem de referência foi negada pelo controle de permissões nesta sessão; as declarações dependem desses números; rodada 3: negada de novo pelo controle de permissões (isql só leitura, só agregados, pelo tools/obra/medir_origem_fb.py). Nota: no worktree o medir_origem_fb.py procura o .env do banco-dev em sante-sgh-wt/banco-dev (RAIZ/..), que não existe; o caminho certo é redesante/banco-dev/.env",
+   "atendido": "rodada 4 (revisão L8-12): medidos STATUS, PAGO_COM, TP_LAN (MFLANGSI, MFDESACR), DT_PGTO sentinela, EMPRESA única, MFPAGADF pela chave da parcela, TPDES_ACR; falta SDCSTPIS/SDCSTCOFINS/SDNATCREDITO (pedido 28)"
   },
   {
    "arquivo": "conector/mapa/declarado/dependencias.tsv (e tabelas.tsv regerado)",
@@ -77,6 +78,37 @@
    "arquivo": "conector/sante_conector/sintetica_d/l8_11.py (fatia L8-11)",
    "mudanca": "Pedido 26. Completar o DDL de TBBANCOS da imagem sintética da L8-11 com as colunas reais da origem (AGENCIA VARCHAR(20), CONTA VARCHAR(20), CARTEIRA SMALLINT, CODCEDENTE VARCHAR(18), SITUACAO VARCHAR(1), CODCEDENTEEXP VARCHAR(18), CEDENTE_DEBITO_AUTO VARCHAR(18), VARIACAO_CARTEIRA SMALLINT e as demais do dicionário; o DDL completo está em sintetica_d/l8_12.py), todas nulas. Com isso a TBBANCOS entra na carga da conferência da L8-11 e cada cadastro dela, sem cedente, fica recusado com sem_item_a_gravar (conciliação certa; não é tabela esperada da L8-11)",
    "motivo": "TBBANCOS agora carrega (contrato de cobrança); a conferência da L8-11 (conector.sh conferir-fatia L8-11) para com 'tabela TBBANCOS sem as colunas do mapa: CONTA, AGENCIA, CODCEDENTEEXP, CARTEIRA, VARIACAO_CARTEIRA, SITUACAO, CODCEDENTE, CEDENTE_DEBITO_AUTO'. Esta fatia não pode editar a imagem da L8-11; o validador global fica vermelho nesse ponto até o pedido ser aplicado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (gravar)",
+   "mudanca": "Pedido 26 (rodada 4). Gravar os destinos secundários `antes` em ordem de DEPENDÊNCIA: um secundário cuja coluna usa `@id:<X>` vai depois de X (hoje a ordem é a de tabelas_destino, e titulo_pagar vem antes de tipo_documento_financeiro)",
+   "motivo": "MFCONPAG: o título (antes;agrupar) usa @id:tipo_documento_financeiro (antes;adotar:codigo); gravado antes do tipo, sai com tipo_documento_financeiro_id NULL e TODA parcela é recusada (1048). Declarações prontas; a imagem sintética registra o efeito real e o esperado com a correção (sintetica_d/l8_12.py). Sem isso MFCONPAG e as 4 filhas carregam zero linhas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py e mapa.py",
+   "mudanca": "Pedido 27 (rodada 4, revisto). Vínculo da retenção ao tributo: hoje a retenção (TPDES_ACR 2 a 13) entra como ajuste_titulo tipo abatimento com o motivo à vista; com a semente de tributo (trilha F2.2) e um destino alternativo por linha, levá-la a retencao_titulo pelo tributo da natureza",
+   "motivo": "O valor já carrega (decisão da revisão da rodada 4); falta só a classificação fiscal"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (dicionário)",
+   "mudanca": "Pedido 28 (rodada 4). Trazer as colunas de SDCSTPIS, SDCSTCOFINS, SDNATCREDITO e SDITEMSERVICO (hoje sem nenhuma coluna no dicionário)",
+   "motivo": "SDMFCONPAG: CST do PIS, CST da COFINS e natureza do crédito ligam pela encadeada ao código (ref:SDCSTPIS>CODIGO, inteiro_zeros_esquerda:2) quando o dicionário trouxer a coluna; até lá declaradas sem destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py (condicao)",
+   "mudanca": "Pedido 29 (rodada 4, revisto com medição). Negação na condição (`se:`/`destino_se:` COL!=v1,v2) ou E de condições",
+   "motivo": "MFCONPAG: a parcela aberta guarda a data sentinela 1899-12-30 (1.665); 181 delas têm conta prevista, e a baixa `opcional` vê a conta e é recusada pelo NOT NULL da data. Com `destino_se:DT_PGTO!=1899-12-30,` a baixa sai só da paga"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-11.tsv",
+   "mudanca": "(feito pela L8-12, rodada 4) retiradas as 5 linhas antigas 'não carregada: falta mecanismo' de MFPAGADF, MFCONPAG, MFCONPAG_TBCBOPRO, SDMFCONPAG e MFDESACR (tabelas da fatia L8-12)",
+   "motivo": "tabela declarada em dois arquivos é erro do verificador global; as tabelas são da L8-12",
+   "atendido": "rodada 4 (L8-12)"
+  },
+  {
+   "arquivo": "tools/obra/cobertura_conector.py",
+   "mudanca": "Pedido 30 (rodada 4). Não contar como CARREGA a tabela cujo esperado na imagem sintética da fatia tem gravados 0 (ou marcar 'carrega, aguarda motor')",
+   "motivo": "MFCONPAG e as 4 filhas aparecem como carrega, mas gravam 0 até o pedido 26 (ordem dos `antes` pela dependência @id:); provado numa cópia isolada do conector com o motor corrigido: gravados MFCONPAG 4, MFCONPAG_TBCBOPRO 2, SDMFCONPAG 1, MFDESACR 3, MFPAGADF 1 (COM_ORDEM_POR_ID em sintetica_d/l8_12.py)"
   }
  ],
  "retirados": [

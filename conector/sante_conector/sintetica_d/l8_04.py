@@ -346,11 +346,13 @@ def linhas(r, ins):
         "TBTPLANC": {"gravados": 3, "pendencias": {"valor_presumido": 8, "restricao_destino_1048": 1}},
         # grau 06 e 77 fora do catálogo da imagem; 77 sem par no tipo e na ordem do auxiliar (reserva 'outro');
         # o presumido de reserva fica em toda linha lida (pedido 19)
-        "TBGRAUPARTPROC": {"gravados": 5, "pendencias": {"valor_presumido": 6, "catalogo_codigo_inexistente": 2,
+        # r4: o presumido de reserva (=~outro) só conta quando é o valor usado (pedido 18 atendido)
+        "TBGRAUPARTPROC": {"gravados": 5, "pendencias": {"valor_presumido": 3, "catalogo_codigo_inexistente": 2,
                                                          "valor_fora_do_dominio": 2, "restricao_destino_1048": 1}},
-        "TBPRESER": {"gravados": 0, "pendencias": {"valor_presumido": 3, "documento_invalido": 2,
+        # r4: o documento em DOUBLE de valor inteiro passa a ser lido (sentinela._digitos): um prestador grava
+        "TBPRESER": {"gravados": 1, "pendencias": {"valor_presumido": 3, "documento_invalido": 1,
                                                    "pai_inexistente": 2, "valor_fora_do_dominio": 1,
-                                                   "restricao_destino_4025": 3}},
+                                                   "restricao_destino_4025": 2}},
         # grupo 77 inexistente: na referência e na cópia do tipo (2) + centro de custo 41 (1)
         "TBSUBDES": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "restricao_destino_1048": 2}},
         "TBTABTHM": {"gravados": 3, "pendencias": {"pai_inexistente": 3, "valor_fora_do_dominio": 3,

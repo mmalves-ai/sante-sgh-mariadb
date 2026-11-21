@@ -14,7 +14,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py + mapa.passos_ref; fatia L7-03 (SITABELE)",
    "mudanca": "referência a destino SECUNDÁRIO do pai: 'ref:SITABELE(EXAME,CODELE)/exame_analito' (procura a chave '<chave>/exame_analito' em conector_origem), o mesmo M1 da L6-15; e a L7-03 carregar exame_analito como destino secundário de SITABELE (exame pela ref:SITABPRO(ATO?,CODPRC), analito = @id, ordem pela COD). Depois: aresta SIFORMUL -> SITABELE em declarado/dependencias.tsv e descomentar o SIFORMUL de colunas.d/L7-02.tsv. Enquanto não houver, SIFORMUL é descarte registrado em sem_carga.tsv (sai quando a declaração for descomentada)",
-   "motivo": "formula_calculo exige alvo 'analito' com exame_analito_id (CHECK ck_formula_calculo_alvo); ninguém grava exame_analito hoje"
+   "motivo": "formula_calculo exige alvo 'analito' com exame_analito_id (CHECK ck_formula_calculo_alvo); ninguém grava exame_analito hoje",
+   "atendido": "rodada 4 (conferidor): SIFORMUL passou à L7-03 e carrega (#codigo_derivado:ATO+EXAME+CODELE:30, analito pela ref:SITABELE(EXAME,CODELE)/exame_analito); SIVARFORMULA e SIRESVAR deixam de estar bloqueadas"
   },
   {
    "arquivo": "conector/mapa/declarado/valores.tsv",

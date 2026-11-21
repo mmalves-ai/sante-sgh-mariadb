@@ -1,7 +1,8 @@
 """Fatia L6-05 (prontuário, assinatura e assistência, módulo PEP): tabelas da origem e anomalias, com dados 100% falsos.
 
 As 19 tabelas carregadas pela carga dirigida pelo mapa (3 da fatia são descarte de produto em declarado/sem_carga.tsv;
-GECADANTIMI e PRFICHAREL têm a declaração pronta, comentada, à espera do modelo e do motor). PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
+GECADANTIMI tem a declaração pronta, comentada, à espera do modelo). PRFICHAREL grava um leiaute de impressão por
+COD (agrupar no principal), com os componentes numa lista JSON e o tipo de migração criado antes e adotado. PRDADOSENVIOOPERADORA grava a informação clínica com o grupo padrão gravado ANTES (criado
 pela primeira linha, adotado pelas seguintes). PRLOCPACDEFAULT (L5-01) entra só como origem do pai da preferência, lida pela ref: encadeada
 de PRFAVORITO_EXIBIR (preferência -> login -> usuário). Anomalias: descrição vazia em destino NOT NULL (1048), código com
 colisão de caixa (codigo_colisao_caixa nas duas linhas), S/N fora do domínio (padrão do destino), pai recusado
@@ -48,6 +49,9 @@ CREATE TABLE PRLOCPACDEFAULT (ID INTEGER NOT NULL PRIMARY KEY, USUARIO VARCHAR(3
 CREATE TABLE PRDADOSENVIOOPERADORA (ID INTEGER NOT NULL PRIMARY KEY, NOME VARCHAR(80));
 CREATE TABLE PRFAVORITO_EXIBIR (ID INTEGER NOT NULL PRIMARY KEY, LOCPACDEFAULT INTEGER NOT NULL,
   CAMPOSLOCALIZACAOPACIENTE SMALLINT NOT NULL, ORDEM SMALLINT, EXIBIR CHAR(1));
+CREATE TABLE PRFICHAREL (ID_FICHAREL INTEGER NOT NULL PRIMARY KEY, COD SMALLINT NOT NULL, NOMECOMP VARCHAR(30) NOT NULL,
+  NOMECLASSE VARCHAR(30), NOME VARCHAR(50), COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1, PARENT VARCHAR(30),
+  TIPO SMALLINT NOT NULL, SEQUENCIA SMALLINT);
 """
 
 # logins inventados de usuários já carregados (L3)
@@ -144,6 +148,14 @@ DADOS = [
                            [5, 30, 1, 1, "S"], [6, 99, 1, 1, "S"], [7, 10, 4, 3, "S"]],
      {"gravados": 4, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 2, "restricao_destino_1048": 2,
                                     "pai_pendente": 1}}),
+    # leiaute de impressão: COD 1 com três componentes fora da ordem da chave (sequência 2, 1 e uma sem sequência)
+    # e propriedades com quebra de linha e acento; COD 2 com um componente; o tipo de migração é criado pela
+    # primeira linha e adotado pelas seguintes; o leiaute entra inativo
+    ("PRFICHAREL", [[1, 1, "Painel1", "TPanel", "Cabeçalho exemplo", b"Left = 8\r\nTop = 4", "Título falso".encode("cp1252"), None, 1, 2],
+                    [2, 1, "Label1", "TLabel", None, b"Caption = 'Nome'", None, "Painel1", 2, 1],
+                    [3, 2, "Memo1", "TMemo", "Observação", None, "Texto de exemplo\nlinha 2".encode("cp1252"), None, 3, 1],
+                    [4, 1, "Image1", "TImage", None, None, None, "Painel1", 4, None]],
+     {"gravados": 4, "pendencias": {"adotado_existente": 3}}),
 ]
 # pai de fora da fatia (L5-01) presente na imagem só para a ref: encadeada; o esperado dele não é desta fatia
 PREFERENCIAS = [_pref(10, U1), _pref(20, U2), _pref(30, "usuario.exemplo.nunca")]

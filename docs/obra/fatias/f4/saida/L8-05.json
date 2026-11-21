@@ -103,7 +103,8 @@
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv e L8-06.tsv (coordenação entre fatias)",
    "mudanca": "L8-02: retirar as 2 linhas sem destino de RPLANRPA (a tabela é da L8-05 no índice); depois, descomentar as 2 linhas #RPLANRPA de colunas.d/L8-05.tsv e pôr RPLANRPA na imagem sintética da L8-05 (pais externos RPRPA e RPLANEVE). L8-06: retirar as linhas comentadas #FCCTAEXT e #FCCTAAUD (declaradas agora na L8-05); a L8-02 também tira RPLANRPA de FORMAS em sintetica_d/l8_02.py: a sintética da L8-05 então inclui a tabela, os pais externos RPRPA e RPLANEVE e o esperado sozinha (RPLANRPA_ATIVA)",
-   "motivo": "RPLANRPA é a única tabela da fatia ainda BLOQUEADA (sem_declaracao): declarar aqui com as linhas da L8-02 no lugar daria 'tabela declarada em mais de um arquivo'. O pai RPLANEVE passou a carregar na L8-01 (rodada 3)"
+   "motivo": "RPLANRPA é a única tabela da fatia ainda BLOQUEADA (sem_declaracao): declarar aqui com as linhas da L8-02 no lugar daria 'tabela declarada em mais de um arquivo'. O pai RPLANEVE passou a carregar na L8-01 (rodada 3)",
+   "atendido": "rodada 4 (conferidor): linhas sem destino tiradas da L8-02; RPLANRPA declarada e conferida na L8-05 (RPLANRPA_ATIVA)"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv",
@@ -121,6 +122,26 @@
    "mudanca": "regra condicional por coluna: gravar o valor só quando outra coluna da linha tiver um valor (ex.: via `se:AUDITADA=S`); fora da condição, NULL sem pendência",
    "motivo": "FCCTAAUD: concluida_em e resultado só para auditoria concluída (AUDITADA = S); sem a condição, uma auditoria em andamento pareceria concluída. FCCTAAUD fica BLOQUEADA até este pedido, o da dependência e o do total nulo",
    "atendido": "rodada 4 (integrador): se:AUDITADA=S na via"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-02.tsv e sintetica_d/l8_02.py, test_l8_02.py (fatia L8-02)",
+   "mudanca": "rodada 4 (repete o pedido 17): retirar as 2 linhas sem destino de RPLANRPA da L8-02.tsv, RPLANRPA de FORMAS em sintetica_d/l8_02.py e de AGUARDAM em test_l8_02.py; depois a L8-05 descomenta as 2 linhas #RPLANRPA (a sintética da L8-05 liga sozinha por RPLANRPA_ATIVA)",
+   "motivo": "RPLANRPA é da L8-05 no índice; declaração pronta; a tabela em dois arquivos é erro do verificador. Não editado daqui (arquivo de outra fatia em trabalho paralelo)",
+   "atendido": "rodada 4 (conferidor): linhas sem destino tiradas da L8-02; RPLANRPA declarada e conferida na L8-05 (RPLANRPA_ATIVA)"
+  },
+  {
+   "arquivo": "modelo (F2.2) e L8-03",
+   "mudanca": "rodada 4: TBPERMEM (preco_negociado_matmed.item_faturavel_id NOT NULL) segue BLOQUEADA por pai: TBMATMED (L8-03 r4) carrega em item_referencia_matmed, sem item faturável; falta o item faturável do mat/med (pedido 18) ou preco_negociado_matmed apontar item_referencia_matmed",
+   "motivo": "pai_nao_carregado: TBMATMED"
+  },
+  {
+   "arquivo": "db/migracoes/14_FIN (F2.2)",
+   "mudanca": "rodada 4 (resto do pedido 9): depara_conta_externa com tipo de ato e subtipo da diária (filtros); até lá TBINTCRC carrega só as linhas com TIPO_ATO=0 e SUBTIPO_DIARIA=0 e as demais ficam com a pendência baixa aguarda_dimensao_no_modelo (so_se)",
+   "motivo": "TBINTCRC carrega na r4 sem perder o filtro"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (so_se com gravidade)",
+   "mudanca": "r4 correção: so_se:COND!regra:gravidade (ex.: !aguarda_dimensao_no_modelo:alta). TBINTCRC recusa as linhas de tipo de ato e subtipo de diária específicos com pendência BAIXA (fixa no motor); é perda de de-para contábil e precisa ser alta até o modelo ganhar as colunas (pedido do depara_conta_externa, F2.2). Alternativa equivalente: o motor usar 'alta' quando a regra do so_se começar por aguarda_."
   }
  ]
 }

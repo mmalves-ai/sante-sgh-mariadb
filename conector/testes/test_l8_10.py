@@ -14,7 +14,8 @@ CTX = "contexto_trabalho_usuario"
 DESTINO = {"GPORIGEM": ["origem_bem"], "GPTP_RESPONSAVEL": ["tipo_responsavel_bem"], "MFTIPOLANC": ["tipo_credor"],
            "MFTPCOBRANCA": ["tipo_cobranca"], "GPPARAMU": [CTX],
            "MFPARUSU": [CTX], "NFSEPARUSU": [CTX], "PEPARAM_USUARIO": [CTX],
-           "SDGEITENS": ["dado_fiscal_item"], "SDGELANNFS": ["nota_entrada_item"]}
+           "SDGEITENS": ["dado_fiscal_item"], "SDGELANNFS": ["nota_entrada_item"],
+           "MFCABECLANC": ["grupo_lancamento_financeiro"]}
 # complemento sem o item da nota (pai_inexistente): recusa sem restrição do destino
 RECUSA_SEM_PAI = {"SDGELANNFS": 1}
 MODULO = {"GPPARAMU": "=patrimonio", "MFPARUSU": "=financeiro", "NFSEPARUSU": "=nota_servico",
@@ -115,9 +116,11 @@ class FatiaL810(unittest.TestCase):
         # espera a regra do agregado dos filhos (pedido C) e o vínculo no modelo (pedido D)
         self.assertNotIn("MFCABECLANC", self.sem_carga)
         (c,) = self._decl("MFCABECLANC", "ID")
-        self.assertFalse(c.get("destino"))
-        self.assertIn("grupo_lancamento_financeiro", c["motivo"])
+        self.assertEqual(c["destino"], "grupo_lancamento_financeiro.numero")
         self.assertIn("pedido D", c["motivo"])
+        (d,) = [x for x in self.decl if x["tabela"] == "MFCABECLANC" and x["coluna"].startswith("#filhos_min:")]
+        self.assertEqual(d["destino"], "grupo_lancamento_financeiro.data_operacao")
+        self.assertTrue(d["coluna"].endswith("@ID_MFCABECLANC"))
         self.assertIn("SINDICAL", self.sem_carga["MFTPCONTRIBUICAO"]["motivo"])
         for t in ("NFSEEMPDESENT", "NFSEEMPDESENV", "SDNATRECEITA"):
             self.assertNotEqual(self.sem_carga[t]["causa"], "catalogo_oficial", t)
@@ -173,16 +176,18 @@ class FatiaL810(unittest.TestCase):
         self.assertEqual(a, b)
         self.assertEqual(set(esp), set(l8_10.CARREGADAS))
         por = {}
+        largura = dict({t: len(c) for t, c in l8_10.COLUNAS.items()},
+                       **{t: len(l8_10._l811.formas()[t]) for t in l8_10.SO_ORIGEM})
         for t, v in a:
-            self.assertEqual(len(v), len(l8_10.COLUNAS[t]), t)
+            self.assertEqual(len(v), largura[t], t)
             por[t] = por.get(t, 0) + 1
-        self.assertEqual(set(por), set(FATIA) | set(l8_10.CATALOGOS_ORIGEM))
+        self.assertEqual(set(por), set(FATIA) | set(l8_10.CATALOGOS_ORIGEM) | set(l8_10.SO_ORIGEM))
         self.assertFalse(set(l8_10.CATALOGOS_ORIGEM) & set(FATIA))
         for t, e in esp.items():  # lidas = gravadas + recusadas (as recusas são de restrição do destino)
             recusas = sum(n for r, n in e["pendencias"].items() if r.startswith("restricao_destino_"))
             recusas += RECUSA_SEM_PAI.get(t, 0)
             self.assertEqual(por[t], e["gravados"] + recusas, t)
-        self.assertEqual(set(l8_10.PAIS_EXTERNOS), {"TBUSERS", "GEITENS", "GELANNFS"})
+        self.assertEqual(set(l8_10.PAIS_EXTERNOS), {"TBUSERS", "GEITENS", "GELANNFS", "TBITEDES", "TBCENCUS"})
         self.assertIn("CREATE TABLE MOPARAM (ANO SMALLINT", l8_10.DDL)
         self.assertIn("CREATE TABLE SDPARAM (", l8_10.DDL)
         self.assertIn("PRIMARY KEY (EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE,GRUPO,SUBGRUPO,ITEM)", l8_10.DDL)

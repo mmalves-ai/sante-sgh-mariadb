@@ -152,6 +152,17 @@ class Plano(unittest.TestCase):
         self.assertEqual(self._col("SILANEXA", "refazimento")[0]["regra"], "booleano_sn")
         self.assertEqual(self._via("SILANEXA", "cancelado_por_usuario_id"), ("USUARIO_SUSPENSAO_PEP", "TBUSERS"))
 
+    def test_coleta_com_hora(self):
+        """Rodada 4, revisão: a coleta leva a hora (HRCOL); a meia-noite só quando a hora não veio."""
+        cs = self._col("SILANEXA", "coletado_em")
+        self.assertEqual([c["coluna"] for c in cs], ["#data_hora:COLETA,HRCOL", "COLETA"])
+        with open(_raiz() / "declarado/colunas.d/L7-04.tsv", encoding="utf-8") as f:
+            vias = {(l[0], l[1]): l[5] for l in (x.rstrip("\n").split("\t") for x in f) if len(l) > 5}
+        self.assertEqual(vias[("SILANEXA", "#data_hora:COLETA,HRCOL")], "se:HRCOL")
+        self.assertEqual(vias[("SILANEXA", "COLETA")], "se:HRCOL=")
+        ddl = re.search(r"CREATE TABLE SILANEXA \((.*?)\);", l7_04.DDL, re.S).group(1)
+        self.assertIn("HRCOL TIME", ddl)
+
     def test_resultado_emissor_metodo_e_referencia_do_exame(self):
         self.assertEqual(self._via("SIRES01", "liberado_por_profissional_id"),
                          ("ID_TBCBOPRO_EMISSOR", "TBCBOPRO>ID_TBPROFIS>TBPROFIS"))
@@ -308,7 +319,7 @@ class Vinculo(unittest.TestCase):
         recusas = sum(n for rg, n in e["pendencias"].items()
                       if rg.startswith("restricao_destino_") or rg == "pai_pendente")
         self.assertEqual(e["gravados"] + recusas, len(l7_04.ASSINATURA_EXAME))
-        self.assertEqual(e["gravados"], 4)
+        self.assertEqual(e["gravados"], 5)  # rodada 4: o exame 102 grava (requisição com setor NULL, DDL 10_SADT/09)
         self.assertFalse(hasattr(l7_04, "ESPERADO_ASSINATURA_ANTES"))
 
     def test_vinculo_depois_do_exame_e_do_cabecalho(self):

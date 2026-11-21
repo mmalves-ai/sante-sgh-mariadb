@@ -12,12 +12,13 @@ from sante_conector.sintetica_d import l8_03
 
 CARREGADAS = ["TBCOSPPROF", "TBCRECOO", "TBCREMED", "TBCREPRS", "TBCTRDTH", "TBCTRMEM", "TBCTRTHM", "TBDTHCDC",
               "TBINDICE", "FCPARAM", "TBIRREGULARID", "TBIRREGULARID_TBMODULO", "TBITEATE", "TBLOCCON", "TBPORMED",
-              "TBPROCTO", "TBTIPPRO"]
+              "TBPROCTO", "TBTIPPRO", "TBMATMED", "TBREFMEMTUSS", "TBPERTHM"]
 # descarte de produto (linha em sem_carga.tsv pedida no L8-03.json; TBIRREGCTRCTA já está lá)
-DESCARTE = ["TBIRREGCTRCTA", "TBCONVPERCTAPAC", "TBCTRTAT"]
+DESCARTE = ["TBIRREGCTRCTA", "TBCTRTAT"]
 # aguardam regra genérica do motor (pedidos em docs/obra/fatias/f4/saida/L8-03.json)
-# TBPERTHM: declaração pronta comentada (as linhas sem destino dela estão em colunas.d/L8-04.tsv)
-BLOQUEADAS = ["TBMATMED", "TBPACTHM", "TBPERTHM"]
+# r4: TBMATMED, TBREFMEMTUSS e TBPERTHM carregam; TBPACTHM espera o componente encadeado na chave composta (pedido 3)
+# r4 (revisão): TBCONVPERCTAPAC volta a bloqueada (a escolha da fonte pagadora em TBCONVEN, L5-06, ainda não carrega)
+BLOQUEADAS = ["TBPACTHM", "TBCONVPERCTAPAC"]
 DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_cooperativa"],
             "TBCREMED": ["credenciamento_cobranca"],
             "TBCREPRS": ["credenciamento_cobranca"], "TBCTRDTH": ["tabela_preco"], "TBCTRMEM": ["tabela_preco"],
@@ -26,7 +27,8 @@ DESTINOS = {"TBCOSPPROF": ["funcao_equipe_cobranca"], "TBCRECOO": ["membro_coope
             "TBIRREGULARID": ["tipo_pendencia_conta"], "TBIRREGULARID_TBMODULO": ["tipo_pendencia_conta_modulo"],
             "TBITEATE": ["tipo_atendimento_tabela"], "TBLOCCON": ["local_cobranca"],
             "TBPROCTO": ["item_faturavel", "grupo_faturamento"], "TBPORMED": ["valor_porte_medico", "porte_procedimento"],
-            "TBTIPPRO": ["tipo_servico_faturavel"]}
+            "TBTIPPRO": ["tipo_servico_faturavel"], "TBMATMED": ["item_referencia_matmed"],
+            "TBREFMEMTUSS": ["equivalencia_matmed_tuss"], "TBPERTHM": ["regra_percentual_cobranca"]}
 OBRIGATORIAS = {
     "funcao_equipe_cobranca": {"codigo", "descricao", "tipo_funcao"},
     "membro_cooperativa": {"cooperativa_medica_id", "profissional_id", "vigencia_inicio"},
@@ -45,7 +47,10 @@ OBRIGATORIAS = {
     "valor_porte_medico": {"porte_procedimento_id", "ocorrido_em", "vigencia_inicio", "valor"},
     "porte_procedimento": {"codigo", "descricao", "tipo_porte"},
     "tipo_servico_faturavel": {"codigo", "descricao"},
-    "sequencia_negocio": {"tipo", "proximo_valor"}}
+    "sequencia_negocio": {"tipo", "proximo_valor"},
+    "item_referencia_matmed": {"fonte_referencia", "codigo_referencia", "descricao", "tipo_produto"},
+    "equivalencia_matmed_tuss": {"item_referencia_matmed_id", "termo_terminologia_id", "vigencia_inicio"},
+    "regra_percentual_cobranca": {"fonte_pagadora_id", "tabela_preco_id", "componente", "vigencia_inicio"}}
 CADEIA_PROFISSIONAL = "TBCBOPRO>ID_TBPROFIS>TBPROFIS"
 
 
@@ -147,12 +152,14 @@ class Plano(unittest.TestCase):
     def test_presumidos_e_vigencia_sem_fonte(self):
         for t, d, lit in (("TBCTRDTH", "referencia", "=~propria"), ("TBCTRMEM", "tipo_item", "=~misto"),
                           ("TBCTRTHM", "tipo_item", "=~honorario"), ("TBCTRDTH", "tipo_item", "=diaria_taxa"),
-                          ("TBITEATE", "padrao", "=~proprio"), ("FCPARAM", "modulo", "=~fonte_pagadora"),
+                          ("FCPARAM", "modulo", "=~fonte_pagadora"),
                           ("FCPARAM", "aberta_em", "=~@data_carga"), ("TBINDICE", "tipo_indice", "=~outro"),
                           ("TBCRECOO", "vigencia_inicio", "@vigencia_carga"),
                           ("TBCREPRS", "vigencia_inicio", "@vigencia_carga"),
                           ("TBDTHCDC", "vigencia_inicio", "@vigencia_carga")):
             self.assertEqual(self._col(t, d)[0]["coluna"], lit, (t, d))
+        # r4: o padrão do tipo de atendimento vem da TAB (lista lida pelo nome); o presumido é só a reserva
+        self.assertEqual([c["coluna"] for c in self._col("TBITEATE", "padrao")], ["TAB", "=~proprio"])
 
     def test_competencia_composta_de_ano_e_mes(self):
         self.assertEqual(self._col("FCPARAM", "competencia")[0]["coluna"], "#data:ANOPRO,MESPRO")
@@ -190,30 +197,37 @@ class Declaracoes(unittest.TestCase):
         for l in self.linhas:
             if l["tabela"] in DESCARTE + BLOQUEADAS:
                 self.assertEqual(l["destino"], "", l["tabela"])
-                self.assertTrue(l["motivo"].startswith(("L8-03: ", "L8-03 r3")), l["tabela"])
+                self.assertTrue(l["motivo"].startswith(("L8-03: ", "L8-03 r3", "L8-03 r4")), l["tabela"])
 
     def test_cooperativa_e_indice_por_procedimento_na_l8_02(self):
         # rodada 3: TBCOOPER e TBINDPRO foram declaradas pela L8-02 (uma tabela, um arquivo)
         self.assertFalse([l for l in self.linhas if l["tabela"].lstrip("#") in ("TBCOOPER", "TBINDPRO")])
 
-    def test_percentuais_prontos_e_comentados(self):
-        pe = [l for l in self.linhas if l["tabela"] == "#TBPERTHM"]
+    def test_percentuais_declarados(self):
+        # r4: descomentada (as linhas sem destino saíram do L8-04.tsv)
+        self.assertFalse([l for l in self.linhas if l["tabela"] == "#TBPERTHM"])
+        pe = [l for l in self.linhas if l["tabela"] == "TBPERTHM"]
         # CH_VALOR_CRED sem coluna no destino (pedido 1: usa_ch_credenciado à F2.2)
         self.assertEqual({l["destino"].split(".")[0] for l in pe if l["coluna"] != "CH_VALOR_CRED"},
                          {"regra_percentual_cobranca"})
 
     def test_catalogo_licenciado_nunca_carregado(self):
-        self.assertFalse([l for l in self.linhas if l["tabela"] == "TBMATMED" and l["destino"]])
+        # r4: o item de mat/med só entra pela tabela PRÓPRIA (filtro de linha pela marca da tabela, pendência baixa)
+        for t, col in (("TBMATMED", "TAB"), ("TBREFMEMTUSS", "TAB_FCREFUND")):
+            vias = ";".join(l["via"] for l in self.linhas if l["tabela"] == t)
+            for marca in ("REF_BRA", "REF_SIMP"):
+                self.assertIn("so_se:%s>TBCTRMEM>%s=N,!licenca_nao_comprovada" % (col, marca), vias, t)
+        self.assertTrue([l for l in self.linhas if l["tabela"] == "TBMATMED" and l["coluna"] == "=outra"])
 
     def test_credenciamento_do_medico_num_so_cadastro(self):
         # profissional_fonte_pagadora vem de TBCBOPRO_TBCONVEN (L5-06): gravar TBCREMED nos dois duplicaria o fato
         ds = {l["destino"].split(".")[0] for l in self.linhas if l["tabela"] == "TBCREMED" and l["destino"]}
         self.assertEqual(ds, {"credenciamento_cobranca"})
 
-    def test_matmed_bloqueada_com_decisao_por_tabela(self):
-        ms = {l["motivo"] for l in self.linhas if l["tabela"] == "TBMATMED"}
-        self.assertEqual(len(ms), 1)
-        self.assertIn("PRÓPRIAS", ms.pop())
+    def test_matmed_com_decisao_por_tabela(self):
+        ms = [l["motivo"] for l in self.linhas if l["tabela"] == "TBMATMED" and l["destino"]]
+        self.assertTrue(ms)
+        self.assertIn("PRÓPRIA", ms[0])
 
     def test_tipo_de_pendencia_so_na_conta(self):
         ds = {l["destino"].split(".")[0] for l in self.linhas if l["tabela"] == "TBIRREGULARID" and l["destino"]}
@@ -236,14 +250,19 @@ class Declaracoes(unittest.TestCase):
                                  for a, b in (("A", "ativa"), ("I", "inativa"))} |
                          {(t, a, b) for t in ("TBCREMED", "TBCREPRS")
                           for a, b in (("I", "internacao"), ("E", "externa"), ("A", "ambulatorial"), ("U", "urgencia"),
-                                       ("T", ""))})
+                                       ("T", ""))} |
+                         {("TBMATMED", "A", "ativo"), ("TBMATMED", "I", "inativo"), ("TBPERTHM", "T", "todos"),
+                          ("TBPERTHM", "I", "internado"), ("TBPERTHM", "E", "externo"), ("TBITEATE", "SUS", "sus"),
+                          ("TBITEATE", "TUSS", "tuss"), ("TBITEATE", "PRESENCIAL", "presencial"),
+                          ("TBITEATE", "PROPRIA", "proprio"), ("TBITEATE", "PRÓPRIA", "proprio")})
 
     def test_referencia_licenciada_bloqueada_nunca_descartada(self):
         # r3 (correção): equivalências do item de mat/med carregam nas tabelas PRÓPRIAS; só a licenciada espera licença
         with open(_raiz() / "sem_carga.tsv", newline="", encoding="utf-8") as f:
             sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
-        for t in ("TBREFUNI", "TBREFMEMTUSS"):
-            self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "mecanismo_pedido"), t)
+        # r4: TBREFMEMTUSS carrega (filtro de licença); TBREFUNI aguarda o modelo (sem fonte pagadora na linha)
+        self.assertNotIn("TBREFMEMTUSS", sc)
+        self.assertEqual((sc["TBREFUNI"]["situacao"], sc["TBREFUNI"]["causa"]), ("bloqueada", "aguarda_modelo"))
         self.assertNotIn("TBTIPPRO", sc)
 
 
@@ -291,12 +310,14 @@ class Sintetica(unittest.TestCase):
         esp = l8_03.linhas(None, lambda t, v: ins.append(t))
         self.assertEqual(set(esp), set(CARREGADAS))
         for t, e in esp.items():
+            if t == "TBPERTHM":  # desdobrado: "gravados" conta itens, não linhas
+                continue
             recusas = sum(n for rg, n in e["pendencias"].items()
-                          if rg.startswith("restricao_destino_") or rg == "pai_pendente")
+                          if rg.startswith("restricao_destino_") or rg in ("pai_pendente", "licenca_nao_comprovada"))
             self.assertEqual(e["gravados"] + recusas, ins.count(t), t)
 
     def test_bloqueadas_fora_da_imagem(self):
-        for t in BLOQUEADAS + DESCARTE:
+        for t in [x for x in BLOQUEADAS + DESCARTE if x not in l8_03.PAIS_ORIGEM]:
             self.assertNotIn("CREATE TABLE %s " % t, l8_03.DDL)
 
 
@@ -455,8 +476,9 @@ class ValoresNoDestino(unittest.TestCase):
 
     def test_tipo_de_atendimento(self):
         self.assertEqual(self.lido["tipo_atendimento_tabela"],
-                         [("atendimento_1", "Consulta exemplo", "proprio", "1"),
-                          ("atendimento_2", "Exame exemplo", "proprio", "2")])
+                         [("atendimento_1", "Consulta exemplo", "tuss", "1"),
+                          ("atendimento_2", "Exame exemplo", "tuss", "2"),
+                          ("atendimento_5", "Tipo exemplo sem tabela", "proprio", "5")])
 
     def test_numeracao_fiscal_inativa_para_conferir(self):
         self.assertEqual(self.lido["sequencias"], [

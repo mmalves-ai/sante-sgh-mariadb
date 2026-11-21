@@ -28,6 +28,19 @@
    "arquivo": "conector/mapa (origem do historico_padrao) + decisão do integrador",
    "mudanca": "pedido 1 (coluna, não tabela): quando alguma tabela do mapa alimentar historico_padrao, declarar GPORIGEM.HISTPR -> origem_bem.historico_padrao_id pela referência a ela",
    "motivo": "hoje nenhuma tabela do mapa tem historico_padrao como destino (o L8-02 registra o mesmo para RPINTEVE.HIST); a coluna ficaria sempre nula com pai_inexistente"
+  },
+  {
+   "arquivo": "L8-11 e L8-12 (títulos)",
+   "mudanca": "rodada 4: MFLANGSI segue BLOQUEADA (sem_declaracao): depende de MFCTAREC (L8-11, declaração pronta e comentada na r4) e MFCONPAG (L8-12) gravarem os títulos; declaração desenhada no pedido A (ref:MFCONPAG.(EMPRESA,FORN,DOC,TIPO,SERIE)=(...)/titulo_pagar;se:TP_LAN=1 e ref:MFCTAREC.(EMPRESA,COD,DOC,DEV,SERIE)=(EMPRESA,FORN,DOC,TIPO,SERIE)/titulo_receber;se:TP_LAN=2, #grupo_seq@..., #grupo_razao:VALOR@...)",
+   "motivo": "não feita nesta rodada por orçamento de turnos do agente"
+  },
+  {
+   "arquivo": "(nenhum compartilhado)",
+   "mudanca": "r4 correção: MFCABECLANC prova a carga na própria imagem (filhos MFLANCTO e MFCTAREC só lidos, formas iguais às da L8-11) e o agrupador sem filho recebe a data da carga (=@data_carga, concorrente) em vez de ser recusado. valor_receber soma MFCTAREC pela origem (o mesmo valor que o título a receber terá quando o pedido 20 da L8-11 for aplicado)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py (integrador)",
+   "mudanca": "Pedido B (r4 correção). MFLANGSI agora declarada (rateio_lancamento pelo título agrupado: ref:MFCONPAG.(..)/titulo_pagar se TP_LAN=1, ref:MFCTAREC.(..)/titulo_receber se TP_LAN=2). Ordem: MFLANGSI (756) vem ANTES de MFCTAREC (776) e MFCONPAG (882): declarar MFLANGSI -> MFCTAREC e MFLANGSI -> MFCONPAG. Não há ciclo real: a natureza dos títulos lê o rateio só na ORIGEM (ref:MFLANGSI.(..)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES termina em TBITEDES); se o gerador emitir MFCTAREC/MFCONPAG -> MFLANGSI por essa encadeada, ela não deve virar aresta (só o último passo grava referência). Também depende do pedido 20 da L8-11 (títulos gravados)."
   }
  ]
 }

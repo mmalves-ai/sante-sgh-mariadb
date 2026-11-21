@@ -189,3 +189,9 @@ TBLOCCON	TBCENCUS	rodada 4 (pedido 8 da L8-03): centro de custo do local por ref
 TBUNIDADEMEDIDA	TBUNICON	rodada 4 (pedido 19 da L6-10): referência declarada na fatia sem FK na origem
 TBPERTHM	TBCONVEN	rodada 4 (pedido 8 da L8-03): fonte pagadora da regra de percentual (declaração da fatia) sem FK na origem
 MFLANCTO	TBCENCUS	rodada 4 (pedido 10 da L8-11): centro de custo do movimento por referência declarada sem FK na origem
+FCREFUND	TBMATMED	L8-01 r4: referência declarada na fatia sem FK na origem; o pai vinha depois do filho na ordem de carga (item do preço pela chave alternativa composta, NOT NULL)
+FCREFUND	TBCTRMEM	L8-01 r4: filtro de linha pela tabela pai (so_se) lido na origem; a tabela de preço vem antes do seu histórico
+GECTRLENTREGADOCSAIDA	GECADDISPENSACAO	L7-08 r4: o setor da entrega é achado pelo código (cod:setor_funcional.codigo) no setor funcional que a dispensação cria (destino agrupado por local de consumo); a dispensação vinha depois da entrega na ordem de carga
+TBDIGITAL_ESPECIALIDADE	TBESPEC	L8-16 r4: a equivalência de especialidade do parceiro digital acha a especialidade do hospital pela chave alternativa (TBESPEC.ID_TBDIGITAL_ESPECIALIDADE, referência do pai para o filho); a especialidade vinha depois na ordem de carga
+MFDESACR	MFCTAREC	L8-12 r4: o ajuste a receber (TP_LAN 1) acha a parcela a receber pela chave de negócio declarada na fatia, sem FK na origem
+TBMEDESP	TBPROFIS	conferidor r4: o profissional da especialidade vem pela referência encadeada ref:TBCBOPRO>ID_TBPROFIS>TBPROFIS; com TBESPEC adiantada (ciclo da L8-16) a especialidade do médico passou a vir antes do profissional

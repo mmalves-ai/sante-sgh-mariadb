@@ -51,7 +51,8 @@
    "n": 8,
    "arquivo": "orquestrador (imagem real, só domínio)",
    "mudanca": "confirmar os 3 códigos de TBCTRTAT e gravar os pares TBITEATE.TAB -> tipo_atendimento_tabela.padrao (pedido 16 da rodada 2)",
-   "motivo": "padrão do tipo de atendimento segue =~proprio presumido"
+   "motivo": "padrão do tipo de atendimento segue =~proprio presumido",
+   "atendido": "r4 (fatia): TAB por ref:TBCTRTAT>NOME com pares em valores.d/L8-03.tsv (SUS, TUSS, PRESENCIAL, PROPRIA); o orquestrador confirma os 3 nomes com a imagem de referência"
   },
   {
    "n": 9,
@@ -92,6 +93,34 @@
    "mudanca": "DDL: colunas de cobrança padrão do local em local_cobranca: tabela_preco_matmed_id e tabela_preco_material_id (FK tabela_preco; CODMEM e CODMAT pela ref:TBCTRMEM com o código derivado matmed_), usa_referencia_unificada e usa_referencia_operadora (REFUNI, REFGEAP), cobra_paciente_particular e despesa_paciente (CPP, DESPAC, booleano_sn). Significado exato de cada coluna a confirmar pelo orquestrador com a imagem (só domínio)",
    "motivo": "são os padrões de cobrança do lançamento por local; o modelo não tem onde guardá-los e o local entra sem eles",
    "atendido": "rodada 4 (DDL): db/migracoes/12_FAT/12"
+  },
+  {
+   "n": 15,
+   "arquivo": "conector/sante_conector/depara.py (integrador)",
+   "mudanca": "de-para 'tiss' com várias tabelas: depara=tiss:19|20 (o termo pelo código na primeira tabela que o tiver; nenhuma: catalogo_codigo_inexistente uma vez)",
+   "motivo": "TBREFMEMTUSS.COD_TUSS é de material (tabela 19) ou de medicamento (20) sem marca na linha; hoje vai por duas declarações concorrentes (tiss:19 e, pela própria linha, tiss:20) e cada linha deixa uma catalogo_codigo_inexistente da tabela que não tem o código (ruído baixo, visível)"
+  },
+  {
+   "n": 16,
+   "arquivo": "db/migracoes/12_FAT (trilha F2.2)",
+   "mudanca": "modelo para TBREFUNI: equivalência do item de mat/med (item_referencia_matmed) ao código da referência UNIFICADA (codigo, classificação, código alfa), sem fonte pagadora (ou equivalencia_matmed_fonte_pagadora.fonte_pagadora_id anulável = vale para os locais de cobrança que usam a referência unificada, local_cobranca com a marca)",
+   "motivo": "TBREFUNI (6974 na referência) liga o item da tabela do hospital ao código da referência unificada; a linha não tem fonte pagadora e o destino do mapa exige fonte_pagadora_id NOT NULL: segue BLOQUEADA (aguarda_modelo); com o modelo, carrega com o filtro de licença de TBMATMED"
+  },
+  {
+   "n": 17,
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "db/migracoes/12_FAT (trilha F2.2)",
+   "mudanca": "colunas de cobrança no item_referencia_matmed para o item da tabela PRÓPRIA: unidade de armazenagem (unidade_armazenagem_id), quantidade por fator (FATOR_Q), classificação fiscal, marca de fracionado, prótese, uso restrito hospitalar, uso, alteração de estoque, lançamento com hora final, condição de pagamento, periodicidade e quantidade por dia, percentual de incidência, tipo de equivalência TISS, código do item no fabricante, identificação, cobrança de taxa de logística, datas de inclusão e atualização (ou um JSON dados_origem)",
+   "motivo": "revisão adversarial r4: ~28 colunas do item de mat/med da tabela própria ficavam sem destino com motivo genérico; são dado financeiro/fiscal do hospital, NÃO descarte. FATOR (fator_divisao) e UNI_CON (unidade_medida_id pela sigla) já carregam; CLASSIF entra no código (TAB_COD_CLASSIF)"
+  },
+  {
+   "n": 18,
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "conector/sante_conector/carga_mapa.py (integrador)",
+   "mudanca": "opção genérica de coluna para a concorrente: ao preencher, apagar também catalogo_codigo_inexistente/codigo_inexistente_destino das anteriores (como senao faz com valor_fora_do_dominio), OU o pedido 15 (depara=tiss:19|20)",
+   "motivo": "TBREFMEMTUSS: cada equivalência GRAVADA deixa uma catalogo_codigo_inexistente falsa (a da tabela TUSS que não tem o código); a conciliação não separa o erro real (código ausente nas duas) do ruído. Sem mudança de motor a fatia não resolve (edição de motor vedada às fatias em paralelo)"
   }
  ],
  "pedidos_rodada2": [

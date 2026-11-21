@@ -84,23 +84,23 @@ PRKITSOLITENS	ID_TBUNICON_UNI_PRESC	unidade_prescricao.descricao	texto_nome		uni
 PRKITSOLITENS	ID_TBUNICON_UNI_PRESC	unidade_prescricao.unidade_medida_id	chave_origem		unidade_prescricao;ref:TBUNICON	L6-11 r3: unidade de medida de estoque equivalente (TBUNICON grava unidade_medida, L7-07); recusada: pai_pendente
 PRKITSOLITENS	@id:unidade_prescricao	kit_prescricao_item.unidade_prescricao_id				L6-11 r3: unidade de prescrição gravada ou adotada nesta linha (substitui a chave alternativa pela sigla de integração, que casava em 7 de 53 códigos)
 PRKITSOLITENS	ID_PRFORMULA		chave_origem			não carregada: a fórmula da origem é de cálculo de dose (formula_calculo_dose), e o destino pede fórmula padrão de manipulação, outra entidade
-#--- TBKITPRO: BLOQUEADA (sem_carga.tsv, regra_faltante): cada linha da origem é um ITEM do kit do cuidado (PROCTO); o kit tem de ser UM por cuidado. O principal do mapa é kit_cuidado_enfermagem e o motor não adota no principal (M5) nem deixa a fatia escolher o principal (o agrupar exige o kit como secundário): declaração pronta e comentada na forma M5 (kit adotado pelo código do cuidado; item secundário com #seq:PROCTO)
-#TBKITPRO	#codigo_derivado:PROCTO:30:kit_cuidado_	kit_cuidado_enfermagem.codigo			adotar:codigo	L6-11 r3: UM kit por cuidado (código pelo cuidado, prefixo de domínio), adotado pelas linhas seguintes do mesmo cuidado (M5: adotar no principal)
-#TBKITPRO	PROCTO	kit_cuidado_enfermagem.descricao	texto_nome		ref:TBPROENF>NOME	o nome do kit é o do cuidado de enfermagem; sem nome: recusa (NOT NULL)
-#TBKITPRO	PROCTO	kit_cuidado_enfermagem.cuidado_enfermagem_id	chave_origem		ref:TBPROENF	cuidado de enfermagem pela chave COD; recusado: pai_pendente
-#TBKITPRO	@id	kit_cuidado_enfermagem_item.kit_cuidado_enfermagem_id				item do kit do cuidado
-#TBKITPRO	#seq:PROCTO	kit_cuidado_enfermagem_item.sequencia				L6-11 r3: posição do item no kit do cuidado, na ordem da chave
-#TBKITPRO	ID_GEUNIPRESC	kit_cuidado_enfermagem_item.insumo_id	chave_origem		ref:GEUNIPRESC>ITEM>GEITENS	produto: o item da unidade de prescrição do insumo leva ao insumo
-#TBKITPRO	QTDE	kit_cuidado_enfermagem_item.quantidade	decimal			quantidade (vazia: NOT NULL recusa; zero: CHECK)
-#TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.codigo	codigo_char		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC;antes;adotar:codigo	L6-11 r3 (revisão): unidade de prescrição pelo código da unidade da origem (TBUNICON), criada antes e adotada pelo código (o mesmo código que a L7-07 e as fatias irmãs adotam; medido na referência: 100% dos códigos usados existem em TBUNICON, nenhum colide com o código numérico das unidades de TBUNIDADEMEDIDA)
-#TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.sigla	codigo_char		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC	L6-11 r3: a origem usa o próprio código como sigla (até 7 posições; cabe em 10)
-#TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.descricao	texto_nome		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC>TBUNICON>NOME	L6-11 r3: descrição = nome da unidade na origem; sem nome: recusa (NOT NULL)
-#TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.unidade_medida_id	chave_origem		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC>TBUNICON	L6-11 r3: unidade de medida de estoque equivalente (TBUNICON grava unidade_medida, L7-07); recusada: pai_pendente
-#TBKITPRO	@id:unidade_prescricao	kit_cuidado_enfermagem_item.unidade_prescricao_id				L6-11 r3: unidade de prescrição gravada ou adotada nesta linha (substitui a chave alternativa pela sigla de integração, que casava em 7 de 53 códigos)
-#TBKITPRO	ID_GETABVIA	kit_cuidado_enfermagem_item.via_de_uso_id	chave_origem		ref:GETABVIA	via de uso pela chave COD
-#TBKITPRO	INTERVALO_INICIAL	kit_cuidado_enfermagem_item.intervalo_inicial_horas	inteiro			início do intervalo em horas
-#TBKITPRO	INTERVALO_FINAL	kit_cuidado_enfermagem_item.intervalo_final_horas	inteiro			fim do intervalo (menor que o início: CHECK)
-#TBKITPRO	ACM	kit_cuidado_enfermagem_item.a_criterio_medico	booleano_sn			a critério médico S/N
+#--- TBKITPRO (rodada 4): cada linha da origem é um ITEM do kit do cuidado (PROCTO); um kit por cuidado pelo agrupar:PROCTO no destino principal (kit_cuidado_enfermagem), o item como secundário
+TBKITPRO	#codigo_derivado:PROCTO:30:kit_cuidado_	kit_cuidado_enfermagem.codigo			agrupar:PROCTO	L6-11 r4: UM kit por cuidado (código pelo cuidado, prefixo de domínio): agrupar:PROCTO no principal; as linhas do cuidado são os itens
+TBKITPRO	PROCTO	kit_cuidado_enfermagem.descricao	texto_nome		ref:TBPROENF>NOME	o nome do kit é o do cuidado de enfermagem; sem nome: recusa (NOT NULL)
+TBKITPRO	PROCTO	kit_cuidado_enfermagem.cuidado_enfermagem_id	chave_origem		ref:TBPROENF	cuidado de enfermagem pela chave COD; recusado: pai_pendente
+TBKITPRO	@id	kit_cuidado_enfermagem_item.kit_cuidado_enfermagem_id				item do kit do cuidado
+TBKITPRO	#grupo_seq@PROCTO	kit_cuidado_enfermagem_item.sequencia				L6-11 r4: posição do item no kit do cuidado, na ordem da chave da origem
+TBKITPRO	ID_GEUNIPRESC	kit_cuidado_enfermagem_item.insumo_id	chave_origem		ref:GEUNIPRESC>ITEM>GEITENS	produto: o item da unidade de prescrição do insumo leva ao insumo
+TBKITPRO	QTDE	kit_cuidado_enfermagem_item.quantidade	decimal			quantidade (vazia: NOT NULL recusa; zero: CHECK)
+TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.codigo	codigo_char		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC;antes;adotar:codigo	L6-11 r3 (revisão): unidade de prescrição pelo código da unidade da origem (TBUNICON), criada antes e adotada pelo código (o mesmo código que a L7-07 e as fatias irmãs adotam; medido na referência: 100% dos códigos usados existem em TBUNICON, nenhum colide com o código numérico das unidades de TBUNIDADEMEDIDA)
+TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.sigla	codigo_char		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC	L6-11 r3: a origem usa o próprio código como sigla (até 7 posições; cabe em 10)
+TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.descricao	texto_nome		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC>TBUNICON>NOME	L6-11 r3: descrição = nome da unidade na origem; sem nome: recusa (NOT NULL)
+TBKITPRO	ID_GEUNIPRESC	unidade_prescricao.unidade_medida_id	chave_origem		unidade_prescricao;ref:GEUNIPRESC>UNI_PRESC>TBUNICON	L6-11 r3: unidade de medida de estoque equivalente (TBUNICON grava unidade_medida, L7-07); recusada: pai_pendente
+TBKITPRO	@id:unidade_prescricao	kit_cuidado_enfermagem_item.unidade_prescricao_id				L6-11 r3: unidade de prescrição gravada ou adotada nesta linha (substitui a chave alternativa pela sigla de integração, que casava em 7 de 53 códigos)
+TBKITPRO	ID_GETABVIA	kit_cuidado_enfermagem_item.via_de_uso_id	chave_origem		ref:GETABVIA	via de uso pela chave COD
+TBKITPRO	INTERVALO_INICIAL	kit_cuidado_enfermagem_item.intervalo_inicial_horas	inteiro			início do intervalo em horas
+TBKITPRO	INTERVALO_FINAL	kit_cuidado_enfermagem_item.intervalo_final_horas	inteiro			fim do intervalo (menor que o início: CHECK)
+TBKITPRO	ACM	kit_cuidado_enfermagem_item.a_criterio_medico	booleano_sn			a critério médico S/N
 PRFAVORITO	@estabelecimento	painel_filtro_usuario.estabelecimento_id				estabelecimento único do cliente
 PRFAVORITO	ID_PRLOCPACDEFAULT	painel_filtro_usuario.usuario_id	chave_origem		ref:PRLOCPACDEFAULT>USUARIO>TBUSERS	usuário da preferência (login do pai na origem leva ao usuário, como PRFAVORITO_EXIBIR na L6-05); inexistente: recusa (NOT NULL)
 PRFAVORITO	TIPO_ATENDIMENTO	painel_filtro_usuario.tipo_atendimento	codigo_char	valores		letra do tipo de atendimento (domínio de L6-09/L5-01); sem par: padrão (todos) com valor_fora_do_dominio
@@ -164,7 +164,7 @@ TBALERGIA_TBPRINC	ID_TBALERGIA	alergeno_principio_ativo.alergeno_id	chave_origem
 TBALERGIA_TBPRINC	ID_TBPRINC	alergeno_principio_ativo.principio_ativo_id	texto		ref:TBPRINC>COD_DCB;cod:principio_ativo.codigo_dcb	L6-11: princípio ativo oficial pelo código DCB do princípio da origem
 TBALERGIA_TBPRINC	SITUACAO	alergeno_principio_ativo.ativo	booleano_ai			L6-11: situação A/I
 #--- PRPADEVOL, PRFORMULCOMP e PRRESPOSTA: PREVOLUCAO grava a versão atual do modelo migrado (modelo_documento_versao, rascunho, número 1000 reservado acima das versões históricas da L6-13); campos, leiaute e opções entram nela
-#--- PRRESPOSTA: BLOQUEADA (sem_carga.tsv, regra_faltante: opção replicada por campo). Declaração pronta e comentada abaixo: a chave alternativa ref:PRPADEVOL.ID_PRPERGUNTA dá pai_ambiguo para pergunta em mais de um modelo (559 perguntas, 1.539 de 3.849 opções na referência)
+#--- PRRESPOSTA (rodada 4): opção replicada por campo (por_pai): pergunta usada em vários modelos ganha uma opção em cada campo
 PREVOLUCAO	@id	modelo_documento_versao.modelo_documento_clinico_id			modelo_documento_versao	L6-11: versão atual do modelo migrado (destino secundário)
 PREVOLUCAO	=1000	modelo_documento_versao.numero_versao			modelo_documento_versao	L6-11: número reservado da versão atual migrada, acima das versões históricas (HTCABECFORMULCOMP, L6-13, numera 1..n pela origem); a numeração pelo maior histórico + 1 continua pedida (saida/L6-11.json)
 PREVOLUCAO	=inclusao	modelo_documento_versao.operacao			modelo_documento_versao	L6-11: a versão nasce da migração
@@ -189,23 +189,27 @@ PRPADEVOL	#retrato:*	modelo_campo.propriedades				L6-11: propriedades de apresen
 PRFORMULCOMP	ID_PRPADEVOL	modelo_layout.modelo_documento_versao_id	chave_origem		ref:PRPADEVOL>ID_EVOLUCAO>PREVOLUCAO/modelo_documento_versao	L6-11: versão do modelo do campo (encadeada ao destino secundário)
 PRFORMULCOMP	#codigo_derivado:ID:150:componente_	modelo_layout.nome				L6-11: nome único do componente (como HTFORMULCOMP na L6-13)
 PRFORMULCOMP	#retrato:*	modelo_layout.conteudo				L6-11: componente visual da origem (classe, pai, propriedades, ordem) como retrato JSON
-#PRRESPOSTA	ID_RESPOSTA	modelo_campo_opcao.codigo	inteiro			L6-11 (antes L6-10): código estável da opção = chave da origem (único; o COD pode faltar ou repetir)
-#PRRESPOSTA	ID_PRPERGUNTA	modelo_campo_opcao.modelo_campo_id	chave_origem		ref:PRPADEVOL.ID_PRPERGUNTA	L6-11: campo do modelo pela ligação modelo x pergunta; pergunta em mais de um modelo: pai_ambiguo e recusa (a opção é por campo; replicar por modelo pede mecanismo, saida/L6-11.json)
-#PRRESPOSTA	COD	modelo_campo_opcao.rotulo	texto		ref:PRCADRESP>DESCRICAO	L6-11: rótulo = texto da resposta do catálogo de respostas (PRCADRESP, descarte duplicado) pelo COD; sem COD ou sem texto vale CONTEVOL (concorrentes)
-#PRRESPOSTA	CONTEVOL	modelo_campo_opcao.rotulo	texto_resumo:300			L6-11: rótulo alternativo: texto que a resposta insere na evolução; maior que 300: resumo
-#PRRESPOSTA	ATIVO	modelo_campo_opcao.ativo	booleano_sn			L6-11: S/N; nulo fica o padrão
-#PRRESPOSTA	ORDEM	modelo_campo_opcao.sequencia	inteiro_nao_negativo			L6-11: ordem da opção no campo; repetida no mesmo campo: restricao_destino_1062
+PRRESPOSTA	ID_RESPOSTA	modelo_campo_opcao.codigo	inteiro			L6-11 (antes L6-10): código estável da opção = chave da origem (único; o COD pode faltar ou repetir)
+PRRESPOSTA	ID_PRPERGUNTA	modelo_campo_opcao.modelo_campo_id	chave_origem		ref:PRPADEVOL.ID_PRPERGUNTA;por_pai	L6-11 r4: campo do modelo pela ligação modelo x pergunta; pergunta em vários modelos: uma opção por campo (por_pai); sem campo: pai_inexistente
+PRRESPOSTA	COD	modelo_campo_opcao.rotulo	texto		ref:PRCADRESP>DESCRICAO	L6-11: rótulo = texto da resposta do catálogo de respostas (PRCADRESP, descarte duplicado) pelo COD; sem COD ou sem texto vale CONTEVOL (concorrentes)
+PRRESPOSTA	CONTEVOL	modelo_campo_opcao.rotulo	texto_resumo:300			L6-11: rótulo alternativo: texto que a resposta insere na evolução; maior que 300: resumo
+PRRESPOSTA	ATIVO	modelo_campo_opcao.ativo	booleano_sn			L6-11: S/N; nulo fica o padrão
+PRRESPOSTA	ORDEM	modelo_campo_opcao.sequencia	inteiro_nao_negativo			L6-11: ordem da opção no campo; repetida no mesmo campo: restricao_destino_1062
 #--- PRPAREVOLIMG: BLOQUEADA (sem_carga.tsv, regra_faltante): imagem do modelo (dado clínico do modelo, mapa do corpo); espera #arquivo (M4); declaração pronta em F4-decisoes-destino.md
-#--- PRASSINATURA_CAB: BLOQUEADA (sem_carga.tsv, regra_faltante: M3 primeiro filho). Declaração pronta e comentada abaixo: a chave alternativa ao evento dá pai_ambiguo em todo documento com mais de um evento (51.039 de 1.325.865 na referência) e as colunas são NOT NULL. Alternativa sem motor novo pedida à L6-12 (saida/L6-11.json): PRASSINATURA_DOC grava o documento como secundário antes;agrupar:ID_PRASSINATURA_CAB
-#PRASSINATURA_CAB	@estabelecimento	documento_prontuario.estabelecimento_id				L6-11: estabelecimento único do cliente
-#PRASSINATURA_CAB	ID_HTPACIENTE	documento_prontuario.paciente_id	chave_origem		ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-11: paciente pela versão do cadastro (como PRCABEVOL na L6-12)
-#PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.atendimento_id	chave_origem		ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-11: atendimento (opcional no destino)
-#PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.tipo_documento_clinico_id	chave_origem		ref:PRTPASSINATURA	L6-11: tipo de documento clínico (L6-07)
-#PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.titulo	texto		ref:PRTPASSINATURA>DESCRICAO	L6-11: título = descrição do tipo de assinatura
-#PRASSINATURA_CAB	#codigo_derivado:ID_PRTPASSINATURA:64:assinatura_tipo_	documento_prontuario.entidade_origem				L6-11: identificador da origem: o evento assinado muda de tabela conforme o tipo; o par (tipo, ID_TABELA) fica único
-#PRASSINATURA_CAB	ID_TABELA	documento_prontuario.entidade_origem_id	inteiro			L6-11: id do evento assinado na origem (sem referência polimórfica)
-#PRASSINATURA_CAB	ID	documento_prontuario.profissional_id	chave_origem		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-11: autor = profissional do evento de assinatura (inscrição no conselho -> profissional)
-#PRASSINATURA_CAB	ID	documento_prontuario.referencia_em	data_hora		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>DATA_HORA_EVENTO	L6-11: momento clínico = evento de assinatura
-#PRASSINATURA_CAB	ID	documento_prontuario.lancado_em	data_hora		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>DATA_HORA_GRAVACAO	L6-11: gravação do evento
-#PRASSINATURA_CAB	ID	documento_prontuario.situacao_documento_prontuario_id	chave_origem		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>ID_PRSITDOCUMENTO>PRSITDOCUMENTO	L6-11: situação atual = a do evento
-#PRASSINATURA_CAB	#retrato:DOCUMENTO_CONSOLIDADO	documento_prontuario.conteudo				L6-11: documento consolidado (texto) guardado no conteúdo do documento como retrato JSON, sem perda, até o arquivo no armazenamento (M4: arquivo_id)
+#--- PRASSINATURA_CAB (rodada 4): o documento do prontuário nasce do cabeçalho; autor, momento e gravação pelo PRIMEIRO evento (min:DATA_HORA_EVENTO), situação atual pelo ÚLTIMO (max:); os eventos (PRASSINATURA_DOC, L6-12) apontam o documento por ref:PRASSINATURA_CAB
+PRASSINATURA_CAB	@estabelecimento	documento_prontuario.estabelecimento_id				L6-11: estabelecimento único do cliente
+PRASSINATURA_CAB	ID_HTPACIENTE	documento_prontuario.paciente_id	chave_origem		ref:HTPACIENTE>ID_RICADPAC>RICADPAC	L6-11: paciente pela versão do cadastro (como PRCABEVOL na L6-12)
+PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.atendimento_id	chave_origem		ref:HTATENDIMENTO>ID_ATCABECATEND>ATCABECATEND	L6-11: atendimento (opcional no destino)
+PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.tipo_documento_clinico_id	chave_origem		ref:PRTPASSINATURA	L6-11: tipo de documento clínico (L6-07)
+PRASSINATURA_CAB	ID_PRTPASSINATURA	documento_prontuario.titulo	texto		ref:PRTPASSINATURA>DESCRICAO	L6-11: título = descrição do tipo de assinatura
+PRASSINATURA_CAB	=documento_migrado	documento_prontuario.entidade_origem				L6-11 r4: o registro assinado muda de tabela conforme o tipo e não tem id do produto: o documento migrado identifica-se pelo cabeçalho da origem (único), sem referência polimórfica
+PRASSINATURA_CAB	ID	documento_prontuario.entidade_origem_id	inteiro			L6-11 r4: id do cabeçalho na origem (único: atende o UNIQUE entidade x id x versão)
+PRASSINATURA_CAB	ID	documento_prontuario.profissional_id	chave_origem		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>min:DATA_HORA_EVENTO>ID_TBCBOPRO>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-11 r4: autor = profissional do PRIMEIRO evento de assinatura (inscrição no conselho -> profissional); sem evento: pai_inexistente e recusa (NOT NULL)
+PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.profissional_id	chave_origem		ref:HTATENDIMENTO>ID_TBCBOPRO_ASSISTENTE>TBCBOPRO>ID_TBPROFIS>TBPROFIS	L6-11 r5: cabeçalho SEM evento (concorrente): autor = médico assistente da versão do atendimento (o pai_inexistente do evento fica como aviso); sem atendimento nem assistente: recusa visível (autor de documento clínico não se inventa; F4-decisoes-destino.md)
+PRASSINATURA_CAB	ID	documento_prontuario.referencia_em	data_hora		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>min:DATA_HORA_EVENTO>DATA_HORA_EVENTO	L6-11 r4: momento clínico = primeiro evento de assinatura
+PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.referencia_em	data_hora		ref:HTATENDIMENTO>DATA_HORA_ENTRADA	L6-11 r5: cabeçalho SEM evento (concorrente): momento clínico = entrada do atendimento
+PRASSINATURA_CAB	ID	documento_prontuario.lancado_em	data_hora		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>min:DATA_HORA_EVENTO>DATA_HORA_GRAVACAO	L6-11 r4: gravação do primeiro evento
+PRASSINATURA_CAB	ID_HTATENDIMENTO	documento_prontuario.lancado_em	data_hora		ref:HTATENDIMENTO>DATA_HORA_HISTORICO	L6-11 r5: cabeçalho SEM evento (concorrente): gravação = momento da versão do atendimento a que o documento se liga
+PRASSINATURA_CAB	ID	documento_prontuario.situacao_documento_prontuario_id	chave_origem		ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>max:ID>ID_PRSITDOCUMENTO>PRSITDOCUMENTO	L6-11 r4: situação atual = a do ÚLTIMO evento GRAVADO (maior ID do evento, sequencial e único: sem empate; o evento retroativo de data menor gravado depois também vale como o mais recente)
+#PRASSINATURA_CAB	=~migrado_sem_assinatura	documento_prontuario.situacao_documento_prontuario_id			cod:situacao_documento_prontuario.codigo	L6-11 r5: cabeçalho SEM evento de assinatura (concorrente): situação nativa de migração migrado_sem_assinatura (categoria aguardando_assinatura; semente pedida à F2.2 em saida/L6-11.json; PRONTA e comentada até a semente: o cod: concorrente é avaliado em toda linha e deixaria codigo_inexistente_destino em todos os documentos; até lá o cabeçalho sem evento é recusado com pai_inexistente + 1048, visível no painel (F4-decisoes-destino.md)
+PRASSINATURA_CAB	#retrato:DOCUMENTO_CONSOLIDADO,ID_TABELA,ID_PRTPASSINATURA	documento_prontuario.conteudo				L6-11 r4: documento consolidado (texto, sem perda) e o registro assinado na origem (tipo e ID_TABELA) no conteúdo do documento, até o arquivo (#arquivo, M4)

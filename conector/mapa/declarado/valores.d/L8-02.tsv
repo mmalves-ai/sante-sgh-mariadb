@@ -20,3 +20,8 @@ RPRPA	METODO_ENVIO	rpa.metodo_envio	E	esocial	L8-02: E é o envio pelo eSocial g
 #SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	T	todos	L8-02 r3: todas as contas
 TBCOOPER	TP_CONTA	cooperativa_medica.tipo_conta_bancaria	C	corrente	L8-02 r3: conta corrente
 TBCOOPER	TP_CONTA	cooperativa_medica.tipo_conta_bancaria	P	poupanca	L8-02 r3: conta poupança
+SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	A	ambulatorial	L8-02 r4: tipo de conta da origem (A, E, U, I; T = todos), como em FCCTAEXT
+SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	E	externo	L8-02 r4: tipo de conta da origem (A, E, U, I; T = todos), como em FCCTAEXT
+SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	U	urgencia	L8-02 r4: tipo de conta da origem (A, E, U, I; T = todos), como em FCCTAEXT
+SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	I	internacao	L8-02 r4: tipo de conta da origem (A, E, U, I; T = todos), como em FCCTAEXT
+SIREFCON	TIPO_CTA	equivalencia_item_fonte_pagadora.tipo_atendimento	T	todos	L8-02 r4: tipo de conta da origem (A, E, U, I; T = todos), como em FCCTAEXT

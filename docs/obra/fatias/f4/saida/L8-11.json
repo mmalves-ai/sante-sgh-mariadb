@@ -77,6 +77,37 @@
   {
    "arquivo": "catalogos/carregadores/ (codigo_receita_federal) + catalogos/baixar.py",
    "mudanca": "Pedido 17. Carregador oficial versionado de codigo_receita_federal (tabela de códigos de receita do DARF e da GPS, publicada pela Receita Federal), com documento, código, descrição, tributo e vigência. Sem ele TBFINCODRECOL fica BLOQUEADA (catalogo_oficial_faltante) e as referências a codigo_receita_federal_id (alíquota, regra de retenção, guia) ficam sem alvo. Com ele: de-para pelo código (depara oficial novo 'receita_federal') e a marca ATIVO da origem como uso do cliente."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py",
+   "mudanca": "rodada 4: desdobrar com regra e referência POR ITEM (ex.: desdobrar:CDC_CRE_PAG=financeiro.centroCustoPadraoCreditoPagar@ref:TBCENCUS,USA_EMPENHO=financeiro.usaEmpenho@booleano_sn) para MFPARAM: os parâmetros booleanos (USA_EMPENHO, TIPO_PGTO_OBRIG, REST_CTA_USU) e os que guardam o id do destino (CDC_*, COD_OPE_*, natureza GRUPO/SUBGRUPO/ITEM_TBITEDES) ainda não carregam; hoje só NMESES e QTDE_DIA_VENC",
+   "motivo": "MFPARAM carrega parcial na r4"
+  },
+  {
+   "arquivo": "db (semente nativa de tributo, F2.2)",
+   "mudanca": "rodada 4 (pedido 15b): a semente de tributo do produto precisa trazer IRRF, ISS, PIS, COFINS, CSLL, CSRF, CBS e IBS (siglas do rótulo de TBINTIMP); sem ela cada linha de TBINTIMP é recusada com codigo_inexistente_destino + 1048 (visível)",
+   "motivo": "TBINTIMP carrega na r4 pelo cod:tributo.codigo"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga.py (diagnóstico)",
+   "mudanca": "rodada 4: guardar na pendência restricao_destino_<código> o NOME da coluna/restrição da mensagem do banco (sem valor), para depurar recusas como as de MFCTAREC",
+   "motivo": "MFCTAREC (declaração pronta e comentada) teve as 4 linhas válidas recusadas com 1048 sem indicação da coluna"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (gravar: ordem dos destinos 'antes')",
+   "mudanca": "Pedido 20 (r4 correção, causa MEDIDA). Os secundários 'antes' são gravados na ordem de tabelas_destino; um secundário agrupado (titulo_receber, 'antes;agrupar:') que cita por @id:<destino> outro secundário 'antes' declarado só pela via (tipo_documento_financeiro, fora de tabelas_destino, portanto por último) recebe NULL e a linha cai com restricao_destino_1048 (Column 'tipo_documento_financeiro_id' cannot be null). Regra genérica: ordenar os destinos 'antes' pela dependência @id: (o citado antes de quem cita). Provado na conferência da L8-11 com a ordem corrigida por um gancho temporário (já retirado): titulo_receber 3/3 e parcela_receber 3 de 5 (904 DEV fora do domínio e 905 sem rateio, recusas esperadas), tipo_documento_financeiro 3/3. O mesmo defeito zera MFCONPAG na L8-12 (parcela_pagar 0 de 6 na última conferência dela). Ao aplicar: trocar em sintetica_d/l8_11.py o esperado de MFCTAREC para gravados 3 (as pendências saem da conferência)."
+  },
+  {
+   "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py (condição por comparação)",
+   "mudanca": "Pedido 21. Condição que compara duas colunas da linha (ex.: se:VLR_PAG<VALOR ou se:#dif:VALOR,VLR_PAG>0): parcela_receber.situacao 'parcial' quando o valor pago é menor que o valor e a data de pagamento existe; hoje a situação vem da data de pagamento (recebida/aberta) e o saldo (valor - recebido) fica visível."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar por item)",
+   "mudanca": "Pedido 19 (reforço). Regra e referência POR ITEM no desdobrar (ex.: desdobrar:CDC_CRE_PAG=financeiro.centroCustoPadraoCreditoPagar@ref:TBCENCUS,USA_EMPENHO=financeiro.usaEmpenho@booleano_sn,...): MFPARAM tem 17 colunas declaradas sem destino aguardando isto (centros de custo, tipos de ajuste, natureza, booleanos). Também TBINTIMP.ALIQUOTA_ADICIONAL_INSS (aliquota_adicional do item INSS)."
+  },
+  {
+   "arquivo": "plataforma/conector (estabelecimento por empresa)",
+   "mudanca": "Pedido 22. Cadastro do estabelecimento por EMPRESA da origem (de-para EMPRESA -> estabelecimento do cliente, no painel): hoje @estabelecimento é o único do cliente e a segunda empresa de MFPARAM/TBINTIMP colide (1062, visível). Decisão provisória registrada em F4-decisoes-destino.md."
   }
  ]
 }

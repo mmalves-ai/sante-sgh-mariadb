@@ -128,29 +128,44 @@ class Plano(unittest.TestCase):
         self.assertEqual(c["preco_base"]["valores"], {"S": "preco_fabrica", "N": "preco_maximo_consumidor"})
 
     def test_comentadas_bloqueadas_sem_gravar_errado(self):
-        """Correção da rodada 3: contador do último número (TBSEGUIA), de-para sem as dimensões da chave (TBINTCRC),
-        auditoria com total zero presumido e conclusão sem condição (FCCTAAUD) e acordo de mat/med (TBPERMEM,
-        TBEMIREFMATMED) ficam com a declaração pronta e COMENTADA: nada delas é gravado nem contado como carregado."""
+        """Acordo de mat/med (TBPERMEM, TBEMIREFMATMED) fica com a declaração pronta e COMENTADA até TBMATMED (L8-03)
+        carregar: nada dele é gravado nem contado como carregado."""
         com = _comentadas()
         ativas = {c["tabela"] for c in self.mapa["colunas_decl"]}
-        sc = {r["tabela"] for r in mapa.ler_tsv(Path(mapa.DIR_PACOTE) / "declarado/sem_carga.tsv")}
+        sc = {r["tabela"] for r in mapa.ler_tsv(Path(mapa.DIR_PACOTE) / "declarado/sem_carga.tsv")
+              if r["situacao"] != "bloqueada"}
         for t in l8_05.COMENTADAS:
             self.assertIn(t, com, t)
             self.assertNotIn(t, ativas, t)
             self.assertNotIn(t, TABELAS, t)
             self.assertNotIn(t, sc, t)  # bloqueio visível, nunca descarte
             self.assertTrue(all("BLOQUEADA" in m[-1] or "NÃO é descarte" in m[-1] for m in com[t]), t)
-        # o total da cópia nunca entra como zero presumido; a conclusão não sai da data da gravação
-        aud = {(m[1], m[2]) for m in com["FCCTAAUD"]}
-        self.assertFalse({x for x in aud if x[0].startswith("=~") and "valor" in x[1]})
-        self.assertFalse({x for x in aud if x[1] in ("auditoria_conta.concluida_em", "auditoria_conta.resultado",
-                                                     "auditoria_conta_versao.valor_total_conta")})
         # acordo de mat/med: item pelo item faturável que TBMATMED gravar, valor, percentual e quantidade da origem
         pm = {m[2]: m[5] for m in com["TBPERMEM"] if m[2]}
         self.assertEqual(pm["preco_negociado_matmed.item_faturavel_id"], "ref:TBMATMED/item_faturavel")
         self.assertEqual(pm["preco_negociado_matmed.fonte_pagadora_id"], "ref:TBCONVEN")
         self.assertTrue({"preco_negociado_matmed.valor_unitario", "preco_negociado_matmed.percentual_ajuste",
                          "preco_negociado_matmed.quantidade_fixa", "preco_negociado_matmed.vigencia_inicio"} <= set(pm))
+
+    def test_rodada4_contador_depara_e_auditoria(self):
+        """TBSEGUIA: último número -> próximo; TBINTCRC: filtros de tipo de conta e de lançamento, ato e subtipo
+        específicos fora pelo so_se; FCCTAAUD: total nunca presumido e conclusão só com AUDITADA = S."""
+        dec = [c for c in self.mapa["colunas_decl"] if c["tabela"] in ("TBSEGUIA", "TBINTCRC", "FCCTAAUD")]
+        por = {}
+        for c in dec:
+            por.setdefault((c["tabela"], c["destino"]), []).append(c)
+        for d in ("sequencial_guia.proximo_numero_lote", "sequencial_guia.proximo_sequencial_transacao"):
+            self.assertEqual(por[("TBSEGUIA", d)][0]["regra"], "inteiro_mais_um")
+        self.assertEqual(por[("TBINTCRC", "depara_conta_externa.tipo_lancamento_id")][0]["via"], "ref:TBTPLANC")
+        via = por[("TBINTCRC", "depara_conta_externa.fonte_pagadora_id")][0]["via"]
+        self.assertIn("so_se:TIPO_ATO=0!aguarda_dimensao_no_modelo", via)
+        self.assertIn("so_se:SUBTIPO_DIARIA=0!aguarda_dimensao_no_modelo", via)
+        for d in ("auditoria_conta.concluida_em", "auditoria_conta.resultado"):
+            self.assertTrue(all(c["via"] == "se:AUDITADA=S" for c in por[("FCCTAAUD", d)]), d)
+        self.assertNotIn(("FCCTAAUD", "auditoria_conta_versao.valor_total_conta"), por)
+        self.assertFalse([c for c in dec if c["tabela"] == "FCCTAAUD" and c["coluna"].startswith("=~")
+                          and "valor" in c["destino"]])
+        self.assertEqual(sentinela.aplicar("inteiro_mais_um", "120")[0], 121)
 
     def test_tbtabdth_mantida(self):
         c = self.cols("TBTABDTH")
@@ -233,7 +248,7 @@ class Sintetica(unittest.TestCase):
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
             recusas = sum(n for k, n in e["pendencias"].items()
-                          if k.startswith("restricao_destino_") or k == "pai_pendente")
+                          if k.startswith("restricao_destino_") or k in ("pai_pendente", "aguarda_dimensao_no_modelo"))
             self.assertEqual(cont[t], e["gravados"] + recusas, t)
         for t in l8_05.BLOQUEADAS + l8_05.SO_ORIGEM:  # presença na imagem, nada esperado no destino
             self.assertEqual(cont[t], 2, t) if t not in l8_05.COM_LINHAS else self.assertGreater(cont[t], 2, t)
@@ -252,7 +267,7 @@ class Sintetica(unittest.TestCase):
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l8_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
         self.assertEqual(criadas, TABELAS | set(l8_05.BLOQUEADAS) | set(l8_05.SO_ORIGEM))
-        self.assertEqual(len(criadas), 26)
+        self.assertEqual(len(criadas), 26 + (1 if l8_05.RPLANRPA_ATIVA else 0))  # r4: RPLANRPA entra aqui
         self.assertNotIn("TBTISSPARDEF", criadas)  # DDL da L8-04 (imagem conjunta dos lotes)
 
     def test_colunas_das_linhas_batem_com_a_forma(self):

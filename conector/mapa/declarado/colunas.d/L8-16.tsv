@@ -25,13 +25,13 @@ TBMEDSOLWEBCAD	SENHA		texto			L8-16: nunca migra (o produto não guarda o acesso
 TBMEDSOLWEBCAD	SEXO		codigo_char			L8-16: não aproveitada: sexo_id é cadastro do produto sem chave da origem (TBSEXO fora do conector_origem, ver SITABPRO no L7-03); o pedido é reconferido na tela e o sexo vem do cadastro do solicitante
 TBMEDSOLWEBCAD	ATIVO		booleano_sn			L8-16: não aproveitada: a origem não distingue pedido recusado de cancelado; todo pedido entra 'pendente' para reconferência (decisão em F4-decisoes-destino.md)
 TBMEDSOLWEBCAD	ID_TBCBOPRO		inteiro			L8-16: não aproveitada: aponta a inscrição de um profissional do corpo clínico (TBCBOPRO), não a ocupação CBO; o vínculo com o profissional nasce da conferência do pedido
-#SIMATHP	TIPO	material_laboratorio_apoio.laboratorio_apoio_id			ref:SITPEQV/laboratorio_apoio	L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (material_biologico_id anulável, equivalência a conferir) e o apoio criado pela SITPEQV (L7-03): o apoio que a interface (TIPO) criou; interface sem apoio: pai_inexistente e recusa (1048)
-#SIMATHP	CODIGO	material_laboratorio_apoio.codigo_externo	texto			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (material_biologico_id anulável, equivalência a conferir) e o apoio criado pela SITPEQV (L7-03): código do material no apoio; repetido no mesmo apoio choca na chave única (1062)
-#SIMATHP	NOME	material_laboratorio_apoio.descricao_externa	texto_nome			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (material_biologico_id anulável, equivalência a conferir) e o apoio criado pela SITPEQV (L7-03): nome do material no apoio; o material próprio (material_biologico_id) fica nulo, a conferir na tela
-#SITBELHP	COD_EXAME	elemento_exame_laboratorio_apoio.exame_laboratorio_apoio_id			ref:SITBEXHP	L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: COD_EXAME é a chave inteira (COD) do exame do apoio
-#SITBELHP	COD	elemento_exame_laboratorio_apoio.codigo_elemento_externo	texto			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: código do elemento no apoio; repetido no mesmo exame choca na chave única (1062)
-#SITBELHP	ELEMENTO_NOME	elemento_exame_laboratorio_apoio.nome_elemento_externo	texto_nome			L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: nome do elemento no apoio; o analito próprio fica nulo, a conferir na tela
-#SITBELHP	ID_SIMATHP	elemento_exame_laboratorio_apoio.material_laboratorio_apoio_id			ref:SIMATHP	L8-16 (rodada 3): declaração pronta; entra com o DDL pedido em saida/L8-16.json (analito_id anulável, a conferir) e os pais SITBEXHP (L7-03) e SIMATHP: material do apoio (opcional); pai ausente: pai_inexistente e o elemento entra sem ele
+SIMATHP	TIPO	material_laboratorio_apoio.laboratorio_apoio_id			ref:SITPEQV/laboratorio_apoio	L8-16: laboratório de apoio pelo TIPO (a interface SITPEQV que o criou, L7-03); interface ausente: pai_inexistente e o NOT NULL recusa
+SIMATHP	CODIGO	material_laboratorio_apoio.codigo_externo	texto			L8-16: código do material no apoio; repetido no mesmo apoio: a chave única recusa (1062)
+SIMATHP	NOME	material_laboratorio_apoio.descricao_externa	texto_nome			L8-16: nome do material no apoio; o material próprio (material_biologico_id) fica nulo: equivalência a conferir pelo cliente na tela (DDL 17_INTG/05)
+SITBELHP	COD_EXAME	elemento_exame_laboratorio_apoio.exame_laboratorio_apoio_id			ref:SITBEXHP	L8-16: exame do apoio pela chave inteira COD de SITBEXHP (L7-03); ausente: pai_inexistente e o NOT NULL recusa
+SITBELHP	COD	elemento_exame_laboratorio_apoio.codigo_elemento_externo	texto			L8-16: código do elemento no apoio
+SITBELHP	ELEMENTO_NOME	elemento_exame_laboratorio_apoio.nome_elemento_externo	texto_nome			L8-16: nome do elemento no apoio; o analito próprio fica nulo, a conferir pelo cliente (DDL 17_INTG/05)
+SITBELHP	ID_SIMATHP	elemento_exame_laboratorio_apoio.material_laboratorio_apoio_id			ref:SIMATHP	L8-16: material do apoio (opcional); ausente: pai_inexistente com a coluna nula
 TBREGUL_TABELAS	=~regulacao_a_conferir	sistema_externo.codigo			antes;adotar:codigo	L8-16 (rodada 3): central a conferir: a origem não aponta a central dona (há mais de uma): as tabelas entram sob a central 'a conferir' (inativa, criada uma vez e adotada nas linhas seguintes), com valor_presumido por linha, e o cliente as move para a central certa no painel (decisão em F4-decisoes-destino.md)
 TBREGUL_TABELAS	=Central de regulação a conferir	sistema_externo.nome				L8-16 (rodada 3): nome da central a conferir
 TBREGUL_TABELAS	=regulacao	sistema_externo.categoria				L8-16 (rodada 3): categoria da central
@@ -49,3 +49,16 @@ TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.valor_externo	texto			L8-16 (ro
 TBREGUL_VLR_TABELAS	DESCRICAO	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): descrição
 TBREGUL_VLR_TABELAS	VALOR	valor_codigo_regulacao.descricao	texto			L8-16 (rodada 3): sem descrição, o próprio valor (concorrente); registro e código internos ficam nulos para o cliente ligar na tela
 TBREGUL_VLR_TABELAS	=migracao	valor_codigo_regulacao.origem				L8-16 (rodada 3): origem da linha
+TBDIGITAL_ESPECIALIDADE	ID	mapeamento_codigo_externo.entidade_id	inteiro		ref:TBESPEC.ID_TBDIGITAL_ESPECIALIDADE;por_pai	L8-16: especialidade do hospital que aponta este código do parceiro (TBESPEC.ID_TBDIGITAL_ESPECIALIDADE): uma equivalência por especialidade; código sem especialidade ligada: pai_inexistente (catálogo do parceiro sem uso no hospital)
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	mapeamento_codigo_externo.entidade				L8-16: tabela interna do código mapeado
+TBDIGITAL_ESPECIALIDADE	ID_DIGITAL	mapeamento_codigo_externo.codigo_externo	texto			L8-16: código da especialidade no parceiro de prescrição digital
+TBDIGITAL_ESPECIALIDADE	NOME	mapeamento_codigo_externo.descricao_externa	texto_nome			L8-16: nome da especialidade no parceiro
+TBDIGITAL_ESPECIALIDADE	@id:sistema_externo	mapeamento_codigo_externo.sistema_externo_id				L8-16: parceiro de prescrição digital (criado uma vez e adotado pelo código)
+TBDIGITAL_ESPECIALIDADE	@id:tipo_mapeamento_codigo	mapeamento_codigo_externo.tipo_mapeamento_codigo_id				L8-16: domínio especialidade (criado uma vez e adotado pelo código)
+TBDIGITAL_ESPECIALIDADE	=~prescricao_digital	sistema_externo.codigo			antes;adotar:codigo	L8-16: PRESUMIDO: a origem não nomeia o parceiro; o cliente confirma no painel
+TBDIGITAL_ESPECIALIDADE	=Parceiro de prescrição digital	sistema_externo.nome				L8-16: nome do parceiro (o cliente ajusta no painel)
+TBDIGITAL_ESPECIALIDADE	=outro	sistema_externo.categoria				L8-16: prescrição digital não tem categoria própria no domínio
+TBDIGITAL_ESPECIALIDADE	=Prescrição digital: equivalência das especialidades do hospital com as do parceiro	sistema_externo.finalidade				L8-16: finalidade do sistema externo
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	tipo_mapeamento_codigo.codigo			antes;adotar:codigo	L8-16: domínio do mapeamento
+TBDIGITAL_ESPECIALIDADE	=Especialidade médica	tipo_mapeamento_codigo.descricao				L8-16: descrição do domínio
+TBDIGITAL_ESPECIALIDADE	=especialidade_medica	tipo_mapeamento_codigo.entidade_interna				L8-16: tabela interna do domínio

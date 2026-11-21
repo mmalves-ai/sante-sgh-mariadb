@@ -175,6 +175,12 @@ class Plano(unittest.TestCase):
         c = {x["destino"]: x["coluna"] for x in self.plano["MFSALDOS"]["colunas"]["saldo_diario_conta"]}
         self.assertEqual((c["fechado"], c["saldo_anterior"]), ("=1", "=~0"))  # dia histórico fechado
 
+    def test_titulo_a_receber_ativo(self):
+        p = self.plano["MFCTAREC"]
+        self.assertEqual(p["destinos"][0], "parcela_receber")
+        self.assertTrue({"titulo_receber", "tipo_documento_financeiro"} <= set(p["destinos"]))
+        self.assertIn("agrupar", (p.get("opcoes") or {}).get("titulo_receber") or {})
+
     def test_bloqueadas_sem_destino(self):
         # dependem de regra genérica do motor (docs/obra/fatias/f4/saida/L8-11.json)
         self.assertFalse(BLOQUEADAS & set(self.plano))
@@ -214,6 +220,7 @@ class Sintetica(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith(("restricao_destino_", "pai_pendente", "codigo_colisao_caixa",
                                            "sem_item_a_gravar")))
+            recusas += l8_11.RECUSAS_POR_DOMINIO.get(t, 0)
             # principal desdobrado: "gravados" conta itens; a linha conta uma vez
             self.assertEqual(cont[t], l8_11.LINHAS_COM_ITEM.get(t, e["gravados"]) + recusas, t)
 

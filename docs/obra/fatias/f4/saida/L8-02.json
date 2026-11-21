@@ -102,7 +102,8 @@
    "rodada": 3,
    "arquivo": "conector/mapa/declarado/colunas.d/L7-03.tsv (SITABPRO) / decisão com a L8-03",
    "mudanca": "vínculo exame -> item faturável (exame.item_faturavel_id): SITABPRO.CODAMB é o procedimento do exame; o item faturável vem do procedimento (TBPROCTO, principal item_faturavel) ou de um item por exame criado na carga do exame (destino secundário antes, adotar:codigo)",
-   "motivo": "L8-02 r3 (revisão): SIREFCON (27081, código de cobrança do exame por fonte pagadora) copia o item do exame; nenhuma declaração preenche exame.item_faturavel_id, então SIREFCON está BLOQUEADA (sem_carga.tsv, pai_nao_carregado:SITABPRO) com a declaração pronta COMENTADA em colunas.d/L8-02.tsv. Com o vínculo: descomentar as linhas #SIREFCON, tirar SIREFCON do sem_carga.tsv, voltar o esperado e acrescentar a dependência SIREFCON -> SITABPRO (ou TBPROCTO, conforme o caminho do vínculo). Atenção: SITABPRO.CODAMB como código de TBPROCTO repete entre tabelas de honorários (pai_ambiguo)"
+   "motivo": "L8-02 r3 (revisão): SIREFCON (27081, código de cobrança do exame por fonte pagadora) copia o item do exame; nenhuma declaração preenche exame.item_faturavel_id, então SIREFCON está BLOQUEADA (sem_carga.tsv, pai_nao_carregado:SITABPRO) com a declaração pronta COMENTADA em colunas.d/L8-02.tsv. Com o vínculo: descomentar as linhas #SIREFCON, tirar SIREFCON do sem_carga.tsv, voltar o esperado e acrescentar a dependência SIREFCON -> SITABPRO (ou TBPROCTO, conforme o caminho do vínculo). Atenção: SITABPRO.CODAMB como código de TBPROCTO repete entre tabelas de honorários (pai_ambiguo)",
+   "atendido": "r4 (fatia): SIREFCON carrega com o item do procedimento do exame (ref:SITABPRO(ATO,EXAME)>CODAMB>TBPROCTO.COD_PROCEDIMENTO>min:ID), sem depender de exame.item_faturavel_id"
   },
   {
    "rodada": 3,
@@ -139,7 +140,22 @@
    "revisao": true,
    "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBITEATE) + valores.d/L8-03.tsv",
    "mudanca": "TBITEATE.TAB -> tipo_atendimento_tabela.padrao por ref:TBCTRTAT>NOME com depara=valores (os 3 nomes da lista na imagem de referência -> sus, tuss, presencial, proprio; sem par: valor_fora_do_dominio e o padrão), no lugar do literal presumido =~proprio; depois o orquestrador volta TBCTRTAT a descarte (mecanismo_do_produto) em sem_carga.tsv",
-   "motivo": "L8-02 r3 (revisão do achado): TAB é NOT NULL na origem e diz a tabela (SUS, TUSS, presencial) de cada tipo; trocar o fato por uma presunção grava tipos SUS e TUSS como próprios. TBCTRTAT fica BLOQUEADA até lá"
+   "motivo": "L8-02 r3 (revisão do achado): TAB é NOT NULL na origem e diz a tabela (SUS, TUSS, presencial) de cada tipo; trocar o fato por uma presunção grava tipos SUS e TUSS como próprios. TBCTRTAT fica BLOQUEADA até lá",
+   "atendido": "r4 (fatia L8-03): TAB por ref:TBCTRTAT>NOME com de-para de valores; TBCTRTAT voltou a descarte (mecanismo_do_produto)"
+  },
+  {
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.py (integrador; mesmo mecanismo do pedido 4 do L8-03.json)",
+   "mudanca": "chave composta com componente encadeado ref:T(ref:U>X,C) (ou T.(K1,K2)=(ref:U>X,C)); com ele SIREFCON.EXAME -> item pelo procedimento na tabela de honorários do PRÓPRIO convênio: ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(ref:TBCONVEN>THM,ref:SITABPRO(ATO,EXAME)>CODAMB), tirando o >min:ID",
+   "motivo": "revisão adversarial r4: hoje o código repetido em várias tabelas de honorários escolhe a menor chave (escolha_pelo_menor, baixa) e pode ligar o código de cobrança ao item de uma tabela que o convênio não usa. Enquanto o mecanismo não vem, a escolha fica visível e registrada em F4-decisoes-destino.md"
+  },
+  {
+   "rodada": 4,
+   "revisao": true,
+   "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06; atribuir pelo orquestrador)",
+   "mudanca": "pedido 19 REAFIRMADO: declarar em TBCONVEN as colunas ID_TBCONVMEDREQATD, ID_TBCONVCOBTXPA, ID_TBCONVCONSMAT, ID_TBCONVPERCTAPAC, ID_TBCONSBRASINATIVO e ID_TBCONSIDCALCVLR_CLI/_CIR/_MATMED/_FILME/_DTH com destino em regra_consistencia_lancamento (de-para de valores das listas)",
+   "motivo": "as 6 listas (TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC) voltaram a BLOQUEADAS (depende_declaracao_L5-06:TBCONVEN): o descarte da r4 escondia que a escolha de cada convênio não carrega. test_l8_02 aceita o descarte sozinho quando essas colunas estiverem declaradas com destino"
   }
  ]
 }

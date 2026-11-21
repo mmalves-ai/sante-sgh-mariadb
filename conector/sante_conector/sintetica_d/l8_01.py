@@ -33,7 +33,8 @@ FATIA = ("FAPARUSU", "FCCODCON", "FCCPSCON", "FCEMPAUDPLANSERV", "FCFECMES", "FC
          "FCORCPAD", "FCORLAME", "FCPARUSU", "FCPROCUNIBHMED", "FCREFUND", "FCTPMOTGLOSA", "FCTPPGTONFSE", "FIPARUSU",
          "RECONTAS", "RPDEDUTIVEL", "RPEVENTOESOC", "RPLANEVE", "RPLANEVE_COMPOSICAOBASE", "RPLANEVE_TBCBOPRO",
          "RPPARAM")
-INTERMEDIARIAS = ("FCCTAEXT", "RECADATE", "RICADPAC", "TBCBOPRO", "TBPROCTO", "RPLANRPA", "TBCTRTHM")
+INTERMEDIARIAS = ("FCCTAEXT", "RECADATE", "RICADPAC", "TBCBOPRO", "TBPROCTO", "RPLANRPA", "TBCTRTHM", "TBCTRMEM",
+                  "TBMATMED")
 _MAPA = os.path.join(os.path.dirname(__file__), "..", "..", "mapa")
 
 
@@ -97,6 +98,24 @@ T0 = datetime.datetime(2026, 3, 2, 8, 30)
 D0 = datetime.date(2026, 3, 2)
 
 
+def _item_aceita_f():
+    """O filtro de licença do item de mat/med (TBMATMED, fatia L8-03) aceita a marca F nas duas colunas?"""
+    from ..mapa import DIR_PACOTE
+    try:
+        txt = (DIR_PACOTE / "declarado" / "colunas.d" / "L8-03.tsv").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    vias = [l.split("\t")[5] for l in txt.splitlines() if l.startswith("TBMATMED\t") and "so_se:" in l]
+    def aceita(col):
+        return any(("so_se:TAB>TBCTRMEM>%s=" % col) in v and
+                   "F" in v.split("so_se:TAB>TBCTRMEM>%s=" % col)[1].split("!")[0].split(";")[0].split(",")
+                   for v in vias)
+    return bool(vias) and aceita("REF_BRA") and aceita("REF_SIMP")
+
+
+_ITEM_ACEITA_F = _item_aceita_f()
+
+
 def linhas(r, ins):
     def linha(t, **v):
         faltam = set(v) - {c for c, _, _ in COLS[t]}
@@ -119,6 +138,23 @@ def linhas(r, ins):
               DATA_REQ=dreq, CON=1, BAIXA=D0, HOR_BAI="0800")
     # tabelas de honorários (r3, correção: carregam aqui pelo mapa, L8-03, antes do horário e do procedimento, que
     # lê o nome da tabela na origem para o grupo de faturamento)
+    # r4: tabelas de mat/med (L8-03, carregam aqui pelo mapa): 1 própria (marcas vazias), 2 de referência comercial,
+    # 3 própria com as marcas da origem T/F valendo F (o caso real: 1.065.998 preços na referência)
+    linha("TBCTRMEM", COD=1, NOME="Tabela de mat/med falsa", SITUACAO="A")
+    linha("TBCTRMEM", COD=2, NOME="Tabela comercial falsa", REF_BRA="T", REF_SIMP="T", SITUACAO="A")
+    linha("TBCTRMEM", COD=3, NOME="Tabela propria marcada falsa", REF_BRA="F", REF_SIMP="F", SITUACAO="A")
+    for i, tab, cod in ((1, 1, 100), (2, 1, 101), (3, 2, 100), (4, 3, 100)):
+        linha("TBMATMED", ID=i, TAB=tab, COD=cod, CLASSIF=1, COD_ALFA="A", NOME="Item falso %d" % i, FATOR_Q=1.0)
+    # histórico de preço (FCREFUND): duas datas do mesmo item (uma edição de migração por tabela), sem preço (CHECK),
+    # negativo, item inexistente (1048) e tabela de referência comercial (pulada: licenca_nao_comprovada)
+    for cod, data, valor, tab in ((100, datetime.date(2025, 1, 1), D("10.5"), 1),
+                                  (100, datetime.date(2025, 6, 1), D("11.25"), 1),
+                                  (101, datetime.date(2025, 1, 1), None, 1),
+                                  (101, datetime.date(2025, 2, 1), D("-1"), 1),
+                                  (999, datetime.date(2025, 1, 1), D("5"), 1),
+                                  (100, datetime.date(2025, 1, 1), D("7"), 2),
+                                  (100, datetime.date(2025, 3, 1), D("8"), 3)):     # tabela própria marcada F
+        linha("FCREFUND", TAB=tab, COD=cod, CLASSIF=1, COD_ALFA="A", DATA=data, VALOR=valor, NOME="Item falso")
     for cod in (10, 20, 30):
         linha("TBCTRTHM", COD=cod, NOME="Tabela de honorários falsa %d" % cod, SITUACAO="A")
     # procedimentos: 30101 numa tabela; 30102 em duas (pai_ambiguo)
@@ -287,9 +323,9 @@ ESPERADO = {
     # valor_fora_do_dominio e 1048); conta repetida (pai_ambiguo nas cinco colunas que a leem, paciente NOT NULL);
     # convênio inexistente; o mesmo número no MESMO convênio ADOTA a guia gravada; em OUTRO convênio, 1062 (modelo
     # pedido); autorização antes da solicitação (CHECK)
-    "FCGUIAS": {"gravados": 5, "pendencias": {"adotado_existente": 1, "pai_ambiguo": 5, "pai_inexistente": 1,
+    "FCGUIAS": {"gravados": 6, "pendencias": {"adotado_existente": 1, "pai_ambiguo": 5, "pai_inexistente": 1,
                                               "valor_fora_do_dominio": 1, "restricao_destino_1048": 3,
-                                              "restricao_destino_1062": 1, "restricao_destino_4025": 1}},
+                                              "restricao_destino_4025": 1}},
     # ordem nova: o procedimento (TBPROCTO) carrega antes: 1 certo; código em duas tabelas (pai_ambiguo, 1048); sem
     # nome (1048); nome repetido (código derivado repetido, 1062)
     "FCORCPAD": {"gravados": 1, "pendencias": {"pai_ambiguo": 1, "restricao_destino_1048": 2,
@@ -298,6 +334,12 @@ ESPERADO = {
     # orçamento 77 inexistente (1048)
     "FCORLAME": {"gravados": 1, "pendencias": {"pai_ambiguo": 1, "pai_inexistente": 1, "restricao_destino_1048": 1,
                                                "restricao_destino_4025": 1}},
+    # tabela 3 (própria, marcas F): grava quando o filtro do item (TBMATMED, L8-03) aceita F como o do preço; enquanto
+    # o do item aceitar só N, o item é recusado (licenca_nao_comprovada) e o preço fica pai_pendente (pedido r4_marca_TF)
+    "FCREFUND": {"gravados": 3 if _ITEM_ACEITA_F else 2,
+                 "pendencias": dict({"adotado_existente": 1, "restricao_destino_4025": 2, "valor_fora_do_dominio": 1,
+                                     "pai_inexistente": 1, "restricao_destino_1048": 1, "licenca_nao_comprovada": 1},
+                                    **({} if _ITEM_ACEITA_F else {"pai_pendente": 1}))},
     "FCTPPGTONFSE": {"gravados": 2, "pendencias": {"restricao_destino_1048": 1}},
     # abertura da conta: login inexistente (grava sem usuário); conta inexistente e conta ambígua (1048)
     "RECONTAS": {"gravados": 2, "pendencias": {"pai_inexistente": 2, "pai_ambiguo": 1, "restricao_destino_1048": 2}},
@@ -309,7 +351,7 @@ ESPERADO = {
     # 103 ADOTA o favorecido do profissional 1; sem profissional (104; 105 empresa: favorecido exige o titular, modelo
     # pedido), valor negativo (CHECK) e evento inexistente (107)
     "RPLANEVE": {"gravados": 3, "pendencias": {"valor_presumido": 7, "adotado_existente": 1, "pai_inexistente": 10,
-                                               "restricao_destino_1048": 3, "restricao_destino_4025": 1}},
+                                               "restricao_destino_1048": 1, "restricao_destino_4025": 3}},
     "RPLANEVE_COMPOSICAOBASE": {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_pendente": 1,
                                                               "restricao_destino_1048": 2}},
 }

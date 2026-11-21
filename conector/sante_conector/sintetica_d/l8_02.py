@@ -24,7 +24,7 @@ na origem e o esperado é SÓ o correto (pessoa jurídica nova, adoção pelo CN
 cooperativa sem CNPJ recusada pelo CHECK da pessoa jurídica): até o integrador aplicar os pedidos (dígitos de float
 inteiro em sentinela._digitos; CHECK de CNPJ obrigatório em empresa nacional, trilha F2.2), a conciliação de TBCOOPER
 FALHA de propósito. SIREFCON (bloqueada: o exame não tem item faturável carregado), o descarte RPRPA_TBCBOPRO, as cinco
-listas de opções (bloqueadas: a escolha de cada fonte pagadora ainda não é gravada) e RPLANRPA (aguarda o lançamento)
+listas de opções (bloqueadas: a escolha de cada fonte pagadora ainda não é gravada) (RPLANRPA passou à L8-05, dona pelo índice)
 entram só com a forma.
 As tabelas que o índice da rodada 3 dá à L8-01 (RPEVENTOESOC, RPLANEVE, RPLANEVE_COMPOSICAOBASE, RPLANEVE_TBCBOPRO,
 RPPARAM) saíram desta imagem: são declaradas lá.
@@ -75,9 +75,6 @@ FORMAS = {
         ('CALCULAR_INSS', 'CHAR(1)', False), ('FATO_GERADOR', 'INTEGER', False),
         ('COMPETENCIA_FATO_GERADOR', 'INTEGER', False), ('METODO_ENVIO', 'CHAR(1)', False),
     ]),
-    'RPLANRPA': ('ID_RPRPA,ID_RPLANEVE', [
-        ('ID_RPRPA', 'INTEGER', True), ('ID_RPLANEVE', 'INTEGER', True),
-    ]),
     'RPRPA_TBCBOPRO': ('ID_RPRPA', [
         ('ID_RPRPA', 'INTEGER', True), ('ID_TBCBOPRO', 'INTEGER', True),
     ]),
@@ -120,7 +117,7 @@ FORMAS = {
 # rodada 3: tabelas do índice da L8-02 declaradas agora nesta fatia, com TODAS as colunas do dicionário
 NOVAS_R3 = {"TBCOOPER": "COD", "TBINDPRO": "CONV,PROCTO,DATA", "FCPORANE": "TAB,PORTE,DATA_PORTE"}
 CARREGADAS = ("RPRENDISENTO", "RPTIPOPRESTADOR", "TBCLASSI", "RPEMPCALCIMP", "RPEVENTO", "RPINTEVE", "RPPARUSUEMP",
-              "RPRPA", "SIORCAME", "SIEXAORC") + tuple(NOVAS_R3)
+              "RPRPA", "SIORCAME", "SIEXAORC") + tuple(NOVAS_R3) + ("SIREFCON",)
 COM_DADOS = CARREGADAS + ("RPRPA_TBCBOPRO",)  # intermediária da referência encadeada do RPA (descarte pedido)
 COLUNAS = {t: cols for t, (_, cols) in FORMAS.items()}
 
@@ -319,9 +316,16 @@ def linhas(r, ins):
             ("Interessado  Exemplo Dois", 1, 150, DT(2025, 6, 3), 1, "USR2", 999),
             ("Interessado Exemplo Tres", 1, None, None, None, None, None)]:
         _ins(ins, "SIORCAME", NOME=nome, ATO=ato, PERC=perc, DATA=data, CONV=conv, USUARIO=usu, PRONT=pront)
-    for i, ato, cod, nome in [(1, 1, "HEM", "Hemograma exemplo"), (2, 1, "GLI", "Glicose exemplo"),
-                              (3, 2, "HEM", "Hemograma setor dois exemplo")]:
-        _ins(ins, "SITABPRO", ID=i, ATO=ato, CODALF=cod, NOME=nome)
+    # r4: CODAMB = código do procedimento do exame (10101 numa tabela; 10102 em duas: vale a menor chave; 99999 sem
+    # procedimento)
+    for i, ato, cod, nome, amb in [(1, 1, "HEM", "Hemograma exemplo", 10101), (2, 1, "GLI", "Glicose exemplo", 10102),
+                                   (3, 2, "HEM", "Hemograma setor dois exemplo", 99999)]:
+        _ins(ins, "SITABPRO", ID=i, ATO=ato, CODALF=cod, NOME=nome, CODAMB=amb)
+    # r4: código de cobrança do exame por fonte pagadora: 1 completo; 2 procedimento em duas tabelas (menor chave,
+    # escolha_pelo_menor); 3 exame sem procedimento (1048); 4 tipo de conta fora do domínio (RECUSADA, exige_dominio); 5 exame inexistente (1048)
+    for ato, ex, conv, tc, amb in [(1, "HEM", 1, "A", 501), (1, "GLI", 1, "I", 502), (2, "HEM", 1, "T", 503),
+                                   (1, "HEM", 1, "X", 504), (9, "ZZZ", 1, "A", 505)]:
+        _ins(ins, "SIREFCON", ATO=ato, EXAME=ex, CONV=conv, TIPO_CTA=tc, CODAMB=amb)
     # cooperativas: 1 completa (pessoa jurídica nova); 2 CNPJ já cadastrado (adotada), conta e ISS fora do domínio;
     # 3 sem CNPJ (CHECK da pessoa jurídica: recusa); 4 município e banco fora do catálogo (gravada, NULL); 5 mesmo
     # CNPJ da 1 (adota a mesma pessoa: a cooperativa repetida recusa por 1062); 6 sem nome (1048)
@@ -396,4 +400,9 @@ def esperado():
     e["TBINDPRO"] = {"gravados": 2, "pendencias": {"valor_fora_do_dominio": 1, "pai_inexistente": 1,
                                                    "pai_ambiguo": 1, "restricao_destino_1048": 3}}
     e["FCPORANE"] = {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2}}
+    # r4: sem item (exame inexistente ou sem procedimento) o CHECK do alvo (item ou grupo) recusa (4025)
+    # r4 (revisão): tipo de conta fora do domínio recusa a linha (exige_dominio): nunca vira 'todos'
+    e["SIREFCON"] = {"gravados": 2, "pendencias": {"escolha_pelo_menor": 1, "pai_inexistente": 2,
+                                                   "restricao_destino_4025": 2, "valor_fora_do_dominio": 1,
+                                                   "vigencia_sem_fonte": 4}}
     return e

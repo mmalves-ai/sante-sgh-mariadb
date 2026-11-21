@@ -101,7 +101,7 @@ SICADATE	PRONT		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de co
 SICADATE	REG		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	CONTA		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	ATEND		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SICADATE	DATA		data			L7-04 (cobertura): data do pedido: fonte alternativa de solicitado_em quando DATA_HORA_INCLUSAO faltar (com HORA); destino requisicao_exame.solicitado_em (DATETIME) decidido; a data (DATE) entra quando o motor gravar DATE em DATETIME sem divergir a soma de controle (pedido em saida/L7-04.json)
+SICADATE	DATA	requisicao_exame.solicitado_em	data			L7-04 (rodada 4, DDL 10_SADT/09): fonte alternativa (concorrente, depois de DATA_HORA_INCLUSAO) do momento do pedido: a data à meia-noite (tipar)
 SICADATE	MESPRO		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	ANOPRO		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	CRM		inteiro			L7-04 (cobertura): repetida do cadastro do solicitante (inscrição no conselho, TBCBOPRO/TBMEDSOL, L5): o modelo liga o solicitante pelo id, nunca por número ou nome
@@ -135,7 +135,7 @@ SICADATE	PERDOENCA		inteiro			L7-04 (cobertura): sem destino: coluna técnica, d
 SICADATE	TP_ATE		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	CHECKWEB		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	VAL_CAR		data			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SICADATE	DATA_AUT		data			L7-04 (cobertura): destino requisicao_exame.autorizado_em (DATETIME) decidido; a data (DATE) entra quando o motor gravar DATE em DATETIME sem divergir a soma de controle (pedido em saida/L7-04.json)
+SICADATE	DATA_AUT	requisicao_exame.autorizado_em	data			L7-04 (rodada 4, DDL 10_SADT/09): data da autorização da operadora (à meia-noite, tipar)
 SICADATE	CODCON_ATV		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	CRM_HEMOTERAPIA		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	ID_FHCADAIH		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
@@ -152,7 +152,7 @@ SICADATE	CODVALIDBIO		texto			L7-04 (cobertura): sem destino: coluna técnica, d
 SICADATE	DATA_HORA_ULTIMA_ATUALIZACAO		data_hora			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	USUARIO		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	DATA_REQUISICAO		data			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SICADATE	ID_TBMEDSOL		chave_origem			L7-04 (cobertura): solicitante de fora (solicitante_externo, L5): destino requisicao_exame.solicitante_externo_id decidido (profissional anulável e CHECK de um dos dois); coluna pedida à trilha do DDL em saida/L7-04.json; até lá o pedido só com solicitante externo recusa (1048), visível no painel; decisão em F4-decisoes-destino.md (L7-04, rodada 2)
+SICADATE	ID_TBMEDSOL	requisicao_exame.solicitante_externo_id	chave_origem		ref:TBMEDSOL;se:ID_TBCBOPRO_SOLICITANTE=	L7-04 (rodada 4, DDL 10_SADT/09): solicitante de fora (solicitante_externo, L5) quando não há solicitante interno (CHECK de exatamente um dos dois); com os dois, vale o profissional
 SICADATE	SENHA_WEB_PACIENTE		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	EMPRESA		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SICADATE	UNIMED_ORIGEM		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
@@ -165,7 +165,7 @@ SIHISTVLREF	=referência geral do exame	trilha_auditoria.motivo			trilha_auditor
 SIHISTVLREF	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L7-04 (rodada 3, revisão): retrato COMPLETO da versão (texto e, se houver, unidade e limites da época)
 SIHISTVLREF	ID		chave_origem			L7-04 (rodada 3, revisão): chave da origem (conector_origem)
 SIHISTVLREF	ID_SITABPRO_CODALF		texto			L7-04 (rodada 3, revisão): segunda parte da chave composta do exame (ver ID_SITABPRO_ATO)
-SIHISTVLREF	VLRREF		texto_longo			L7-04 (rodada 3, revisão): no retrato (dados_depois); o texto da época chega ao resultado quando existir resultado_exame.referencia_texto (pedido de DDL em saida/L7-04.json)
+SIHISTVLREF	VLRREF		texto_longo			L7-04 (rodada 4, DDL 10_SADT/09): no retrato (dados_depois); o texto da época chega ao resultado por resultado_exame.referencia_texto (SIRES01)
 SIHISTVLREFELEMENTO	ID_SITABELE_CODPRC	faixa_referencia_versao.faixa_referencia_id	texto		ref:SITABELE(ID_SITABELE_CODPRC,ID_SITABELE_CODELE)/faixa_referencia	L7-04 (rodada 3, revisão): faixa do analito: destino SECUNDÁRIO faixa_referencia do analito (SITABELE, chave composta); hoje o L7-03 não grava a faixa (pedido 15 de lá): tabela BLOQUEADA em sem_carga.tsv até lá
 SIHISTVLREFELEMENTO	=alteracao	faixa_referencia_versao.operacao				L7-04 (rodada 3, revisão): cada linha é uma gravação da referência do analito (a origem não distingue a primeira)
 SIHISTVLREFELEMENTO	#retrato:*	faixa_referencia_versao.dados				L7-04 (rodada 3, revisão): retrato COMPLETO da versão: texto, unidade, faixa (REFINI/REFFIN) e limites de valor absurdo (MIN_ABE/MAX_ABE) da época
@@ -189,7 +189,7 @@ SIHISTVLREFEXAME	=referência do exame impressa no laudo	trilha_auditoria.motivo
 SIHISTVLREFEXAME	#retrato:*	trilha_auditoria.dados_depois			trilha_auditoria	L7-04 (rodada 3, revisão): retrato COMPLETO da versão (texto e, se houver, unidade e limites da época)
 SIHISTVLREFEXAME	ID		chave_origem			L7-04 (rodada 3, revisão): chave da origem (conector_origem)
 SIHISTVLREFEXAME	ID_SITABPRO_CODALF		texto			L7-04 (rodada 3, revisão): segunda parte da chave composta do exame (ver ID_SITABPRO_ATO)
-SIHISTVLREFEXAME	VLRREF		texto_longo			L7-04 (rodada 3, revisão): no retrato (dados_depois); o texto da época chega ao resultado quando existir resultado_exame.referencia_texto (pedido de DDL em saida/L7-04.json)
+SIHISTVLREFEXAME	VLRREF		texto_longo			L7-04 (rodada 4, DDL 10_SADT/09): no retrato (dados_depois); o texto da época chega ao resultado por resultado_exame.referencia_texto (SIRES01)
 SIHISTVLREFEXAME	UNIDADE		texto			L7-04 (rodada 3, revisão): no retrato (dados_depois) da versão do exame; MIN_ABE/MAX_ABE são limites de valor absurdo, não crítico
 SIHISTVLREFEXAME	MIN_ABE		decimal			L7-04 (rodada 3, revisão): no retrato (dados_depois) da versão do exame; MIN_ABE/MAX_ABE são limites de valor absurdo, não crítico
 SIHISTVLREFEXAME	MAX_ABE		decimal			L7-04 (rodada 3, revisão): no retrato (dados_depois) da versão do exame; MIN_ABE/MAX_ABE são limites de valor absurdo, não crítico
@@ -214,8 +214,9 @@ SILANEXA	REG		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de cont
 SILANEXA	CONTA		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	ATEND		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	EXAME		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SILANEXA	COLETA		data			L7-04 (cobertura): destino exame_item.coletado_em (DATETIME) decidido; a data (DATE) entra quando o motor gravar DATE em DATETIME sem divergir a soma de controle (pedido em saida/L7-04.json)
-SILANEXA	ENTREGA		data			L7-04 (cobertura): destino exame_item.previsto_em (DATETIME) decidido; a data (DATE) entra quando o motor gravar DATE em DATETIME sem divergir a soma de controle (pedido em saida/L7-04.json)
+SILANEXA	#data_hora:COLETA,HRCOL	exame_item.coletado_em			se:HRCOL	L7-04 (rodada 4, revisão): coleta = data + hora da coleta (HRCOL, TIME): a hora é dado clínico (jejum, prazo do resultado, validade da amostra)
+SILANEXA	COLETA	exame_item.coletado_em	data		se:HRCOL=	L7-04 (rodada 4, revisão): concorrente: só quando a hora da coleta não veio, a data da coleta à meia-noite (tipar); a hora não existe na origem
+SILANEXA	ENTREGA	exame_item.previsto_em	data			L7-04 (rodada 4, DDL 10_SADT/09): data prevista de entrega do resultado (à meia-noite, tipar)
 SILANEXA	HORA		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	ESPEC		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	CDC		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
@@ -253,10 +254,11 @@ SILANEXA	RES_AMO		texto			L7-04 (cobertura): sem destino: coluna técnica, de co
 SILANEXA	COLONIAS		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	SEQRES		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	RN		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SILANEXA	HRCOL		hora			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
+SILANEXA	HRCOL		hora			L7-04 (rodada 4, revisão): hora da coleta: vai com COLETA para exame_item.coletado_em (#data_hora:COLETA,HRCOL)
 SILANEXA	RESLIB		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
-SILANEXA	DTEMIRES		data			L7-04 (cobertura): data da emissão do resultado (com HREMIRES); destino exame_item.emitido_em (DATETIME) decidido; a data (DATE) entra quando o motor gravar DATE em DATETIME sem divergir a soma de controle (pedido em saida/L7-04.json)
-SILANEXA	HREMIRES		texto_char			L7-04 (cobertura): hora da emissão: vai com DTEMIRES para emitido_em (pedido de data + hora em texto, #data_hora)
+SILANEXA	DTEMIRES		data			L7-04 (rodada 4, DDL 10_SADT/09): data da emissão do resultado: vai com HREMIRES para exame_item.emitido_em (#data_hora abaixo)
+SILANEXA	HREMIRES		texto_char			L7-04 (rodada 4, DDL 10_SADT/09): hora da emissão: vai com DTEMIRES para exame_item.emitido_em (#data_hora abaixo)
+SILANEXA	#data_hora:DTEMIRES,HREMIRES	exame_item.emitido_em				L7-04 (rodada 4, DDL 10_SADT/09): emissão do resultado (data + hora HHMM em texto)
 SILANEXA	DTDIGRES		data			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	LAMINA		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	POTE		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
@@ -318,7 +320,7 @@ SILANEXA	EXPORTADO_LAB_ID_SITPEQV		codigo_char			L7-04 (cobertura): sem destino:
 SILANEXA	SOLICITACAOPEP		inteiro			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	DATA_HORA_SUSPENSAO_PEP	exame_item.cancelado_em	data_hora			L7-04 (cobertura): suspensão do exame no prontuário = cancelamento; a situação 'cancelado' exige o motivo do catálogo (CHECK), que a origem não tem: fica a data e o usuário (decisão em F4-decisoes-destino.md (L7-04, rodada 2))
 SILANEXA	USUARIO_SUSPENSAO_PEP	exame_item.cancelado_por_usuario_id			ref:TBUSERS	L7-04 (cobertura): usuário que suspendeu (login); nunca visto: NULL com pai_inexistente
-SILANEXA	JUSTIFICATIVA_SUSPENSAO_PEP		texto_longo			L7-04 (cobertura): texto livre da suspensão: exame_item só guarda o motivo do catálogo (motivo_cancelamento_item_exame_id); coluna de texto ou motivo 'outro' com texto pedidos em saida/L7-04.json
+SILANEXA	JUSTIFICATIVA_SUSPENSAO_PEP	exame_item.motivo_cancelamento_texto	texto_resumo:500			L7-04 (rodada 4, DDL 10_SADT/09): justificativa da suspensão (cancelamento) em texto; acima de 500 caracteres cortada na palavra com pendência
 SILANEXA	ID_ATTISSAUTLANC		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	ID_TBPRESER		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SILANEXA	NECESSITA_LAUDO_WEB		codigo_char			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
@@ -436,8 +438,8 @@ SIRES01	ID_TBCBOPRO_EMISSOR	resultado_exame.liberado_por_profissional_id			ref:T
 SIRES01	RESULTADO_HTML		texto_longo			L7-04 (cobertura): laudo em HTML: mesma emissão do PDF (laudo_arquivo_id), que é a guarda legal; o HTML repete o PDF
 SIRES01	ID_RIEVOLUCAOPAC		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SIRES01	RESULTADO_PDF		blob			L7-04 (cobertura): laudo emitido (PDF): destino resultado_exame.laudo_arquivo_id decidido; a carga de BLOB para arquivo ainda não existe no motor (pedido L6-03, repetido em saida/L7-04.json); decisão em F4-decisoes-destino.md (L7-04, rodada 2)
-SIRES01	ID_SIHISTVLREF		chave_origem			L7-04 (rodada 3, revisão): texto geral de referência da época: fonte alternativa (concorrente, depois de ID_SIHISTVLREFEXAME) de resultado_exame.referencia_texto quando o DDL existir (pedido); o histórico carrega em trilha_auditoria (SIHISTVLREF); duplicidade com o texto do exame não provada (agregado pedido)
-SIRES01	ID_SIHISTVLREFEXAME		chave_origem			L7-04 (rodada 3, revisão): texto de referência do exame da época: NÃO vai a observacao (é observação clínica, não referência); destino resultado_exame.referencia_texto pedido ao DDL (saida/L7-04.json), via ref:SIHISTVLREFEXAME>VLRREF; o histórico do texto carrega em trilha_auditoria (SIHISTVLREFEXAME)
+SIRES01	ID_SIHISTVLREF		chave_origem			L7-04 (rodada 4, DDL 10_SADT/09): texto geral de referência da época: o do exame (ID_SIHISTVLREFEXAME) já vai a resultado_exame.referencia_texto; este segue no histórico (SIHISTVLREF em trilha_auditoria)
+SIRES01	ID_SIHISTVLREFEXAME	resultado_exame.referencia_texto	texto_longo		ref:SIHISTVLREFEXAME>VLRREF	L7-04 (rodada 4, DDL 10_SADT/09): texto de referência do exame da época, como impresso no laudo (não vai a observacao); o histórico segue em trilha_auditoria
 SIRES01	ID_SIHISTVLREFIDADE		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SIRES01	ID_DIGITAL_DIA_REP		texto			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino
 SIRES01	ID_SIRES01_BINARY_ASS		chave_origem			L7-04 (cobertura): sem destino: coluna técnica, de controle ou repetida de outra tabela; o que importa entra pelas colunas com destino

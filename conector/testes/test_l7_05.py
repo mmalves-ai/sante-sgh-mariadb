@@ -2,6 +2,8 @@
 sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em `conector.sh conferir-fatia L7-05`."""
 import datetime
 import decimal
+import json
+import os
 import random
 import unittest
 from pathlib import Path
@@ -189,14 +191,24 @@ class Plano(unittest.TestCase):
         self.assertEqual(self.cols("GECONITL", "saldo_estoque_mensal")["quantidade_saida_paciente"]["coluna"], "=~0")
 
     def test_consumo_e_lote_nao_sao_descartados(self):
-        # rodada 3: consumo por centro de custo e lote por documento CARREGAM (dado financeiro e sanitário); bloqueados
-        # só pelo motor, com a declaração pronta comentada
+        # rodada 3: consumo por centro de custo e lote por documento CARREGAM (dado financeiro e sanitário); rodada 4:
+        # o consumo carrega somado por ano, mês, centro de custo e insumo (agrupar: no destino principal)
         raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado"
         sem = {r["tabela"] for r in mapa.ler_tsv(raiz / "sem_carga.tsv")}
         self.assertFalse({"GEKONCDC", "GECTRVMM"} & sem)
         pronta = (raiz / "colunas.d" / "L7-05.tsv").read_text(encoding="utf-8")
-        self.assertIn("#GEKONCDC\t#grupo_somar:VALOR\tconsumo_centro_custo.valor_liquido", pronta)
-        self.assertIn("#GECTRVMM\tLOTE\tmovimento_lote.lote_insumo_id", pronta)
+        self.assertIn("\nGEKONCDC\t#grupo_somar:VALOR\tconsumo_centro_custo.valor_liquido", pronta)
+        decl = {(c["tabela"], c["coluna"], c["destino"]): c for c in self.mapa["colunas_decl"]}
+        self.assertEqual(decl[("GEKONCDC", "ANO", "consumo_centro_custo.ano")]["via"], "agrupar:ANO,MES,CDC,ITEM")
+        self.assertIn(("GEKONCDC", "#grupo_json:DOC,DATA,QTDE,VALOR", "consumo_centro_custo.dados"), decl)
+        # o local: primeiro o estoque padrão do centro de custo (constante no grupo), depois o do documento
+        locais = [c["coluna"] for c in self.mapa["colunas_decl"]
+                  if c["tabela"] == "GEKONCDC" and c["destino"] == "consumo_centro_custo.local_estoque_id"]
+        self.assertEqual(locais, ["CDC", "DOC"])
+        self.assertIn("GEKONCDC", self.plano)
+        # o lote por documento carrega desde a rodada 3 (conferidor): declaração ativa, não comentada
+        self.assertIn("\nGECTRVMM\tLOTE\tlote_insumo.numero_lote", pronta)
+        self.assertNotIn("\n#GECTRVMM\t", pronta)
 
     def test_bloqueadas_sem_destino(self):
         com_destino = {c["tabela"] for c in self.mapa["colunas_decl"] if c["destino"]}
@@ -230,6 +242,9 @@ class Sintetica(unittest.TestCase):
         esp = l7_05.linhas(random.Random(1), lambda t, v: cont.__setitem__(t, cont.get(t, 0) + 1))
         self.assertEqual(set(esp), TABELAS)
         for t, e in esp.items():
+            if t == "GEHORMED":  # desdobrado: "gravados" conta itens (10 de uma linha) e a outra não tem item
+                self.assertEqual(cont[t], 1 + e["pendencias"]["sem_item_a_gravar"], t)
+                continue
             pref = ("restricao_destino_",) if t in FASE2 else ("restricao_destino_", "pai_pendente")
             pref += ("pai_inexistente",) if t in COMPLEMENTA else ()
             recusas = sum(n for k, n in e["pendencias"].items() if k.startswith(pref))
@@ -239,7 +254,7 @@ class Sintetica(unittest.TestCase):
 
     def test_ddl_das_tabelas_da_fatia(self):
         criadas = {l.split()[2] for l in l7_05.DDL.splitlines() if l.startswith("CREATE TABLE")}
-        self.assertEqual(criadas, TABELAS | set(l7_05.BLOQUEADAS))
+        self.assertEqual(criadas, TABELAS | set(l7_05.BLOQUEADAS) | set(l7_05.PAIS_NA_IMAGEM))
 
     def test_colunas_das_linhas_batem_com_o_ddl(self):
         ncols = {}
@@ -257,6 +272,44 @@ class Sintetica(unittest.TestCase):
         l7_05.linhas(random.Random(1), lambda t, v: vistos.append((t, len(v))))
         for t, n in vistos:
             self.assertEqual(n, ncols[t], t)
+
+
+
+def _mariadb():
+    try:
+        from sante_conector import banco
+        banco.conectar(None).close()
+        return True
+    except Exception:  # noqa: BLE001 (fora do container: sem MariaDB)
+        return False
+
+
+@unittest.skipUnless(os.path.exists("/opt/firebird/bin/isql") and _mariadb(),
+                     "só no container do conector, com o MariaDB da rede interna")
+class Conferencia(unittest.TestCase):
+    def test_consumo_somado_por_grupo(self):
+        """GEKONCDC: 4 linhas gravadas em 3 grupos; o grupo 2025/3, centro 11, insumo 1 soma os 2 documentos e os
+        guarda no JSON; o local é o estoque padrão do centro (11 -> local 1)."""
+        from sante_conector import conferencia
+        lidos = {}
+
+        def ler(cc):
+            with cc.cursor() as c:
+                c.execute("SELECT k.ano, k.mes, CAST(k.quantidade_liquida AS CHAR), CAST(k.valor_liquido AS CHAR),"
+                          " k.dados, l.codigo FROM consumo_centro_custo k JOIN local_estoque l ON"
+                          " l.id=k.local_estoque_id ORDER BY k.ano, k.mes, k.quantidade_liquida")
+                lidos["kon"] = [list(x) for x in c.fetchall()]
+        r = conferencia.conferir("L7-05", depois_da_primeira=ler)
+        self.assertEqual(r["erros"], [])
+        kon = lidos["kon"]
+        self.assertEqual(len(kon), 3)
+        self.assertEqual([(k[0], k[1], k[2], k[3], str(k[5])) for k in kon],
+                         [(2025, 3, "3.5000", "17.50", "1"), (2025, 3, "4.0000", "8.00", "1"),
+                          (2025, 4, "1.0000", "5.00", "1")])
+        docs = json.loads(kon[0][4])
+        self.assertEqual(len(docs), 2)
+        self.assertIn("100", json.dumps(docs))
+        self.assertIn("101", json.dumps(docs))
 
 
 if __name__ == "__main__":

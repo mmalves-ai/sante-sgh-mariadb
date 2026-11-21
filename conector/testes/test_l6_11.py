@@ -20,7 +20,7 @@ FORMA_FORA = set()
 _DIR = Path(os.environ.get("CONECTOR_MAPA_DIR") or mapa.DIR_PACOTE)
 DESCARTE = {"PRAGRUP_PRFILTROCLASSIF": "sem_valor", "PRPARAM": "mecanismo_do_produto"}
 # rodada 3 (revisão do achado): bloqueadas por falta de mecanismo, com a declaração pronta e comentada; nunca descarte
-BLOQUEADA = {"PRPAREVOLIMG", "PRASSINATURA_CAB", "PRRESPOSTA", "TBKITPRO"}
+BLOQUEADA = {"PRPAREVOLIMG"}
 
 
 def _sem_carga():
@@ -55,7 +55,8 @@ class FatiaL611(unittest.TestCase):
                   "PRKITSOLITENS": ["kit_prescricao_item", "unidade_prescricao"],
                   "PRPADEVOL": ["modelo_campo", "unidade_resposta"],
                   "PRITEM_GEITENS": ["parametro_clinico_item", "item_prescritivel"],
-                  "PREVOLUCAO": ["modelo_documento_clinico", "modelo_documento_versao"]}
+                  "PREVOLUCAO": ["modelo_documento_clinico", "modelo_documento_versao"],
+                  "TBKITPRO": ["kit_cuidado_enfermagem", "kit_cuidado_enfermagem_item", "unidade_prescricao"]}
         for t, p in self.plano.items():
             self.assertEqual(p["destinos"], varios.get(t, p["destinos"][:1]), t)
 
@@ -234,6 +235,32 @@ class FatiaL611(unittest.TestCase):
             recusas = sum(n for k, n in e["pendencias"].items()
                           if k.startswith("restricao_destino_") or k in ("pai_pendente", "codigo_colisao_caixa"))
             self.assertEqual(e["gravados"] + recusas, len(linhas[t]), t)
+
+    def test_documento_sem_evento_e_ultimo_evento(self):
+        """Situação atual pelo MAIOR ID do evento (sem empate no mesmo instante); cabeçalho sem evento carrega pelo
+        atendimento (autor = assistente, momento = entrada) e pela situação nativa de migração, na ordem declarada."""
+        ordem = {}
+        for c in self.decl:
+            if c["tabela"] == "PRASSINATURA_CAB" and c.get("destino"):
+                ordem.setdefault(c["destino"], []).append((c["coluna"], c.get("via", "")))
+        sit = ordem["documento_prontuario.situacao_documento_prontuario_id"]
+        self.assertIn(">max:ID>ID_PRSITDOCUMENTO>", sit[0][1])
+        self.assertNotIn("max:DATA_HORA_EVENTO", sit[0][1])
+        # situação nativa de migração: pronta e comentada até a semente da F2.2 (o cod: concorrente é avaliado em toda
+        # linha); até lá o cabeçalho sem evento é recusado com pendência visível
+        self.assertEqual(len(sit), 1)
+        self.assertIn("#PRASSINATURA_CAB\t=~migrado_sem_assinatura\tdocumento_prontuario.situacao_documento_prontuario_id",
+                      (_DIR / "declarado/colunas.d/L6-11.tsv").read_text(encoding="utf-8"))
+        prof = ordem["documento_prontuario.profissional_id"]
+        self.assertIn("min:DATA_HORA_EVENTO", prof[0][1])
+        self.assertEqual(prof[1], ("ID_HTATENDIMENTO", "ref:HTATENDIMENTO>ID_TBCBOPRO_ASSISTENTE>TBCBOPRO>ID_TBPROFIS>TBPROFIS"))
+        for d in ("referencia_em", "lancado_em"):
+            vs = ordem["documento_prontuario." + d]
+            self.assertEqual([c for c, _ in vs], ["ID", "ID_HTATENDIMENTO"], d)
+        for _, v in sum(ordem.values(), []):
+            for x in v.split(";"):
+                if x.startswith("ref:"):
+                    self.assertIsNotNone(mapa.passos_ref(x[4:]), x)
 
 
 if __name__ == "__main__":

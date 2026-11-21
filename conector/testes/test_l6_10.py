@@ -148,7 +148,7 @@ class L6_10(unittest.TestCase):
         self.assertEqual(via[("TBUNIDMEDIDA_PRINC_VALID", "tipo_validacao_dose_unidade.unidade_medida_id")],
                          "ref:TBUNIDADEMEDIDA>SIGLA_API>TBUNICON")
         # a unidade de prescrição do tipo de item: adotada ou criada pelo código de TBUNICON (como na L6-11)
-        self.assertNotIn(("PRUNITPLAN", "tipo_item_prescricao_unidade.unidade_prescricao_id"), via)
+        self.assertFalse(via.get(("PRUNITPLAN", "tipo_item_prescricao_unidade.unidade_prescricao_id")))  # só @id, sem via
         self.assertEqual(via[("PRUNITPLAN", "unidade_prescricao.codigo")], "unidade_prescricao;antes;adotar:codigo")
         self.assertEqual(via[("PRUNITPLAN", "unidade_prescricao.unidade_medida_id")], "unidade_prescricao;ref:TBUNICON")
         self.assertIn(("@id:unidade_prescricao", "tipo_item_prescricao_unidade.unidade_prescricao_id"),

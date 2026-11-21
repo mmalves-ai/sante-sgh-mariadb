@@ -9,23 +9,25 @@ from sante_conector.sintetica_d import l6_05
 
 CARREGADAS = ["GETABVIA", "PRAGRAVOTPARQUETIPO", "PRAGRAVOPERGUNTA", "PRAGRUPBALANCO", "PRASSINANTE",
               "PRBHINTENSIDADE", "PRBHTIPOFECHAMENTO", "PRBHTPELIMINA", "PRCAB_IDENTIFIC_PAC",
-              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
+              "PRCAMPOSLOCALIZACAOPACIENTE", "PRDADOSENVIOOPERADORA", "PRFAVORITO_EXIBIR", "PRFA_UTILIZACAO", "PRFICHAREL", "PRFILTROCLASSIF", "PRFILTROUSUARIO",
               "PRFINALIDADETRAT", "PRFORMULA", "PRFREQUENCIA", "PRHRRELATIVA"]
 # descarte de produto (declarado/sem_carga.tsv), com a causa aceita
 DESCARTADAS = {"PRCADRESP": "duplicado", "PREMAILOPCAO": "mecanismo_do_produto",
                "PRLAYIMPPRESC": "mecanismo_do_produto"}
 # dado que o hospital usa e que ainda não carrega: declaração pronta, comentada, à espera do pedido (saida/L6-05.json);
 # nunca descarte (a ficha do antimicrobiano é clínica; o leiaute é do hospital)
-BLOQUEADAS = {"GECADANTIMI": "pedido 14", "PRFICHAREL": "pedido 15"}
+BLOQUEADAS = {"GECADANTIMI": "pedido 14"}
 AGUARDAM = list(DESCARTADAS) + list(BLOQUEADAS)
 # chaves de atributo que a tela do painel exibe (COLUNAS_PAINEL, packages/contratos/src/pep/documentos.ts)
 COLUNAS_PAINEL = {"leito", "paciente", "idade", "atendimento", "entrada", "dias", "convenio", "medico", "alergias",
                   "alertas"}
 # tabela -> destinos (principal primeiro); as outras têm um destino só
-MULTIDESTINO = {"PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"]}
+MULTIDESTINO = {"PRDADOSENVIOOPERADORA": ["informacao_clinica_operadora", "grupo_informacao_clinica_operadora"],
+                "PRFICHAREL": ["modelo_impressao_clinica", "tipo_modelo_impressao"]}
 # colunas da origem declaradas sem destino, de propósito (motivo na declaração)
 SEM_DESTINO = {("GETABVIA", "ID_TBTISSVIAADMIN"), ("PRFINALIDADETRAT", "ID_TBTISSFINTRAT"),
-               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")}
+               ("PRFILTROUSUARIO", "ATENDIMENTO"), ("PRFREQUENCIA", "TP_PRESCRICAO"), ("PRFORMULA", "ATIVO")} | {("PRFICHAREL", c) for c in ("ID_FICHAREL", "COD", "NOMECOMP", "NOMECLASSE", "NOME",
+                                                 "COMPONENTE", "CONTEUDO", "PARENT", "TIPO", "SEQUENCIA")}
 DECLARADO = Path(__file__).resolve().parents[1] / "mapa" / "declarado"
 # coluna clínica sem fonte direta: de-para de valores pelo nome ou pelo número de doses, nunca literal presumido
 POR_VALORES = {("PRAGRUPBALANCO", "tipo"), ("PRASSINANTE", "papel"), ("PRBHTIPOFECHAMENTO", "periodo_horas"),
@@ -73,7 +75,7 @@ class Plano(unittest.TestCase):
             self.assertNotIn(t, self.por)
 
     def test_bloqueadas_so_com_declaracao_pronta_e_pedido(self):
-        """Só GECADANTIMI e PRFICHAREL ficam de fora sem descarte: declaração pronta comentada (motivo cita o pedido),
+        """Só GECADANTIMI fica de fora sem descarte: declaração pronta comentada (motivo cita o pedido),
         nenhuma linha em sem_carga.tsv (não é descarte) e o pedido em aberto no saida/L6-05.json."""
         if not (DECLARADO / "sem_carga.tsv").exists():
             self.skipTest("mapa do conector ausente")
@@ -279,6 +281,25 @@ class Sintetica(unittest.TestCase):
 
     def test_so_dados_inventados(self):
         self.assertTrue(all(u.startswith("usuario.exemplo.") for u in l6_05.PAIS_EXTERNOS["TBUSERS"]))
+
+
+class LeiauteSemPerda(unittest.TestCase):
+    def test_componentes_em_texto_no_json(self):
+        """COMPONENTE e CONTEUDO são BLOB de TEXTO (SUB_TYPE 1 no dicionário vivo): o #grupo_json guarda as
+        propriedades do leiaute como texto, nunca como hash (sha256:)."""
+        self.assertRegex(l6_05.DDL, r"COMPONENTE BLOB SUB_TYPE 1, CONTEUDO BLOB SUB_TYPE 1")
+        linhas = next(v for t, v, _ in l6_05.DADOS if t == "PRFICHAREL")
+        amostras = [x for ln in linhas for x in ln[5:7] if x is not None]
+        self.assertEqual(len(amostras), 4)
+        for b in amostras:
+            v = sentinela.aplicar(sentinela.regra_efetiva("texto_longo", 1), b)[0]
+            j = carga_mapa._valor_json(v)
+            self.assertIsInstance(j, str)
+            self.assertFalse(j.startswith("sha256:"), j)
+        self.assertIn("Left = 8", carga_mapa._valor_json(sentinela.aplicar("texto_longo", amostras[0])[0]))
+        self.assertIn("Título falso", [carga_mapa._valor_json(sentinela.aplicar("texto_longo", b)[0]) for b in amostras])
+        # a regra só viraria bytes (hash) num BLOB binário: é o subtipo vivo que decide, não o gerado
+        self.assertEqual(sentinela.regra_efetiva("texto_longo", 0), "blob")
 
 
 if __name__ == "__main__":

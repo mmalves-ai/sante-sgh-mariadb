@@ -6,9 +6,9 @@ insumo, apresentação, unidade do insumo, lote, item do kit rastreável, lote d
 padrão, saldo do item do kit) e, na rodada 3, balanço (inventário + rodada única) e seus itens, pedido de compra, item
 da nota (cria o cabeçalho agrupado por ANO, MES, DOC e o movimento de entrada), cabeçalho da nota (complementa pelo
 número), lote por movimento (nota e transferência, pelo destino secundário do pai), consumo do paciente (movimento de
-saída) e princípio ativo do insumo (NOME do princípio do hospital no catálogo oficial, `cod:`). Descartadas
-(DESCARTADAS, 2) e bloqueadas por pedido (BLOQUEADAS, 3) em `declarado/sem_carga.tsv`. TBCENCUS, TBPRINC e TBCBOPRO
-entram só como origem lida pela referência
+saída) e princípio ativo do insumo (NOME do princípio do hospital no catálogo oficial, `cod:`). Rodada 4: princípio
+do cadastro do hospital (principio_ativo_cliente) e saldo do lote por local (saldo_lote). Descartadas (DESCARTADAS, 4)
+em `declarado/sem_carga.tsv`; nenhuma bloqueada. TBCENCUS e TBCBOPRO entram só como origem lida pela referência
 (ORIGEM_PAIS, fora do plano pelo MAPA_TESTE).
 Anomalias cobertas:
 - nome nulo (NOT NULL do destino: restricao_destino_1048), literais presumidos (valor_presumido por linha lida);
@@ -86,6 +86,10 @@ CREATE TABLE GELANNFS (ID_GELANNFS INTEGER NOT NULL, ANO SMALLINT, MES SMALLINT,
 CREATE TABLE GERASVALNFS (ID INTEGER NOT NULL, ID_GELANNFS INTEGER, QTDE NUMERIC(18,3), ID_GEVALMEM INTEGER, DATA DATE, LOTE VARCHAR(30), ID_GERASVALFINAL INTEGER, ID_TBLABORA SMALLINT, ID_GENOMCOM INTEGER, PRIMARY KEY (ID));
 CREATE TABLE GERASVALTRANSFLOTE (ID INTEGER NOT NULL, ID_GELANTRA INTEGER, QTDE NUMERIC(18,3), ID_GEVALMEM_ORI INTEGER, ID_GEVALMEM_DES INTEGER, DATA DATE, LOTE VARCHAR(30), ARM_ORI SMALLINT, ARM_DES SMALLINT, ID_GERASVALFINAL INTEGER, PRIMARY KEY (ID));
 CREATE TABLE GELANPAC (ID INTEGER NOT NULL, TIPO VARCHAR(1), REG INTEGER, DATA DATE, HORA VARCHAR(4), ITEM INTEGER, LOCAL SMALLINT, USUARIO VARCHAR(31), QTDE NUMERIC(18,3), ATO SMALLINT, CDC INTEGER, ORIGEM VARCHAR(1), VALOR NUMERIC(18,2), PERC NUMERIC(9,2), KIT INTEGER, CONSOL VARCHAR(1), DOC_SAI INTEGER, MES_SAI SMALLINT, ANO_SAI SMALLINT, ID_PRESC INTEGER, ID_NOMCOM INTEGER, CRM INTEGER, ID_TBCBOPRO INTEGER, CONTA DOUBLE PRECISION, CDC_BK INTEGER, ID_TBFORNEC INTEGER, PRIMARY KEY (ID));
+CREATE TABLE GERASVALFINAL (ID INTEGER NOT NULL PRIMARY KEY, ID_GEVALMEM INTEGER NOT NULL, ITEM INTEGER NOT NULL,
+  QTDE NUMERIC(18,3) NOT NULL, DATA TIMESTAMP);
+CREATE TABLE GERASVALINICIAL (ID_GEVALMEM INTEGER NOT NULL, ITEM INTEGER NOT NULL, QTDE NUMERIC(18,3) NOT NULL,
+  ID INTEGER NOT NULL PRIMARY KEY, DATA TIMESTAMP, ID_GERASVALFINAL INTEGER);
 CREATE TABLE GEITENS_TBPRINC (ID_GEITENS INTEGER NOT NULL, ID_TBPRINC INTEGER NOT NULL, PRIMARY KEY (ID_GEITENS, ID_TBPRINC));
 CREATE TABLE TBPRINC (COD INTEGER NOT NULL, NOME VARCHAR(254), ATIVO CHAR(1), COD_DCB VARCHAR(10), ID_TBTERAPEUTICO INTEGER, ID_TBUNICON_PADRAO VARCHAR(7), PRIMARY KEY (COD));
 CREATE TABLE TBCENCUS (COD INTEGER NOT NULL PRIMARY KEY, ID INTEGER);
@@ -111,14 +115,15 @@ PAIS_EXTERNOS = {"GEGRUPOS": ["1", "2"], "TBLABORA": ["1", "2"], "GEKITRAS": ["1
                  "TBFORNEC": ["1", "2"], "TBNATOPE": ["5"], "TBCENCUS": ["10", "20"], "RECADATE": ["7001", "7002"],
                  "GELANTRA": ["1/movimento_estoque", "2/movimento_estoque"], "TBPROFIS": ["501"]}
 # pais lidos na ORIGEM só para a referência (chave alternativa ou encadeada): fora do plano (MAPA_TESTE), já carregados
-ORIGEM_PAIS = ("TBCENCUS", "TBPRINC", "TBCBOPRO")
+ORIGEM_PAIS = ("TBCENCUS", "TBCBOPRO")
 CARREGADAS = ("TBTP_ENV_LISTA_AVAL_FARM", "TBUNICON", "GEITENS", "GENOMCOM", "GEUNIPRESC", "GEVALMEM",
               "GEITEMKITRAS", "GERASVALESTINI", "GEVIASITEM", "GEKITITE", "GESALDOKITRAS", "GECADBAL", "GELANBAL",
-              "GECADPED", "GELANNFS", "GECADNFS", "GERASVALNFS", "GERASVALTRANSFLOTE", "GELANPAC", "GEITENS_TBPRINC")
+              "GECADPED", "GELANNFS", "GECADNFS", "GERASVALNFS", "GERASVALTRANSFLOTE", "GELANPAC", "TBPRINC",
+              "GEITENS_TBPRINC", "GERASVALFINAL", "GERASVALINICIAL")
 DESCARTADAS = ("GEKITKPI", "GEUSERS_TBCLASSI")
-# bloqueadas por pedido (sem_carga.tsv, situacao=bloqueada): o princípio próprio do hospital espera o modelo
-# principio_ativo_cliente (F2.2); as fotografias do saldo do lote esperam o saldo atual (pedido competencia_carga)
-BLOQUEADAS = ("TBPRINC", "GERASVALFINAL", "GERASVALINICIAL")
+# rodada 4: nenhuma bloqueada (o princípio do hospital carrega em principio_ativo_cliente; as fotografias do saldo
+# do lote carregam como histórico na trilha_auditoria, correção da rodada 4)
+BLOQUEADAS = ()
 NAO_CARREGADAS = DESCARTADAS + BLOQUEADAS
 COLS = {m.group(1): [c.split()[0] for c in re.split(r",\s+(?![0-9]+\))", re.sub(r",\s*(PRIMARY KEY|CONSTRAINT).*$", "", m.group(2))) if c.split()[0] not in ("PRIMARY", "CONSTRAINT")]
         for m in re.finditer(r"CREATE TABLE (\w+) \((.*?)\);", " ".join(DDL.split()))}
@@ -241,13 +246,30 @@ def linhas(r, ins):
     ins("TBCENCUS", [20, 2])
     # princípio do hospital SEM código DCB (como nas 138 linhas da referência): casa pelo NOME com o catálogo oficial
     for x in [(1, "Principio falso A", "S", None), (2, "  Principio   falso B ", "S", None),  # espaços colapsados
-              (3, "Principio proprio do hospital", "S", None)]:                            # sem par no catálogo
-        ins("TBPRINC", list(x) + [7, "MG"])
+              (3, "Principio proprio do hospital", "S", None),                             # sem par no catálogo
+              (4, "Principio com codigo", "N", "1234"),            # DCB com zeros à esquerda: liga ao oficial
+              (5, "Principio codigo falso", "S", "99999"),         # DCB fora do oficial: tenta o nome, sem par
+              (6, None, "S", None),                                # sem nome: 1048
+              (7, "Principio falso A ", "S", None)]:               # nome repetido no cadastro: 1062
+        ins("TBPRINC", list(x) + [7, "ZZ" if x[0] == 3 else "ML"])   # 3: unidade nunca vista (NULL)
     ins("TBCBOPRO", [1, 501])
     for x in [(101, 1), (102, 1), (102, 2),
-              (101, 3),                                            # nome fora do catálogo oficial: 1048
+              (101, 3),                                            # sem DCB: o princípio do hospital
+              (101, 4),                                            # com DCB achado: o do hospital, ligado ao oficial
+              (102, 5),                                            # DCB fora do oficial: o princípio do hospital
               (107, 1)]:                                           # insumo recusado: pai_pendente
         _l(ins, "GEITENS_TBPRINC", ID_GEITENS=x[0], ID_TBPRINC=x[1])
+    # fotografias do saldo do lote (histórico na trilha_auditoria): duas do mesmo lote, lote recusado (pai_pendente:
+    # a foto espera o lote), lote nunca visto (pai_inexistente, NULL), sem data (1048); saldo inicial ligado ou não à foto
+    dth = datetime.datetime
+    for x in [(1, 1, 101, D(5), dth(2025, 1, 31, 23, 0)), (2, 1, 101, D(3), dth(2025, 2, 28, 23, 0)),
+              (3, 3, 102, D(2), dth(2025, 2, 28, 23, 0)),
+              (4, 5, 103, D(1), dth(2025, 2, 28, 23, 0)),          # lote recusado: pai_pendente (recusa)
+              (5, 99, 101, D(1), dth(2025, 2, 28, 23, 0)),         # lote nunca visto: pai_inexistente
+              (6, 2, 101, D(4), None)]:                            # sem data: 1048
+        _l(ins, "GERASVALFINAL", ID=x[0], ID_GEVALMEM=x[1], ITEM=x[2], QTDE=x[3], DATA=x[4])
+    for x in [(1, 1, 101, D(4), dth(2025, 1, 1, 0, 0), 1), (2, 2, 101, D(7), dth(2025, 1, 1, 0, 0), None)]:
+        _l(ins, "GERASVALINICIAL", ID=x[0], ID_GEVALMEM=x[1], ITEM=x[2], QTDE=x[3], DATA=x[4], ID_GERASVALFINAL=x[5])
     # balanço: o número leva o prefixo de domínio; o mesmo DOC em outro mês colide (1062, pedido texto_composto)
     for x in [(1, 10, dt(2026, 1, 31), 1, "T"), (2, 10, dt(2026, 2, 28), 1, "T"),     # 1062
               (2, 11, dt(2026, 2, 28), 2, "F"),
@@ -310,16 +332,20 @@ def linhas(r, ins):
            CONTA=1.0, ID_TBFORNEC=2 if x[0] == 7 else None)
     # (linha 7: inscrição no conselho nunca vista: solicitante NULL com pai_inexistente)
     return {
-        "GEITENS_TBPRINC": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1,
-                                                          "codigo_inexistente_destino": 1, "pai_pendente": 1}},
+        "TBPRINC": {"gravados": 5, "pendencias": {"restricao_destino_1048": 1, "restricao_destino_1062": 1,
+                                                  "codigo_inexistente_destino": 4, "pai_inexistente": 1}},
+        "GEITENS_TBPRINC": {"gravados": 6, "pendencias": {"pai_pendente": 1}},
+        "GERASVALFINAL": {"gravados": 4, "pendencias": {"pai_pendente": 1, "pai_inexistente": 1,
+                                                        "restricao_destino_1048": 1}},
+        "GERASVALINICIAL": {"gravados": 2, "pendencias": {}},
         "GECADBAL": {"gravados": 3, "pendencias": {"valor_presumido": 6, "restricao_destino_1062": 1,
                                                    "restricao_destino_1048": 2, "pai_inexistente": 1,
                                                    "valor_fora_do_dominio": 1}},
         "GELANBAL": {"gravados": 2, "pendencias": {"restricao_destino_1062": 1, "pai_pendente": 2,
                                                    "pai_inexistente": 4, "restricao_destino_1048": 1,
                                                    "restricao_destino_4025": 1}},
-        "GECADPED": {"gravados": 3, "pendencias": {"restricao_destino_1048": 2, "pai_inexistente": 1,
-                                                   "data_sentinela": 1, "restricao_destino_4025": 1,
+        "GECADPED": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1, "pai_inexistente": 1,
+                                                   "data_sentinela": 1, "restricao_destino_4025": 2,
                                                    "valor_fora_do_dominio": 1}},
         "GECADNFS": {"gravados": 2, "pendencias": {}},
         "GELANNFS": {"gravados": 4, "pendencias": {"restricao_destino_1062": 1, "restricao_destino_4025": 1,

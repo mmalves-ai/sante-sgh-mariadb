@@ -26,7 +26,8 @@
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
    "mudanca": "M3: referência ao PRIMEIRO/ÚLTIMO FILHO: via 'ref:<FILHO>^<COL_FK>:primeiro|ultimo>COL[>T...]' (linha filha que aponta para esta, na ordem da chave do filho; terminada em coluna dá o valor, em tabela dá o id); sem filho: pai_inexistente",
-   "motivo": "PRASSINATURA_CAB (BLOQUEADA, rodada 3 revisão): 51.039 de 1.325.865 cabeçalhos com evento têm mais de um evento (medido, só contagem) e dariam pai_ambiguo em colunas NOT NULL; 150 sem evento. Declaração pronta e comentada em colunas.d/L6-11.tsv"
+   "motivo": "PRASSINATURA_CAB (BLOQUEADA, rodada 3 revisão): 51.039 de 1.325.865 cabeçalhos com evento têm mais de um evento (medido, só contagem) e dariam pai_ambiguo em colunas NOT NULL; 150 sem evento. Declaração pronta e comentada em colunas.d/L6-11.tsv",
+   "atendido": "contornado na rodada 4: PRASSINATURA_CAB carrega com ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>min:DATA_HORA_EVENTO (autor, momento, gravação) e >max: (situação atual)"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py (erros_especiais_e_opcoes) + carga_mapa.py",
@@ -128,6 +129,11 @@
    "arquivo": "tools/obra/conferir-fatia-f4.sh ou sintetica_d/l7_07.py / l7_05.py (orquestrador)",
    "mudanca": "a conferência da L6-11 (REQUER L7-07) cai em 'tabela TBCENCUS sem as colunas do mapa: NOME, SIGLA, SITUACAO, COD_APURASUS, UNIMEN': a imagem da L7-07 cria TBCENCUS só com (COD, ID) e a declaração da L7-05 lê mais colunas",
    "motivo": "conciliação da L6-11 sem prova na árvore atual por causa de fatia alheia; tipo_entrada_estoque foi resolvido no PREPARO_DESTINO da L6-11 (INSERT IGNORE, mesma forma da L7-07)"
+  },
+  {
+   "arquivo": "db/migracoes/06_PEP (semente do produto, trilha F2.2)",
+   "mudanca": "situação NATIVA de migração em situacao_documento_prontuario: codigo='migrado_sem_assinatura', descricao 'Documento migrado sem assinatura', categoria='aguardando_assinatura', permite_edicao=0, final=0 (como os tipos nativos de migração do estoque)",
+   "motivo": "PRASSINATURA_CAB sem evento de assinatura (150 na referência) carrega pelo atendimento (autor = assistente, momento = entrada); a situação vai por cod:situacao_documento_prontuario.codigo com =~migrado_sem_assinatura (declarada). Sem a semente: codigo_inexistente_destino e recusa visível. As situações da origem (PRSITDOCUMENTO, L6-07) têm código = chave da origem e não servem como padrão genérico"
   }
  ]
 }

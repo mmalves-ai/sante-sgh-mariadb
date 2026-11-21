@@ -26,28 +26,34 @@ RECTRAGE	INTER_INC	agenda_escala.intervalo_inicio	00:00:00		L6-03: '0000' = sem 
 RECTRAGE	INTER_FIN	agenda_escala.intervalo_fim	00:00:00		L6-03: '0000' = sem intervalo (perfil da operação do sistema anterior): nulo sem pendência
 SICTRAGE	INTER_INC	agenda_escala.intervalo_inicio	00:00:00		L6-03: '0000' = sem intervalo (perfil da operação do sistema anterior): nulo sem pendência
 SICTRAGE	INTER_FIN	agenda_escala.intervalo_fim	00:00:00		L6-03: '0000' = sem intervalo (perfil da operação do sistema anterior): nulo sem pendência
-#REPACAGI	PACIENTE	horario_agenda.situacao	1	ocupado	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	PACIENTE	horario_agenda.situacao	0		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	HR	bloqueado	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	Q	bloqueado	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	P	bloqueado	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	C		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	F		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	T		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	A		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	S		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	X		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	U		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	V		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	W		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	Z		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	R		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	SITUACAO	horario_agenda.situacao	N		L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	LIVRE	horario_agenda.situacao	S	livre	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	LIVRE	horario_agenda.situacao	N	bloqueado	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	1	1	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	0	0	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	TIPOHR	horario_agenda.tipo_horario	N	regular	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	TIPOHR	horario_agenda.tipo_horario	E	encaixe	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	N	0	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
-#REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	E	1	L6-03 (REPACAGI, comentada com a declaração): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	PACIENTE	horario_agenda.situacao	1	ocupado	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	PACIENTE	horario_agenda.situacao	0		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	HR	bloqueado	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	Q	bloqueado	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	P	bloqueado	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	C		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	F		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	T		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	A		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	S		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	X		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	U		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	V		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	W		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	Z		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	R		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	horario_agenda.situacao	N		L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	LIVRE	horario_agenda.situacao	S	livre	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	LIVRE	horario_agenda.situacao	N	cancelado	/L6-0 r4b: LIVRE N sem paciente e sem situação de bloqueio (HR, Q, P): horário fechado à marcação pelo hospital sem motivo registrado; 'cancelado' (indisponível, não exige bloqueio) em vez de recusar ou abrir como livre (decisão em F4-decisoes-destino.md)
+REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	1	1	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	0	0	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	TIPOHR	horario_agenda.tipo_horario	N	regular	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	TIPOHR	horario_agenda.tipo_horario	E	encaixe	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	N	0	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	TIPOHR	horario_agenda.encaixe_ordem	E	1	L6-03 (REPACAGI, r4): evidência estado-horario.ts e gravação de encaixe (marcacao.ts) do sistema anterior
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	HR	horario_reservado	L6-03 r4: motivo do bloqueio do horário pela situação
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	HR	Horário reservado	L6-03 r4: descrição do motivo do bloqueio
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	Q	feriado	L6-03 r4: motivo do bloqueio do horário pela situação
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	Q	Feriado	L6-03 r4: descrição do motivo do bloqueio
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	P	manutencao	L6-03 r4: motivo do bloqueio do horário pela situação
+REPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	P	Manutenção	L6-03 r4: descrição do motivo do bloqueio

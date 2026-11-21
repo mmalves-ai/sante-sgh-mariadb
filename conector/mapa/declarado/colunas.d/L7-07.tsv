@@ -140,9 +140,6 @@ GEVALMEM	DATA	lote_insumo.validade	data			L7-07: validade; data sentinela: data_
 GEVALMEM	DATA_ORIGINAL	lote_insumo.validade_original	data			L7-07: validade antes da redução
 GEVALMEM	ID_TBLABORA	lote_insumo.fabricante_id	chave_origem			L7-07: fabricante (L7, ordem 593); nunca visto: NULL com pai_inexistente
 GEVALMEM	DATAMATRIX_QRCODE	lote_insumo.codigo_rastreio	texto			L7-07: código bidimensional lido
-GEVALMEM	LOCAL		inteiro			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
-GEVALMEM	QTDE		decimal			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
-GEVALMEM	QTDE_KIT		decimal			L7-07 r3 (correção): sem destino ATIVO: saldo do lote no local vai para saldo_lote (declaração pronta e comentada abaixo); saldo_lote.competencia (NOT NULL, dia 1) precisa do mês da carga (=@data_carga com a regra data_primeiro_dia_mes), que o motor ainda não aplica: pedido competencia_carga (alta) no saida/L7-07.json. Até lá GERASVALFINAL e GERASVALINICIAL ficam BLOQUEADAS (sem_carga.tsv), não descartadas
 GEVALMEM	QTDE_ORIGINAL		decimal			L7-07: sem destino: quantidade da entrada do lote: está no item da nota (GELANNFS) e no movimento do lote
 GEVALMEM	DATA_REDUCAO		data			L7-07: sem destino: data em que a validade foi reduzida; a validade original fica em lote_insumo.validade_original
 GEVALMEM	ID_SEQ_LOTE_ITEM		chave_origem			L7-07: sem destino: sequência do lote no item do sistema antigo; o lote do produto tem id próprio
@@ -152,12 +149,13 @@ GEVALMEM	DOC		inteiro			L7-07: sem destino: número do documento de entrada; ver
 GEVALMEM	ANO		inteiro			L7-07: sem destino: ano do documento de entrada; ver TIPO_DOC
 GEVALMEM	MES		inteiro			L7-07: sem destino: mês do documento de entrada; ver TIPO_DOC
 GEVALMEM	ID_GENOMCOM		chave_origem			L7-07: sem destino: apresentação comercial da entrada; lote_insumo guarda fabricante e marca, não a apresentação
-#GEVALMEM	@estabelecimento	saldo_lote.estabelecimento_id			saldo_lote	L7-07: saldo ATUAL do lote no local (mesmo grão de uq_saldo_lote: local x lote); destino fora do mapa pela via
-#GEVALMEM	@id	saldo_lote.lote_insumo_id				L7-07: o lote gravado (ou adotado) por esta linha
-#GEVALMEM	LOCAL	saldo_lote.local_estoque_id	chave_origem		ref:GELOCARM	L7-07: local do saldo
-#GEVALMEM	QTDE	saldo_lote.quantidade	decimal_nao_negativo			L7-07: saldo do lote no local
-#GEVALMEM	QTDE_KIT	saldo_lote.quantidade_em_kit	decimal_nao_negativo			L7-07: parte do saldo dentro de kits
-#GEVALMEM	=@data_carga	saldo_lote.competencia	data_primeiro_dia_mes			L7-07: mês corrente do saldo = mês da carga (regra sobre =@data_carga pedida no L7-07.json)
+GEVALMEM	@estabelecimento	saldo_lote.estabelecimento_id			saldo_lote	L7-07: saldo ATUAL do lote no local (mesmo grão de uq_saldo_lote: local x lote); destino fora do mapa pela via
+GEVALMEM	@id	saldo_lote.lote_insumo_id				L7-07: o lote gravado (ou adotado) por esta linha
+GEVALMEM	LOCAL	saldo_lote.local_estoque_id	chave_origem		ref:GELOCARM	L7-07: local do saldo
+GEVALMEM	QTDE	saldo_lote.quantidade	decimal_nao_negativo			L7-07: saldo do lote no local
+GEVALMEM	QTDE_KIT	saldo_lote.quantidade_em_kit	decimal_nao_negativo			L7-07: parte do saldo dentro de kits
+GEVALMEM	=@data_carga	saldo_lote.competencia	data_primeiro_dia_mes			L7-07: mês corrente do saldo = mês da carga (regra sobre =@data_carga, rodada 4)
+GEVALMEM	=migracao	saldo_lote.origem				L7-07 r4: saldo vindo da migração
 GEITEMKITRAS	ID_GEKITRAS	kit_rastreavel_item.kit_rastreavel_id	chave_origem		ref:GEKITRAS;adotar:kit_rastreavel_id,insumo_id	L7-07 r3 (correção): kit rastreável (L7, ordem 560); nunca visto: pai_inexistente e recusa (NOT NULL). A origem tem uma linha por insumo E LOTE do kit (1795 pares kit+insumo repetidos em 4216 linhas, todos com lotes distintos, na referência): o par repetido ADOTA o item já gravado (adotado_existente, baixa) e grava o seu lote em kit_rastreavel_lote
 GEITEMKITRAS	#seq:ID_GEKITRAS	kit_rastreavel_item.sequencia				L7-07: posição do item no kit, na ordem da chave. Instável no diferencial (exclusão + inclusão no mesmo kit repete a posição: 1062): sequência estável pedida no L7-07.json
 GEITEMKITRAS	ID_GEITENS	kit_rastreavel_item.insumo_id	chave_origem			L7-07 r3 (correção): insumo (mesma fatia); recusado: pai_pendente. Com o kit, identifica o item (adotar)
@@ -331,7 +329,7 @@ GERASVALTRANSFLOTE	#seq:ID_GELANTRA	movimento_lote.sequencia				L7-07 r3: sequê
 GERASVALTRANSFLOTE	ID_GEVALMEM_ORI	movimento_lote.lote_insumo_id	chave_origem		ref:GEVALMEM	L7-07 r3: lote (o lote por local adota o lote físico)
 GERASVALTRANSFLOTE	QTDE	movimento_lote.quantidade	decimal			L7-07 r3: quantidade do lote
 GEITENS_TBPRINC	ID_GEITENS	insumo_principio_ativo.insumo_id	chave_origem		ref:GEITENS	L7-07 r3: insumo
-GEITENS_TBPRINC	ID_TBPRINC	insumo_principio_ativo.principio_ativo_id	texto_nome		ref:TBPRINC>NOME;cod:principio_ativo.descricao	L7-07 r3 (correção): princípio ativo pelo NOME do princípio da origem achado no catálogo oficial do destino (descrição, espaços colapsados, comparação do banco sem caixa e sem acento): o código DCB vem vazio nas 138 linhas da referência. Sem par: codigo_inexistente_destino e recusa (NOT NULL, visível); nome repetido no catálogo: pai_ambiguo. O princípio próprio do hospital sem par espera o modelo principio_ativo_cliente (pedido F2.2 no saida/L7-07.json); usar o DCB quando houver pede a via alternativa na mesma coluna (pedido via_alternativa)
+GEITENS_TBPRINC	ID_TBPRINC	insumo_principio_ativo.principio_ativo_cliente_id	chave_origem		ref:TBPRINC	L7-07 r4 (correção): SEMPRE o princípio do cadastro do hospital (principio_ativo_cliente), que guarda a ligação ao oficial pelo DCB ou pelo nome; ligar ao oficial direto perdia a composição quando o DCB não está no catálogo (CHECK de um só recusava a linha). Decisão em F4-decisoes-destino.md
 GECADPED	OQUE		codigo_char			L7-07 r3: sem destino: P em todas as linhas (pedido)
 GECADPED	DOC		inteiro			L7-07 r3: sem destino: número do documento repetido no ano; ver ID
 GECADPED	CONDICAO		texto			L7-07 r3: sem destino nesta rodada: dado de cotação, licitação ou impressão do pedido sem coluna no pedido do produto
@@ -438,9 +436,30 @@ GERASVALTRANSFLOTE	ARM_ORI		inteiro			L7-07 r3: sem destino: lote de destino, lo
 GERASVALTRANSFLOTE	ARM_DES		inteiro			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GERASVALTRANSFLOTE	ID_GERASVALFINAL		chave_origem			L7-07 r3: sem destino: lote de destino, locais e data vêm do movimento da transferência e do lote
 GELANPAC	HORA		texto			L7-07 r3: lida pela data e hora do lançamento (#data_hora:DATA,HORA)
-#TBPRINC	NOME	principio_ativo_cliente.nome	texto_nome			L7-07 r3: princípio próprio do hospital (pronto, espera o modelo principio_ativo_cliente da F2.2, pedido no L7-07.json); sem nome recusa (NOT NULL)
-#TBPRINC	ATIVO	principio_ativo_cliente.ativo	booleano_sn			L7-07 r3: S/N
-#TBPRINC	COD_DCB	principio_ativo_cliente.principio_ativo_id	inteiro_zeros_esquerda:5		cod:principio_ativo.codigo_dcb	L7-07 r3: ligação ao oficial pelo DCB quando houver (vazio na referência); concorrente com o NOME abaixo
-#TBPRINC	NOME	principio_ativo_cliente.principio_ativo_id	texto_nome		cod:principio_ativo.descricao	L7-07 r3: ligação ao oficial pelo nome na falta do DCB; sem par fica NULL com codigo_inexistente_destino (o farmacêutico liga depois)
-#TBPRINC	ID_TBTERAPEUTICO	principio_ativo_cliente.classe_terapeutica_codigo	texto			L7-07 r3: só o código da classe (a tabela de classes não existe no dicionário da origem)
-#TBPRINC	ID_TBUNICON_PADRAO	principio_ativo_cliente.unidade_medida_padrao_id	chave_origem		ref:TBUNICON	L7-07 r3: unidade padrão de dose (mesma fatia); nunca vista: pai_inexistente
+TBPRINC	NOME	principio_ativo_cliente.nome	texto_nome		principio_ativo_cliente;principal	L7-07 r3: princípio próprio do hospital (modelo principio_ativo_cliente, rodada 4: todo princípio do cadastro do hospital, ligado ao oficial quando houver par); sem nome recusa (NOT NULL)
+TBPRINC	ATIVO	principio_ativo_cliente.ativo	booleano_sn			L7-07 r3: S/N
+TBPRINC	COD_DCB	principio_ativo_cliente.principio_ativo_id	inteiro_zeros_esquerda:5		cod:principio_ativo.codigo_dcb	L7-07 r3: ligação ao oficial pelo DCB quando houver (vazio na referência); concorrente com o NOME abaixo
+TBPRINC	NOME	principio_ativo_cliente.principio_ativo_id	texto_nome		cod:principio_ativo.descricao	L7-07 r3: ligação ao oficial pelo nome na falta do DCB; sem par fica NULL com codigo_inexistente_destino (o farmacêutico liga depois)
+TBPRINC	ID_TBTERAPEUTICO	principio_ativo_cliente.classe_terapeutica_codigo	texto			L7-07 r3: só o código da classe (a tabela de classes não existe no dicionário da origem)
+TBPRINC	ID_TBUNICON_PADRAO	principio_ativo_cliente.unidade_medida_padrao_id	chave_origem		ref:TBUNICON	L7-07 r3: unidade padrão de dose (mesma fatia); nunca vista: pai_inexistente
+TBPRINC	=migracao	principio_ativo_cliente.origem				L7-07 r4: princípio vindo da migração
+#--- GERASVALFINAL e GERASVALINICIAL (r4, correção): CARREGAM como histórico do saldo do lote na trilha_auditoria (fotografia com retrato completo); não são recalculáveis (medido: o último retrato difere do saldo atual em 98 de 808 lotes). Decisão em F4-decisoes-destino.md
+GERASVALFINAL	DATA	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria;principal	L7-07 r4 (correção): momento da fotografia (sem vazio na referência); vazio ou sentinela recusa (NOT NULL)
+GERASVALFINAL	@estabelecimento	trilha_auditoria.estabelecimento_id				L7-07 r4 (correção): id do único estabelecimento do cliente
+GERASVALFINAL	=operacao	trilha_auditoria.acao				L7-07 r4 (correção): registro de saldo, não inclusão nem alteração de cadastro
+GERASVALFINAL	=lote_insumo	trilha_auditoria.entidade				L7-07 r4 (correção): o saldo é do lote
+GERASVALFINAL	ID_GEVALMEM	trilha_auditoria.entidade_id	chave_origem		ref:GEVALMEM	L7-07 r4 (correção): lote (mesma fatia; o lote por local adota o lote físico); recusado: pai_pendente, nunca visto: pai_inexistente (NULL)
+GERASVALFINAL	#retrato:*	trilha_auditoria.dados_depois				L7-07 r4 (correção): retrato completo da linha (lote, item, quantidade, data e a fotografia ligada)
+GERASVALFINAL	=fotografia do saldo do lote	trilha_auditoria.motivo				L7-07 r4 (correção): natureza do histórico
+GERASVALFINAL	ITEM		inteiro			L7-07 r4 (correção): sem coluna própria: o item é o do lote; no retrato
+GERASVALFINAL	QTDE		decimal			L7-07 r4 (correção): sem coluna própria: a quantidade fotografada vai no retrato
+GERASVALINICIAL	DATA	trilha_auditoria.ocorrido_em	data_hora		trilha_auditoria;principal	L7-07 r4 (correção): momento da fotografia (sem vazio na referência); vazio ou sentinela recusa (NOT NULL)
+GERASVALINICIAL	@estabelecimento	trilha_auditoria.estabelecimento_id				L7-07 r4 (correção): id do único estabelecimento do cliente
+GERASVALINICIAL	=operacao	trilha_auditoria.acao				L7-07 r4 (correção): registro de saldo, não inclusão nem alteração de cadastro
+GERASVALINICIAL	=lote_insumo	trilha_auditoria.entidade				L7-07 r4 (correção): o saldo é do lote
+GERASVALINICIAL	ID_GEVALMEM	trilha_auditoria.entidade_id	chave_origem		ref:GEVALMEM	L7-07 r4 (correção): lote (mesma fatia; o lote por local adota o lote físico); recusado: pai_pendente, nunca visto: pai_inexistente (NULL)
+GERASVALINICIAL	#retrato:*	trilha_auditoria.dados_depois				L7-07 r4 (correção): retrato completo da linha (lote, item, quantidade, data e a fotografia ligada)
+GERASVALINICIAL	=saldo inicial do lote na fotografia	trilha_auditoria.motivo				L7-07 r4 (correção): natureza do histórico
+GERASVALINICIAL	ITEM		inteiro			L7-07 r4 (correção): sem coluna própria: o item é o do lote; no retrato
+GERASVALINICIAL	QTDE		decimal			L7-07 r4 (correção): sem coluna própria: a quantidade fotografada vai no retrato
+GERASVALINICIAL	ID_GERASVALFINAL		chave_origem			L7-07 r4 (correção): sem coluna própria: a fotografia ligada vai no retrato (35 de 681 na referência)

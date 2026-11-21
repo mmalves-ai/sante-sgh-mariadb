@@ -152,13 +152,20 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L7-01.tsv ou L7-02.tsv + sem_carga.tsv (fatia dona de SIFORMUL)",
    "mudanca": "carregar SIFORMUL em formula_calculo (declaração pronta e comentada na L7-02) e tirar o descarte mecanismo_do_produto: a cadeia SIFORMUL -> SIVARFORMULA (L7-03) -> SIRESVAR (L7-04) está toda declarada e só espera a fórmula",
    "motivo": "SIRESVAR (valores informados das variáveis, entrada do cálculo do analito) é dado clínico do laudo e fica BLOQUEADA (pai_nao_carregado:SIVARFORMULA) enquanto a fórmula não carregar; não há outro destino correto para o valor sem a variável",
-   "gravidade": "alta"
+   "gravidade": "alta",
+   "atendido": "rodada 4 (conferidor): SIFORMUL passou à L7-03 e carrega (#codigo_derivado:ATO+EXAME+CODELE:30, analito pela ref:SITABELE(EXAME,CODELE)/exame_analito); SIVARFORMULA e SIRESVAR deixam de estar bloqueadas"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv e L6-12.tsv (fatias donas de PRASSINATURA_CAB e PRASSINATURA_DOC)",
    "mudanca": "carregar documento_prontuario (PRASSINATURA_CAB) pela alternativa já disponível (PRASSINATURA_DOC grava o documento como secundário antes, agrupado pelo cabeçalho) ou pelo M3 (primeiro filho); reforça o pedido 14",
    "motivo": "PREXAMEASSINATURA (exame_item_assinatura.documento_prontuario_id NOT NULL) fica BLOQUEADA por pai_nao_carregado:PRASSINATURA_CAB; a declaração da L7-04 está pronta e a imagem sintética já prova os 4 vínculos na ordem certa",
    "gravidade": "alta"
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT/09_tabelas.sql (trilha F2.2)",
+   "mudanca": "exame_item.motivo_cancelamento_texto de VARCHAR(500) para TEXT NULL (como referencia_texto no mesmo 09). Depois: em colunas.d/L7-04.tsv, SILANEXA JUSTIFICATIVA_SUSPENSAO_PEP com a regra texto_longo no lugar de texto_resumo:500.",
+   "motivo": "A justificativa clínica da suspensão vem de BLOB de texto (sem limite na origem); o limite de 500 veio do DDL da própria rodada, não de regra de negócio. Hoje o texto acima de 500 caracteres é cortado na palavra com pendência (visível), mas o restante não chega ao produto.",
+   "sql": "ALTER TABLE exame_item MODIFY COLUMN motivo_cancelamento_texto TEXT NULL COMMENT 'Justificativa do cancelamento em texto';"
   }
  ]
 }

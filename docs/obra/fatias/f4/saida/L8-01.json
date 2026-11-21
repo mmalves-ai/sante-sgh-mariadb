@@ -185,7 +185,8 @@
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L8-05.tsv e L8-02.tsv (fatias L8-05, L8-02)",
    "mudanca": "descomentar RPLANRPA em L8-05 (rpa_lancamento) e retirar as 2 linhas sem destino de RPLANRPA em L8-02",
-   "motivo": "a guarda do produto contra pagar duas vezes (ja-em-rpa) lê rpa_lancamento; a situação aprovado dos 8.477 lançamentos em RPA já vem da L8-01, mas o vínculo lançamento x RPA ainda não é gravado"
+   "motivo": "a guarda do produto contra pagar duas vezes (ja-em-rpa) lê rpa_lancamento; a situação aprovado dos 8.477 lançamentos em RPA já vem da L8-01, mas o vínculo lançamento x RPA ainda não é gravado",
+   "atendido": "rodada 4 (conferidor): linhas sem destino tiradas da L8-02; RPLANRPA declarada e conferida na L8-05 (RPLANRPA_ATIVA)"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d da fatia de FCCADNFS (nota de serviço)",
@@ -206,6 +207,25 @@
    "arquivo": "conector/sante_conector/carga_mapa.py (conciliação do principal desdobrado, integrador; mesma regra vale para TBLOCALHORA)",
    "mudanca": "no resultado da conciliação do destino PRINCIPAL desdobrado (_desdobrado), registros_destino = linhas da origem gravadas (a variável 'linhas', hoje só usada no ok) e não len(destino) (itens); acrescentar 'itens_destino': len(destino) ao resultado (e, se o painel quiser mostrar, à conciliação/execucao.ts). A soma de controle segue sobre os itens. Teste: na imagem sintética da L8-01, FCHORATE tem 4 linhas lidas, 1 gravada com 6 itens e 3 recusadas: registros_origem 4 = registros_destino 1 + recusados 3",
    "motivo": "o ponta a ponta do painel (apps/api/src/modulos/plataforma-onboarding/ponta-a-ponta.int.spec.ts) exige registrosOrigem = registrosDestino + recusados por entidade; com o principal desdobrado o motor grava registros_destino = itens (6) e o painel acusa horario_normal_tabela '4 de 9' no Importar (4 linhas contra 6 itens + 3 recusadas). A declaração da fatia segue o mecanismo da rodada 3 como documentado (FCHORATE é o exemplo do brief); mudar a imagem sintética para uma linha com um só item esconderia o defeito. Código compartilhado: a fatia não edita"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv",
+   "id": "r4_marca_TF",
+   "mudanca": "filtro de TBMATMED aceitar F além de N e vazio: so_se:TAB>TBCTRMEM>REF_BRA=N,F,!licenca_nao_comprovada (idem REF_SIMP)",
+   "motivo": "as marcas da origem valem T/F (agregado da referência: 1.065.998 preços de tabelas com REF_BRA=F e REF_SIMP=F); com =N, todo item de tabela própria F é recusado (licenca_nao_comprovada) e cerca de 1 milhão de preços do hospital ficam pai_pendente. A sintética da L8-01 agora tem a tabela 3 com marcas F: o esperado de FCREFUND passa sozinho de 2 a 3 gravados quando o filtro do item aceitar F (hoje 2 e pai_pendente 1). Alta.",
+   "gravidade": "alta"
+  },
+  {
+   "id": "r4_preco_propria_pmc",
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-03.tsv (TBCTRMEM)",
+   "mudanca": "tabela_preco.preco_referencia = '=~pmc' na tabela de mat/med própria (TBCTRMEM)",
+   "motivo": "o preço da tabela própria (FCREFUND VALOR) é gravado em preco_referencia_matmed.preco_maximo_consumidor de uma fonte tipo_fonte='propria'; a tabela de preço diz qual coluna usar (pf/pmc). Com 'pmc' presumido (valor_presumido, uma por tabela, visível), o faturamento lê o preço do hospital; hoje fica NULL"
+  },
+  {
+   "id": "r4_preco_propria_modelo",
+   "arquivo": "F2.2 (modelo 12_FAT, preco_referencia_matmed)",
+   "mudanca": "coluna de preço próprio do hospital (ex.: preco_tabela_propria) ou comentário/CHECK que diga que, em fonte tipo_fonte='propria', preco_maximo_consumidor é o preço da tabela do hospital",
+   "motivo": "PMC tem significado regulatório (publicação/CMED); relatório que compare PMC com preço cobrado precisa distinguir a fonte própria. Decisão provisória registrada em F4-decisoes-destino.md (L8-01, correção r4)"
   }
  ]
 }

@@ -91,9 +91,20 @@ PRDADOSENVIOOPERADORA	=Informações enviadas à operadora	grupo_informacao_clin
 #GECADANTIMI	CONV	ficha_antimicrobiano.fonte_pagadora_id			ref:TBCONVEN	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): convênio da ficha (pode diferir do atendimento: fica o da ficha)
 #GECADANTIMI	TIPO	ficha_antimicrobiano.finalidade_terapeutica_id	codigo_char	valores	cod:finalidade_terapeutica.codigo	PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): tipo de tratamento (profilático, empírico, terapêutico) por pares de valor, depois da contagem por valor
 #GECADANTIMI	CRM		inteiro			PRONTA, aguarda o modelo (F2.2, L6-05.json pedido 14): sem destino: o número do conselho já vem pelo ID_TBCBOPRO (inscrição do prescritor)
-#PRFICHAREL	COD	modelo_impressao_clinica.codigo	texto		agrupar:COD	PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): um leiaute por COD da origem; as linhas são os componentes dele
-#PRFICHAREL	#codigo_derivado:COD:150:leiaute_	modelo_impressao_clinica.nome				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): a origem não nomeia o leiaute; o cliente renomeia
-#PRFICHAREL	=leiaute_migrado	modelo_impressao_clinica.tipo_modelo_impressao_id			cod:tipo_modelo_impressao.codigo	PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): tipo nativo de migração (proposto ao modelo)
-#PRFICHAREL	=0	modelo_impressao_clinica.ativo				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): entra inativo, para revisão no editor do produto
-#PRFICHAREL	#grupo_json:SEQUENCIA,NOMECOMP,NOMECLASSE,PARENT,TIPO,NOME,COMPONENTE,CONTEUDO	modelo_impressao_clinica.conteudo				PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): lista JSON dos componentes, na ordem de SEQUENCIA e da chave; propriedades do BLOB como texto
-#PRFICHAREL	ID_FICHAREL					PRONTA, aguarda o motor (L6-05.json pedido 15: agrupar no principal + #grupo_json): chave do componente: entra no JSON pela ordem; o modelo não tem tabela de componente
+PRFICHAREL	#codigo_derivado:COD:30:leiaute_	modelo_impressao_clinica.codigo			agrupar:COD	L6-05 r4: um leiaute por COD da origem (agrupar no principal); as linhas da origem são os componentes dele
+PRFICHAREL	#codigo_derivado:COD:150:leiaute_migrado_	modelo_impressao_clinica.nome				L6-05 r4: a origem não nomeia o leiaute; o cliente renomeia no editor
+PRFICHAREL	=leiaute_migrado	tipo_modelo_impressao.codigo			tipo_modelo_impressao;antes;adotar:codigo	L6-05 r4: tipo do leiaute migrado, criado pela primeira linha e adotado pelas seguintes (o produto não semeia tipo de migração)
+PRFICHAREL	=Leiaute migrado do sistema anterior	tipo_modelo_impressao.descricao			tipo_modelo_impressao	L6-05 r4: descrição do tipo de migração
+PRFICHAREL	@id:tipo_modelo_impressao	modelo_impressao_clinica.tipo_modelo_impressao_id				L6-05 r4: tipo gravado ou adotado nesta linha
+PRFICHAREL	=0	modelo_impressao_clinica.ativo				L6-05 r4: entra inativo, para revisão no editor do produto (o produto não interpreta os componentes da ferramenta antiga)
+PRFICHAREL	#grupo_json:SEQUENCIA,NOMECOMP,NOMECLASSE,PARENT,TIPO,NOME,COMPONENTE,CONTEUDO	modelo_impressao_clinica.conteudo				L6-05 r4: lista JSON dos componentes do leiaute (sequência, nome, classe, pai, tipo, propriedades e conteúdo em TEXTO: COMPONENTE e CONTEUDO são BLOB SUB_TYPE 1 no dicionário vivo, convertidos de CP1252 sem perda; nunca hash)
+PRFICHAREL	ID_FICHAREL		chave_origem			L6-05 r4: chave do componente: entra na ordem da lista JSON; o modelo não tem tabela de componente
+PRFICHAREL	COD		inteiro			L6-05 r4: sem coluna própria: agrupa os componentes no leiaute (código e nome do leiaute)
+PRFICHAREL	NOMECOMP		texto			L6-05 r4: sem coluna própria: nome do componente: entra na lista JSON do conteúdo
+PRFICHAREL	NOMECLASSE		texto			L6-05 r4: sem coluna própria: classe do componente: entra na lista JSON do conteúdo
+PRFICHAREL	NOME		texto_nome			L6-05 r4: sem coluna própria: rótulo do componente: entra na lista JSON do conteúdo
+PRFICHAREL	COMPONENTE		texto_longo			L6-05 r4: sem coluna própria: propriedades do componente (texto): entram na lista JSON do conteúdo
+PRFICHAREL	CONTEUDO		texto_longo			L6-05 r4: sem coluna própria: conteúdo do componente (texto): entra na lista JSON do conteúdo
+PRFICHAREL	PARENT		texto			L6-05 r4: sem coluna própria: componente pai: entra na lista JSON do conteúdo
+PRFICHAREL	TIPO		inteiro			L6-05 r4: sem coluna própria: tipo do componente: entra na lista JSON do conteúdo
+PRFICHAREL	SEQUENCIA		inteiro			L6-05 r4: sem coluna própria: ordem do componente: entra na lista JSON do conteúdo

@@ -58,3 +58,17 @@ TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA POUPANÇA	poupanca	L8-12:
 TBTPCONTA	DESCRICAO	tipo_conta_bancaria.natureza	CONTA POUPANCA	poupanca	L8-12: natureza pela palavra da descrição (regra genérica, sem dado do cliente)
 TBBANCOS	SITUACAO	contrato_cobranca_bancaria.situacao	A	ativo	L8-12: cadastro ativo
 TBBANCOS	SITUACAO	contrato_cobranca_bancaria.situacao	I	suspenso	L8-12: inativo = suspenso (reversível; a origem não guarda o encerramento)
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	0	desconto	L8-12: natureza 0 = desconto
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	1	acrescimo	L8-12: natureza 1 = acréscimo
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	2	abatimento	L8-12: natureza 2 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	3	abatimento	L8-12: natureza 3 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	4	abatimento	L8-12: natureza 4 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	5	abatimento	L8-12: natureza 5 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	6	abatimento	L8-12: natureza 6 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	7	abatimento	L8-12: natureza 7 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	8	abatimento	L8-12: natureza 8 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	9	abatimento	L8-12: natureza 9 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	10	abatimento	L8-12: natureza 10 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	11	abatimento	L8-12: natureza 11 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	12	abatimento	L8-12: natureza 12 = retenção de tributo, migrada como abatimento da parcela
+MFDESACR	TPDES_ACR	ajuste_titulo.tipo	13	abatimento	L8-12: natureza 13 = retenção de tributo, migrada como abatimento da parcela

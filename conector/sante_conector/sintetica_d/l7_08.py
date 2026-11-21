@@ -574,7 +574,7 @@ def linhas(r, ins):
         "GELANPEDENTREGA": {"gravados": 3, "pendencias": {"data_sentinela": 1, r48: 2, r25: 1, pi: 1}},
         "GERASVALBAL": {"gravados": 4, "pendencias": {pi: 2, r48: 2, r25: 2, r62: 1}},
         "GEUSERS_TBCENCUS": {"gravados": 3, "pendencias": {"vigencia_sem_fonte": 5, pi: 2, r48: 2}},
-        "PRPARINTEGEST": {"gravados": 2, "pendencias": {"valor_presumido": 9, r48: 1, "valor_fora_do_dominio": 1}},
+        "PRPARINTEGEST": {"gravados": 2, "pendencias": {"valor_presumido": 4, r48: 1, "valor_fora_do_dominio": 1}},
         "GECADSAI": {"gravados": 4, "pendencias": {pi: 6, r48: 3, r25: 1, "valor_fora_do_dominio": 3}},
         "GEINFVENEXT": {"gravados": 1, "pendencias": {"pai_pendente": 1, pi: 1}},
         "GECADDEV": {"gravados": 3, "pendencias": {pi: 1}},

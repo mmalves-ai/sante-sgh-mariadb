@@ -2,6 +2,7 @@
 coerência da imagem sintética. Sem banco; só valores inventados. A carga e a conciliação rodam em
 `conector.sh conferir-fatia L7-03`."""
 import decimal
+import os
 import random
 import unittest
 
@@ -117,18 +118,21 @@ class Plano(unittest.TestCase):
         pronta = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8")
         for col in ("SENHA_EXPORTACAO", "SENHA_FTP"):
             self.assertEqual(decl[("SITPEQV", col)]["destino"], "")
-            # cada senha tem o seu #cofre na declaração pronta (pendência segredo_aguarda_cofre própria)
-            self.assertIn("#SITPEQV\t#cofre:%s\tinterface_equipamento.chave_cofre_credencial" % col, pronta)
-        self.assertIn("#SITPEQV\tCRIPTOGRAFIA_AES\tinterface_equipamento.criptografia\tbooleano_sn", pronta)
+            # cada senha tem o seu #cofre (pendência segredo_aguarda_cofre própria): nunca gravada em claro
+            self.assertIn("\nSITPEQV\t#cofre:%s\tinterface_equipamento.chave_cofre_credencial" % col, pronta)
+        self.assertIn("\nSITPEQV\tCRIPTOGRAFIA_AES\tinterface_equipamento.criptografia\tbooleano_sn", pronta)
         for col in ("INTERFACE", "COD_LABORATORIO", "NOME_LABORATORIO", "USUARIO_FTP"):
             self.assertTrue(decl[("SITPEQV", col)]["motivo"].strip(), col)
         self.assertEqual(decl[("SIWEBPARLAUDO", "ARQUIVO_LAUDO")]["destino"], "")
 
     def test_declaracao_pronta_do_apoio(self):
-        # rodada 3: o apoio da interface e os exames do apoio ficam prontos (comentados) até o DDL pedido
+        # rodada 4 (DDL 10_SADT/09): o apoio da interface e os exames do apoio carregam
         from sante_conector import mapa as m
         pronta = (mapa.DIR_PACOTE / "declarado/colunas.d/L7-03.tsv").read_text(encoding="utf-8").splitlines()
-        com = [l[1:].split("\t") for l in pronta if l.startswith("#SITPEQV\t") or l.startswith("#SITBEXHP\t")]
+        self.assertFalse([l for l in pronta if l.startswith("#SITPEQV\t") or l.startswith("#SITBEXHP\t")])
+        com = [l.split("\t") for l in pronta if l.split("\t")[0] in ("SITPEQV", "SITBEXHP") and l.split("\t")[2]]
+        self.assertIn("SITPEQV", self.plano)
+        self.assertIn("SITBEXHP", self.plano)
         dest = {(c[0], c[2]): c for c in com}
         self.assertIn("antes;opcional;adotar:codigo", dest[("SITPEQV", "laboratorio_apoio.codigo")][5])
         self.assertEqual(dest[("SITPEQV", "interface_equipamento.laboratorio_apoio_id")][1], "@id:laboratorio_apoio")
@@ -261,7 +265,37 @@ class Sintetica(unittest.TestCase):
     def test_colunas_da_origem(self):
         for t, cols in l7_03.COLUNAS.items():
             self.assertEqual(len(cols), len(set(cols)), t)
-        self.assertEqual(set(l7_03.COLUNAS), TABELAS | BLOQUEADAS | set(l7_03.FORMA_SO))
+        self.assertEqual(set(l7_03.COLUNAS), TABELAS | BLOQUEADAS | set(l7_03.FORMA_SO) |
+                         set(l7_03.PAIS_NA_IMAGEM))
+
+
+
+def _mariadb():
+    try:
+        from sante_conector import banco
+        banco.conectar(None).close()
+        return True
+    except Exception:  # noqa: BLE001 (fora do container: sem MariaDB)
+        return False
+
+
+@unittest.skipUnless(os.path.exists("/opt/firebird/bin/isql") and _mariadb(),
+                     "só no container do conector, com o MariaDB da rede interna")
+class Conferencia(unittest.TestCase):
+    def test_apoio_por_exame_pela_equivalencia(self):
+        """SITBEXHP 1: apoio da interface 1 (código 7), exame próprio HB copiado da equivalência 1/HGB, exige peso."""
+        from sante_conector import conferencia
+        lidos = {}
+
+        def ler(cc):
+            with cc.cursor() as c:
+                c.execute("SELECT a.codigo, e.sigla, x.codigo_exame_apoio, x.exige_peso, x.exige_altura FROM"
+                          " exame_laboratorio_apoio x JOIN laboratorio_apoio a ON a.id=x.laboratorio_apoio_id"
+                          " JOIN exame e ON e.id=x.exame_id")
+                lidos["apoio"] = [[str(v) for v in x] for x in c.fetchall()]
+        r = conferencia.conferir("L7-03", depois_da_primeira=ler)
+        self.assertEqual(r["erros"], [])
+        self.assertEqual(lidos["apoio"], [["7", "HB", "HGB", "1", "0"]])
 
 
 if __name__ == "__main__":

@@ -201,6 +201,12 @@
    "prioridade": "baixa",
    "mudanca": "`ref:T/<destino>` para linha do pai RECUSADA: pendência pai_pendente (com a raiz) em vez de pai_inexistente",
    "motivo": "GESALDOKITRAS da linha recusada de GEITEMKITRAS aparece como pai_inexistente (provado na conferência da fatia)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L6-11.tsv e L6-12.tsv",
+   "id": "r4_principio_cliente_ligacoes",
+   "mudanca": "PRALERGIAPAC_TBPRINC, PRITEMNAOPAD_TBPRINC e TBALERGIA_TBPRINC: SEMPRE principio_ativo_cliente_id por ref:TBPRINC (sem se: e sem a coluna do oficial), como GEITENS_TBPRINC na correção da rodada 4",
+   "motivo": "TBPRINC carrega em principio_ativo_cliente, que guarda a ligação ao oficial (DCB ou nome). Ligar ao oficial direto pelo DCB recusa a linha (CHECK de um só princípio) quando o DCB não está no catálogo, e a alergia/composição clínica se perde; COD_DCB vazio nas 138 linhas da referência"
   }
  ]
 }

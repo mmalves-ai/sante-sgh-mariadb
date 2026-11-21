@@ -19,3 +19,10 @@ MFREFDES	TIPO	tipo_ajuste_titulo.natureza	13	retencao	L8-11: medido 1 linha(s), 
 MFADIFOR	TIPO_CREDOR	adiantamento.tipo_credor	F	fornecedor	L8-11 r3: medido F 3926
 MFADIFOR	TIPO_CREDOR	adiantamento.tipo_credor	M	profissional	L8-11 r3: medido M 395 (as 395 linhas com inscrição em MFADIFOR_TBCBOPRO)
 MFADIFOR	DT_PGTO	adiantamento.situacao	1	pago	L8-11 r3 (revisão): data de pagamento preenchida (regra preenchido) = adiantamento pago; sem data fica o padrão aberto
+TBINTIMP	TIPO	aliquota_tributo_vigencia.tipo_pessoa	M	fisica	L8-11 r4: M = profissional (pessoa física)
+TBINTIMP	TIPO	aliquota_tributo_vigencia.tipo_pessoa	E	juridica	L8-11 r4: E = empresa (pessoa jurídica)
+MFCTAREC	PGTO	parcela_receber.situacao	1	recebida	L8-11 r4: com data de pagamento
+MFCTAREC	PGTO	parcela_receber.situacao	0	aberta	L8-11 r4: sem data de pagamento
+MFCTAREC	DEV	titulo_receber.tipo_devedor	E	fonte_pagadora	L8-11 r4: E = convênio (fonte pagadora)
+MFCTAREC	DEV	titulo_receber.tipo_devedor	I	paciente	L8-11 r4: I = paciente (particular)
+MFCTAREC	DEV	titulo_receber.tipo_devedor	C	cliente	L8-11 r4: C = cliente financeiro

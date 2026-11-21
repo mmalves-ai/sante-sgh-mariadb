@@ -143,7 +143,9 @@ class Plano(unittest.TestCase):
         # TBEMIREFMATMED: configuração do hospital por fonte pagadora e item; espera o item faturável do mat/med
         raiz = Path(mapa.__file__).resolve().parents[1] / "mapa" / "declarado" / "sem_carga.tsv"
         sc = {r["tabela"]: r for r in mapa.ler_tsv(raiz)}
-        self.assertNotIn("TBEMIREFMATMED", sc)
+        # r4: bloqueada pelo MODELO (o item faturável de mat/med exige insumo; pedido de item_referencia_matmed_id na
+        # exceção, saida/L8-04.json), nunca descarte
+        self.assertEqual((sc["TBEMIREFMATMED"]["situacao"], sc["TBEMIREFMATMED"]["causa"]), ("bloqueada", "aguarda_modelo"))
         self.assertNotIn("TBEMIREFMATMED", l8_04.DESCARTADAS)
         self.assertIn("TBEMIREFMATMED", l8_04.AGUARDA_PAI)
 

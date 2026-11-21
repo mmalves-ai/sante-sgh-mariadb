@@ -49,6 +49,17 @@
    "arquivo": "conector/mapa/declarado/colunas.d/L5-06.tsv (fatia L5-06)",
    "mudanca": "declarar TBESPEC.ID_TBDIGITAL_ESPECIALIDADE para mapeamento_codigo_externo (destino secundário opcional): entidade `=especialidade_medica`, entidade_id `@id`, codigo_externo por `ref:TBDIGITAL_ESPECIALIDADE>ID_DIGITAL`, descricao_externa por `ref:TBDIGITAL_ESPECIALIDADE>NOME`, sistema_externo_id do parceiro de prescrição digital (secundário `sistema_externo` antes;adotar:codigo com código presumido) e tipo_mapeamento_codigo_id por `cod:tipo_mapeamento_codigo.codigo` (especialidade)",
    "motivo": "a ligação especialidade do cliente -> especialidade do parceiro de prescrição digital não carrega por nenhuma fonte; com ela, TBDIGITAL_ESPECIALIDADE (L8-16) volta a descarte duplicado verdadeiro"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv + tools/obra/gerar_mapa_conector.py",
+   "mudanca": "Dependência de ordem TBDIGITAL_ESPECIALIDADE -> TBESPEC (e regerar tabelas.tsv)",
+   "motivo": "O mapeamento do parceiro (TBDIGITAL_ESPECIALIDADE, uma equivalência por especialidade com `ref:TBESPEC.ID_TBDIGITAL_ESPECIALIDADE;por_pai`) carrega antes da especialidade: hoje toda linha sai pai_inexistente (efeito real na imagem sintética); com a ordem: 3 equivalências de 3 linhas lidas, 1 sem especialidade ligada"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/dependencias.tsv e ciclos.tsv",
+   "mudanca": "TBDIGITAL_ESPECIALIDADE -> TBESPEC (ordem) e ciclo TBESPEC -> TBDIGITAL_ESPECIALIDADE em duas fases; mapa regerado",
+   "motivo": "a equivalência acha a especialidade pela chave alternativa",
+   "atendido": "rodada 4 (revisão L8-16): feito pela fatia; conferência 3 itens, 1 pai_inexistente, 2 adotados"
   }
  ]
 }

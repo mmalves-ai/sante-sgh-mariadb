@@ -152,12 +152,27 @@ class FatiaL603(unittest.TestCase):
         self._d("SICANAGE", "#retrato:*", "trilha_auditoria.dados_antes")
         self.assertEqual(self._d("SICANAGE", "=operacao", "trilha_auditoria.acao")["via"], "trilha_auditoria")
 
-    def test_horario_da_agenda_pronto_e_comentado(self):
-        txt = (mapa.DIR_PACOTE / "declarado/colunas.d/L6-03.tsv").read_text(encoding="utf-8")
-        com = [l.split("\t") for l in txt.splitlines() if l.startswith("#REPACAGI\t")]
-        self.assertIn("horario_agenda.fim_em", {x[2] for x in com})
-        self.assertIn("horario_agenda.inicio_em", {x[2] for x in com})
-        self.assertFalse([c for c in self.m["colunas_decl"] if c["tabela"] == "REPACAGI"])
+    def test_horario_da_agenda_carrega_com_fim_pela_duracao(self):
+        # rodada 4: fim = início + duração do horário; sem duração na linha, a da agenda
+        fim = self._d("REPACAGI", "#data_hora_mais:DATA,HORA,DURACAO", "horario_agenda.fim_em")
+        self.assertEqual((fim["regra"], fim["via"]),
+                         ("minutos_hhmm", "ref:REAGENDA.(NOME,CRM)=(NOME,CRM)@duracao_horario_minutos"))
+        self._d("REPACAGI", "#data_hora:DATA,HORA", "horario_agenda.inicio_em")
+        self.assertEqual(self.plano["REPACAGI"]["destinos"][0], "horario_agenda")
+        self.assertEqual(set(self.plano["REPACAGI"]["destinos"]),
+                         {"horario_agenda", "bloqueio_agenda", "motivo_bloqueio_agenda"})
+
+    def test_horario_bloqueado_cria_o_bloqueio_da_agenda(self):
+        self._d("REPACAGI", "@id:bloqueio_agenda", "horario_agenda.bloqueio_agenda_id")
+        self._d("REPACAGI", "@id:motivo_bloqueio_agenda", "bloqueio_agenda.motivo_bloqueio_agenda_id")
+        c = self._d("REPACAGI", "SITUACAO", "motivo_bloqueio_agenda.codigo")
+        self.assertIn("destino_se:SITUACAO=HR,Q,P", c["via"])
+        self.assertIn("adotar:codigo", c["via"])
+        e = self._d("REPACAGI", "@estabelecimento", "bloqueio_agenda.estabelecimento_id")
+        self.assertIn("destino_se:SITUACAO=HR,Q,P", e["via"])
+        vs = {v["valor_origem"]: v["valor_destino"] for v in self.m["valores"]
+              if (v["tabela"], v["coluna"], v["destino"]) == ("REPACAGI", "SITUACAO", "motivo_bloqueio_agenda.codigo")}
+        self.assertEqual(vs, {"HR": "horario_reservado", "Q": "feriado", "P": "manutencao"})
 
     def test_agenda_tem_dono_pelo_setor_da_unidade(self):
         self._d("REAGENDA", "@id:setor_funcional", "agenda_servico.setor_funcional_id")
@@ -174,25 +189,32 @@ class FatiaL603(unittest.TestCase):
         self.assertEqual((vs["C"], vs["F"], vs["X"], vs["S"], vs["HR"]),
                          ("confirmada", "falta", "cancelada", "realizada", "bloqueada"))
 
+    def test_horario_fechado_sem_motivo_carrega_indisponivel(self):
+        """r4b: LIVRE N sem paciente e sem situação de bloqueio carrega como 'cancelado' (indisponível), nunca
+        recusado nem aberto como livre."""
+        vs = {v["valor_origem"]: v["valor_destino"] for v in self.m["valores"]
+              if (v["tabela"], v["coluna"], v["destino"]) == ("REPACAGI", "LIVRE", "horario_agenda.situacao")}
+        self.assertEqual((vs["S"], vs["N"]), ("livre", "cancelado"))
+
     def test_reversao_da_geracao_nao_e_geracao(self):
         d = self._d("REAGECRI", "STATUS", "geracao_grade.situacao")
         self.assertIn("complementa a C", d["motivo"])
         self.assertIn("4025", d["motivo"])
 
-    def test_horario_pronto_tem_situacao_ocupacao_e_encaixe(self):
-        txt = (mapa.DIR_PACOTE / "declarado/colunas.d/L6-03.tsv").read_text(encoding="utf-8")
-        com = [l.split("\t") for l in txt.splitlines() if l.startswith("#REPACAGI\t")]
-        dest = {x[2] for x in com}
-        for dc in ("situacao", "vagas_ocupadas", "tipo_horario", "encaixe_ordem", "criado_por"):
-            self.assertIn("horario_agenda." + dc, dest)
-        cols = {x[1] for x in com}
+    def test_horario_tem_situacao_ocupacao_e_encaixe(self):
+        dc = [c for c in self.m["colunas_decl"] if c["tabela"] == "REPACAGI"]
+        dest = {c["destino"] for c in dc}
+        for x in ("situacao", "vagas_ocupadas", "tipo_horario", "encaixe_ordem", "criado_por", "teleatendimento"):
+            self.assertIn("horario_agenda." + x, dest)
+        cols = {c["coluna"] for c in dc}
         for c in ("LIVRE", "SITUACAO", "TIPOHR", "UNID", "PROCED", "USUARIO", "DATA_CTR", "HORA_CTR", "APAC",
                   "HR_PLANEJA", "RETORNO", "CONV", "TIPO", "DATA_SIT", "HORA_SIT", "AOL_HORARIO",
                   "COD_AGENDA_GERCON", "ID_DIGITAL_VIDEOTELEPHONY", "PACIENTE", "DURACAO", "HORA", "CRM"):
             self.assertIn(c, cols)
-        self.assertTrue(all(x[6] for x in com))
-        vtxt = (mapa.DIR_PACOTE / "declarado/valores.d/L6-03.tsv").read_text(encoding="utf-8")
-        self.assertIn("#REPACAGI\tTIPOHR\thorario_agenda.encaixe_ordem\tE\t1", vtxt)
+        self.assertTrue(all(c["motivo"] for c in dc))
+        vs = {v["valor_origem"]: v["valor_destino"] for v in self.m["valores"]
+              if (v["tabela"], v["coluna"], v["destino"]) == ("REPACAGI", "TIPOHR", "horario_agenda.encaixe_ordem")}
+        self.assertEqual(vs, {"N": "0", "E": "1"})
 
     def test_regras_de_hora_e_duracao(self):
         self.assertEqual(sentinela.aplicar("minutos_hhmm", "0130")[0], 90)

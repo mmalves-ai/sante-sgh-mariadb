@@ -8,8 +8,10 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_12
 
 CARREGADAS = ["TBOBSREC", "TBORGAOPUBLICO", "TBORIGEMRECEBIMENTO", "TBCADPAG", "TBTIPOLANCVLR", "TBTIPOPAGFOR",
-              "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO", "TBUNIMEN", "TBITEDES", "MFCCCONV",
-              "MFPARAM_MFTIPOLANC"]
+              "TBTPCONTA", "TBBANCOS", "TBNATOPE", "SDGECADNFS", "TBTPOCORBANCOPGTO", "TBUNIMEN", "TBITEDES", "MFCONPAG",
+              "MFCONPAG_TBCBOPRO", "MFCCCONV", "MFPAGADF", "MFPARAM_MFTIPOLANC", "MFDESACR", "SDMFCONPAG"]
+# títulos a pagar (rodada 4): vários destinos por linha (parcela principal, título agrupado, tipo de documento, baixa)
+VARIOS_DESTINOS = {"MFCONPAG": {"parcela_pagar", "titulo_pagar", "tipo_documento_financeiro", "baixa_titulo"}}
 # nenhuma tabela da fatia fica sem mecanismo nem esperando decisão (rodada de cobertura total)
 AGUARDAM = []
 # descartes de produto (declarado/sem_carga.tsv): domínio fixo do produto, parâmetros do software antigo ou duplicado
@@ -57,12 +59,56 @@ class Plano(unittest.TestCase):
     def test_um_destino_por_tabela(self):
         """Destinos transacionais (meio_recebimento_particular, retorno_bancario_item) não recebem catálogo."""
         for p in self.plano:
+            if p["tabela"] in VARIOS_DESTINOS:
+                self.assertEqual(set(p["destinos"]), VARIOS_DESTINOS[p["tabela"]], p["tabela"])
+                continue
             self.assertEqual(len(p["destinos"]), 1, p["tabela"])
+        self.assertEqual(self.por["MFCONPAG"]["destinos"][0], "parcela_pagar")
+        self.assertEqual(self.por["MFDESACR"]["destinos"], ["ajuste_titulo"])
         self.assertEqual(self.por["TBCADPAG"]["destinos"], ["forma_recebimento"])
         self.assertEqual(self.por["TBTPOCORBANCOPGTO"]["destinos"], ["ocorrencia_bancaria"])
         self.assertEqual(self.por["MFCCCONV"]["destinos"], ["credito_fonte_pagadora"])
         self.assertEqual(self.por["SDGECADNFS"]["destinos"], ["nota_entrada"])
         self.assertTrue(self.por["SDGECADNFS"]["opcoes"]["nota_entrada"]["complementa"])
+
+    @staticmethod
+    def _arquivo(rel):
+        for r in (Path(__file__).resolve().parents[1] / "mapa", Path("/app/mapa")):
+            if (r / rel).is_file():
+                return (r / rel).read_text().splitlines()
+        raise unittest.SkipTest("declarações ausentes")
+
+    def _decl(self, tab, destino):
+        """Linhas declaradas (coluna, regra, via) para tabela.destino, na ordem do arquivo da fatia."""
+        return [(x[1], x[3], x[5]) for x in (l.split("\t") for l in self._arquivo("declarado/colunas.d/L8-12.tsv"))
+                if len(x) > 5 and x[0] == tab and x[2] == destino]
+
+    def test_contas_a_pagar_pela_medicao(self):
+        """Rodada 4 (medição só de contagens): TP_LAN 0 = a pagar; DT_PGTO sentinela = aberta; a compensação liga à
+        baixa da própria parcela (sem baixa em dobro); a natureza do ajuste é o próprio TPDES_ACR."""
+        nat = self._decl("MFCONPAG", "titulo_pagar.natureza_financeira_id")
+        self.assertEqual(len(nat), 1)
+        self.assertIn("=0)>max:VALOR", nat[0][2])
+        sit = self._decl("MFCONPAG", "parcela_pagar.situacao")
+        self.assertEqual([c[0] for c in sit], ["=aberta", "=paga"])
+        self.assertIn("se:DT_PGTO=1899-12-30", sit[0][2])
+        self.assertTrue(self.por["MFCONPAG"]["opcoes"]["baixa_titulo"]["opcional"])
+        self.assertEqual([c[1] for c in self._decl("MFCONPAG", "baixa_titulo.valor_pago")], ["decimal_zero_nulo"])
+        self.assertEqual(self.por["MFPAGADF"]["destinos"], ["compensacao_adiantamento"])
+        self.assertEqual(self._decl("MFPAGADF", "compensacao_adiantamento.baixa_titulo_id")[0][2],
+                         "ref:MFCONPAG/baixa_titulo")
+        pag = self._decl("MFDESACR", "ajuste_titulo.parcela_pagar_id")[0][2]
+        rec = self._decl("MFDESACR", "ajuste_titulo.parcela_receber_id")[0][2]
+        self.assertTrue(pag.endswith(";se:TP_LAN=0"))
+        self.assertTrue(rec.startswith("ref:MFCTAREC.") and rec.endswith(";se:TP_LAN=1"))
+        self.assertEqual(self._decl("MFDESACR", "ajuste_titulo.tipo_ajuste_titulo_id"), [])
+
+    def test_natureza_do_ajuste_cobre_0_a_13(self):
+        pares = {l.split("\t")[3]: l.split("\t")[4] for l in self._arquivo("declarado/valores.d/L8-12.tsv")
+                 if l.startswith("MFDESACR\tTPDES_ACR\tajuste_titulo.tipo\t")}
+        self.assertEqual(set(pares), {str(k) for k in range(14)})
+        self.assertEqual((pares["0"], pares["1"]), ("desconto", "acrescimo"))
+        self.assertEqual({pares[str(k)] for k in range(2, 14)}, {"abatimento"})
 
     def test_codigo_numerico_vira_texto(self):
         for p in self.plano:
@@ -90,6 +136,9 @@ class Plano(unittest.TestCase):
             pend = l8_12_esperado()[t]["pendencias"]
             n = len([d for d in l8_12.DADOS if d[0] == t][0][1])
             # toda linha, salvo as recusadas antes por pai_pendente
+            if t == "TBTPCONTA":  # rodada 4 (pedido 25): o literal concorrente só presume onde a descrição não casou
+                self.assertEqual(pend.get("valor_presumido"), 1, t)
+                continue
             self.assertEqual(pend.get("valor_presumido"), n - pend.get("pai_pendente", 0), t)
 
     def test_empresa_do_financeiro_e_a_mantenedora(self):

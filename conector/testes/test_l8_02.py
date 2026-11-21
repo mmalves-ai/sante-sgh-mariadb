@@ -10,13 +10,18 @@ from sante_conector import carga_mapa, mapa, sentinela
 from sante_conector.sintetica_d import l8_02
 
 FATIA = tuple(l8_02.FORMAS) + tuple(l8_02.NOVAS_R3)
-AGUARDAM = {"RPLANRPA"}
+AGUARDAM = set()  # RPLANRPA passou à L8-05 (dona pelo índice), rodada 4
 DESCARTES = {"RPRPA_TBCBOPRO"}
 # revisão da rodada 3: bloqueadas em sem_carga.tsv (não descarte) até outra fatia gravar o dado que justificaria o
 # descarte (a escolha de cada fonte pagadora; o padrão do tipo de atendimento) ou o pai carregar (item do exame)
-BLOQUEADAS = {"TBCONSBRASINATIVO", "TBCONSIDCALCVLR", "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD",
-              "SIREFCON"}
-BLOQUEADAS_SEM_CARGA = BLOQUEADAS | {"TBCONVPERCTAPAC", "TBCTRTAT"}
+# r4: SIREFCON carrega (item pelo procedimento do exame); as listas de opções são descarte de produto
+# r4 (revisão adversarial): as listas de opções seguem BLOQUEADAS até a L5-06 declarar a escolha de cada fonte pagadora
+LISTAS_OPCOES = {"TBCONSBRASINATIVO", "TBCONSIDCALCVLR", "TBCONVCOBTXPA", "TBCONVCONSMAT", "TBCONVMEDREQATD"}
+BLOQUEADAS = set(LISTAS_OPCOES)
+LISTAS_SEM_CARGA = LISTAS_OPCOES | {"TBCONVPERCTAPAC", "TBCTRTAT"}
+# colunas de TBCONVEN com a escolha da fonte pagadora (L5-06): só com elas declaradas a lista vira descarte
+ESCOLHA_TBCONVEN = ("ID_TBCONVMEDREQATD", "ID_TBCONVCOBTXPA", "ID_TBCONVCONSMAT", "ID_TBCONVPERCTAPAC",
+                    "ID_TBCONSBRASINATIVO", "ID_TBCONSIDCALCVLR_")
 # rodada 3: declaradas aqui (índice da L8-02) e ainda com linhas sem destino em colunas.d/L8-03.tsv até o integrador
 # tirá-las de lá (pedido em saida/L8-02.json)
 EM_OUTRO_ARQUIVO_PEDIDO = {"TBCOOPER", "TBINDPRO"}
@@ -168,12 +173,22 @@ class FatiaL802(unittest.TestCase):
         from pathlib import Path
         base = Path(l8_02._MAPA) / "declarado"
         sc = {r["tabela"]: r for r in mapa.ler_tsv(base / "sem_carga.tsv")}
-        for t in BLOQUEADAS_SEM_CARGA:
-            self.assertEqual(sc[t]["situacao"], "bloqueada", t)
-        # SIREFCON: declaração pronta só COMENTADA (o pai, o item faturável do exame, ainda não carrega)
+        # r4 (revisão): a lista só é descarte (domínio do produto) quando a escolha de cada fonte pagadora (colunas
+        # ID_TBCONS*/ID_TBCONV* de TBCONVEN, L5-06, pedido 19) está declarada com destino; antes, bloqueada e visível
+        escolha = [c for c in self.m["colunas_decl"] if c["tabela"] == "TBCONVEN" and c["destino"]
+                   and c["coluna"].startswith(ESCOLHA_TBCONVEN)]
+        for t in LISTAS_SEM_CARGA - {"TBCTRTAT"}:
+            if escolha:
+                self.assertEqual(sc[t]["situacao"], "descarte", t)
+            else:
+                self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "depende_declaracao_L5-06:TBCONVEN"), t)
+        self.assertEqual((sc["TBCTRTAT"]["situacao"], sc["TBCTRTAT"]["causa"]), ("descarte", "mecanismo_do_produto"))
+        # r4: SIREFCON carrega: item faturável pelo procedimento do exame (não depende de exame.item_faturavel_id)
+        self.assertNotIn("SIREFCON", sc)
+        self.assertIn("SIREFCON", self.plano)
         texto = (base / "colunas.d" / "L8-02.tsv").read_text(encoding="utf-8")
-        self.assertIn("#SIREFCON\tEXAME\tequivalencia_item_fonte_pagadora.item_faturavel_id", texto)
-        self.assertNotIn("SIREFCON", self.plano)
+        self.assertIn("SIREFCON\tEXAME\tequivalencia_item_fonte_pagadora.item_faturavel_id\t\t\t"
+                      "ref:SITABPRO(ATO,EXAME)>CODAMB>TBPROCTO.COD_PROCEDIMENTO>min:ID", texto)
         self.assertNotIn("ITEM_DO_EXAME", vars(l8_02))
 
     def test_rodada3_dependencias_fora_de_ordem_tem_pedido(self):

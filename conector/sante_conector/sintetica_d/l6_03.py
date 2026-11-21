@@ -8,9 +8,9 @@ categoria criada ou adotada pela coluna EXAME, o profissional pela inscrição n
 unidade), REAGECRI (geração da
 grade), RECTRAGE e SICTRAGE (escala semanal das agendas de consulta e de exame) e SICANAGE (cancelamento de marcação
 de exame, na trilha de auditoria como destino interino). CDTPRETCONS e PSTPRETORNO são descarte
-(declarado/sem_carga.tsv, mecanismo_do_produto). REPACAGI (horário da agenda) tem a declaração pronta e comentada até
-o motor ter o fim do horário por início + duração (pedido em docs/obra/fatias/f4/saida/L6-03.json): entra na imagem
-só com a forma (2 linhas falsas).
+(declarado/sem_carga.tsv, mecanismo_do_produto). REPACAGI (horário da agenda, rodada 4): fim = início + duração
+(`#data_hora_mais`, sem duração na linha a da agenda); o horário bloqueado na origem (HR, Q, P) cria o bloqueio da
+agenda e o motivo (destinos secundários `antes` com `destino_se`).
 Pais de fora da fatia: TBUSERS (login) e TBPROFIS (profissional) como PAIS_EXTERNOS; TBCBOPRO (inscrição no
 conselho, L5) e SIAGENDA (agenda de exames, L6-04) entram na imagem com a forma inteira do dicionário, para a
 referência encadeada e a chave alternativa (a conferência os carrega junto, sem esperado nesta fatia).
@@ -83,14 +83,13 @@ CREATE TABLE SIAGENDA (ID INTEGER NOT NULL PRIMARY KEY, CRM INTEGER NOT NULL, NO
   OBS_PORTAL_PAC_AGEND_ONLINE BLOB SUB_TYPE 1);
 """
 
-# REPACAGI: declaração pronta e comentada (fim do horário pede o especial pedido ao motor): 2 linhas falsas na imagem,
-# fora da carga; descarte de produto (declarado/sem_carga.tsv): 2 linhas falsas cada
-NAO_CARREGADAS = {"CDTPRETCONS": 2, "PSTPRETORNO": 2, "REPACAGI": 2}
+# descarte de produto (declarado/sem_carga.tsv): 2 linhas falsas cada
+NAO_CARREGADAS = {"CDTPRETCONS": 2, "PSTPRETORNO": 2}
 DESCARTADAS = ("CDTPRETCONS", "PSTPRETORNO")
-PRONTAS = ("REPACAGI",)
+PRONTAS = ()
 
 CARREGADAS = ("AGCADMOTIVO", "AGCOMPLEXIDADE", "AGDURACAO", "AGGRPFASEEVOL", "AGTPAGENDA", "RESITAGE", "RETIPAGE",
-              "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "REAGENDA", "REAGECRI", "RECTRAGE", "SICTRAGE")
+              "RETP_INTEG_AGENDA_ONLINE", "SICANAGE", "REAGENDA", "REAGECRI", "RECTRAGE", "REPACAGI", "SICTRAGE")
 # rodada 4: SICTRAGE depois de REAGENDA porque a agenda de exame (SIAGENDA, L6-04) passou a esperar o profissional
 PAIS_EXTERNOS = {"TBUSERS": ["ana", "bia"], "TBPROFIS": ["1", "2"]}
 # a conferência cria só as tabelas de destino da fatia: o estabelecimento único vem daqui; a categoria 'exame' já
@@ -231,6 +230,24 @@ def linhas(r, ins):
                None, "  Sem   motivo €", None)]:
         _ins(ins, "SICANAGE", **dict(zip(("NOME", "CRM", "DATA", "HORA", "FONE", "PACIENTE", "DT_CAN", "HR_CAN",
                                           "USU_CAN", "USU_AGE", "CONV", "MOTIVO", "ID_TBMOTCANCCAD"), v)))
+    # horários da agenda de consultas (rodada 4): ocupado, livre (duração da agenda), bloqueado com o bloqueio criado
+    # (HR, Q; motivo criado e adotado; responsável pelo horário ou pela agenda), LIVRE N sem situação de bloqueio
+    # (cancelado, r4b), encaixe, virada de dia, agenda inexistente, agenda recusada (pai_pendente) e hora inválida
+    cg, ca = "Clinica geral exemplo", "Cardiologia exemplo"
+    for (nome, crm, dia, hora, pac, sit, livre, tipohr, dur, usu, tele) in [
+            (cg, 101, D(2026, 3, 2), "08:00", "Paciente Ficticio Um", "C", "N", "N", "0020", "ana", "N"),
+            (cg, 101, D(2026, 3, 2), "08:20", None, None, "S", "N", None, "bia", "S"),
+            (cg, 101, D(2026, 3, 2), "08:40", None, "HR", "N", "N", "0020", "ana", "N"),
+            (ca, 102, D(2026, 3, 3), "09:00", None, "Q", "N", "N", "0030", None, "N"),
+            (ca, 102, D(2026, 3, 3), "09:30", None, "HR", "N", "N", "0030", "zeca", "N"),
+            (cg, 101, D(2026, 3, 4), "10:00", None, None, "N", "N", "0020", "ana", "N"),
+            (cg, 101, D(2026, 3, 4), "10:20", "Paciente Ficticio Dois", "C", "N", "E", "0010", "ana", "N"),
+            (cg, 101, D(2026, 3, 5), "23:50", "Paciente Ficticio Tres", "C", "N", "N", "0020", "ana", "N"),
+            ("Agenda inexistente", 999, D(2026, 3, 2), "08:00", None, None, "S", "N", "0020", "ana", "N"),
+            ("Duracao zero exemplo", 101, D(2026, 3, 2), "08:00", None, None, "S", "N", "0020", "ana", "N"),
+            (cg, 101, D(2026, 3, 6), "25:75", None, None, "S", "N", "0020", "ana", "N")]:
+        _ins(ins, "REPACAGI", NOME=nome, CRM=crm, DATA=dia, HORA=hora, PACIENTE=pac, SITUACAO=sit, LIVRE=livre,
+             TIPOHR=tipohr, DURACAO=dur, USUARIO=usu, TELEATENDIMENTO=tele, RETORNO="N", CONV=1, UNID=0, PROCED=0)
     return {
         "AGCADMOTIVO": {"gravados": 3, "pendencias": {"restricao_destino_1048": 1}},
         "AGCOMPLEXIDADE": {"gravados": 4, "pendencias": {"restricao_destino_1048": 1}},
@@ -260,10 +277,19 @@ def linhas(r, ins):
         "RECTRAGE": {"gravados": 3, "pendencias": {"pai_inexistente": 1, "restricao_destino_1048": 2,
                                                    "restricao_destino_4025": 1, "valor_fora_do_dominio": 3,
                                                    "vigencia_sem_fonte": 6}},
-        # escala de exame: a da agenda 5 (Raio X) gravada; hora inválida na mesma agenda (1048); Ultrassom com nome
-        # repetido (pai_ambiguo, 1048); Endoscopia (3 faixas) e a agenda 4 recusadas na L6-04 (sem dono): pai_pendente
-        "SICTRAGE": {"gravados": 1, "pendencias": {"hora_invalida": 1, "pai_ambiguo": 1, "pai_pendente": 4,
-                                                   "restricao_destino_1048": 2, "vigencia_sem_fonte": 3}},
+        # escala de exame (rodada 4: a agenda migrada sem dono entra, CHECK com origem = 'migracao'): Endoscopia dia 2 e
+        # 4 (intervalo real 1330-1400: valor_fora_do_dominio nas duas pontas), agenda 4 e Raio X dia 2 gravadas; hora
+        # inválida na Endoscopia e no Raio X (1048); Ultrassom com nome repetido (pai_ambiguo, 1048)
+        "SICTRAGE": {"gravados": 4, "pendencias": {"hora_invalida": 2, "pai_ambiguo": 1, "restricao_destino_1048": 3,
+                                                   "valor_fora_do_dominio": 2, "vigencia_sem_fonte": 7}},
+        # horários: 8 gravados (ocupado, livre com a duração da agenda, 3 bloqueados com o bloqueio criado, LIVRE N
+        # sem situação de bloqueio como 'cancelado' (r4b: indisponível, carregado), encaixe, virada de dia); motivo HR
+        # criado e adotado (adotado_existente); login desconhecido no autor do horário e no responsável do bloqueio
+        # (pai_inexistente; vale o da agenda); agenda inexistente (pai_inexistente, 1048); agenda recusada
+        # (pai_pendente); hora inválida (início e fim, 1048)
+        "REPACAGI": {"gravados": 8, "pendencias": {"adotado_existente": 1, "hora_invalida": 2, "pai_inexistente": 3,
+                                                   "pai_pendente": 1, "restricao_destino_1048": 2,
+                                                   "virada_de_dia": 1}},
         # cancelamento de exame na trilha (interino): 3 gravados; data sentinela recusa (1048); login desconhecido
         "SICANAGE": {"gravados": 3, "pendencias": {"data_sentinela": 1, "pai_inexistente": 1,
                                                    "restricao_destino_1048": 1}},

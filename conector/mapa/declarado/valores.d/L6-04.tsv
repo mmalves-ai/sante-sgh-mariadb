@@ -16,3 +16,36 @@ TBSITAGE	COD	situacao_marcacao.significado	R	aguardando	L6-04: evidência pelo n
 TBSITAGE	COD	situacao_marcacao.significado	N	aguardando	L6-04: evidência pelo nome da situação (legenda do código de leitura): Não informado: marcada
 SIAGECRI	STATUS	geracao_grade.situacao	C	concluida	L6-04: geração concluída (legenda do código de leitura, como REAGECRI)
 SIAGECRI	STATUS	geracao_grade.situacao	E	revertida	L6-04: linha que o sistema antigo grava na reversão da geração (como REAGECRI); recusada pela restrição do destino até a regra condicional pedida (L6-04.json, pedido 4)
+SIPACAGI	PACIENTE	horario_agenda.situacao	1	ocupado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	PACIENTE	horario_agenda.situacao	0		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	A		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	C		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	F		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	T		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	S		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	X		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	U		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	V		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	W		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	Z		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	R		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	N		L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	HR	bloqueado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	Q	bloqueado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	horario_agenda.situacao	P	bloqueado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	LIVRE	horario_agenda.situacao	S	livre	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	LIVRE	horario_agenda.situacao	N	cancelado	/L6-0 r4b: LIVRE N sem paciente e sem situação de bloqueio (HR, Q, P): horário fechado à marcação pelo hospital sem motivo registrado; 'cancelado' (indisponível, não exige bloqueio) em vez de recusar ou abrir como livre (decisão em F4-decisoes-destino.md)
+SIPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	1	1	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	PACIENTE	horario_agenda.vagas_ocupadas	0	0	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	TIPOHR	horario_agenda.tipo_horario	N	regular	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	TIPOHR	horario_agenda.tipo_horario	E	encaixe	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	TIPOHR	horario_agenda.encaixe_ordem	N	0	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	TIPOHR	horario_agenda.encaixe_ordem	E	1	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	HR	horario_reservado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	HR	Horário reservado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	Q	feriado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	Q	Feriado	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.codigo	P	manutencao	L6-04 r4: horário de exame e marcação de consulta
+SIPACAGI	SITUACAO	motivo_bloqueio_agenda.descricao	P	Manutenção	L6-04 r4: horário de exame e marcação de consulta
+REPACAGD	RETORNO	marcacao_horario.tipo_marcacao_id	S	retorno	L6-04 r4: horário de exame e marcação de consulta
+REPACAGD	RETORNO	marcacao_horario.tipo_marcacao_id	N		L6-04 r4: horário de exame e marcação de consulta

@@ -1617,3 +1617,174 @@ Vale por cima das linhas anteriores da L7-07 para as mesmas tabelas.
 | MFPARAM | parâmetros `financeiro.*` semeados em parametro_definicao (nível estabelecimento) | Catálogo tipado do produto; a carga grava só parametro_valor. |
 | TBPRINC | `principio_ativo_cliente` criada; ligações aceitam o oficial OU o do cliente | Regra 7: o oficial nunca é gravado; o princípio do hospital sem par fica no cadastro próprio (segurança do paciente na alergia). |
 | politica_senha | periodicidade em quantidade e unidade ao lado da em dias | Não quebrar a API; a F2.2 migra e remove a coluna em dias. |
+
+## Rodada 4: L8-02, L8-03 e L8-04 (zerar bloqueadas)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| TBMATMED | **carrega** em `item_referencia_matmed` (fonte `outra`, código TAB_COD, descrição, laboratório, ANVISA, TUSS, situação, tipo OPME pela marca OPM e o resto `outro` presumido), com o filtro de linha `so_se:TAB>TBCTRMEM>REF_BRA=N,` e `REF_SIMP=N,` (`!licenca_nao_comprovada`) | Só o item de tabela PRÓPRIA entra; o de tabela licenciada é recusado com pendência baixa e nunca gravado (regra 7). Sem `item_faturavel` secundário: o item faturável de mat/med exige insumo (`ck_item_faturavel_insumo`) e a origem não liga TBMATMED ao insumo |
+| TBREFMEMTUSS | **carrega** em `equivalencia_matmed_tuss` (item pela chave alternativa TAB, COD, CLASSIF; termo TUSS pelas tabelas 19 e 20; vigência da origem ou da carga), mesmo filtro de licença | TUSS é terminologia pública; o item é o da tabela própria |
+| TBPERTHM | **carrega** em `regra_percentual_cobranca` (um percentual por componente, desdobrado no principal) | Acordo comercial do hospital; CH_VALOR_CRED sem coluna até a F2.2 (pedido 1 do L8-03) |
+| TBITEATE.TAB / TBCTRTAT | TAB **lida** pela lista (`ref:TBCTRTAT>NOME`, de-para de valores); TBCTRTAT volta a descarte (`mecanismo_do_produto`) | O padrão de cada tipo é fato da origem, não presunção; os nomes dos pares são confirmados com a imagem de referência pelo orquestrador |
+| SIREFCON | **carrega** em `equivalencia_item_fonte_pagadora`: item = o do procedimento do exame (`ref:SITABPRO(ATO,EXAME)>CODAMB>TBPROCTO.COD_PROCEDIMENTO>min:ID`) | Não depende de `exame.item_faturavel_id`; código em várias tabelas: menor chave com `escolha_pelo_menor` (baixa, visível) |
+| TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC | descarte (`mecanismo_do_produto`) | Listas fixas de opções (domínio de `regra_consistencia_lancamento`); a escolha por fonte pagadora é coluna de TBCONVEN (L5-06, pedido 19 da L8-02 aberto) |
+| TBREFUNI | bloqueada (`aguarda_modelo`) | A equivalência à referência unificada não tem fonte pagadora na linha; pedido de modelo no L8-03.json |
+| TBEMIREFMATMED | bloqueada (`aguarda_modelo`) | A exceção exige item faturável, que mat/med só tem com insumo; pedido de modelo (item de referência) no L8-04.json |
+| TBPACTHM | segue bloqueada (`mecanismo_pedido`) | O procedimento do pacote (THM) está na tabela de honorários do convênio: precisa do componente encadeado na chave composta `ref:TBTABTHM(ref:TBCONVEN>THM,THM)`, não aplicado na r4 |
+
+## Rodada 4 (L7-03, L7-04, L7-05): decisões de destino
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| GEKONCDC | `consumo_centro_custo` agrupado por ano, mês, centro de custo e insumo; local = estoque padrão do centro de custo (TBCENCUS.LOCARM), senão o do documento de saída da primeira linha do grupo | O local não pode entrar no agrupamento (é derivado por referência); o do centro de custo é constante no grupo e respeita a chave única (estabelecimento, ano, mês, centro, insumo, local). Cada documento fica em `dados` (DOC, DATA, QTDE, VALOR): nada se perde. |
+| SICADATE | `solicitante_externo_id` só quando não há solicitante interno (`se:ID_TBCBOPRO_SOLICITANTE=`) | CHECK de exatamente um solicitante (10_SADT/09). Com os dois, vale o profissional; sem nenhum (profissional nunca visto), a requisição é recusada pela restrição, visível como pendência. |
+| SILANEXA | justificativa da suspensão em `exame_item.motivo_cancelamento_texto` (`texto_resumo:500`) | Texto livre da origem; o motivo do catálogo segue sem fonte. |
+| SIRES01 | `resultado_exame.referencia_texto` pela referência do exame da época (SIHISTVLREFEXAME.VLRREF) | Texto como impresso no laudo; o histórico segue em trilha_auditoria. |
+
+## L8-12 e L8-16, rodada 4 (títulos a pagar destravados; laboratório de apoio e especialidade do parceiro)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| MFCONPAG | Declarada (rascunho da rodada 3 com os mecanismos da rodada 4): parcela principal (`principal`), título `antes;agrupar`, natureza pelo MAIOR rateio (`ref:MFLANGSI.(..,TP_LAN)=(..,=1)>max:VALOR>(GRUPO,SUBGRUPO,ITEM)>TBITEDES`; TP_LAN 1 = a pagar, a confirmar na medição), saldo `#dif:VALOR,PAGO` com piso 0, situação pela data de pagamento (preenchida: paga), baixa só da parcela paga (`destino_se:DT_PGTO`, forma presumida `transferencia`), datas de emissão e lançamento com concorrentes (entrada, emissão), tipo de documento presumido `sem_tipo` quando a origem não traz | Melhor prática sem inventar: o domínio de STATUS e PAGO_COM não foi medido; tudo presumido fica com `valor_presumido` para o cliente revisar. Carga real espera o pedido 26 (ordem dos secundários `antes`) |
+| MFDESACR | `ajuste_titulo` (desconto 0, acréscimo 1 pela natureza do motivo, `exige_dominio`); retenção recusada visível (`valor_fora_do_dominio`) até o destino alternativo e o tributo (pedido 27) | Retenção sem tributo violaria o modelo; recusa visível em vez de descarte |
+| MFPAGADF | `compensacao_adiantamento` com a baixa `compensacao` gravada antes | Compensação de adiantamento é baixa sem conta (CHECK do meio dispensa) |
+| SDMFCONPAG | `dado_fiscal_titulo_pagar` por parcela (sequência copiada da parcela, base = valor da parcela, modelo pelo código oficial); CST PIS/COFINS e natureza do crédito sem destino até o dicionário (pedido 28) | As tabelas de códigos da origem não têm colunas no dicionário do mapa |
+| SIMATHP, SITBELHP | Carregam (`material_laboratorio_apoio`, `elemento_exame_laboratorio_apoio`) com material e analito próprios nulos (DDL 17_INTG/05): o cliente confere a equivalência na tela | Configuração real do cliente com o laboratório de apoio |
+| TBDIGITAL_ESPECIALIDADE | Carrega em `mapeamento_codigo_externo` pelo lado do parceiro: uma equivalência por especialidade do hospital que aponta o código (`ref:TBESPEC.ID_TBDIGITAL_ESPECIALIDADE;por_pai`), parceiro `sistema_externo` presumido e domínio `tipo_mapeamento_codigo` criados uma vez e adotados; código sem especialidade ligada: `pai_inexistente`. Substitui o pedido à L5-06 | A ligação fica na fatia dona do catálogo do parceiro, sem depender de outra fatia; falta só a dependência de ordem (pedido em saida/L8-16.json) |
+
+
+### L8-12 e L8-16, rodada 4: revisão dos achados (medição na referência, só contagens, 2026-11-21)
+
+Medição: MFCONPAG 71.267 parcelas, EMPRESA = 1 em todas (1 hospital, 1 empresa); DT_PGTO sentinela 1899-12-30 em
+1.665 (todas com PAGO 0) e data real em 69.602 (todas com conta); STATUS 0/1 e PAGO_COM vazio/X andam juntos e
+misturam pagas e abertas; nenhum cheque. MFLANGSI TP_LAN 0 (66.923; 66.898 casam com o documento a pagar), 1 e 4.
+MFDESACR TP_LAN 0 (20.748; 20.738 casam com a parcela a pagar) e 1 (6.295); TPDES_ACR de 0 a 13 (9 valores), nenhum
+casa com o código do motivo (MFREFDES.COD de 101 a 9.990). MFPAGADF 4.560: todas casam com MFCONPAG.ID (pelo título e
+parcela, só 3.430); em 4.226 das 4.560 parcelas compensadas o PAGO sozinho já quita.
+
+| Tabela | Decisão (substitui a linha acima) | Motivo |
+|---|---|---|
+| MFCONPAG | Natureza pelo maior rateio com **TP_LAN 0** (era 1, errado). Situação: `aberta` com a data sentinela, senão `paga` (saldo 0; aberta: valor - pago). Baixa `opcional` (sem data real, sem PAGO e sem conta não grava), valor = PAGO (`decimal_zero_nulo`), forma `=~transferencia` presumida com evidência (toda paga tem conta, nenhum cheque). `@estabelecimento` justificado (EMPRESA única). STATUS e PAGO_COM sem destino com a medição | A data sentinela marcava toda parcela aberta como paga; TP_LAN 1 não é a pagar |
+| MFCONPAG (aberta com conta prevista) | Recusa visível (NOT NULL da data da baixa), 181 na referência, até o motor aceitar negação na condição (`se:DT_PGTO!=..`, pedido 29) | O `opcional` vê a conta e tenta a baixa |
+| MFPAGADF | Sem baixa própria: `compensacao_adiantamento.baixa_titulo_id` = baixa da própria parcela (`ref:MFCONPAG/baixa_titulo`); parcela pela chave dela (`ref:MFCONPAG`) | O PAGO da parcela já inclui a compensação: duas baixas contariam o pagamento em dobro. Compensação em parcela aberta (31) recusa visível |
+| MFDESACR | Parcela a pagar com `se:TP_LAN=0`; a receber (`parcela_receber_id`, `ref:MFCTAREC.(EMPRESA,COD,DOC,SERIE,PARC)`) com `se:TP_LAN=1`. Natureza = o próprio TPDES_ACR: 0 desconto, 1 acréscimo, **2 a 13 abatimento** com motivo "Retenção de tributo migrada como abatimento"; fora de 0 a 13: recusa. Sem `tipo_ajuste_titulo_id` (nenhum motivo casa) | Retenção é dado financeiro que o hospital usa: entra com o valor; o vínculo ao tributo e à guia fica para o pedido 27 |
+| TBDIGITAL_ESPECIALIDADE | Dependência de ordem TBDIGITAL_ESPECIALIDADE -> TBESPEC em `declarado/dependencias.tsv` e ciclo em duas fases TBESPEC -> TBDIGITAL_ESPECIALIDADE em `declarado/ciclos.tsv` (a especialidade não grava o código do parceiro); mapa regerado | Sem a ordem, toda equivalência caía em `pai_inexistente` |
+
+## L7-03, L7-04 e L7-05, rodada 4 (revisão adversarial): decisões das fatias
+
+- L7-04, SILANEXA: a coleta grava data e hora (`#data_hora:COLETA,HRCOL`, condição `se:HRCOL`); só sem a hora a data
+  vai à meia-noite (concorrente `se:HRCOL=`). A hora da coleta é dado clínico (jejum, prazo do resultado, validade
+  da amostra) e não pode ser inventada como 00:00 quando existe na origem.
+- L7-04, SILANEXA.JUSTIFICATIVA_SUSPENSAO_PEP: continua `texto_resumo:500` (corte na palavra, com pendência visível)
+  até a coluna do destino virar TEXT (pedido em `saida/L7-04.json`, com o SQL); depois, `texto_longo` sem corte.
+- L7-03, SITBEXHP: a imagem da fatia passa a trazer a equivalência SITBEXEQ (mesmas linhas da imagem da L8-16,
+  carregadas pela declaração de lá) e os exames HB e GL do ato 1, para a prova positiva (apoio, exame copiado e exige
+  peso); equivalência ambígua (mesmo TIPO e código em duas linhas) vira `pai_ambiguo` e recusa visível.
+- L7-05, GEKONCDC: a imagem da fatia passa a trazer o centro de custo TBCENCUS (mesmas linhas da imagem da L8-11, o 11
+  com o local padrão 1), para a prova positiva do agrupamento: 4 linhas em 3 grupos, somas e JSON dos documentos
+  conferidos por teste; centro sem local padrão e sem documento de saída: local NOT NULL, recusa visível.
+
+## L6-03 e L6-04, rodada 4: horários e marcações da agenda carregam
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| REPACAGI, SIPACAGI | **carrega** em `horario_agenda` (fim = início + duração por `#data_hora_mais`) | O horário bloqueado na origem (situação HR reservado, Q feriado, P manutenção, sem paciente) vira `situacao='bloqueado'`, que o CHECK `ck_horario_agenda_bloqueio` só aceita com bloqueio. Melhor prática: a linha cria o bloqueio da agenda no intervalo do horário (`bloqueio_agenda`, secundário `antes` com `destino_se:SITUACAO=HR,Q,P`) e o motivo pela situação (`motivo_bloqueio_agenda`, códigos `horario_reservado`, `feriado`, `manutencao`, criado na 1.ª linha e adotado nas outras). Responsável pelo bloqueio: o usuário do horário; sem ele (ou no horário de exame, que não guarda usuário), quem criou a agenda; sem nenhum, recusa visível (1048). `LIVRE='N'` sem situação de bloqueio continua bloqueado sem bloqueio de origem: recusa visível (4025), nunca horário aberto falso. |
+| SIPACAGI | fim pela duração da agenda com `#data_hora_mais:DATA,HORA,DATA` e regra `data_fim_aberta:1801` | O horário de exame não guarda duração e o especial exige 3 argumentos: a coluna de minutos é a própria DATA, anulada sem pendência por `data_fim_aberta:1801`, e a duração vem da agenda pela via (`@duracao_horario_minutos`). Pedido de forma de 2 argumentos em `saida/L6-04.json` (troca só a declaração). |
+| SIPACAGD, REPACAGD | **carrega** em `marcacao_horario`; sem paciente cadastrado, **pré-cadastro** (`pre_cadastro`, `antes`, `destino_se:ID_RICADPAC=`) com nome, nascimento, CPF, contatos e endereço da marcação | O CHECK `ck_marcacao_horario_pessoa` exige paciente ou pré-cadastro; o pré-cadastro é o mecanismo do produto para marcação sem prontuário (vira paciente na chegada). Tipo: exame (`=exame`), retorno (RETORNO='S') ou primeira vez; situação pela do horário (legenda da agenda); duração do horário, senão da agenda; autor pelo login, senão pelo login da inclusão (REPACAGD); executante e solicitante pelo número do conselho. Colunas acessórias sem coluna no modelo (guia, solicitação externa, ids de integração do sistema anterior, atendimento da chegada) ficam declaradas sem destino, com motivo; a ligação ao atendimento (`atendimento_id`) fica para quando a carga do atendimento expuser a chave do registro. |
+
+## Rodada 4: L8-05, L8-10, L8-11 (agente f4r4, 2026-11-21)
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| TBSEGUIA | carrega: `inteiro_mais_um` em NUM_LOTE e SEQ_TRANSACAO; tipo 0 = `lote` | a origem guarda o último número usado; o destino, o próximo |
+| TBINTCRC | carrega: tipo de conta (`cod:tipo_conta.codigo`, pares A/E/U/I) e tipo de lançamento (`ref:TBTPLANC`, 0 = todos) como filtros; linhas com TIPO_ATO ou SUBTIPO_DIARIA diferentes de 0 ficam fora por `so_se` com a pendência baixa `aguarda_dimensao_no_modelo` | gravá-las sem o filtro faria o de-para valer para todos os atos; o modelo ainda não tem essas dimensões |
+| FCCTAAUD | carrega: conclusão só com AUDITADA = S (`se:`): `concluida_em` = data da gravação da cópia e `resultado` PRESUMIDO `sem_alteracao` (valor_presumido); total da cópia nulo | a origem não guarda o resultado nem outra data; o presumido fica visível ao cliente. **Revisar com o dono** |
+| TBINTIMP | carrega: aplicação PRESUMIDA `retencao_pagar` (TIPO_CTA sem pares medidos); M física, E jurídica; vigência sem início = vigência da carga (só quando DT_VIG_I é nulo) | retenções sobre profissional e empresa que o hospital paga |
+| MFPARAM | carrega parcial: NMESES e QTDE_DIA_VENC em `parametro_valor` (nível estabelecimento); o resto espera regra e referência por item do desdobrado (pedido) | o desdobrar aplica uma só regra e via a todos os itens |
+| TBFINCODRECOL | descarte `catalogo_oficial` | regra 7: só o carregador oficial grava `codigo_receita_federal` (pedido 17 segue aberto na trilha de catálogos) |
+| MFCABECLANC | carrega: `#filhos_min` (data) e `#filhos_somar` (totais); sem filho: recusa visível | nunca a data da carga como data da operação |
+| MFCTAREC | declaração PRONTA e COMENTADA (devedor por `se:DEV=`, natureza pelo maior rateio TP_LAN 2, título agrupado, paciente por `ref:RICADPAC.PRONT` a confirmar) | a conferência recusou com 1048 sem indicar a coluna; pedido de diagnóstico |
+
+### L7-07, L7-08 e L8-01, rodada 4 (zero bloqueadas nas três fatias, salvo GEANTIMI por pai de outra fatia)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| TBPRINC | **carrega** em `principio_ativo_cliente` (opção `principal`): nome (`texto_nome`, único), ativo, ligação ao oficial pelo DCB e, na falta, pelo nome (`cod:`), código da classe, unidade padrão, `origem='migracao'`. Continua em `catalogos.tsv` como `oficial:principio_ativo` (o oficial só dá de-para; nunca é gravado) | Cadastro próprio do hospital (COD_DCB vazio nas 138 linhas da referência); modelo da rodada 4 (11_SUP/08). |
+| GEITENS_TBPRINC | insumo liga ao **oficial** pelo DCB quando o princípio da origem tem DCB (`se:ID_TBPRINC>TBPRINC>COD_DCB`) e ao **princípio do hospital** na falta (`ref:TBPRINC;se:...=`); CHECK de um só: DCB fora do oficial recusa (4025, visível) | Segue o comentário do modelo (cliente = sem par no oficial). |
+| GEVALMEM -> `saldo_lote` | **aplicada**: saldo atual do lote por local, competência = mês da carga (`=@data_carga` com `data_primeiro_dia_mes`), `origem='migracao'` | Mecanismo competencia_carga da rodada 4. |
+| GERASVALFINAL, GERASVALINICIAL | **descarte `duplicado`** (a decisão anterior, que só valia com o saldo atual carregando) | Fotografias do saldo do lote sem local; o saldo atual vem da GEVALMEM e a série é recalculável de `movimento_lote`. |
+| GECTRLENTREGADOCSAIDA | dependência de ordem nova -> GECADDISPENSACAO | O setor da entrega é achado pelo código no setor funcional que a dispensação cria; a dispensação vinha depois. |
+| FCREFUND | **carrega** `preco_referencia_matmed` das tabelas PRÓPRIAS (`so_se:TAB>TBCTRMEM>REF_BRA=N,F,` e `REF_SIMP=N,F,`, fora: `licenca_nao_comprovada`, baixa); item pela chave alternativa composta de TBMATMED; fonte `fonte_referencia_matmed` (código `matmed_<TAB>`, `adotar:codigo`, nome da tabela de preço por `ref:TBCTRMEM@descricao`, tipo `propria`); UMA edição de migração por tabela (`agrupar:TAB`, vigência = menor DATA, quantidade = linhas do grupo); `#retrato:*` em `dados`. Dependências FCREFUND -> TBMATMED, TBCTRMEM | Preço do próprio hospital (1.065.998 de 1.077.674 linhas, agregado): dado financeiro; a licenciada nunca entra (regra 7). |
+
+
+## Rodada 4, correção das fatias L8-05, L8-10 e L8-11 (2026-11-21)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| MFCTAREC | **ativa** (título agrupado + parcela principal, como MFCONPAG) | Causa do 1048 medida: o secundário agrupado `titulo_receber` é gravado antes do `tipo_documento_financeiro` que ele cita por `@id:` (ordem de `tabelas_destino`). Pedido 20 da L8-11 (ordenar os `antes` pela dependência); com a ordem corrigida a imagem grava 3 parcelas e 2 títulos. Até o pedido, as recusas são visíveis (1048). |
+| MFCTAREC situação | recebida pela data de pagamento; saldo = valor - recebido (piso 0) | Na origem a baixa parcial gera parcela vinculada (PARC_VINC); `parcial` precisa de condição por comparação (pedido 21). Presunções a medir: TP_LAN 2 = a receber no rateio e paciente pelo prontuário. |
+| MFPARAM | 2 parâmetros inteiros carregam; os outros 17 ficam declarados sem destino, aguardando regra por item (pedido 19) | Perda visível, nunca descarte. EMPRESA não é estabelecimento no produto: vence a primeira empresa lida e a outra é recusada com 1062 visível até o de-para empresa -> estabelecimento (pedido 22). |
+| TBINTIMP | aplicação presumida `retencao_pagar` (valor_presumido) | TIPO_CTA sem medição; linhas que diferem só por TIPO_CTA ou EMPRESA colidem na chave única (1062 visível, caso na imagem). As colunas `*_C` e o código conjunto são o tipo de ajuste da retenção: o vínculo tributo -> ajuste vem de MFREFDES (`tipo_ajuste_titulo.tributo_id`, pedido 9). CODIGO_CBS/IBS esperam o catálogo oficial da Receita (pedido 17). |
+| TBFINCODRECOL | descarte `catalogo_oficial` mantido | O código é catálogo oficial (regra 7). A marca ATIVO não tem destino no produto: os códigos que o hospital usa são os citados pelos tipos de ajuste (MFREFDES). Revisão pedida pelo achado: guardar o uso pelo cliente quando o carregador oficial existir (pedido 17). |
+| FCCTAAUD | concluída em = DATA_FEC, depois DATA_GRA; iniciada em = DATA_GRA | Fechamento é a data natural da conclusão. Resultado `sem_alteracao` PRESUMIDO só na concluída: o domínio não tem valor neutro e a CHECK de conclusão exige resultado. |
+| TBINTCRC | `so_se` TIPO_ATO=0 e SUBTIPO_DIARIA=0 mantidos | O modelo não tem as dimensões ato e subtipo em `depara_conta_externa` (pedido F2.2). Carregar a linha específica sem a dimensão a faria valer para todos os atos (conta errada). A pendência do `so_se` é baixa por regra do motor; pedido para gravidade alta. |
+| MFCABECLANC | data da operação = menor data dos filhos; sem filho, a data da carga (concorrente) | O agrupador nunca é recusado; `sem_filho_com_valor` fica visível. |
+
+
+### L7-07, L8-01: correção da rodada 4 (achados do conferidor)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| GEITENS_TBPRINC | **sempre** `principio_ativo_cliente_id` por `ref:TBPRINC`; a coluna do oficial (`principio_ativo_id`) não é mais gravada pelo conector. Revoga a decisão "oficial pelo DCB, hospital na falta" | O `principio_ativo_cliente` já guarda a ligação ao oficial (DCB ou nome). Ligar ao oficial direto recusava a linha inteira pelo CHECK de um só princípio quando o DCB não estava no catálogo, e a composição do medicamento (usada no alerta de alergia e de duplicidade terapêutica) se perdia. Pedido igual às L6-11/L6-12 (alergia, item não padronizado). |
+| GERASVALFINAL, GERASVALINICIAL | **carregam** como histórico do saldo do lote na `trilha_auditoria` (entidade `lote_insumo`, acao `operacao`, retrato completo em `dados_depois`, momento = DATA). Revoga o descarte `duplicado` | Medido na referência (só contagens, 2026-11-21): 843 fotografias de 808 lotes em 15 datas (2020 a 2026), nenhuma sem data; a última fotografia difere do saldo atual do lote (GEVALMEM) em 98 de 808 lotes, e 69.801 saídas, 776 entradas, 88 balanços e 35 saldos iniciais apontam para elas. Não há prova de que `movimento_lote` reconstrua a série: é histórico que o hospital usa (regra 23). O modelo não tem série de saldo por lote; a trilha é o histórico genérico já usado por 31 tabelas. Lote recusado: a foto espera o lote (`pai_pendente`). |
+| FCREFUND (preço) | o preço da tabela própria fica em `preco_referencia_matmed.preco_maximo_consumidor` de uma fonte `tipo_fonte='propria'`; a tabela de preço do hospital deve dizer `preco_referencia='pmc'` (presumido, pedido à L8-03) | Em fonte própria não há PMC regulatório: a coluna é o preço da tabela, e o modelo já escolhe a coluna pela `tabela_preco.preco_referencia` (pf/pmc). Para não confundir relatório de PMC, pedida à F2.2 uma coluna de preço próprio ou a regra explícita no modelo (saida/L8-01.json, `r4_preco_propria_modelo`). |
+| FCREFUND x TBMATMED (filtro de licença) | o filtro do item (L8-03) tem de aceitar F como o do preço (`=N,F,`); a sintética da L8-01 tem tabela própria marcada F | Sem isso cerca de 1 milhão de preços do próprio hospital ficam `pai_pendente` na carga real (pedido `r4_marca_TF`, alta). |
+
+## Rodada 4: L6-05, L6-11 e L6-12 (zerar bloqueios)
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| PRFICHAREL | **Carrega**: `modelo_impressao_clinica` inativo, um por COD (`agrupar:COD` no principal), conteúdo = `#grupo_json` dos componentes; tipo `leiaute_migrado` criado pela primeira linha e adotado (`tipo_modelo_impressao;antes;adotar:codigo`), porque o produto não semeia tipo de migração | Leiaute é do hospital (regra 23); o editor do produto revisa e ativa. |
+| PRASSINATURA_CAB | **Carrega**: o documento do prontuário nasce do cabeçalho (um por cabeçalho, `entidade_origem='documento_migrado'`, id = chave do cabeçalho); autor, momento e gravação pelo PRIMEIRO evento (`ref:PRASSINATURA_DOC.ID_PRASSINATURA_CAB>min:DATA_HORA_EVENTO>...`), situação atual pelo ÚLTIMO (`>max:`); documento consolidado, tipo e ID_TABELA no `conteudo` (`#retrato`). Cabeçalho sem evento (150 na referência) fica recusado com `pai_inexistente` (autor NOT NULL), visível no painel | Resolve o M3 sem motor novo; serve também à L7-04 (PREXAMEASSINATURA aponta o cabeçalho). Revoga a criação agrupada do documento pela PRASSINATURA_DOC (L6-12 r3): o evento agora aponta `ref:PRASSINATURA_CAB`. |
+| PRRESPOSTA | **Carrega** com `por_pai`: uma opção por campo de cada modelo que usa a pergunta | Antes 1.539 de 3.849 opções caíam em `pai_ambiguo`. |
+| TBKITPRO | **Carrega**: um kit por cuidado (`agrupar:PROCTO` no principal), cada linha da origem é um item (`#grupo_seq@PROCTO`) | 13 linhas em 3 cuidados na referência. |
+| GECADANTIMI | Segue **BLOQUEADA** (modelo): `ficha_antimicrobiano` exige item prescrito, antimicrobiano, origem da infecção, justificativa e datas que a origem não tem; o pedido 13 da L6-05 (NULL quando `origem='migracao'`) não foi aplicado na rodada 4 | Inventar esses campos seria registro falso; descartar perderia a ficha clínica. |
+| PRGEDIMP, PRPAREVOLIMG | Seguem **BLOQUEADAS** (`#arquivo`, M4) | O binário só pode entrar com o armazenamento de arquivos (ADR 0004); metadado sem objeto seria registro falso. |
+
+### L6-03 / L6-04, rodada 4b (revisão dos achados)
+
+| Origem | Decisão | Motivo |
+|---|---|---|
+| REPACAGD, SIPACAGD `PROCED` | **carrega** em `marcacao_horario_item.item_faturavel_id` (secundário `opcional`, sequência 1) pelo código do procedimento (`ref:TBPROCTO.COD_PROCEDIMENTO`); 0 = sem item; código ausente: `pai_inexistente` e a marcação entra sem item | Procedimento marcado é dado clínico e de cobrança. O `PROCED` do horário (REPACAGI, SIPACAGI) é cópia do da marcação no sistema anterior e fica sem carga por isso. |
+| REPACAGD, SIPACAGD `MED_SOL` | **carrega** em `solicitante_externo_id` pelo nome no cadastro de solicitantes externos, só sem solicitante da casa (`se:CRM_SOL=,0`) | Nome ausente: `pai_inexistente`; repetido: `pai_ambiguo`. |
+| REPACAGD, SIPACAGD `IBGE`, `CEP` | **carrega** no pré-cadastro (`municipio_ibge_id` por de-para oficial `ibge_municipio`; CEP em 8 dígitos) | CIDADE e UF ficam no retrato: o município vem do código. |
+| REPACAGD, SIPACAGD (demais colunas acessórias: guia, solicitação externa, diagnóstico, atendimento, unidade, ids de integração, dados de contato) | **carrega** o retrato completo da marcação (`#retrato:*`) em `trilha_auditoria` (`acao=inclusao`, `entidade=marcacao_horario`, `entidade_id` = id da marcação, `correlacao=marcacao_migrada`) | Nada sem carga por falta de coluna; coluna própria no modelo quando o produto precisar. `SENHA_SOL` (autorização) tem nome de segredo e fica fora do retrato: pedido de coluna em `saida/L6-04.json`. |
+| REPACAGI, SIPACAGI com LIVRE N sem paciente e sem situação HR, Q, P | **carrega** com `situacao='cancelado'` (horário indisponível, sem exigir bloqueio) | Antes era recusado (4025). Abrir como livre seria falso. O bloqueio com motivo próprio pede condição com OU no motor (pedido em `saida/L6-04.json`). |
+| SIPACAGI `fim_em` (`#data_hora_mais:DATA,HORA,DATA` com `data_fim_aberta:1801`) | mantido até a forma de dois argumentos | A DATA nunca vira minutos: ano < 1801 e data sentinela dão `data_sentinela` (na data, no início e no fim) e a linha é recusada; provado na imagem sintética. |
+
+### Rodada 5 (L6-05, L6-11): revisão dos achados
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| PRFICHAREL `COMPONENTE`, `CONTEUDO` | **carrega como texto** no `#grupo_json` de `modelo_impressao_clinica.conteudo` | O dicionário vivo dá BLOB SUB_TYPE 1 (texto) nas duas: o subtipo vivo decide a regra (`regra_efetiva`) e o JSON guarda as propriedades do leiaute em texto, nunca `sha256:`. A imagem sintética estava com SUB_TYPE 0 e foi corrigida; `test_l6_05.LeiauteSemPerda` prova o texto. |
+| PRASSINATURA_CAB situação atual | **a do evento de maior ID** (`>max:ID`), não a do maior `DATA_HORA_EVENTO` | O `max:` desempata pela MENOR chave: dois eventos no mesmo instante dariam a situação do anterior. O ID do evento é sequencial e único (sem empate) e segue a ordem de gravação: o evento retroativo gravado depois também é o mais recente. Autor e momento seguem pelo menor `DATA_HORA_EVENTO` (empate = o gravado antes, correto para "primeiro"). Caso provado na imagem (cabeçalho 7). |
+| PRASSINATURA_CAB sem evento de assinatura (150 na referência) | **carrega**, por colunas concorrentes: autor = médico assistente da versão do atendimento (`ID_TBCBOPRO_ASSISTENTE`), momento = entrada do atendimento, gravação = momento da versão do atendimento, situação = nativa de migração `migrado_sem_assinatura` (categoria `aguardando_assinatura`, `valor_presumido`); o `pai_inexistente` do evento fica como aviso visível | Documento clínico com conteúdo consolidado não pode sumir (regra 23). A situação nativa depende da semente do produto (pedido à F2.2 em `saida/L6-11.json`): até ela, `codigo_inexistente_destino` + recusa visível no painel, sem descarte. Sem atendimento ou sem assistente, a recusa (`pai_inexistente` + 1048) é a melhor prática: o autor de um documento clínico não se inventa. |
+
+## L8-02, L8-03 e L8-04, rodada 4 (revisão adversarial): decisões
+
+| Tabela / coluna | Decisão | Motivo |
+|---|---|---|
+| TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD, TBCONVPERCTAPAC | **Voltam a BLOQUEADAS** (`depende_declaracao_L5-06:TBCONVEN`); o descarte `mecanismo_do_produto` da r4 foi desfeito | A lista é domínio do produto, mas só pode sair quando a ESCOLHA de cada fonte pagadora (colunas ID_TBCONS*/ID_TBCONV* de TBCONVEN) carregar em `regra_consistencia_lancamento`; hoje nenhuma fatia as declara e o descarte calaria a perda. O teste da L8-02 aceita o descarte sozinho quando as colunas estiverem declaradas com destino (pedido reafirmado ao L5-06 em saida/L8-02.json). |
+| TBPERTHM.PROCTO e TAB | Item direto pelo procedimento da tabela: `ref:TBPROCTO.(ID_TBCTRTHM,COD_PROCEDIMENTO)=(TAB,PROCTO)`; a tabela de preço pela mesma chave (`>ID_TBCTRTHM>TBCTRTHM`) | PROCTO é obrigatório na origem: o percentual é de UM procedimento. Sem o procedimento na tabela a linha é RECUSADA (pai_inexistente + 1048 da tabela NOT NULL), nunca gravada com item NULL (que no produto vale para a tabela inteira). Presunção a confirmar por agregado: TAB/COD da linha de preço = ID_TBCTRTHM/COD_PROCEDIMENTO do procedimento (a linha de preço liga ID_TBPROCTO). |
+| TBPERTHM.TIPO_PAC, SIREFCON.TIPO_CTA | `exige_dominio`: valor sem par recusa a linha (valor_fora_do_dominio) | Cair no padrão 'todos' ampliaria a regra e mudaria o valor cobrado. Domínio de TIPO_PAC (T, I, E) a confirmar com a imagem de referência (só valores distintos). |
+| TBMATMED código | `#codigo_derivado:TAB+COD+CLASSIF:20` | A identidade do item é (TAB, COD, CLASSIF) (chave alternativa usada pela equivalência TUSS); TAB_COD colidia na UNIQUE (fonte_referencia, codigo_referencia). |
+| TBMATMED FATOR, UNI_CON | FATOR -> `fator_divisao` (`faixa:0.0001,..`: zero/negativo NULL visível); UNI_CON -> `unidade_medida_id` por `cod:unidade_medida.sigla` | Colunas que já têm lugar no modelo. |
+| TBMATMED demais colunas (UNI_ARM, FATOR_Q, CLASSIF_FISCAL, FRACIONADO, PROTESE, USO, COND_PGTO, etc.) | **Não é descarte**: sem coluna no modelo; pedido 17 do L8-03.json à F2.2 | São dado financeiro/fiscal de cobrança do item da tabela própria. |
+| SIREFCON.EXAME | Mantida a escolha pela menor chave quando o código do procedimento existe em várias tabelas (`escolha_pelo_menor`, visível) até o mecanismo `ref:T(ref:U>X,C)` (pedido no L8-02.json, mesmo do pedido 4 do L8-03) resolver pela tabela de honorários do próprio convênio | Recusar todas as ambíguas perderia o código de cobrança do convênio (dado que o hospital usa); a escolha fica visível por linha. A gravidade baixa da `escolha_pelo_menor` é do motor (fora da fatia). |
+| TBREFMEMTUSS (tabela 19 ou 20) | Concorrentes `tiss:19` e `tiss:20;senao` mantidas | Ruído conhecido: uma `catalogo_codigo_inexistente` por linha gravada; resolver exige motor (pedidos 15 e 18 do L8-03.json). |
+| TBREFUNI | **Destino decidido**, BLOQUEADA só pelo modelo: equivalência do item de referência (TBMATMED, tabela própria) à referência unificada sem fonte pagadora (pedido 16 do L8-03.json) | A linha não tem fonte pagadora; replicar por fonte inventaria escopo. |
+| TBEMIREFMATMED | **Destino decidido**, BLOQUEADA só pelo modelo: `referencia_emissao_matmed_excecao.item_referencia_matmed_id` (anulável, CHECK de um dos dois alvos), DDL no pedido r4 do L8-04.json | O item faturável de mat/med exige insumo, que a tabela de preço da origem não tem. |
+| TBPACTHM | BLOQUEADA (mecanismo): o procedimento do pacote está na tabela de honorários do convênio (`ref:T(ref:U>X,C)`, pedido 4 do L8-03.json) | Ligar pelo código sem a tabela daria item errado calado. |
+
+### Rodada 4, conferidor (2026-11-21)
+
+| Tabela | Decisão | Motivo |
+|---|---|---|
+| SIFORMUL | **Carrega** em `formula_calculo` pela L7-03 (passou da L7-02): código `#codigo_derivado:ATO+EXAME+CODELE:30`, alvo `analito`, analito no exame por `ref:SITABELE(EXAME,CODELE)/exame_analito`, descrição pelo nome do analito, expressão, vigência da carga; descarte `mecanismo_do_produto` retirado | Os dois mecanismos que faltavam (código de várias colunas e referência ao destino secundário do pai) existem; a imagem da L7-03 tem a SITABELE que grava `exame_analito`. Destrava SIVARFORMULA (L7-03) e SIRESVAR (L7-04). |
+| RPLANRPA | **Carrega** em `rpa_lancamento` pela L8-05 (dona pelo índice); as 2 linhas sem destino da L8-02 saíram | Conflito de arquivo resolvido; conciliação da L8-05 com RPLANRPA ativa. |
