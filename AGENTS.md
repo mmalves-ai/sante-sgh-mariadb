@@ -121,6 +121,10 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
 - **O administrador da plataforma pode tudo.**
 - A virada é **operacional** e decidida pelo cliente: o sistema dá ferramentas, alertas e relatórios, sem
   travas automáticas.
+- **Sem S3 (ADR 0004, dono, 2026-11-21).**
+  - Todo arquivo fica no disco da máquina que hospeda o sistema: a EC2 da hospedagem ou a máquina local do cliente.
+  - O acesso é pela porta de armazenamento de arquivos, com imutabilidade e retenção garantidas pelo sistema.
+  - Nada de S3, nem na AWS nem compatível.
 - **Um banco por cliente,** criado pelo comando "criar novo cliente". A Rede Santé usa o mesmo comando, e o
   conector importa e limpa o SPDATA.
 - **Melhor prática, não o SPDATA.** Chaves e obrigatoriedades vão no banco (PK, FK, NOT NULL, UNIQUE,
