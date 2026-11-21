@@ -35,7 +35,30 @@ PASTAS=$(sed -n 's/^# pastas: //p' "$LISTA")
 # shellcheck disable=SC2086
 { grep -v '^#' "$LISTA"; git ls-files --others --exclude-standard -- $PASTAS 2>/dev/null | grep -E '\.tsx?$'; } |
   sort -u | while read -r f; do [ -f "$f" ] && echo "$f"; done >"$TMP"
-[ -s "$TMP" ] || err "nenhum arquivo do lote existe"
+# Lote só de remoção (ADR 0003): vale quando cada arquivo da lista que não existe mais está registrado na
+# "remocao-registrada" de saida/<lote>.json; senão, "nenhum arquivo do lote existe" continua erro.
+if [ ! -s "$TMP" ]; then
+  FALTA=$(grep -v '^#' "$LISTA" | python3 -I -c "
+import json, os, sys
+try:
+    d = json.load(open('docs/obra/fatias/f22/saida/$ID.json'))
+except Exception:
+    print('sem saida/$ID.json'); sys.exit()
+reg = set()
+for p in d.get('pedidos', []):
+    if p.get('tipo') == 'remocao-registrada':
+        a = p.get('arquivos', {})
+        reg.update(os.path.basename(x) for x in (a if isinstance(a, (dict, list)) else []))
+for f in (l.strip() for l in sys.stdin):
+    if f and os.path.basename(f) not in reg:
+        print(f)
+")
+  if [ -z "$FALTA" ]; then
+    echo "lote só de remoção: todos os arquivos apagados constam da remocao-registrada"
+  else
+    err "nenhum arquivo do lote existe (sem registro de remoção: $(echo "$FALTA" | head -3 | tr '\n' ' '))"
+  fi
+fi
 
 # 1. legado
 while read -r f; do grep -qE "$PADRAO" "$f" && err "legado: $f"; done <"$TMP"
