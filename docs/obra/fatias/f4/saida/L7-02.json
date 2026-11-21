@@ -1,0 +1,59 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/dependencias.tsv (ordem do mapa)",
+   "mudanca": "referência declarada por chave composta (o mesmo pedido da L6-01/L6-02/L6-14: 'ref:SITABPRO(ATO,CODALF=EXAME)') e a dependência SIKITITE -> SITABPRO no mapa, para SIKITITE vir depois de SITABPRO (hoje 493 antes de 515). Declaração pronta: KIT -> kit_exame_item.kit_exame_id (chave_origem, ref SIKITEXA), '#seq:KIT' -> sequencia, QTDE -> quantidade (inteiro; zero recusa por ck_kit_exame_item_quantidade, nulo fica 1), ATO+EXAME -> exame_id",
+   "motivo": "SIKITITE (itens dos kits) não carregada: exame_id é NOT NULL e o exame tem chave composta e é carregado depois; sem isso toda linha seria recusada"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/dependencias.tsv",
+   "mudanca": "(a) referência composta ao analito do exame ('ref:SITABELE(CODPRC=EXAME,CODELE=CODELE)', a confirmar contra o significado de ATO) e dependência SIFORMUL -> SITABELE (hoje 491 antes de 514); (b) código composto '={ATO}-{EXAME}-{CODELE}' (pedido 1 da L5-07); (c) vigencia_inicio NOT NULL sem origem: '@data_carga' presumido (mesmo pedido da L6-18) ou aceitar NULL; (d) descricao NOT NULL sem origem: presumida a partir do código, com valor_presumido; alvo '=analito'; FORMULA -> expressao (texto_longo)",
+   "motivo": "SIFORMUL (fórmulas de analito calculado) não carregada"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "código composto '={ATO}-{COD}' para texto_padrao_resultado.codigo (pedido 1 da L5-07, pedido (a) da L6-14); com ele: NOME -> descricao (texto_nome), OBS -> texto (texto_longo), e ATO -> setor_diagnostico_id por 'ref:SIMODULO(ID=ATO)' se ATO for o módulo da origem (confirmar)",
+   "motivo": "SIOBSERV não carregada: a chave é (ATO,COD) e o código do destino é único; COD sozinho colidiria entre setores"
+  },
+  {
+   "arquivo": "db/migracoes/10_SADT/05_tabelas.sql (visualizador_imagem) ou decisão do dono",
+   "mudanca": "url_base NOT NULL sem origem: aceitar NULL com o visualizador migrado inativo até o cliente informar o endereço, ou descartar a tabela (2 linhas na imagem de referência; o cliente recadastra)",
+   "motivo": "SIPACSVISIMG só tem o nome do visualizador"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + docs/obra/passagens/F4-plano.md (decisão do dono)",
+   "mudanca": "consolidação de preferências por usuário em regra por estabelecimento e setor: SIPARANA, SIPAREND, SIPARHEM, SIPARLAB, SIPAROUT, SIPARRX, SIPARTM e SIPARULT (uma tabela por setor da origem, uma linha por usuário) viram uma configuracao_setor_diagnostico por setor; falta (a) o setor de cada tabela (setor_diagnostico_id NOT NULL; os setores vêm de SIMODULO com tipo presumido) e (b) a regra para escolher entre valores divergentes dos usuários (maioria, usuário de referência ou o mais restritivo, decisão do dono); SIPARLAB.SENHAGERENCIAL nunca migra; SIPARRX.ID_TBCBOPRO_RESP_LAUDO -> responsavel_laudo_setor pede vigencia_inicio (NOT NULL sem origem); SIPARLAB -> interface_equipamento pede modelo_comunicacao_id (NOT NULL sem origem)",
+   "motivo": "8 tabelas de parâmetros (cerca de 7.100 linhas na imagem de referência) não carregadas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "despivotamento de parâmetros (o mesmo pedido do AGPARAM na L6-04 e de CHPARAM/CVPARAM na L6-18) para SIPARGER, com as colunas por setor da origem (uma por módulo) distribuídas na configuracao_setor_diagnostico do setor correspondente",
+   "motivo": "SIPARGER (uma linha por estabelecimento, 141 colunas) não carregada"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv",
+   "mudanca": "de-para de valores (confirmado com o cliente) para as classificações sem origem que entram presumidas '=~outro' com valor_presumido por linha: SIMODULO.ID -> setor_diagnostico.tipo (laboratorio, imagem, metodos_graficos, endoscopia, hemodinamica, anatomia_patologica, agencia_transfusional...); SIESPEC.COD -> especialidade_diagnostica.tipo_servico (laboratorio, imagem, metodo_grafico, anatomia_patologica, hemoterapia, outro); SIMATERI.COD -> material_biologico.tipo (liquido, tecido, secrecao, swab, celular, outro); com ele, trocar cada '=~outro' pela coluna com depara=valores",
+   "motivo": "setor_diagnostico.tipo, especialidade_diagnostica.tipo_servico e material_biologico.tipo entram presumidos 'outro' com valor_presumido em toda linha (nunca o padrão do destino em silêncio)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + db/migracoes/10_SADT (laboratorio_apoio)",
+   "mudanca": "fonte do laboratório de apoio para de_para_material_apoio (laboratorio_apoio_id NOT NULL): SIMATERI.CODREFHP e CODREFSF são códigos do material em dois laboratórios de apoio, cada coluna de um laboratório; pede a referência declarada por coluna a um laboratório de apoio do cadastro do cliente (configuração, nunca fixo por cliente)",
+   "motivo": "destino secundário de_para_material_apoio de SIMATERI não carregado"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra genérica 'preenchido' (texto não vazio vira verdadeiro, vazio falso) para SIESPEC.INTERFACE -> especialidade_diagnostica.usa_interface",
+   "motivo": "baixa prioridade: hoje usa_interface fica o padrão (falso)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (_colisoes, _unicos_sem_caixa) + sentinela.py",
+   "mudanca": "generalizar a recusa em grupo a qualquer coluna declarada (não só codigo_char) gravada num índice único de uma coluna do destino que não seja a chave da origem: agrupar os valores já convertidos (casefold quando a colação não distingue caixa) e, se um valor aparece em mais de uma chave da origem, recusar TODAS as linhas do grupo antes de gravar com a pendência 'valor_repetido_unico' (gravidade media; sem valor no registro, só tabela, chave e regra). No Sincronizar, incluir no grupo o valor já gravado por outra chave da mesma origem. Depois: esperado de SIPACSMODALID na sintética L7-02 vira gravados 3, valor_repetido_unico 2 e sem restricao_destino_1062 (comentário no esperado)",
+   "motivo": "SIPACSMODALID.SIGLA -> modalidade_imagem.sigla_padrao (uq_modalidade_imagem_sigla_padrao): a repetição exata ('MG' e 'MG') hoje grava a primeira lida e recusa a segunda (1062), ou seja, vence a ordem de leitura, contra o princípio do motor; a variação só de caixa já é tratada (SIGLA declarada codigo_char). A alternativa, decisão do dono, é afrouxar a UNIQUE (mais de uma modalidade do cliente com a mesma sigla do padrão)"
+  },
+  {
+   "arquivo": "conector/sante_conector/cli.py (comando novo, só agregado)",
+   "mudanca": "comando de medição que devolve só contagens por coluna numa imagem registrada (ex.: 'repetidos --tabela T --coluna C': quantos valores distintos aparecem em mais de uma linha, com e sem distinção de caixa), sem nunca imprimir valores",
+   "motivo": "medir na imagem de referência as siglas repetidas de SIPACSMODALID (81 linhas) sem ler dado de linha; hoje nenhum comando dá esse agregado (ler-faixa só devolve hashes)"
+  }
+ ]
+}

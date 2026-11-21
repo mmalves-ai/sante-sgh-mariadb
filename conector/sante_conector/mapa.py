@@ -482,7 +482,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
     for c in colunas:
         if c["tabela"] not in por or not por[c["tabela"]]["tabelas_destino"]:
             erros.append("coluna de tabela fora do mapa carregável: %s.%s" % (c["tabela"], c["coluna"]))
-        if c["regra"] not in sentinela.REGRAS:
+        if not sentinela.regra_conhecida(c["regra"]):
             erros.append("regra de coluna desconhecida: %s.%s" % (c["tabela"], c["coluna"]))
         if c.get("depara") and c["depara"] not in depara.CATALOGOS:
             erros.append("de-para desconhecido: %s.%s" % (c["tabela"], c["coluna"]))
@@ -497,7 +497,7 @@ def verificar_dados(analise, volume, ddl, tabelas, deps, ciclos_decl, descartes,
         if t not in por or not por[t]["tabelas_destino"]:
             erros.append("coluna declarada de tabela fora do mapa carregável: %s.%s" % (t, c["coluna"]))
             continue
-        if c.get("regra") and c["regra"] not in sentinela.REGRAS:
+        if c.get("regra") and not sentinela.regra_conhecida(c["regra"]):
             erros.append("regra declarada desconhecida: %s.%s" % (t, c["coluna"]))
         if c.get("depara") and c["depara"] not in depara.CATALOGOS and c["depara"] != DEPARA_VALORES:
             erros.append("de-para declarado desconhecido: %s.%s" % (t, c["coluna"]))

@@ -575,3 +575,41 @@ destinos a rever no gerador (TBESTADOCONFIRMACAO, TBACAOGRAUGRA, PRTPREQUISICAO,
 PRITENSESQ, HTPARAMORIGEMCABIMP, unidade_prescricao e unidade_internacao sem alimentadora); de-para de valores por
 cliente no painel (situação da marcação, classificações hoje presumidas); mudanças de modelo pedidas (06_PEP, 09_HOT,
 04_REC).
+
+## 15. Integração do L7 (2026-11-21, tentativa 1): prova verde
+
+8 fatias (L7-01 a L7-08, SADT e suprimentos) integradas. Prova: `tools/obra/conferir-fatia-f4.sh` ok nas 8 fatias;
+`verificar_mapa` ok (2952 colunas declaradas em 38 arquivos); `fatiar_conector --conferir` ok; `conector.sh testes`
+473 testes ok (9 pulados); ponta a ponta do painel (`ponta-a-ponta.int.spec.ts`, 4 testes, `--fatias lotes` com as
+tabelas do L7) verde, toda entidade conferida.
+Cobertura: 59 das 179 tabelas carregáveis do L7 com colunas declaradas (59 entidades na conciliação das fatias, 59
+conferidas). L7-08 fica bloqueada (pai obrigatório não carregado: GELANPED, GELANBAL, GECADANTIMI); L7-01 com 10
+tabelas bloqueadas com motivo (`#---`).
+Pendências na imagem sintética (soma das 8 fatias, primeira carga): valor_presumido 159, restricao_destino_1048 61,
+valor_fora_do_dominio 30, pai_inexistente 20, restricao_destino_4025 14, pai_pendente 14, restricao_destino_1364 8,
+restricao_destino_1062 8, codigo_colisao_caixa 7, data_sentinela 4, hora_com_data 2, documento_invalido 2,
+catalogo_codigo_inexistente 1, restricao_destino_1406 1.
+
+Aplicado (genérico, com prova em `testes/test_carga_mapa_l7.py`):
+- regras `cnpj`, `cpf` e `cpf_cnpj`: só dígitos, zeros à esquerda (11/14), dígito verificador; inválido vira NULL
+  com a pendência nova `documento_invalido` (sem valor); 0 é 'sem documento' (L7-06, L7-05);
+- regras com parâmetro (`sentinela.regra_conhecida`, aceita no verificador): `inteiro_faixa:<min>,<max>` (L7-05:
+  prazo acima do CHECK não recusa mais o grupo de insumo, pai NOT NULL do insumo) e `inteiro_zeros_esquerda:<n>`
+  (CEP em inteiro, L7-05);
+- regras `preenchido` (texto presente vira verdadeiro, L7-02) e `decimal_positivo` (zero ou negativo em coluna com
+  CHECK > 0 vira NULL com pendência, L7-07);
+- declarações passadas para as regras novas: GEDESCOM.CEP/CGC, GEGRUPOS.PRAZO_ENT, TBFABOPM.CNPJ, GEITENS.FATOR_CONV,
+  SIESPEC.INTERFACE (imagens sintéticas e testes das fatias L7-02, 05, 06 e 07 ajustados).
+
+Fica para a próxima rodada (decisão do dono ou mecanismo maior; pedidos completos em
+`docs/obra/fatias/f4/saida/L7-*.json`): `data_em_data_hora` com a soma de controle (L7-08); idade com unidade em outra
+coluna (L7-03, já pedida no L6); de-para de valores por cliente no painel (situação e natureza da bolsa, natureza do
+grupo de insumo, tipo de local de estoque, ação da dose, tipo/serviço do exame, fator Rh, tipo de tratamento do
+antimicrobiano, curva ABC/XYZ) — nenhum par presumido sem evidência; de-para oficial de princípio ativo (DCB) e termo
+TISS de unidade (L7-07); destino condicional pelo tipo de pessoa e adoção pela chave natural do documento
+(TBFORNEC, L7-06); parâmetros por linha/desdobrar colunas (L7-01, L7-05), `historico_entidade`, `#seq` estável com
+segunda imagem (L7-08), coluna derivada da linha referenciada (L7-08), gravidade do presumido (L7-01); ordem e
+dependências novas no gerador do mapa (L7-02, 05, 06, 07, 08: GELANPED/GELANBAL antes das filhas, GECADANTIMI);
+mudanças de modelo pedidas (10_SADT: visualizador_imagem, laboratorio_apoio; 11_SUP: local_estoque, grupo_insumo,
+capela_manipulacao); destinos a rever (SHINTER como intercorrência da doação, PRHEMOTLAN, SHCLIENT, SHDOACAO, SHLOCAL,
+TBPRINC -> classe_terapeutica).

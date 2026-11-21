@@ -1,0 +1,48 @@
+tabela	coluna	destino	regra	depara	via	motivo
+SICTRPSR	COD	grupo_resposta.codigo	texto			L7-02: chave inteira da origem gravada como código (texto); SICTRPSR é a única alimentadora
+SICTRPSR	NOME	grupo_resposta.descricao	texto_nome			L7-02: sem nome recusa a linha (NOT NULL); tipo fica o padrão do destino (qualitativo): as respostas do grupo vêm em outra fatia
+SIESPEC	COD	especialidade_diagnostica.codigo	texto			L7-02: chave inteira da origem gravada como código (texto)
+SIESPEC	NOME	especialidade_diagnostica.descricao	texto_nome			L7-02: sem nome recusa a linha (NOT NULL)
+SIESPEC	ATIVO	especialidade_diagnostica.ativo	booleano_sn			L7-02: S/N; vazio ou fora do domínio fica o padrão do destino (ativa), com pendência no segundo caso
+SIESPEC	INTERFACE	especialidade_diagnostica.usa_interface	preenchido			L7-02 (integração): nome da interface preenchido vira verdadeiro, só espaços falso, nulo fica o padrão (falso); o nome não é gravado
+SIESPEC	=~outro	especialidade_diagnostica.tipo_servico				L7-02: a origem não classifica a especialidade (laboratório, imagem...; há setores de imagem em SIMODULO): entra 'outro' com valor_presumido por linha para o cliente reclassificar, nunca o padrão 'laboratorio' em silêncio (de-para de valores pedido no L7-02.json)
+SIKITEXA	COD	kit_exame.codigo	texto			L7-02: chave inteira da origem gravada como código (texto)
+SIKITEXA	NOME	kit_exame.nome	texto_nome			L7-02: nome só de espaços recusa a linha (NOT NULL)
+SIKITEXA	GERARBATERIAEXAME	kit_exame.gera_bateria	booleano_sn			L7-02: S/N (gerado codigo_char): os exames do kit formam bateria única; fora do domínio fica o padrão (falso) com pendência
+SIKITEXA	HORA_SUGERIDA_COLETA_PEP	kit_exame.hora_sugerida_coleta	hora_em_timestamp			L7-02: TIMESTAMP que guarda só a hora; outra data: hora usada com hora_com_data
+SIKITEXA	ATIVO	kit_exame.ativo	booleano_sn			L7-02: S/N; vazio fica o padrão (ativo)
+SIMATERI	COD	material_biologico.codigo	texto			L7-02: chave inteira da origem gravada como código (texto)
+SIMATERI	NOME	material_biologico.descricao	texto_nome			L7-02: sem nome recusa a linha (NOT NULL)
+SIMATERI	ATIVO	material_biologico.ativo	booleano_sn			L7-02: S/N; vazio ou fora do domínio fica o padrão (ativo)
+SIMATERI	ATO		inteiro			L7-02: sem destino: setor da origem; o material do modelo não é por setor
+SIMATERI	CODREFHP		texto			L7-02: sem destino: código do material num laboratório de apoio; de_para_material_apoio exige laboratorio_apoio_id (NOT NULL) sem origem nesta tabela (pedido no L7-02.json)
+SIMATERI	CODREFSF		texto			L7-02: sem destino: código do material em outro laboratório de apoio (ver CODREFHP; pedido no L7-02.json)
+SIMATERI	=~outro	material_biologico.tipo				L7-02: a origem não classifica o material (líquido, tecido, swab...): entra 'outro' com valor_presumido por linha para o cliente reclassificar, nunca o padrão 'liquido' em silêncio (de-para de valores pedido no L7-02.json)
+SIMETODO	COD	metodo_analitico.codigo	texto			L7-02: chave inteira da origem gravada como código (texto)
+SIMETODO	NOME	metodo_analitico.descricao	texto_nome			L7-02: sem nome recusa a linha (NOT NULL)
+SIMETODO	DESCR	metodo_analitico.descricao_laudo	texto_longo			L7-02: texto do método no laudo (BLOB de texto, sem mexer em quebras nem espaços)
+SIMETODO	ATIVO	metodo_analitico.ativo	booleano_sn			L7-02: S/N; vazio fica o padrão (ativo)
+SIMODULO	@estabelecimento	setor_diagnostico.estabelecimento_id				L7-02: estabelecimento único do cliente (nenhum ou vários: estabelecimento_indefinido)
+SIMODULO	ID	setor_diagnostico.codigo	texto			L7-02: chave inteira da origem gravada como código (texto); SIMODULO é a única alimentadora
+SIMODULO	NOME	setor_diagnostico.nome	texto_nome			L7-02: nome só de espaços recusa a linha (NOT NULL)
+SIMODULO	=~outro	setor_diagnostico.tipo				L7-02: a origem não classifica o setor (laboratório, imagem...): entra 'outro' com pendência valor_presumido por linha para o cliente reclassificar (de-para de valores pedido no L7-02.json)
+SIMODULO	ID_DIGITAL		texto			L7-02: sem destino: identificador técnico da origem
+SIMODULO	ID_DIGITAL_DIA_SER_SEC		texto			L7-02: sem destino: identificador técnico da origem
+SIPACSMODALID	ID	modalidade_imagem.codigo	texto			L7-02: chave inteira da origem gravada como código (texto)
+SIPACSMODALID	NOME	modalidade_imagem.descricao	texto_nome			L7-02: nome da modalidade (NOT NULL)
+SIPACSMODALID	SIGLA	modalidade_imagem.sigla_padrao	codigo_char			L7-02: sigla do padrão de imagem (NOT NULL e única sem distinção de caixa): codigo_char faz o motor recusar TODAS as siglas que só diferem pela caixa (codigo_colisao_caixa), nenhuma vence pela ordem; repetição exata ainda recusa só a segunda (1062) até o pedido 10 do L7-02.json
+SIPACSMODALID	ATIVO	modalidade_imagem.ativo	booleano_sn			L7-02: S/N; vazio ou fora do domínio fica o padrão (ativa)
+SIPACSMODALID	ID_DIGITAL	modalidade_imagem.identificador_externo	texto			L7-02: identificador da modalidade no arquivo de imagens
+SIFORMUL	ATO		inteiro			L7-02: não carregada: exame_analito_id pede referência por chave composta a SITABELE (carregada depois, ordem 514), vigencia_inicio e descricao NOT NULL sem origem e código composto (pedido no L7-02.json)
+SIKITITE	KIT		inteiro			L7-02: não carregada: exame_id NOT NULL pede referência por chave composta (ATO,EXAME) a SITABPRO, carregada depois (ordem 515); sequencia por '#seq:KIT' (pedido no L7-02.json)
+SIOBSERV	COD		inteiro			L7-02: não carregada: chave (ATO,COD) e texto_padrao_resultado.codigo único pedem o código composto '={ATO}-{COD}' (pedido no L7-02.json)
+SIPACSVISIMG	ID		chave_origem			L7-02: não carregada: url_base NOT NULL sem origem (a origem só tem o nome do visualizador) (pedido no L7-02.json)
+SIPARANA	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPAREND	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARHEM	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARLAB	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json); a senha gerencial nunca migra
+SIPAROUT	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARRX	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARTM	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARULT	USUARIO		texto			L7-02: não carregada: preferências por usuário viram regra por estabelecimento e setor (setor_diagnostico_id NOT NULL sem origem; consolidação de várias linhas numa) (pedido no L7-02.json)
+SIPARGER	HOSP		inteiro			L7-02: não carregada: parâmetros gerais em colunas (uma linha por estabelecimento) pedem o despivotamento e a distribuição por setor (pedido no L7-02.json)

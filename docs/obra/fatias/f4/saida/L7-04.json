@@ -1,0 +1,54 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por chave composta da origem: `chave_origem` com várias colunas (ex.: ATO,EXAME -> SITABPRO ATO,CODALF; CODPRC,CODELE -> SITABELE), resolvida pelo conector_origem do pai com a chave juntada na ordem da chave do pai (já pedida no L6-01)",
+   "motivo": "SILANEXA, SIKITHISTITE e HTNOTEXAMESEXO apontam o exame (SITABPRO) e SIHISTVLREF/SIHISTVLREFEXAME/SIHISTVLREFELEMENTO apontam exame ou analito só por chave composta; os destinos exigem exame_id NOT NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência derivada: `chave_origem` que resolve o pai e grava uma coluna do destino do pai (ex.: SICADATE.ID_ATCABECATEND -> atendimento.paciente_id para requisicao_exame.paciente_id; SILANEXA.ID_SICADATE -> requisicao_exame), já pedida no L5-06",
+   "motivo": "requisicao_exame.paciente_id e resultado_exame.paciente_id (NOT NULL) só chegam pelo atendimento ou pelo pedido"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv",
+   "mudanca": "pares de TBFATORRH NOME -> fator_rh.sinal ('+' e '-') revisados pelo cliente sobre os 2 nomes da origem; depois declarar TBFATORRH (ID -> codigo, NOME -> descricao texto_nome, NOME -> sinal depara=valores)",
+   "motivo": "sinal NOT NULL e único sem fonte direta; presumir trocaria o Rh do paciente"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "fonte de requisicao_exame.setor_diagnostico_id e solicitante_profissional_id (NOT NULL) na carga de SICADATE: setor pelo exame (SILANEXA -> SITABPRO -> setor) e solicitante externo (TBMEDSOL -> solicitante_externo) ou inscrição no conselho (TBCBOPRO), que não são profissional; ou tornar essas colunas anuláveis para dado migrado",
+   "motivo": "SICADATE (123702 na referência) não tem setor executante e o solicitante não é profissional; sem a requisição, SILANEXA (exame_item), SILIBERACAOEXAME, SIASSLAUDO_IMP_SILANEXA, SIRES01, SIRESOBS, SIRESVAR ficam bloqueadas em cascata; o número (NOT NULL) pode vir de REQUIS ou do ID"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py ou decisão do dono",
+   "mudanca": "agregação: SIRES01 tem uma linha por analito (ELEMENTO) e resultado_exame é um por exame pedido; regra genérica de 'agrupar por coluna' (ex.: ID_SILANEXA) que grava o principal uma vez e cada linha num destino filho (resultado_analito, com o analito pela chave composta)",
+   "motivo": "carga linha a linha gravaria um resultado por analito e violaria uq_resultado_exame_exame_item; SIRESOBS e SIRESVAR dependem do resultado"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "destino de SIWSETIQUETA (leiaute de etiqueta devolvido pelo apoio, BLOB) e de PREXAMEASSINATURA (agrupamento de assinatura): etiqueta_amostra_apoio exige laboratório e amostra; modelo_etiqueta exige largura e altura; documento_prontuario exige tipo, situação, profissional e paciente",
+   "motivo": "nenhuma das colunas NOT NULL tem fonte na origem"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "faixa_referencia_versao exige faixa_referencia_id, mas SIHISTVLREF/SIHISTVLREFEXAME guardam o valor de referência por exame e SIHISTVLREFELEMENTO por analito, em texto (VLRREF) e limites; definir se viram versão da faixa do analito (exige a faixa vigente pelo analito) ou histórico em trilha_auditoria",
+   "motivo": "o modelo versiona a faixa, a origem versiona o texto de referência do exame"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "fonte alternativa para uma coluna do destino: primeira não nula entre duas colunas da origem (ex.: SIRES01_DELETE DATA_HORA_EVENTO, senão DATA_HORA_GRAVACAO -> trilha_auditoria.ocorrido_em)",
+   "motivo": "DATA_HORA_EVENTO é anulável na origem; a linha sem ela é recusada (NOT NULL) mesmo tendo DATA_HORA_GRAVACAO"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "SIRES01_DELETE: guardar o resultado excluído em trilha_auditoria.dados_antes (JSON das colunas da origem, sem valores no log), a mesma regra de JSON pedida no L7-01.json para SICADATE_EXCLUSAO",
+   "motivo": "sem o retrato a trilha guarda quem excluiu e quando, mas não o que foi excluído"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "HTNOTEXAMESEXO: com a regra de JSON (dados_depois) declarar =alteracao, =restricao_exame, DATA_HORA_HISTORICO -> ocorrido_em e o retrato (sexo, tipo de alerta, exame ATO+CODALF)",
+   "motivo": "sem retrato a linha na trilha só teria a data; 754 linhas na referência ficam fora até lá"
+  }
+ ]
+}

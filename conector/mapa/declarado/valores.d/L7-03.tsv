@@ -1,0 +1,4 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+SITABELE	NUMERICO	analito.tipo_resultado	S	numerico	L7-03
+SITABELE	NUMERICO	analito.tipo_resultado	N	texto	L7-03
+SITABELE	TITULO	analito.resultado_obrigatorio	N	1	L7-03: linha comum: resultado obrigatório; S (título) sem par de propósito: pendência por linha até a regra composta

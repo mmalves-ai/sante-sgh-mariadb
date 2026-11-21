@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial) + decisão do integrador",
+   "mudanca": "coluna especial de vigência inicial quando a origem não tem data (ex.: '@inicio_carga' = data da primeira carga do cliente, gravada uma vez e estável no diferencial, com pendência baixa valor_presumido), ou decisão de deixar vigencia_inicio com padrão no modelo",
+   "motivo": "GEUSERS_TBCENCUS -> usuario_estoque_centro_custo.vigencia_inicio é NOT NULL sem origem (o mesmo bloqueio do pai GEUSERS); a tabela fica fora da carga"
+  },
+  {
+   "arquivo": "conector/mapa (de-para do local de estoque) + decisão do integrador",
+   "mudanca": "referência ao local_estoque pelo código numérico de armazém/consumo da origem (ARM, CON, CONS, LOC_ARM, LOC_CONS): declarar qual tabela da origem alimenta local_estoque e a chave usada, para valer 'via ref:<TABELA>'",
+   "motivo": "origem_local_estoque_id/local_estoque_id/atendente_local_estoque_id são NOT NULL em documento_estoque, dispensacao, movimento_estoque, nota_entrada e regra_integracao_prescricao: GECADDEV, GECADSAI, GECADDISPENSACAO, GECADNFS, GELANSAI e PRPARINTEGEST ficam fora da carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra 'competencia_mes' (data -> primeiro dia do mês, destino DATE) e coluna derivada do pai ('via pai:<TABELA>.<coluna destino>': lê a coluna já gravada no destino do pai, ex.: prescricao_item_id de horario_administracao, kit_rastreavel_id de kit_rastreavel_item, unidade_medida_id/insumo_id da apresentacao_comercial)",
+   "motivo": "movimento_estoque.competencia e unidade_medida_id, liberacao_farmaceutica_item.prescricao_item_id (PREXTRATOITEM_TBSITFARM), substituicao_dispensacao.dispensacao_item_id/anterior_insumo_id (PREXTRATOITEM_SUBST), movimento_kit_rastreavel.kit_rastreavel_id (GEITEMKITRAS_GELANSAI, GEITEMKITRAS_GELANDEV) são NOT NULL e só existem no pai"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/sante_conector/mapa.py",
+   "mudanca": "referência a DESTINO SECUNDÁRIO do pai ('ref:<TABELA>/<tabela_destino>', já pedida no L6-11)",
+   "motivo": "GERASVALDEVLOTE.ID_GELANDEV aponta o movimento_estoque de GELANDEV (3º destino); hoje gravaria o id de documento_estoque_item em movimento_lote.movimento_estoque_id"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "tabela de ATUALIZAÇÃO de outra entidade: GEQTDELOTEVALLOTEDOCSAIDA.QTDE atualiza movimento_lote.quantidade da linha de GERASVALSAIDLOTE com a mesma chave (sem linha nova), com conciliação própria",
+   "motivo": "as duas tabelas da origem descrevem a mesma linha de movimento_lote; declará-las como destinos independentes duplicaria as linhas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mecanismo) + conector/mapa/tabelas.tsv",
+   "mudanca": "mecanismo de linha larga para pares chave-valor: cada coluna declarada de GEPARAM vira um parametro_valor (nível usuario pela chave USUARIO, ou rede/estabelecimento) ligado à parametro_definicao pela chave declarada, com tipo e vigência",
+   "motivo": "GEPARAM (tipo MECANISMO, ~280 colunas) não cabe na carga coluna a coluna; fica fora da carga"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv",
+   "mudanca": "pares de-para de GEANTIMI.TIPO e GEANTIMI.PRO_TER -> liberacao_antimicrobiano.tipo_tratamento (profilatico/empirico/terapeutico), com o domínio de códigos confirmado pelo dono na origem (só contagem por valor)",
+   "motivo": "tipo de tratamento ficaria NULL (coluna opcional) quando GEANTIMI entrar (pedido 10)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra 'data_em_data_hora' (DATE da origem gravada em DATETIME à meia-noite, com a mesma forma na soma de controle)",
+   "motivo": "GEANTIMI.DATA (DATE) não pode ir a ocorrido_em (DATETIME) sem divergir a soma; na declaração prevista ocorrido_em usa o início da vigência"
+  },
+  {
+   "arquivo": "decisão do integrador (ordem de carga)",
+   "mudanca": "as tabelas de documento e item de estoque da fatia (GECADSAI, GELANSAI, GELANSAIREQ, GECADDEV, GELANDEV, GECADDISPENSACAO, GELANDISPENSACAO, GEDISPHOR, PRINTEGRACAOESTOQUE, GECTRLENTREGADOCSAIDA, GEINFVENEXT, GERASVALSAIDLOTE) entram juntas numa fatia de reprocessamento depois dos pedidos acima; numero do documento pede regra de número composto (ANO, MES, DOC) e tipo/natureza pedem de-para de valores",
+   "motivo": "cada uma depende de outra da mesma cadeia (pai não carregado = recusa em massa: 1048); declarar hoje geraria milhões de pendências na imagem real"
+  },
+  {
+   "arquivo": "decisão do integrador (ordem de carga) + conector/mapa/declarado/colunas.d (fatias L7-07, L6-05 e a da ficha do antimicrobiano)",
+   "mudanca": "carregar os pais obrigatórios GELANPED -> pedido_compra_item, GELANBAL -> inventario_estoque_item e GECADANTIMI -> ficha_antimicrobiano (e PRFREQUENCIA -> frequencia_administracao, opcional); depois reativar em colunas.d/L7-08.tsv a declaração prevista (registrada no motivo de cada coluna): GELANPEDENTREGA: ID_GELANPED->pedido_compra_item_id, '#seq:ID_GELANPED'->sequencia (pedido 12), DATA->data_prevista (data), QUANTIDADE->quantidade (decimal); GERASVALBAL: ID_GELANBAL->inventario_estoque_item_id, '#seq:ID_GELANBAL'->sequencia (pedido 12), ID_GEVALMEM->lote_insumo_id, LOTE->lote_informado (texto), DATA->validade_informada, QTDE->quantidade_contada; GEANTIMI: ID_GECADANTIMI->ficha_antimicrobiano_id, DATA_VIGENCIA_INICIAL->ocorrido_em e vigencia_inicio, USUARIO->usuario_id (via ref:TBUSERS), '=~liberado'->decisao (com o pedido 11), ITEM->insumo_id (via ref:GEITENS), DATA_VIGENCIA_FINAL->vigencia_fim, DIAS, DIA_INICIO, QUANTIDADE_DOSE, ID_TBUNICON->unidade_medida_id (via ref:TBUNICON), ID_PRFREQUENCIA->frequencia_administracao_id, QTDE_TOTAL, DOSE_EXTRA (booleano_sn), ID_GEANTIMI_ORIGEM_TRAT->anterior_liberacao_antimicrobiano_id (via ref:GEANTIMI, duas fases); e devolver CARREGADAS, PAIS_EXTERNOS e o esperado em sintetica_d/l7_08.py",
+   "motivo": "GELANPED e GELANBAL estão 'não carregada' no L7-07, GECADANTIMI não tem coluna declarada em nenhuma fatia (o L6-05 a lista como já pendente) e PRFREQUENCIA está 'não carregada (L6-05)'. pedido_compra_item_id, inventario_estoque_item_id e ficha_antimicrobiano_id são NOT NULL: declaradas hoje, 100% das linhas de GELANPEDENTREGA, GERASVALBAL e GEANTIMI seriam recusadas na imagem real (pai_inexistente + restricao_destino_1048). As três ficam fora da carga (sem destino) até os pais entrarem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial genérica) ou conector/sante_conector/pendencia.py (regra nova)",
+   "mudanca": "liberação interrompida na origem: (a) preferida: literal condicional pela presença de uma coluna ('=?<COLUNA>:<valor se preenchida>:<valor se nula>', ex.: '=?DATA_INT:suspenso:~liberado' em decisao) e coalescência ('<COLUNA_A>|<COLUNA_B>', ex.: 'DATA_INT|DATA_VIGENCIA_FINAL' em vigencia_fim, com o CHECK vigencia_fim >= vigencia_inicio valendo), com as duas colunas nas lidas (hash) e na soma de controle pela forma gravada; ou (b) recusar a linha com DATA_INT preenchida com pendência própria 'liberacao_interrompida' de gravidade média para o cliente decidir. Em qualquer caso DATA_INT entra nas lidas, para a interrupção registrada depois na origem aparecer como 'alteracao_aguarda_sincronizar'",
+   "motivo": "sem isso um antimicrobiano restrito interrompido na origem entraria como 'liberado' e vigente no destino, só com a pendência baixa valor_presumido igual em todas as linhas, e a interrupção posterior não mudaria o hash; a imagem sintética já traz uma liberação interrompida (GEANTIMI 5)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (#seq) + imagem sintética de duas rodadas",
+   "mudanca": "'#seq:<COLUNA>' estável no diferencial (o mesmo pedido do L6-05): linha já carregada mantém a sequência gravada; linha NOVA recebe max(sequencia)+1 do grupo no destino, nunca a posição na ordem da chave; e prova em duas rodadas: entrega nova com DATA anterior às já carregadas no mesmo item (GELANPEDENTREGA, chave ID_GELANPED,DATA) e exclusão seguida de inclusão no mesmo item (GERASVALBAL por ID_GELANBAL) sem 1062 em uq_pedido_compra_entrega_sequencia / uq_inventario_estoque_lote_sequencia",
+   "motivo": "hoje a sequência é a posição na ordem da chave contada em toda leitura e não entra no hash: a reprogramação de uma entrega (apagar e incluir com data anterior) daria à linha nova uma sequência já usada (recusa 1062) e deixaria as existentes com a sequência antiga sem aviso. Pré-requisito para reativar GELANPEDENTREGA e GERASVALBAL (pedido 10)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna derivada da linha referenciada) + fatia L7-07 (GERASVALFINAL)",
+   "mudanca": "gravar inventario_estoque_lote.saldo_sistema a partir de GERASVALFINAL.QTDE da linha apontada por GERASVALBAL.ID_GERASVALFINAL: coluna derivada do pai ('via pai:', o mesmo mecanismo do pedido 3) lendo a coluna gravada no destino de GERASVALFINAL, ou leitura da coluna da origem da linha referenciada ('via origem:GERASVALFINAL.QTDE'), com a forma gravada na soma de controle",
+   "motivo": "inventario_estoque_lote tem saldo_sistema DECIMAL(15,4) NULL; sem ele a divergência entre contado e sistema (razão de ser do inventário) se perde. O saldo no momento da contagem não é o saldo atual do lote_insumo. Depende de GERASVALFINAL entrar (bloqueada no L7-07)"
+  }
+ ]
+}

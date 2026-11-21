@@ -1,0 +1,79 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + sentinela.py",
+   "mudanca": "regra genérica 'documento_cpf_cnpj' (e 'cnpj'): inteiro ou texto vira texto só de dígitos com zeros à esquerda (11 ou 14 conforme o tipo da pessoa ou o tamanho), dígito verificador conferido; inválido vira NULL com pendência documento_invalido (sem valor no log)",
+   "motivo": "TBFORNEC.CGC e TBFABOPM.CNPJ são BIGINT: gravados como estão perdem os zeros à esquerda (CNPJ errado no UNIQUE de fabricante e empresa_fornecedora, e recusa pelo CHECK REGEXP de pessoa_juridica). Até lá TBFABOPM.CNPJ fica sem destino e TBFORNEC bloqueada"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + verificar_mapa.py",
+   "mudanca": "destino secundário condicional por valor da origem (ex.: na declaração, destino 'pessoa_juridica' só quando PESSOA indica jurídica, 'pessoa_fisica' só física, 'conta_bancaria_credor' só com BANCO e CONTA preenchidos); a linha que não satisfaz a condição não cria a entidade nem pendência",
+   "motivo": "TBFORNEC tem quatro destinos e hoje o motor grava todos para toda linha: criaria pessoa física para fornecedor jurídico e conta bancária vazia (recusa pelo CHECK ck_conta_bancaria_credor_destino) para quem não tem banco"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "adoção pela chave natural (já pedida na L5): linha cujo CPF/CNPJ já existe em pessoa_fisica/pessoa_juridica (gravada por TBPESSOA, L5 ordem 83) passa a apontar para o id existente, com pendência baixa, em vez de 1062; e referência ao destino certo do pai de vários destinos (ID_TBPESSOA -> pessoa_juridica_id ou pessoa_fisica_id pelo tipo, não só o principal)",
+   "motivo": "fornecedor que também é pessoa do cadastro geral seria recusado pelo UNIQUE de CPF/CNPJ; ID_TBPESSOA resolve hoje só para o destino principal de TBPESSOA (pessoa_fisica), errado para jurídica"
+  },
+  {
+   "arquivo": "painel do conector (de-para de valores por cliente) + conector/sante_conector/carga_mapa.py",
+   "mudanca": "de-para de valores POR CLIENTE, preenchido no painel antes da carga (não em declarado/valores.tsv, que vale para todos): TBFORNEC.PESSOA -> empresa_fornecedora.tipo_pessoa (fisica/juridica), TBFORNEC.DISPONIB (códigos de TBDISPON) -> empresa_fornecedora.disponibilidade (comercial/plantao_24h/sob_demanda), tipo de saldo (GETPSALDO) -> atributo do saldo; sem par: NULL ou padrão com valor_fora_do_dominio",
+   "motivo": "TBDISPON e GETPSALDO são listas próprias do cliente (o mapa diz 'lista fixa vira atributo'): o significado de cada código não é o mesmo entre clientes, e o painel é genérico para N clientes"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "pivô genérico de linhas para colunas booleanas: linhas agrupadas por chave parcial (ex.: USUARIO,ARM) viram UMA linha do destino, e um de-para por cliente do valor de uma coluna (TIPO_MOV) diz qual coluna booleana fica TRUE (pode_requisitar, pode_atender...); valor sem par: valor_fora_do_dominio",
+   "motivo": "GELOCUSU tem uma linha por usuário, local e tipo de movimento; local_estoque_usuario tem uma linha por usuário e local (UNIQUE) com uma permissão por operação. Carregar linha a linha recusaria todas menos uma com 1062"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "desdobramento de grupo repetido (já pedido na L6-16) aplicado a GEUSERS: LOC_ARM e ARM1..ARM10 -> uma linha de local_estoque_usuario por local preenchido (ref:GELOCARM), com padrao=TRUE para LOC_ARM e as permissões do usuário (PERM_*, VISUAL_PRECO, PERMITIR_*) copiadas em cada linha",
+   "motivo": "GEUSERS guarda os locais do usuário em colunas repetidas; usuario_estoque_centro_custo e usuario_estoque_classificacao não têm origem nesta tabela (sem centro de custo nem grupo). SENHA, OLD_SENHA e a configuração de servidor de e-mail nunca entram (credencial vai para o cofre)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "agregação genérica por grupo: 'agrega:max(<COLUNA>)+1' agrupando pelas colunas declaradas (ID_GETPLANCTO, ANO_MES), com ano e mês tirados de um inteiro AAAAMM (regra 'ano_mes' -> ano, mes) e reinicio presumido mensal",
+   "motivo": "GEULTDOCGER (cerca de 841 mil linhas na referência) é o histórico dos números gerados; sequencia_documento_estoque guarda um próximo número por tipo, estabelecimento, ano e mês"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador) e conector/mapa/declarado (dependências)",
+   "mudanca": "revisar destino e ordem: GESALDOS (saldo mensal por insumo, SEM local) não cabe em saldo_estoque_mensal (exige saldo_estoque_id local x insumo) nem em custo_medio_historico (exige estabelecimento, tipo e custo antes/depois); declarar ITEM -> GEITENS como dependência de GESALDOS, GESALCON e GEBARRAS, que hoje carregam (ordens 567, 568, 594) antes do insumo (GEITENS, ordem 599)",
+   "motivo": "o ITEM dessas tabelas não tem referência gerada; com a ordem atual o insumo ainda não existe quando elas carregam, e insumo_id é NOT NULL nos três destinos"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "'@unico:<tabela_destino>' (já pedido na L6-16) para local_estoque em saldo_consignado, e referência derivada (já pedida na L6-16: unidade do insumo achado pelo ITEM) para insumo_codigo_barras.unidade_medida_id",
+   "motivo": "GESALCON não tem local (local_estoque_id NOT NULL); GEBARRAS não tem unidade (unidade_medida_id NOT NULL)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "código composto '={GRU}.{COD}' (o mesmo pedido da L5-07) para subgrupo_insumo.codigo",
+   "motivo": "GESUBGRU tem chave (GRU,COD): o COD só é único dentro do grupo, e subgrupo_insumo.codigo é único na tabela toda"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
+   "mudanca": "PRPARVARUNIRESP: destino unidade_medida trocado pelo domínio das unidades de resposta das variáveis de cálculo de dose (o mesmo pedido da L6-10)",
+   "motivo": "é unidade de resposta (ex.: kg, dias) de variável clínica, não unidade de estoque; em unidade_medida misturaria domínios, chocaria com os códigos de TBUNICON e não tem a sigla (NOT NULL e única)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "pivô de mecanismo de parâmetros: cada coluna declarada vira um parametro_valor (nível estabelecimento, pelo EMPRESA -> ref:TBEMPHOS) de uma parametro_definicao do catálogo do produto, pela chave declarada na coluna (ex.: via 'param:<chave>')",
+   "motivo": "GPPARAMG é MECANISMO (módulo sem uso segundo o mapa): uma linha com uma coluna por parâmetro de depreciação e integração"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + painel do conector",
+   "mudanca": "catálogo licenciado por cliente: coluna declarada com 'licenca=<catálogo>' só é carregada quando o cliente tem a licença registrada no painel; sem licença, fica NULL sem pendência",
+   "motivo": "TBLABORA.COD_LAB_BRASINDICE é código numa tabela de preços licenciada (regra 7 do AGENTS.md); hoje fica sem destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "presunção que exige revisão antes da virada (gravidade alta, já pedida na L6-03) para os literais '=~' que dirigem regra: tipo_movimento_estoque.natureza/sentido/afeta_saldo (GETPLANCTO), situacao_farmaceutica.permite_dispensacao (TBSITUACAOFARMACIA) e situacao_pedido_compra.situacao_final (GESITUACAOPED); ex.: marca no declarado ('=~!' ou coluna 'revisao=virada') que eleva a pendência valor_presumido a 'alta' e a lista no painel como bloqueio de virada",
+   "motivo": "tipo de movimento dirige saldo e custo; a situação farmacêutica decide se o item pode ser dispensado; a situação do pedido decide se ele aceita recebimento. As presunções neutras (FALSE, ajuste, neutro) são as mais seguras, mas o cliente tem de revisá-las antes de usar o estoque, a farmácia e as compras"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + motor.py + conferencia da fatia (tools/obra/conferir-fatia-f4.sh / sintetica.py)",
+   "mudanca": "pendência por tabela 'tabela_nao_carregada' (gravidade alta, já pedida na L6-03), no molde de 'tabela_sem_mapa' do motor.py: tabela da origem com linhas nesta imagem, presente no mapa (tabelas.tsv) mas sem nenhuma coluna declarada com destino (fora do carga_mapa.planejar e do carga.ORDEM), grava UMA pendência (execucao_id, tabela_origem, chave_original NULL) e entra no resumo do painel como 'imagem:tabela_nao_carregada:alta' com a contagem da origem (cont['tabelas_nao_carregadas'] = {tabelas, registros}). A conferência da fatia passa a aceitar no esperado {'gravados': 0, 'pendencias': {'tabela_nao_carregada': 1}} e a exigir que toda tabela da imagem sintética da fatia esteja no esperado",
+   "motivo": "a conciliação da fatia cobre 11 de 25 tabelas; as 14 bloqueadas (GELOCUSU, GESALCON, GESALDOS, GESUBGRU, GETPSALDO, GEULTDOCGER, GEUSERS, GPPARAMG, PRPARVARUNIRESP, TBDISPON, TBFORNEC, TBCATFOR, TBFORNECTEL, GEBARRAS) são puladas sem rastro: uma carga real daria 'ok' com mais de 1,1 milhão de registros da referência sem destino e sem aviso. Aplicado o pedido, a fatia põe as 14 no esperado (2 linhas cada, gravados 0, tabela_nao_carregada 1)"
+  }
+ ]
+}

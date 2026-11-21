@@ -1,0 +1,95 @@
+tabela	coluna	destino	regra	depara	via	motivo
+SIPOSRES	TAB	resposta_padrao.grupo_resposta_id	chave_origem		ref:SICTRPSR	L7-03: grupo de respostas pelo conector_origem do pai (chave COD); zero ou inexistente recusa a linha (NOT NULL)
+SIPOSRES	COD	resposta_padrao.sequencia	inteiro_nao_negativo			L7-03: ordem da resposta no grupo (parte da chave da origem)
+SIPOSRES	COD	resposta_padrao.codigo	texto			L7-03: código da resposta no grupo (chave da origem gravada como texto)
+SIPOSRES	NOME	resposta_padrao.descricao	texto_nome			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SIRECIPI	COD	recipiente_coleta.codigo	texto			L7-03: código próprio do cliente (chave da origem)
+SIRECIPI	NOME	recipiente_coleta.descricao	texto_nome			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SIRECIPI	SITUACAO	recipiente_coleta.ativo	booleano_ai			L7-03: A ativo, I inativo; vazio ou fora do domínio fica o padrão do destino (ativo), com pendência quando fora
+SIRECIPI	=~outro	recipiente_coleta.tipo				L7-03: tipo (tubo, frasco, coletor, swab...) não existe na origem: valor presumido (=~) com pendência valor_presumido por linha; 'outro' é o valor neutro do domínio
+SIRESPAD	EXAME		texto			L7-03: bloqueada: modelo_resultado e modelo_laudo apontam o exame pela chave composta ATO,EXAME (exame vem de SITABPRO, chave ATO,CODALF), que a referência ainda não resolve; o código do modelo de laudo também é composto (EXAME,COD,TIPO,ATO) e modelo_resultado exige vigencia_inicio sem origem (pedidos em saida/L7-03.json)
+SISTATUS_AMOSTRA	ID	situacao_amostra.codigo	texto			L7-03: código próprio do cliente (chave da origem)
+SISTATUS_AMOSTRA	DESCRICAO	situacao_amostra.descricao	texto			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SISTATUS_AMOSTRA	COR	situacao_amostra.cor	texto			L7-03: cor de exibição no painel
+SISTATUS_AMOSTRA	ORDEM	situacao_amostra.ordem	inteiro_nao_negativo			L7-03: ordem no rastreio; nula fica com o padrão do destino (1)
+SISTATUS_AMOSTRA	ATIVO	situacao_amostra.ativo	booleano_sn			L7-03: S/N; fora do domínio fica com o padrão do destino (ativo), com pendência
+SISTATUS_AMOSTRA	STATUS_ANTERIOR	situacao_amostra.situacao_anterior_id	chave_origem		ref:SISTATUS_AMOSTRA	L7-03: passagem válida: situação anterior na própria tabela (autorreferência, gravada em duas fases)
+SISTATUS_AMOSTRA	REGISTRO_COLETA	situacao_amostra.registra_coleta	booleano_sn			L7-03: S/N: entrar nesta situação registra a coleta
+SISTATUS_AMOSTRA	ATO		inteiro			L7-03: não aproveitada: módulo da origem (laboratório ou imagem); a situação da amostra é única no destino
+SISTATUS_AMOSTRA	ID_SISTATUS_PEP		chave_origem			L7-03: não aproveitada: situação equivalente do prontuário (tabela fora do mapa); o destino não tem a correspondência
+SITABELE	COD	analito.codigo	texto			L7-03: código do analito: identificador inteiro da origem (único); a chave da origem (exame + elemento) fica no conector_origem
+SITABELE	NOME	analito.nome	texto_nome			L7-03: nome do analito; vazio recusa a linha (NOT NULL)
+SITABELE	NUMERICO	analito.tipo_resultado	codigo_char	valores		L7-03: S numérico, N texto (pares em valores.d/L7-03.tsv); vazio fica o padrão do destino (numerico); fora do domínio: padrão com pendência
+SITABELE	CASAS	analito.casas_decimais	inteiro_nao_negativo			L7-03: casas decimais; acima de 6 recusa pela restrição do destino (ck_analito_casas_decimais)
+SITABELE	MIN_ABE	analito.limite_minimo_aceito	decimal_zero_nulo			L7-03: limite de valor absurdo (abaixo, recusado na digitação); 0 em NUMERIC nulável é 'não informado' (com MAX_ABE 0, um mínimo 0 recusaria resultados negativos válidos): vira nulo; perder o limite só deixa a digitação mais permissiva, nunca recusa resultado válido
+SITABELE	MAX_ABE	analito.limite_maximo_aceito	decimal_zero_nulo			L7-03: limite de valor absurdo (acima, recusado na digitação); 0 é 'não informado' (máximo 0 recusaria todo resultado positivo e, com mínimo > 0, o analito pelo ck_analito_limites): vira nulo; invertido (ambos preenchidos) recusa pela restrição do destino
+SITABELE	METODO	analito.metodo_analitico_id	chave_origem		ref:SIMETODO	L7-03: método analítico pelo conector_origem do pai (chave COD); zero é ausência; inexistente fica nulo com pendência
+SITABELE	RESULTADOFIXO	analito.resultado_fixo	booleano_sn			L7-03: S/N: valor padrão já preenchido na digitação
+SITABELE	PULARELEMENTORESULT	analito.pula_na_digitacao	booleano_sn			L7-03: S/N: campo sem parada na digitação
+SITABELE	IMPRIMIR_ETIQUETA_TRIAGEM	analito.imprime_etiqueta_triagem	booleano_sn			L7-03: S/N
+SITABELE	SITUACAO	analito.ativo	booleano_ai			L7-03: A ativo, I inativo; fora do domínio fica o padrão do destino (ativo), com pendência
+SITABELE	CODPRC		texto			L7-03: exame_analito, faixa_referencia e unidade_resultado não carregados: o exame vem só pelo CODALF (sem ATO; exame tem chave ATO,CODALF), a faixa pede o exame_analito e vigencia_inicio sem origem, e a unidade é texto livre a resolver por código (pedidos em saida/L7-03.json)
+SITABELE	UNIDADE		texto			L7-03: não aproveitada por ora: unidade em texto livre; precisa de referência por código ao destino unidade_resultado (pedido)
+SITABELE	TITULO	analito.resultado_obrigatorio	codigo_char	valores		L7-03: linha-título (cabeçalho de seção) não é campo mensurável: N dá resultado obrigatório (par em valores.d); S fica SEM par de propósito: a linha entra com pendência valor_fora_do_dominio por linha-título, para revisão, até a regra composta TITULO/NUMERICO/RES1 -> tipo_resultado 'titulo'/'texto_padrao' e o exame_analito.titulo (pedidos em saida/L7-03.json); vazio fica o padrão
+SITABELE	RES1		inteiro			L7-03: não aproveitada por ora: grupo de respostas (SICTRPSR) vai a exame_analito.grupo_resposta_id (não carregado; pedido)
+SITABELE	REFINI		decimal			L7-03: não aproveitada por ora: faixa de referência (faixa_referencia não carregada; pedido)
+SITABELE	REFFIN		decimal			L7-03: não aproveitada por ora: faixa de referência (faixa_referencia não carregada; pedido)
+SITABELE	VLRREF		texto_longo			L7-03: não aproveitada por ora: referência textual (faixa_referencia não carregada; pedido)
+SITABPRO	ID	exame.codigo	texto			L7-03: código do exame: identificador inteiro da origem (único); a chave da origem (ATO,CODALF) fica no conector_origem
+SITABPRO	CODALF	exame.sigla	codigo_char			L7-03: mnemônico do exame (código: caixa preservada); uq_exame_sigla não distingue caixa: siglas que só diferem pela caixa são recusadas TODAS com codigo_colisao_caixa (nenhuma vence pela ordem de leitura); o mesmo mnemônico em dois atos recusa o segundo pela chave única (pedido de código composto em saida/L7-03.json)
+SITABPRO	NOME	exame.nome	texto_nome			L7-03: nome; vazio recusa a linha (NOT NULL)
+SITABPRO	NCOMUM	exame.nome_popular	texto			L7-03: nome comum mostrado ao paciente
+SITABPRO	=~misto	exame.tipo_resultado				L7-03: forma do resultado sai de TIPO/ALFANUM, cujo domínio não está confirmado: valor presumido (=~) com pendência valor_presumido por linha; 'misto' é o neutro do domínio (o padrão 'numerico' tiparia exames de imagem e laudo; pedido de de-para TIPO/ALFANUM)
+SITABPRO	=~outro	exame.tipo_servico				L7-03: área (laboratório, imagem...) sai do ATO, cujo domínio não está confirmado: valor presumido (=~) com pendência valor_presumido por linha; 'outro' é o neutro do domínio (pedido de de-para do ATO)
+SITABPRO	GRUPO	exame.especialidade_diagnostica_id	chave_origem		ref:SIESPEC	L7-03: especialidade diagnóstica pelo conector_origem do pai (dependência SITABPRO -> SIESPEC do mapa); zero é ausência
+SITABPRO	ID_SIPACSMODALID	exame.modalidade_imagem_id	chave_origem			L7-03: modalidade de imagem pelo conector_origem do pai; zero é ausência
+SITABPRO	ID_TBSEXO		chave_origem			L7-03: não aproveitada por ora: TBSEXO não entra no conector_origem (o sexo vem do L3 pelas siglas, sem chave da origem; adoção pedida no L5-05), então toda referência daria pai_inexistente e sexo_id nulo, que no destino quer dizer 'ambos' (gravado assim, o diferencial nunca corrigiria). Declarada depois da adoção, as linhas aparecem como alteradas para o Sincronizar (pedido)
+SITABPRO	ENTHORS	exame.prazo_entrega_horas	inteiro_nao_negativo			L7-03: prazo do resultado em horas; negativo vira nulo com pendência
+SITABPRO	PREPAR	exame.orientacao_geral	texto_longo			L7-03: orientação de preparo (BLOB de texto, sem mexer em quebras de linha)
+SITABPRO	DUM	exame.exige_data_ultima_menstruacao	booleano_sn			L7-03: S/N
+SITABPRO	IMPCCIH	exame.informa_controle_infeccao	booleano_sn			L7-03: S/N: aviso ao controle de infecção
+SITABPRO	TORNAR_INF_COMP_CLIN_OBRIG_PEP	exame.exige_informacao_clinica	booleano_sn			L7-03: S/N
+SITABPRO	EXAME_INTEGRADO_WEBSERVICE	exame.integrado_servico_web	booleano_sn			L7-03: S/N
+SITABPRO	ANTIBIOGRAMA	exame.antibiograma	booleano_sn			L7-03: S/N
+SITABPRO	IMPRIMIR_ETIQUETA_TRIAGEM	exame.imprime_etiqueta_triagem	booleano_sn			L7-03: S/N
+SITABPRO	EXIBIR_FICHA_ANEST	exame.exibe_ficha_anestesica	booleano_sn			L7-03: S/N; fora do domínio fica o padrão do destino, com pendência
+SITABPRO	ORDEM_FICHA_ANEST	exame.ordem_ficha_anestesica	inteiro_nao_negativo			L7-03: ordem na ficha anestésica
+SITABPRO	SITUACAO	exame.ativo	booleano_ai			L7-03: A ativo, I inativo; exame inativo nunca entra ativo: sem desativado_em na origem, o ck_exame_desativacao recusa a linha (restricao_destino_4025, pendência por linha) até o pedido de desativação na data da carga; vazio fica o padrão (ativo); fora do domínio: padrão com pendência
+SITABPRO	ID_PRTIPONOTIFICACAO		chave_origem			L7-03: não aproveitada: o pai alimenta configuracao_alerta_prescricao, mas exame.tipo_notificacao_agravo_id aponta tipo_notificacao_agravo (outro domínio; pedido)
+SITABPRO	IDADEI		flutuante			L7-03: não aproveitada por ora: idade mínima com unidade (ID_TBUNID_IDADE_MIN) precisa de conversão para dias (pedido)
+SITABPRO	IDADEF		flutuante			L7-03: não aproveitada por ora: idade máxima com unidade (ID_TBUNID_IDADE_MAX) precisa de conversão para dias (pedido)
+SITABPRO	MATERIAL		inteiro			L7-03: exame_material não carregado: destino secundário com material NOT NULL recusaria o exame inteiro quando a origem não tem material (imagem); pede destino secundário opcional (pedido)
+SITABPRO	RECIPIENTE		inteiro			L7-03: exame_material não carregado (ver MATERIAL; pedido)
+SITABPRO	CODAMB		inteiro			L7-03: exame_equivalencia_codigo não carregado: vigencia_inicio NOT NULL sem origem e procedimento cobrável sem destino carregado (pedido)
+SITABPRO	ID_TBPROSUSAIH		chave_origem			L7-03: exame_equivalencia_codigo não carregado (ver CODAMB; tabela fora do mapa)
+SITABPRO	ID_TBPROSUSAMB		chave_origem			L7-03: exame_equivalencia_codigo não carregado (ver CODAMB; tabela fora do mapa)
+SITBGRAN	EXAME		texto			L7-03: bloqueada: secao_laudo_estruturado e grandeza_laudo exigem o exame (NOT NULL) pela chave composta ATO,EXAME, que a referência ainda não resolve (pedido)
+SITPEQV	CODIGO		inteiro			L7-03: bloqueada: interface_equipamento exige modelo_comunicacao_id (NOT NULL), que vem por SITPEQV_SITPEQVMODELO (carregada depois, via encadeada) e equipamento ou apoio (ck_interface_equipamento_alvo), que é destino secundário gravado depois do principal; equipamento_analitico exige setor_diagnostico_id sem origem; credencial_integracao exige a referência do cofre (senhas não migram em claro) (pedidos)
+SITPEQV	SENHA_EXPORTACAO		texto			L7-03: nunca migra: segredo vai ao cofre por referência (credencial_integracao.referencia_cofre)
+SITPEQV	SENHA_FTP		texto			L7-03: nunca migra: segredo vai ao cofre por referência (credencial_integracao.referencia_cofre)
+SITBEXHP	COD		inteiro			L7-03: bloqueada: exame_laboratorio_apoio exige o exame próprio (não apontado pela origem: COD_EXAME é o código no apoio) e o laboratório de apoio (SITPEQV, bloqueada) (pedido)
+SITPEQVMODELO	ID	modelo_comunicacao.codigo	texto			L7-03: código próprio do cliente (chave da origem)
+SITPEQVMODELO	NOME	modelo_comunicacao.descricao	texto_nome			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SITPEQVMODELO	=~proprietario	modelo_comunicacao.padrao_mensagem				L7-03: padrão de mensagem (ASTM, HL7...) não existe na origem: valor presumido (=~) com pendência valor_presumido por linha, para o cliente revisar
+SITPEQV_SITPEQVMODELO	ID		chave_origem			L7-03: bloqueada: a linha é atributo da interface (modelo de comunicação de SITPEQV), não interface nova; pede atualizar o registro do pai (pedido)
+SIVARFORMULA	CODIGO		inteiro			L7-03: bloqueada: variavel_formula exige formula_calculo_id (NOT NULL), sem fórmula carregada nem apontada pela origem; a origem aponta o exame pela chave composta ATO,EXAME (pedido)
+SIWEBCADPERFIL	ID	perfil_portal_resultado.codigo	texto			L7-03: código próprio do cliente (chave da origem)
+SIWEBCADPERFIL	NOME	perfil_portal_resultado.descricao	texto_nome			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SIWEBCADPERFIL	=~medico_externo	perfil_portal_resultado.publico				L7-03: público do perfil não existe na origem; os parâmetros (visualizar imagem, digitar laudo) apontam médico externo: valor presumido (=~) com pendência valor_presumido por linha
+SIWEBCADPERFIL_SIPACSMODALID	ID_SIWEBCADPERFIL	perfil_portal_modalidade.perfil_portal_resultado_id	chave_origem			L7-03: perfil pelo conector_origem do pai; inexistente recusa (NOT NULL)
+SIWEBCADPERFIL_SIPACSMODALID	ID_SIPACSMODALID	perfil_portal_modalidade.modalidade_imagem_id	chave_origem			L7-03: modalidade pelo conector_origem do pai; inexistente recusa (NOT NULL)
+SIWEBCADPERFIL_TBUSERS	ID_SIWEBCADPERFIL	perfil_portal_usuario.perfil_portal_resultado_id	chave_origem			L7-03: perfil pelo conector_origem do pai
+SIWEBCADPERFIL_TBUSERS	USUARIO	perfil_portal_usuario.usuario_id	chave_origem		ref:TBUSERS	L7-03: usuário pelo login (chave do pai); inexistente recusa (NOT NULL)
+SIWEBPARDATA	ID		chave_origem			L7-03: bloqueada: lista fixa de períodos, que no destino é o domínio de perfil_portal_resultado.periodo_padrao, não perfil novo (pedido: descarte justificado)
+SIWEBPARTPATU	ID		chave_origem			L7-03: bloqueada: lista fixa de tipos de atualização, atributo do perfil (atualizacao_automatica_minutos), não perfil novo (pedido: descarte justificado)
+SIWEBPARPERFIL	ID_SIWEBCADPERFIL		chave_origem			L7-03: bloqueada: parâmetros do perfil já carregado (visualiza_imagem, digita_laudo, envia_imagem_email, envia_link_imagem_email); pede atualizar o registro do pai (pedido)
+SIWEBPARLAUDO	ID	modelo_impressao_laudo.codigo	texto			L7-03: código próprio do cliente (chave da origem)
+SIWEBPARLAUDO	@estabelecimento	modelo_impressao_laudo.estabelecimento_id				L7-03: estabelecimento único do cliente; nenhum ou vários recusa com estabelecimento_indefinido (nunca fixo)
+SIWEBPARLAUDO	NOME	modelo_impressao_laudo.descricao	texto_nome			L7-03: descrição; vazia recusa a linha (NOT NULL)
+SIWEBPARLAUDO	ID_SIMODULO	modelo_impressao_laudo.setor_diagnostico_id	chave_origem			L7-03: setor pelo conector_origem do pai; inexistente fica nulo (modelo geral) com pendência
+SIWEBPARLAUDO	EXIBIR_IMAGEM_LAUDO	modelo_impressao_laudo.exibe_imagens	booleano_sn			L7-03: S/N
+SIWEBPARLAUDO	QUANTIDADE_IMAGEM_POR_LINHA	modelo_impressao_laudo.imagens_por_linha	inteiro_nao_negativo			L7-03: imagens por linha; exibir imagens sem quantidade positiva recusa pela restrição do destino
+SIWEBPARLAUDO	ALTURA_ESPACAMENTO_LAUDO	modelo_impressao_laudo.espacamento_vertical	inteiro_nao_negativo			L7-03: espaçamento vertical
+SIWEBPARLAUDO	LARGURA_ESPACAMENTO_LAUDO	modelo_impressao_laudo.espacamento_horizontal	inteiro_nao_negativo			L7-03: espaçamento horizontal
+SIWEBPARLAUDO	ARQUIVO_LAUDO		blob			L7-03: não migra: layout binário do gerador de relatório da origem é refeito no destino (motivo do mapa)
+SIWEBVISULIMG	ID		chave_origem			L7-03: bloqueada: visualizador_imagem exige url_base (NOT NULL), que a origem não tem (só o nome); um endereço inventado abriria o visualizador errado (pedido: decisão do dono)

@@ -1,0 +1,3 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+GECAPELAMP	FUNCIONAMENTO	capela_manipulacao.situacao	S	disponivel	L7-05
+GECAPELAMP	FUNCIONAMENTO	capela_manipulacao.situacao	N	inativa	L7-05

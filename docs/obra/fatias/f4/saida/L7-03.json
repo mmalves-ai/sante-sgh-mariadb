@@ -1,0 +1,99 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + mapa.referencia_declarada",
+   "mudanca": "Referência composta declarada: via `ref:<TABELA>(<COL1>,<COL2>)` monta a chave do pai com várias colunas da linha, na ordem da chave do pai (ex.: SIRESPAD `ref:SITABPRO(ATO,EXAME)`, SITBGRAN `ref:SITABPRO(ATO,EXAME)`, SIVARFORMULA `ref:SITABPRO(ATO,EXAME)`). Mesmo pedido do L7-04.",
+   "motivo": "O exame (SITABPRO) tem chave ATO,CODALF; sem isso SIRESPAD (modelo_resultado, modelo_laudo), SITBGRAN (secao_laudo_estruturado, grandeza_laudo) e SIVARFORMULA ficam bloqueadas."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Literal composto de colunas: coluna especial `#concat:<COL1>,<COL2>[:<sep>]` grava o texto das colunas juntas (ex.: exame.codigo = ATO-CODALF; modelo_laudo.codigo = EXAME-COD-TIPO-ATO).",
+   "motivo": "Código único no destino com chave composta na origem. Hoje exame.codigo usa o ID inteiro da origem e exame.sigla o CODALF: o mesmo mnemônico em dois atos recusa o segundo exame (restricao_destino_1062)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Coluna especial `@data_carga` (data da carga, do relógio do banco) para vigencia_inicio NOT NULL sem origem.",
+   "motivo": "Bloqueia modelo_resultado (SIRESPAD), faixa_referencia (SITABELE) e exame_equivalencia_codigo (SITABPRO)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Destino secundário opcional: marcar o destino (ex.: via `opcional`) para que a linha secundária não seja gravada, sem recusar o principal, quando a referência NOT NULL dela vier nula ou zero (ex.: SITABPRO.MATERIAL -> exame_material.material_biologico_id; RECIPIENTE -> recipiente_coleta_id; padrao `=1`).",
+   "motivo": "Exame de imagem não tem material: com exame_material declarado, a recusa do secundário levaria o exame junto."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Referência por coluna do destino (procura): via `busca:<tabela_destino>.<coluna>` resolve o id pelo valor (ex.: SITABELE.UNIDADE -> unidade_resultado.simbolo; SITABELE.CODPRC -> exame.sigla dentro do ato do laboratório); valor sem par: nulo com pai_inexistente.",
+   "motivo": "SITABELE carrega só analito; exame_analito (exame pelo CODPRC sem ATO) e a unidade em texto livre precisam disso. Com a regra, declarar exame_analito (TITULO -> titulo, RES1 -> grupo_resposta_id ref:SICTRPSR, @id -> analito_id, #seq:CODPRC -> ordem) e faixa_referencia (REFINI/REFFIN/VLRREF)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Atualizar o registro do pai (regra genérica já pedida no L6-10): via `atualiza:<TABELA_PAI>` grava colunas no registro já carregado do pai em vez de linha nova (SITPEQV_SITPEQVMODELO -> interface_equipamento.modelo_comunicacao_id; SIWEBPARPERFIL -> perfil_portal_resultado.visualiza_imagem, digita_laudo, envia_imagem_email, envia_link_imagem_email).",
+   "motivo": "As duas tabelas são atributos de registros de outra tabela; carregadas como linha criariam interface e perfil novos."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L7-03.tsv (após leitura do PSQL da origem)",
+   "mudanca": "De-para de valores de SITABPRO.ATO -> exame.tipo_servico (laboratorio, imagem, metodo_grafico...) no lugar do literal presumido `=~outro`; e TIPO/ALFANUM -> exame.tipo_resultado.",
+   "motivo": "Domínio do ATO não confirmado; hoje cada exame fica com valor_presumido."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Literal condicional: exame.desativado_em = data da carga quando SITUACAO indica inativo (e ativo = falso), para cumprir ck_exame_desativacao.",
+   "motivo": "Hoje SITUACAO do exame não é aproveitada e todo exame entra ativo."
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerado) ou decisão de modelagem",
+   "mudanca": "SITABPRO.ID_PRTIPONOTIFICACAO: o pai PRTIPONOTIFICACAO alimenta configuracao_alerta_prescricao, mas exame.tipo_notificacao_agravo_id aponta tipo_notificacao_agravo. Corrigir o destino do pai ou referência por destino secundário.",
+   "motivo": "Gravar o id do pai seria id de outro domínio (FK quebrada)."
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "Regra `idade_em_dias` com a unidade em outra coluna (SITABPRO.IDADEI/IDADEF com ID_TBUNID_IDADE_MIN/MAX -> exame.idade_minima_dias/idade_maxima_dias).",
+   "motivo": "O destino guarda a idade em dias; a origem guarda número e unidade."
+  },
+  {
+   "arquivo": "decisão do dono + conector/sante_conector/carga_mapa.py",
+   "mudanca": "SITPEQV: interface_equipamento exige modelo_comunicacao_id (vem por SITPEQV_SITPEQVMODELO, carregada depois: via encadeada como no L6-12) e equipamento ou apoio (ck_interface_equipamento_alvo; equipamento_analitico é destino secundário gravado depois e exige setor_diagnostico_id sem origem); credencial_integracao exige referencia_cofre (as senhas nunca migram: o cliente cadastra no cofre). Decidir a ordem dos destinos (secundário antes do principal) ou carga em duas fases, e o tratamento da credencial (descarte com aviso ao cliente).",
+   "motivo": "SITPEQV bloqueada, e com ela SITBEXHP (laboratório de apoio)."
+  },
+  {
+   "arquivo": "docs/analise/rodada2/final/mapa-spdata.tsv (mapa de análise) -> tabelas.tsv",
+   "mudanca": "Descarte justificado (tipo NAO) de SIWEBPARDATA e SIWEBPARTPATU: listas fixas que no destino são o domínio de perfil_portal_resultado.periodo_padrao e o atributo atualizacao_automatica_minutos.",
+   "motivo": "Hoje estão com destino perfil_portal_resultado; carregadas, criariam perfis falsos."
+  },
+  {
+   "arquivo": "decisão do dono",
+   "mudanca": "SIWEBVISULIMG: visualizador_imagem exige url_base NOT NULL que a origem não tem. Opções: descarte com aviso ao cliente (cadastrar os visualizadores), ou carga com url_base presumida vazia e pendência.",
+   "motivo": "Endereço inventado abriria o visualizador errado; bloqueada."
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "SITBEXHP: exame_laboratorio_apoio exige o exame próprio, que a origem não aponta (COD_EXAME é o código do apoio). Precisa de de-para do exame do apoio para o exame próprio (por tabela de ligação da origem, se houver) ou de exame_id opcional no modelo.",
+   "motivo": "SITBEXHP (3084 na imagem de referência) bloqueada."
+  },
+  {
+   "arquivo": "decisão de modelagem",
+   "mudanca": "SIVARFORMULA: variavel_formula exige formula_calculo_id; a origem tem a variável por exame (ATO,EXAME) sem fórmula própria. Criar a fórmula por exame (destino secundário formula_calculo) ou ligar pela fórmula que a carga de exame_analito criar.",
+   "motivo": "SIVARFORMULA bloqueada."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + declarado/valores.d",
+   "mudanca": "De-para de valores composto: chave do par formada por várias colunas da linha (ex.: SITABELE TITULO,NUMERICO,RES1 -> analito.tipo_resultado: S,*,* -> titulo; N,N,>0 -> texto_padrao; N,S,* -> numerico; N,N,0 -> texto) e, para a linha-título, resultado_obrigatorio FALSE. Até lá TITULO=S fica sem par (pendência valor_fora_do_dominio por linha) e RES1 preenchido entra como 'texto'.",
+   "motivo": "Linha-título e grupo de respostas da origem dependem de mais de uma coluna; com uma coluna só, o título vira campo mensurável."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Pendência de regra genérica por valor (ex.: via `pendencia_se:<valor>:<regra>`), para nomear a pendência da linha-título (ex.: linha_titulo_sem_destino) em vez de valor_fora_do_dominio.",
+   "motivo": "Hoje a única pendência por valor disponível sem código novo é valor_fora_do_dominio, cujo nome não descreve o caso."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga.py (sexo do L3) + regra de adoção pedida no L5-05",
+   "mudanca": "Adoção de TBSEXO pela chave natural (registrar no conector_origem o sexo já criado pelo L3 pela sigla). Depois dela, declarar SITABPRO.ID_TBSEXO -> exame.sexo_id ref:TBSEXO (as linhas aparecem como alteradas para o Sincronizar).",
+   "motivo": "Sem TBSEXO no conector_origem, toda restrição por sexo do exame viraria nulo ('ambos os sexos')."
+  },
+  {
+   "arquivo": "verificação na imagem de referência (só contagem)",
+   "mudanca": "Contar em SITABELE as linhas com MIN_ABE=0, MAX_ABE=0 e ambos 0, e com MIN_ABE<0, para confirmar a sentinela decimal_zero_nulo dos limites de valor absurdo.",
+   "motivo": "A contagem não pôde ser feita pela fatia (acesso à imagem negado na sessão); a regra foi escolhida pelo lado seguro (limite perdido só afrouxa a digitação)."
+  }
+ ]
+}

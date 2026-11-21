@@ -1,0 +1,49 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (ordem) + dependencias.tsv",
+   "mudanca": "pôr GELOCARM (local_estoque, sem dependências) antes de GECADTRA (536) e GEESTINI (543), com as arestas GECADTRA.LOC_ORI/LOC_DES -> GELOCARM e GEESTINI.ARM -> GELOCARM declaradas; pôr GELIMLOC, GEARMLOC, GECONITL, GEKONCDC, GECOMPRA, GECTRVMM, GELANESI e GELANTRA depois de GEITENS (599), GETPSALDO (572) e TBCENCUS (831), conforme o pai",
+   "motivo": "na ordem atual o local de estoque (556) e o insumo (599) chegam DEPOIS das tabelas que os exigem NOT NULL: toda linha seria pai_inexistente e recusada; por isso 16 das 25 tabelas da fatia ficam bloqueadas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial)",
+   "mudanca": "coluna especial de competência composta: '#competencia:<ANO>,<MES>' grava DATE do primeiro dia do mês; mês fora de 1..12 ou ano < 1900: NULL com valor_fora_do_dominio",
+   "motivo": "saldo_estoque_mensal, fechamento_estoque e recalculo_saldo_estoque exigem competencia DATE NOT NULL (CHECK dia 1) e a origem guarda ANO e MES separados (GEARMLOC, GECONITL, GEFECMES, GEATUALIZASALDO)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
+   "mudanca": "regra 'inteiro_zeros_esquerda:<n>': inteiro vira texto com n dígitos (zfill); mais de n dígitos ou 0: NULL com valor_fora_do_dominio",
+   "motivo": "GEDESCOM.CEP (INTEGER) -> destino_entrega_compra.cep CHAR(8) e GEDESCOM.CGC (BIGINT) -> cnpj CHAR(14) perdem os zeros à esquerda com a regra 'inteiro'; ficaram sem destino"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.tsv (ou valores.d/L7-05.tsv)",
+   "mudanca": "de-para de valores por cliente: GEGRUPOS.COD -> grupo_insumo.natureza (medicamento/material/dieta/...); GELOCARM.COD -> local_estoque.tipo (almoxarifado/farmacia_central/farmacia_satelite/...); acao_dose.notifica/bloqueia (nada/avisar/bloquear) partindo da DESCRIÇÃO revisada pelo cliente no painel, nunca do GEITEACAODOSE.ID fixo (não prender a regra a um cliente). A situação da capela já sai por valores.d/L7-05.tsv (FUNCIONAMENTO S->disponivel, N->inativa)",
+   "motivo": "natureza, tipo de local, notifica e bloqueia entram PRESUMIDOS (valor_presumido por linha e coluna) até o de-para; depende do conteúdo da imagem do cliente"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (desdobrar colunas em linhas)",
+   "mudanca": "regra genérica de tabela pivotada: cada coluna declarada Hfn vira uma linha no destino (frequencia_administracao pela frequência f, ordem_dose n, horario pelo valor HHMM)",
+   "motivo": "GEHORMED (linha única com 36 colunas de horário) -> horario_padrao_medicacao; mesma lacuna dos parâmetros de linha única (L5-08, L6-06)"
+  },
+  {
+   "arquivo": "conector/mapa (GECADTER, GECADTRA, GEDESPDS, GEGERSEQ, GELANTRA)",
+   "mudanca": "decidir: GECADTER -> terceiro_destinatario exige pessoa_fisica_id (CHECK); vínculo com pessoa por regra própria, nunca por nome; GECADTRA -> documento_estoque.tipo por de-para (REQUISICAO/CONSOL/ORIGEM) e numero único por estabelecimento (DOC repete por ANO/MES: compor ou relaxar a chave); GEDESPDS escolhe o destino pelo valor de OQUE (roteamento por valor); GEGERSEQ.COD -> tipo_movimento_estoque (GETPLANCTO, 571, depois); GELANTRA -> movimento_estoque com natureza, competência e usuário NOT NULL sem origem direta",
+   "motivo": "destinos NOT NULL ou CHECK sem dado direto na origem; ficam bloqueados com motivo em colunas.d/L7-05.tsv"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (conciliação)",
+   "mudanca": "tabela_bloqueada (mesmo pedido 1 de L6-06): tabela do mapa com linhas e sem coluna declarada com destino entra na conciliação como origem=N, destino=0, com pendência alta tabela_bloqueada por tabela; e tools/obra/conferir-fatia-f4.sh deve exigir essas linhas no conferencia.json (hoje lista só as 9 carregadas e devolve ok)",
+   "motivo": "as 16 tabelas bloqueadas de L7-05 (cerca de 6,4 milhões de linhas na referência, entre elas os consumos e os movimentos) somem hoje da conferência; L7-05 não deve ser dada como concluída antes disso"
+  },
+  {
+   "arquivo": "db/migracoes/11_SUP (local_estoque, grupo_insumo, capela_manipulacao)",
+   "mudanca": "avaliar colunas: local_estoque com grupo/subgrupo/item de compra padrão (GELOCARM.GRUPO/SGRUPO/ITEM); grupo_insumo.codigo_integracao_compras (GEGRUPOS.INT_COMP); capela_manipulacao ligada à unidade assistencial (GECAPELAMP.ID_TBUNIDAD)",
+   "motivo": "colunas da origem sem destino no modelo, registradas como não aproveitadas"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
+   "mudanca": "regra 'inteiro_faixa:<min>,<max>' (ou 'inteiro_nao_negativo:<max>'): fora da faixa vira NULL com valor_fora_do_dominio, linha gravada",
+   "motivo": "GEGRUPOS.PRAZO_ENT -> grupo_insumo.prazo_entrega_dias (CHECK <= 365): hoje o prazo acima de 365 recusa o grupo de insumo inteiro (restricao_destino_4025), pai NOT NULL do insumo (GEITENS.GRU); o negativo já vira NULL com inteiro_nao_negativo. Aplicada a regra, o esperado de GEGRUPOS na sintética passa a gravados 5, valor_fora_do_dominio 3, sem restricao_destino_4025"
+  }
+ ]
+}

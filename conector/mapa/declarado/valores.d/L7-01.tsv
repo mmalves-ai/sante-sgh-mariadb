@@ -1,0 +1,2 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+SHPERGUN	SEXO	pergunta_triagem_doador.sexo_aplicavel			L7-01: só o nulo (vale para os dois); código sem par vira pendência até o de-para revisado pelo cliente

@@ -39,9 +39,88 @@ REGRAS = {
     "flutuante": "DOUBLE/FLOAT vira DECIMAL pelo texto do valor (sem ruído binário)",
     "blob": "BLOB binário (SUB_TYPE 0): bytes originais, nunca convertidos, com sha256 guardado para a conciliação",
     "chave_origem": "id de outra tabela da origem: resolvido pelo conector_origem; pai ausente ou pendente: pai_pendente",
+    "preenchido": "texto ou valor presente vira TRUE, vazio (só espaços) FALSE; nulo fica nulo (padrão do destino)",
+    "decimal_positivo": "NUMERIC que só tem sentido maior que zero (CHECK > 0): zero ou negativo vira NULL com "
+                        "valor_fora_do_dominio (linha gravada, fica o padrão do destino)",
+    "cnpj": "documento de pessoa jurídica (inteiro ou texto): só dígitos, 14 com zeros à esquerda; dígito verificador "
+            "errado, todos iguais ou mais de 14 dígitos: NULL com documento_invalido (nunca o valor no log); 0 vira NULL",
+    "cpf": "documento de pessoa física (inteiro ou texto): só dígitos, 11 com zeros à esquerda; dígito verificador "
+           "errado, todos iguais ou mais de 11 dígitos: NULL com documento_invalido (nunca o valor no log)",
+    "cpf_cnpj": "documento de pessoa (inteiro ou texto): até 11 dígitos é CPF, até 14 é CNPJ (com zeros à esquerda); "
+                "inválido: NULL com documento_invalido",
 }
 # regras cujo destino é coluna TIME / DATETIME (o verificador confere contra o tipo da coluna declarada no DDL)
 REGRAS_TIME = {"hora", "hora_hhmm", "hora_em_timestamp"}
+
+# Regras com parâmetro (`nome:parametro` no mapa): validadas por `regra_conhecida`.
+REGRAS_PARAMETRO = {
+    "inteiro_faixa": "inteiro_faixa:<min>,<max>: fora da faixa vira NULL com valor_fora_do_dominio (linha gravada; "
+                     "ex.: prazo acima do CHECK do destino não recusa a linha inteira)",
+    "inteiro_zeros_esquerda": "inteiro_zeros_esquerda:<n>: inteiro (ou texto de dígitos) vira texto de n dígitos com "
+                              "zeros à esquerda (CEP); 0, negativo ou mais de n dígitos: NULL com valor_fora_do_dominio",
+}
+
+
+def _parametro(regra):
+    """(nome, parâmetros) de uma regra com parâmetro válida; None se não for uma."""
+    nome, sep, arg = (regra or "").partition(":")
+    if not sep or nome not in REGRAS_PARAMETRO:
+        return None
+    try:
+        if nome == "inteiro_faixa":
+            a, b = (int(x) for x in arg.split(","))
+            return (nome, (a, b)) if a <= b else None
+        n = int(arg)
+        return (nome, (n,)) if n > 0 else None
+    except ValueError:
+        return None
+
+
+def regra_conhecida(regra):
+    """Regra simples de REGRAS ou regra com parâmetro bem formada (o verificador do mapa recusa as outras)."""
+    return regra in REGRAS or _parametro(regra) is not None
+
+
+def _digitos(v):
+    """Só os dígitos de um inteiro ou texto; None se houver outro caractere além de pontuação de documento."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return str(v) if v >= 0 else None
+    if isinstance(v, decimal.Decimal):
+        return str(int(v)) if v == v.to_integral_value() and v >= 0 else None
+    s = _str(v).strip()
+    if not re.fullmatch(r"[\d.\-/ ]*", s):
+        return None
+    return re.sub(r"\D", "", s)
+
+
+def _dv_ok(d):
+    """Dígitos verificadores de CPF (11) ou CNPJ (14)."""
+    if len(set(d)) == 1:
+        return False
+    if len(d) == 11:
+        pesos = [list(range(10, 1, -1)), list(range(11, 1, -1))]
+    else:
+        pesos = [[5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]]
+    for i, w in enumerate(pesos):
+        r = sum(int(x) * p for x, p in zip(d, w)) % 11
+        if int(d[len(w)]) != (0 if r < 2 else 11 - r):
+            return False
+    return True
+
+
+def _documento(v, tamanhos):
+    d = _digitos(v)
+    if d is None:
+        return None, "documento_invalido"
+    if not d or int(d) == 0:  # vazio ou 0 (convenção de 'sem documento' em coluna numérica): NULL sem pendência
+        return None, None
+    for n in tamanhos:
+        if len(d) <= n:
+            d = d.zfill(n)
+            return (d, None) if _dv_ok(d) else (None, "documento_invalido")
+    return None, "documento_invalido"
 DATA_ZERO = datetime.date(1899, 12, 30)
 SENTINELAS_DATA = {datetime.date(1899, 12, 30), datetime.date(1900, 1, 1)}
 VERDADEIRO = {"S", "T", "V", "Y", "1"}
@@ -153,10 +232,36 @@ def _data(v):
 def aplicar(regra, v):
     """Converte um valor cru da origem pela regra. Devolve (valor, regra_de_pendencia_ou_None); nunca o valor na
     pendência. Regra desconhecida é erro de programa (o verificador do mapa recusa antes)."""
-    if regra not in REGRAS:
+    par = _parametro(regra)
+    if regra not in REGRAS and par is None:
         raise KeyError("regra de coluna desconhecida: %s" % regra)
     if v is None:
         return None, None
+    if par and par[0] == "inteiro_faixa":
+        a, b = par[1]
+        try:
+            n = int(v)
+        except (TypeError, ValueError):
+            return None, "valor_fora_do_dominio"
+        inteiro = not isinstance(v, (decimal.Decimal, float)) or v == n
+        return (n, None) if inteiro and a <= n <= b else (None, "valor_fora_do_dominio")
+    if par:  # inteiro_zeros_esquerda
+        d = _digitos(v)
+        n = par[1][0]
+        if not d or len(d) > n or int(d) == 0:
+            return None, (None if d == "" else "valor_fora_do_dominio")
+        return d.zfill(n), None
+    if regra == "preenchido":
+        return bool(_str(v).strip()) if isinstance(v, (str, bytes, bytearray)) else True, None
+    if regra == "decimal_positivo":
+        x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))
+        return (x, None) if x > 0 else (None, "valor_fora_do_dominio")
+    if regra == "cnpj":
+        return _documento(v, (14,))
+    if regra == "cpf":
+        return _documento(v, (11,))
+    if regra == "cpf_cnpj":
+        return _documento(v, (11, 14))
     if regra == "texto":
         return _txt(v, "pontas"), None
     if regra == "texto_nome":
