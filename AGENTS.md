@@ -191,6 +191,11 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
 - Pendências e logs do conector registram tabela, chave original e regra violada, **nunca valores**.
 - **Sem vetorização no conector** (ADR 0002). A busca vetorial é recurso do produto, nunca aplicada a texto clínico sem decisão registrada.
 - **Homologação com dados reais** só depois dos quatro pré-requisitos de LGPD da F5.1.
+  - **Exceção (dono, 2026-11-21):** o dono navega no painel desta VM com a carga completa da ProntoCardio num
+    cliente de teste.
+    - O ambiente é privado, e o dono tem as credenciais de segurança máxima dos hospitais.
+    - Os dados ficam só no MariaDB local (loopback).
+    - Chat, e-mail, commit e log continuam só com contagens e agregados.
 
 ### 6. Nenhuma mensagem externa fora de produção
 
@@ -200,6 +205,13 @@ Mudar o guardião ou o plano só com pedido explícito do dono.
   - TISS e laboratório para destinos falsos;
   - sem rede de saída.
 - O envio para fora só existe com a chave de ambiente de produção.
+- **Exceção: aviso da obra ao dono** (decisão do dono, 2026-11-21).
+  - O `.env` tem credenciais do Amazon SES (`AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), para enviar
+    a partir de `noreply@hal-ai.com`.
+  - Envie só por `python3 -I tools/obra/avisar_dono.py --assunto ... --texto ...`.
+  - O destino é só o dono: avisos de marco e de "pronto para navegar". O produto não usa esse canal.
+  - O conteúdo leva só contagens e agregados (regra 5). Nunca imprima nem copie as credenciais.
+  - Teste de envio feito em 2026-11-21, aceito pelo SES.
 
 ### 7. Catálogos
 
