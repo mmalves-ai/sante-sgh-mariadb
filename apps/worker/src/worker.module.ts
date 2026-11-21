@@ -14,7 +14,6 @@ import { EmailService } from './email.service.js';
 import { IndiceBuscaService } from './indice-busca.service.js';
 import { PublicadorCatalogosService } from './publicador-catalogos.service.js';
 import { RelayOutboxService } from './relay-outbox.service.js';
-import { RepresentacaoPepService } from './representacao-pep.service.js';
 import { VigiaParecerService } from './vigia-parecer.service.js';
 import { Relogio } from './relogio.js';
 import { SinalDeVidaService } from './sinal-de-vida.service.js';
@@ -41,7 +40,6 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   email: EmailService,
   'indice-busca': IndiceBuscaService,
   'publicador-catalogos': PublicadorCatalogosService,
-  'representacao-pep': RepresentacaoPepService,
   'vigia-parecer': VigiaParecerService,
   'vigia-vazias': VigiaVaziasService,
   'censo-fechamento': CensoFechamentoService,
@@ -89,7 +87,6 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     EmailService,
     IndiceBuscaService,
     PublicadorCatalogosService,
-    RepresentacaoPepService,
     // M23: pedidos de parecer feitos no outro sistema entram na fila (leitura incremental).
     VigiaParecerService,
     VigiaVaziasService,

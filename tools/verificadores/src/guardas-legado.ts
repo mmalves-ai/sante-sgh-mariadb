@@ -82,12 +82,6 @@ export const EXCECOES: readonly {
       'M59-F1: teste de unidade da varredura do alcance; o texto com CREATE SEQUENCE é a entrada sintética do leitor de generators (nunca vai ao banco)',
   },
   {
-    arquivo: /^packages\/testes\/src\/integracao\/privilegio-modulo\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora', 'c-ddl-fora-sgh', 'g-funcao-em-indice'],
-    motivo:
-      'M59-F1 (regra 4; ficha, seção 10): prova na cópia que o papel do módulo lê e grava só o que o plano dá: leituras de PRTERMOCAD e PRTERMOACEITE e um UPDATE na trilha que o banco tem de RECUSAR (sem privilégio), numa transação desfeita; a DDL é o DROP ROLE da limpeza dos papéis efêmeros do teste, pelo isql',
-  },
-  {
     arquivo:
       /^(docs\/implantacao\/anexos\/privilegios-(papel|plataforma)\.sql|tools\/implantacao\/src\/privilegios(\.spec)?\.ts)$/,
     regras: ['c-ddl-fora-sgh', 'a-tabela-legada-fora'],
@@ -166,18 +160,6 @@ export const EXCECOES: readonly {
     motivo:
       'M03: cenário sintético da ferramenta de assinatura (uma linha fictícia, transação sempre desfeita) e SAVEPOINT da captura',
   },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/prontuario-diario\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M23: conferência do gravado pelo executor na transação desfeita (COUNT(*) das tabelas gravadas e a ligação da linha ao paciente, só SELECT); nenhuma escrita',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m48-e2-sugestao\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M48.2: só LEITURA (COUNT(*) da PRCHKGERAL e da SGH_PEP_CHECAGEM_EXT antes e depois, para conferir o ROLLBACK); a marcação "por fora" fica na massa sintética (packages/testes/src/massa/checagem-outro-sistema.ts), na transação desfeita',
-  },
   // W1-01 (revisões 2 e 3): provas de CHECK e de índice único das tabelas SGH_ do acesso.
   {
     arquivo:
@@ -206,67 +188,6 @@ export const EXCECOES: readonly {
     regras: ['b-escrita-fora', 'generator-fora'],
     motivo:
       'M04: prova de que o banco RECUSA UPDATE e DELETE em SGH_TRILHA para o papel da aplicação; INSERT sintético (HOSPITAL zz) desfeito; NEXT VALUE FOR da sequência SGH_GEN_TRILHA (SGH_, não do legado)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m60-e1-migracao\.int\.spec\.ts$/,
-    regras: ['b-escrita-fora', 'c-ddl-fora-sgh'],
-    motivo:
-      'M60.1: prova de que o Firebird aceita o DDL de um script SGH_ (SGH_M60_PROVA_TX) e o INSERT do registro em SGH_VERSAO_SCRIPT na mesma transação, SEMPRE desfeita (desfazendoNaCopia); nenhum objeto do legado',
-  },
-  // M52.4 (regra 11): a marcação original só de inclusão, provada com o papel da aplicação.
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/ponto-marcacao\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora', 'generator-fora'],
-    motivo:
-      'M52.4: prova de que o banco RECUSA UPDATE e DELETE em SGH_PES_MARCACAO, SGH_PES_AFD_ARQUIVO, SGH_PES_PONTO_FECHAMENTO e SGH_PES_BANCO_HORAS (e o DELETE em SGH_PES_PONTO_AJUSTE) para o papel da aplicação; INSERT sintético (HOSPITAL zz) em tabelas SGH_ desfeito; NEXT VALUE FOR de sequências SGH_ (não do legado)',
-  },
-  // M06 (revisão por arquivo, como no M04).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/trilha-cadeia\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M06: leitura (SELECT) do cabeçalho e do detalhe da trilha do legado que a operação gravou, na transação desfeita e, depois, por contagem READ ONLY; UPDATE/DELETE só em SGH_TRILHA para provar que um evento alterado quebra a cadeia (transação desfeita) e que o papel da aplicação os recusa',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/matriz-autorizacao\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M06: contagem (COUNT) de TBPERUSU por grupo para conferir as opções efetivas lidas; nenhuma escrita',
-  },
-  // M08 (revisão por arquivo, como no M04 e no M06).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/dominios\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M08: prova do LOCK TIMEOUT — uma segunda conexão segura a linha de TBRELIG por SELECT … WITH LOCK numa transação de escrita SEMPRE desfeita, para o executor receber "registro em edição"; nenhuma escrita',
-  },
-  // M17 (revisão por arquivo, como no M04 a M14).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/agenda\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M17: retrato das tabelas da agenda fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual, a contagem dos horários vagos na transação desfeita e a trava de uma agenda por SELECT … WITH LOCK numa transação SEMPRE desfeita, para o executor receber "registro em edição"; nenhuma escrita fora do executor',
-  },
-  // M50 (etapa 2; revisão por arquivo, como no M17).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/colisao-portal\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M50 (regra 3): retrato das tabelas da agenda fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual depois da colisão do portal com o outro sistema; nenhuma escrita fora do executor (o outro sistema é o escritor legado simulado da massa do M39)',
-  },
-  // M19 (revisão por arquivo, como no M04 a M17).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/recepcao\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M19: retrato das tabelas da recepção fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual, e as leituras na transação desfeita (os números do dia, a senha seguinte da fila, as linhas do fluxo, um par de encaminhamento e um atendimento sem senha) e a trava de uma senha por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita, para a chamada sem espera passar à seguinte; a escrita do outro sistema simulado está na massa (reproducao-recepcao.ts); nenhuma escrita aqui',
-  },
-  // M32 (revisão por arquivo, como no M04 a M31).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m32\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M32: retrato dos títulos, do movimento, dos borderôs, da SGH_OUTBOX e das tabelas SGH_FIN_ fora da transação (contagens) para provar que o ROLLBACK deixou tudo igual; as leituras da massa na transação desfeita (título a receber em aberto, conta bancária, classificação, título pago, o histórico relido); o escopo de conta do operador sintético (INSERT em MFCTAUSU, como o cadastro de parâmetros) e o outro sistema simulado mexendo no título (UPDATE que só recarimba), ambos na transação SEMPRE desfeita; a trava do título por SELECT … WITH LOCK numa segunda conexão desfeita, para o LOCK TIMEOUT',
   },
   {
     arquivo:
@@ -474,139 +395,11 @@ export const EXCECOES: readonly {
     motivo:
       'M44.1: o índice SGH_IDX_PEP_SINAL_ATEND conferido em RDB$INDICES, 30 mil sinais SINTÉTICOS semeados só em SGH_PEP_SINAL_VITAL (tabela do novo, IDs negativos fora do gerador) na transação SEMPRE desfeita e a contagem depois do ROLLBACK; a leitura medida vai pelo adaptador (@sgh/legado); nenhuma tabela do outro sistema',
   },
-  // M31 (revisão por arquivo, como no M04 a M30).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m31\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M31: retrato do contador, dos lotes e das tabelas SGH_ do marco fora da transação (contagens) para provar que o ROLLBACK deixou tudo igual; as leituras da massa na transação desfeita (contas prontas, lote, item, convênio e competência); a trava do contador e do item por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita, para o LOCK TIMEOUT; o DELETE do lote protocolado na transação desfeita só para provar que os gatilhos o RECUSAM (E_GERAL_TISS_PROTOCOLO); nenhuma escrita fora do executor que fique',
-  },
-  // M30 (revisão por arquivo, como no M04 a M28).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m30\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M30: retrato da conta, dos itens e das tabelas SGH_ do marco fora da transação (contagens e somas) para provar que o ROLLBACK deixou tudo igual; as leituras na transação desfeita (a conta emitida da massa, o carimbo da versão, as fichas da fila e o número de contas); a trava da conta por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita, para o LOCK TIMEOUT; nenhuma escrita fora do executor (o outro sistema simulado é da massa: conta-outro-sistema.ts)',
-  },
-  // M45 (etapa 5; revisão por arquivo, como no M44.2).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m45-e5\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M45 (etapa 5): leituras READ ONLY para montar os casos na cópia (o dia da prescrição mais recente dos internados, uma cirurgia agendada com internação, a vigência da prescrição gravada na transação desfeita e os logins com o CBO de nutricionista, só contagem); nenhuma escrita fora do executor e das gravações SGH_',
-  },
-  // M44 (etapa 2; revisão por arquivo, como no M21).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m44-nir\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M44 (etapa 2): retrato da internação fora da transação (MAX da chave) para provar que o ROLLBACK deixou tudo igual e a mesma contagem na transação desfeita (a admissão recusada não gravou nada); nenhuma escrita fora do executor (a reserva fora de vista do outro sistema simulado é da massa: internacao-outro-sistema.ts)',
-  },
-  // M21 (revisão por arquivo, como no M04 a M20).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m21\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M21: retrato das tabelas da internação fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual, as leituras na transação desfeita (o carimbo da internação, o cabeçalho, as contas, os trechos, a ocupação e as transferências nascidos nos gatilhos e, só por contagem, os bancos externos neutralizados) e a trava de um leito por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita, para o LOCK TIMEOUT; nenhuma escrita fora do executor (o outro sistema simulado é da massa)',
-  },
-  // M20 (revisão por arquivo, como no M04 a M19).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m20\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M20: retrato das tabelas do atendimento fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual, e as leituras na transação desfeita (o prontuário do paciente sintético, a contagem da fila HL7 e a configuração de integração que o gatilho dela lê, a conta e o item nascidos no gatilho, o carimbo da ficha, a carteirinha do cabeçalho e, só por contagem, os bancos externos neutralizados); nenhuma escrita fora do executor (o outro sistema simulado é da massa)',
-  },
-  // M29 (revisão por arquivo, como no M04 a M28).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m29\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M29: retrato das tabelas da dispensação fora da transação (MAX da chave e COUNT, as linhas do horário e o saldo do item) para provar que o ROLLBACK deixou tudo igual, as leituras na transação desfeita (a saída, o lançamento, a dose, o controle de entrega e a integração com o estoque nascidos nos gatilhos) e a trava de um horário por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita, para a fila disputada; nenhuma escrita fora do executor (a suspensão do horário pelo outro sistema é da massa, reproducao-farmacia.ts)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m42-onda4\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M42: a escolha de uma conta emitida e consistente que o fechamento aceita (o mesmo critério do teste do M30; só o ID e a competência) e o retrato antes e depois (a conta, os itens, as tabelas SGH_ do fechamento, COUNT(*) da FCCTAEXT, o operador em TBUSERS e a trilha dele, só contagens) para provar que o ROLLBACK deixou tudo igual; o fechamento é do executor e as leituras do acompanhamento são as do adaptador. D-IDX-42: uma trilha SINTÉTICA no volume de produção semeada só em SGH_TRILHA (tabela do novo, IDs negativos fora do gerador; a FCCTAEXT só é lida dentro do banco) na transação SEMPRE desfeita, a leitura antiga só para comparar o tempo e a contagem depois do ROLLBACK; nenhuma escrita em tabela do outro sistema fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m43-fim\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M43: o retrato antes e depois (COUNT(*) dos três logins sintéticos em TBUSERS, fora da transação, para provar que o ROLLBACK deixou tudo igual) e a releitura de TBUSERS.BLOQUEADO do login sintético bloqueado pelo executor na transação desfeita; as demais leituras são as do adaptador; nenhuma escrita fora do executor (os usuários sintéticos são criados, trocados de grupo e bloqueados pelas receitas do M10)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m41-onda3\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M41: retrato das tabelas da dispensação fora da transação (MAX da chave e COUNT, as linhas do horário e o saldo do item) para provar que o ROLLBACK deixou tudo igual; a trava de um horário por SELECT … WITH LOCK numa segunda conexão SEMPRE desfeita (a outra estação); a amostra de saídas consolidadas de um dia do dump (só as chaves) e a releitura linha a linha do saldo do local e do preço médio pela outra conexão, para a conferência numérica; nenhuma escrita fora do executor (a outra estação editando o horário é da massa, reproducao-farmacia.ts)',
-  },
-  // M18 (revisão por arquivo, como no M04 a M17).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m39-onda1\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M39: as leituras na transação desfeita (o último dia de senhas da cópia, só a data, para a medida das senhas por sistema; o catálogo RDB$ para achar a coluna imutável que aceita nulo); nenhuma escrita fora do executor (a gravação por fora na lista para ligar e o outro sistema simulado esvaziando a coluna são da massa: onda1-outro-sistema.ts)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m18\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M18: retrato das tabelas da agenda de exames e do centro cirúrgico fora da transação (MAX da chave e COUNT) para provar que o ROLLBACK deixou tudo igual, e a releitura (SELECT) da DURACAO 1899-12-30, da cópia do cancelamento e do estado do novo na transação desfeita; nenhuma escrita fora do executor (o escritor legado simulado é da massa)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m46-e1\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M46 (etapa 1): retrato do centro cirúrgico fora da transação (MAX da chave e COUNT da cópia do cancelamento) para provar que o ROLLBACK deixou tudo igual, a amostra dos agendamentos recentes (só os IDs, para medir o tempo da leitura do contexto da APA) e a contagem da linha do agendamento depois do cancelamento pela receita compatível; na revisão, o ID de uma cirurgia realizada sem ligação (CCCADCIR, só o ID) para ligar à SRPA pela gravação SGH_ do M18; nenhuma escrita fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m46-e2\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M46 (etapa 2): retrato do centro cirúrgico fora da transação (MAX da chave e COUNT da cópia do cancelamento) para provar que o ROLLBACK deixou tudo igual, a amostra dos agendamentos recentes (só os IDs, para medir o tempo das leituras do quadro) e a contagem da linha do agendamento depois do cancelamento pela receita compatível; nenhuma escrita fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m46-e3\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M46 (etapa 3): retrato fora da transação (MAX da chave da saída e da agenda) para provar que o ROLLBACK deixou tudo igual, a amostra das contas de internação e dos itens da classe de OPME (só os códigos, para medir o tempo da conciliação), um lote do estoque com saídas (só o item e o lote, para medir o rastreio reverso), o lançamento da saída gravada pelo executor (só o ID) e a contagem da linha do agendamento depois do cancelamento pela receita compatível; nenhuma escrita fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m46-e4\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M46 (etapa 4): retrato fora da transação (MAX da chave da saída) para provar que o ROLLBACK deixou tudo igual e que a baixa sem conferência não gravou, uma nota da entrada com o fornecedor e um item (só o código, o documento e o fornecedor, para o faturamento do consignado) e o lançamento da saída gravada pelo executor (só o ID); a única escrita é a avaliação farmacêutica SINTÉTICA em SGH_SUP_AVALIACAO_FARM (tabela só do Sante, sem FK para a prescrição), na transação SEMPRE desfeita; nenhuma escrita em tabela antiga fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m55-e3\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M55 (etapa 3): retrato fora da transação (MAX da chave do pedido e do título) para provar que o ROLLBACK deixou tudo igual e que o pedido recusado ou desfeito não gravou, o fornecedor de pedido recente e a classificação gerencial recente (só os códigos) para o pedido e o título com contrato gravados pelo EXECUTOR; o contrato SINTÉTICO só em SGH_SUP_CONTRATO, na transação SEMPRE desfeita; nenhuma escrita em tabela antiga fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m55-e4\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M55 (etapa 4): retrato fora da transação (MAX da chave do pedido) para provar que o ROLLBACK deixou tudo igual, os códigos de dois fornecedores com pedido recente e o ID de um pedido deles (só os códigos) para as propostas e o pedido ligado ao processo; o processo SINTÉTICO só em SGH_SUP_LICITACAO*, na transação SEMPRE desfeita; nenhuma escrita em tabela antiga fora do executor',
-  },
   {
     arquivo: /^tools\/assinatura\/src\/sem-legado-m46-e4\.ts$/,
     regras: ['b-escrita-fora'],
     motivo:
       'M46 (etapa 4): o cenário só SGH_ da ordem de manipulação precisa de uma avaliação farmacêutica SINTÉTICA aprovada pela regra em SGH_SUP_AVALIACAO_FARM (tabela só do Sante, sem FK para a prescrição), gravada na transação da captura, que é SEMPRE desfeita; nenhuma tabela antiga é escrita',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m50-3\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M50.3 (correção da revisão): retrato da agenda do bloco e do cadastro fora da transação (MAX da chave e COUNT) para provar o ROLLBACK, a escolha de um registro de profissional que não atuou no bloco (só ID e código) e a releitura do agendamento confirmado na transação desfeita; nenhuma escrita fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m50-4\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M50.4: retrato do atendimento e do cadastro fora da transação (MAX da chave) para provar o ROLLBACK, o prontuário do paciente sintético e a releitura da marcação, do horário (TELEATENDIMENTO), da senha e das fichas na transação desfeita; nenhuma escrita fora do executor (a marcação antiga trazida para hoje é a da massa do M20)',
   },
   {
     arquivo: /^packages\/legado\/src\/cirurgia\/gravacao\/registro\.ts$/,
@@ -620,58 +413,11 @@ export const EXCECOES: readonly {
     motivo:
       'M18: banco falso dos testes unitários das receitas, que reconhece e responde à mesma consulta da ORDEM de CCCADCIR (nada é executado no banco)',
   },
-  // M14 (correção; revisão por arquivo, como no M04 a M11).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m14\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M14: retrato das tabelas tocadas fora da transação (COUNT nas pequenas, MAX da chave na trilha dupla) para provar que o ROLLBACK deixou tudo igual; só leitura, nenhuma escrita',
-  },
-  // M11 (revisão por arquivo, como no M04 a M08).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/cadastro\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M11: escolha de um paciente ativo pelo ID (SELECT FIRST 1) e a trava da linha por SELECT … WITH LOCK numa transação SEMPRE desfeita, para o executor receber "registro em edição"; estatística de leitura da transação (MON$); nenhuma escrita fora do executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/emergencia\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M06 (revisão): leitura (JOIN com RICADPAC pelo ID) para conferir que prontuário, tipo e OTMU gravados na quebra de vidro vêm do cadastro do paciente sintético, na transação desfeita; nenhuma escrita em tabela do legado',
-  },
   {
     arquivo: /^packages\/testes\/src\/integracao\/(?:perfil-complementar|emergencia)\.int\.spec\.ts$/,
     regras: ['b-escrita-fora'],
     motivo:
       'M06: INSERT só em tabelas SGH_ do acesso (perfil concedido, mapa, quebra de vidro) na transação desfeita, para provar as CHECKs (conceder a si, abertura sem justificativa) e a leitura das concessões',
-  },
-  // ADR 0022 (revisão por arquivo, como no M04, M06 e M08).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/gestao-acesso\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'ADR 0022: contagens (COUNT e MAX(ID)) antes e depois e a leitura do evento da trilha do legado e das opções do grupo sintético que as receitas do executor gravaram, na transação SEMPRE desfeita; toda escrita no legado é pelo executor; nenhuma escrita direta',
-  },
-  // M59-F4 (revisão por arquivo, como a da ADR 0022).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m59-4-saneamento\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M59-F4: contagens antes e depois (TBPERUSU, TBGRUUSU, TBUSERS, TBCABTRILHA depois do gerador) e a escolha de opções ativas (TBOPCOES) para a massa sintética que as receitas do executor gravam, na transação SEMPRE desfeita; toda escrita no legado é pelo executor; nenhuma escrita direta',
-  },
-  // M10 (revisão por arquivo, como no M04 a M11).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/administracao\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M10: contagens (COUNT e MAX(ID)) antes e depois, escolha de unidade, termo vigente, bloco, tipo de acomodação, centro de custo, local de conta, tipo TISS e paciente pelo ID (SELECT FIRST 1), releitura do que as receitas do executor gravaram (sem vazio onde o banco sempre preenche), o login de um usuário bloqueado e a trava da linha por SELECT … WITH LOCK, na transação SEMPRE desfeita; toda gravação é pelo executor',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/administracao\.int\.spec\.ts$/,
-    regras: ['b-escrita-fora'],
-    motivo:
-      'M10 (regras 1 e 16 da ficha): dois comandos que o BANCO RECUSA, só sobre a massa sintética criada pelo executor na transação SEMPRE desfeita: DELETE de TBUSERS (TRG_TBUSERS_BD, exclusão proibida) e UPDATE da chave de RILEITOS (TRG_RILEITOS_BU, código em uso); nenhuma receita os faz',
   },
   {
     arquivo: /^packages\/legado\/src\/acesso\/identidade\.int\.spec\.ts$/,
@@ -758,13 +504,6 @@ export const EXCECOES: readonly {
     motivo:
       'M26 (regras 4 e 9): leitura READ ONLY da liberação para visualização (a visualização gravada com data e IP; a situação 2 da liberação substituída) na transação desfeita, só contagens',
   },
-  // M27 (revisão por arquivo, como no M04 a M26).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/m27-jornada\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M27 (jornada e J10): as leituras na transação SEMPRE desfeita que conferem o efeito de cada passo da jornada (a linha que a assinatura do marco descreve, a conta e a alta nascidas nos gatilhos, os horários da enfermagem, o exame liberado, a ligação da senha) e a trilha própria dos logins da jornada, só contagens; nenhuma escrita fora do executor (o outro sistema simulado é da massa)',
-  },
   {
     arquivo:
       /^apps\/api\/src\/modulos\/(?:pep\/aplicacao\/worklist-medico\.autorizacao|recepcao\/aplicacao\/worklist-recepcao|acesso\/aplicacao\/mensagem)\.int\.spec\.ts$/,
@@ -778,31 +517,11 @@ export const EXCECOES: readonly {
     motivo:
       'M26 (regra 10): o login de um usuário com parâmetros do laboratório (só o login, em memória), READ ONLY, para provar que a resposta não tem segredo',
   },
-  // M13 (revisão por arquivo, como no M04 a M11).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/catalogos\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M13: SELECT FIRST e COUNT(*) das tabelas de catálogo (CBO, SIGTAP, CEP) para montar o arquivo sintético sobre códigos reais e conferir o que os lotes do executor gravaram, na transação SEMPRE desfeita; UPDATE só em SGH_CAT_CARGA (LOTES_TOTAL da carga sintética); toda escrita no legado é pelo executor',
-  },
   {
     arquivo: /^packages\/legado\/src\/nucleo\/spike-driver\.int\.spec\.ts$/,
     regras: ['b-escrita-fora'],
     motivo:
       'M02/M09: DELETE em tabelas virtuais MON$ (encerra a própria conexão do teste, filtrada por PID), não em tabela do legado',
-  },
-  // M16 (revisão por arquivo): a integração na cópia e o data mart.
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/painel-leitos\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M16: consulta pesada de propósito (soma dos itens de conta pela conta) para provar o cancelamento pelo driver, READ ONLY; estatística de leitura da transação (MON$)',
-  },
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/censo-fechamento\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora', 'b-escrita-fora'],
-    motivo:
-      'M16: comando que o escritor SGH_ do núcleo RECUSA antes de chegar ao banco (prova da transação só SGH_; nunca executado), numa transação desfeita',
   },
   {
     arquivo: /^tools\/verificadores\/src\/datamart(-carregar)?(\.spec)?\.ts$/,
@@ -823,13 +542,6 @@ export const EXCECOES: readonly {
     regras: ['a-tabela-legada-fora'],
     motivo:
       'W0-10 (M2): a integração na cópia só LÊ um paciente qualquer (RICADPAC, ID e PRONT) para o pedido sintético e a trilha (SGH_TRILHA) da correlação do teste, em desfazendoNaCopia (ROLLBACK; nunca confirmada) e sob a trava da cópia; nenhuma escrita fora do executor',
-  },
-  // M15 (revisão por arquivo, como no M04 a M11).
-  {
-    arquivo: /^packages\/testes\/src\/integracao\/prontuario\.int\.spec\.ts$/,
-    regras: ['a-tabela-legada-fora'],
-    motivo:
-      'M15: consulta pesada de propósito (COUNT de PREVOLPAC com PRCABEVOL) para provar o cancelamento pelo driver; contagem READ ONLY depois do ROLLBACK do registro sintético; privilégios do papel da aplicação (RDB$) e estatística de leitura da transação (MON$); a gravação "por fora" fica na massa sintética (packages/testes/src/massa/prontuario.ts), na transação desfeita',
   },
   // W0-08 (CRUD completo, manutenção e patrimônio): integração na cópia, sempre na transação desfeita.
   {

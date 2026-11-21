@@ -1,15 +1,42 @@
 // Relay da outbox no worker (ficha do M04, seção 1): a cada OUTBOX_INTERVALO_MS (padrão 1 s), um ciclo por
-// estabelecimento (packages/legado: pendentes de SGH_OUTBOX em ordem de ID, publica, marca publicado; falha
-// com espera crescente e, esgotada, morto). Publica no BullMQ, fila `eventos-<rede>` com o prefixo `sgh`
-// (chaves da rede, ARQ-2), job com o TIPO do evento e jobId = chave do evento: a republicação depois de uma
+// cliente (relay-outbox-proprio.ts: pendentes de integracao_mensagem em ordem de id, publica, marca enviada; falha
+// com espera crescente e, esgotada, erro). Publica no BullMQ, fila `eventos-<cliente>` com o prefixo `sgh`
+// (chaves do cliente, ARQ-2), job com o TIPO do evento e jobId = chave do evento: a republicação depois de uma
 // falha não duplica. Consumidor nulo idempotente (prova do ciclo neste marco; os consumidores reais nascem
 // nos marcos donos): anota a chave num conjunto do Valkey e não faz mais nada. Só Valkey em loopback (trava de
 // saídas do M01). Carga só com IDs e códigos (conferida na gravação). M06: o evento `alerta-emergencia`
-// (quebra de vidro, gravado na SGH_OUTBOX na mesma transação da abertura) vai à fila `email-<rede>`, que o
+// (quebra de vidro, gravado na fila comum de saída na mesma transação da abertura) vai à fila `email-<rede>`, que o
 // EmailService entrega ao Auditor; a fila fora não perde o alerta (fica pendente na outbox).
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
 import { Redis } from 'ioredis';
-import { dadosDoJobOutbox, type PendenteOutbox, type Publicador } from '@sgh/legado';
+
+/** Mensagem pendente da fila comum de saída (integracao_mensagem), como o relay a publica. */
+export interface PendenteOutbox {
+  readonly id: string;
+  /** Código do cliente (o banco). */
+  readonly cliente: string;
+  /** Código do estabelecimento da mensagem (null: mensagem do cliente inteiro). */
+  readonly hospital: string | null;
+  /** O ponto de integração (o tipo do evento). */
+  readonly tipo: string;
+  /** A chave única do evento (o jobId). */
+  readonly chave: string;
+  /** Só ids e códigos. */
+  readonly carga: Readonly<Record<string, string | number | boolean | null>>;
+  readonly tentativas: number;
+}
+
+export type Publicador = (ev: PendenteOutbox) => Promise<void>;
+
+/** Os dados do job: a carga (booleano vira 1/0; nulo sai) e o código do estabelecimento, quando houver. */
+export function dadosDoJobOutbox(ev: PendenteOutbox): Record<string, string | number> {
+  const d: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(ev.carga))
+    if (typeof v === 'string' || typeof v === 'number') d[k] = v;
+    else if (typeof v === 'boolean') d[k] = v ? 1 : 0;
+  if (ev.hospital !== null && d['hospital'] === undefined) d['hospital'] = ev.hospital;
+  return d;
+}
 
 /**
  * Prefixo das filas no Valkey. M35: `FILAS_PREFIXO` separa as filas do E2E de um worktree (portas próprias) das do
@@ -25,9 +52,9 @@ export function prefixoDasFilas(env: NodeJS.ProcessEnv): string {
   return p;
 }
 
-/** Nome da fila de eventos da rede (BullMQ não aceita ':' no nome; o prefixo e a rede separam as redes). */
+/** Nome da fila de eventos do cliente (BullMQ não aceita ':' no nome; o prefixo e o cliente separam os clientes). */
 export function filaDeEventos(rede: string): string {
-  if (!/^[a-z0-9-]{1,63}$/.test(rede)) throw new Error('Código de rede inválido para a fila.');
+  if (!/^[a-z0-9_-]{1,63}$/.test(rede)) throw new Error('Código de rede inválido para a fila.');
   return `eventos-${rede}`;
 }
 
@@ -80,7 +107,7 @@ export const EVENTOS_DE_EMAIL: ReadonlySet<string> = new Set([
 ]);
 
 export function filaDeEmail(rede: string): string {
-  if (!/^[a-z0-9-]{1,63}$/.test(rede)) throw new Error('Código de rede inválido para a fila.');
+  if (!/^[a-z0-9_-]{1,63}$/.test(rede)) throw new Error('Código de rede inválido para a fila.');
   return `email-${rede}`;
 }
 

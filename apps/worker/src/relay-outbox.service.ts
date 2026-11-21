@@ -1,21 +1,27 @@
-// Serviço do relay da outbox no worker (ficha do M04): ciclo periódico por estabelecimento configurado, com
-// o publicador BullMQ e o consumidor nulo idempotente. Desligado por OUTBOX_RELAY=desligado (testes). Log só
-// com contagens e códigos.
-import { resolve } from 'node:path';
+// Serviço do relay da outbox no worker (ficha do M04; lote F2.2 05-16): ciclo periódico por cliente (um banco por
+// cliente, NucleoProprio), com o publicador BullMQ e o consumidor idempotente de cada cliente (integrações e
+// financeiro). Desligado por OUTBOX_RELAY=desligado (testes). Log só com contagens e códigos.
+// Melhoria: as filas são por cliente (eventos-<cliente>), e o consumidor de cada cliente grava só no banco dele.
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
-import { lerCodigos, lerConfiguracaoNucleo, lerInteiroAmbiente, NucleoLegado } from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
+import { clientesDoWorker } from './clientes-worker.js';
 import { consumirEventoFinanceiro } from './financeiro/consumidor-financeiro.js';
-import { logger } from './logger.js';
 import { acessoDoNucleo } from './integracao/acesso.js';
 import { distribuirEvento } from './integracao/consumidor-idempotente.js';
+import { logger } from './logger.js';
+import { cicloRelayOutbox } from './relay-outbox-proprio.js';
 import { consumidorNulo, type Fila, filaBullmq } from './relay-outbox.js';
+
+interface DoCliente {
+  readonly fila: Fila;
+  readonly consumidor: ReturnType<typeof consumidorNulo>;
+}
 
 @Injectable()
 export class RelayOutboxService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: NucleoLegado | null = null;
-  private fila: Fila | null = null;
-  private consumidor: ReturnType<typeof consumidorNulo> | null = null;
+  private nucleo: NucleoProprio | null = null;
+  private url = '';
+  private readonly clientes = new Map<string, DoCliente>();
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
 
@@ -28,27 +34,8 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
     }
     try {
       const intervalo = lerInteiroAmbiente(process.env, 'OUTBOX_INTERVALO_MS', 1_000, 200, 600_000);
-      process.env['SGH_PROCESSO'] ??= 'worker';
-      this.nucleo = new NucleoLegado({
-        env: process.env,
-        driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(process.env).bibliotecaCliente }),
-        pastaHomologada: resolve(
-          process.cwd(),
-          process.env['SCHEMA_HOMOLOGADO_DIR'] ?? 'tools/schema-check/homologado',
-        ),
-        aviso: (m, c) => logger.warn(c, m),
-      });
-      this.fila = filaBullmq(url, this.nucleo.rede);
-      // M34: os eventos das integrações novas viram mensagens de saída (uma por parceiro; idempotente pela chave).
-      const acesso = acessoDoNucleo(this.nucleo, 'integracao-consumidor');
-      const financeiro = acessoDoNucleo(this.nucleo, 'financeiro-consumidor');
-      this.consumidor = consumidorNulo(url, this.nucleo.rede, undefined, async (ev) => {
-        const r = await distribuirEvento(acesso, ev);
-        if (r.parceiros > 0) logger.info({ tipo: ev.tipo, ...r }, 'integrações: evento distribuído');
-        // M32: a glosa aceita no faturamento vira glosa no título; a competência fechada vai à fila de trabalho.
-        const f = await consumirEventoFinanceiro(financeiro, this.nucleo!.rede, ev);
-        if (f) logger.info({ tipo: ev.tipo, resultado: f.resultado }, 'financeiro: evento consumido');
-      });
+      this.url = url;
+      this.nucleo = new NucleoProprio({ env: process.env });
       this.temporizador = setInterval(() => void this.ciclo(), intervalo);
       this.temporizador.unref();
     } catch (e) {
@@ -56,21 +43,41 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
     }
   }
 
+  private doCliente(nucleo: NucleoProprio, cliente: string): DoCliente {
+    const ja = this.clientes.get(cliente);
+    if (ja) return ja;
+    // M34: os eventos das integrações viram mensagens de saída (uma por parceiro; idempotente pela chave).
+    const acesso = acessoDoNucleo(nucleo, cliente, 'integracao-consumidor');
+    const financeiro = acessoDoNucleo(nucleo, cliente, 'financeiro-consumidor');
+    const c: DoCliente = {
+      fila: filaBullmq(this.url, cliente),
+      consumidor: consumidorNulo(this.url, cliente, undefined, async (ev) => {
+        const r = await distribuirEvento(acesso, ev);
+        if (r.parceiros > 0) logger.info({ cliente, tipo: ev.tipo, ...r }, 'integrações: evento distribuído');
+        // M32: a glosa aceita no faturamento vira glosa no título; a competência fechada vai à fila de trabalho.
+        const f = await consumirEventoFinanceiro(financeiro, cliente, ev);
+        if (f) logger.info({ cliente, tipo: ev.tipo, resultado: f.resultado }, 'financeiro: evento consumido');
+      }),
+    };
+    this.clientes.set(cliente, c);
+    return c;
+  }
+
   async ciclo(): Promise<void> {
-    if (this.rodando || !this.nucleo || !this.fila) return;
+    const nucleo = this.nucleo;
+    if (this.rodando || !nucleo) return;
     this.rodando = true;
     try {
-      for (const cod of lerCodigos(process.env)) {
+      for (const cliente of await clientesDoWorker(nucleo, process.env, 'relay-outbox')) {
         try {
-          const r = await this.nucleo.cicloRelayOutbox(cod, this.fila.publicar);
-          if (r.lidos > 0) logger.info({ estabelecimento: cod, ...r }, 'relay da outbox');
+          const r = await cicloRelayOutbox(nucleo, cliente, this.doCliente(nucleo, cliente).fila.publicar);
+          if (r.lidos > 0) logger.info({ cliente, ...r }, 'relay da outbox');
         } catch (e) {
-          logger.warn(
-            { estabelecimento: cod, erro: e instanceof Error ? e.name : 'erro' },
-            'relay da outbox: ciclo falhou',
-          );
+          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'relay da outbox: ciclo falhou');
         }
       }
+    } catch (e) {
+      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'relay da outbox: clientes indisponíveis');
     } finally {
       this.rodando = false;
     }
@@ -78,8 +85,10 @@ export class RelayOutboxService implements OnApplicationBootstrap, OnApplication
 
   async onApplicationShutdown(): Promise<void> {
     if (this.temporizador) clearInterval(this.temporizador);
-    await this.consumidor?.fechar().catch(() => undefined);
-    await this.fila?.fechar().catch(() => undefined);
+    for (const c of this.clientes.values()) {
+      await c.consumidor.fechar().catch(() => undefined);
+      await c.fila.fechar().catch(() => undefined);
+    }
     await this.nucleo?.encerrar();
   }
 }

@@ -12,7 +12,7 @@ const URL_VALKEY = process.env['VALKEY_URL']?.trim() || 'redis://127.0.0.1:63718
 const REDE = `teste-m04-${randomBytes(3).toString('hex')}`;
 const evento = {
   id: '1',
-  rede: REDE,
+  cliente: REDE,
   hospital: 'pc',
   tipo: 'teste.sintetico',
   chave: `pc:teste.sintetico:${REDE}:0`,

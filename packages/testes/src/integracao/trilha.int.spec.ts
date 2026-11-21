@@ -1,27 +1,56 @@
-// SGH_TRILHA sobre a cópia (ficha do M04, regra 9): só de inclusão para o papel da aplicação (UPDATE e
-// DELETE recusados pelo banco) e a cadeia de hash fecha. A conta da aplicação de teste é efêmera: criada só
-// para este teste na cópia (DP-15: em dev, contas no container do projeto), com senha aleatória que nunca é
-// impressa, recebe só o papel SGH_APLICACAO e é apagada no fim. As gravações ficam em transação desfeita.
-import { randomBytes } from 'node:crypto';
-import { executarIsql, operacao, validarPedidoCopia, verificarCadeia } from '@sgh/legado';
+// Trilha de auditoria do núcleo sobre o MariaDB real (cliente f22_o5), em transação DESFEITA. Substitui os specs da
+// trilha dupla e da cadeia sobre a cópia do sistema de origem (trilha.int.spec.ts e trilha-cadeia.int.spec.ts antigos):
+// lá a trilha nova e a antiga eram gravadas lado a lado; aqui há UMA trilha (trilha_auditoria), gravada pelo executor
+// na mesma transação da operação. Prova: (1) inclusão e alteração do mesmo registro deixam duas linhas, na ordem, com
+// estabelecimento, ação, entidade, id, correlação, a operação, as escritas, o "antes" relido com trava (versão 1) e o
+// "depois" (versão 2); (2) a recusa por versão velha não deixa linha; (3) o ROLLBACK leva a trilha junto com a
+// gravação; (4) ação fora do vocabulário é recusada pelo núcleo e, por SQL direto, pela restrição do banco.
+// Saída só com contagens, ids e códigos; massa sintética (estabelecimento de teste); nada fica no banco.
+// Melhoria: o "antes" da alteração é o registro relido sob trava (não um retrato montado pela tela).
+// Melhoria: a ação da trilha tem vocabulário fechado nas duas pontas (lista do núcleo e CHECK ck_trilha_auditoria_acao).
+// Melhoria: a recusa por conflito de versão não deixa rastro parcial (nem linha, nem trilha).
+// Lacuna registrada (saida/05-05.json): a cadeia de integridade da trilha (fecho diário por hash, que detectava evento
+// alterado) não tem tabela no modelo; a verificação de integridade fica indisponível até o DDL pedido.
+import { gravarTrilha } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loginLivre, usuarioSintetico } from '../massa/sintetica.js';
 import {
+  alterarEstabelecimento,
   type Ambiente,
-  codigos,
-  criarNucleo,
-  ctx,
+  CLIENTE,
+  chaveNova,
+  codigoDe,
+  codigoSintetico,
+  contar,
   ctxOperacao,
-  env,
-  PODE_ESCREVER,
+  desfeito,
+  incluirEstabelecimento,
+  MARCA,
+  num,
   prepararAmbiente,
+  SEM_BANCO,
 } from './escrita.spec-util.js';
 
-const criarUsuario = operacao('acesso.criarUsuarioIntegracao');
-const CONTA = `SGH_TESTE_TRILHA_${randomBytes(3).toString('hex').toUpperCase()}`;
-const SENHA = randomBytes(12).toString('base64url').slice(0, 16);
+type LinhaLida = {
+  id: number;
+  estabelecimento_id: number | null;
+  acao: string;
+  entidade: string;
+  entidade_id: number | null;
+  correlacao: string | null;
+  operacao: string | null;
+  escritas: number | null;
+  antes_versao: string | null;
+  depois_versao: string | null;
+};
 
-describe.skipIf(!PODE_ESCREVER)('trilha só de inclusão e cadeia de hash', () => {
+const LER_TRILHA = `SELECT id, estabelecimento_id, acao, entidade, entidade_id, correlacao,
+    JSON_VALUE(dados_depois, '$.operacao') AS operacao,
+    JSON_LENGTH(dados_depois, '$.escritas') AS escritas,
+    JSON_VALUE(dados_antes, '$.versao') AS antes_versao,
+    JSON_VALUE(dados_depois, '$.resultado.versao') AS depois_versao
+  FROM trilha_auditoria WHERE correlacao = ? ORDER BY id`;
+
+describe.skipIf(SEM_BANCO)('trilha de auditoria do núcleo no MariaDB (cliente f22_o5, transação desfeita)', () => {
   let a: Ambiente;
   beforeAll(async () => {
     a = await prepararAmbiente();
@@ -30,71 +59,146 @@ describe.skipIf(!PODE_ESCREVER)('trilha só de inclusão e cadeia de hash', () =
     await a?.nucleo.encerrar();
   });
 
-  it('a cadeia fecha com as linhas novas (na transação) e com as já confirmadas', async () => {
-    const r = await a.nucleo.desfazendoNaCopia(ctx(a), async (e) => {
-      for (let i = 0; i < 3; i++) {
-        const login = await loginLivre(e, (Date.now() + i * 101) % 1_000_000);
-        await a.executor.executar(
-          criarUsuario,
-          a.cod,
-          usuarioSintetico('usuario-tecnico', login),
-          ctxOperacao(a, 'SGH.TESTE'),
-          { escritor: e },
-        );
-      }
-      return verificarCadeia(e, a.cod);
+  it('inclusão e alteração: duas linhas na ordem, com quem, onde, o quê, o antes relido e o depois', async () => {
+    const correlacao = chaveNova('int-trilha');
+    const r = await desfeito(a, async (e) => {
+      const inc = await a.executor.executar(
+        incluirEstabelecimento,
+        CLIENTE,
+        { codigo: codigoSintetico(), nome: `Hospital ${MARCA}` },
+        ctxOperacao(a, { correlacao }),
+        { escritor: e },
+      );
+      const id = num(inc.resultado['id']);
+      await a.executor.executar(
+        alterarEstabelecimento,
+        CLIENTE,
+        { id, versao: 1, nome: `Hospital ${MARCA} alterado` },
+        ctxOperacao(a, { correlacao }),
+        { escritor: e },
+      );
+      const linhas = await e.consultar<LinhaLida>(LER_TRILHA, [correlacao]);
+      return { id, linhas };
     });
-    expect(r.ok).toBe(true);
-    expect(r.linhas).toBeGreaterThanOrEqual(3);
-    console.log(`[${a.cod}] cadeia da trilha: ${r.linhas} linha(s), fecha`);
+    expect(r.linhas).toHaveLength(2);
+    const [inclusao, alteracao] = r.linhas;
+    expect({
+      acao: inclusao?.acao,
+      entidade: inclusao?.entidade,
+      entidadeId: num(inclusao?.entidade_id),
+      estabelecimento: num(inclusao?.estabelecimento_id),
+      operacao: inclusao?.operacao,
+      escritas: num(inclusao?.escritas),
+      antes: inclusao?.antes_versao ?? null,
+    }).toEqual({
+      acao: 'inclusao',
+      entidade: 'estabelecimento',
+      entidadeId: r.id,
+      estabelecimento: a.estabelecimento,
+      operacao: 'teste.nucleo.incluir',
+      escritas: 1,
+      antes: null,
+    });
+    expect({
+      acao: alteracao?.acao,
+      entidadeId: num(alteracao?.entidade_id),
+      operacao: alteracao?.operacao,
+      antes: num(alteracao?.antes_versao),
+      depois: num(alteracao?.depois_versao),
+      ordem: num(alteracao?.id) > num(inclusao?.id),
+    }).toEqual({
+      acao: 'alteracao',
+      entidadeId: r.id,
+      operacao: 'teste.nucleo.alterar',
+      antes: 1,
+      depois: 2,
+      ordem: true,
+    });
   });
 
-  it('com o papel da aplicação: INSERT e SELECT aceitos; UPDATE e DELETE recusados pelo banco', async () => {
-    // Conta efêmera: o administrador da cópia a cria e apaga pelo isql do container (ferramenta de cópia do
-    // M01, SQL pela entrada padrão; a senha nunca vai à linha de comando nem à saída).
-    const alvo = validarPedidoCopia({ hospital: a.cod, destino: 'dev' }, env);
-    const admin = async (sql: string) => {
-      const r = executarIsql(alvo.container, alvo.banco, `${sql};\nCOMMIT;\n`);
-      if (r.codigo !== 0) throw new Error(`isql: ${r.erro}`);
-    };
-    await admin(`CREATE USER ${CONTA} PASSWORD '${SENHA}'`);
-    try {
-      await admin(`GRANT SGH_APLICACAO TO USER ${CONTA}`);
-      const cod = codigos[0] as string;
-      const app = criarNucleo({
-        [`FB_${cod.toUpperCase()}_USUARIO`]: CONTA,
-        [`FB_${cod.toUpperCase()}_SENHA`]: SENHA,
-        FB_POOL_TETO: '1',
-      });
+  it('a recusa por versão velha não deixa linha nem trilha', async () => {
+    const correlacao = chaveNova('int-trilha-recusa');
+    const r = await desfeito(a, async (e) => {
+      const inc = await a.executor.executar(
+        incluirEstabelecimento,
+        CLIENTE,
+        { codigo: codigoSintetico(), nome: `Hospital ${MARCA}` },
+        ctxOperacao(a),
+        { escritor: e },
+      );
+      const id = num(inc.resultado['id']);
+      let codigo = 'aceito';
       try {
-        const r = await app.desfazendoNaCopia(ctx(a), async (e) => {
-          const ok = await e.executar(
-            `INSERT INTO SGH_TRILHA (ID, DATA_HORA, REDE, HOSPITAL, USUARIO, EVENTO, RECURSO, OPERACAO, RESULTADO, CORRELACAO, HASH_ANTERIOR, HASH_LINHA)
-             VALUES (NEXT VALUE FOR SGH_GEN_TRILHA, CURRENT_TIMESTAMP, 'teste', 'zz', 'SGH.TESTE', 'teste', 'teste', 'teste', 'teste', 'teste', ?, ?)`,
-            ['f'.repeat(64), 'e'.repeat(64)],
-          );
-          const recusa = async (sql: string) => {
-            try {
-              await e.executar(sql);
-              return 'aceito';
-            } catch (x) {
-              return /no permission|permission/i.test(String(x)) ? 'recusado' : 'outro erro';
-            }
-          };
-          return {
-            insert: ok,
-            update: await recusa("UPDATE SGH_TRILHA SET RESULTADO = 'x' WHERE HOSPITAL = 'zz'"),
-            delete: await recusa("DELETE FROM SGH_TRILHA WHERE HOSPITAL = 'zz'"),
-          };
-        });
-        expect(r).toEqual({ insert: 1, update: 'recusado', delete: 'recusado' });
-        console.log(`[${cod}] SGH_TRILHA com o papel da aplicação: ${JSON.stringify(r)}`);
-      } finally {
-        await app.encerrar();
+        await a.executor.executar(
+          alterarEstabelecimento,
+          CLIENTE,
+          { id, versao: 7, nome: `Hospital ${MARCA} velho` },
+          ctxOperacao(a, { correlacao }),
+          { escritor: e },
+        );
+      } catch (x) {
+        codigo = codigoDe(x);
       }
-    } finally {
-      await admin(`REVOKE SGH_APLICACAO FROM USER ${CONTA}`).catch(() => undefined);
-      await admin(`DROP USER ${CONTA}`);
-    }
+      return {
+        codigo,
+        trilha: await contar(e, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = ?', [correlacao]),
+        versao: await contar(e, 'SELECT versao AS n FROM estabelecimento WHERE id = ?', [id]),
+      };
+    });
+    expect(r).toEqual({ codigo: 'conflito-versao', trilha: 0, versao: 1 });
+  });
+
+  it('o ROLLBACK leva a trilha junto com a gravação', async () => {
+    const correlacao = chaveNova('int-trilha-desfeita');
+    const dentro = await desfeito(a, async (e) => {
+      await a.executor.executar(
+        incluirEstabelecimento,
+        CLIENTE,
+        { codigo: codigoSintetico(), nome: `Hospital ${MARCA}` },
+        ctxOperacao(a, { correlacao }),
+        { escritor: e },
+      );
+      return contar(e, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = ?', [correlacao]);
+    });
+    const depois = await a.nucleo.lerSomente({ cliente: CLIENTE, correlacao: 'int-trilha-conferencia' }, (l) =>
+      contar(l, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = ?', [correlacao]),
+    );
+    expect({ dentro, depois }).toEqual({ dentro: 1, depois: 0 });
+  });
+
+  it('ação fora do vocabulário: o núcleo recusa antes do banco e o banco recusa o SQL direto', async () => {
+    const r = await desfeito(a, async (e) => {
+      // Metade do núcleo: só conta como recusa a mensagem da lista ACOES_TRILHA (a CHECK do banco daria outro erro)
+      // e nada pode ter chegado ao banco.
+      let nucleo = 'aceito';
+      try {
+        await gravarTrilha(e, {
+          estabelecimento: a.estabelecimento,
+          usuario: null,
+          // @ts-expect-error ação fora da lista de propósito
+          acao: 'apagar',
+          entidade: 'estabelecimento',
+          entidadeId: null,
+          correlacao: 'int-trilha-acao',
+          ocorridoEm: new Date(),
+        });
+      } catch (x) {
+        nucleo = x instanceof Error && x.message === 'Ação de trilha inválida.' ? 'recusado' : 'outro erro';
+      }
+      const depoisNucleo = await contar(e, 'SELECT COUNT(*) AS n FROM trilha_auditoria WHERE correlacao = ?', [
+        'int-trilha-acao',
+      ]);
+      // Metade do banco: só a CHECK de vocabulário, pelo nome (nada de curinga que aceite FK ou outra restrição).
+      let banco = 'aceito';
+      try {
+        await e.inserir(
+          "INSERT INTO trilha_auditoria (ocorrido_em, acao, entidade, correlacao, criado_em, versao) VALUES (NOW(3), 'apagar', 'estabelecimento', 'int-trilha-acao', NOW(3), 1)",
+        );
+      } catch (x) {
+        banco = /ck_trilha_auditoria_acao/.test(String(x)) ? 'recusado' : 'outro erro';
+      }
+      return { nucleo, depoisNucleo, banco };
+    });
+    expect(r).toEqual({ nucleo: 'recusado', depoisNucleo: 0, banco: 'recusado' });
   });
 });

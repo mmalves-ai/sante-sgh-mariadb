@@ -1,7 +1,8 @@
-// MPI da Rede noturno no worker (M57, etapa 1): desligado por padrão (POL-3); só os estabelecimentos com o índice
-// (HS-1) e só com dois ou mais; a noite roda ciclos até a marca parar de andar e depois o relatório de divergência com
-// o reparo; uma vez por noite, na janela noturna; a porta sobre o núcleo grava a trilha em cada banco. Sintético.
-import { describe, expect, it, vi } from 'vitest';
+// MPI da Rede noturno no worker (M57, etapa 1; lote F2.2 05-16): desligado por padrão (POL-3); só os estabelecimentos
+// do cliente com a chave e os pré-requisitos, e só com dois ou mais; a noite roda ciclos até a marca parar de andar e
+// depois o relatório de divergência com o reparo; uma vez por noite, na janela noturna; sem a porta do índice, nada é
+// gravado (pendência registrada). Sintético.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PortaIndiceRede } from '@sgh/dominio-rede';
 import {
   estabelecimentosDoMpi,
@@ -9,7 +10,6 @@ import {
   noiteDaRede,
   noturnoLigado,
   type NucleoRede,
-  portaIndiceNucleo,
   RedeMpiService,
 } from './rede-mpi.service.js';
 
@@ -58,15 +58,44 @@ function porta(totalPorBanco: number): PortaIndiceRede & { gravacoes: string[] }
   };
 }
 
+/** Núcleo falso: os estabelecimentos do cliente e a chave e os pré-requisitos de cada um. */
+function nucleoComChaves(ligadas: Record<string, { chave: boolean; prereq: boolean }>, ests = Object.keys(ligadas)) {
+  return {
+    lerPlataforma: async () => [],
+    lerSomente: async (_c: unknown, fn: (l: unknown) => Promise<unknown>) =>
+      fn({
+        uma: async () => null,
+        consultar: async (sql: string, p: unknown[] = []) => {
+          if (/FROM estabelecimento WHERE/.test(sql)) return ests.map((codigo) => ({ codigo }));
+          const x = ligadas[String(p[0])];
+          if (!x) throw new Error('estabelecimento fora (simulado)');
+          if (/liberacao_chave/.test(sql))
+            return [{ chave: 'rede.mpi', tipo: 'recurso', escopo: 'hospital', valor: '*', ligada: x.chave ? 1 : 0 }];
+          if (/recurso_prerequisito/.test(sql))
+            return [{ recurso: 'rede.mpi', tipo: 'aprovacao', situacao: x.prereq ? 'cumprido' : 'pendente', validade: null }];
+          return [];
+        },
+      }),
+    encerrar: async () => undefined,
+  } as unknown as NucleoRede;
+}
+
 describe('MPI da Rede noturno', () => {
-  it('desligado por padrão; só os estabelecimentos com o índice', () => {
+  const antes = { c: process.env['WORKER_CLIENTES'], r: process.env['REDE_MPI_ESTABELECIMENTOS'] };
+  afterEach(() => {
+    for (const [k, v] of [
+      ['WORKER_CLIENTES', antes.c],
+      ['REDE_MPI_ESTABELECIMENTOS', antes.r],
+    ] as const)
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  });
+
+  it('desligado por padrão; os estabelecimentos do cliente ou só os da lista', () => {
     expect(noturnoLigado({})).toBe(false);
     expect(noturnoLigado({ REDE_MPI_NOTURNO: 'ligado' })).toBe(true);
-    expect(estabelecimentosDoMpi({ ESTABELECIMENTOS: 'pc,hs' })).toEqual(['pc']);
-    expect(estabelecimentosDoMpi({ ESTABELECIMENTOS: 'pc,hs', REDE_MPI_ESTABELECIMENTOS: 'hs' })).toEqual([
-      'pc',
-      'hs',
-    ]);
+    expect(estabelecimentosDoMpi({}, ['hs', 'pc'])).toEqual(['hs', 'pc']);
+    expect(estabelecimentosDoMpi({ REDE_MPI_ESTABELECIMENTOS: 'hs,zz' }, ['hs', 'pc'])).toEqual(['hs']);
   });
 
   it('ciclos até a marca parar de andar, depois a divergência (0: sem reparo)', async () => {
@@ -78,7 +107,7 @@ describe('MPI da Rede noturno', () => {
     expect(teto.ciclos).toBe(3);
   });
 
-  it('uma vez por noite, na janela; menos de dois estabelecimentos: nada', async () => {
+  it('uma vez por noite, na janela; sem núcleo, nada', async () => {
     const s = new RedeMpiService();
     const noite = vi.spyOn(s, 'noite').mockResolvedValue(null);
     await s.talvez(new Date(2026, 9, 24, 1, 0));
@@ -87,127 +116,37 @@ describe('MPI da Rede noturno', () => {
     expect(noite).toHaveBeenCalledTimes(1);
     noite.mockRestore();
     expect(await s.noite()).toBeNull();
-    s.usar({
-      rede: 'r',
-      lerSomente: vi.fn(),
-      gravarSgh: vi.fn(),
-      encerrar: vi.fn(),
-    } as unknown as NucleoRede);
-    const antes = process.env['ESTABELECIMENTOS'];
-    process.env['ESTABELECIMENTOS'] = 'pc';
-    expect(await s.noite()).toBeNull();
-    if (antes === undefined) delete process.env['ESTABELECIMENTOS'];
-    else process.env['ESTABELECIMENTOS'] = antes;
-    await s.onApplicationShutdown();
   });
 
-  /** Núcleo falso: as chaves e os pré-requisitos de cada banco; registra toda gravação. */
-  function nucleoComChaves(ligadas: Record<string, { chave: boolean; prereq: boolean }>) {
-    const gravacoes: string[] = [];
-    const nucleo = {
-      rede: 'r',
-      lerSomente: async (c: { hospital: string }, fn: (l: unknown) => Promise<unknown>) => {
-        const x = ligadas[c.hospital];
-        if (!x) throw new Error('banco fora (simulado)');
-        return fn({
-          hospital: c.hospital,
-          consultar: async (sql: string) =>
-            /SGH_CFG_LIBERACAO/.test(sql)
-              ? [
-                  {
-                    ID: 1,
-                    TIPO: 'recurso',
-                    OPERACAO: 'rede.mpi',
-                    ESCOPO: 'hospital',
-                    VALOR: '*',
-                    LIGADA: x.chave ? 1 : 0,
-                  },
-                ]
-              : /SGH_CFG_PREREQUISITO/.test(sql)
-                ? [{ RECURSO: 'rede.mpi', TIPO: 'aprovacao', SITUACAO: x.prereq ? 'cumprido' : 'pendente' }]
-                : [],
-          lerBlob: async () => Buffer.alloc(0),
-        });
-      },
-      gravarSgh: async (c: { hospital: string }) => {
-        gravacoes.push(c.hospital);
-        throw new Error('não devia gravar');
-      },
-      encerrar: async () => undefined,
-    } as unknown as NucleoRede;
-    return { nucleo, gravacoes };
-  }
-
-  it('a chave rede.mpi de cada estabelecimento: desligada ou com pré-requisito pendente fica fora; banco fora também', async () => {
-    const { nucleo } = nucleoComChaves({
+  it('a chave rede.mpi de cada estabelecimento: desligada ou com pré-requisito pendente fica fora; falha também', async () => {
+    const nucleo = nucleoComChaves({
       pc: { chave: true, prereq: true },
       sx: { chave: false, prereq: true },
       hs: { chave: true, prereq: false },
       ab: { chave: true, prereq: true },
     });
-    expect(await estabelecimentosLiberadosMpi(nucleo, ['pc', 'sx', 'hs', 'ab', 'zz'])).toEqual(['pc', 'ab']);
+    expect(await estabelecimentosLiberadosMpi(nucleo, 'f22_teste', ['pc', 'sx', 'hs', 'ab', 'zz'])).toEqual(['pc', 'ab']);
   });
 
-  it('REDE_MPI_NOTURNO=ligado com a chave desligada num dos dois: nenhuma escrita', async () => {
-    const { nucleo, gravacoes } = nucleoComChaves({
-      pc: { chave: true, prereq: true },
-      hs: { chave: false, prereq: true },
-    });
+  it('a chave desligada num dos dois: a porta do índice nem é pedida; com os dois, a noite roda', async () => {
+    process.env['WORKER_CLIENTES'] = 'f22_teste';
     const s = new RedeMpiService();
-    s.usar(nucleo);
-    const antes = { e: process.env['ESTABELECIMENTOS'], r: process.env['REDE_MPI_ESTABELECIMENTOS'] };
-    process.env['ESTABELECIMENTOS'] = 'pc,hs';
-    process.env['REDE_MPI_ESTABELECIMENTOS'] = 'hs';
-    try {
-      expect(await s.noite()).toBeNull();
-      expect(gravacoes).toEqual([]);
-    } finally {
-      for (const [k, v] of [
-        ['ESTABELECIMENTOS', antes.e],
-        ['REDE_MPI_ESTABELECIMENTOS', antes.r],
-      ] as const)
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-    }
-  });
-
-  it('a porta sobre o núcleo: leitura e gravação no banco do estabelecimento, com a trilha junto', async () => {
-    const executados: string[] = [];
-    const escritor = {
-      hospital: 'hs',
-      consultar: async (sql: string) =>
-        /SGH_REDE_MARCA/.test(sql) ? [] : /GEN_ID|SGH_TRILHA/.test(sql) ? [] : [],
-      lerBlob: async () => Buffer.alloc(0),
-      executar: async (sql: string) => {
-        executados.push(sql.trim().split(/\s+/).slice(0, 5).join(' '));
-        return 1;
-      },
-      executarRetornando: async () => ({ ID: 1, HASH: 'h' }),
-    };
-    const contextos: string[] = [];
-    const nucleo = {
-      rede: 'r',
-      lerSomente: async (c: { hospital: string }, fn: (l: unknown) => Promise<unknown>) => {
-        contextos.push(`ler:${c.hospital}`);
-        return fn(escritor);
-      },
-      gravarSgh: async (c: { hospital: string }, fn: (e: unknown) => Promise<unknown>) => {
-        contextos.push(`gravar:${c.hospital}`);
-        return fn(escritor);
-      },
-      encerrar: async () => undefined,
-    } as unknown as NucleoRede;
-    const p = portaIndiceNucleo(nucleo);
-    expect(await p.marca('hs')).toBeNull();
-    await p
-      .gravar('hs', (g) => g.marca({ ultimoId: 3, ultimaAtualizacao: null }, 'SGH.REDE'), {
-        evento: 'rede.fila.atualizada',
-        operacao: 'rede.parearCadastros',
-        chave: 'lidos=3',
-        pessoa: null,
-      })
-      .catch(() => undefined);
-    expect(contextos).toEqual(['ler:hs', 'gravar:hs']);
-    expect(executados[0]).toMatch(/^UPDATE OR INSERT INTO SGH_REDE_MARCA/);
+    const pedidas: string[] = [];
+    s.usar(nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: false, prereq: true } }), (c) => {
+      pedidas.push(c);
+      return porta(1);
+    });
+    expect(await s.noite()).toEqual([]);
+    expect(pedidas).toEqual([]);
+    s.usar(nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: true, prereq: true } }), (c) => {
+      pedidas.push(c);
+      return porta(1);
+    });
+    const r = await s.noite();
+    expect(pedidas).toEqual(['f22_teste']);
+    expect(r).toHaveLength(1);
+    s.usar(nucleoComChaves({ pc: { chave: true, prereq: true }, hs: { chave: true, prereq: true } }), null);
+    expect(await s.noite()).toEqual([]);
+    await s.onApplicationShutdown();
   });
 });

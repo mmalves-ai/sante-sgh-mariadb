@@ -1,0 +1,153 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: os 18 specs apagados testavam a cópia do sistema de origem (trava da cópia, isql, tabelas antigas, gatilhos, código de página, escritor simulado do outro sistema, coexistência). O trilha.int.spec.ts foi reescrito sobre o MariaDB. A coluna 'onde' só aponta spec que prova o cenário; o que não tem prova vai como pedido ou cenario-sem-prova abaixo (reavaliado na correção do lote).",
+      "arquivos": {
+        "perfil-complementar.int.spec.ts": {
+          "cenario": "concessão de perfil com vigência, mapa perfil→permissão aprovado, recusa de conceder a si",
+          "onde": "apps/api/src/modulos/acesso/gestao-fonte-propria.int.spec.ts"
+        },
+        "ponto-marcacao.int.spec.ts": {
+          "cenario": "marcação de ponto original nunca alterada (só INSERT/SELECT pelo papel da aplicação)",
+          "onde": "apps/api/src/modulos/pessoas/ponto/porta-ponto-propria.int.spec.ts (a recusa de UPDATE/DELETE pelo papel do banco: sem prova; ver cenario-sem-prova)"
+        },
+        "precos.int.spec.ts": {
+          "cenario": "lote de reajuste em transações curtas, desfazer, colisão de vigência, trava, valor vigente em data",
+          "onde": "apps/api/src/modulos/precos/fonte-propria.int.spec.ts prova só o valor vigente na data (linha do tempo) e suspender/reativar. Reajuste em lote, desfazer, colisão de vigência e trava do lote: SEM prova; o spec prova que preco.reajustar responde 'operacao-nao-liberada' (ver pedido 'adaptador' do reajuste)."
+        },
+        "prescricao.int.spec.ts": {
+          "cenario": "prescrever, reler, uma ativa por período, adendo, suspender item e prescrição, dados para dose, trava",
+          "onde": "NENHUM: não há porta própria de prescrição (pep/modulo.ts liga portaPrescricaoIndisponivel fora de dev; só PortaPrescricaoMemoria). prescricao-pdf.int.spec.ts cobre só o documento. Ver pedido 'adaptador' da prescrição."
+        },
+        "privilegio-modulo.int.spec.ts": {
+          "cenario": "papel de banco por módulo: lê e grava o plano, recusa fora dele, recolher sem sobra",
+          "onde": "tools/implantacao/src/privilegios.spec.ts e apps/api/src/modulos/acesso/contas-banco/porta-propria.int.spec.ts (a recusa pelo servidor com a conta do módulo: sem prova; ver cenario-sem-prova)"
+        },
+        "profissionais.int.spec.ts": {
+          "cenario": "cadastro do profissional, login ligado, troca com justificativa, inativar/reativar, exclusão só sem vínculo, login único",
+          "onde": "apps/api/src/modulos/cadastro/porta-propria.int.spec.ts; apps/api/src/modulos/pessoas/porta-propria.int.spec.ts"
+        },
+        "prontuario-diario.int.spec.ts": {
+          "cenario": "leituras do prontuário com teto de tempo; receita, atestado com correção, suspensão, sumário, anexo, exame externo, alergia, pedido de exames",
+          "onde": "apps/api/src/modulos/pep/registro-porta-propria.int.spec.ts (leituras); pep/documentos-pdf.int.spec.ts; documento/infra/registro-propria.int.spec.ts. As gravações do registro clínico (correção, suspensão) dependem do pedido 'adaptador' do registro clínico."
+        },
+        "prontuario.int.spec.ts": {
+          "cenario": "lista e abertura do registro, leitura auditada (3 aberturas = 3 eventos)",
+          "onde": "apps/api/src/modulos/pep/registro-porta-propria.int.spec.ts cobre a lista e a abertura (leitura). A trilha de consulta na abertura local (3 aberturas = 3 eventos 'consulta'): SEM prova; acesso-entre-hospitais.int.spec.ts cobre só a regra entre hospitais. Ver cenario-sem-prova."
+        },
+        "prova-triggers.spec.ts": {
+          "cenario": "gatilhos do sistema de origem disparam na cópia",
+          "onde": "nenhum: sem gatilho de regra no MariaDB (regra de ouro 2; verificador de gatilhos na esteira)"
+        },
+        "receita-duas-reguas.int.spec.ts": {
+          "cenario": "receita anual pela data do item e pela competência; glosa dos baixados (somas sobre dado real)",
+          "onde": "apps/api/src/modulos/relatorio/porta-propria.int.spec.ts (as duas réguas sobre massa sintética: confirmar)"
+        },
+        "recepcao.int.spec.ts": {
+          "cenario": "senha do dia por contador, chamada sem espera, dois emissores, guichê ocupado, encaminhar",
+          "onde": "apps/api/src/modulos/recepcao/porta-propria.int.spec.ts prova senha do dia por serviço, guichê ocupado e chegada. Concorrência (chamada sem espera sobre senha travada; dois emissores na primeira senha do dia): SEM prova. Ver cenario-sem-prova."
+        },
+        "registro-clinico-desempenho.int.spec.ts": {
+          "cenario": "p95 de abrir e finalizar o registro clínico",
+          "onde": "nenhum spec de desempenho sobre o MariaDB (ver cenario-sem-prova)"
+        },
+        "registro-clinico.int.spec.ts": {
+          "cenario": "registro com texto grande, rascunho encadeado, colisão 409, descarte e suspensão",
+          "onde": "NENHUM: registro-porta-propria.int.spec.ts:359 prova que a gravação recusa com 501 'pendente-modelo-proprio'. Ver pedido 'adaptador' da gravação do registro clínico."
+        },
+        "sgh-aplicar.int.spec.ts": {
+          "cenario": "scripts aplicados e registrados com hash, reaplicação idempotente",
+          "onde": "NENHUM: tools/db/criar_cliente.py não grava migracao_aplicada (só cliente.versao_migracao). Ver pedido 'aplicador' de migrações."
+        },
+        "trilha-cadeia.int.spec.ts": {
+          "cenario": "trilha dupla na mesma transação; cadeia de hash por dia; UPDATE/DELETE na trilha recusados",
+          "onde": "packages/testes/src/integracao/trilha.int.spec.ts (reescrito; a cadeia e a recusa por privilégio: ver pedidos)"
+        },
+        "uso-dia.int.spec.ts": {
+          "cenario": "parcela do novo x outro sistema, retratos de conexões, MON$ (coexistência); setor, trilha versionada, conclusão de treino, chamado",
+          "onde": "coexistência sai (ADR 0003); treino: apps/api/src/modulos/pessoas/treinamento/porta-treinamento-propria.int.spec.ts; chamado: apps/api/src/modulos/suporte"
+        },
+        "vigia.int.spec.ts": {
+          "cenario": "vigia de mudanças gravadas por fora pelo outro sistema",
+          "onde": "sai pelo ADR 0003 (vigia de reconciliação); o painel ao vivo: apps/api/src/modulos/internacao/vigia.int.spec.ts"
+        },
+        "w0-05.int.spec.ts": {
+          "cenario": "oncologia: ligar/desfazer ciclo–prescrição, comandos de nutrição, social, lactário, acompanhante",
+          "onde": "apps/api/src/modulos/nutricao/porta-propria.int.spec.ts; oncologia/social/lactário: confirmar no pep"
+        }
+      }
+    },
+    {
+      "tipo": "adaptador",
+      "modulo": "pep (prescrição)",
+      "motivo": "PortaPrescricao própria sobre o MariaDB (prescricao-porta-propria.ts), pelo Executor do núcleo, nas tabelas que já existem: prescricao, prescricao_item e filhas (medicamento, solucao*, dieta*, cuidado, procedimento, se_necessario, justificativa...), prescricao_evento, prescricao_protocolo_aplicado, prescricao_variavel_calculo. Regras (uma ativa por período, adendo, suspensão de item/prescrição, dose) no domínio. DDL: nenhum novo identificado pelas tabelas existentes; se o adaptador achar coluna faltante, pedir por ADR 0002 (PK/FK/NOT NULL/UNIQUE/CHECK, versao, auditoria).",
+      "indisponivel": "prescrição eletrônica fora de dev: prescrever, reler, adendo, suspender item e suspender prescrição (pep/modulo.ts usa portaPrescricaoIndisponivel, que recusa todo método)",
+      "casos_do_spec_futuro": {
+        "arquivo": "apps/api/src/modulos/pep/prescricao-porta-propria.int.spec.ts",
+        "casos": [
+          "prescrever: linhas em prescricao e prescricao_item, versao 1, trilha e outbox na mesma transação",
+          "reler a prescrição gravada igual ao que foi enviado (cabeçalho e itens)",
+          "uma ativa por período: segunda prescrição no mesmo período do atendimento é recusada, nada gravado",
+          "adendo: liga à prescrição de origem, não altera a original, trilha",
+          "suspender item: evento em prescricao_evento com profissional e motivo; doses pendentes suspensas",
+          "suspender prescrição: todos os itens suspensos; CHECK de suspensão incompleta recusa",
+          "dados para cálculo de dose (peso, altura, variáveis) lidos do atendimento",
+          "trava otimista: versão velha recusada com conflito, nada gravado",
+          "outro estabelecimento: leitura e gravação recusadas"
+        ]
+      }
+    },
+    {
+      "tipo": "adaptador",
+      "modulo": "pep (registro clínico)",
+      "motivo": "Gravação do registro clínico no PortaRegistroPropria (hoje 501 'pendente-modelo-proprio', MOTIVO_GRAVACAO_PENDENTE em registro-porta-propria.ts): rascunho encadeado (registro_assistencial_rascunho), finalizar com versão (registro_assistencial + registro_assistencial_versao, texto grande), colisão por versão (409), descarte do rascunho e suspensão com motivo; trilha e outbox pelo Executor. DDL: as tabelas existem; coluna faltante, se houver, pedir por ADR 0002.",
+      "indisponivel": "registrar e finalizar registro clínico (evolução/anotação), descartar rascunho e suspender registro: a tela do prontuário fica só em consulta",
+      "casos_do_spec_futuro": {
+        "arquivo": "apps/api/src/modulos/pep/registro-porta-propria.int.spec.ts (substituir o caso 501 da linha 359)",
+        "casos": [
+          "registro com texto grande gravado e relido inteiro",
+          "rascunho encadeado: salvar, salvar de novo, finalizar gera a versão 1",
+          "colisão: duas finalizações com a mesma versão, a segunda recebe 409 e nada grava",
+          "descarte do rascunho: some da lista, trilha",
+          "suspensão com motivo: registro fica suspenso, versão sobe, trilha"
+        ]
+      }
+    },
+    {
+      "tipo": "cenario-sem-prova",
+      "motivo": "Trilha de consulta na abertura local do prontuário: cada abertura grava um evento acao 'consulta' (3 aberturas = 3 linhas em trilha_auditoria, mesma entidade). Pedir o caso em apps/api/src/modulos/pep/registro-porta-propria.int.spec.ts. Se a abertura local hoje não grava a trilha, é falha de auditoria LGPD a corrigir no adaptador."
+    },
+    {
+      "tipo": "adaptador",
+      "modulo": "precos (reajuste)",
+      "motivo": "preco.reajustar e preco.desfazerReajuste na fonte própria (hoje 'operacao-nao-liberada' no MariaDB; só a fonte-memoria faz): lote em transações curtas sobre lote_reajuste e lote_reajuste_item, nova vigência em preco_*_valor sem colisão de vigência, desfazer pelo lote, trava do lote. DDL: as tabelas existem; coluna faltante, se houver, pedir por ADR 0002. Spec: os casos do precos.int.spec.ts antigo (lote, desfazer, colisão, trava) em precos/fonte-propria.int.spec.ts.",
+      "indisponivel": "reajuste e desfazer reajuste da tabela de preços"
+    },
+    {
+      "tipo": "cenario-sem-prova",
+      "motivo": "Concorrência da recepção sem prova: pedir spec em apps/api/src/modulos/recepcao/porta-propria.int.spec.ts com duas conexões do núcleo (1) emitindo ao mesmo tempo a primeira senha do dia do mesmo serviço: números únicos e sem lacuna em senha_emitida; (2) chamada sobre senha travada por outra conexão: falha imediata (sem espera) e nada gravado. Nenhuma operação indisponível, mas a unicidade sob carga não está provada."
+    },
+    {
+      "tipo": "aplicador",
+      "modulo": "tools/db (migrações por cliente)",
+      "motivo": "Aplicador incremental de migrações: grava migracao_aplicada (numero, arquivo, hash SHA-256) na criação do cliente e na atualização; recusa hash divergente de arquivo já aplicado; reaplicar não faz nada. Hoje criar_cliente.py só grava cliente.versao_migracao e a implantação (implantacao/porta-propria.ts:95) lê migracao_aplicada 'se existir'. Pedir também o spec (cliente de teste: criar, aplicar migração nova, reaplicar, hash divergente).",
+      "indisponivel": "atualizar banco de cliente existente com migração nova (um banco por cliente: só a criação aplica as migrações)"
+    },
+    {
+      "tipo": "ddl",
+      "motivo": "Cadeia de integridade da trilha (o spec antigo provava o fecho diário por hash e a detecção de evento alterado). O modelo não tem onde guardar o fecho. Proposta (ADR 0002): tabela trilha_auditoria_fecho (id PK, estabelecimento_id BIGINT UNSIGNED NULL FK estabelecimento, dia DATE NOT NULL, primeiro_trilha_auditoria_id e ultimo_trilha_auditoria_id BIGINT UNSIGNED NOT NULL FK trilha_auditoria, quantidade INT UNSIGNED NOT NULL, hash_dia CHAR(64) NOT NULL, hash_anterior CHAR(64) NULL, fechado_em DATETIME(3) NOT NULL, colunas padrão de auditoria e versao; UNIQUE (estabelecimento_id, dia); CHECK hash_dia REGEXP ^[0-9a-f]{64}$; CHECK ultimo >= primeiro), mais a função pura do hash no packages/nucleo (fecharDia/verificarCadeia) e o job diário no worker.",
+      "indisponivel": "verificação de integridade da trilha de auditoria (detectar evento alterado ou apagado depois do fecho do dia)"
+    },
+    {
+      "tipo": "cenario-sem-prova",
+      "motivo": "Trilha e marcação de ponto só de inclusão para o papel_aplicacao (UPDATE/DELETE recusados pelo servidor): os anexos de privilégios do 05-09 negam, mas falta o spec com conta efêmera do papel. Junta-se ao pedido de imutabilidade clínica do 05-01. Nenhuma operação indisponível."
+    },
+    {
+      "tipo": "cenario-sem-prova",
+      "motivo": "Desempenho do registro clínico (p95 de abrir < 1,5 s e finalizar) sobre o MariaDB: sem spec hoje. Nenhuma operação indisponível."
+    }
+  ]
+}

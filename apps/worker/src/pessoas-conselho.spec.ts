@@ -1,16 +1,36 @@
-// M52.1 (regra 3; ficha, seção 4): o retrato diário da validade do conselho no worker. A contagem (só os registros
-// ativos; vencidos, a vencer na janela e sem validade), a conferência que só vale para o mesmo número e conselho, a
-// janela do parâmetro, a gravação só em SGH_PES_CONSELHO_DIA e a chave do serviço. Núcleo falso; dados sintéticos.
-import { describe, expect, it } from 'vitest';
+// M52.1 (regra 3; ficha, seção 4; lote F2.2 05-16): o retrato diário da validade do conselho no worker. A contagem (só
+// os registros ativos; vencidos, a vencer na janela e sem validade), a janela do parâmetro, o retrato não gravado sem a
+// tabela (nunca finge gravar) e a chave do serviço. Porta falsa; dados sintéticos.
+import { afterEach, describe, expect, it } from 'vitest';
+import { diaCivil } from './clientes-worker.js';
+import { type PortaConselho, type RetratoConselho, tabelaAusente } from './pessoas-conselho-propria.js';
 import {
   contarAlertas,
   type NucleoConselho,
   PessoasConselhoService,
   retratoConselhoLigado,
-  retratoDoEstabelecimento,
+  retratoDoCliente,
 } from './pessoas-conselho.service.js';
 
 const HOJE = '2026-10-25';
+const AGORA = new Date('2026-10-25T13:00:00Z');
+
+function portaFalsa(janela: number | null, grava: boolean) {
+  const gravados: RetratoConselho[] = [];
+  const porta: PortaConselho = {
+    registrosAtivos: async () => [
+      { registro: 11, profissional: 7, ativo: true, validade: '2026-12-09' },
+      { registro: 12, profissional: 7, ativo: true, validade: null },
+      { registro: 13, profissional: 8, ativo: false, validade: '2020-01-01' },
+    ],
+    janelaDias: async () => janela,
+    gravarRetrato: async (r) => {
+      gravados.push(r);
+      return grava;
+    },
+  };
+  return { porta, gravados };
+}
 
 describe('retrato do conselho (M52.1)', () => {
   it('conta vencidos, a vencer e sem validade; o registro inativo fica de fora', () => {
@@ -35,83 +55,43 @@ describe('retrato do conselho (M52.1)', () => {
     expect(retratoConselhoLigado({ AMBIENTE: 'ci', PESSOAS_CONSELHO_DIARIO: 'ligado' })).toBe(true);
   });
 
-  it('lê READ ONLY, aplica a janela do parâmetro e grava só SGH_PES_CONSELHO_DIA', async () => {
-    const escritas: string[] = [];
-    const leitor = {
-      consultar: async (sql: string) => {
-        if (sql.includes('FROM SGH_PES_VINCULO v JOIN TBCBOPRO'))
-          return [
-            { ID: 11, ID_TBPROFIS: 7, CONS_PROF: 'COREN', COD: 123, ATIVO: 'T', VINCULO: 1, NOME: 'X' },
-            { ID: 12, ID_TBPROFIS: 7, CONS_PROF: 'CRM', COD: 456, ATIVO: 'T', VINCULO: 1, NOME: 'X' },
-          ];
-        if (sql.includes('FROM SGH_PES_HABILITACAO'))
-          return [
-            // Conferida com o mesmo número: vale (vence em 45 dias: fora da janela de 30 do parâmetro; dentro da de 60).
-            {
-              ID_TBCBOPRO: 11,
-              COD: 123,
-              CONS_PROF: 'COREN',
-              VALIDADE: '2026-12-09',
-              CONFERIDO_EM: HOJE,
-              CONFERIDO_POR: 'RH',
-              VERSAO: 0,
-            },
-            // Conferida com outro número: não vale (sem validade).
-            {
-              ID_TBCBOPRO: 12,
-              COD: 999,
-              CONS_PROF: 'CRM',
-              VALIDADE: '2030-01-01',
-              CONFERIDO_EM: HOJE,
-              CONFERIDO_POR: 'RH',
-              VERSAO: 0,
-            },
-          ];
-        if (sql.includes('SGH_CFG_PARAMETRO'))
-          return [
-            {
-              ID: '1',
-              CHAVE: 'pessoas.alertaConselhoDias',
-              NIVEL: 'estabelecimento',
-              ALVO: 'aa',
-              VALOR: '30',
-              VIGENTE_DESDE: new Date('2026-01-01T00:00:00'),
-              VIGENTE_ATE: null,
-              JUSTIFICATIVA: 'teste',
-              AUTOR: 'RH',
-            },
-          ];
-        return [];
-      },
-    };
-    const nucleo = {
-      rede: 'r',
-      lerSomente: async (_c: unknown, fn: (l: never) => Promise<unknown>) => fn(leitor as never),
-      gravarSgh: async (_c: unknown, fn: (e: never) => Promise<unknown>) =>
-        fn({
-          hospital: 'aa',
-          consultar: async () => [],
-          lerBlob: async () => Buffer.alloc(0),
-          executar: async (sql: string) => {
-            escritas.push(sql.trim().split(/\s+/).slice(0, 3).join(' '));
-            return sql.startsWith('UPDATE') ? 0 : 1;
-          },
-          executarRetornando: async () => ({}),
-        } as never),
-      encerrar: async () => undefined,
-    } as unknown as NucleoConselho;
-    const r = await retratoDoEstabelecimento(nucleo, 'aa', HOJE);
-    expect(r).toMatchObject({
-      hospital: 'aa',
-      dia: HOJE,
-      janelaDias: 30,
-      registros: 2,
-      aVencer: 0,
-      semValidade: 1,
-      vencidos: 0,
+  it('aplica a janela do parâmetro (30: 45 dias fica fora; padrão 60: dentro) e grava só as contagens', async () => {
+    const a = portaFalsa(30, true);
+    const r = await retratoDoCliente(a.porta, 'f22_teste', AGORA);
+    expect(r).toMatchObject({ cliente: 'f22_teste', dia: HOJE, janelaDias: 30, registros: 2, aVencer: 0, semValidade: 1 });
+    expect(r.gravado).toBe(true);
+    expect(Object.keys(a.gravados[0]!).sort()).toEqual(
+      ['aVencer', 'cliente', 'dia', 'janelaDias', 'registros', 'semValidade', 'vencidos'].sort(),
+    );
+    const b = portaFalsa(null, false);
+    const s = await retratoDoCliente(b.porta, 'f22_teste', AGORA);
+    expect(s).toMatchObject({ aVencer: 1, gravado: false });
+    expect(s.janelaDias).toBeGreaterThan(30);
+  });
+
+  it('a tabela ausente é reconhecida pelo código, pelo número ou pela causa', () => {
+    expect(tabelaAusente({ code: 'ER_NO_SUCH_TABLE' })).toBe(true);
+    expect(tabelaAusente({ message: 'x', cause: { errno: 1146 } })).toBe(true);
+    expect(tabelaAusente(new Error('outra falha'))).toBe(false);
+    expect(diaCivil(new Date('2026-10-26T02:00:00Z'))).toBe('2026-10-25');
+  });
+
+  describe('o serviço', () => {
+    const antes = process.env['WORKER_CLIENTES'];
+    afterEach(() => {
+      if (antes === undefined) delete process.env['WORKER_CLIENTES'];
+      else process.env['WORKER_CLIENTES'] = antes;
     });
-    expect(escritas).toEqual(['UPDATE SGH_PES_CONSELHO_DIA SET', 'INSERT INTO SGH_PES_CONSELHO_DIA']);
-    const s = new PessoasConselhoService();
-    expect(await s.ciclo()).toEqual([]);
+    it('roda por cliente; sem núcleo, nada', async () => {
+      const s = new PessoasConselhoService();
+      expect(await s.ciclo()).toEqual([]);
+      process.env['WORKER_CLIENTES'] = 'f22_teste,Invalido';
+      s.usar({ lerPlataforma: async () => [], encerrar: async () => undefined } as unknown as NucleoConselho, () =>
+        portaFalsa(30, false).porta,
+      );
+      const r = await s.ciclo(AGORA);
+      expect(r.map((x) => [x.cliente, x.gravado])).toEqual([['f22_teste', false]]);
+      await s.onApplicationShutdown();
+    });
   });
 });

@@ -1,0 +1,164 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: 19 dos 20 specs do lote testavam a cópia do sistema de origem (tabelas TB*/SGH_*, GECADPED, MON$, RDB$, isql, neutralizar.sh, trava da cópia, desfazendoNaCopia, operacao() do catálogo antigo, escritor do driver nativo) e importavam funções do pacote antigo que não existe aqui. Não há o que portar: o cenário de negócio de cada um foi casado com o spec de integração do módulo sobre o MariaDB (coluna 'onde', casada por título dos testes via grep; o integrador confere). Onde diz 'sai', o cenário era de convivência ou de troca de motor do sistema de origem.",
+      "arquivos": {
+        "m55-e3.int.spec.ts": {
+          "cenario": "contratos de fornecedor: lista, detalhe com saldo, painel, candidatos; pedido com contrato vencido recusado; vínculo pedido/título na mesma transação; faixa e página pelo fim vigente; alerta de vencimento uma vez por faixa",
+          "onde": "apps/api/src/modulos/suprimentos/contrato-porta-propria.int.spec.ts (vínculo do pedido, saldo, pedido já ligado recusado); apps/api/src/modulos/suprimentos/contrato.spec.ts (contrato-vencido, unidade); alerta diário: apps/worker/src/contratos-vencimento.service.ts é de outro lote da onda 5 (ainda lê pelo pacote antigo)"
+        },
+        "m55-e4.int.spec.ts": {
+          "cenario": "licitação: pregão até a ata, pesquisa de preços com descarte, documento emitido, prazo do aviso, julgamento, recurso, homologação com segregação, pedido do vencedor",
+          "onde": "nenhum sobre o MariaDB: a licitação só tem apps/api/src/modulos/suprimentos/licitacao-porta-memoria.ts (bateria em licitacao.spec.ts e licitacao-porta-memoria.spec.ts); a porta própria e o DDL evento_processo_licitatorio já estão pedidos na saída do lote 03-13"
+        },
+        "m55-e5.int.spec.ts": {
+          "cenario": "contratualização SUS: domínios, SIGTAP por prefixo, produção agregada; contrato, metas e apuração; versão vencida recusada",
+          "onde": "apps/api/src/modulos/contratualizacao/porta-propria.int.spec.ts (domínios, inclui com incentivos, versão vista, metas quantitativa/qualitativa, apuração); apps/api/src/modulos/sus/porta-propria.int.spec.ts; PRODUÇÃO AGREGADA SEM PROVA COM DADOS: o único caso (porta-propria.int.spec.ts:452) espera [] sobre massa vazia, então o SQL de agregação de producaoFaturamentoSus (porta-propria.ts:873) nunca roda com linhas; producaoContasSus segue modelo-pendente (porta-propria.ts:906). Pedido spec-integracao abaixo"
+        },
+        "m56-rede.int.spec.ts": {
+          "cenario": "rede credenciada da operadora: domínios, credenciar/alterar/descredenciar/reincluir com movimento RPS, saída agendada, recusas, escopo",
+          "onde": "apps/api/src/modulos/operadora/rede-porta-propria.int.spec.ts (bateria comum memória × banco e contrato de efeito, escopo, lista)"
+        },
+        "m58-desligamento.int.spec.ts": {
+          "cenario": "inventário do desligamento do sistema de origem (sessões, contas técnicas, funções externas, PSQL) e checklist de desligamento",
+          "onde": "sai (ADR 0003): convivência com o sistema de origem; não há desligamento a inventariar no banco próprio"
+        },
+        "m58-ensaio-firebird5.int.spec.ts": {
+          "cenario": "ensaio de troca de versão do motor do sistema de origem",
+          "onde": "sai (ADR 0003): driver e motor do sistema de origem"
+        },
+        "m58-ensaio-utf8.int.spec.ts": {
+          "cenario": "ensaio de conversão de código de página para UTF-8 no sistema de origem",
+          "onde": "sai (ADR 0003); o UTF-8 de 4 bytes no banco próprio está provado em packages/testes/src/integracao/executor.int.spec.ts e apps/api/src/modulos/implantacao/porta-propria.int.spec.ts (utf8mb4)"
+        },
+        "m58-janela.int.spec.ts": {
+          "cenario": "verificação pós-janela da troca de motor (plataforma, charset, contagens com hash)",
+          "onde": "sai (ADR 0003); conexão, charset e impressão da estrutura no MariaDB: apps/api/src/modulos/implantacao/porta-propria.int.spec.ts"
+        },
+        "m59-4-saneamento.int.spec.ts": {
+          "cenario": "saneamento dos grupos de acesso aplicado pelo executor (troca de grupo, bloqueio, retirada em lote) com plano e trilha",
+          "onde": "apps/api/src/modulos/acesso/saneamento/porta-propria.int.spec.ts (plano: inclui, reserva, conclui, descarta com a trilha); bloqueio e troca de perfil: apps/api/src/modulos/acesso/gestao-fonte-propria.int.spec.ts"
+        },
+        "m59-6-retrocompatibilidade.int.spec.ts": {
+          "cenario": "inventário de retrocompatibilidade: gatilhos do novo em tabelas do sistema de origem",
+          "onde": "sai (ADR 0003): não há tabelas do sistema de origem; a proibição de gatilho com regra é do verificador da esteira"
+        },
+        "m60-e1-migracao.int.spec.ts": {
+          "cenario": "simulação dos scripts, recolhimento dos objetos do novo no banco de origem, DDL e registro na mesma transação",
+          "onde": "simulação e recolhimento no banco de origem saem (ADR 0003). O registro das migrações NÃO está coberto: a tabela migracao_aplicada existe (db/migracoes/01_SIS/02_tabelas.sql:4, CHECK do hash, UNIQUE por número e por arquivo), mas nenhum código a grava (só a leitura em apps/api/src/modulos/implantacao/porta-propria.ts:91), e o spec da implantação (porta-propria.int.spec.ts:52) aceita null ou qualquer array. 'DDL e registro na mesma transação' fica sem prova: pedido operacao-faltante abaixo"
+        },
+        "m60-e2-conexao.int.spec.ts": {
+          "cenario": "conferência da instalação: conexão corrente, scripts registrados, conta sem papel",
+          "onde": "apps/api/src/modulos/implantacao/porta-propria.int.spec.ts (conexão corrente MariaDB, utf8mb4, conta sem host); papéis das contas: apps/api/src/modulos/acesso/contas-banco/porta-propria.int.spec.ts; 'scripts registrados' SEM PROVA: migracao_aplicada não é preenchida por ninguém e o teste aceita null (pedido operacao-faltante abaixo)"
+        },
+        "m60-e3-fumaca.int.spec.ts": {
+          "cenario": "fumaça pós-implantação: relógio do banco, impressão da estrutura, chaves de liberação, itens da fumaça",
+          "onde": "apps/api/src/modulos/implantacao/porta-propria.int.spec.ts (relógio em UTC, impressão estável); chaves de liberação: tools/instalacao/src/liberacao-propria.int.spec.ts e apps/api/src/modulos/config/configuracao-propria.int.spec.ts"
+        },
+        "matriz-autorizacao.int.spec.ts": {
+          "cenario": "matriz perfil × permissão × escopo: permissões efetivas por perfil e recusa de registro de outra unidade",
+          "onde": "apps/api/src/modulos/acesso/gestao-fonte-propria.int.spec.ts e apps/api/src/modulos/acesso/leitura-acesso.int.spec.ts (perfis por estabelecimento, ações, vínculo vigente no estabelecimento); apps/api/src/sessao/fonte-propria.int.spec.ts (permissões da sessão); escopo por unidade no domínio (@sgh/dominio-acesso, unidade)"
+        },
+        "mwl.int.spec.ts": {
+          "cenario": "lista de trabalho DICOM: exames a enviar, item com evento na saída, reenvio sem duplicar, MPPS fora de ordem, mensagem repetida",
+          "onde": "apps/api/src/modulos/sadt/pacs-porta-propria.int.spec.ts (item com mensagem na fila, repetido recusado, reenvio conferido, status idempotente); o MPPS fora de ordem é regra do domínio (@sgh/dominio-sadt statusVigente, unidade)"
+        },
+        "neutralizacao-idempotente.spec.ts": {
+          "cenario": "script de neutralização da cópia do sistema de origem rodado duas vezes",
+          "onde": "sai (ADR 0003 e regra 6): o banco próprio não recebe cópia a neutralizar; dev/homologação sem envio externo por configuração do ambiente"
+        },
+        "outbox.int.spec.ts": {
+          "cenario": "evento de saída na transação do negócio, some com o ROLLBACK; relay respeita a falha e publica uma vez",
+          "onde": "REESCRITO neste lote sobre o MariaDB: packages/testes/src/integracao/outbox.int.spec.ts (nasce pendente na transação, carga só com ids, invisível a outra conexão antes do COMMIT, desfeita com o ROLLBACK); relay: apps/worker/src/relay-outbox.int.spec.ts"
+        },
+        "painel-leitos.int.spec.ts": {
+          "cenario": "painel de leitos e censo: ocupados × internações abertas, valores de controle da cópia, terapia intensiva pela trajetória, consulta cancelada por tempo, sem leitura sequencial",
+          "onde": "apps/api/src/modulos/internacao/fonte-propria.int.spec.ts (painel, movimento, conferência cadastro × retrato, censo fechado, vigia); terapia intensiva pela trajetória: packages/dominio-internacao/src/ocupacao.spec.ts (unidade; não é montarPainel); SEM COBERTURA DE INTEGRAÇÃO, pedidas neste arquivo (operacao-faltante/spec-integracao): (a) consulta cancelada por tempo e conexão boa em seguida — hoje só packages/nucleo/src/nucleo.int.spec.ts:271 (SELECT rápido com tempoMaximoMs 5000, não prova o cancelamento) e unidade com dublê em transacao.spec.ts:44; o spec do worker (apps/worker/src/integracao/porta-propria.int.spec.ts) trata só tempo esgotado da entrega HTTP, não do banco; (b) caminho do painel sem leitura sequencial (EXPLAIN sem type=ALL nas tabelas grandes) — sem prova hoje"
+        },
+        "parametro-legado.int.spec.ts": {
+          "cenario": "painel de parâmetros do sistema de origem (letra S/N, hora HHMM) interpretados",
+          "onde": "sai (ADR 0003): parâmetros do sistema de origem não existem no banco próprio; os parâmetros do produto são tipados em apps/api/src/modulos/config/configuracao-propria.int.spec.ts"
+        },
+        "parametro-vigencia.int.spec.ts": {
+          "cenario": "vigência do parâmetro: plano velho recusado (conflito-concorrente), plano atual fecha a vigente",
+          "onde": "apps/api/src/modulos/config/configuracao-propria.int.spec.ts (recusa a definição concorrente 409 conflito-concorrente; retira a sobreposição)"
+        }
+      }
+    },
+    {
+      "tipo": "operacao-faltante",
+      "lote": "dono de apps/api/src/modulos/suprimentos (licitação; já pedido em saida/03-13.json)",
+      "operacao": "licitação inteira sobre o MariaDB (criar, avançar etapa, registrar preço/proposta/evento, descartar preço, homologar, ligar pedido; leituras lista, detalhe, painel, pedidos marcados)",
+      "motivo": "m55-e4 era a única prova de integração do pregão; sobre o banco próprio só existe a porta de memória. Este lote só reforça o pedido do 03-13 (porta própria + DDL evento_processo_licitatorio); não pede DDL novo."
+    },
+    {
+      "tipo": "orfaos-de-massa",
+      "lote": "testes-massa (onda 5)",
+      "arquivo": "packages/testes/src/massa/sintetica.ts",
+      "simbolos": [
+        "grupoSintetico",
+        "unidadeSintetica",
+        "unidadesAtivas"
+      ],
+      "motivo": "usados só por matriz-autorizacao.int.spec.ts (apagado) e listados em tools/verificadores/src/guardas-legado.ts; remover junto com a entrada no guardas-legado"
+    },
+    {
+      "tipo": "cenario-a-confirmar",
+      "itens": [
+        "alerta diário de vencimento de contrato (uma vez por faixa): depende de apps/worker/src/contratos-vencimento.service.ts, ainda sobre o pacote antigo, de outro lote; o spec de integração do alerta sobre o MariaDB nasce com ele",
+        "MPPS fora de ordem e mensagem repetida: conferir que @sgh/dominio-sadt (statusVigente) tem o caso em unidade; pacs-porta-propria.int.spec.ts cobre status idempotente",
+        "escopo por unidade (registro de outra unidade recusado) com perfil lido do MariaDB: hoje provado na leitura (vínculo vigente no estabelecimento) e no domínio; sem spec ponta a ponta",
+        "terapia intensiva pela trajetória × posição atual: coberto em unidade por packages/dominio-internacao/src/ocupacao.spec.ts"
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "itens": []
+    },
+    {
+      "tipo": "spec-integracao",
+      "lote": "dono de packages/nucleo (integrador)",
+      "arquivo": "packages/nucleo/src/nucleo.int.spec.ts",
+      "operacao": "tempo máximo da consulta no servidor (lerSomente com tempoMaximoMs)",
+      "caso": "SELECT SLEEP(2) com tempoMaximoMs 100 recusado como tempo esgotado (ErroTempoEsgotado, vindo do max_statement_time/errno 1969) em menos de 1 s; logo depois, na mesma fonte, uma consulta boa (SELECT 1) responde — a conexão volta boa ao pool",
+      "motivo": "cenário do painel-leitos.int.spec.ts apagado; hoje o caso de integração (nucleo.int.spec.ts:271) roda um SELECT rápido com 5000 ms e não prova o cancelamento"
+    },
+    {
+      "tipo": "spec-integracao",
+      "lote": "dono de apps/api/src/modulos/internacao",
+      "arquivo": "apps/api/src/modulos/internacao/fonte-propria.int.spec.ts",
+      "operacao": "consultas do painel de leitos e do censo",
+      "caso": "EXPLAIN de cada consulta do painel (leitos, internações abertas, trechos da trajetória) sem type=ALL nas tabelas grandes (internacao, trecho/movimento de internação, leito); se faltar índice, pedir o DDL (ADR 0002) em vez de afrouxar o teste",
+      "motivo": "garantia 'caminho do painel: 0 leitura sequencial nas tabelas grandes' do painel-leitos.int.spec.ts apagado; não há prova equivalente sobre o MariaDB"
+    },
+    {
+      "tipo": "operacao-faltante",
+      "lote": "dono de tools/db (aplicador de migrações: criar_cliente.py / validar_migracoes.py) e de apps/api/src/modulos/implantacao",
+      "operacao": "registro das migrações aplicadas em migracao_aplicada",
+      "pedido": [
+        "o aplicador de migrações grava migracao_aplicada (numero, arquivo, hash sha256) na mesma transação do script quando o motor permitir, ou logo após o script com conferência e recusa de reaplicação divergente (DDL do MariaDB faz commit implícito: registrar a limitação no cabeçalho)",
+        "o spec da implantação (apps/api/src/modulos/implantacao/porta-propria.int.spec.ts:52) exige um array igual aos arquivos de db/migracoes (número e hash), sem aceitar null; a conferência da instalação sai com registroLido=true e zero pendentes",
+        "corrigir o comentário de apps/api/src/modulos/implantacao/porta-propria.ts:7 ('pedido de modelo migracao_aplicada'): a tabela existe, falta quem a preencha"
+      ],
+      "motivo": "a tabela existe no modelo (db/migracoes/01_SIS/02_tabelas.sql:4) mas ninguém a grava; o teste atual passa com qualquer resultado: vazio silencioso",
+      "indisponivel": "conferência da instalação 'scripts registrados' (ServicoConferenciaInstalacao: pendências de migração) não funciona: sempre lê registro vazio/ausente"
+    },
+    {
+      "tipo": "spec-integracao",
+      "lote": "dono de apps/api/src/modulos/contratualizacao (ou do SUS)",
+      "arquivo": "apps/api/src/modulos/contratualizacao/porta-propria.int.spec.ts",
+      "operacao": "producaoFaturamentoSus (produção agregada por competência e SIGTAP)",
+      "caso": "massa: uma produção ambulatorial (producao_ambulatorial_sus_item) e uma AIH fechada (conta_aih_procedimento) no estabelecimento A, uma cancelada e uma do estabelecimento B; conferir as somas por competência e modalidade (só A, sem a cancelada), com as parcelas no teste",
+      "motivo": "o caso atual (porta-propria.int.spec.ts:452) espera [] sobre massa vazia: JOIN, filtro de situação ou soma errados passam. producaoContasSus continua modelo-pendente (porta-propria.ts:906)"
+    }
+  ],
+  "avisos": [
+    "A licitação continua indisponível sobre o MariaDB até a porta própria pedida pelo 03-13.",
+    "Operação indisponível: a conferência da instalação de 'scripts registrados' (pendências de migração) não funciona, porque migracao_aplicada existe no modelo mas nenhum código a grava; pedido operacao-faltante para o aplicador de migrações e para o spec da implantação.",
+    "Sem prova de integração (pedidos spec-integracao registrados): cancelamento de consulta por tempo máximo no MariaDB com a conexão voltando boa; ausência de leitura sequencial no caminho do painel de leitos; produção SUS agregada com dados (producaoFaturamentoSus). producaoContasSus segue modelo-pendente.",
+    "Correção do achado: a terapia intensiva pela trajetória está em packages/dominio-internacao/src/ocupacao.spec.ts, não em montarPainel."
+  ]
+}

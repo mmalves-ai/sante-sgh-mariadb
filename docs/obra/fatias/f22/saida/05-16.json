@@ -1,0 +1,106 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    {
+      "arquivo": "apps/worker/tsconfig.migrado.json",
+      "acrescentar": [
+        "src/clientes-worker.ts",
+        "src/relay-outbox.ts",
+        "src/relay-outbox-proprio.ts",
+        "src/relay-outbox.service.ts",
+        "src/relay-outbox.spec.ts",
+        "src/relay-outbox.int.spec.ts",
+        "src/relay-outbox-proprio.int.spec.ts",
+        "src/prefixo-filas.spec.ts",
+        "src/publicador-catalogos.service.ts",
+        "src/pacs-worklist.service.ts",
+        "src/pacs-worklist-propria.ts",
+        "src/pacs-worklist.spec.ts",
+        "src/pacs-worklist-propria.int.spec.ts",
+        "src/pessoas-conselho.service.ts",
+        "src/pessoas-conselho-propria.ts",
+        "src/pessoas-conselho.spec.ts",
+        "src/pessoas-conselho-propria.int.spec.ts",
+        "src/rede-mpi.service.ts",
+        "src/rede-mpi.spec.ts",
+        "src/relogio.ts",
+        "src/sinal-de-vida.service.ts",
+        "src/smtp.ts",
+        "src/telemetria.ts",
+        "src/validade-conselho.ts",
+        "src/validade-conselho.spec.ts"
+      ],
+      "motivo": "já acrescentados diretamente (o brief manda cada lote acrescentar); conferir que nenhum lote paralelo sobrescreveu"
+    }
+  ],
+  "pedidos": [
+    {
+      "tipo": "remover",
+      "arquivo": "apps/worker/src/worker.module.ts",
+      "motivo": "representacao-pep.service.ts e o spec foram APAGADOS (ADR 0003: convertia formulários Delphi do sistema de origem para a coexistência). Tirar o import de RepresentacaoPepService, a entrada 'representacao-pep' de SERVICOS e o provider; senão o worker não compila/sobe. A carga dos modelos de formulário do sistema de origem é do conector (pode usar converterModelo de @sgh/dominio-pep na importação).",
+      "indisponivel": "nenhuma operação do produto: a representação derivada dos formulários do sistema de origem deixa de existir no worker"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "retrato_validade_conselho",
+      "motivo": "retrato diário (só contagens) da validade do conselho dos colaboradores (M52.1); o worker calcula e grava por PortaConselhoPropria.gravarRetrato (Executor, operação pessoas.registrar_retrato_conselho, contexto do estabelecimento sede); sem a tabela devolve gravado=false e loga 'calculado sem gravar'",
+      "ddl": "CREATE TABLE retrato_validade_conselho (\n  id            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,\n  dia           DATE NOT NULL COMMENT 'Dia civil do retrato (refeito se o worker rodar de novo no dia)',\n  janela_dias   SMALLINT UNSIGNED NOT NULL COMMENT 'Janela de alerta do parâmetro pessoas.alertaConselhoDias usada',\n  registros     INT UNSIGNED NOT NULL COMMENT 'Inscrições ativas de colaboradores ativos',\n  vencidos      INT UNSIGNED NOT NULL,\n  a_vencer      INT UNSIGNED NOT NULL,\n  sem_validade  INT UNSIGNED NOT NULL,\n  criado_em     DATETIME(3) NOT NULL,\n  criado_por    BIGINT UNSIGNED NULL,\n  alterado_em   DATETIME(3) NULL,\n  alterado_por  BIGINT UNSIGNED NULL,\n  versao        INT UNSIGNED NOT NULL DEFAULT 1,\n  CONSTRAINT ck_retrato_validade_conselho_contagens CHECK (vencidos + a_vencer + sem_validade <= registros),\n  UNIQUE KEY uq_retrato_validade_conselho_dia (dia)\n) COMMENT='Retrato diário da validade do registro no conselho dos colaboradores (só contagens; sem dado de pessoa)';",
+      "indisponivel": "gravação do retrato diário da validade do conselho (pessoas.registrar_retrato_conselho): o worker calcula e loga as contagens, mas não grava até o DDL"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "item_lista_trabalho_imagem",
+      "motivo": "um só item vigente por exame no banco (hoje a porta garante pela trava FOR UPDATE do exame e pela idempotência; a chave única fecha a corrida também para a tela e o conector); o item 'sem_modalidade' conta como vigente (só cancelado e descontinuado liberam o exame), coerente com a porta",
+      "ddl": "ALTER TABLE item_lista_trabalho_imagem ADD COLUMN exame_item_vigente_id BIGINT UNSIGNED AS (IF(excluido_em IS NULL AND situacao NOT IN ('cancelado','descontinuado'), exame_item_id, NULL)) PERSISTENT COMMENT 'Apoio à unicidade do item vigente por exame' AFTER exame_item_id, ADD UNIQUE KEY uq_item_lista_trabalho_imagem_exame_vigente (exame_item_vigente_id);"
+    },
+    {
+      "tipo": "mover",
+      "de": "apps/api/src/modulos/rede (PortaRedePropria + o indice() de aplicacao/servico.ts, que monta a PortaIndiceRede sobre suspeita_duplicidade e marca_sincronismo)",
+      "para": "pacote comum (ex.: packages/persistencia ou um dominio-rede/adaptador sem I/O de app)",
+      "motivo": "o worker não importa a API; RedeMpiService já recebe a porta por usar(nucleo, fabrica) e só falta a fábrica no onApplicationBootstrap",
+      "indisponivel": "MPI da Rede noturno no worker (pareamento em lote entre estabelecimentos e relatório de divergência com reparo); com REDE_MPI_NOTURNO=ligado o serviço loga 'indisponível' (pendencia f22-05-16-indice-rede); o pareamento pela tela da API continua"
+    },
+    {
+      "tipo": "mover",
+      "de": "apps/worker/src/relay-outbox-proprio.ts (cicloRelayOutbox, pendentesOutbox)",
+      "para": "packages/nucleo",
+      "motivo": "a marcação da fila comum (integracao_mensagem enviada/tentativa/erro) é infraestrutura do núcleo, como era o cicloRelayOutbox do núcleo antigo; hoje vai por nucleo.escrever (transação curta, UPDATE condicionado a situacao='pendente'), sem Executor nem trilha própria"
+    },
+    {
+      "tipo": "ajuste",
+      "arquivo": "tools/instalacao/src/variaveis.ts",
+      "motivo": "variável nova WORKER_CLIENTES (lista de clientes dos serviços do worker; sem ela, os clientes em uso na plataforma; INTEGRACAO_CLIENTES continua aceita)"
+    },
+    {
+      "tipo": "decisao",
+      "arquivo": "packages/dominio-sadt/src/pacs/worklist.ts (lerModalidadePorSetor, chaveNaturalExame) e parâmetro pacs.modalidadePorSetor em packages/contratos",
+      "motivo": "o worker não usa mais o mapa 'código de setor do sistema de origem -> modalidade' (padrão '16:CR;24:US;...') nem a chave natural do exame antigo: a modalidade vem de exame.modalidade_imagem_id; avaliar remover do domínio e do catálogo de parâmetros, se nenhum outro leitor restar"
+    },
+    {
+      "tipo": "decisao",
+      "arquivo": "apps/worker/src/relay-outbox.int.spec.ts",
+      "motivo": "o teste do Valkey pula quando o Valkey do Compose não responde (skipIf); a prova de efeito no banco do relay está em relay-outbox-proprio.int.spec.ts"
+    },
+    {
+      "tipo": "mover",
+      "de": "apps/worker/src/validade-conselho.ts (conferenciaVigente, validadeVigente) e o spec",
+      "para": "packages/dominio-pessoas (ex.: src/habilitacao/validade-conselho.ts, exportado no index)",
+      "motivo": "regra única da validade vigente da inscrição no conselho (último evento por ocorrido_em e id; exclusão derruba a conferência; registro suspenso ou cancelado não conta; sem data, vale a da inscrição). O lote não edita o domínio; depois de mover, o worker importa de @sgh/dominio-pessoas"
+    },
+    {
+      "tipo": "ajuste",
+      "arquivo": "apps/api/src/modulos/pessoas/folha/porta-folha-propria.ts (conselhos, linha ~472) e as demais leituras de validade_conselho na API",
+      "motivo": "hoje a folha usa ORDER BY ocorrido_em DESC, id DESC sem descartar a exclusão e sem olhar situacao_registro: diverge do retrato do worker. Ler as linhas de validade_conselho da inscrição e aplicar validadeVigente (a mesma regra), com teste de conferência excluída, retroativa e suspensa",
+      "indisponivel": "nenhuma; até o ajuste, folha/tela e retrato diário podem contar vencidos de forma diferente quando a última conferência for exclusão ou o registro estiver suspenso/cancelado"
+    },
+    {
+      "tipo": "ajuste",
+      "arquivo": "conector (carga de exame e item_lista_trabalho_imagem) e tela de pendências da lista de trabalho de imagem",
+      "motivo": "o worker não usa mais o mapa de modalidade por setor: todo exame de imagem precisa de modalidade no cadastro (o modelo já exige: ck_exame_imagem). Exame com modalidade inativa vira item 'sem_modalidade' (sem evento à modalidade), que a tela de pendências deve listar; o worker promove a 'a_enviar' quando o cadastro ganha modalidade ativa. O conector deve preencher exame.modalidade_imagem_id em todo exame de imagem migrado"
+    }
+  ],
+  "apagados": [
+    "apps/worker/src/representacao-pep.service.ts",
+    "apps/worker/src/representacao-pep.spec.ts"
+  ]
+}

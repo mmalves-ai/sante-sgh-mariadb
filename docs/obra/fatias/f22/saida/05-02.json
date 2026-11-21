@@ -1,0 +1,227 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "motivo": "ADR 0003: os 19 specs testavam a cópia do sistema de origem (trava da cópia, executor e driver antigos, tabelas TB*/SGH_*, gatilhos, WITH LOCK, CP1252, outro sistema simulado, vigia e assinatura). Não há o que portar ao MariaDB. Revisão 2: a coluna \"onde\" foi relida teste a teste (títulos dos it() e as recusas 'modelo-pendente' dos specs alvo); o cenário sem prova diz 'sem cobertura' e tem entrada em 'cobertura-a-conferir' ou em 'operacoes-indisponiveis'.",
+      "arquivos": {
+        "m14.int.spec.ts": {
+          "cenario": "inativação de item de domínio, consultas paginadas com teto e tempo, tabela grande que exige filtro, sessão \"como\" e o Corrigir",
+          "onde": "inativação: config/dominios-propria.int.spec.ts ('inativar e reativar'); página e contagem: consultas/fonte-propria.int.spec.ts; tempo máximo: packages/nucleo/src/nucleo.int.spec.ts:271. Sem cobertura: tabela grande que exige filtro, sessão \"como\" e o Corrigir (cobertura-a-conferir)"
+        },
+        "m18.int.spec.ts": {
+          "cenario": "agenda de exames (marcação, disputa do horário, check-in, cancelamento, remarcação) e sala cirúrgica (disputa, sobreposição, par de profissional)",
+          "onde": "exames/porta-propria.int.spec.ts (marca, ocupado recusado, cancela, remarca); cirurgia/porta-propria.int.spec.ts (sala ocupada, remarcar com versão). Sem cobertura: check-in do exame e o par de profissional na sala (cobertura-a-conferir)"
+        },
+        "m20.int.spec.ts": {
+          "cenario": "atendimento externo e PA: colisão de versão, conta do atendimento, desfecho que libera o leito, paciente não identificado",
+          "onde": "atendimento/porta-propria.int.spec.ts (abertura, desfecho, exclusão, leito de observação que volta ao fim). Sem cobertura: colisão de versão do atendimento, conta gerada pelo atendimento e paciente não identificado (cobertura-a-conferir). Aviso: o mesmo spec prova que atendimento.alterarHeranca e indicadores respondem 501"
+        },
+        "m21.int.spec.ts": {
+          "cenario": "admissão com leito ocupado, transferência, higienização pedida pela alta, mapa de leitos",
+          "onde": "adt/porta-propria.int.spec.ts (internar com recusas, transferir com versão, dar alta com limpeza terminal e leito em higienização, higienização); packages/testes/src/integracao/painel-leitos.int.spec.ts (mapa)"
+        },
+        "m26.int.spec.ts": {
+          "cenario": "SADT: lançamento, digitação, liberação com faixa crítica, retificação, amostra, portal do paciente",
+          "onde": "sadt/porta-propria.int.spec.ts (lista, laudo, segunda via); sadt/aplicacao/coletar.int.spec.ts (amostra); aviso-critico e vigia-criticos (faixa crítica). SEM COBERTURA, operação em modelo-pendente: digitação (sadt/porta-propria.int.spec.ts:122) e liberação do exame (sadt/aplicacao/liberar.autorizacao.int.spec.ts); retificação e portal do paciente sem prova (cobertura-a-conferir)"
+        },
+        "m27-jornada.int.spec.ts": {
+          "cenario": "jornada ponta a ponta do mesmo paciente (agendar, atender, internar, prescrever, evoluir, exame, alta), J2, J5 e J10 (J10 é convivência pura)",
+          "onde": "sem cobertura: nenhuma jornada ponta a ponta sobre o MariaDB (cobertura-a-conferir); os passos isolados estão nos specs de agenda, atendimento, adt, farmácia e sadt, e a liberação do SADT e a dispensação por horário estão em modelo-pendente"
+        },
+        "m28.int.spec.ts": {
+          "cenario": "estoque: saída consolidada, recusa por saldo, concorrência, devolução sobre devolução, transferência em dois passos, ponto de pedido",
+          "onde": "SEM COBERTURA: operação em modelo-pendente. suprimentos/porta-propria.int.spec.ts só prova leituras e inventário; registrarSaida e definirPontoPedido respondem modelo-pendente (linhas 354-378). Saída, recusa por saldo, concorrência, devolução sobre devolução, transferência em dois passos e ponto de pedido indisponíveis (operacoes-indisponiveis)"
+        },
+        "m29.int.spec.ts": {
+          "cenario": "farmácia: dispensação de horário com idempotência, fila disputada, horário suspenso, entrega por outro usuário, devolução da dose",
+          "onde": "SEM COBERTURA: operação em modelo-pendente. farmacia/porta-propria.int.spec.ts só prova avaliação e intervenção; suprimentos.dispensarHorario responde modelo-pendente (linha 501). Dispensação por horário com idempotência, fila disputada, entrega por outro usuário e devolução da dose indisponíveis. Só a suspensão do horário tem prova: packages/testes/src/massa/massa.int.spec.ts:194"
+        },
+        "m30.int.spec.ts": {
+          "cenario": "conta do paciente: fechar e reabrir sem recálculo, conflito de versão, idempotência, lançamento tardio, escopo de convênio, caução",
+          "onde": "faturamento/porta-propria.int.spec.ts: fechar e reabrir, conflito de versão, idempotência do lançamento (repetida), competência fechada, escopo de outro estabelecimento. SEM COBERTURA, operação em modelo-pendente: lançamento tardio (linha 624, fila vazia e decisão recusada) e caução (registrarOrcamento recusa; a regra só está na memória e em dominio-faturamento/conta/particular.spec.ts)"
+        },
+        "m31.int.spec.ts": {
+          "cenario": "pós-fechamento: numeração de lote, lote congelado, demonstrativo idempotente, recurso de glosa, competência fechada, outbox com morto",
+          "onde": "tiss/porta-propria.int.spec.ts: número do lote TISS (linha 520), lote congelado pelo protocolo e repetição recusada (linha 612), glosa e competência fechada; integracao/porta-propria.int.spec.ts:283 (morto). Protocolo do lote recebido único: regras-no-banco.int.spec.ts grava a segunda linha e prova a recusa pela chave. SEM COBERTURA, operação em modelo-pendente: demonstrativo (importarDemonstrativo recusa, tiss linha 969); recurso de glosa idem"
+        },
+        "m32.int.spec.ts": {
+          "cenario": "financeiro: baixa com colisão, idempotência da baixa e do movimento, conciliação fora do escopo, saldo entre fechamentos",
+          "onde": "financeiro/porta-propria.int.spec.ts: idempotência do lançamento do título (linha 81), baixa com o movimento e segunda baixa recusada ('titulo-ja-baixado'), conciliação fora do escopo recusada ('fora-do-escopo', linha 221); escopo do movimento: financeiro/api/escopo-conta.int.spec.ts. Sem cobertura: a mesma chave da baixa e do movimento devolvendo o resultado anterior, e o saldo entre fechamentos (cobertura-a-conferir)"
+        },
+        "m35-prontidao.int.spec.ts": {
+          "cenario": "público por papel e recolhimento de liberação por grupo",
+          "onde": "recolhimento da liberação: tools/instalacao/src/liberacao-propria.int.spec.ts (05-13). Sem cobertura: público por papel (cobertura-a-conferir). A contagem contra os usuários da cópia é convivência pura"
+        },
+        "m37-conducao.int.spec.ts": {
+          "cenario": "condução opcional de setor entre os dois sistemas (permissões do outro sistema)",
+          "onde": "nenhum: convivência pura (ADR 0003), sem equivalente"
+        },
+        "m38-vigia-gravacao.int.spec.ts": {
+          "cenario": "vigilância diária da gravação contra a assinatura do outro sistema",
+          "onde": "nenhum: convivência pura e teste de assinatura (ADR 0003; AGENTS.md)"
+        },
+        "m39-onda1.int.spec.ts": {
+          "cenario": "lista para ligar o setor, uso do dia, disputa com o outro sistema, vigia da onda 1",
+          "onde": "nenhum: convivência pura (ADR 0003). A disputa do horário está em apps/api/src/modulos/agenda/porta-propria.int.spec.ts"
+        },
+        "m40-onda2.int.spec.ts": {
+          "cenario": "critério do setor, chave desligada com a tela aberta, relatório de contingência do posto, acompanhamento por sistema",
+          "onde": "chave desligada: tools/instalacao/src/liberacao-propria.int.spec.ts. Sem cobertura: relatório de contingência do posto (enfermagem/porta-propria.int.spec.ts não o testa; cobertura-a-conferir). O resto é convivência pura"
+        },
+        "m41-onda3.int.spec.ts": {
+          "cenario": "dispensação disputada por dois sistemas, painel de efeito no estoque, regra 1 da farmácia, conferência numérica",
+          "onde": "regra 1: tools/instalacao/src/liberacao-propria.int.spec.ts (05-13). A dispensação disputada NÃO tem prova: dispensarHorario em modelo-pendente (operacoes-indisponiveis). O resto é convivência pura"
+        },
+        "m42-onda4.int.spec.ts": {
+          "cenario": "acompanhamento da competência por sistema, conta única entre os dois sistemas, volume da trilha pelo índice do dia",
+          "onde": "faturamento/porta-propria.int.spec.ts (competência); o resto é convivência pura"
+        },
+        "m43-fim.int.spec.ts": {
+          "cenario": "fim da coexistência: usuários sem grupo, logins de painel, aparelho por login, conexões do outro sistema",
+          "onde": "bloqueio da conta: acesso/gestao-fonte-propria.int.spec.ts:242 e PIN em apps/api/src/sessao/porta-pin-propria.int.spec.ts:130. Sem cobertura: aparelho por login (cobertura-a-conferir). O resto é convivência pura"
+        }
+      }
+    },
+    {
+      "tipo": "cobertura-a-conferir",
+      "motivo": "Cenários de negócio dos specs apagados sem prova de integração no MariaDB, relidos teste a teste (revisão 2). A operação existe e falta o teste, salvo quando o item aponta 'operacoes-indisponiveis'.",
+      "cenarios": [
+        {
+          "cenario": "paciente não identificado: cadastro temporário e encerramento da marca na identificação",
+          "dono": "cadastro/atendimento"
+        },
+        {
+          "cenario": "atendimento: colisão de versão na alteração e conta gerada pelo atendimento (atendimento_conta)",
+          "dono": "atendimento"
+        },
+        {
+          "cenario": "jornada assistencial do mesmo paciente de ponta a ponta sobre o MariaDB (depende das operações indisponíveis do SADT e da farmácia)",
+          "dono": "testes-integracao (nova onda)"
+        },
+        {
+          "cenario": "tabela grande que exige filtro, sessão \"como\" e o Corrigir de registro",
+          "dono": "consultas / sessao"
+        },
+        {
+          "cenario": "check-in do exame marcado e par de profissional na sala cirúrgica",
+          "dono": "exames / cirurgia"
+        },
+        {
+          "cenario": "SADT: retificação do resultado liberado e a liberação ao portal do paciente (liberacao_resultado_portal), com a retirada datada",
+          "dono": "sadt / portal-paciente"
+        },
+        {
+          "cenario": "estoque: saída consolidada, recusa por saldo, saída concorrente (a segunda recebe saldo insuficiente e nada dela fica), devolução sobre devolução, transferência em dois passos, ponto de pedido",
+          "dono": "suprimentos",
+          "indisponivel": true
+        },
+        {
+          "cenario": "farmácia: dispensação por horário com idempotência, fila disputada, entrega por outro usuário, devolução da dose, dispensação disputada",
+          "dono": "farmacia",
+          "indisponivel": true
+        },
+        {
+          "cenario": "conta: lançamento tardio (fila e decisão) e caução no orçamento particular",
+          "dono": "faturamento",
+          "indisponivel": true
+        },
+        {
+          "cenario": "pós-fechamento: demonstrativo idempotente (a mesma importação não grava duas vezes) e recurso de glosa",
+          "dono": "tiss",
+          "indisponivel": true
+        },
+        {
+          "cenario": "pós-fechamento: protocolo do lote recebido pela porta (proximoNumero 'protocolo_conta') sem repetição sob concorrência; o banco já recusa a repetição",
+          "dono": "operadora"
+        },
+        {
+          "cenario": "financeiro: a mesma Idempotency-Key da baixa e do movimento devolve o resultado anterior (repetida) sem gravar",
+          "dono": "financeiro"
+        },
+        {
+          "cenario": "saldo da conta bancária entre fechamentos = movimentos + títulos recebidos − pagos",
+          "dono": "financeiro"
+        },
+        {
+          "cenario": "público por papel (quem é alcançado pela liberação de um grupo)",
+          "dono": "acesso"
+        },
+        {
+          "cenario": "relatório de contingência do posto de enfermagem",
+          "dono": "enfermagem"
+        },
+        {
+          "cenario": "aparelho por login (vínculo do dispositivo ao usuário)",
+          "dono": "sessao / acesso"
+        },
+        {
+          "cenario": "recusa antes do banco, com mensagem de negócio, da faixa de horário invertida do local (local_atendimento_horario): nenhuma porta grava a tabela hoje",
+          "dono": "agenda / config"
+        },
+        {
+          "cenario": "recusa antes do banco da vigência invertida do dependente do portal (conta_portal_paciente_dependente): a gravação da conta e dos vínculos responde 503 recurso-sem-modelo",
+          "dono": "portal-paciente"
+        },
+        {
+          "cenario": "devolução do lote recebido sem motivo recusada pela porta (o int spec só grava com motivo)",
+          "dono": "operadora"
+        }
+      ]
+    },
+    {
+      "tipo": "operacoes-indisponiveis",
+      "motivo": "Operações dos cenários dos specs apagados que respondem 'modelo-pendente' (ou 'recurso-sem-modelo') sobre o MariaDB hoje. Cada uma está ligada ao pedido do lote dono. Nenhuma é dívida deste lote; fica registrada para não passar por coberta.",
+      "operacoes": [
+        {
+          "operacao": "suprimentos.registrarSaida, suprimentos.registrarDevolucao, suprimentos.transferir (executor)",
+          "pedido": "f22 saida/03-14.json pedido 7 (porta pendente; as tabelas documento_estoque, movimento_estoque, saldo_estoque e saldo_lote existem)"
+        },
+        {
+          "operacao": "gravarSgh: enviarTransferencia, cancelarTransferencia, registrarDivergencia, definirPontoPedido",
+          "pedido": "f22 saida/03-14.json pedido 6 (porta pendente) e pedido 11 (DDL opcional do prazo por local)"
+        },
+        {
+          "operacao": "suprimentos.dispensarHorario, confirmarEntrega, devolverDose, cancelarDispensacao",
+          "pedido": "arquivo-ondas-1a4/saida/02-06.json pedidos 14 a 17 (contrato por dispensacao.id + versao, sem situação numérica nem documento ano/mês)"
+        },
+        {
+          "operacao": "gravarSgh.dispensarAmbulatorial",
+          "pedido": "arquivo-ondas-1a4/saida/02-06.json pedido 22 (DDL dispensacao ambulatorial)"
+        },
+        {
+          "operacao": "faturamento: fila e decisão do lançamento tardio",
+          "pedido": "arquivo-ondas-1a4/saida/02-08.json pedido 0 (DDL decisao_lancamento_tardio)"
+        },
+        {
+          "operacao": "faturamento: registrarOrcamento (caução/garantia antes) e emitirRecibo",
+          "pedido": "arquivo-ondas-1a4/saida/02-08.json pedidos 2 e 3 (orcamento_particular e movimento_caixa)"
+        },
+        {
+          "operacao": "tiss: importarDemonstrativo, faturamento.registrarGlosa por demonstrativo e faturamento.registrarRecurso",
+          "pedido": "f22 saida/03-16.json pedido 0 (DDL demonstrativo_pagamento_item)"
+        },
+        {
+          "operacao": "sadt: digitação do resultado e liberação do exame",
+          "pedido": "f22 saida/02-09.json pedido 1 (operações no banco do SADT)"
+        },
+        {
+          "operacao": "atendimento.alterarHeranca e a leitura de indicadores do atendimento respondem 501 (contra a regra do brief: sem pedido de DDL achado)",
+          "pedido": "ABRIR no lote dono do atendimento: trocar o 501 por 409 modelo-pendente com o motivo e pedir o DDL ou a porta"
+        }
+      ]
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "lote_tiss_conta (12_FAT)",
+      "motivo": "uq_lote_tiss_conta_conta_guia (lote_tiss_id, conta_hospitalar_id, guia_tiss_id) tem guia_tiss_id anulável; NULL não é igual a NULL na UNIQUE do MariaDB, e a mesma conta entra duas vezes no mesmo lote quando a guia é nula (provado em regras-no-banco.int.spec.ts). Convenções do ADR 0002, sem sentinela gravada.",
+      "ddl": "ALTER TABLE lote_tiss_conta ADD COLUMN guia_tiss_chave BIGINT UNSIGNED AS (COALESCE(guia_tiss_id, 0)) PERSISTENT COMMENT 'Só para a unicidade: a guia nula conta como uma', DROP INDEX uq_lote_tiss_conta_conta_guia, ADD UNIQUE KEY uq_lote_tiss_conta_conta_guia (lote_tiss_id, conta_hospitalar_id, guia_tiss_chave);",
+      "efeito_no_teste": "trocar, em regras-no-banco.int.spec.ts, a expectativa 'gravou' da guia nula pela recusa com o nome da chave e a coluna nova em UNICAS"
+    },
+    {
+      "tipo": "util",
+      "motivo": "Nenhum spec do lote 05-02 importa mais PODE_ESCREVER; o regras-no-banco.int.spec.ts usa SEM_BANCO. O @deprecated do escrita.spec-util.ts pode sair quando 05-03 a 05-05 fecharem."
+    }
+  ]
+}

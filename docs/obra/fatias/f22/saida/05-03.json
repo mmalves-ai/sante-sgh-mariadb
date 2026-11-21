@@ -1,0 +1,224 @@
+{
+ "registrar": [],
+ "fecho_tsconfig": [],
+ "pedidos": [
+  {
+   "tipo": "remocao-registrada",
+   "motivo": "ADR 0003, mesmo critério do lote 05-01: os 18 specs testavam a cópia do sistema de origem (trava da cópia, tabelas SGH_/TB*, 'só tabelas SGH_', cancelamento pelo outro sistema, código de página antigo, ids reais da cópia). Não há o que portar ao MariaDB. O cenário de negócio de cada um foi casado por palavra-chave (grep) com o spec de integração do módulo na API; o integrador confere o marcado.",
+   "arquivos": {
+    "m44-e3.int.spec.ts": {
+     "cenario": "regulação estadual (número à mão, pedido à central pela saída na mesma transação, número de outra solicitação recusado) e protocolo gerenciado (inclusão, metas, encerramento, publicação concorrente)",
+     "onde": "apps/api/src/modulos/adt/nir-porta-propria.int.spec.ts prova só 'solicitação à central; central desconhecida recusa'. Número informado à mão e número de outra solicitação recusado: cenario-sem-prova (dono adt/NIR). Protocolo gerenciado: inclusão e evento estão indisponíveis (enfermagem/escores-porta-propria.ts:1258/1261, operacao-faltante (ver pedidos e avisos))"
+    },
+    "m44-nir.int.spec.ts": {
+     "cenario": "NIR: reserva concorrente do leito, conflito da reserva, admissão vinda do NIR consumindo a reserva na mesma transação, leituras da fila",
+     "onde": "apps/api/src/modulos/adt/nir-porta-propria.int.spec.ts; apps/worker/src/nir-reserva.int.spec.ts; apps/api/src/modulos/adt/porta-propria.int.spec.ts"
+    },
+    "m45-e1.int.spec.ts": {
+     "cenario": "ciclo do formulário novo (rascunho, revisão, aprovação por outra pessoa, publicação, aposentadoria) e leitor de modelos; RTF em código de página antigo",
+     "onde": "nenhum: a porta do formulário novo é a indisponível em apps/api/src/modulos/pep/modulo.ts (ver operacao-faltante); o RTF em código de página antigo sai por ADR 0003 (utf8mb4)"
+    },
+    "m45-e2.int.spec.ts": {
+     "cenario": "índices de UTI (APACHE II), escalas em formulário (Braden, Morse), NEWS2, classificação do turno, índice registrado e validado",
+     "onde": "apps/api/src/modulos/enfermagem/porta-propria.int.spec.ts (NEWS2, escalas). Índice de gravidade da UTI (registrar, validar, estornar) e classificação Fugulin/NAS: indisponíveis (escores-porta-propria.ts:1061-1067 lançam pendente), operacao-faltante (ver pedidos e avisos)"
+    },
+    "m45-e3.int.spec.ts": {
+     "cenario": "balanço hídrico com checagem reenviada sem rede (ganho uma vez), fechamento de 24 h uma vez, trava da janela",
+     "onde": "apps/api/src/modulos/enfermagem/aplicacao/balanco-origem-checagem.int.spec.ts; apps/api/src/modulos/enfermagem/porta-propria.int.spec.ts"
+    },
+    "m45-e4.int.spec.ts": {
+     "cenario": "SAE (processo, evolução, revisão com versão, atividades), checagem não feita, estorno, suspensão, terminologia, receita do enfermeiro, vacina com evento na saída",
+     "onde": "apps/api/src/modulos/enfermagem/sae-porta-propria.int.spec.ts (processo, evolução, revisão com versão); sae.autorizacao.int.spec.ts. Prescrição, suspensão, checagem e estorno do cuidado do enfermeiro, terminologia licenciada e receita do enfermeiro (prescrever e inativar): indisponíveis (sae-porta-propria.ts:545-563 em modeloPendente), operacao-faltante (ver pedidos e avisos). suspensao.int.spec.ts e checar.idempotencia.int.spec.ts provam a checagem e a suspensão do item médico, não as do cuidado do enfermeiro"
+    },
+    "m45-e5.int.spec.ts": {
+     "cenario": "nutrição (fila de triagem, terapia, mapa de dietas, jejum da agenda cirúrgica, dieta de outro profissional) e serviço social (parecer com sigilo, barreira social do NIR)",
+     "onde": "apps/api/src/modulos/nutricao/porta-propria.int.spec.ts (nutrição e mapa). Serviço social: registrarSocial e adendoSocial indisponíveis e sociais() vazio (nutricao/porta-propria.ts:401/415/721), operacao-faltante (ver pedidos e avisos)"
+    },
+    "m45-e6.int.spec.ts": {
+     "cenario": "oftalmologia, protocolo e ciclo oncológico com validação por outra pessoa e ligação à prescrição, partograma, recém-nascido, ordem do lactário com conferência",
+     "onde": "apps/api/src/modulos/especialidades/porta-propria.int.spec.ts prova só o partograma (e a leitura do recém-nascido sem medidas). Exame oftalmológico, registro do recém-nascido, protocolo, ciclo, validação, ligação à prescrição e eventos oncológicos, e lactário inteiro: indisponíveis (especialidades/porta-propria.ts:523-539 pendente), operacao-faltante (ver pedidos e avisos)"
+    },
+    "m46-e1.int.spec.ts": {
+     "cenario": "avaliação pré-anestésica, ficha anestésica (marcos, sinais, fármaco, gás, fluido), recuperação pós-anestésica; cancelamento pelo outro sistema (coexistência)",
+     "onde": "ficha.autorizacao.int.spec.ts e trava-incisao.int.spec.ts provam a autorização e a trava, não a gravação. APA, ficha, SRPA: gravação indisponível (anestesia-porta-propria.ts só lê; executar recusa tudo), operacao-faltante (ver pedidos e avisos). A parte de coexistência sai por ADR 0003"
+    },
+    "m46-e2.int.spec.ts": {
+     "cenario": "checklist de cirurgia segura (entrada e pausa) e movimentação do paciente no bloco; cancelamento pelo outro sistema (coexistência)",
+     "onde": "cirurgia/porta-propria.int.spec.ts (agenda e andamento) e trava-incisao.int.spec.ts. Checklist (entrada, pausa, confirmação) e movimento do paciente no bloco: gravação indisponível (bloco-seguro-porta-propria.ts só lê; executar recusa tudo), operacao-faltante (ver pedidos e avisos). A coexistência sai por ADR 0003"
+    },
+    "m46-e3.int.spec.ts": {
+     "cenario": "OPME: solicitação, autorização, saída ao paciente com conta aberta gravando o rastreio na mesma transação, recusa sem conta, rastreio reverso por lote",
+     "onde": "nenhum: opme-porta-propria.int.spec.ts só lê classe, consignado e local com saldo. Solicitação, etapas, consumo em sala com rastreio, devolução, rastreio reverso e itens da conta: indisponíveis (opme-porta-propria.ts:25-41 OPME_PENDENTE), operacao-faltante (ver pedidos e avisos)"
+    },
+    "m46-e4.int.spec.ts": {
+     "cenario": "consignado (remessa, consumo, reposição, faturamento, consumo reposto recusado, devoluções simultâneas) e manipulação (ordem, dupla conferência por outra pessoa, baixa do insumo na mesma transação)",
+     "onde": "consignado-porta-propria.int.spec.ts prova cadastro, remessa, devolução e outro estabelecimento. Consumo, reposição, faturamento, 'consumo reposto recusado' e devoluções simultâneas: cenario-sem-prova (consumo e saldo aguardam o pedido de saida/03-13.json). Manipulação: a fila, a ordem, a dupla conferência e a baixa do insumo estão indisponíveis (suprimentos/manipulacao-porta-propria.ts MANIPULACAO_PENDENTE), operacao-faltante (ver pedidos e avisos); opme-porta-propria.int.spec.ts:51 só lê capelas"
+    },
+    "m47-e1.int.spec.ts": {
+     "cenario": "ato transfusional: requisição, amostra, início com dupla checagem e sinais na mesma transação, reenvio sem duplicar, conclusão com ganho no balanço, reação; liberação em lote com pré-requisito",
+     "onde": "apps/api/src/modulos/enfermagem/transfusao-porta-propria.int.spec.ts; apps/api/src/modulos/enfermagem/aplicacao/dupla-checagem.int.spec.ts; apps/api/src/modulos/config/configuracao-propria.int.spec.ts (liberação em lote e pré-requisito)"
+    },
+    "m47-e2.int.spec.ts": {
+     "cenario": "agência transfusional: tipagem com dupla conferência, bolsa (número único), prova cruzada, reserva, início com a bolsa conferida no estoque, bolsa em quarentena recusada; liberação com pré-requisito",
+     "onde": "enfermagem/transfusao-porta-propria.int.spec.ts (requisição, amostra, início com bolsa do estoque, reação); configuracao-propria.int.spec.ts (pré-requisito). Bolsa em quarentena recusada no início: cenario-sem-prova (0 ocorrências de 'quarentena' no spec)"
+    },
+    "m48-e2-sugestao.int.spec.ts": {
+     "cenario": "dose marcada como não administrada por fora do sistema vira sugestão",
+     "onde": "sai por ADR 0003: o cenário só existe na coexistência (alteração direta da cópia por outro sistema); sobre o banco próprio toda checagem passa pela operação, coberta em apps/api/src/modulos/enfermagem/aplicacao/checar.idempotencia.int.spec.ts"
+    },
+    "m50-3.int.spec.ts": {
+     "cenario": "bloco confirma pedido do portal do médico externo agendando a cirurgia com cirurgião fora das opções do mapa",
+     "onde": "nenhum: portal-medico/porta-propria.int.spec.ts não tem confirmação nem mapa; cirurgia/porta-propria.int.spec.ts só cobre retirarPedidoPortal. Ver cenario-sem-prova (dono cirurgia/portal-medico)"
+    },
+    "m50-4.int.spec.ts": {
+     "cenario": "teleconsulta abre o atendimento a partir da marcação, sem senha, na mesma transação; sem sala aberta tudo desfeito",
+     "onde": "apps/api/src/modulos/telemedicina/porta-propria.int.spec.ts; apps/api/src/modulos/atendimento/porta-propria.int.spec.ts"
+    },
+    "m50-e5.int.spec.ts": {
+     "cenario": "portaria: visita com crachá, bloqueio por paciente relido na transação, acompanhante com troca, catraca uma vez só, visita vencida, entradas simultâneas",
+     "onde": "portaria/porta-propria.int.spec.ts (visita com crachá, bloqueio, acompanhante com troca, saída uma vez); porteiro.autorizacao.int.spec.ts. Catraca: indisponível (portaria/porta-propria.ts:1252 registrarEventoCatraca), operacao-faltante (ver pedidos e avisos). Entradas simultâneas: cenario-sem-prova (sem teste concorrente)"
+    }
+   }
+  },
+  {
+   "tipo": "limpeza-fora-do-lote",
+   "arquivo": "tools/verificadores/src/guardas-legado.ts",
+   "motivo": "exceções órfãs apontando specs apagados por este lote (linhas ~176, 493, 500, 558, 564, 570, 576 e outras que casem m44-*, m45-*, m46-*, m47-*, m48-e2-sugestao, m50-3/4/e5 em packages/testes/src/integracao): remover; grep -n 'packages\\\\/testes\\\\/src\\\\/integracao\\\\/m4[4-8]\\\\|m50-' no arquivo."
+  },
+  {
+   "tipo": "conferidor",
+   "arquivo": "tools/obra/conferir-lote-f22.sh",
+   "motivo": "lote só de remoção: o passo 0 acusa 'nenhum arquivo do lote existe' quando todos os arquivos da lista foram apagados de propósito (o brief diz que arquivo apagado sai da conferência sozinho). Sugestão: com a lista toda apagada e nenhum novo nas pastas, devolver 'ok (lote só de remoção)'."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/especialidades",
+   "operacao": "especialidades: exame oftalmológico (registrarExame)",
+   "motivo": "Tabelas existem: exame_oftalmologico, exame_oftalmologico_valor, tipo_exame_oftalmologico, grupo_exame_oftalmologico (db/migracoes/06_PEP/05 e 11). Pedido: gravação pelo Executor com contrato de efeito; sem DDL novo."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/especialidades",
+   "operacao": "especialidades: registro do recém-nascido (reanimação e observação)",
+   "motivo": "internacao_recem_nascido (07_INT/02_tabelas.sql) tem Apgar, mas o grep não achou colunas de reanimação nem de observação. Pedido: porta pelo Executor sobre internacao_recem_nascido e, se confirmada a falta, o DDL (ver item ddl)."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/especialidades",
+   "operacao": "especialidades: protocolo oncológico versionado, ciclo (registrar, validar por outra pessoa, ajustar, andamento), ligar/desligar prescrição, evento oncológico, revogar versão",
+   "motivo": "Tabelas existem: protocolo_quimioterapia, protocolo_quimioterapia_droga, ciclo_quimioterapia, tratamento_oncologico, acompanhamento_oncologico(_evento). Pedido: porta pelo Executor; validação por pessoa diferente no domínio; recusa sem prescrição ligada. Versão do protocolo: conferir se protocolo_quimioterapia tem versão; se não, DDL (item ddl)."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/especialidades",
+   "operacao": "especialidades: ordem do lactário (registrar, alterar, cancelar, conferir por outra pessoa, etiqueta, histórico)",
+   "motivo": "Confirmado: especialidades/porta-propria.ts:529-539 lança pendente. Tabelas preparo_lactario e preparo_lactario_item existem (09_HOT/03_tabelas.sql); sem DDL novo."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/enfermagem (escores)",
+   "operacao": "enfermagem: índice de gravidade da UTI (registrar, validar, estornar) e classificação Fugulin/NAS; inclusão e evento do protocolo gerenciado do internado",
+   "motivo": "escores-porta-propria.ts:1061-1067 e 1258-1261 lançam pendente. Tabelas existem: indice_gravidade_uti, classificacao_paciente (06_PEP/14_tabelas.sql), inclusao_protocolo_paciente, inclusao_protocolo_evento (já lidas pela porta). Pedido: gravação pelo Executor com o cálculo no domínio (caso publicado APACHE II 22 pontos e 45,2%), validação por outra pessoa e escores-porta-propria.int.spec.ts com a publicação concorrente recusada."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/enfermagem (SAE)",
+   "operacao": "enfermagem: prescrição, suspensão, checagem e estorno do cuidado do enfermeiro; terminologia licenciada por estabelecimento; receita do enfermeiro (prescrever, inativar)",
+   "motivo": "sae-porta-propria.ts:545-563 em modeloPendente. Tabelas existem: cuidado_enfermagem, prescricao_item_cuidado, terminologia, terminologia_licenca_estabelecimento (17_INTG), receita_medica e receita_medica_item (prescritor_profissional_id). Pedido: porta pelo Executor. A receita do enfermeiro precisa do protocolo institucional que autoriza o medicamento e da lista permitida: conferir no DDL; se faltar, pedir o DDL (item ddl)."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/nutricao",
+   "operacao": "serviço social: registrarSocial, adendoSocial e a leitura sociais()/ultimosSociais()",
+   "motivo": "Corrige o pedido anterior (a porta é nutricao/porta-propria.ts, rotas /api/servico-social em nutricao.controller.ts). registrarSocial (:401) e adendoSocial (:415) lançam modeloPendente e sociais() (:721) devolve [] sem registro. A tabela registro_social existe completa (06_PEP/15_tabelas.sql:40: tipo, rede_apoio, vulnerabilidades, risco, encaminhamentos, parecer, barreira_alta_id, adendo com CHECK e versao). Sem DDL novo. Pedido: gravação pelo Executor com a barreira_alta_id (barreira social do NIR) na mesma transação; o parecer fica só na tabela (fora da trilha); leitura filtrando estabelecimento e excluido_em IS NULL."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/cirurgia",
+   "operacao": "cirurgia: gravação da APA, da ficha anestésica (marcos, sinais, fármaco, gás, fluido), da SRPA, do checklist de cirurgia segura e do movimento do paciente no bloco",
+   "motivo": "anestesia-porta-propria.ts e bloco-seguro-porta-propria.ts só leem; executar() recusa com 'operacao-desconhecida', que parece operação inexistente. Tabelas existem: avaliacao_pre_anestesica, ficha_anestesica, lancamento_ficha_anestesica, ficha_anestesica_tecnica, adendo_ficha_anestesica, avaliacao_recuperacao_anestesica, registro_recuperacao_anestesica (08_CC/01 e 02), checklist_cirurgia_segura, confirmacao_checklist_cirurgia, movimento_paciente_bloco (com o CHECK de atraso com motivo). Pedido: (1) já agora, trocar a recusa de executar() nos dois arquivos para ErroOperacao 409 'modelo-pendente' com o nome da operação; (2) a gravação pelo Executor, com a SRPA ligada à cirurgia realizada e a APA v2 'inapto' reabrindo pendências; anestesia-porta-propria.int.spec.ts e bloco-seguro-porta-propria.int.spec.ts."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/suprimentos (OPME)",
+   "operacao": "suprimentos: OPME inteiro (solicitação e etapas, autorização, consumo em sala com conta aberta e rastreio na mesma transação, devolução, rastreio reverso por lote, itens da conta)",
+   "motivo": "opme-porta-propria.ts:25-41 (OPME_PENDENTE). Tabelas existem: solicitacao_opme, solicitacao_opme_item (11_SUP/05), consumo_opme (11_SUP/01). Sem DDL novo."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/suprimentos (manipulação)",
+   "operacao": "suprimentos: manipulação (fila a manipular, ordem, dupla conferência por outra pessoa, baixa do insumo na mesma transação)",
+   "motivo": "manipulacao-porta-propria.ts MANIPULACAO_PENDENTE. Tabelas existem: ordem_manipulacao, ordem_manipulacao_insumo, conferencia_manipulacao. Sem DDL novo."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/portaria",
+   "operacao": "portaria: registro da passagem pela catraca (uma vez só)",
+   "motivo": "portaria/porta-propria.ts:1252 registrarEventoCatraca em modeloPendente. Tabela evento_acesso_portaria existe (17_INTG/01_tabelas.sql). Sem DDL novo; pedir a chave única do evento por terminal e instante para o 'uma vez só'."
+  },
+  {
+   "tipo": "cenario-sem-prova",
+   "lote_sugerido": "dono de apps/api/src/modulos/adt (NIR)",
+   "motivo": "regulação: número informado à mão e número de outra solicitação recusado; nir-porta-propria.int.spec.ts:156 só prova a solicitação à central."
+  },
+  {
+   "tipo": "cenario-sem-prova",
+   "lote_sugerido": "dono de apps/api/src/modulos/portaria",
+   "motivo": "entradas simultâneas na portaria (visita do mesmo visitante em paralelo): sem teste concorrente (nenhum Promise.all no spec)."
+  },
+  {
+   "tipo": "cenario-sem-prova",
+   "lote_sugerido": "dono de apps/api/src/modulos/suprimentos (consignado)",
+   "motivo": "consignado: consumo, reposição, faturamento, consumo reposto recusado e devoluções simultâneas; o spec só tem cadastro, remessa, devolução e outro estabelecimento. A escrita de saldo_consignado e reposicao_consignada segue o pedido de saida/03-13.json."
+  },
+  {
+   "tipo": "cenario-sem-prova",
+   "lote_sugerido": "dono de apps/api/src/modulos/enfermagem (agência transfusional)",
+   "motivo": "bolsa em quarentena recusada no início da transfusão (agencia.controller.ts recebe em quarentena; transfusao-porta-propria.int.spec.ts não prova a recusa)."
+  },
+  {
+   "tipo": "cenario-sem-prova",
+   "lote_sugerido": "dono de apps/api/src/modulos/cirurgia e portal-medico",
+   "motivo": "o bloco confirma o pedido do portal do médico externo agendando a cirurgia (cirurgião fora das opções do mapa): nenhum spec prova a confirmação; cirurgia/porta-propria.int.spec.ts só cobre retirarPedidoPortal."
+  },
+  {
+   "tipo": "operacao-faltante",
+   "lote_sugerido": "dono de apps/api/src/modulos/pep",
+   "operacao": "pep: formulário novo (rascunho, revisão, aprovação por outra pessoa, publicação, aposentadoria e leitor de modelos)",
+   "motivo": "pep/modulo.ts usa portaFormularioNovoIndisponivel(); só existem formulario-novo-porta-memoria.ts e a porta. Tabelas candidatas: modelo_documento_clinico, modelo_documento_versao (conferir se cobrem rascunho/revisão/aprovação; se não, DDL). Pedido: porta própria pelo Executor, hash da definição relida igual, aprovação por pessoa diferente da autora (domínio), código repetido recusado (UNIQUE)."
+  },
+  {
+   "tipo": "ddl",
+   "itens": [
+    {
+     "condicional": "se internacao_recem_nascido não tiver as colunas",
+     "tabela": "internacao_recem_nascido",
+     "alteracao": "ADD reanimacao_realizada BOOLEAN NOT NULL DEFAULT FALSE, ADD reanimacao_manobras VARCHAR(500) NULL, ADD observacao_clinica TEXT NULL, ADD versao INT UNSIGNED NOT NULL DEFAULT 1; CHECK (reanimacao_realizada OR reanimacao_manobras IS NULL)"
+    },
+    {
+     "condicional": "se protocolo_quimioterapia não for versionado",
+     "tabela": "protocolo_quimioterapia_versao",
+     "alteracao": "CREATE TABLE: id BIGINT UNSIGNED PK, protocolo_quimioterapia_id FK NOT NULL, numero_versao INT UNSIGNED NOT NULL, publicada_em DATETIME NULL, revogada_em DATETIME NULL, motivo_revogacao VARCHAR(500) NULL, auditoria padrão (criado_em, criado_por, versao, excluido_em); UNIQUE (protocolo_quimioterapia_id, numero_versao); CHECK (revogada_em IS NULL OR motivo_revogacao IS NOT NULL)"
+    },
+    {
+     "condicional": "se receita_medica não tiver o protocolo que autoriza a receita do enfermeiro",
+     "tabela": "protocolo_receita_enfermagem e protocolo_receita_enfermagem_item",
+     "alteracao": "CREATE TABLE do protocolo institucional (estabelecimento_id, codigo UNIQUE por estabelecimento, descricao, vigente_de, vigente_ate) e itens (produto_id FK, dose máxima) + receita_medica.protocolo_receita_enfermagem_id FK NULL"
+    }
+   ]
+  }
+ ],
+ "avisos": [
+  "Corrigido: o aviso anterior dizia que índice de UTI, protocolo gerenciado, APA/ficha/SRPA, movimento no bloco e ciclo oncológico 'existem'; não existem: a gravação é recusada. Os 18 specs apagados eram a única prova desses cenários; a falta fica registrada como operacao-faltante e cenario-sem-prova.",
+  "Indisponível sobre o MariaDB (409 modelo-pendente): exame oftalmológico; registro do recém-nascido; protocolo, ciclo, validação, ligação à prescrição e eventos oncológicos; ordem do lactário inteira.",
+  "Indisponível: índice de gravidade da UTI (registrar, validar, estornar), classificação Fugulin/NAS, inclusão e evento do protocolo gerenciado do internado.",
+  "Indisponível: prescrição, suspensão, checagem e estorno do cuidado do enfermeiro; terminologia licenciada; receita do enfermeiro (prescrever e inativar).",
+  "Indisponível: serviço social. A avaliação social (registrarSocial) e o adendo (adendoSocial) recusam, e a listagem /api/servico-social volta vazia (nutricao/porta-propria.ts:721), embora a tabela registro_social exista.",
+  "Indisponível: gravação da APA, da ficha anestésica, da SRPA, do checklist de cirurgia segura e do movimento do paciente no bloco. Hoje a recusa sai como 'operacao-desconhecida' em vez de 409 modelo-pendente; troca pedida ao dono de cirurgia (arquivo fora deste lote).",
+  "Indisponível: OPME inteiro (solicitação, etapas, consumo, devolução, rastreio reverso, itens da conta) e manipulação (fila, ordem, dupla conferência, baixa do insumo).",
+  "Indisponível: registro da passagem pela catraca na portaria.",
+  "Indisponível: formulário novo do prontuário (criar, revisar, aprovar, publicar, aposentar).",
+  "Sem prova (operação existe): regulação com número à mão e número de outra solicitação; entradas simultâneas na portaria; consumo/reposição/faturamento do consignado; bolsa em quarentena recusada; confirmação do pedido do portal pelo bloco.",
+  "Lote só de remoção: nenhum arquivo de código editado; os achados sobre nutricao/porta-propria.ts e cirurgia/*-porta-propria.ts viraram pedidos, porque esses arquivos são de outros lotes."
+ ]
+}

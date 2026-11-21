@@ -1,20 +1,14 @@
-// Serviço do publicador das cargas de catálogo no worker (ficha do M13): a cada CATALOGO_PUBLICADOR_MS (padrão
-// 30 s), por estabelecimento, o lote seguinte das cargas aprovadas, na janela fora do pico
-// (CATALOGO_JANELA_PUBLICACAO, padrão 22:00-06:00). Ligado fora de dev/ci; em dev/ci só com
-// CATALOGO_PUBLICADOR=ligado (a cópia é compartilhada: a publicação é provada pelos testes de integração, com
-// ROLLBACK). Fora de produção, CATALOGO_PUBLICAR_FORA_DA_JANELA=sim publica a qualquer hora. Log só com códigos e
-// contagens.
-import { resolve } from 'node:path';
+// Serviço do publicador das cargas de catálogo no worker (ficha do M13; lote F2.2 05-16): a cada
+// CATALOGO_PUBLICADOR_MS (padrão 30 s), por cliente e estabelecimento, o lote seguinte das cargas aprovadas, na janela
+// fora do pico (CATALOGO_JANELA_PUBLICACAO, padrão 22:00-06:00), pela porta própria (Executor do banco do cliente).
+// Ligado fora de dev/ci; em dev/ci só com CATALOGO_PUBLICADOR=ligado. Fora de produção,
+// CATALOGO_PUBLICAR_FORA_DA_JANELA=sim publica a qualquer hora. Log só com códigos e contagens.
+// Melhoria: os clientes vêm da plataforma e os estabelecimentos do banco de cada cliente (sem lista fixa de bancos).
 import { Injectable, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
 import { lerJanela } from '@sgh/dominio-catalogo';
-import {
-  fonteCatalogoArquivo,
-  lerCodigos,
-  lerConfiguracaoNucleo,
-  lerInteiroAmbiente,
-  NucleoLegado,
-} from '@sgh/legado';
-import { criarDriverNativo } from '@sgh/legado/nativo';
+import { lerInteiroAmbiente, NucleoProprio } from '@sgh/nucleo';
+import { clientesDoWorker, codigosDosEstabelecimentos } from './clientes-worker.js';
+import { PortaPublicacaoPropria } from './importadores/porta-propria.js';
 import { cicloPublicacao } from './importadores/publicador.js';
 import { logger } from './logger.js';
 
@@ -33,7 +27,7 @@ export function minutosCivis(d = new Date()): number {
 
 @Injectable()
 export class PublicadorCatalogosService implements OnApplicationBootstrap, OnApplicationShutdown {
-  private nucleo: NucleoLegado | null = null;
+  private nucleo: NucleoProprio | null = null;
   private temporizador: NodeJS.Timeout | undefined;
   private rodando = false;
 
@@ -41,16 +35,7 @@ export class PublicadorCatalogosService implements OnApplicationBootstrap, OnApp
     if (!publicadorLigado(process.env)) return;
     try {
       const intervalo = lerInteiroAmbiente(process.env, 'CATALOGO_PUBLICADOR_MS', 30_000, 1_000, 3_600_000);
-      process.env['SGH_PROCESSO'] ??= 'worker';
-      this.nucleo = new NucleoLegado({
-        env: process.env,
-        driver: criarDriverNativo({ biblioteca: lerConfiguracaoNucleo(process.env).bibliotecaCliente }),
-        pastaHomologada: resolve(
-          process.cwd(),
-          process.env['SCHEMA_HOMOLOGADO_DIR'] ?? 'tools/schema-check/homologado',
-        ),
-        aviso: (m, c) => logger.warn(c, m),
-      });
+      this.nucleo = new NucleoProprio({ env: process.env });
       this.temporizador = setInterval(() => void this.ciclo(), intervalo);
       this.temporizador.unref();
     } catch (e) {
@@ -59,44 +44,47 @@ export class PublicadorCatalogosService implements OnApplicationBootstrap, OnApp
   }
 
   async ciclo(): Promise<void> {
-    if (this.rodando || !this.nucleo) return;
-    this.rodando = true;
     const nucleo = this.nucleo;
+    if (this.rodando || !nucleo) return;
+    this.rodando = true;
     try {
-      const executor = nucleo.criarExecutor({
-        catalogo: fonteCatalogoArquivo(
-          resolve(process.cwd(), process.env['CATALOGO_OPERACOES'] ?? 'docs/operacoes/catalogo'),
-        ),
-      });
       const producao = (process.env['AMBIENTE'] ?? '').trim() === 'producao';
-      for (const cod of lerCodigos(process.env)) {
-        const ctx = { rede: nucleo.rede, hospital: cod, traceId: 'publicador-catalogos' };
+      for (const cliente of await clientesDoWorker(nucleo, process.env, 'publicador-catalogos')) {
+        let estabelecimentos: string[] = [];
         try {
-          const r = await cicloPublicacao({
-            rede: nucleo.rede,
-            hospital: cod,
-            executor,
-            ler: (fn) => nucleo.lerSomente(ctx, fn),
-            gravarSgh: (fn) => nucleo.gravarSgh(ctx, fn),
-            janela: lerJanela(process.env['CATALOGO_JANELA_PUBLICACAO']),
-            agoraMinutos: () => minutosCivis(),
-            ignorarJanela: !producao && process.env['CATALOGO_PUBLICAR_FORA_DA_JANELA'] === 'sim',
-            lotesPorCiclo: lerInteiroAmbiente(process.env, 'CATALOGO_LOTES_POR_CICLO', 20, 1, 1_000),
-            log: (m, c) => logger.info({ estabelecimento: cod, ...c }, m),
-          });
-          for (const x of r)
-            if (x.lotes > 0 || x.situacao === 'falhou')
-              logger.info(
-                { estabelecimento: cod, carga: x.carga, lotes: x.lotes, situacao: x.situacao },
-                'publicador de catálogos',
-              );
-        } catch (e) {
-          logger.warn(
-            { estabelecimento: cod, erro: e instanceof Error ? e.name : 'erro' },
-            'publicador de catálogos: ciclo falhou',
+          estabelecimentos = await nucleo.lerSomente(
+            { cliente, correlacao: 'publicador-catalogos' },
+            codigosDosEstabelecimentos,
           );
+        } catch (e) {
+          logger.warn({ cliente, erro: e instanceof Error ? e.name : 'erro' }, 'publicador: cliente indisponível');
+        }
+        for (const cod of estabelecimentos) {
+          try {
+            const r = await cicloPublicacao({
+              porta: new PortaPublicacaoPropria(nucleo, cliente, cod),
+              janela: lerJanela(process.env['CATALOGO_JANELA_PUBLICACAO']),
+              agoraMinutos: () => minutosCivis(),
+              ignorarJanela: !producao && process.env['CATALOGO_PUBLICAR_FORA_DA_JANELA'] === 'sim',
+              lotesPorCiclo: lerInteiroAmbiente(process.env, 'CATALOGO_LOTES_POR_CICLO', 20, 1, 1_000),
+              log: (m, c) => logger.info({ cliente, estabelecimento: cod, ...c }, m),
+            });
+            for (const x of r)
+              if (x.lotes > 0 || x.situacao === 'falhou')
+                logger.info(
+                  { cliente, estabelecimento: cod, carga: x.carga, lotes: x.lotes, situacao: x.situacao },
+                  'publicador de catálogos',
+                );
+          } catch (e) {
+            logger.warn(
+              { cliente, estabelecimento: cod, erro: e instanceof Error ? e.name : 'erro' },
+              'publicador de catálogos: ciclo falhou',
+            );
+          }
         }
       }
+    } catch (e) {
+      logger.warn({ erro: e instanceof Error ? e.name : 'erro' }, 'publicador de catálogos: clientes indisponíveis');
     } finally {
       this.rodando = false;
     }

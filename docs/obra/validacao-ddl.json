@@ -1,14 +1,14 @@
 {
  "resumo": {
   "banco": "validacao",
-  "tabelas_criadas": 3605,
-  "catalogo": 3599,
+  "tabelas_criadas": 3606,
+  "catalogo": 3600,
   "faltam": 0,
   "fora_catalogo": 0,
   "arquivos_com_erro": 0,
   "erros_sql": 0,
   "tabelas_com_erro": 0,
-  "colunas_id_sem_fk": 72,
+  "colunas_id_sem_fk": 74,
   "fks": 13802,
   "gatilhos": 0,
   "plataforma_erros": 0,
@@ -124,6 +124,9 @@
    "laudo_bem_id sem FK",
    "estorno_usuario_id sem FK"
   ],
+  "lote_tiss_conta": [
+   "conta_sem_guia_id sem FK"
+  ],
   "pin_troca_rapida": [
    "usuario_vivo_id sem FK"
   ],
@@ -156,6 +159,9 @@
   ],
   "laudo_bem": [
    "bem_patrimonial_id sem FK"
+  ],
+  "item_lista_trabalho_imagem": [
+   "exame_item_vigente_id sem FK"
   ],
   "periodo_situacao_leito": [
    "leito_vigente_id sem FK"

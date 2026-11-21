@@ -1,115 +1,114 @@
-// Outbox sobre a cópia (ficha do M04, regra 7 e seção 10): legado, SGH_ e outbox na mesma transação —
-// transação desfeita não deixa evento; o relay com o Valkey "parado" (publicador que falha) deixa o evento
-// pendente, com nova tentativa; quando volta, o evento sai uma vez e não sai de novo. Tudo na transação
-// desfeita do teste (o relay usa o mesmo escritor); a publicação real no BullMQ é coberta no worker.
-import { chaveDoEvento, cicloRelay, operacao, type PendenteOutbox } from '@sgh/legado';
+// Mensagem de saída (outbox) do núcleo sobre o MariaDB real (cliente f22_o5), em transação desfeita. Substitui o spec
+// do outbox sobre a cópia do sistema de origem (tabela de saída da cópia, relay rodando no escritor da cópia):
+//   - a mensagem nasce na MESMA transação do negócio, como 'saida' e 'pendente', sem tentativa, ligada à entidade e
+//     ao estabelecimento da sessão: é o ponto de partida do relay do worker;
+//   - a carga leva só ids e códigos: o nome gravado no negócio não vai para a mensagem (LGPD);
+//   - outra conexão não enxerga a mensagem antes da confirmação (o relay nunca publica o que pode ser desfeito);
+//   - depois do ROLLBACK, nem a mensagem nem a linha do negócio ficam.
+// O relay (falha do Valkey, nova tentativa, publicação uma vez só) é provado em apps/worker/src/relay-outbox.int.spec.ts.
+// Saída só com contagens e ids (dados sintéticos).
+// Melhoria: a carga sem dado de pessoa é conferida no banco, no conteúdo gravado, e não só no objeto em memória.
+// Melhoria: a invisibilidade antes do COMMIT é provada com uma segunda conexão real (isolamento do MariaDB).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { loginLivre, usuarioSintetico } from '../massa/sintetica.js';
 import {
   type Ambiente,
+  codigoSintetico,
   contar,
   ctx,
   ctxOperacao,
-  PODE_ESCREVER,
+  desfeito,
+  incluirEstabelecimento,
+  MARCA,
+  num,
   prepararAmbiente,
+  SEM_BANCO,
 } from './escrita.spec-util.js';
 
-const criarUsuario = operacao('acesso.criarUsuarioIntegracao');
+/** Todos os valores folha de uma carga JSON. */
+function folhas(v: unknown): unknown[] {
+  if (v === null || typeof v !== 'object') return [v];
+  return Object.values(v as Record<string, unknown>).flatMap(folhas);
+}
 
-describe.skipIf(!PODE_ESCREVER)('outbox na cópia (transação desfeita)', () => {
-  let a: Ambiente;
-  beforeAll(async () => {
-    a = await prepararAmbiente();
-  });
-  afterAll(async () => {
-    await a?.nucleo.encerrar();
-  });
+describe.skipIf(SEM_BANCO)(
+  'mensagem de saída do núcleo no MariaDB (cliente f22_o5, transação desfeita)',
+  () => {
+    let a: Ambiente;
+    beforeAll(async () => {
+      a = await prepararAmbiente();
+    });
+    afterAll(async () => {
+      await a?.nucleo.encerrar();
+    });
 
-  it('o evento nasce na transação do negócio e some com o ROLLBACK; o relay respeita a falha e publica uma vez', async () => {
-    let chave = '';
-    const r = await a.nucleo.desfazendoNaCopia(ctx(a), async (e) => {
-      const login = await loginLivre(e, Date.now() % 1_000_000);
-      const c = ctxOperacao(a, 'SGH.TESTE');
-      const s = await a.executor.executar(
-        criarUsuario,
-        a.cod,
-        usuarioSintetico('usuario-tecnico', login),
-        c,
-        { escritor: e },
-      );
-      chave = chaveDoEvento(a.cod, 'acesso.criarUsuarioIntegracao', c.idempotencyKey, 0);
-      const naTransacao = await contar(e, 'SELECT COUNT(*) N FROM SGH_OUTBOX WHERE CHAVE_EVENTO = ?', [
-        chave,
-      ]);
-      const acesso = {
-        ler: <T>(fn: (l: typeof e) => Promise<T>) => fn(e),
-        escrever: <T>(fn: (w: typeof e) => Promise<T>) => fn(e),
-      };
-      const cfg = { lote: 1000, tentativas: 5, esperaInicialS: 0, esperaMaximaS: 0 };
-      const publicados: PendenteOutbox[] = [];
-      const parado = await cicloRelay(
-        acesso,
-        a.cod,
-        async () => {
-          throw new Error('connect ECONNREFUSED 127.0.0.1:1');
-        },
-        cfg,
-      );
-      const [pend] = await e.consultar(
-        'SELECT SITUACAO, TENTATIVAS FROM SGH_OUTBOX WHERE CHAVE_EVENTO = ?',
-        [chave],
-        { teto: 1 },
-      );
-      const voltou = await cicloRelay(
-        acesso,
-        a.cod,
-        async (ev) => {
-          publicados.push(ev);
-        },
-        cfg,
-      );
-      const deNovo = await cicloRelay(
-        acesso,
-        a.cod,
-        async (ev) => {
-          publicados.push(ev);
-        },
-        cfg,
-      );
-      const [pub] = await e.consultar('SELECT SITUACAO FROM SGH_OUTBOX WHERE CHAVE_EVENTO = ?', [chave], {
-        teto: 1,
+    it('nasce pendente na transação do negócio, só com ids, invisível a outra conexão e desfeita com o ROLLBACK', async () => {
+      const codigo = codigoSintetico();
+      const nome = `Hospital ${MARCA} ${codigo}`;
+      const c = ctxOperacao(a);
+      let mensagem = 0;
+      const r = await desfeito(a, async (e) => {
+        const s = await a.executor.executar(incluirEstabelecimento, c.cliente, { codigo, nome }, c, {
+          escritor: e,
+        });
+        const id = num(s.resultado['id']);
+        mensagem = num(s.eventos[0]);
+        const linha = await e.uma<{
+          direcao: string;
+          situacao: string;
+          tentativas: number;
+          entidade_id: number | null;
+          estabelecimento_id: number | null;
+          conteudo: string | null;
+        }>(
+          `SELECT direcao, situacao, tentativas, entidade_id, estabelecimento_id, conteudo
+           FROM integracao_mensagem WHERE id = ?`,
+          [mensagem],
+        );
+        const conteudo = String(linha?.conteudo ?? '');
+        let valores: unknown[];
+        try {
+          valores = folhas(JSON.parse(conteudo));
+        } catch {
+          valores = [conteudo];
+        }
+        // Segunda conexão, com a transação do negócio ainda aberta: não pode ver a mensagem.
+        const vistaDeFora = await a.nucleo.lerSomente(ctx(a, 'int-outbox-fora'), (l) =>
+          contar(l, 'SELECT COUNT(*) AS n FROM integracao_mensagem WHERE id = ?', [mensagem]),
+        );
+        return {
+          eventos: s.eventos.length,
+          direcao: linha?.direcao,
+          situacao: linha?.situacao,
+          tentativas: num(linha?.tentativas),
+          daEntidade: num(linha?.entidade_id) === id,
+          carregaOId: valores.some((v) => num(v) === id),
+          semNome: !conteudo.includes(MARCA),
+          soIdsECodigos: valores.every(
+            (v) =>
+              v === null ||
+              typeof v === 'number' ||
+              typeof v === 'boolean' ||
+              /^[A-Za-z0-9._:-]{0,64}$/.test(String(v)),
+          ),
+          vistaDeFora,
+        };
       });
-      return {
-        eventos: s.eventos.length,
-        naTransacao,
-        parado: {
-          falhas: parado.falhas,
-          situacao: String(pend?.['SITUACAO']).trim(),
-          tentativas: Number(pend?.['TENTATIVAS']),
-        },
-        publicadosNoRetorno: voltou.publicados,
-        publicadosDeNovo: deNovo.publicados,
-        vezesDoEvento: publicados.filter((p) => p.chave === chave).length,
-        cargaSoComIds: publicados.every((p) =>
-          Object.values(p.carga).every((v) => typeof v === 'number' || /^[a-z0-9-]+$/.test(String(v))),
-        ),
-        situacaoFinal: String(pub?.['SITUACAO']).trim(),
-      };
+      expect(r).toEqual({
+        eventos: 1,
+        direcao: 'saida',
+        situacao: 'pendente',
+        tentativas: 0,
+        daEntidade: true,
+        carregaOId: true,
+        semNome: true,
+        soIdsECodigos: true,
+        vistaDeFora: 0,
+      });
+      const restou = await a.nucleo.lerSomente(ctx(a), async (l) => ({
+        mensagem: await contar(l, 'SELECT COUNT(*) AS n FROM integracao_mensagem WHERE id = ?', [mensagem]),
+        negocio: await contar(l, 'SELECT COUNT(*) AS n FROM estabelecimento WHERE codigo = ?', [codigo]),
+      }));
+      expect(restou).toEqual({ mensagem: 0, negocio: 0 });
     });
-    expect(r).toMatchObject({
-      eventos: 1,
-      naTransacao: 1,
-      parado: { falhas: 1, situacao: 'pendente', tentativas: 1 },
-      publicadosDeNovo: 0,
-      vezesDoEvento: 1,
-      cargaSoComIds: true,
-      situacaoFinal: 'publicado',
-    });
-    expect(r.publicadosNoRetorno).toBeGreaterThanOrEqual(1);
-    const depois = await a.nucleo.lerSomente(ctx(a), (l) =>
-      contar(l, 'SELECT COUNT(*) N FROM SGH_OUTBOX WHERE CHAVE_EVENTO = ?', [chave]),
-    );
-    expect(depois).toBe(0);
-    console.log(`[${a.cod}] outbox: ${JSON.stringify(r)}; depois do ROLLBACK ${depois} evento`);
-  });
-});
+  },
+);
