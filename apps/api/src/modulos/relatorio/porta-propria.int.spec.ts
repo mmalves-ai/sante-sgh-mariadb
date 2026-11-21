@@ -256,7 +256,8 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
           'SELECT id FROM papel_seguranca WHERE codigo = ?',
           [`${P}-FAT`],
           'INSERT INTO papel_seguranca (codigo, nome, criado_em) VALUES (?, ?, ?)',
-          [`${P}-FAT`, `PAPEL ${P} SINTETICO`, agora],
+          // O nome do papel é o da área de faturamento do domínio (PAPEIS_TRIAGEM): é por ele que a triagem acha a área.
+          [`${P}-FAT`, 'gerente de faturamento', agora],
         ),
       );
       ids.lista = guardar(
@@ -275,8 +276,8 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
       );
       ids.triRestrita = await e.inserir(
         `INSERT INTO triagem_relatorio_legado (estabelecimento_id, codigo, nome, acesso_restrito, destino, marco, artefato,
-           relatorio_id, situacao, motivo, decidido_em, criado_em)
-         VALUES (?, ?, ?, TRUE, 'catalogo', 'M34', 'internadosNaData', ?, 'proposta', 'Sintetico', ?, ?)`,
+           relatorio_id, situacao, area, motivo, decidido_em, criado_em)
+         VALUES (?, ?, ?, TRUE, 'catalogo', 'M34', 'internadosNaData', ?, 'proposta', 'leitos', 'Sintetico', ?, ?)`,
         [ids.est, String(ORIGEM.restrita), `Relatorio de origem ${P} dois`, relatorios['internadosNaData'], agora, agora],
       );
       temPedido = !!(await e.uma(
@@ -515,6 +516,33 @@ describe.skipIf(SEM_BANCO)('porta própria dos relatórios (MariaDB, cliente f22
         [ids.est, String(ORIGEM.nova)],
       ),
     ).toMatchObject({ n: 1, rel: null });
+    // Toda triagem decidida tem área dona, pela chave do domínio (o papel de segurança é o da área de faturamento).
+    expect(
+      await ler<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM triagem_relatorio_legado WHERE estabelecimento_id = ? AND codigo IN (?, ?) AND area = 'faturamento'",
+        [ids.est, String(ORIGEM.pendente), String(ORIGEM.nova)],
+      ),
+    ).toMatchObject({ n: 2 });
+    expect(
+      await erroDe(
+        porta.gravarSgh(ctx, trilha('triagem_relatorio_legado'), (g) =>
+          g.gravarPropostas([
+            {
+              id: ORIGEM.nova + 1000,
+              nome: `Relatorio de origem ${P} sem area`,
+              modulo: 0,
+              destino: 'descartado',
+              marco: null,
+              artefato: 'sem uso',
+              papelDono: 'papel fora das areas',
+              onda: 1,
+              regra: 'regra sintetica',
+              motivo: 'motivo sintetico',
+            },
+          ]),
+        ),
+      ),
+    ).toBe('triagem-sem-area');
     expect(await porta.umaTriagem(ctx, ids.triPendente)).toMatchObject({
       destino: 'catalogo',
       situacao: 'proposta',

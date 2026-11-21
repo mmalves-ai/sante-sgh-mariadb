@@ -1,0 +1,101 @@
+{
+  "registrar": [],
+  "fecho_tsconfig": [
+    {
+      "arquivo": "apps/worker/tsconfig.migrado.json",
+      "acrescentar": [
+        "src/vigia-vazias.ts",
+        "src/vigia-banco.ts",
+        "src/vigia-banco.service.ts",
+        "src/vigia-banco.spec.ts",
+        "src/vigia-banco.int.spec.ts",
+        "src/worker.module.ts",
+        "src/worker.spec.ts",
+        "src/relatorios/envio-agendado.ts",
+        "src/relatorios/envio-agendado.spec.ts",
+        "src/relatorios/envio-agendado.service.ts",
+        "src/relatorios/envio-agendado-proprio.ts",
+        "src/relatorios/envio-agendado-proprio.spec.ts",
+        "src/relatorios/envio-agendado-proprio.int.spec.ts"
+      ],
+      "motivo": "já acrescentados diretamente pelo comando do brief (append idempotente); conferir que nenhum lote paralelo sobrescreveu"
+    }
+  ],
+  "pedidos": [
+    {
+      "tipo": "remocao-registrada",
+      "arquivos": {
+        "apps/worker/src/vigia-firebird.service.ts": "coletor MON$ do banco de origem; substituído por vigia-banco(.service).ts sobre o MariaDB (transações, pools, plataforma, serviços)",
+        "apps/worker/src/vigia-gravacao.service.ts": "ADR 0003: vigilância de gravação contra assinaturas do sistema de origem (coexistência); o contrato de efeito dos testes a substitui",
+        "apps/worker/src/vigia-gravacao.ts": "idem",
+        "apps/worker/src/vigia-gravacao.spec.ts": "idem",
+        "apps/worker/src/vigia-parecer.service.ts": "ADR 0003: trazia pedidos de parecer do outro sistema para a fila (coexistência); no produto o parecer nasce no próprio sistema",
+        "apps/worker/src/vigia-parecer.spec.ts": "idem",
+        "apps/worker/src/vigia-vazias.service.ts": "ADR 0003: vigia das tabelas vazias do banco de origem contra a matriz (coexistência)",
+        "apps/worker/src/vigia-vazias.spec.ts": "idem"
+      }
+    },
+    {
+      "tipo": "ajuste-outro-lote",
+      "arquivo": "apps/worker/src/contabil/leitura-fatos.service.ts",
+      "pedido": "importar diaCivil de './clientes-worker.js' (assinatura diaCivil(agora, fuso?)) em vez de '../vigia-vazias.js'; depois apagar apps/worker/src/vigia-vazias.ts (ficou só como transição com diaCivil)"
+    },
+    {
+      "tipo": "ajuste-outro-lote",
+      "arquivo": "apps/worker/src/email.service.ts e apps/worker/src/relay-outbox.ts",
+      "pedido": "remover código morto da coexistência: destinatariosTabelaVazia, mensagemDoAlertaAssinatura, EVENTO_ALERTA_ASSINATURA e o tratamento dos eventos de tabela vazia/alerta de assinatura (ninguém mais os emite)"
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "packages/contratos/src/relatorio/gestao.ts",
+      "pedido": "esquemaJobEnvioRelatorio: trocar 'rede' por 'cliente' (FORMATO_CLIENTE do @sgh/nucleo, aceita '_'), remover 'grupos' e 'dono' (os destinatários e o dono vêm do cadastro do agendamento); filaEnvioRelatorio(cliente) aceitar '_'. Até lá o worker usa redeDaFila(cliente)='_'->'-' na fila e no job; o enfileirador da API (envio 'enviar agora') deve usar o mesmo nome de fila"
+    },
+    {
+      "tipo": "dominio",
+      "arquivo": "packages/dominio-relatorio/src/agendamento.ts",
+      "pedido": "proximoEnvio aceitar diaMes até 31 (31 = último dia do mês, como o CHECK de agendamento_relatorio.dia_mes); hoje o worker limita a 28 (diaMesDoDominio) para não pular o mês curto"
+    },
+    {
+      "tipo": "operacao",
+      "pedido": "painel Grafana 'Banco e coexistência': métricas sgh.firebird.* saíram; usar sgh.banco.* (transacoes, transacoes.escrita, transacoes.acima_limite, travas.esperas, transacao.mais_longa, pool.conexoes, plataforma, neutralizacao, coleta.duracao, alertas). Variáveis obsoletas: VIGIA_FIREBIRD, VIGIA_GRAVACAO, VIGIA_GRAVACAO_MS, VIGIA_GRAVACAO_JANELA, COEX_VIGIA_AMOSTRA, PEP_VIGIA_PARECER, PEP_VIGIA_PARECER_MS, VIGIA_VAZIAS, VIGIA_VAZIAS_MS, VIGIA_VAZIAS_JANELA, VIGIA_VAZIAS_POVOADAS_DIR, FB_<H>_NOME. Novas: VIGIA_BANCO (desligado), VIGIA_BANCO_MS"
+    },
+    {
+      "tipo": "permissao",
+      "pedido": "para o vigia ver as transações abertas (information_schema.INNODB_TRX) o usuário de leitura da plataforma precisa do privilégio PROCESS; sem ele a coleta das transações devolve null (aviso único no log) e o resto do vigia segue"
+    },
+    {
+      "tipo": "contrato",
+      "arquivo": "apps/api/src/modulos/relatorio/infra/fila-envio.ts",
+      "pedido": "o 'enviar agora' passar jobId determinístico (a chave do pedido da tela) ao enfileirar: o worker usa '<fila>:<job.id>' como chave da reserva, então a nova tentativa (attempts:5) já não repete o e-mail; com jobId estável, o clique duplo também não"
+    },
+    {
+      "tipo": "dominio-tela",
+      "pedido": "cadastro de agendamento (API/tela): recusar entrega='anexo', formato diferente do padrão e condicao_envio preenchida enquanto o worker só envia link (cap-07 §7.5); hoje o worker envia só o link e grava em envio_relatorio.dados entregaPedida/formatoPedido/temCondicao/linhasAvaliadas=false para o dono ver"
+    },
+    {
+      "tipo": "recurso",
+      "pedido": "avaliar 'só com linhas' (enviar_sem_linhas=FALSE, o DEFAULT da coluna) exige executar o relatório no worker (execucao_relatorio tipo 'envio') antes do envio; não há porta de execução de relatório no worker. Até existir, todo agendamento sai sem a avaliação e a situação 'sem_linhas' nunca é gravada"
+    },
+    {
+      "tipo": "operacao",
+      "pedido": "envio_relatorio em 'nao_enviado' com mensagem 'Envio reservado; aguardando o resultado do envio.' há mais de 15 minutos = processo caiu entre o e-mail e a conclusão (o e-mail pode ter saído); mostrar na tela de agendamentos / alerta, sem reenvio automático"
+    }
+  ],
+  "ddl": [
+    {
+      "tabela": "agendamento_relatorio",
+      "pedido": "decisão do dono: (a) política só link (cap-07 §7.5): ADD CONSTRAINT ck_agendamento_relatorio_entrega_link CHECK (entrega = 'link') e remover formato/condicao_envio, ou (b) manter as colunas e criar o recurso de anexo/condição no worker. Até a decisão, 'anexo', 'formato' e 'condicao_envio' ficam indisponíveis (registrados em envio_relatorio.dados)",
+      "convencao": "ADR 0002"
+    },
+    {
+      "tabela": "agendamento_relatorio / envio_relatorio",
+      "pedido": "validade_link_horas e link_token_hash/link_valido_ate: o link do e-mail é o autenticado (login + permissão), sem token; a validade não se aplica. Ou relaxar ck_agendamento_relatorio_link (validade opcional) e documentar que o link não expira, ou a API emitir link com token (hash gravado em envio_relatorio.link_token_hash e conferido na abertura) — esse recurso é da API, não do worker",
+      "convencao": "ADR 0002"
+    },
+    {
+      "tabela": "agendamento_relatorio_destinatario",
+      "pedido": "unificar o vocabulário: forma_envio IN ('para','cc','cco') para ('para','copia','copia_oculta'), igual a lista_distribuicao_email_membro.tipo_envio (o worker hoje traduz pelo formaDe)",
+      "convencao": "ADR 0002"
+    }
+  ]
+}

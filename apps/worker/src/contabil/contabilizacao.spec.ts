@@ -1,13 +1,13 @@
-// M54.2: a contabilização do worker, lote a lote, sobre um acesso em memória (dados sintéticos). Sem regra publicada,
-// o fato fica "sem regra" (nada é lançado); o teto de lotes por ciclo para o laço; sem candidato, não grava nada.
-import type { AcaoContabilizacaoSgh, AcessoContabilizacao, LeituraContabilizacao } from '@sgh/legado';
+// M54.2: a contabilização do worker, lote a lote, sobre um acesso dublê (dados sintéticos). Sem regra publicada, o fato
+// fica "sem regra" (nada é lançado); o teto de lotes por ciclo para o laço; sem candidato, não grava nada.
+import type { AcaoContabilizacao } from '@sgh/dominio-contabil';
 import { describe, expect, it } from 'vitest';
-import { contabilizarPendentes } from './contabilizacao.js';
+import { type AcessoContabilizacao, contabilizarPendentes, type LeituraContabilizacao } from './contabilizacao.js';
 
 const fato = (idFato: number) => ({
   idFato,
   situacao: 'pendente' as const,
-  tabela: 'FCCTAEXT',
+  tabela: 'titulo_receber',
   id: 100 + idFato,
   tipo: 'receitaConta' as const,
   origem: 3,
@@ -25,7 +25,7 @@ const fato = (idFato: number) => ({
 });
 
 function acessoFalso(lotes: number[][], restamSempre = false) {
-  const gravados: { acoes: readonly AcaoContabilizacaoSgh[]; diferenca: string }[] = [];
+  const gravados: { acoes: readonly AcaoContabilizacao[]; diferenca: string }[] = [];
   let i = 0;
   const acesso: AcessoContabilizacao = {
     ler: async () => {
@@ -55,14 +55,14 @@ function acessoFalso(lotes: number[][], restamSempre = false) {
 describe('contabilizarPendentes (worker, M54.2)', () => {
   it('sem fato pendente, lê uma vez e não grava', async () => {
     const f = acessoFalso([[]]);
-    const r = await contabilizarPendentes(f.acesso, { empresa: 1 });
+    const r = await contabilizarPendentes(f.acesso, { estabelecimento: 1 });
     expect(r).toMatchObject({ fatos: 0, lotes: 0, lancamentos: 0, restam: false });
     expect(f.gravados).toHaveLength(0);
   });
 
   it('sem regra publicada, marca os fatos "sem regra" e soma os lotes até não restar nada', async () => {
     const f = acessoFalso([[1, 2], [3]]);
-    const r = await contabilizarPendentes(f.acesso, { empresa: 1 });
+    const r = await contabilizarPendentes(f.acesso, { estabelecimento: 1 });
     expect(r).toMatchObject({ fatos: 3, lotes: 2, lancamentos: 0, semRegra: 3, restam: false });
     expect(f.gravados.flatMap((g) => g.acoes.map((a) => [a.idFato, a.acao, a.situacao]))).toEqual([
       [1, 'marcar', 'semRegra'],
@@ -77,8 +77,14 @@ describe('contabilizarPendentes (worker, M54.2)', () => {
 
   it('para no teto de lotes por ciclo e avisa que restam fatos', async () => {
     const f = acessoFalso([[1], [2], [3], [4]], true);
-    const r = await contabilizarPendentes(f.acesso, { empresa: 1, maxLotes: 2 });
+    const r = await contabilizarPendentes(f.acesso, { estabelecimento: 1, maxLotes: 2 });
     expect(r).toMatchObject({ lotes: 2, fatos: 2, restam: true });
     expect(f.leituras()).toBe(2);
+  });
+
+  it('a recusa da leitura (operação indisponível no banco) sobe sem gravar nada', async () => {
+    const gravar = async () => ({ lancamentos: 0, repetidos: 0, mudaram: 0 });
+    const acesso: AcessoContabilizacao = { ler: () => Promise.reject(new Error('modelo-pendente')), gravar };
+    await expect(contabilizarPendentes(acesso, { estabelecimento: 1 })).rejects.toThrow('modelo-pendente');
   });
 });

@@ -1,0 +1,15 @@
+# F2.2 onda 5d: correção das falhas da integração da API
+
+Integrador enxuto, 21/11/2026. Só os arquivos de teste afetados rodaram (`vitest.integracao.config.ts`).
+
+| Falha | Origem | Causa | Correção | Resultado |
+|---|---|---|---|---|
+| relatório `porta-propria.int.spec.ts` (f22_o4) | antes (onda 5a, DDL `19_REL/04`) | O CHECK `ck_triagem_relatorio_legado_area_decidida` exige área em toda triagem decidida; a porta própria (`gravarPropostas`, `decidirTriagem`) e a massa do teste não gravavam `area`. | A porta resolve a área pela chave do domínio (`PAPEIS_TRIAGEM`), pelo rótulo do papel dono ou pelo código/nome do papel de segurança; sem área no domínio nem na linha, recusa `triagem-sem-area`. Massa: papel sintético com o nome da área de faturamento, triagem restrita com área `leitos`; o teste passa a conferir a área gravada e a recusa. | verde (14) |
+| cadastro `porta-propria.int.spec.ts` (f22_o1) | antes (ondas 3 e 4: `06_PEP/15`, `10_SADT/07`) | `registro_social.paciente_id` e `visualizacao_resultado_exame.paciente_id` não estavam em `REFERENCIAS_PACIENTE`: a unificação recusava (proteção correta). | As duas entram como `transferir` (registro clínico; a visualização repete o paciente do resultado, que também é transferido). | verde (10) |
+| cirurgia `porta-propria.int.spec.ts` (f22_o3) | antes (onda 3, DDL `08_CC/04`) | `checklist_cirurgia_segura` ganhou `agendamento_cirurgico_id`; `c.*, t.agendamento_cirurgico_id` repetia o nome e o driver recusa. | Consulta com colunas nomeadas e o checklist aberto pelo agendamento antes do ato (LEFT JOIN no ato, agendamento por `COALESCE`). Dublê do teste unitário ajustado aos novos nomes. | verde (13; unidade 4) |
+| cargos `porta-propria.int.spec.ts` (f22_o3) | antes (onda 3, DDL `15_RH/05`) | `avaliacao_desempenho.cargo_id` e `cargo_competencia.cargo_id` têm FK para cargo, fora de `DEPENDENCIAS_CARGO`. | As duas entram na lista de dependências (com `excluido_em`). | verde (15) |
+| sessão `fonte-propria.int.spec.ts` (teste_login) | 5d (`PARAMETROS_NOVOS`, módulo `alerta`) | O catálogo do produto ganhou a ação `config.alerta.ler` (7907); o banco de teste tinha 7906. | Banco de teste recarregado: `python3 -I tools/db/carregar_acoes.py teste_login` (incluídas 1, ativas 7907). | verde (7) |
+| PDF (9 testes: documento, contingência, prescrição, licitação, laudo) | ambiente | 503 "Emissão indisponível" vem de `ErroS3 500 InternalError` no `gravarComRetencao`. Log do `sgh-s3`: "No writable volumes and no free volumes left"; o SeaweedFS roda com `-volume.max=32` e está tomado por coleções `sgh-teste-*-<instante>` deixadas por execuções anteriores (uma por execução, com Object Lock). Gotenberg (3318) e S3 (9318) respondem 200. | Nada alterado no container comum. Liberar exige apagar as coleções de teste antigas do `sgh-s3` (ex.: `weed shell` `collection.delete`), decisão do dono. | vermelho (ambiente) |
+
+Conferência: `tsc` da API (3 configs) e do `dominio-cadastro` sem erro; unidade de relatório, cirurgia, cargos, cadastro e
+`dominio-cadastro` verde.

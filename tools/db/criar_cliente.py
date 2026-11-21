@@ -45,8 +45,14 @@ def q(texto: str) -> str:
 
 def garantir_plataforma():
     sql(None, None, "-e", f"CREATE DATABASE IF NOT EXISTS {PLAT}")
+    # Trava do servidor: duas criações simultâneas (painel, testes em paralelo) não reaplicam o DDL da plataforma
+    # ao mesmo tempo (DROP/ADD CONSTRAINT se atropelavam). A trava é da sessão e cai sozinha se a sessão cair.
+    trava = f"sgh_plataforma_ddl_{PLAT}"
     for arq in sorted((RAIZ / "db/plataforma").glob("*.sql")):
-        r = sql(PLAT, arq.read_text(encoding="utf-8"))
+        corpo = arq.read_text(encoding="utf-8").rstrip()
+        texto = (f"DO GET_LOCK({q(trava)}, 300);\n" + corpo + ("" if corpo.endswith(";") else ";")
+                 + f"\nDO RELEASE_LOCK({q(trava)});\n")
+        r = sql(PLAT, texto)
         if r.returncode:
             raise SystemExit(f"plataforma: {arq.name}: {r.stderr[:400]}")
 

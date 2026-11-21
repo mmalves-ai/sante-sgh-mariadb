@@ -105,10 +105,11 @@ describe('vocabulário do banco → contrato', () => {
           [
             {
               id: 20,
-              agendamento_cirurgico_id: 99,
-              sala_cirurgica_id: 2,
-              atendimento_id: 5,
-              paciente_id: 6,
+              agendamento_cirurgico_id: null,
+              agendamento_id: 99,
+              sala_id: 2,
+              atendimento_ref: 5,
+              paciente_ref: 6,
               ato_cirurgico_id: 30,
               modelo_checklist_cirurgia_id: 1,
               versao: 2,

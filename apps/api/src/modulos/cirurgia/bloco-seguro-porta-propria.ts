@@ -86,11 +86,16 @@ export class PortaBlocoSeguroPropria implements PortaBlocoSeguro {
     const m = new Map<number, ChecklistDaCirurgia>();
     if (ags.length === 0) return m;
     const cs = await l.consultar(
-      `SELECT c.*, t.agendamento_cirurgico_id, t.sala_cirurgica_id, t.atendimento_id, t.paciente_id, a.inicio_previsto_em
-         FROM checklist_cirurgia_segura c JOIN ato_cirurgico t ON t.id = c.ato_cirurgico_id
-         LEFT JOIN agendamento_cirurgico a ON a.id = t.agendamento_cirurgico_id
-        WHERE t.estabelecimento_id = ? AND t.agendamento_cirurgico_id IN (${lista(ags.length)})
-          AND c.excluido_em IS NULL AND t.excluido_em IS NULL`,
+      // O checklist é aberto pelo agendamento antes do ato (c.agendamento_cirurgico_id, 08_CC/04) ou pelo ato: o
+      // agendamento é o do checklist ou, sem ele, o do ato; sala, atendimento e paciente vêm do ato e, antes dele, do
+      // agendamento. Colunas nomeadas (c.* já traz agendamento_cirurgico_id: o driver recusa nome repetido).
+      `SELECT c.*, a.id AS agendamento_id, COALESCE(t.sala_cirurgica_id, a.sala_cirurgica_id) AS sala_id,
+              COALESCE(t.atendimento_id, a.atendimento_id) AS atendimento_ref,
+              COALESCE(t.paciente_id, a.paciente_id) AS paciente_ref, a.inicio_previsto_em
+         FROM checklist_cirurgia_segura c LEFT JOIN ato_cirurgico t ON t.id = c.ato_cirurgico_id AND t.excluido_em IS NULL
+         JOIN agendamento_cirurgico a ON a.id = COALESCE(c.agendamento_cirurgico_id, t.agendamento_cirurgico_id)
+        WHERE a.estabelecimento_id = ? AND a.id IN (${lista(ags.length)})
+          AND c.excluido_em IS NULL AND (c.ato_cirurgico_id IS NULL OR t.id IS NOT NULL)`,
       [est, ...ags],
     );
     if (cs.length === 0) return m;
@@ -105,14 +110,14 @@ export class PortaBlocoSeguroPropria implements PortaBlocoSeguro {
     const por = (v: unknown) => (v === null || v === undefined ? null : String(v));
     for (const x of cs) {
       const id = n(x['id']);
-      const ag = n(x['agendamento_cirurgico_id']);
+      const ag = n(x['agendamento_id']);
       m.set(ag, {
         id,
         agendamento: ag,
-        sala: n(x['sala_cirurgica_id']),
+        sala: n(x['sala_id']),
         dataHora: (civil(x['inicio_previsto_em'], fuso) ?? '').replace(' ', 'T'),
-        reg: n(x['atendimento_id']),
-        paciente: nn(x['paciente_id']),
+        reg: n(x['atendimento_ref']),
+        paciente: nn(x['paciente_ref']),
         cirurgia: n(x['ato_cirurgico_id']),
         registroProntuario: null,
         lista: n(x['modelo_checklist_cirurgia_id']),

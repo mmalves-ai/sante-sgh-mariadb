@@ -7,27 +7,23 @@ import { LeituraFatosContabeisService } from './contabil/leitura-fatos.service.j
 import { PacsWorklistService } from './pacs-worklist.service.js';
 import { PessoasConselhoService } from './pessoas-conselho.service.js';
 import { RedeMpiService } from './rede-mpi.service.js';
-import { CoexistenciaRetratoService } from './coexistencia-retrato.service.js';
 import { IntegracaoService } from './integracao/integracao.service.js';
 import { EnvioRelatorioService } from './relatorios/envio-agendado.service.js';
 import { EmailService } from './email.service.js';
 import { IndiceBuscaService } from './indice-busca.service.js';
 import { PublicadorCatalogosService } from './publicador-catalogos.service.js';
 import { RelayOutboxService } from './relay-outbox.service.js';
-import { VigiaParecerService } from './vigia-parecer.service.js';
 import { Relogio } from './relogio.js';
 import { SinalDeVidaService } from './sinal-de-vida.service.js';
-import { VigiaFirebirdService } from './vigia-firebird.service.js';
-import { VigiaGravacaoService } from './vigia-gravacao.service.js';
-import { VigiaVaziasService } from './vigia-vazias.service.js';
+import { VigiaBancoService } from './vigia-banco.service.js';
 
-// M09: vigia do Firebird (coletor MON$, alertas, saúde dos serviços) exportado por OpenTelemetry.
+// Vigia do banco próprio (transações abertas, pools, plataforma, saúde dos serviços) exportado por OpenTelemetry
+// (lote F2.2 05-17; as vigias de coexistência com o banco de origem saíram: ADR 0003).
 // M04: relay da outbox (SGH_OUTBOX → BullMQ) com o consumidor nulo idempotente.
 // M06: fila email (alerta de quebra de vidro ao Auditor, por SMTP; Mailpit fora de produção).
 // M11: leitura incremental do índice de busca do cadastro (SGH_BUSCA_NOME).
 // M13: publicador das cargas de catálogo aprovadas (lotes curtos na janela fora do pico, pelo executor).
 // M15: representação derivada dos formulários do PEP (SGH_PEP_FORM_VERSAO), quando o layout muda no Delphi.
-// M14: vigia diária das tabelas vazias (SGH_CFG_TABELA_VAZIA; aviso à TI e ao responsável técnico).
 // M16: fechamento do censo diário na hora de fechamento (SGH_INT_CENSO_DIA), com a chave internacao.censo.fechamento.
 // M44: aviso do estouro do tempo-alvo da classificação de risco (SGH_PA_CLASSIF_AVISO), com a chave pa.classificacao.
 // M44 (etapa 2): expiração das reservas de leito do NIR vencidas (SGH_INT_RESERVA_LEITO; a solicitação volta à análise).
@@ -35,13 +31,11 @@ import { VigiaVaziasService } from './vigia-vazias.service.js';
 // entrega com retentativa e fila de mortos, alerta da regra 10); o consumidor dos eventos fica no relay.
 const SERVICOS: Readonly<Record<string, Provider>> = {
   'sinal-de-vida': SinalDeVidaService,
-  'vigia-firebird': VigiaFirebirdService,
+  'vigia-banco': VigiaBancoService,
   'relay-outbox': RelayOutboxService,
   email: EmailService,
   'indice-busca': IndiceBuscaService,
   'publicador-catalogos': PublicadorCatalogosService,
-  'vigia-parecer': VigiaParecerService,
-  'vigia-vazias': VigiaVaziasService,
   'censo-fechamento': CensoFechamentoService,
   'classificacao-estouro': ClassificacaoEstouroService,
   'nir-reserva': NirReservaService,
@@ -57,10 +51,6 @@ const SERVICOS: Readonly<Record<string, Provider>> = {
   'rede-mpi': RedeMpiService,
   'relatorio-envio': EnvioRelatorioService,
   integracao: IntegracaoService,
-  // M37: retrato das conexões do outro sistema e uso do dia (painel de migração gradual).
-  'coexistencia-retrato': CoexistenciaRetratoService,
-  // M38: vigilância diária de gravação em produção (SGH_CFG_COEX_VIGIA e o alerta direto da divergência).
-  'vigia-gravacao': VigiaGravacaoService,
 };
 
 /**
@@ -82,14 +72,11 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
   providers: [
     Relogio,
     SinalDeVidaService,
-    VigiaFirebirdService,
+    VigiaBancoService,
     RelayOutboxService,
     EmailService,
     IndiceBuscaService,
     PublicadorCatalogosService,
-    // M23: pedidos de parecer feitos no outro sistema entram na fila (leitura incremental).
-    VigiaParecerService,
-    VigiaVaziasService,
     CensoFechamentoService,
     // M44: aviso do estouro do tempo-alvo da classificação de risco (uma vez por classificação).
     ClassificacaoEstouroService,
@@ -107,8 +94,6 @@ export function servicosDoWorker(env: NodeJS.ProcessEnv = process.env): Provider
     RedeMpiService,
     EnvioRelatorioService,
     IntegracaoService,
-    CoexistenciaRetratoService,
-    VigiaGravacaoService,
   ],
 })
 export class WorkerModule {

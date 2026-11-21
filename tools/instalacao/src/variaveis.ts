@@ -244,6 +244,13 @@ export const VARIAVEIS: readonly Variavel[] = [
   v('GOTENBERG_URL', 'servicos', 'recomendada', 'http://127.0.0.1:3000', 'Conversor de documentos para PDF.'),
   v('WORKER_SERVICOS', 'servicos', 'opcional', '', 'Lista dos serviços do worker (vazio: todos).'),
   v('WORKER_SINAL_MS', 'servicos', 'opcional', '', 'Intervalo do sinal de vida do worker, em ms.'),
+  v(
+    'WORKER_CLIENTES',
+    'servicos',
+    'opcional',
+    '',
+    'Clientes atendidos pelos ciclos do worker, separados por vírgula (vazio: os clientes em uso na plataforma).',
+  ),
   v('LOG_NIVEL', 'servicos', 'opcional', 'info', 'Nível dos logs.', {
     valores: ['fatal', 'error', 'warn', 'info', 'debug', 'trace'],
   }),
@@ -344,23 +351,7 @@ export const VARIAVEIS: readonly Variavel[] = [
     { segredo: true },
   ),
   v('EMAIL_REMETENTE', 'email', 'obrigatoria', MARCADOR_PREENCHER, 'Remetente dos e-mails do sistema.'),
-  v(
-    'AVISO_TI_EMAIL',
-    'email',
-    'recomendada',
-    MARCADOR_PREENCHER,
-    'Destino dos avisos técnicos (TI do hospital).',
-  ),
-  v(
-    'AVISO_RT_EMAIL',
-    'email',
-    'recomendada',
-    MARCADOR_PREENCHER,
-    'Destino dos avisos ao responsável técnico.',
-  ),
   v('AUDITORIA_EMAIL', 'email', 'recomendada', MARCADOR_PREENCHER, 'Destino dos avisos de auditoria.'),
-  v('ENCARREGADO_EMAIL', 'email', 'recomendada', MARCADOR_PREENCHER, 'Encarregado de dados (LGPD).'),
-  v('PLANTAO_EMAIL', 'email', 'recomendada', MARCADOR_PREENCHER, 'Plantão técnico (chamados graves).'),
   v(
     'ALERTA_RELATORIO_EMAIL',
     'email',
@@ -514,16 +505,13 @@ export const VARIAVEIS: readonly Variavel[] = [
     [
       ['OUTBOX_RELAY', 'Envio da caixa de saída (e-mails, avisos e integrações).'],
       ['INTEGRACAO', 'Integrações de saída do worker.'],
-      ['VIGIA_FIREBIRD', 'Coletor das conexões do banco (monitoramento).'],
-      ['VIGIA_GRAVACAO', 'Vigia das gravações feitas fora do produto.'],
-      ['VIGIA_VAZIAS', 'Vigia das tabelas vazias que começam a ser usadas.'],
+      ['VIGIA_BANCO', 'Vigia do banco (transações, travas e conexões; desligado desliga).'],
       ['RELATORIO_ENVIO', 'Envio agendado de relatórios.'],
       ['RELATORIO_ENVIO_VENCIDOS', 'Envio dos relatórios agendados vencidos ao subir.'],
       ['BUSCA_VIGIA', 'Índice de busca de pacientes.'],
       ['CATALOGO_PUBLICADOR', 'Publicação dos catálogos.'],
       ['CENSO_FECHAMENTO', 'Fechamento diário do censo.'],
       ['CLASSIFICACAO_ESTOURO', 'Aviso de estouro do tempo da classificação de risco.'],
-      ['COEX_RETRATO', 'Retrato das conexões do sistema anterior (migração gradual).'],
       ['CONTABIL_LEITURA', 'Leitura dos fatos contábeis dos módulos.'],
       [
         'CONTABIL_CONTABILIZAR',
@@ -532,8 +520,6 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['CONTINGENCIA_POR_HORA', 'Folha de contingência da enfermagem por hora.'],
       ['NIR_EXPIRACAO', 'Expiração das reservas de leito.'],
       ['PACS_WORKLIST', 'Lista de trabalho do PACS.'],
-      ['PEP_REPRESENTACAO', 'Representação dos registros do prontuário.'],
-      ['PEP_VIGIA_PARECER', 'Vigia dos pareceres.'],
       ['PESSOAS_CONSELHO_DIARIO', 'Conferência diária dos conselhos profissionais.'],
       ['CONTRATOS_ALERTA_DIARIO', 'Alerta diário de vencimento dos contratos com fornecedores.'],
       ['REDE_MPI_NOTURNO', 'Carga noturna do índice de pacientes da rede.'],
@@ -553,10 +539,8 @@ export const VARIAVEIS: readonly Variavel[] = [
   ...(
     [
       ['VIGIA_MUDANCAS_MS', 'vigia de mudanças das telas ao vivo'],
-      ['VIGIA_GRAVACAO_MS', 'vigia das gravações'],
-      ['VIGIA_GRAVACAO_JANELA', 'janela da vigia das gravações'],
-      ['VIGIA_VAZIAS_MS', 'vigia das tabelas vazias'],
-      ['VIGIA_VAZIAS_JANELA', 'janela da vigia das tabelas vazias'],
+      ['VIGIA_BANCO_MS', 'vigia do banco'],
+      ['VIGIA_TRANSACAO_LIMITE_MS', 'limite da transação longa no vigia do banco'],
       ['OUTBOX_INTERVALO_MS', 'caixa de saída'],
       ['INTEGRACAO_INTERVALO_MS', 'integrações'],
       ['INTEGRACAO_LOTE_FATOS', 'lote das integrações (fatos por ciclo)'],
@@ -565,23 +549,11 @@ export const VARIAVEIS: readonly Variavel[] = [
       ['CATALOGO_LOTES_POR_CICLO', 'lotes de catálogo por ciclo'],
       ['CATALOGO_JANELA_PUBLICACAO', 'janela de publicação dos catálogos'],
       ['CONTABIL_JANELA_LEITURA', 'janela da leitura dos fatos contábeis'],
-      ['CONTABIL_EMPRESA', 'empresa contábil do estabelecimento'],
-      ['COEX_RETRATO_MS', 'retrato das conexões'],
-      ['COEX_VIGIA_AMOSTRA', 'amostra da vigia das gravações'],
-      ['PEP_VIGIA_PARECER_MS', 'vigia dos pareceres'],
       ['PORTAL_VIGENCIA_MS', 'vigência dos acessos ao portal'],
       ['BUSCA_CONFERENCIA_MS', 'conferência do índice de busca'],
-      ['PEP_REPRESENTACAO_MS', 'representação dos registros do prontuário'],
       ['RELATORIO_ENVIO_INTERVALO_MS', 'envio agendado de relatórios'],
     ] as const
   ).map(([k, d]) => v(k, 'rotinas', 'opcional', '', `Intervalo ou tamanho: ${d}. Vazio: o padrão.`)),
-  v(
-    'COEX_ESTACOES_TECNICAS',
-    'rotinas',
-    'opcional',
-    '',
-    'Estações técnicas fora da contagem de uso (lista).',
-  ),
   // Observabilidade
   v('OTEL_EXPORTER_URL', 'observabilidade', 'recomendada', '', 'Coletor OpenTelemetry (métricas e rastros).'),
   v('OTEL_INTERVALO_MS', 'observabilidade', 'opcional', '', 'Intervalo de exportação das métricas, em ms.'),
@@ -637,13 +609,9 @@ export const VARIAVEIS: readonly Variavel[] = [
   // Caminhos do pacote (relativos à pasta da versão; o padrão serve)
   ...(
     [
-      ['SCHEMA_HOMOLOGADO_DIR', 'impressões digitais homologadas do banco'],
-      ['SGH_CATALOGO_OPERACOES', 'catálogo das operações'],
-      ['CATALOGO_OPERACOES', 'catálogo das operações (worker)'],
       ['SGH_M58_ENSAIOS', 'relatórios do ensaio da versão 5 do banco'],
       ['SGH_HOMOLOGACAO', 'registro da homologação'],
       ['SGH_PRONTIDAO', 'relatório de prontidão'],
-      ['VIGIA_VAZIAS_POVOADAS_DIR', 'tabelas já povoadas'],
     ] as const
   ).map(([k, d]) => v(k, 'caminhos', 'opcional', '', `Pasta ou arquivo: ${d}. Vazio: o do pacote.`)),
 ];

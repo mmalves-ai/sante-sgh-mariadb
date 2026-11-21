@@ -33,6 +33,7 @@ import {
   type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { PAPEIS_TRIAGEM } from '@sgh/dominio-relatorio';
 import { z } from 'zod';
 import { portaIndisponivel, type TrilhaDaGravacao } from '../exames/public-api.js';
 import { executarConsultaCatalogo } from './infra/consultas-catalogo.js';
@@ -772,6 +773,29 @@ function gravador(
     return r;
   }
 
+  /**
+   * Área dona da triagem pela chave de negócio do domínio (PAPEIS_TRIAGEM): o rótulo do papel dono, ou o código ou o nome
+   * do papel de segurança cadastrado, casa com a chave ou com o papel da área. Toda triagem decidida tem área (CHECK
+   * ck_triagem_relatorio_legado_area_decidida): sem área no domínio nem na linha, a gravação é recusada.
+   */
+  async function areaDona(rotulo: string, papel: number | null, atual: string | null): Promise<string> {
+    const candidatos = [rotulo];
+    if (papel != null) {
+      const r = await tx.uma('SELECT codigo, nome FROM papel_seguranca WHERE id = ?', [papel]);
+      if (r) candidatos.push(texto(r['codigo']), texto(r['nome']));
+    }
+    for (const c of candidatos) {
+      const k = c.trim().toLowerCase();
+      const achada = Object.entries(PAPEIS_TRIAGEM).find(([chave, v]) => chave === k || v.toLowerCase() === k);
+      if (achada) return achada[0];
+    }
+    if (atual) return atual;
+    throw recusa(
+      'triagem-sem-area',
+      `O papel dono "${rotulo}" não é de nenhuma área da triagem, e o relatório ainda não tem área dona.`,
+    );
+  }
+
   async function papelId(codigo: string, obrigatorio: boolean): Promise<number | null> {
     const r = await tx.uma(
       'SELECT id FROM papel_seguranca WHERE (codigo = ? OR nome = ?) AND excluido_em IS NULL ORDER BY codigo = ? DESC LIMIT 1',
@@ -901,15 +925,18 @@ function gravador(
       const quando = await agora();
       for (const p of propostas) {
         const [x] = await tx.consultarParaAtualizar(
-          'SELECT id, versao, situacao, nome FROM triagem_relatorio_legado WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
+          'SELECT id, versao, situacao, nome, area FROM triagem_relatorio_legado WHERE estabelecimento_id = ? AND codigo = ? AND excluido_em IS NULL',
           [est, String(p.id)],
           { teto: 1 },
         );
+        const dono = await papelId(p.papelDono, false);
+        const areaAtual = x ? textoN(x['area']) : null;
         const decisao = {
           destino: p.destino,
           marco: p.marco,
           artefato: p.artefato.slice(0, 120),
-          dono_papel_seguranca_id: await papelId(p.papelDono, false),
+          dono_papel_seguranca_id: dono,
+          area: x?.['situacao'] === 'confirmada' ? areaAtual : await areaDona(p.papelDono, dono, areaAtual),
           onda: p.onda,
           regra: p.regra.slice(0, 200),
           motivo: p.motivo.slice(0, 200),
@@ -949,7 +976,7 @@ function gravador(
      */
     async decidirTriagem(id, d) {
       const [x] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, destino, marco, artefato, decidido_em IS NULL AS sem_decisao
+        `SELECT id, versao, destino, marco, artefato, area, decidido_em IS NULL AS sem_decisao
            FROM triagem_relatorio_legado WHERE estabelecimento_id = ? AND id = ? AND excluido_em IS NULL`,
         [est, id],
         { teto: 1 },
@@ -961,12 +988,13 @@ function gravador(
         textoN(x['destino']) !== d.destino ||
         textoN(x['marco']) !== d.marco ||
         texto(x['artefato']) !== d.artefato.slice(0, 120);
+      const dono = d.destino === 'descartado' ? await papelId(d.papelDono, false) : await papelId(d.papelDono, true);
       await tx.alterar('triagem_relatorio_legado', n(x['id']), n(x['versao']), {
         destino: d.destino,
         marco: d.marco,
         artefato: d.artefato.slice(0, 120),
-        dono_papel_seguranca_id:
-          d.destino === 'descartado' ? await papelId(d.papelDono, false) : await papelId(d.papelDono, true),
+        dono_papel_seguranca_id: dono,
+        area: await areaDona(d.papelDono, dono, textoN(x['area'])),
         onda: d.onda,
         motivo: d.motivo.slice(0, 200),
         relatorio_id: d.destino === 'catalogo' ? await relatorioId(d.artefato) : null,

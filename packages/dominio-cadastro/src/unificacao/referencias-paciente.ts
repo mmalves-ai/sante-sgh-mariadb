@@ -211,6 +211,7 @@ export const REFERENCIAS_PACIENTE: readonly ReferenciaPaciente[] = [
   { tabela: 'registro_nascimento', coluna: 'recem_nascido_paciente_id', destino: 'transferir' },
   { tabela: 'registro_raas', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'registro_recuperacao_anestesica', coluna: 'paciente_id', destino: 'transferir' },
+  { tabela: 'registro_social', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'registro_tempo_evento', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'regra_alerta_paciente', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'renegociacao', coluna: 'paciente_id', destino: 'transferir' },
@@ -262,6 +263,7 @@ export const REFERENCIAS_PACIENTE: readonly ReferenciaPaciente[] = [
   { tabela: 'vigilancia_pos_alta_cirurgica', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'visita', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'visita_domiciliar', coluna: 'paciente_id', destino: 'transferir' },
+  { tabela: 'visualizacao_resultado_exame', coluna: 'paciente_id', destino: 'transferir' },
   { tabela: 'volume_prontuario', coluna: 'paciente_id', destino: 'transferir' },
 ];
 

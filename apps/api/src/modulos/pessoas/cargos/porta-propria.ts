@@ -193,6 +193,8 @@ export const DEPENDENCIAS_CARGO: readonly { grupo: string; tabela: string; sql: 
   ['Funções do cargo', 'funcao', true],
   ['Trabalhadores sem vínculo no cargo', 'trabalhador_sem_vinculo', true],
   ['Ciclos de avaliação do cargo', 'ciclo_avaliacao', true],
+  ['Avaliações de desempenho no cargo', 'avaliacao_desempenho', true],
+  ['Competências exigidas do cargo', 'cargo_competencia', true],
   ['Cláusulas de convenção coletiva', 'clausula_convencao', true],
   ['Tarefas de manutenção preventiva', 'plano_preventivo_tarefa', true],
   ['Qualificações de plano de manutenção', 'qualificacao_plano_manutencao', true],

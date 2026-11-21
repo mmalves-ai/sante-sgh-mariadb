@@ -91,19 +91,13 @@ export interface Fila {
 export const EVENTO_ALERTA_EMERGENCIA = 'alerta-emergencia';
 /** ADR 0021: aviso ao Auditor da abertura de uma sessão "como" (suporte técnico ou plataforma). */
 export const EVENTO_ALERTA_SUPORTE = 'alerta-suporte';
-/** M14 (regra 14): tabela que estava vazia passou a ter dados (aviso à TI e ao responsável técnico). */
-export const EVENTO_ALERTA_TABELA_VAZIA = 'alerta-tabela-vazia';
 /** M37 (regra 7): chamado com dado pessoal (aviso ao encarregado) ou S1 (aviso ao plantão). */
 export const EVENTO_ALERTA_CHAMADO = 'alerta-chamado';
-/** M38 (cap-14 §14.6): divergência na vigilância diária de gravação em produção (alerta direto à TI). */
-export const EVENTO_ALERTA_ASSINATURA = 'alerta-assinatura-divergente';
 /** Eventos da outbox que vão à fila de e-mail. */
 export const EVENTOS_DE_EMAIL: ReadonlySet<string> = new Set([
   EVENTO_ALERTA_EMERGENCIA,
   EVENTO_ALERTA_SUPORTE,
-  EVENTO_ALERTA_TABELA_VAZIA,
   EVENTO_ALERTA_CHAMADO,
-  EVENTO_ALERTA_ASSINATURA,
 ]);
 
 export function filaDeEmail(rede: string): string {

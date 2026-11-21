@@ -4,9 +4,18 @@
 // ALERTA o dono do envio (o editor de origem acumulou 2.600 "não enviado" sem ninguém saber); fora de produção, o
 // e-mail só vai ao coletor local (SMTP em loopback; a trava de saídas do M01 garante também no processo). O resultado
 // vai ao agendamento (a situação, a falha curta, as seguidas e o próximo envio).
+// Lote F2.2 05-17: os destinatários vêm do cadastro do agendamento no banco do cliente (usuário, lista de distribuição
+// ou endereço), não de grupos do sistema de origem; os campos `grupos` e `dono` do job ficam ignorados (pedido de
+// ajuste do contrato no saida/05-17.json). O nome do estabelecimento vem do cadastro.
+// Melhoria: o registro leva a quantidade de destinatários do envio.
+// Melhoria: o envio é RESERVADO antes do e-mail (reservar) e o resultado vai à mesma linha depois (registrar). Sem a
+// reserva (outra instância, o ciclo seguinte ou a nova tentativa do job já a fizeram) nada é enviado: no máximo um
+// e-mail por vencimento ou por job, mesmo com falha ao gravar o resultado.
+// Melhoria: o alerta ao dono respeita o avisar_falha do agendamento.
 import { esquemaJobEnvioRelatorio, type JobEnvioRelatorio } from '@sgh/contratos';
 import { depoisDoEnvio, mensagemDeFalha, mensagemDoEnvio } from '@sgh/dominio-relatorio';
 import type { MensagemEmail } from '../smtp.js';
+import type { DestinatariosEnvio, FormaEnvio, OrigemEnvio } from './envio-agendado-proprio.js';
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 
@@ -25,27 +34,33 @@ export interface DependenciasEnvio {
   readonly smtpUrl: string | null;
   readonly remetente: string;
   readonly produto: string;
-  readonly nomeEstabelecimento: (hospital: string) => string;
+  readonly nomeEstabelecimento: (hospital: string) => string | Promise<string>;
   readonly enviar: (m: MensagemEmail) => Promise<void>;
-  /** Os e-mails dos grupos e o do dono (o cadastro de usuários); vazio sem o banco. */
-  readonly emails: (
-    hospital: string,
-    grupos: readonly string[],
-    dono: string,
-  ) => Promise<{ destinatarios: string[]; dono: string | null }>;
+  /** Os e-mails dos destinatários do agendamento e o do dono (cadastro); vazio sem o banco. */
+  readonly emails: (hospital: string, agendamento: string) => Promise<DestinatariosEnvio>;
   /** Endereço de alerta quando o dono não tem e-mail (ALERTA_RELATORIO_EMAIL; senão, o do sistema). */
   readonly alertaPadrao: string | null;
-  /** Grava o resultado no agendamento (só com o banco). */
-  readonly registrar?: (
-    hospital: string,
-    agendamento: string,
-    r: { situacao: 'enviado' | 'falhou'; falha: string | null; falhasSeguidas: number },
-  ) => Promise<void>;
+  /** Reserva o envio antes do e-mail (só com o banco); null: outro já reservou, não envia. */
+  readonly reservar?: (hospital: string, agendamento: string, origem: OrigemEnvio) => Promise<{ envio: number } | null>;
+  /** Grava o resultado na linha reservada (só com o banco). */
+  readonly registrar?: (hospital: string, agendamento: string, r: ConclusaoEnvio) => Promise<void>;
   /** As falhas seguidas antes deste envio (do agendamento; 0 sem o banco). */
   readonly falhasAntes?: (hospital: string, agendamento: string) => Promise<number>;
 }
 
+export interface ConclusaoEnvio {
+  readonly envio: number;
+  readonly situacao: 'enviado' | 'falhou';
+  readonly falha: string | null;
+  readonly falhasSeguidas: number;
+  readonly destinatarios: number;
+  readonly enderecos: readonly string[];
+  readonly formas?: Readonly<Record<FormaEnvio, number>>;
+}
+
 export interface ResultadoEnvio {
+  /** Verdadeiro quando outro já reservou este envio: nada foi enviado nem gravado. */
+  readonly repetido: boolean;
   readonly destinatarios: number;
   readonly enviados: number;
   readonly situacao: 'enviado' | 'falhou';
@@ -54,21 +69,36 @@ export interface ResultadoEnvio {
 }
 
 /** Processa um job de envio: valida, resolve os destinatários, envia o link e registra; a falha alerta o dono. */
-export async function processarEnvio(dados: unknown, d: DependenciasEnvio): Promise<ResultadoEnvio> {
+export async function processarEnvio(
+  dados: unknown,
+  d: DependenciasEnvio,
+  origem?: OrigemEnvio,
+): Promise<ResultadoEnvio> {
   const job: JobEnvioRelatorio = esquemaJobEnvioRelatorio.parse(dados);
-  const estabelecimento = d.nomeEstabelecimento(job.hospital);
+  let reserva: { envio: number } | null = null;
+  if (job.registrar && d.reservar && d.registrar) {
+    if (!origem) throw new Error('Envio com registro sem a origem (vencimento ou job da fila).');
+    reserva = await d.reservar(job.hospital, job.agendamento, origem);
+    if (!reserva)
+      return { repetido: true, destinatarios: 0, enviados: 0, situacao: 'enviado', falha: null, alertouDono: false };
+  }
+  const estabelecimento = await d.nomeEstabelecimento(job.hospital);
   let falha: string | null = null;
   let enviados = 0;
   let destinatarios: string[] = [];
   let dono: string | null = null;
+  let avisarFalha = true;
+  let formas: Readonly<Record<FormaEnvio, number>> | undefined;
   if (!d.smtpUrl) falha = 'SMTP não configurado';
   else if (!smtpPermitido(d.ambiente, d.smtpUrl))
     falha = 'destino de e-mail fora do coletor local (fora de produção)';
   if (!falha) {
     const r = await d
-      .emails(job.hospital, job.grupos, job.dono)
-      .catch(() => ({ destinatarios: [], dono: null }));
+      .emails(job.hospital, job.agendamento)
+      .catch((): DestinatariosEnvio => ({ destinatarios: [], dono: null }));
     dono = r.dono;
+    avisarFalha = r.avisarFalha !== false;
+    formas = r.formas;
     destinatarios = [...new Set([...job.enderecos, ...r.destinatarios])].slice(0, 50);
     if (destinatarios.length === 0) falha = 'nenhum destinatário com e-mail';
   }
@@ -92,7 +122,7 @@ export async function processarEnvio(dados: unknown, d: DependenciasEnvio): Prom
   const antes = (await d.falhasAntes?.(job.hospital, job.agendamento).catch(() => 0)) ?? 0;
   const depois = depoisDoEnvio(antes, falha === null);
   let alertouDono = false;
-  if (depois.alertarDono) {
+  if (depois.alertarDono && avisarFalha) {
     const para = dono ?? d.alertaPadrao;
     if (para && d.smtpUrl && smtpPermitido(d.ambiente, d.smtpUrl)) {
       const a = mensagemDeFalha({
@@ -107,11 +137,15 @@ export async function processarEnvio(dados: unknown, d: DependenciasEnvio): Prom
         .catch(() => undefined);
     }
   }
-  if (job.registrar)
+  if (reserva)
     await d.registrar?.(job.hospital, job.agendamento, {
+      envio: reserva.envio,
       situacao: depois.situacao,
       falha,
       falhasSeguidas: depois.falhasSeguidas,
+      destinatarios: destinatarios.length,
+      enderecos: destinatarios,
+      ...(formas ? { formas } : {}),
     });
-  return { destinatarios: destinatarios.length, enviados, situacao: depois.situacao, falha, alertouDono };
+  return { repetido: false, destinatarios: destinatarios.length, enviados, situacao: depois.situacao, falha, alertouDono };
 }

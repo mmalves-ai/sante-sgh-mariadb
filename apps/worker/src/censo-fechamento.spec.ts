@@ -1,205 +1,156 @@
-// internacao.fecharCenso no worker: só com a chave ligada; fecha o último dia do censo uma vez (o segundo desiste);
-// só transação SGH_ (o escritor do núcleo recusa outra tabela); dev/ci só com CENSO_FECHAMENTO=ligado.
-import type { Escritor, Leitor } from '@sgh/legado';
+// internacao.fecharCenso no worker (lote F2.2 05-15): só com a chave ligada; fecha o último dia do censo uma vez (o
+// segundo desiste); fecha os dias da janela que ficaram sem retrato, em ordem; dev/ci só com CENSO_FECHAMENTO=ligado.
+// A porta própria é trocada por um dublê (nada conecta a banco); a prova sobre o MariaDB é a
+// censo-fechamento-propria.int.spec.ts. Dados sintéticos.
+import type { MovimentoInternacao } from '@sgh/contratos';
+import { grupoDoTipoSaida } from '@sgh/dominio-internacao';
 import { describe, expect, it } from 'vitest';
+import type { DiaCensoParaGravar, PortaCenso } from './censo-fechamento-propria.js';
 import {
   CensoFechamentoService,
   fechamentoLigado,
   fecharCensoDoEstabelecimento,
   JANELA_FECHAMENTO_DIAS,
-  type NucleoCenso,
 } from './censo-fechamento.service.js';
+import type { AlvoEstabelecimento } from './servico-worker.js';
 
 const D = (s: string) => new Date(`${s}T00:00:00.000Z`);
-const SENT = D('1899-12-30');
+const EST: AlvoEstabelecimento = { cliente: 'cli_teste', id: 7, codigo: 'pc', fuso: 'America/Sao_Paulo' };
 
-function nucleo(opcoes: { ligada: boolean; fechados?: string[]; jaNaGravacao?: boolean }) {
-  const escritas: string[] = [];
-  const fechados = [...(opcoes.fechados ?? [])];
-  const leitor: Leitor = {
-    hospital: 'pc',
-    consultar: async (sql) => {
-      if (sql.includes('FROM SGH_CFG_LIBERACAO'))
-        return (
-          opcoes.ligada
-            ? [
-                {
-                  ID: 1,
-                  TIPO: 'recurso',
-                  OPERACAO: 'internacao.censo.fechamento',
-                  ESCOPO: 'hospital',
-                  VALOR: '*',
-                  LIGADA: true,
-                },
-              ]
-            : []
-        ) as never;
-      if (sql.includes('FROM SGH_CFG_PREREQUISITO'))
-        return [
-          {
-            RECURSO: 'internacao.censo.fechamento',
-            TIPO: 'aprovacao',
-            SITUACAO: 'cumprido',
-            DESCRICAO: 'x',
-            RESPONSAVEL: 'x',
-          },
-        ] as never;
-      if (sql.includes('FROM SGH_CFG_PARAMETRO')) return [] as never;
-      if (sql.includes('DISTINCT DATA_CENSO')) return fechados.map((d) => ({ DATA_CENSO: D(d) })) as never;
-      if (sql.includes('FROM RICADINT'))
-        return [
-          {
-            REG: 1,
-            PRONT: 1,
-            ENTRADA: D('2026-10-18'),
-            HORAENT: '1000',
-            ALTA: SENT,
-            HORASAI: null,
-            MOTIVO: null,
-            CARINT: '1',
-            CLINICA: 'M',
-            PERMANEN: null,
-            BLOCO: '1',
-            ACOMOD: 'ENF',
-            LEITO: '01',
-          },
-        ] as never;
-      if (sql.includes('FROM RICTRLOC'))
-        return [
-          {
-            REG: 1,
-            COD: 1,
-            BLOCO: '1',
-            ACOMOD: 'ENF',
-            LEITO: '01',
-            ENTRADA: D('2026-10-18'),
-            HORAENT: '1000',
-            SAIDA: SENT,
-            HORASAI: null,
-            ID_TBTIPOACOMOD: 1,
-          },
-        ] as never;
-      if (sql.includes('FROM RIACOMOD'))
-        return [{ BLOCO: '1', ACOMOD: 'ENF', NOME: 'Enf', TIPO: 1, LEITOS: 2, ATIVOS: 2 }] as never;
-      if (sql.includes('FROM TBTIPOACOMOD')) return [{ ID: 1, NOME: 'Enfermaria' }] as never;
-      return [] as never;
+const MOV: MovimentoInternacao = {
+  internacoes: [
+    {
+      bloco: '1',
+      acomodacao: 'ENF',
+      leito: '01',
+      reg: 1,
+      paciente: 1,
+      entrada: D('2026-10-18'),
+      horaEntrada: '1000',
+      alta: null,
+      horaAlta: null,
+      motivo: null,
+      grupoSaida: grupoDoTipoSaida(null),
+      carater: '1',
+      clinica: 'Clínica médica',
+      permanencia: null,
     },
-    lerBlob: async () => Buffer.alloc(0),
-  };
-  let n = 0;
-  // Linhas gravadas por dia (a prova pós-escrita relê o dia: contagem e soma dos internados).
-  const porDia = new Map<string, number[]>();
-  const diaDe = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v));
-  const e: Escritor = {
-    ...leitor,
-    consultar: async (sql, p) => {
-      if (sql.includes('WITH LOCK')) return (opcoes.jaNaGravacao ? [{ ID: 1 }] : []) as never;
-      if (sql.includes('NEXT VALUE')) return [{ ID: ++n }] as never;
-      if (sql.includes('COUNT(*) N, COALESCE')) {
-        const xs = porDia.get(diaDe(p?.[1])) ?? [];
-        return [{ N: xs.length, S: xs.reduce((a, b) => a + b, 0) }] as never;
-      }
-      return leitor.consultar(sql, p);
+  ],
+  trechos: [
+    {
+      bloco: '1',
+      acomodacao: 'ENF',
+      leito: '01',
+      reg: 1,
+      cod: 1,
+      entrada: D('2026-10-18'),
+      horaEntrada: '1000',
+      saida: null,
+      horaSaida: null,
+      tipo: 1,
     },
-    executar: async (sql, p) => {
-      escritas.push(sql.trim().split(/\s+/).slice(0, 3).join(' '));
-      if (sql.includes('INTO SGH_INT_CENSO_DIA')) {
-        const d = diaDe(p?.[2]);
-        porDia.set(d, [...(porDia.get(d) ?? []), Number(p?.[7])]);
-      }
-      return 1;
-    },
-    executarRetornando: async (sql) => {
-      escritas.push(sql.trim().split(/\s+/).slice(0, 3).join(' '));
-      return { ID: 'x' };
+  ],
+  transferencias: [],
+  unidades: [{ bloco: '1', acomodacao: 'ENF', nome: 'Enf', tipo: 1, leitos: 2, leitosAtivos: 2 }],
+  tipos: new Map([[1, 'Enfermaria']]),
+  dadosAte: D('2026-10-20'),
+};
+
+function porta(opcoes: {
+  ligada: boolean;
+  fechados?: string[];
+  jaNaGravacao?: boolean;
+  semAcomodacao?: boolean;
+  intensivas?: number[];
+}) {
+  const gravados: DiaCensoParaGravar[] = [];
+  const p: PortaCenso = {
+    estabelecimentos: async () => [EST],
+    configuracao: async () => ({ ligada: opcoes.ligada, horaFechamento: null, categoriasIntensivas: opcoes.intensivas ?? [] }),
+    diasFechados: async () => [...(opcoes.fechados ?? [])],
+    movimento: async () => MOV,
+    gravarDia: async (_e, d) => {
+      if (opcoes.jaNaGravacao) return null;
+      if (opcoes.semAcomodacao) return { unidades: 0, linhas: 0, internados: 0 };
+      gravados.push(d);
+      return { unidades: 1, linhas: d.linhas.length, internados: d.linhas.reduce((a, l) => a + l.internados, 0) };
     },
   };
-  const nc: NucleoCenso = {
-    rede: 'r',
-    lerSomente: (_c, fn) => fn(leitor),
-    gravarSgh: (_c, fn) => fn(e),
-    encerrar: async () => undefined,
-  };
-  return { nc, escritas };
+  return { p, gravados };
 }
 
 // 2026-10-20 13:00 UTC = 10:00 em São Paulo: o último dia fechado (meia-noite) é 2026-10-19.
 const AGORA = Date.UTC(2026, 9, 20, 13, 0);
-/** A janela conferida em cada ciclo: os 7 dias até o último fechado. */
-const SEMANA = [
-  '2026-10-13',
-  '2026-10-14',
-  '2026-10-15',
-  '2026-10-16',
-  '2026-10-17',
-  '2026-10-18',
-  '2026-10-19',
-];
+const SEMANA = ['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'];
 
 describe('fechamento do censo no worker', () => {
   it('chave desligada: nada é gravado', async () => {
-    const { nc, escritas } = nucleo({ ligada: false });
-    expect(await fecharCensoDoEstabelecimento(nc, 'pc', AGORA)).toEqual({ situacao: 'desligado' });
-    expect(escritas).toEqual([]);
+    const { p, gravados } = porta({ ligada: false });
+    expect(await fecharCensoDoEstabelecimento(p, EST, AGORA)).toEqual({ situacao: 'desligado' });
+    expect(gravados).toEqual([]);
   });
 
-  it('ligada: fecha o dia anterior uma vez, só em SGH_, com a trilha', async () => {
-    const { nc, escritas } = nucleo({ ligada: true, fechados: SEMANA.slice(0, 6) });
-    const r = await fecharCensoDoEstabelecimento(nc, 'pc', AGORA);
-    expect(r).toEqual({
-      situacao: 'fechado',
-      data: '2026-10-19',
-      linhas: 1,
-      internados: 1,
-      dias: ['2026-10-19'],
-    });
-    expect(escritas.every((s) => /SGH_/.test(s))).toBe(true);
-    expect(escritas.some((s) => s.includes('SGH_INT_CENSO_DIA'))).toBe(true);
-    expect(escritas.some((s) => s.includes('SGH_TRILHA'))).toBe(true);
+  it('ligada: fecha o dia anterior uma vez, com a versão do cálculo e a hora padrão', async () => {
+    const { p, gravados } = porta({ ligada: true, fechados: SEMANA.slice(0, 6) });
+    const r = await fecharCensoDoEstabelecimento(p, EST, AGORA);
+    expect(r).toMatchObject({ situacao: 'fechado', data: '2026-10-19', internados: 1, dias: ['2026-10-19'] });
+    expect(gravados).toHaveLength(1);
+    expect(gravados[0]).toMatchObject({ data: '2026-10-19', versaoCalculo: 1 });
+    expect(gravados[0]!.horaFechamento).toBeGreaterThanOrEqual(1);
   });
 
   it('já fechado (antes ou por outro processo durante a gravação): desiste', async () => {
-    expect(
-      await fecharCensoDoEstabelecimento(nucleo({ ligada: true, fechados: SEMANA }).nc, 'pc', AGORA),
-    ).toEqual({
+    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, fechados: SEMANA }).p, EST, AGORA)).toEqual({
       situacao: 'ja-fechado',
     });
-    expect(
-      await fecharCensoDoEstabelecimento(nucleo({ ligada: true, jaNaGravacao: true }).nc, 'pc', AGORA),
-    ).toEqual({
+    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, jaNaGravacao: true }).p, EST, AGORA)).toEqual({
       situacao: 'ja-fechado',
     });
   });
 
-  it('dia perdido (worker parado na hora de fechar): o ciclo seguinte fecha os dias da janela sem retrato, em ordem', async () => {
-    const { nc, escritas } = nucleo({
+  it('sem acomodação de internação no cadastro: nada é gravado e o resultado diz por quê', async () => {
+    expect(await fecharCensoDoEstabelecimento(porta({ ligada: true, semAcomodacao: true }).p, EST, AGORA)).toEqual({
+      situacao: 'sem-acomodacao',
+    });
+  });
+
+  it('a terapia intensiva vem das categorias de acomodação da porta (não de códigos fixos)', async () => {
+    const comUti = porta({ ligada: true, fechados: SEMANA.slice(0, -1), intensivas: [1] });
+    await fecharCensoDoEstabelecimento(comUti.p, EST, AGORA);
+    expect(comUti.gravados[0]?.linhas.every((l) => l.intensiva)).toBe(true);
+    const semUti = porta({ ligada: true, fechados: SEMANA.slice(0, -1), intensivas: [3, 7, 8, 9, 17] });
+    await fecharCensoDoEstabelecimento(semUti.p, EST, AGORA);
+    expect(semUti.gravados[0]?.linhas.some((l) => l.intensiva)).toBe(false);
+  });
+
+  it('dia perdido (worker parado na hora de fechar): fecha os dias da janela sem retrato, em ordem', async () => {
+    const { p, gravados } = porta({
       ligada: true,
       fechados: SEMANA.filter((d) => !['2026-10-15', '2026-10-18', '2026-10-19'].includes(d)),
     });
-    const r = await fecharCensoDoEstabelecimento(nc, 'pc', AGORA);
+    const r = await fecharCensoDoEstabelecimento(p, EST, AGORA);
     expect(r).toMatchObject({ situacao: 'fechado', data: '2026-10-19', internados: 1 });
     expect(r.situacao === 'fechado' && r.dias).toEqual(['2026-10-15', '2026-10-18', '2026-10-19']);
-    // Um retrato e um evento da trilha por dia.
-    expect(escritas.filter((s) => s.includes('SGH_TRILHA'))).toHaveLength(3);
-    // Fora da janela de 7 dias, nada.
+    expect(gravados.map((g) => g.data)).toEqual(['2026-10-15', '2026-10-18', '2026-10-19']);
     expect(JANELA_FECHAMENTO_DIAS).toBe(7);
   });
 
-  it('ligado fora de dev/ci; em dev/ci só pedido; o ciclo percorre os estabelecimentos', async () => {
+  it('ligado fora de dev/ci; em dev/ci só pedido; o ciclo percorre clientes e estabelecimentos', async () => {
     expect(fechamentoLigado({ AMBIENTE: 'producao' })).toBe(true);
     expect(fechamentoLigado({ AMBIENTE: 'producao', CENSO_FECHAMENTO: 'desligado' })).toBe(false);
     expect(fechamentoLigado({ AMBIENTE: 'dev' })).toBe(false);
     expect(fechamentoLigado({ AMBIENTE: 'ci', CENSO_FECHAMENTO: 'ligado' })).toBe(true);
     const s = new CensoFechamentoService();
     expect(await s.ciclo()).toEqual([]);
-    s.usar(nucleo({ ligada: false }).nc);
-    const antes = process.env['ESTABELECIMENTOS'];
-    process.env['ESTABELECIMENTOS'] = 'pc';
+    const plataforma = { lerPlataforma: async () => [] as never, encerrar: async () => undefined };
+    s.usar(plataforma, () => porta({ ligada: false }).p);
+    const antes = process.env['WORKER_CLIENTES'];
+    process.env['WORKER_CLIENTES'] = 'cli_teste';
     try {
-      expect(await s.ciclo(AGORA)).toEqual([{ situacao: 'desligado' }]);
+      expect(await s.ciclo(AGORA)).toEqual([{ situacao: 'desligado', cliente: 'cli_teste', estabelecimento: 'pc' }]);
     } finally {
-      if (antes === undefined) delete process.env['ESTABELECIMENTOS'];
-      else process.env['ESTABELECIMENTOS'] = antes;
+      if (antes === undefined) delete process.env['WORKER_CLIENTES'];
+      else process.env['WORKER_CLIENTES'] = antes;
     }
     await s.onApplicationShutdown();
   });
