@@ -1,0 +1,3 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBGRUDES	CLASSIF	grupo_natureza_financeira.tipo	D	despesa	L8-11: medido D 34; sentido a confirmar com o cliente (pedido 2)
+TBGRUDES	CLASSIF	grupo_natureza_financeira.tipo	R	receita	L8-11: medido R 6; sentido a confirmar com o cliente (pedido 2)

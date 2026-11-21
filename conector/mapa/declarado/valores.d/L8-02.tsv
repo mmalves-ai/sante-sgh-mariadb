@@ -1,0 +1,7 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	1	01	L8-02: código de despesa da TISS (tabela 25)
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	2	02	L8-02: código de despesa da TISS (tabela 25)
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	3	03	L8-02: código de despesa da TISS (tabela 25)
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	5	05	L8-02: código de despesa da TISS (tabela 25)
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	7	07	L8-02: código de despesa da TISS (tabela 25)
+TBCLASSI	REF_TISS	classificacao_despesa.codigo_despesa_tiss	8	08	L8-02: código de despesa da TISS (tabela 25)

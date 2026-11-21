@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/mapa (origem do historico_padrao) + decisão do integrador",
+   "mudanca": "declarar qual tabela da origem alimenta historico_padrao (com a chave usada), para GPORIGEM.HISTPR e MFADIFOR.HIST valerem 'chave_origem' com destino historico_padrao_id",
+   "motivo": "pedido 1: hoje nenhuma tabela do mapa tem historico_padrao como destino; a coluna ficaria sempre nula com pai_inexistente, por isso HISTPR ficou sem destino"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial)",
+   "mudanca": "competência de duas colunas: '#competencia:<ANO>,<MES>' grava DATE do primeiro dia do mês (mês fora de 1..12 ou ano nulo: NULL com valor_fora_do_dominio); mais o literal do módulo ('=patrimonio', '=financeiro', '=nota_servico', '=folha')",
+   "motivo": "pedido 2: contexto_trabalho_usuario.competencia é NOT NULL; GPPARAMU (COMPANO,COMPMES), MFPARUSU (ANOPRO,MESPRO), NFSEPARUSU (ANO_/MES_PROCESSAMENTO) e PEPARAM_USUARIO (ANO,MES) ficam bloqueadas; destino previsto de cada coluna no motivo de colunas.d/L8-10.tsv. Atenção: a chave única (usuario_id, modulo) recusará com 1062 o mesmo login em duas empresas"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + decisão do integrador",
+   "mudanca": "MFCABECLANC: data_operacao e tipo_operacao de grupo_lancamento_financeiro (NOT NULL) derivados dos lançamentos filhos, ou o agrupador deixa de ser carregado e os filhos o criam; MFCABECRENEGO: renegociacao (número, tipo, devedor, valores, parcelas, primeiro vencimento NOT NULL) montada a partir das parcelas renegociadas, que não estão nesta fatia",
+   "motivo": "pedido 3: as duas tabelas da origem só têm o ID (e a data e o responsável, na renegociação); ficam fora da carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/tabelas.tsv",
+   "mudanca": "referência por coluna não chave do pai ('ref:TBUSERS.ID_TBUSERS': id pelo valor da coluna ID_TBUSERS lida de TBUSERS) e a dependência MFCTAUSU -> TBCTABAN em tabelas.tsv (hoje TBCTABAN tem ordem 853, depois de MFCTAUSU 811)",
+   "motivo": "pedido 4: MFCTAUSU (permissao_conta_bancaria) recusaria toda linha: usuário não resolve (a chave de TBUSERS no mapa é o login) e conta bancária ainda não carregada; o mesmo vale para MFADIFOR.ID_TBCTABAN"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por chave composta ('ref:<TABELA>(<COL1>,<COL2>,...)') para o título (EMPRESA,TP_LAN,FORN,DATA,DOC,TIPO,SERIE) e a natureza financeira (GRUPO,SUBGRUPO,ITEM), e coluna derivada do pai para percentual = valor / valor do título",
+   "motivo": "pedido 5: MFLANGSI (117182 linhas na referência) fica bloqueada: o CHECK ck_rateio_lancamento_pai e natureza_financeira_id/centro_custo_id/percentual (NOT NULL) recusariam toda linha"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-10.tsv (confirmação do dono)",
+   "mudanca": "confirmar o domínio de MFTIPOLANC.TP_LANCAMENTO (hoje P pagar, R receber) e decidir o de-para de COD_TP_LANCAMENTO para tipo_credor.natureza (fornecedor, medico, prestador, adiantamento, tributo, folha, cooperativa, outro), pela contagem por valor na origem (só contagem)",
+   "motivo": "pedido 6: sem a confirmação, valor fora de P/R fica com o padrão 'pagar' e pendência valor_fora_do_dominio, e a natureza fica presumida 'outro' (valor_presumido)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência condicional: o mesmo código (MFADIFOR.COD) aponta fornecedor ou profissional conforme o valor de outra coluna (TIPO_CREDOR), gravando só a coluna de destino do ramo; e 'via pai' para MFADIFOR_TBCBOPRO.ID_TBCBOPRO -> profissional_id da inscricao_conselho (já pedido no L7-08, pedido 3)",
+   "motivo": "pedido 7: MFADIFOR (adiantamento, 4328 linhas) recusaria toda linha pelo ck_adiantamento_credor; MFADIFOR_TBCBOPRO depende dela"
+  },
+  {
+   "arquivo": "decisão do dono (modelo)",
+   "mudanca": "MFTIPOLANC_TBOPCOES libera tipo de lançamento por TELA; permissao_tipo_lancamento é por PERFIL e operação (perfil_acesso_id, operacao NOT NULL): definir se a tela vira operação (de-para tela -> contas_pagar/contas_receber/banco/caixa/adiantamento) aplicada a todos os perfis com acesso à tela, ou se a tabela fica fora",
+   "motivo": "pedido 8: sem correspondência direta, a tabela fica fora da carga"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv",
+   "mudanca": "MFTPAPURACAO: tirar tributo dos destinos (as 2 linhas são formas de apuração, domínio fixo tributo.forma_apuracao) e descartar com motivo, ou usar como de-para de valores; MOPARAM: mecanismo de linha larga (o mesmo pedido do GEPARAM no L7-08, pedido 6)",
+   "motivo": "pedido 9: gravar formas de apuração como tributos criaria tributos falsos; MOPARAM é linha única de módulo sem uso"
+  },
+  {
+   "arquivo": "decisão do integrador",
+   "mudanca": "regra_retencao a partir de MFTPCONTRIBUICAO: alíquota e vigencia_inicio (NOT NULL) não existem nesta tabela; buscar na tabela de alíquotas (TBINTIMP -> aliquota_tributo_vigencia, ordem 868) ou deixar regra_retencao fora do mapa desta tabela",
+   "motivo": "pedido 10: só o destino tributo é carregado"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + conector/mapa/declarado/catalogos.tsv",
+   "mudanca": "NFSEEMPDESENT/NFSEEMPDESENV: declarar o de-para oficial (codigo_fiscal_oficial, provedor_nota_municipal) em catalogos.tsv e retirar municipio_provedor_nota e nota_servico dos destinos (não são alimentadas por estas tabelas); NFSEPARUSU: retirar configuracao_nota_servico (é por estabelecimento e tipo de faturamento, não por usuário) ou decidir a regra de consolidação das retenções por usuário",
+   "motivo": "pedido 11: as três ficam fora da carga (NFSEPARUSU também bloqueada pelo pedido 2)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + depara.py",
+   "mudanca": "SDGEITENS -> dado_fiscal_item: vigência inicial sem origem ('@inicio_carga', o pedido 1 do L7-08), tipo_item_efd presumido ou derivado (NOT NULL, CHECK de 12 valores) e de-para do id da tabela oficial para o código (SDGENERO, SDNATCREDITO, SDCSTPIS, SDCSTCOFINS -> CHAR(2)); a origem não separa CST de entrada e saída",
+   "motivo": "pedido 12: SDGEITENS (7689 linhas) fica bloqueada; GEITENS também lista dado_fiscal_item como destino sem declaração (L7-07): definir qual das duas grava a linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (coluna especial) + conector/mapa/declarado/valores.d/L8-10.tsv + fatia L8-12",
+   "mudanca": "(a) coluna especial genérica '~<COLUNA>': grava o valor da origem e deixa por linha a pendência baixa valor_presumido (como '=~', mas com o valor lido), para declarar MFTPCONTRIBUICAO.ID -> tributo.codigo como presumido; (b) de-para de valores ID -> sigla oficial (IRRF, INSS, ISS, PIS, COFINS, CSLL) revisado pelo cliente, montado pela contagem por valor na origem (só contagem, nunca o conteúdo no chat); (c) o L8-12 (TBINTIMP -> aliquota_tributo_vigencia, um tributo por coluna COFINS/PIS/CSLL/IRRF) resolve o tributo pela sigla gravada aqui, e não pelo ID",
+   "motivo": "pedido 13: tributo.codigo é a sigla (UNIQUE); hoje grava o ID da origem ('1','2'...), provisório: sem a sigla, o L8-12 não acha o tributo e um 'PIS' cadastrado depois duplica o tributo sem o UNIQUE perceber"
+  }
+ ]
+}

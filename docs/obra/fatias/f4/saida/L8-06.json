@@ -1,0 +1,64 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/verificar_mapa.py (referência condicional) e conector/mapa/declarado (decisão do dono)",
+   "mudanca": "(1) referência condicional por coluna discriminadora na via, ex.: 'ref:TIPO_CTA=I?RICADINT(COD)|ATCABECATEND(COD)' para conta_hospitalar.atendimento_id em FCCTAEXT (TIPO_CTA,COD) e 'ref:RICADINT(REG)' em RICONTAS; paciente_id pelo atendimento resolvido (coluna do destino do pai: 'ref:...>paciente_id'); (2) data composta de ano e mês ('#competencia:ANOPRO,MESPRO' -> primeiro dia do mês) para conta_hospitalar.competencia e conta_hospitalar_periodo.competencia; (3) tipo_conta_id e natureza por de-para de valores de TIPO_CTA (tipo_conta é catálogo do produto: id por código fixo); (4) numero da conta composto ('={ANOPRO}{MESPRO}-{TIPO_CTA}{COD}' ou SERIE), único por estabelecimento",
+   "motivo": "conta_hospitalar exige atendimento_id, paciente_id, tipo_conta_id, natureza, numero, competencia e inicio_em NOT NULL e a origem não tem coluna de referência gerada para nenhum deles (a conta aponta o atendimento por TIPO_CTA+COD). Sem isso FCCTAEXT e RICONTAS recusariam toda linha e, em cadeia (pai_pendente), FCFAIPAC, FCIRREGULARID, FCLANEXT, FCLANEXTSEQITEM, REPROEXT, RIPROEXT, FCINTEGRPA, FCCTAEXT_FCTISSLOTEPROT, FCCTAAUD e FCLANAUD: 11 tabelas bloqueadas por esta única falta"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência por chave composta não primária)",
+   "mudanca": "referência declarada por colunas que não são a chave do pai, ex.: 'ref:FCCTAEXT(ANOPRO,MESPRO,TIPO_CTA,COD)' em FCCTAAUD para auditoria_conta.conta_hospitalar_id e 'ref:FCLANEXT(ID_FCCTAEXT*,TIPO,DATA,HORA,PROCTO,LOCAL,ATO)' em FCLANAUD para auditoria_conta_item.conta_hospitalar_item_id (índice auxiliar no conector_origem do pai pelas colunas nomeadas, colisão = pendência ambígua)",
+   "motivo": "FCCTAAUD e FCLANAUD são retratos da auditoria e apontam a conta e o item pelos campos de negócio, não pelo ID; auditoria_conta.conta_hospitalar_id e auditoria_conta_item.conta_hospitalar_item_id são NOT NULL"
+  },
+  {
+   "arquivo": "conector/mapa/declarado (decisão do dono) + carga_mapa.py (retrato JSON)",
+   "mudanca": "FCCTAAUD -> auditoria_conta + auditoria_conta_versao: tipo_auditoria_id por código fixo (catálogo do produto, ex.: 'auditoria interna migrada'), iniciada_em por DATA_GRA/DATA_FEC, situacao 'concluida' com resultado presumido; auditoria_conta_versao.dados JSON com o retrato da linha (mesmo pedido de retrato JSON da L6-14) e momento 'antes'/'depois' por TIPO_CTA ou pela tabela-par",
+   "motivo": "auditoria_conta exige tipo_auditoria_id, iniciada_em e um auditor (CHECK); auditoria_conta_versao exige dados JSON, momento e operacao: nenhum vem pronto da origem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + conector/mapa/tabelas.tsv",
+   "mudanca": "(a) referência ao destino NÃO principal do pai ('ref:TBPROCTO>item_faturavel', 'ref:TBMATMED>item_faturavel', 'ref:TBTABDTH>item_faturavel') e referência condicional pelo TIPO do lançamento para conta_hospitalar_item.item_faturavel_id em FCLANEXT, REPROEXT e RIPROEXT; (b) definir no mapa quem alimenta item_faturavel para procedimento e mat/med (hoje TBPROCTO tem principal tabela_preco e TBMATMED item_referencia_matmed); (c) destino condicional: glosa_item só quando o lançamento tem glosa (coluna de valor glosado > 0), em vez de uma linha de glosa por lançamento; (d) data + hora HHMM em duas colunas (DATA + HORA, HORA_FINAL) -> DATETIME, regra 'data_mais_hhmm:<COL_HORA>'",
+   "motivo": "conta_hospitalar_item.item_faturavel_id é NOT NULL e a referência gerada daria o id de tabela_preco/item_referencia_matmed, entidade errada; um destino secundário incondicional criaria glosa falsa para todo item"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (ordem e dependências)",
+   "mudanca": "FCLANEXTSEQITEM e REPROEXT dependem de ATTISSAUTLANC (fora do mapa: dep_fora_do_mapa); incluir ATTISSAUTLANC no mapa (autorização TISS do lançamento) antes delas ou declarar a coluna ID_ATTISSAUTLANC descartada com motivo; FCLANEXTSEQITEM é sem chave (sem_chave_recarga) e só tem sentido com a autorização",
+   "motivo": "conta_hospitalar_item_autorizacao sem a autorização é só o número sequencial do item: nada a carregar sem o pai"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + sentinela.py + decisão do dono",
+   "mudanca": "TBREPGER -> regra_repasse;regra_repasse_item: (a) agrupar linhas da origem numa só regra (chave de agrupamento declarada, ex. 'agrupar:MED_PRS,COD'), com o item por linha e sequencia por '#seq'; (b) descricao NOT NULL sem coluna: literal composto ('=Repasse {MED_PRS} {COD}') ou presumido; (c) regra 'zero_e_nulo' (0 = todos) para CONV, UNID, CDC, ESP, LOCAL, ATO, sem pendência pai_inexistente; (d) 'ref:RPEVENTO' em ID_RPEVENTOS (nome diferente do pai: sem referência gerada) para evento_repasse_id NOT NULL; (e) beneficiario por de-para de valores de MED_PRS; (f) percentual xor valor_fixo (CHECK) com PERC/VALOR. TBREPGER_TBCBOPRO -> regra_repasse_profissional: profissional_id pela inscrição no conselho (TBCBOPRO principal é inscricao_conselho: 'ref:TBCBOPRO>profissional_id') e vigencia_inicio de coluna do pai (TBREPGER.DATA)",
+   "motivo": "uma regra por linha daria 105 mil regras sem descrição, e o 0 de 'todos' viraria pendência média em quase toda linha; regra_repasse_profissional.profissional_id e vigencia_inicio são NOT NULL e não estão na linha. FCINTEGRPA (producao_repasse) fica bloqueada também pelo pedido 1 (FCLANEXT)"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + carga_mapa.py (destino condicional) + declarado/valores.d",
+   "mudanca": "FCTISSLOTEPROT -> lote_tiss;protocolo_recebimento;recurso_glosa: (a) versao_padrao_tiss_id NOT NULL sem alimentadora (TBTISSSCHEMA vai para transacao_tiss_webservice, não para a versão do padrão): mapa alimentar versao_padrao_tiss ou 'ref:TBTISSSCHEMA>versao_padrao_tiss_id'; (b) tipo_guia por de-para de valores de ID_TBTISSTPGUIA (código do catálogo TISS) para o domínio do CHECK; (c) protocolo_recebimento só quando NUM_PROTOCOLO preenchido e recurso_glosa só quando NUM_DEMONSTRATIVO_RECURSO_GLOSA preenchido (destino condicional); (d) gerado_em NOT NULL com DATA_HORA_LOTE nulável (pendência e recusa, ou decisão). FCCTAEXT_FCTISSLOTEPROT segue o pedido 1",
+   "motivo": "sem (a) e (b) toda linha de lote seria recusada por NOT NULL/CHECK; destinos secundários incondicionais criariam protocolo e recurso falsos"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (mecanismo historico_entidade de HTPROCTO)",
+   "mudanca": "HTPROCTO grava trilha_auditoria com entidade 'item_faturavel' e entidade_id do item faturável do procedimento, mas ID_TBPROCTO resolve para o principal de TBPROCTO (tabela_preco): mesmo pedido 4(a)/(b) ('ref:TBPROCTO>item_faturavel'); conferir também o segundo destino item_faturavel declarado no mapa para um histórico (o histórico não cria item)",
+   "motivo": "gravar entidade_id de tabela_preco com entidade 'item_faturavel' seria trilha apontando o registro errado"
+  },
+  {
+   "arquivo": "conector (cofre de segredos) + conector/sante_conector/sentinela.py + conector/sante_conector/sintetica.py",
+   "mudanca": "(a) TBTISSWEBSERV -> credencial_fonte_pagadora: login LOGIN_PRESTADOR e a senha para o cofre (referencia_cofre 'cofre:...'), nunca no banco; vigencia_inicio NOT NULL sem coluna na origem (literal presumido da data da migração ou decisão); (b) regra 'tempo_em_segundos' (TIME -> segundos) para TIME_RESPOSTA_WEBSERV -> endpoint_tiss_fonte_pagadora.tempo_limite_segundos; (c) sintetica._q: citar datetime.time (\"'%H:%M:%S'\"); hoje um TIME na imagem sintética quebra o isql",
+   "motivo": "o endpoint já carrega (L8-06), mas sem credencial a autenticação básica fica sem segredo até o cliente cadastrá-lo no cofre; LOCAL_ARQ_XML_RETORNO (pasta do servidor antigo) não é migrado de propósito"
+  },
+  {
+   "arquivo": "decisão do dono + conector/mapa/declarado/descartes.tsv",
+   "mudanca": "TBHISTBR -> preco_referencia_matmed: a origem só guarda o histórico do vínculo do material ao código da tabela de referência (TAB, COD, BRAS, DATA), sem preço nem edição; preco_referencia_matmed exige edicao_referencia_matmed_id NOT NULL e um preço (CHECK). Propor descarte (ou trilha_auditoria de item_referencia_matmed) e, se for preço de tabela licenciada, só por hospital com licença (regra 7)",
+   "motivo": "carregar como preço gravaria linhas sem preço (recusadas pelo CHECK) e tabela licenciada não entra na base do produto"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + decisão do dono",
+   "mudanca": "TBHISTTABDTH, TBHISTTABMM, TBHISTTABTHME, TBHISTTABTHMI -> contrato_tabela_vigencia: contrato_fonte_pagadora_id NOT NULL e nenhuma tabela do mapa alimenta contrato_fonte_pagadora; decidir criar um contrato padrão por fonte pagadora (TBCONVEN, segundo destino com '@id') ou 'ref:TBCONVEN>contrato_fonte_pagadora'. Com isso a fatia declara: tipo_item literal por tabela (DTH 'diaria_taxa', MM 'matmed', THME 'honorario_ambulatorial', THMI 'honorario_internacao'), tabela_preco_id pela referência gerada (TBCTRDTH/TBCTRMEM/TBCTRTHM, principal tabela_preco), vigencia_inicio/fim por PERIODO_INICIAL/FINAL",
+   "motivo": "sem contrato todo histórico de vigência seria recusado (NOT NULL)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (planejar e _valores; cabeçalho)",
+   "mudanca": "referência OBRIGATÓRIA declarada no campo via ('obrigatoria', item separado por ';', ao lado de 'ref:'): (a) módulo: VIA_OBRIGATORIA = \"obrigatoria\"; (b) planejar: cols[dt].append({..., \"obrigatoria\": VIA_OBRIGATORIA in (c.get(\"via\") or \"\").split(\";\")}); (c) _valores, logo após x, pr, g = self._referencia(...): 'if pr == \"pai_inexistente\" and c.get(\"obrigatoria\"): return None, None, pend, (pr, g), []' (recusa com pendência no mesmo commit, filhos em cadeia com pai_pendente, nada gravado); (d) cabeçalho: 'pai nunca visto: NULL com pendência pai_inexistente, ou recusa se a via declarar obrigatoria'. Nulo/zero na origem segue sem referência (não recusa). A sintética l8_06 e o test_l8_06 já se ajustam sozinhos quando carga_mapa.VIA_OBRIGATORIA existir (esperado gravados=4 em vez de 6); depois da integração o integrador pode remover o ramo antigo",
+   "motivo": "TBTISSWEBSERV.ID_TBTISSSCHEMA é NOT NULL na origem e faz parte da chave (o registro é o endereço daquela transação), mas transacao_tiss_webservice_id é NULL no destino (NULL = portal/papel). Hoje o pai nunca visto grava um endpoint servico_web com transação NULL: muda o significado, o UNIQUE uq_endpoint_tiss_fonte_pagadora_canal não pega duas linhas assim para a mesma fonte (endpoints ambíguos), e a linha igual é pulada no Sincronizar, então o NULL não se resolve quando o pai chega. Regra genérica, não código por tabela"
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus, CHECK ck_dominio_sus_lista)",
+   "mudanca": "acrescentar a lista 'localizacao_tumor' (localização primária do tumor do laudo oncológico); depois declarar TBLOCPRI (=localizacao_tumor, COD->codigo e codigo_oficial em texto, NOME->descricao texto_nome) em colunas.d/L8-08.tsv",
+   "motivo": "TBLOCPRI (49 linhas na imagem de referência) não tem lista no CHECK; local_metastase tem outro sentido"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (TBLOCSUS, TBNIVSUS, TBPRESUS) e conector/mapa/declarado/catalogos.tsv",
+   "mudanca": "tirar as três de dominio_sus: destinos vazio, destinos_oficiais=dominio_sigtap, estratégia depara_catalogo_oficial; em catalogos.tsv declarar TBLOCSUS (lista modalidade), TBNIVSUS (lista complexidade, ou nova lista oficial 'nivel_hierarquia' em ck_dominio_sigtap_lista se os códigos não forem os da complexidade: conferir só pelo código na carga oficial) e TBPRESUS (lista tipo_prestador) com coluna_codigo COD; código ausente no catálogo vira pendência catalogo_codigo_*. As relações TBPROLOC, TBPRONIV e TBPRESTP já são depara_catalogo_oficial e passam a resolver por esse de-para",
+   "motivo": "regra 7: são catálogos oficiais da tabela unificada (já versionados em dominio_sigtap com versao_fonte); gravá-los em dominio_sus criaria uma segunda cópia sem versão e com sentido trocado (TBLOCSUS é a modalidade, não 'local de atendimento')"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (TBNIVEL, TBPRESSE) e catalogos.tsv ou descartes.tsv",
+   "mudanca": "versões antigas (sem id) dos mesmos catálogos oficiais: de-para pelo COD para dominio_sigtap (TBPRESSE lista tipo_prestador; TBNIVEL a mesma lista do TBNIVSUS) se alguma coluna da origem ainda as referencia, senão descarte com motivo; nunca lista própria em dominio_sus",
+   "motivo": "regra 7; substitui o pedido anterior de listas próprias 'nivel_hierarquia'/'tipo_prestador_estadual' em dominio_sus"
+  },
+  {
+   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (ck_dominio_sus_lista) e conector/sante_conector/mapa.py (verificador)",
+   "mudanca": "retirar 'local_atendimento', 'nivel_atencao' e 'tipo_prestador' do CHECK de dominio_sus (são listas da tabela unificada, que moram em dominio_sigtap) ou, se ficarem, o verificador recusar alimentadora da origem para elas; dominio_sigtap já é oficial pelo versao_fonte (conferir que continue em destinos_oficiais)",
+   "motivo": "sem isso o verificador não pega uma lista oficial gravada em dominio_sus (dominio_sus não tem versao_fonte nem está em oficiais.tsv)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (mesmo pedido do L6-06)",
+   "mudanca": "regra genérica do mecanismo de parâmetro para tabela de linha única: cada COLUNA declarada vira parâmetro (parametro_definicao pela chave modulo.nome, com módulo e tipo declarados; parametro_valor no nível do estabelecimento, vigência na data da migração). Com ela FIPARAM, FAPARAM e FAPARAMA declaram as opções (hoje 'bloqueada até a regra genérica', coluna a coluna)",
+   "motivo": "as opções dos instrumentos AIH, BPA e APAC (cerca de 180 colunas) não têm tabela própria no modelo"
+  },
+  {
+   "arquivo": "conector/mapa (FIPARAM, FAPARAM, FAPARAMA: cabeçalho) e decisão do dono",
+   "mudanca": "destino dos dados de cabeçalho: (a) dados do estabelecimento (EMPRESA, ENDERECO, ENDENT, BAIENT, CEPENT, CIDENT, UFENT, FONE) conferidos contra o cadastro do estabelecimento, divergência vira pendência sem sobrescrever; (b) órgão gestor (NOME_ORGAO, SUDS_COD, SUDS_NOME, SUDS_END, SUDS_RESP) para contrato_gestor_sus.gestor_nome ou parâmetro do estabelecimento; (c) cabeçalho da produção (NUMRAA, CNS_AUTORIZACOES, AIHVAL, DATENT, HOSP, PRESTADOR, NIVEL_H, COD_SER, CLA_SER, AUTORIZADOR) como parâmetro de faturamento SUS por estabelecimento. Descartadas com motivo: EMAIL/EMAIL_SERV/EMAIL_USER (configuração de envio da origem) e VERDAT/VERSAO/VERSAO_BANCO/ULT_COMP_PROC/MEM (controle interno da origem)",
+   "motivo": "esses dados não são opções; hoje ficam declarados como bloqueados para não se perderem sem registro"
+  },
+  {
+   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus) + sentinela (competencia_aaaamm, já pedido)",
+   "mudanca": "para listas versionadas por competência (fonte orçamentária): único (lista, codigo, vigencia_inicio) ou vigência na chave de negócio; até lá o mesmo código em duas competências vira pendência restricao_destino_1062 (duplicidade, visível no painel)",
+   "motivo": "código = código do leiaute (único na lista) evita ambiguidade no SIH/SIA; a duplicidade não é mais gravada em silêncio"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py (REGRAS)",
+   "mudanca": "regra genérica 'competencia_aaaamm': inteiro ou texto AAAAMM vira DATE do 1º dia do mês (inválido: NULL com valor_fora_do_dominio); com ela TBFONTE_ORCAMENTARIA_SUS.ANO_MES_COMPETENCIA vai para dominio_sus.vigencia_inicio",
+   "motivo": "fonte orçamentária é versionada por competência; hoje a vigência fica NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna derivada de duas colunas da origem (ex.: '%AAAAMM:ANOPRO,MESPRO' -> CHAR(6)) e literal de momento da carga para colunas DATETIME NOT NULL sem padrão (ex.: '@agora' para competencia_sus.aberta_em); com elas FIPARAM/FAPARAM/FAPARAMA entram em competencia_sus (instrumento =aih/=bpa/=apac, @estabelecimento, PERINI/PERFIN como data; FIPARAM sem período precisa de período derivado da competência)",
+   "motivo": "competencia_sus exige competencia, periodo_inicio, periodo_fim e aberta_em NOT NULL; as demais opções dos instrumentos vão para o mecanismo de parâmetros (fora do mapa por tabela)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "coluna derivada da linha referenciada (mesmo pedido 13 do L7-08): FCCTRLANCIHA.ID_FCLANEXT -> conta_hospitalar_item.item_faturavel_id para equivalencia_sigtap_item.item_faturavel_id; vigencia_inicio presumida (=~) e instrumento =ciha; registro_ciha_procedimento fica fora (registro_ciha_id e sequência sem origem: retirar do destinos do mapa ou alimentadora própria)",
+   "motivo": "FCCTRLANCIHA (660776 linhas na imagem de referência) não carrega sem o item faturável; destino secundário sem origem"
+  },
+  {
+   "arquivo": "conector/mapa (alimentadora de unidade_internacao) e decisão do dono",
+   "mudanca": "FHLEITOUTI: ID_TBUNIDAD aponta unidade_assistencial (principal de TBUNIDAD), mas leito_uti_habilitado.unidade_internacao_id referencia unidade_internacao, que nenhum lote alimenta; e vigencia_inicio NOT NULL não tem origem (presumir =~ data com valor_presumido?). Decidir alimentadora/via de unidade_internacao e a vigência presumida; então declarar tipo_uti (FHLEITOUTITP, L8-07), quantidade, @estabelecimento",
+   "motivo": "gravar unidade NULL mudaria o sentido (habilitação do estabelecimento inteiro)"
+  }
+ ]
+}

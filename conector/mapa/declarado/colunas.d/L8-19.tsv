@@ -1,0 +1,4 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBTPSURTO	ID	tipo_surto_infeccao.codigo	texto			L8-19: chave inteira da origem gravada como código (texto; a soma de controle compara texto)
+TBTPSURTO	NOME	tipo_surto_infeccao.descricao	texto_nome			L8-19: nome do tipo de surto vira a descrição (em branco recusa a linha pelo NOT NULL do destino)
+TBTPSURTO	=~outro	tipo_surto_infeccao.categoria				L8-19: PRESUMIDO (valor_presumido por linha): a origem não classifica a categoria (NOT NULL com CHECK no destino); o cliente reclassifica pelo painel. codigo_sinan fica nulo: a origem não traz o código oficial

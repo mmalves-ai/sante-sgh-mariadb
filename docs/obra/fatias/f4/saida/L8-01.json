@@ -1,0 +1,59 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "coluna especial de competência que junta ano e mês da origem numa data do 1º dia do mês (ex.: '#competencia:ANOPRO,MESPRO'); mês fora de 1..12 ou ano nulo vira NULL com valor_fora_do_dominio",
+   "motivo": "FAPARUSU, FCPARUSU, FIPARUSU, FCFECMES e RECONTAS guardam a competência em duas colunas inteiras e o destino exige DATE NOT NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "referência em cadeia na via (ex.: 'ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS'): id do destino do pai do pai pelo conector_origem",
+   "motivo": "FCCODCON e FCCRECUN apontam a inscrição no conselho e o destino exige profissional_id; RICGUIAS/FCGUIAS precisam do paciente pelo atendimento (já pedido por L6)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "coluna especial de data somada a dias de outra coluna (ex.: '#data_mais_dias:DATA,VALIDADE') e de data+hora HHMM em texto (DT_INICIO+HR_INICIO)",
+   "motivo": "FCORCAME.validade_ate e RECONTAS.inicio_em são NOT NULL e vêm de duas colunas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "desdobrar colunas repetidas numa linha em várias linhas do destino (ex.: dia da semana 0..6 a partir de DOM_I/DOM_F..SAB_I/SAB_F, hora HHMM em texto)",
+   "motivo": "FCHORATE -> horario_normal_tabela tem uma linha por dia da semana"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (regra genérica)",
+   "mudanca": "referência por chave composta ao item faturável (PROCTO,TIPO,SUBTIPO ou TAB,COD) e à tabela de preço pela TAB",
+   "motivo": "FCORCPAD, FCORLAME, FCREFUND, FCPROCUNIBHMED, FCPORANE e FCHORATE exigem item_faturavel_id/tabela_preco_id NOT NULL"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-01.tsv (revisão do cliente no painel)",
+   "mudanca": "de-para de valores: tipo_deducao_irrf.natureza (RPDEDUTIVEL por código; hoje literal presumido =~outra com valor_presumido por linha), competencia_trabalho_usuario.modulo (FAPARUSU.MODULO), guia_fonte_pagadora.tipo_guia (FCGUIAS.TP_GUIA), regra_credito_producao.tipo_conta_id/credita (FCCRECUN.CONTAS) e grupo_motivo_glosa.codigo_tiss (FCTPMOTGLOSA.COD_TP_MOTIVO_GLOSA, só com evidência)",
+   "motivo": "domínios codificados sem significado fixo; não se leem valores reais para fixar pares no código"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (destinos sem fonte)",
+   "mudanca": "empresa_auditoria_externa.pessoa_juridica_id (FCEMPAUDPLANSERV só traz nome), vigencia_inicio de codigo_prestador_fonte_pagadora/profissional_fonte_pagadora (FCCODCON, FCCPSCON), numero_carteira de conta_hospitalar_segurado (FCDIAEXT, FCDIAINT), data_abertura de fechamento_competencia_fonte_pagadora e ocorrido_em de valor_porte_anestesico: NOT NULL sem fonte. Propor referência por nome/criação secundária, data de vigência mínima declarada pelo cliente, ou afrouxar o modelo",
+   "motivo": "nada presumido em silêncio; tabelas fora da carga"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (FCTPPGTONFSE -> nota_fatura)",
+   "mudanca": "o destino do mapa é a ligação nota de serviço com fatura (nota_servico_id e valor NOT NULL), não um catálogo de condição de pagamento; trocar o destino para condicao_pagamento (ou enumerado) por de-para de valores",
+   "motivo": "mapa aponta destino incompatível com a forma da tabela"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (FCPARUSU)",
+   "mudanca": "preferências soltas do faturista (CTAE, CTAI, DIG_PERVAL, IMPRES, HOSP, CNPJ_ALT, NOME_ALT, CNES_ALTERNATIVO...) pelo mecanismo de parâmetro por usuário (parametro_definicao/parametro_valor); só ANOPRO/MESPRO vão para competencia_trabalho_usuario",
+   "motivo": "motivo do mapa: preferências vão para parâmetro por usuário"
+  },
+  {
+   "arquivo": "decisão do dono / integrador (classificação do cliente dos motivos de glosa: TBMOTGLO.ID_FCTPMOTGLOSA -> FCTPMOTGLOSA)",
+   "mudanca": "motivo_glosa.grupo_motivo_glosa_id está numa tabela oficial que o conector nunca grava: (a) tirar a coluna da tabela oficial e criar ligação própria do cliente (motivo oficial por codigo_tuss x grupo_motivo_glosa), carregada de TBMOTGLO.CODIGO (de-para pelo código oficial) + TBMOTGLO.ID_FCTPMOTGLOSA (referência ao grupo pelo conector_origem); ou (b) decisão do dono de liberar a escrita dessa coluna não oficial. Registrar em dependencias a aresta TBMOTGLO -> FCTPMOTGLOSA (hoje ausente) e declarar a coluna no lote que tiver TBMOTGLO",
+   "motivo": "sem isso os grupos de glosa entram órfãos e a classificação do hospital se perde em silêncio, sem pendência; TBMOTGLO só tem a declaração de catálogo oficial e nenhuma coluna"
+  },
+  {
+   "arquivo": "evidência por metadado/contagem (integrador) + conector/mapa/declarado/colunas.d/L8-01.tsv",
+   "mudanca": "verificar, sem ler valores (só contagem de IDs e faixa por agregado, e comparação com a tabela pública de tipos de dedução da EFD-Reinf), se RPDEDUTIVEL.ID corresponde ao tipo de dedução oficial (tpDed). Se sim: declarar tipo_deducao_irrf.codigo_esocial a partir do ID e derivar a natureza por tabela pública versionada (carregador de catálogo), trocando o literal presumido; e ligar natureza_rendimento_deducao.tipo_deducao_irrf_id pelo codigo_deducao_reinf (ou por FPITENSNATREND_DEDUTIVEL.ID_RPDEDUTIVEL). Se não: de-para revisado pelo cliente no painel",
+   "motivo": "hoje codigo_esocial fica nulo e a natureza 'outra' em toda linha de uma tabela fiscal; o carregador oficial não acha o tipo do hospital e as deduções permitidas por natureza de rendimento ficam desligadas"
+  }
+ ]
+}

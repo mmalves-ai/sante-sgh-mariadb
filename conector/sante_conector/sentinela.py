@@ -48,6 +48,12 @@ REGRAS = {
            "errado, todos iguais ou mais de 11 dígitos: NULL com documento_invalido (nunca o valor no log)",
     "cpf_cnpj": "documento de pessoa (inteiro ou texto): até 11 dígitos é CPF, até 14 é CNPJ (com zeros à esquerda); "
                 "inválido: NULL com documento_invalido",
+    "decimal_nao_negativo": "NUMERIC em que negativo não tem sentido (CHECK >= 0): negativo vira NULL com "
+                            "valor_fora_do_dominio (linha gravada); zero fica",
+    "competencia_aaaamm": "competência em inteiro ou texto AAAAMM vira DATE do 1º dia do mês; mês fora de 1..12, ano "
+                          "< 1800 ou forma inválida: NULL com valor_fora_do_dominio; 0 ou vazio vira NULL",
+    "data_primeiro_dia_mes": "DATE/TIMESTAMP vira DATE do 1º dia do mês (competência); data sentinela vira NULL com "
+                             "data_sentinela",
 }
 # regras cujo destino é coluna TIME / DATETIME (o verificador confere contra o tipo da coluna declarada no DDL)
 REGRAS_TIME = {"hora", "hora_hhmm", "hora_em_timestamp"}
@@ -256,6 +262,31 @@ def aplicar(regra, v):
     if regra == "decimal_positivo":
         x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))
         return (x, None) if x > 0 else (None, "valor_fora_do_dominio")
+    if regra == "decimal_nao_negativo":
+        x = v if isinstance(v, decimal.Decimal) else decimal.Decimal(str(v))
+        return (x, None) if x >= 0 else (None, "valor_fora_do_dominio")
+    if regra == "competencia_aaaamm":
+        t = _str(v).strip() if isinstance(v, (str, bytes, bytearray)) else v
+        if t == "" or t == 0:
+            return None, None
+        if isinstance(t, str):
+            if not re.fullmatch(r"\d{6}", t):
+                return None, "valor_fora_do_dominio"
+            t = int(t)
+        if isinstance(t, (decimal.Decimal, float)) and t != int(t) or isinstance(t, bool):
+            return None, "valor_fora_do_dominio"
+        n = int(t)
+        ano, mes = divmod(n, 100)
+        if not (1800 <= ano <= 9999 and 1 <= mes <= 12):
+            return None, "valor_fora_do_dominio"
+        return datetime.date(ano, mes, 1), None
+    if regra == "data_primeiro_dia_mes":
+        if not isinstance(v, (datetime.date, datetime.datetime)):
+            return None, "valor_fora_do_dominio"
+        if _data(v):
+            return None, "data_sentinela"
+        d = v.date() if isinstance(v, datetime.datetime) else v
+        return d.replace(day=1), None
     if regra == "cnpj":
         return _documento(v, (14,))
     if regra == "cpf":

@@ -1,0 +1,69 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + depara.py",
+   "mudanca": "de-para oficial por coluna de outra tabela da origem: o código de compensação vem de TBBANCOS.CODBCOCENTRAL pela chave (EMPRESA, BANCO) da linha (ex.: depara 'banco' com via 'ref:TBBANCOS(EMPRESA,COD=BANCO).CODBCOCENTRAL'), sem gravar o catálogo; banco sem código de compensação: pendência catalogo_codigo_* e, na conta, tipo caixa se o cliente decidir. Com isso voltam TBAGEBAN (agencia_bancaria), TBCTABAN (conta_bancaria) e MFBORDER (bordero_pagamento), declarações prontas no colunas.d/L8-11.tsv (só faltam destino e de-para), e depois MFSALDOS",
+   "motivo": "medido por contagem agregada na imagem de referência: TBCTABAN.BANCO e TBAGEBAN.BANCO são o código interno do banco (489 de 489 contas e 141 de 143 agências acham TBBANCOS pela chave EMPRESA,COD; 0 de 49 bancos têm COD igual ao código de compensação; 12 agências sem código de compensação). O de-para direto pelo código de compensação gravaria banco errado em silêncio (códigos internos que coincidem com um banco oficial) ou recusaria a linha; por isso as três tabelas ficam sem destino até este pedido"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-11.tsv (decisão do dono/cliente)",
+   "mudanca": "confirmar os sentidos: TBCTABAN.TP_CONTA C corrente, A aplicacao (medido C 483, A 6; nenhuma conta de caixa: todas com banco com código de compensação) e SITUACAO A ativa, I bloqueada (medido A 480, I 9), a declarar quando o pedido 1 entrar; TBGRUDES.CLASSIF D despesa, R receita (medido D 34, R 6; já declarado no de-para, substitui o 'ambos' presumido); TBGRUDES.CUSTO tem um só código em todas as 40 linhas e não é S/N: compoe_custo fica o padrão (falso) até o sentido ser dito",
+   "motivo": "tipo da conta e do grupo e a apuração de custos dependem do sentido dos códigos da origem"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py",
+   "mudanca": "regra genérica decimal_nao_negativo: NUMERIC negativo vira NULL com valor_fora_do_dominio (linha gravada); zero fica. Para TBCTABAN.CHE_ESP -> conta_bancaria.limite_credito (CHECK limite_credito >= 0)",
+   "motivo": "decimal_positivo anularia o zero legítimo (medido: as 489 contas com limite zero); com 'decimal' um negativo recusa a conta inteira e a recusa desce em pai_pendente aos borderôs e saldos"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra entre colunas para faixa informativa: MFBORDER VENC_I/VENC_F com fim antes do início vira NULL nas duas com valor_fora_do_dominio (linha gravada), em vez da recusa pela CHECK ck_bordero_pagamento_faixa",
+   "motivo": "a faixa é só informativa; recusar o borderô por ela perde o registro (medido: nenhuma invertida na referência; protege os outros clientes)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + docs/obra/passagens/F4-plano.md (decisão do dono)",
+   "mudanca": "coluna de reserva declarada: bordero_pagamento.data_emissao <- EMISSAO; sentinela ou nula: DATA (pagamento) com valor_presumido, em vez da recusa pelo NOT NULL",
+   "motivo": "medido: 85 de 14016 borderôs com emissão sentinela seriam recusados quando o pedido 1 entrar"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "'@estabelecimento:<COLUNA>': com coluna de unidade na origem, recusar com estabelecimento_indefinido quando a origem tiver mais de um valor distinto nessa coluna e o cliente não tiver de-para empresa -> estabelecimento (hoje mistura as empresas em silêncio). Agência: a mesma (BANCO, COD) em outra EMPRESA é a mesma agência do modelo (linha igual, sem 1062), ex.: chave de entidade declarada sem a coluna de unidade",
+   "motivo": "painel genérico de N clientes; medido na referência: 1 EMPRESA distinta em TBAGEBAN, TBCTABAN e MFBORDER, nenhuma agência ou borderô repetido (sem efeito neste cliente)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (tipar)",
+   "mudanca": "data (DATE da origem) gravada em coluna DATETIME/TIMESTAMP do destino: tipar converte date em datetime à meia-noite antes da soma de controle (hoje a releitura devolve datetime e a conciliação diverge). Com isso (e o pedido 1, pois a conta é o pai) entra MFSALDOS -> saldo_diario_conta, declaração pronta nas linhas MFSALDOS do colunas.d/L8-11.tsv: ID_TBCTABAN -> conta_bancaria_id (chave_origem), DATA -> data_saldo e ocorrido_em (data), SALDO -> saldo_final (decimal), '=inclusao' -> operacao; a imagem sintética já traz as anomalias (esperado 4 gravados; 1048, 1062 e pai_pendente 1 cada)",
+   "motivo": "MFSALDOS (588 linhas na imagem de referência) não carregada: só por essa divergência de tipo na soma de controle"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "'@data_carga' (data da carga com valor_presumido), o mesmo pedido da L6-18 e da L7-03, para centro_custo.vigencia_inicio (TBCENCUS) e saldo_diario_conta.data_saldo do saldo atual (MFSALATU); para TBCENCUS ainda: classificacao_centro_custo.classe pelo de-para de CLASSIF (domínio a confirmar com o cliente) e centro_custo_pai pela hierarquia, se houver",
+   "motivo": "TBCENCUS (99 linhas, base de custos, referida por grupos e outras fatias) e MFSALATU não carregadas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência declarada por chave composta (o mesmo pedido da L6-01/L7-02): conta_bancaria.agencia_bancaria_id por 'ref:TBAGEBAN(EMPRESA,BANCO,COD=AGENCIA)'",
+   "motivo": "a conta não fica ligada à agência carregada"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "regra condicional por coluna: documento CPFCGC para cliente_financeiro.cpf ou .cnpj conforme PESSOA (F/J) e tipo_pessoa pelo de-para de PESSOA; com isso entra TBCLIENT (NOME -> nome, ENDERECO -> logradouro, NUM_ENDERECO, COMPL_ENDERECO, BAIRRO, FONE, EMAIL, CONTATO -> contato_nome, CEP -> cep por inteiro_zeros_esquerda:8)",
+   "motivo": "TBCLIENT não carregada: a CHECK de documento recusaria toda linha"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py + docs/obra/passagens/F4-plano.md (decisão do dono)",
+   "mudanca": "títulos a pagar e a receber: agrupar as parcelas da origem (uma linha por parcela: EMPRESA,FORN,DOC,SERIE,TIPO / EMPRESA,DEV,COD,DOC,SERIE) num título com parcelas (destino principal por grupo), credor/devedor exclusivo por tipo (TP_FORNPRES; DEV), natureza financeira (grupo/subgrupo/item de TBGRUDES e subgrupos) e tipo de documento financeiro; baixa e recebimento quando houver data de pagamento. Destravam MFCONPAG, MFCTAREC e as filhas MFCONPAG_TBCBOPRO, SDMFCONPAG, MFPAGADF e MFDESACR",
+   "motivo": "cerca de 160 mil linhas do financeiro não carregadas; regra genérica de agrupamento e de destino condicional não existe no motor"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "uma linha da origem em vários registros do mesmo destino (lado crédito e lado débito) para MFLANCTO -> movimento_bancario (natureza, conta e tipo de lançamento por lado) e transferencia_bancaria quando os dois lados existem",
+   "motivo": "MFLANCTO (36 mil linhas) não carregada"
+  },
+  {
+   "arquivo": "docs/obra/passagens/F4-plano.md (decisão do dono)",
+   "mudanca": "SDGELANNFS (item da nota escriturado) depende da escrituração de entrada e do item da nota carregados; SDPARAM vira parametro_valor de uma definição do produto (ex.: fiscal.competenciaProcessamento) a criar no catálogo de parâmetros; MFREFDES -> tipo_ajuste_titulo pede o domínio de TIPO e código único sem empresa (ou '={EMPRESA}-{COD}'), regra_retencao pede tributo, alíquota e vigência; borderô: item_bordero sai de MFCONPAG.BORDERO quando os títulos entrarem; HIST_COD -> historico_padrao_id e CDC/CODCONT de TBGRUDES quando histórico, centro de custo e plano de contas forem carregados",
+   "motivo": "tabelas e colunas da fatia sem destino por ora"
+  }
+ ]
+}

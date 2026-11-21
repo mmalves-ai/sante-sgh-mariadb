@@ -613,3 +613,45 @@ dependências novas no gerador do mapa (L7-02, 05, 06, 07, 08: GELANPED/GELANBAL
 mudanças de modelo pedidas (10_SADT: visualizador_imagem, laboratorio_apoio; 11_SUP: local_estoque, grupo_insumo,
 capela_manipulacao); destinos a rever (SHINTER como intercorrência da doação, PRHEMOTLAN, SHCLIENT, SHDOACAO, SHLOCAL,
 TBPRINC -> classe_terapeutica).
+
+## 16. Integração do L8 (2026-11-21, tentativa 1): prova verde
+
+19 fatias (L8-01 a L8-19: faturamento, repasse, SUS, financeiro e tabelas de preço) integradas. Prova:
+`tools/obra/conferir-fatia-f4.sh` ok nas 19 fatias; `verificar_mapa` ok (5261 colunas declaradas em 57 arquivos);
+`fatiar_conector --conferir` ok; `conector.sh testes` verde; ponta a ponta do painel (`ponta-a-ponta.int.spec.ts`,
+`--fatias lotes` com as tabelas do L8) verde, toda entidade conferida.
+Cobertura: 130 das 389 tabelas carregáveis do L8 com colunas declaradas (131 entidades na conciliação das fatias, 131
+conferidas); as demais ficam citadas com motivo (`não carregada por ora`) e pedido na saída da fatia.
+Pendências na imagem sintética (soma das 19 fatias, primeira carga): valor_presumido 300, restricao_destino_1048 87,
+valor_fora_do_dominio 28, restricao_destino_1062 17, pai_inexistente 13, restricao_destino_1406 12,
+restricao_destino_1364 7, pai_pendente 6, restricao_destino_4025 5, codigo_colisao_caixa 4, data_sentinela 4,
+catalogo_codigo_inexistente 1.
+
+Aplicado (genérico, com prova em `testes/test_carga_mapa_l8.py`):
+- regra `competencia_aaaamm` (L8-08): inteiro ou texto AAAAMM vira DATE do 1º dia do mês; mês/forma inválidos viram
+  NULL com valor_fora_do_dominio. Declarada em TBFONTE_ORCAMENTARIA_SUS -> dominio_sus.vigencia_inicio (imagem
+  sintética com mês 13);
+- regra `decimal_nao_negativo` (L8-11): negativo vira NULL com valor_fora_do_dominio, zero fica (conta bancária,
+  limite de crédito; a tabela segue bloqueada pelo código do banco);
+- regra `data_primeiro_dia_mes` (L8-05): data vira o 1º dia do mês; a declaração da competência da entrega espera a
+  confirmação do dono.
+
+Fica para a próxima rodada (decisão do dono ou mecanismo maior; pedidos completos em
+`docs/obra/fatias/f4/saida/L8-*.json`):
+- motor: coluna derivada de duas colunas (`#competencia:ANO,MES`, data + dias, data + hora HHMM), referência por chave
+  composta e por coluna não-id do pai, referência encadeada (`ref:A.X>B`), referência pelo código de catálogo do
+  produto (`cod:modulo_sistema`), destino encadeado (pessoa jurídica), desdobrar colunas em linhas (dia da semana,
+  percentuais), agrupar linhas num cabeçalho, prefixo de domínio no código, gravidade do literal presumido, entidade
+  `sem_destino` na conciliação, coluna derivada da linha referenciada, mecanismo de parâmetros (linha larga);
+- decisões do dono: vigencia_inicio NOT NULL sem fonte (data presumida, `=~hoje` ou coluna anulável), empresa da
+  origem como estabelecimento (cliente com várias empresas), referência licenciada de mat/med (regra 7: interruptor
+  por cliente com licença), escrita da classificação do cliente em tabela oficial (grupo de motivo de glosa), destinos
+  a rever (nota de serviço x fatura, subgrupo de faturamento, tipo de serviço, domínios TISS como enumerados, listas de
+  opções de regra_consistencia_lancamento e a dimensão de grupo de item no único), favorecido do repasse,
+  tipo de pendência de prontuário;
+- de-para de valores revisado pelo cliente no painel (natureza e tipo de lançamento do repasse, situação do RPA,
+  categoria do prestador, padrão do tipo de atendimento, modo global de controle da irregularidade e outros): nenhum par
+  presumido sem evidência;
+- de-para oficial `tuss` e grau de participação TISS; tabelas fora do mapa (natureza da rubrica, incidências de
+  INSS/IRRF, via de acesso TISS); ordem e dependências novas no gerador do mapa (centro de custo e tabela de
+  procedimentos depois das filhas; aresta do motivo de glosa ao grupo).

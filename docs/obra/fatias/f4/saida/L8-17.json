@@ -1,0 +1,29 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Regra genérica de COMPLEMENTO: tabela cujo destino é coluna de um registro já carregado por outra tabela (pai pelo conector_origem, ou registro achado por chave natural declarada) grava por UPDATE só as colunas declaradas daquele registro, sem inserir linha nova; a entidade concilia contagem lida = complementada + recusada.",
+   "motivo": "L8-17: TBTISSURLWSSGH é o endereço por transação (transacao_tiss_webservice.caminho_padrao da transação carregada por TBTISSSCHEMA) e TBSEXO_PIXPDQ é o código HL7 do sexo já carregado no L5 (sexo.codigo_hl7, pela sigla); inserir duplicaria a transação ou chocaria na sigla única. Até lá as duas ficam fora da carga."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Referência por literal a um cadastro do cliente (ex.: coluna especial '@ref:provedor_assinatura_nuvem.codigo=<codigo>' que resolve o id pelo código; ausente: recusa com pendência própria), ou o provedor de assinatura em nuvem cadastrado pelo comando de criar cliente.",
+   "motivo": "L8-17: TBSAFEWEB_FORMA_ASSIN_ICP e TBVIDAAS_FORMA_ASSIN_ICP são os formatos aceitos por um provedor fixo de cada tabela; provedor_assinatura_formato exige provedor_assinatura_nuvem_id (NOT NULL), que nenhuma tabela da origem carrega. Gravar como formato_assinatura_icp chocaria com o formato do pai (família e política únicas)."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/oficiais.tsv",
+   "mudanca": "Declarar termo_equivalencia (equivalência procedimento x grupo SIP, TBSIPANSPROC) e termo_terminologia_vigencia (histórico de termos CID-10 e CIAP, HTCID e HTCIAP) como conteúdo do carregador versionado de catálogo oficial; incluir a equivalência SIP no carregador tiss_ans quando ele existir.",
+   "motivo": "L8-17: regra 7: os dois lados da equivalência e os termos do histórico são catálogo oficial (tiss_ans sem carregador; cid10 pelo id interno, não pelo código). Hoje as três tabelas ficam fora da carga, declaradas sem destino."
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-17.tsv",
+   "mudanca": "Quando os 3 valores de TBSGHINTEGRADOR_TABELA forem conferidos por contagem na imagem de referência, declarar o de-para de valores NOME -> entidade do modelo (paciente, atendimento...) e carregar tipo_evento_publicado.",
+   "motivo": "L8-17: o nome é o de uma tabela da origem: gravá-lo em tipo_evento_publicado.entidade poria nome da origem no modelo (regra 1)."
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Par curinga no de-para de valores: em _valores, quando o valor (não nulo) não tem par e c['valores'] tem a chave '*', gravar c['valores']['*'] e manter a pendência valor_fora_do_dominio (media) na linha, em vez de NULL. Sem '*', o comportamento atual (NULL + valor_fora_do_dominio). Documentar no cabeçalho. Ao aplicar, atualizar o esperado de conector/sante_conector/sintetica_d/l8_17.py: TBSMSTPRETMSG gravados 5 e restricao_destino_1048 1; TBTISSSCHEMA gravados 6 e restricao_destino_1048 2 (valor_fora_do_dominio segue 1 em cada).",
+   "motivo": "L8-17 (revisão): valor desconhecido de TP_TRANSACAO recusava a transação TISS pelo NOT NULL e derrubava em cadeia os endpoints do L8-06 (pai_pendente), embora o CHECK aceite 'outro'; na situação da mensagem, o lado seguro para nome sem par é 'pendente', nunca 'enviada'. Regra genérica, não por tabela. Na imagem de referência todos os valores já têm par (25/25 e 4/4), então o curinga só protege outros clientes."
+  }
+ ]
+}

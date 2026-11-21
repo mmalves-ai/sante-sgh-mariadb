@@ -1,0 +1,7 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.natureza	SH	servico_hospitalar	L8-04: sigla de natureza do lançamento
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.natureza	SP	servico_profissional	L8-04: sigla de natureza do lançamento
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.natureza	MM	material_medicamento	L8-04: sigla de natureza do lançamento
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	SH	0	L8-04: não entra na base de repasse
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	SP	1	L8-04: honorário entra na base de repasse
+TBTIPO_PROCEDIMENTO	CODIGO	tipo_lancamento.gera_repasse	MM	0	L8-04: não entra na base de repasse

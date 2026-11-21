@@ -1,0 +1,52 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBAGRUPRELAT	COD_AGRUPAMENTO	agrupamento_relatorio.codigo	texto			L8-18: código numérico do agrupamento gravado como texto (único no destino: repetido recusa só a linha, restricao_destino_1062)
+TBAGRUPRELAT	NOME	agrupamento_relatorio.nome	texto_nome			L8-18: nome do agrupamento (nulo recusa pelo NOT NULL; único no destino)
+TBAGRUPRELAT	INTERCALAR_IMPRESSAO_PAGINA	agrupamento_relatorio.intercalar_impressao	booleano_sn			L8-18: S/N intercala páginas na impressão; nulo ou fora do domínio fica com o padrão do destino (não intercala), fora do domínio com valor_fora_do_dominio
+TBEDITREL	ID_EDITREL	relatorio.codigo	texto			L8-18: chave inteira do relatório gravada como código (texto); o relatório entra como rascunho do catálogo (situação padrão) e passa pela triagem
+TBEDITREL	NOME	relatorio.titulo	texto_nome			L8-18: nome do relatório vira o título (nulo recusa pelo NOT NULL)
+TBEDITREL	MODULO	relatorio.modulo_sistema_id	chave_origem		ref:TBMODULO	L8-18: número do módulo resolvido pela chave do módulo do sistema (L5, ordem 32); referência gerada veio vazia; nunca visto: pai_inexistente e recusa pelo NOT NULL
+TBEDITREL	=-- definição pendente: ver a triagem do relatório de origem	relatorio.consulta_definicao				L8-18: a consulta de origem nunca é executada (é SQL livre): vai só como especificação na triagem; o catálogo recebe marcador fixo até a triagem decidir o destino
+TBEDITREL	VERSAO	relatorio.numero_versao	inteiro_zero_nulo			L8-18: versão da definição; zero ou nulo fica com o padrão do destino (1, CHECK > 0)
+TBEDITREL	USUARIO	relatorio.criado_por	chave_origem		ref:TBUSERS	L8-18: login de quem criou o relatório (L3, pela chave de login); nunca visto: NULL com pai_inexistente
+TBEDITREL	@estabelecimento	triagem_relatorio_legado.estabelecimento_id				L8-18: triagem é do estabelecimento do cliente (único; nenhum ou vários: estabelecimento_indefinido)
+TBEDITREL	ID_EDITREL	triagem_relatorio_legado.codigo	texto			L8-18: número de negócio da triagem = chave do relatório de origem (texto)
+TBEDITREL	NOME	triagem_relatorio_legado.nome	texto_nome			L8-18: nome do relatório na origem
+TBEDITREL	MODULO	triagem_relatorio_legado.modulo_sistema_id	chave_origem		ref:TBMODULO	L8-18: módulo equivalente no sistema novo (L5)
+TBEDITREL	TEXTOSQL	triagem_relatorio_legado.especificacao	texto_longo			L8-18: texto da consulta de origem só como especificação (nunca executado); BLOB de texto sem mexer em quebras
+TBEDITREL	@id	triagem_relatorio_legado.relatorio_id				L8-18: liga a triagem ao rascunho criado no catálogo; destino e situação ficam pendentes para a área decidir
+TBEDITREL	=~0	triagem_relatorio_legado.quantidade_parametros				L8-18: PRESUMIDO (valor_presumido por linha): a quantidade de parâmetros vem das linhas filhas (TBEDITPARAM), que o motor não agrega; contagem a confirmar no catálogo (relatorio_parametro) até a agregação pós-carga pedida em saida/L8-18.json
+TBEDITREL	=~0	triagem_relatorio_legado.acesso_restrito				L8-18: PRESUMIDO (valor_presumido por linha): a restrição vem das linhas filhas (TBEDITREL_GRUUSU, TBEDITREL_TBUSERS), que o motor não agrega; a permissão real está em relatorio_permissao; agregação pós-carga pedida em saida/L8-18.json
+TBEDITREL	TIPO		inteiro			L8-18: não carregada: tipo do relatório na origem sem equivalente no catálogo (formato e destino são decididos na triagem)
+TBEDITREL	ID_TBOPCOES		chave_origem			L8-18: não carregada: tela de onde o relatório era chamado; no modelo é relatorio_tela, que exige rótulo e tela obrigatórios (ver TBBTNOPREL e pedido em saida/L8-18.json)
+TBAGRUPRELAT_TBEDITREL	ID_TBAGRUPRELAT	agrupamento_relatorio_item.agrupamento_relatorio_id	chave_origem			L8-18: agrupamento (mesma fatia); recusado: pai_pendente
+TBAGRUPRELAT_TBEDITREL	ID_TBEDITREL	agrupamento_relatorio_item.relatorio_id	chave_origem			L8-18: relatório (mesma fatia); recusado: pai_pendente; nunca visto: pai_inexistente e recusa pelo NOT NULL
+TBAGRUPRELAT_TBEDITREL	ORDEM_IMPRESSAO	agrupamento_relatorio_item.sequencia	inteiro			L8-18: ordem de impressão no agrupamento (única por agrupamento: repetida recusa só a linha)
+TBAGRUPRELAT_TBEDITREL	ID_FPESOCTVERSAOESOCIAL		chave_origem			L8-18: não carregada: versão de leiaute vem de tabela fora do mapa (leiaute_esocial_id fica nulo, é opcional)
+TBEDITPARAM	ID_TBEDITREL	relatorio_parametro.relatorio_id	chave_origem			L8-18: relatório do parâmetro; nulo na origem recusa pelo NOT NULL; relatório recusado: pai_pendente
+TBEDITPARAM	#seq:ID_TBEDITREL	relatorio_parametro.sequencia				L8-18: sequência 1..n dentro do relatório na ORDEM DA CHAVE (ID), não na ORDEM da origem: o motor só numera pela chave. PERDA DECLARADA: parâmetro incluído depois com ORDEM menor aparece fora da ordem original; e no diferencial, parâmetro apagado seguido de outro incluído pode receber número já gravado (recusa restricao_destino_1062). Pedido em saida/L8-18.json: '#seq:<GRUPO>:<ORDEM>' (desempate pela chave) e numeração a partir do maior número já gravado do grupo
+TBEDITPARAM	PARAMETRO	relatorio_parametro.campo	texto			L8-18: nome do parâmetro na consulta (único por relatório: repetido recusa só a linha)
+TBEDITPARAM	NOME	relatorio_parametro.rotulo	texto_nome			L8-18: pergunta mostrada ao usuário
+TBEDITPARAM	=~texto	relatorio_parametro.tipo_dado				L8-18: PRESUMIDO (valor_presumido por linha): o tipo da origem é código numérico sem domínio documentado; o cliente reclassifica pelo painel (de-para pedido em saida/L8-18.json)
+TBEDITPARAM	VALOR_DEFAULT	relatorio_parametro.valor_padrao	texto			L8-18: valor padrão do parâmetro
+TBEDITPARAM	TIPO		inteiro			L8-18: não carregada: código de tipo sem domínio documentado (tipo_dado presumido)
+TBEDITPARAM	ORDEM		inteiro			L8-18: não carregada (PERDA DECLARADA): ordem de exibição do parâmetro; o motor só numera a sequência pela chave (ORDEM nula ou repetida na origem não serve de sequência única); pedido '#seq:ID_TBEDITREL:ORDEM' em saida/L8-18.json
+TBEDITPARAM	VISIVEL		booleano_sn			L8-18: não carregada (PERDA DECLARADA): S/N parâmetro oculto, preenchido internamente; relatorio_parametro não tem atributo de parâmetro oculto, então o oculto entra como parâmetro comum e passa a ser perguntado ao usuário (o cliente revisa na triagem); pedido de atributo no modelo em saida/L8-18.json
+TBEDITPARAM	TIPO_DEFAULT		inteiro			L8-18: não carregada (PERDA DECLARADA): diz se VALOR_DEFAULT é fixo ou relativo (código sem domínio documentado); valor_padrao entra como texto da origem e o cliente confirma; de-para para os relativos do destino (hoje, mes_anterior) pedido em saida/L8-18.json
+TBEDITPARAM	ID_TBSMSCENARIO		chave_origem			L8-18: não carregada: cenário de mensagem fora do módulo de relatórios
+TBEDITREL_GRUUSU	ID_EDITREL	relatorio_permissao.relatorio_id	chave_origem		ref:TBEDITREL	L8-18: relatório (referência gerada veio vazia, declarada na via); recusado: pai_pendente
+TBEDITREL_GRUUSU	NOME_GRUPO	relatorio_permissao.perfil_acesso_id	chave_origem		ref:TBGRUUSU	L8-18: perfil de acesso pela chave do grupo (L5, ordem 1); nunca visto: pai_inexistente e o CHECK de alvo recusa a linha
+TBEDITREL_TBUSERS	ID_TBEDITREL	relatorio_permissao.relatorio_id	chave_origem			L8-18: relatório; recusado: pai_pendente
+TBEDITREL_TBUSERS	USUARIO	relatorio_permissao.usuario_id	chave_origem		ref:TBUSERS	L8-18: usuário pela chave de login (L3); nunca visto: pai_inexistente e o CHECK de alvo recusa a linha
+TBOPCAOREL	ID	categoria_relatorio.codigo	texto			L8-18: opção de relatórios do menu de um módulo vira categoria do catálogo; chave gravada como código (texto)
+TBOPCAOREL	=~Relatórios da opção de menu	categoria_relatorio.descricao				L8-18: PRESUMIDO (valor_presumido por linha): a origem não tem nome da opção; o cliente renomeia pelo painel
+TBOPCAOREL	ID_TBMODULO	categoria_relatorio.modulo_sistema_id	chave_origem			L8-18: módulo em cujo menu a categoria aparece (L5); nunca visto: NULL com pai_inexistente
+TBOPCAOREL	ID_TBOPCOES		chave_origem			L8-18: não carregada: tela da opção; categoria não tem tela (a ligação relatório-tela pede referência por caminho, saida/L8-18.json)
+PNCONFIGPORTAL	NOME		texto_nome			L8-18: não carregada: painel_tv exige tipo_painel_tv_id e o pai (painel de chamada) vai para painel_chamada, não painel_tv; o bloco exige painel_tv_id; criar tipo por linha seria falso (pedido em saida/L8-18.json)
+TBEDITPESQ	TIPO_RETORNO		inteiro			L8-18: não carregada: a pesquisa exige entidade e campos nomeados pelo produto (a origem só tem o texto da busca) e a ligação é do parâmetro para a pesquisa, no sentido inverso (pedido em saida/L8-18.json)
+TBEDITQRP	NOMECOMP		texto			L8-18: não carregada: cada linha é um componente do leiaute antigo; relatorio_versao é única por (relatório, versão) e o leiaute vai como arquivo anexo: pede agregação das linhas num arquivo (saida/L8-18.json)
+TBEDITREL_AGENDA	EMAILS_DESTINO		texto			L8-18: não carregada: agendamento exige dono (usuário responsável), nome único e periodicidade, sem origem; envio agendado é decisão do cliente na virada (nenhuma mensagem externa fora de produção)
+TBEDITREL_AGENDA_SITUACAO	NOME		texto_nome			L8-18: não carregada: lista de situações é o atributo envio_relatorio.situacao (CHECK), não linhas
+TBEDITREL_AGENDA_LOG	REMETENTE		texto			L8-18: não carregada: o envio exige o agendamento (não carregado) e a origem não liga o log ao horário do agendamento; histórico de e-mails com endereços pessoais fica na origem
+TBEDITREL_PRMODELOREL	ID_PRMODELOREL		chave_origem			L8-18: não carregada: o pai (L6) vai para tipo_modelo_impressao, mas a coluna do destino aponta modelo_documento_clinico (entidade diferente); pedido em saida/L8-18.json
+TBBTNOPREL	BOTAO		texto			L8-18: não carregada: relatorio_tela exige a tela, que está no pai (TBOPCAOREL.ID_TBOPCOES): pede referência por caminho no motor (saida/L8-18.json)
+TBPARAMOPREL	PARAMETRO		texto			L8-18: não carregada: depende do botão (TBBTNOPREL, não carregado) e o parâmetro vem por nome, não por chave

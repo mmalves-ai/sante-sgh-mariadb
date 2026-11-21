@@ -1,0 +1,14 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "db/migracoes/13_SUS/01_tabelas.sql (dominio_sus)",
+   "mudanca": "alargar dominio_sus.lista de VARCHAR(30) para VARCHAR(40) (migração nova com ALTER TABLE ... MODIFY lista VARCHAR(40) NOT NULL, se a 01 já estiver aplicada em algum banco)",
+   "motivo": "o próprio CHECK ck_dominio_sus_lista e a API (apps/api/src/modulos/consultas/tabelas.gerado.ts) usam 'caracteristica_tratamento_dialitico' (35) e 'justificativa_paciente_sem_documento' (36), que não cabem: hoje toda linha de FAHEMOCARTRAT e FHJUSTPACDESC é recusada com restricao_destino_1406 (e o produto não consegue gravar estes itens). Ao alargar: em sintetica_d/l8_07.py trocar LARGURA_LISTA para 40 (LISTA_LONGA fica vazio) e em test_l8_07.py tirar test_listas_longas_sao_as_conhecidas; o Sincronizar não é preciso (linhas recusadas são relidas na próxima carga); conferido por script em todas as colunas VARCHAR com CHECK IN do 13_SUS/01_tabelas.sql: só dominio_sus.lista tem valor maior que a largura (dominio_contratualizacao_sus.lista e dominio_sigtap.lista cabem em 30). Achado da revisão: até a migração, a conciliação dessas duas listas prova a contagem mas não a carga (0 gravados)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-07.tsv (CMINCENTIVO) + modelo incentivo_contratual_sus",
+   "mudanca": "decidir o destino de CMINCENTIVO: a origem só tem ID, NOME e ID_CMTPDADOS (1 linha padrão na imagem de referência). incentivo_contratual_sus exige estabelecimento_id (resolvível por @estabelecimento), vigencia_inicio NOT NULL e valor_incentivo OU percentual (CHECK) sem origem. Opções: (a) manter fora (é cadastro do contrato com gestor, F7, sem contrato na Rede); (b) tornar vigencia_inicio e o CHECK de valor opcionais para incentivo sem contrato (rascunho) e carregar com codigo=ID, nome=NOME, tipo_dado pela referência CMTPDADOS",
+   "motivo": "fatia L8-07: sem literal inventado de vigência nem de valor (seria dado falso no destino); hoje fica não carregada com a declaração prevista no motivo"
+  }
+ ]
+}

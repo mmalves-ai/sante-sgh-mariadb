@@ -1,0 +1,79 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por caminho: via `ref:<PAI>><COLUNA_DO_PAI>` resolve o id de destino de um avô lendo a coluna do pai na origem (ex.: TBBTNOPREL.ID_TBOPCAOREL -> TBOPCAOREL.ID_TBOPCOES -> tela_sistema)",
+   "motivo": "L8-18: relatorio_tela exige tela_sistema_id, que só existe no pai (TBOPCAOREL); sem isso TBBTNOPREL e TBPARAMOPREL ficam sem carga"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por chave composta de negócio: via `ref:<TABELA>(<COL_A>,<COL_B>)` (ex.: parâmetro pelo relatório do botão + nome do parâmetro) para TBPARAMOPREL.PARAMETRO -> relatorio_parametro",
+   "motivo": "L8-18: TBPARAMOPREL aponta o parâmetro pelo nome, não pela chave"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "tipar literal (=/=~) em coluna DATE/DATETIME antes da soma de controle (mesmo pedido do L8-13)",
+   "motivo": "L8-18: relatorio_versao exige ocorrido_em e dados (JSON); sem literal de data a versão inicial de cada relatório não é gravada (ficou fora)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "agregar as linhas filhas de uma chave (TBEDITQRP por ID_EDITREL) num arquivo anexo (leiaute_arquivo_id da versão), regra genérica 'agregado_em_arquivo'",
+   "motivo": "L8-18: o leiaute antigo (17921 componentes na referência) é anexo da versão, não uma versão por componente (relatorio_versao é única por relatório e número)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "pai_inexistente da mesma coluna de origem declarada em dois destinos deve contar uma vez por linha (Propagador: conjunto por linha)",
+   "motivo": "L8-18: TBEDITREL.MODULO nunca visto gerou 2 pendências na mesma linha (relatorio e triagem_relatorio_legado); a imagem sintética espera 3 hoje (2+1)"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (fatiar/mapa gerado)",
+   "mudanca": "rever destino de TBEDITREL_PRMODELOREL: o pai PRMODELOREL vai para tipo_modelo_impressao (L6), mas relatorio_modelo_documento aponta modelo_documento_clinico; ou o pai muda de destino, ou o modelo ganha relatorio_tipo_modelo_impressao",
+   "motivo": "L8-18: referência gravaria id de outra entidade"
+  },
+  {
+   "arquivo": "decisão do dono",
+   "mudanca": "TBEDITREL_AGENDA/AGENDA_LOG: agendamento exige dono (usuário responsável), nome único e periodicidade, e o log não liga ao horário; decidir se o agendamento migra (desligado) e quem é o dono padrão; TBEDITREL_AGENDA_SITUACAO vira de-para de valores para envio_relatorio.situacao quando o log migrar",
+   "motivo": "L8-18: sem origem para campos obrigatórios; envio de e-mail só em produção"
+  },
+  {
+   "arquivo": "decisão do dono / modelo",
+   "mudanca": "PNCONFIGPORTAL (portal do painel de chamada): o pai vai para painel_chamada; painel_tv exige tipo_painel_tv_id. Proposta: configuração do portal como coluna JSON de painel_chamada (ou painel_chamada_portal)",
+   "motivo": "L8-18: carregar em painel_tv criaria tipo e painel falsos por linha"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+   "mudanca": "de-para de TBEDITPARAM.TIPO -> relatorio_parametro.tipo_dado (data, inteiro, texto, escolha...) quando o domínio for confirmado com o cliente; hoje presumido 'texto'",
+   "motivo": "L8-18: código numérico sem domínio documentado"
+  },
+  {
+   "arquivo": "decisão do modelo",
+   "mudanca": "TBEDITPESQ: relatorio_parametro_pesquisa exige entidade e campos nomeados pelo produto; a origem só tem o texto da busca. Proposta: carregar como pesquisa 'pendente' com o texto em especificação, ligada ao parâmetro (relatorio_parametro.relatorio_parametro_pesquisa_id, sentido inverso: UPDATE do filho)",
+   "motivo": "L8-18: ligação no sentido inverso não é suportada pelo motor"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "'#seq:<GRUPO>:<ORDEM>': numerar 1..n dentro do grupo ordenando por (ORDEM, chave), com a chave como desempate quando ORDEM for nula ou repetida; no diferencial, linha nova recebe o número seguinte ao maior já gravado do grupo no destino (ou o número da linha já gravada, guardado em conector_origem), e nunca a contagem das linhas lidas",
+   "motivo": "L8-18: TBEDITPARAM.ORDEM (ordem das perguntas ao usuário) está perdida porque o '#seq' numera pela chave; e no diferencial, um parâmetro apagado seguido de outro incluído pode receber um número já gravado e ser recusado por restricao_destino_1062 em uq_relatorio_parametro_sequencia. Ao aplicar, a fatia troca '#seq:ID_TBEDITREL' por '#seq:ID_TBEDITREL:ORDEM' e o ORDEM sai das perdas"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "falha de coluna especial (@estabelecimento) num destino SECUNDÁRIO recusa só aquele destino (pendência estabelecimento_indefinido na entidade '<chave>/<destino>'), e o destino principal é gravado; ou '@estabelecimento' aceitar a escolha do estabelecimento padrão do cliente no painel (configuração por cliente, nunca fixa)",
+   "motivo": "L8-18: a triagem (destino secundário de TBEDITREL) usa @estabelecimento; com nenhum ou vários estabelecimentos (o L3 já teve 2 e 3) a linha INTEIRA é recusada e o relatório do catálogo, que não precisa de estabelecimento, se perde, com parâmetros, itens de agrupamento e permissões em cascata (pai_pendente). Efeito provado em testes/test_l8_18.py (RiscoEstabelecimento)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "agregação pós-carga genérica declarada no mapa (ex.: 'agrega:<TABELA_FILHA>:<COLUNA_REF>:contar' e ':existe'), aplicada depois da carga das filhas por UPDATE do pai pelo conector_origem, fora do hash da linha",
+   "motivo": "L8-18: triagem_relatorio_legado.quantidade_parametros (contagem de TBEDITPARAM) e acesso_restrito (existe linha em TBEDITREL_GRUUSU ou TBEDITREL_TBUSERS) hoje entram PRESUMIDOS (=~0, valor_presumido por linha) para não mostrar 'sem parâmetros' e 'acesso livre' como fato no painel"
+  },
+  {
+   "arquivo": "db/migracoes/19_REL (modelo) e colunas.d/L8-18.tsv",
+   "mudanca": "atributo de parâmetro oculto em relatorio_parametro (ex.: visivel BOOLEAN NOT NULL DEFAULT TRUE, ou modo_exibicao 'oculto' no CHECK) para receber TBEDITPARAM.VISIVEL por booleano_sn",
+   "motivo": "L8-18: VISIVEL='N' marca parâmetro preenchido internamente; sem o atributo, ele passa a ser perguntado ao usuário (perda declarada)"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-18.tsv (futuro)",
+   "mudanca": "de-para de TBEDITPARAM.TIPO_DEFAULT + VALOR_DEFAULT para relatorio_parametro.valor_padrao relativo (hoje, mes_anterior...) quando o domínio do código for confirmado com o cliente",
+   "motivo": "L8-18: sem TIPO_DEFAULT o valor padrão relativo entra como texto literal da origem (perda declarada)"
+  }
+ ]
+}

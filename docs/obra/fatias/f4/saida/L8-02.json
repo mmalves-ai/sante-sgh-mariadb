@@ -1,0 +1,64 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "db/migracoes/12_FAT (empresa_calculo_cumulativo_rpa, evento_repasse_incidencia, evento_repasse_contabil, equivalencia_item_fonte_pagadora) ou conector/sante_conector/carga_mapa.py",
+   "mudanca": "vigencia_inicio NOT NULL sem fonte na origem: aceitar um literal declarado de início de vigência (ex.: '=~1900-01-01' presumido com valor_presumido, ou a data da carga) ou tornar a coluna anulável com o significado 'desde sempre'",
+   "motivo": "L8-02: RPEMPCALCIMP, RPEVENTOESOC, RPINTEVE e SIREFCON não têm vigência na origem; sem isso 100% das linhas seriam recusadas (1048/1364). Mesmo caso do pedido 1 do L7-08 (GEUSERS_TBCENCUS)"
+  },
+  {
+   "arquivo": "conector/mapa (TBEMPHOS) + conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência da empresa da origem (EMPRESA, ID_TBEMPHOS, EMPRESA_RPPARAM) para estabelecimento_id: declarar TBEMPHOS também como estabelecimento (ou um de-para empresa -> estabelecimento do cliente) e carregá-la; @estabelecimento não serve a cliente com várias empresas",
+   "motivo": "L8-02: RPEVENTO, RPLANEVE, RPRPA, RPPARUSUEMP e RPEMPCALCIMP têm estabelecimento_id NOT NULL; TBEMPHOS vai para mantenedora e nenhum lote declara coluna dela"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (FPNATRUBRICA, FPRUBRICAINSS, FPRUBRICAIRRF)",
+   "mudanca": "trazer para o mapa as tabelas de natureza da rubrica e incidência de INSS/IRRF (dep_fora_do_mapa de RPEVENTOESOC) ou registrar que vêm do catálogo oficial do eSocial por de-para do código",
+   "motivo": "L8-02: evento_repasse_incidencia exige natureza_rubrica_id NOT NULL"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "referência por chave composta do pai (ex.: via 'ref:RPEVENTO(EMPRESA,COD)' com as colunas EMPRESA,EVENTO; 'ref:SIORCAME(NOME,ATO)'; item faturável por (ATO,EXAME))",
+   "motivo": "L8-02: RPINTEVE, SIEXAORC e SIREFCON apontam o pai pelo par de colunas, não pelo id (mesmo caso do SILANEXA no L7-04)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "mecanismo de parâmetros (linha larga): cada coluna de RPPARAM vira parametro_valor de uma parametro_definicao do catálogo do produto, nível estabelecimento",
+   "motivo": "L8-02: RPPARAM é MECANISMO no mapa (mesmo pedido do GPPARAMG no L7-06 e do GEPARAM no L7-08)"
+  },
+  {
+   "arquivo": "conector/sante_conector/sentinela.py + carga_mapa.py",
+   "mudanca": "coluna derivada de duas colunas da origem: competência DATE (1º dia) a partir de mês e ano (ex.: destino com coluna '#competencia:MES_PROCESSAMENTO,ANO_PROCESSAMENTO'); mês ou ano inválido vira pendência valor_fora_do_dominio",
+   "motivo": "L8-02: competencia_trabalho_usuario.competencia NOT NULL (RPPARUSUEMP); também serviria a lancamento_repasse e rpa se a competência vier da data"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-02.tsv (ao reativar)",
+   "mudanca": "de-para de valores revisado pelo cliente: RPEVENTO.TIPO_EVENTO -> evento_repasse.natureza (rendimento/desconto/informativo), RPEVENTO.TIPO_LANC -> tipo_lancamento (credito/debito), RPRPA.STATUS -> rpa.situacao, RPRPA.METODO_ENVIO -> rpa.metodo_envio",
+   "motivo": "L8-02: domínios codificados em 1 caractere sem significado no dicionário; NOT NULL com CHECK no destino"
+  },
+  {
+   "arquivo": "conector/mapa (favorecido do repasse) + carga_mapa.py",
+   "mudanca": "favorecido_repasse_id do lançamento (TIPO + COD_PRESTADOR: médico ou empresa) e competência do lançamento; lancamento_repasse.tipo_lancamento 'ajuste' exige justificativa (CHECK): na migração usar um tipo próprio ou justificativa literal; depois RPLANEVE_COMPOSICAOBASE com '#seq:ID_RPLANEVE' e RPLANRPA",
+   "motivo": "L8-02: RPLANEVE e filhas sem favorecido carregado"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "via encadeada ref:TBCBOPRO.ID_TBPROFIS>TBPROFIS (inscrição no conselho -> profissional) e tabela secundária que completa coluna do destino de outra tabela (RPLANEVE_TBCBOPRO -> lancamento_repasse.profissional_id, RPRPA_TBCBOPRO -> rpa.profissional_id) por UPDATE pelo conector_origem do pai",
+   "motivo": "L8-02: rpa.profissional_id é NOT NULL e só existe na tabela RPRPA_TBCBOPRO (mesma via pedida no L6-12)"
+  },
+  {
+   "arquivo": "db/migracoes/12_FAT/04_tabelas.sql ou carga_mapa.py",
+   "mudanca": "orçamento particular: numero (único por estabelecimento) e validade_ate NOT NULL sem fonte na origem; aceitar número derivado (ex.: ATO + sequência por NOME) e validade = data do orçamento presumida",
+   "motivo": "L8-02: SIORCAME/SIEXAORC"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv + conector/mapa/declarado/valores.d/L8-02.tsv + db/migracoes/12_FAT/05_tabelas.sql (regra_consistencia_lancamento)",
+   "mudanca": "(1) TBCONSBRASINATIVO, TBCONSIDCALCVLR, TBCONVCOBTXPA, TBCONVCONSMAT, TBCONVMEDREQATD (e TBCONVPERCTAPAC, TBTPOBRIGAMAT de outras fatias): marcar como domínio de opções (descartada/DOMINIO), sem destino regra_consistencia_lancamento; a regra por fonte pagadora vem da coluna do cadastro do convênio (TBCONVEN) que aponta para a lista. (2) de-para de valores revisado pelo cliente, por lista: ID da opção -> valor de `opcao`, com o tipo_regra (TBCONSBRASINATIVO -> item_referencia_inativo, TBCONSIDCALCVLR -> data_base_calculo, TBCONVCOBTXPA -> taxa_porte_anestesico, TBCONVCONSMAT -> material_obrigatorio, TBCONVMEDREQATD -> requisitante_obrigatorio); sem ele o NOME da opção, único significado do ID gravado no convênio, se perde e a fatia do TBCONVEN não traduz os IDs. (3) mudança no modelo: TBCONVEN tem CINCO colunas para TBCONSIDCALCVLR (ID_TBCONSIDCALCVLR_CLI, _CIR, _MATMED, _FILME, _DTH: uma data base por grupo de item) e o UNIQUE (fonte_pagadora_id, tipo_regra, categoria_atendimento_id) só comporta uma; acrescentar a dimensão de grupo de item (coluna grupo_item na chave única, ex. clinica/cirurgia/matmed/filme/diaria_taxa) ou tipos por grupo no CHECK (data_base_calculo_clinica, _cirurgia, _matmed, _filme, _diaria_taxa)",
+   "motivo": "L8-02: listas fixas (ID, NOME) sem fonte pagadora nem tipo de regra; gravá-las em regra_consistencia_lancamento violaria NOT NULL. Sem o de-para (2) a escolha de cada convênio fica sem tradução; sem a mudança (3) as cinco escolhas de data_base_calculo de um convênio colidem no UNIQUE ou quatro se perdem"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/valores.d/L8-02.tsv (ao rever)",
+   "mudanca": "de-para RPTIPOPRESTADOR.COD -> tipo_prestador_repasse.categoria (medico, empresa_medica, fornecedor, vendedor, outro), revisado pelo cliente, no lugar do literal presumido '=~outro'",
+   "motivo": "L8-02: categoria NOT NULL sem fonte; hoje entra 'outro' com valor_presumido por linha"
+  }
+ ]
+}

@@ -1,0 +1,74 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Referência genérica da EMPRESA da origem ao estabelecimento (ex.: especial @estabelecimento:<COLUNA> resolvido pelo conector_origem do cadastro de empresas/estabelecimento), em vez do único estabelecimento",
+   "motivo": "1: MFPARAM_MFTIPOLANC (e MFCCCONV, TBINTIMP, MFPARAM) trazem EMPRESA. Sem a referência, MFPARAM_MFTIPOLANC fica BLOQUEADA (com @estabelecimento e um só estabelecimento, as habilitações da empresa 2 iriam em silêncio para o estabelecimento da empresa 1; com vários, todas recusadas). Quando a referência existir: EMPRESA_MFPARAM -> estabelecimento_id, ID_MFTIPOLANC -> tipo_credor_id"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Desdobramento coluna -> linha (pivô) declarável: uma linha da origem gera N linhas do destino, uma por grupo de colunas (alíquota + código de recolhimento por tributo), com o tributo como literal por grupo",
+   "motivo": "2: TBINTIMP guarda COFINS, ISS, PIS, CSLL, IRRF, adicional de INSS, CBS e IBS numa linha; aliquota_tributo_vigencia é uma linha por tributo (tributo_id, aplicacao e vigencia_inicio NOT NULL)"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Entidade derivada pela chave composta (subgrupo pelo par GRUPO,SUBGRUPO de TBITEDES, criado uma vez por par) ou fonte do subgrupo declarada no TBGRUDES; mais de-para de DESPESA -> tipo (receita/despesa)",
+   "motivo": "3: TBITEDES (533 linhas) exige subgrupo_natureza_financeira_id NOT NULL, sem tabela própria na origem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Pivô genérico coluna -> parametro_valor (nível estabelecimento) de uma parametro_definicao do catálogo do produto (mesmo pedido do GPPARAMG no L7-06)",
+   "motivo": "4: MFPARAM é mecanismo (cerca de 150 parâmetros por empresa)"
+  },
+  {
+   "arquivo": "painel (de-para por cliente)",
+   "mudanca": "De-para por código revisado pelo cliente para orgao_arrecadador.esfera (federal, estadual, municipal)",
+   "motivo": "5: TBORGAOPUBLICO não traz a esfera; sem valor presumido, as 3 linhas da imagem de referência ficam recusadas com restricao_destino_1364"
+  },
+  {
+   "arquivo": "painel (de-para por cliente)",
+   "mudanca": "De-para de valores por cliente para as classes gravadas como 'outro'/'outra' ou presumidas (=~, com valor_presumido por linha): origem_recebimento.forma, forma_recebimento.meio (RECEBIMENTO_CHEQUE) e .uso (=~ambos; TIPO_PAG), tipo_valor_integracao.natureza, tipo_conta_bancaria.natureza (=~corrente), natureza_operacao.finalidade, ocorrencia_bancaria.efeito (=~informativo), unidade_mensuracao_custo.categoria (=~outro; TIPO)",
+   "motivo": "6: a origem não traz a classe; o modelo pede domínio fixo. Nada fixo por cliente: o cliente classifica no painel"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
+   "mudanca": "MFCCCONV: carregar só credito_fonte_pagadora quando TBCONVEN (fonte_pagadora) e a referência EMPRESA -> estabelecimento existirem; tirar aplicacao_credito_fonte_pagadora (parcela_receber_id NOT NULL sem fonte) e demonstrativo_pagamento (número e fonte pagadora sem fonte) dos destinos",
+   "motivo": "7: MFCCCONV (2512 linhas) bloqueada: fonte_pagadora_id e conta_bancaria_id NOT NULL; ID_TBCTABAN anulável na origem"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Valor do destino pelo de-para do pai referenciado (ID_TBTPNATOPENF -> natureza_operacao.tipo_nota por de-para do registro de TBTPNATOPENF), sem carregar o pai como linha",
+   "motivo": "8: TBTPNATOPENF é o tipo (entrada/saída) da natureza; como linha colidiria com TBNATOPE no UNIQUE de codigo. Até o de-para, natureza_operacao.tipo_nota vai como =~ambos (valor_presumido por linha), nunca o padrão 'saida' em silêncio"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
+   "mudanca": "TBTIPOCARTAO e TBTIPOTAXACARTAO: sem destino de linha (domínios de dois valores que viram modalidade e tipo_taxa da taxa_administradora por de-para de valores quando a tabela de taxas for carregada)",
+   "motivo": "9: como linha de taxa_administradora exigiriam administradora, estabelecimento e vigência NOT NULL sem fonte"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.d/L8-12.tsv (integrador, quando TBFORNEC entrar)",
+   "mudanca": "TBTIPOPAGFOR: FORN -> forma_pagamento_credor.empresa_fornecedora_id (via ref:TBFORNEC), TIPO_PAG -> forma_pagamento_credor.forma_recebimento_id (via ref:TBCADPAG)",
+   "motivo": "10: bloqueada pelo pai TBFORNEC (L7-06), empresa_fornecedora_id NOT NULL"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
+   "mudanca": "TBTIPOPERMISSAO: sem destino de linha; o tipo vira valor de permite_lancar/permite_desfazer/exigencia_senha por de-para quando a tabela de permissões por usuário for carregada",
+   "motivo": "11: regra_bloqueio_periodo_contabil exige estabelecimento e vigencia_inicio NOT NULL, sem fonte"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py",
+   "mudanca": "Complemento 1:1 por chave do pai: a tabela atualiza colunas da entidade já gravada pelo pai (SDGECADNFS.CHAVE_NFE -> escrituracao_entrada.chave_acesso da escrituração de GECADNFS), com pai_pendente se o pai não entrou",
+   "motivo": "12: SDGECADNFS (13794 linhas) não tem estabelecimento, emitente, modelo, número nem datas (NOT NULL): só o pai traz; GECADNFS não carregada no L7-08"
+  },
+  {
+   "arquivo": "conector/mapa/declarado/colunas.tsv",
+   "mudanca": "TBBANCOS: a linha CODBCOCENTRAL -> conta_bancaria.banco_id (via conta_bancaria) fica no arquivo compartilhado e conta_bancaria não é destino de TBBANCOS; mover para colunas.d/L8-12.tsv (ou para a fatia de TBCTABAN) e declarar as demais colunas sem destino: carteira_cobranca, contrato_cobranca_bancaria e leiaute_bancario exigem conta_bancaria_id, nosso número, convênio, serviço, padrão e versão (NOT NULL) sem fonte",
+   "motivo": "13: a fatia não pode declarar TBBANCOS (tabela em dois arquivos = erro do verificador); ficou fora da imagem sintética da fatia"
+  },
+  {
+   "arquivo": "conector/mapa/tabelas.tsv (gerador)",
+   "mudanca": "Tirar dos destinos os transacionais que um catálogo não alimenta: TBCADPAG -> meio_recebimento_particular, TBTPOCORBANCOPGTO -> retorno_bancario_item, TBTPCONTA -> aplicacao_financeira",
+   "motivo": "14: exigem recebimento, retorno ou valores NOT NULL sem fonte; a fatia só declarou o destino de catálogo"
+  }
+ ]
+}

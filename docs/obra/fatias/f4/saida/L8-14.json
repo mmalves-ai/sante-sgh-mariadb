@@ -1,0 +1,24 @@
+{
+ "pedidos": [
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (+ sentinela.py e verificar_mapa.py)",
+   "mudanca": "prefixo de domínio no código: regra com parâmetro 'codigo_prefixo:<texto>' (ou coluna especial '=<texto>+<COLUNA>') que grava '<texto>-<valor>' na coluna de código, com a soma de controle calculada sobre o valor prefixado. Depois disso, em colunas.d/L8-14.tsv, a chave (ID/COD) volta a ser o código, com prefixo, e o NOME fica só na descrição, em: CDTPLANCAMEN (tipo_lancamento_fatura), PSMOTIVO (motivo_movimento_cadastral), PSORIGEMCOBR (origem_cobranca_plano), PSORIGEMGUIA (origem_guia_plano)",
+   "motivo": "destinos com código único gravados por mais de uma tabela da origem, todas com chave inteira 1..n (choque restricao_destino_1062 na carga real). Lista completa dos destinos compartilhados desta fatia, na ordem de carga: tipo_lancamento_fatura = CDTPEVTCTAREC (920, L8-14, chave) + CDTPLANCAMEN (923, L8-14, nome); motivo_movimento_cadastral = CDMOTMOVIMCAD (910, L8-13, chave) + PSMOTIVO (935, L8-14, nome); origem_cobranca_plano = CDORIGEMCOBR (903, L8-13, chave) + PSORIGEMCOBR (937, L8-14, nome) + PSTIPMEN (941, L8-15, nome) + TBTIPOCOBRANCASGO (952, L8-15, nome); origem_guia_plano = CDORIGEMGUIA (904, L8-13, chave) + PSORIGEMGUIA (938, L8-14, nome); tipo_guia_plano = CDTPGUIA (922, L8-14, chave) + PSTIPOGUIA (942, L8-15, nome); unidade_prazo = CDTPPERIODO (925, L8-14, chave) + PSTPPERIODO (944, L8-15, nome) + TBTPUNIDTEMPO (958, L8-15, nome); tipo_prestador_rede = PFTPATEND (928, L8-14, chave) + TBTPPRESTADOR (957, L8-15, nome); documento_emitido_operadora = CDPARDIGOBG (905, L8-13, não carregada) + PSDOCIMPNOMESOCIAL (932, L8-14, chave) + PSEMPEMITEOBS (933, não carregada). A primeira a carregar fica com a chave; as seguintes usam o nome como código provisório. Recusas 1062 que ainda sobram na carga real: nome igual (sem caixa) entre tabelas do mesmo destino, e nome que seja só dígitos igual a uma chave já gravada. Mesmo pedido já feito no L5-09, L6-06, L6-07 e L8-13; ao trocar o código, as linhas aparecem alteradas e o Sincronizar corrige"
+  },
+  {
+   "arquivo": "conector/mapa/colunas.tsv (gerado) / modelagem do mapa (integrador e dono)",
+   "mudanca": "registro: nenhuma coluna de nenhuma tabela em conector/mapa/colunas.tsv tem referencia para CDTPDESCACR, PSEMPEMITEOBS ou PSDOCIMPNOMESOCIAL, nem coluna com nome parecido (DESCACR, EMITEOBS, DOCIMP). O de-para de valores para lancamento_programado_contrato.natureza (CDTPDESCACR) e documento_emitido_operadora.publico_observacao (PSEMPEMITEOBS) só pode ser declarado quando a análise achar a coluna da origem que guarda o valor (provavelmente sem FK declarada no dicionário); até lá não há caminho de carga",
+   "motivo": "o pedido anterior apontava para uma 'fatia da tabela que referencia' sem nomeá-la; a busca no mapa não achou nenhuma"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (planejar) + motor.py (conciliação e painel)",
+   "mudanca": "tabela do mapa com tabelas_destino, presente na imagem do cliente e com linhas, mas sem nenhuma coluna declarada com destino: em vez de 'continue' silencioso (carga_mapa.py, planejar: `t not in decl`), uma pendência por linha lida 'tabela_sem_carga' (alta; tabela e chave original, sem valor), contada na conciliação como recusada e no painel por regra, como tabela_sem_mapa",
+   "motivo": "nunca descarte silencioso: hoje CDTPDESCACR e PSEMPEMITEOBS (L8-14), CDPARDIGOBG (L8-13) e qualquer outra tabela mapeada sem declaração somem num cliente que tenha linhas nelas; mapa.tabelas_sem_mapa só pega tabela fora do mapa"
+  },
+  {
+   "arquivo": "conector/sante_conector/carga_mapa.py (referência) + conector/mapa/tabelas.tsv/dependencias (ordem)",
+   "mudanca": "referência por chave natural composta: 'via' do tipo 'ref:PSBENEFI(EMP,BEN,DEP)' que resolve o id de destino do beneficiário pelas colunas EMP+BEN+DEP da tabela pai (PSBENEFI tem chave ID). Com isso, e com PSATVASS e PSPLNASS carregadas DEPOIS de PSBENEFI (972) e de PSMOTIVO (935), declarar em L8-14: PSATVASS.EMP/BEN/DEP -> movimento_cadastral_beneficiario.beneficiario_plano_id, MOTIVO -> motivo_movimento_cadastral_id (ref:PSMOTIVO), USUARIO -> usuario_id (login). PSPLNASS: o destino certo é um histórico de plano do beneficiário (troca de plano/faixa com data), não uma linha nova de beneficiario_plano; decisão de modelagem (integrador/dono)",
+   "motivo": "hoje toda linha de PSATVASS e PSPLNASS é lida, guardada e recusada com restricao_destino_1364 (crítica) porque o beneficiário (NOT NULL) não é resolvível; nada some, mas nada migra"
+  }
+ ]
+}

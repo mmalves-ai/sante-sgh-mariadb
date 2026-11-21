@@ -1,0 +1,70 @@
+tabela	coluna	destino	regra	depara	via	motivo
+TBTPPROFPROC	ID					L8-05: não carregada por ora: destino previsto funcao_equipe_cobranca.codigo: funcao_equipe_cobranca.codigo (UNIQUE) já recebe o próprio ID em texto de TBCOSPPROF (L8-03) e TBGRAUPARTPROC (L8-04): IDs pequenos colidem (1062) ou, sem colisão, códigos iguais de domínios distintos se confundem; espera prefixo de domínio por origem ou unificação das três por de-para (pedido em saida/L8-05.json)
+TBTPPROFPROC	NOME					L8-05: não carregada por ora: destino previsto funcao_equipe_cobranca.descricao: mesmo bloqueio do código (colisão entre origens)
+TBTIPPLANO	ID_TBCONVEN	plano_fonte_pagadora.fonte_pagadora_id	chave_origem			L8-05: fonte pagadora do plano pelo conector_origem de TBCONVEN (L5-06). DEPENDÊNCIA BLOQUEANTE: TBCONVEN ainda NÃO é carregada (L5-06 comentada); até lá, na carga real, toda linha fica pai_inexistente e é recusada pelo NOT NULL (1048). Registrada em saida/L8-05.json
+TBTIPPLANO	COD	plano_fonte_pagadora.codigo	inteiro			L8-05: código do plano na fonte pagadora (número gravado como texto); repetido na mesma fonte recusa pela chave única
+TBTIPPLANO	NOME	plano_fonte_pagadora.descricao	texto_nome			L8-05: nome do plano; vazio recusa a linha (NOT NULL)
+TBTIPPLANO	PLANO_COOPART	plano_fonte_pagadora.coparticipacao	booleano_sn			L8-05: plano com coparticipação (S/N); fora do domínio fica com o padrão do destino (falso), com pendência
+TBTABDTH	TAB	preco_diaria_taxa.tabela_preco_id	chave_origem		ref:TBCTRDTH	L8-05: tabela de preço pelo conector_origem de TBCTRDTH (L8 ordem 680). DEPENDÊNCIA BLOQUEANTE: TBCTRDTH ainda NÃO é carregada (L8-03, colisão de tabela_preco.codigo entre quatro origens); até lá, na carga real, toda linha fica pai_inexistente e é recusada pelo NOT NULL (1048). Registrada em saida/L8-05.json
+TBTABDTH	OPE	preco_diaria_taxa.codigo	inteiro			L8-05: código do item dentro da tabela (número da operação, gravado como texto); (tabela, código) único
+TBTABDTH	OPE	preco_diaria_taxa.sequencia	inteiro			L8-05: sequência do item na tabela = número da operação (chave natural TAB+OPE que os valores por vigência usam); repetido na tabela recusa pela chave única
+TBTABDTH	NOME	preco_diaria_taxa.nome	texto_nome			L8-05: nome da diária ou taxa; vazio recusa a linha (NOT NULL)
+TBTABDTH	=~taxa	preco_diaria_taxa.tipo_item				L8-05: o TIPO da origem é um código numérico sem de-para revisado: entra presumido como taxa (valor_presumido por linha); de-para de TIPO pedido em saida/L8-05.json
+TBTABDTH	CH	preco_diaria_taxa.quantidade_indice	flutuante			L8-05: quantidade de índice de cobrança (coeficiente) do item
+TBTABDTH	COBTX	preco_diaria_taxa.cobra_taxa	booleano_sn			L8-05: cobra a taxa (S/N); fora do domínio fica com o padrão (verdadeiro), com pendência
+TBTABDTH	PACOTE	preco_diaria_taxa.compoe_pacote	booleano_sn			L8-05: compõe pacote (S/N); fora do domínio: padrão (falso) e pendência
+TBTABDTH	LAN_CRM	preco_diaria_taxa.exige_profissional	booleano_sn			L8-05: lançamento exige profissional executante (S/N)
+TBTABDTH	MAT_INSUMO	preco_diaria_taxa.insumo_material	booleano_sn			L8-05: taxa que representa material (S/N)
+TBTABDTH	MED_INSUMO	preco_diaria_taxa.insumo_medicamento	booleano_sn			L8-05: taxa que representa medicamento (S/N)
+TBTABDTH	LAN_HORA_FINAL	preco_diaria_taxa.lanca_hora_final	booleano_sn			L8-05: lançamento exige hora final (S/N)
+TBTABDTH	NUMERO_MESES	preco_diaria_taxa.numero_meses	inteiro_nao_negativo			L8-05: período de cobrança em meses; negativo vira NULL com valor_fora_do_dominio (UNSIGNED no destino)
+TBTABDTH	COD					L8-05: não carregada por ora: código complementar do item (texto opcional): significado não confirmado no dicionário; não é a equivalência TUSS (que tem coluna própria, ID_TBTABDTH_COD_TUSS) nem o código de operação: o código do item na tabela é OPE (o leito busca a diária por TAB+OPE), e COD opcional não cobre preco_diaria_taxa.codigo (NOT NULL). Confirmação pedida
+TBTABDTH	TIPO					L8-05: não carregada por ora: tipo do item (diária, taxa, gás, pacote...): de-para de valores pedido; até lá tipo_item entra presumido
+TBTABDTH	SITUACAO	preco_diaria_taxa.ativo	booleano_ai			L8-05: A (ativo) TRUE, I (inativo) FALSE; outro valor: NULL com valor_fora_do_dominio (fica o padrão do destino, com a pendência para revisar)
+TBTABDTH	PERIODO_I					L8-05: não carregada por ora: faixa de permanência: unidade (horas ou dias) a confirmar antes de ir para permanencia_minima_horas
+TBTABDTH	PERIODO_F					L8-05: não carregada por ora: faixa de permanência: unidade a confirmar antes de ir para permanencia_maxima_horas
+TBTABDTH	ID_TBTPACOMTISS					L8-05: não carregada por ora: acomodação TISS: tabela fora do mapa (L4); categoria_acomodacao_id fica NULL
+TBTABDTH	ID_TBTPCLASSIFUNIBH					L8-05: não carregada por ora: classificação de operadora: destino previsto atributo_guia_opcao, bloqueado nesta fatia
+TBTABDTH	UNIDADE					L8-05: não carregada por ora: unidade de medida: referência à unidade cadastrada a confirmar (pedido)
+TBTABDTH	TITULO					L8-05: não carregada por ora: marca de uma letra que pode indicar linha de título (agrupador, não cobrável): significado não confirmado e o motor não filtra linhas; pedido de contagem por valor na imagem e de filtro ou de-para antes de liberar a carga (dependência bloqueante em saida/L8-05.json)
+TBTABDTH	SUBTIPO					L8-05: não carregada por ora: destino previsto preco_diaria_taxa.tipo_servico_faturavel_id (subtipo do serviço): de-para de valores TIPO+SUBTIPO pedido
+TBTABDTH	TIPO_ACO					L8-05: não carregada por ora: destino previsto preco_diaria_taxa.categoria_acomodacao_id (acomodação da diária): de-para de valores da letra pedido; ID_TBTPACOMTISS é a outra via
+TBTABDTH	PORTE					L8-05: não carregada por ora: destino previsto preco_diaria_taxa.porte_procedimento_id: referência ao porte pelo código (texto) pedida; porte ainda não carregado por código
+TBTABDTH	ID_TBTABDTH_COD_TUSS					L8-05: não carregada por ora: destino previsto preco_diaria_taxa.termo_versao_tiss_id (equivalência TUSS, catálogo oficial nunca gravado): o id aponta para cadastro de códigos da origem fora do mapa; de-para pelo código TUSS pedido
+TBTABDTH	EQUIV_TISS					L8-05: não carregada por ora: equivalência TISS antiga (número), substituída por ID_TBTABDTH_COD_TUSS e ID_TBTPACOMTISS: descarte proposto, confirmação pedida
+TBTABDTH	OLD_TIPO_ACO_TISS					L8-05: não carregada por ora: coluna obsoleta da origem (prefixo OLD): descartada
+TBTABDTH	PERMANENCIA					L8-05: não carregada por ora: permanência do item: unidade (horas ou dias) e relação com PERIODO_I/PERIODO_F a confirmar antes de ir para permanencia_minima_horas
+TBTABDTH	FATOR					L8-05: não carregada por ora: fator de texto (6 posições) sem destino no modelo e sem significado confirmado: descarte proposto, confirmação pedida
+TBTABDTH	DATA_HORA_INCLUSAO					L8-05: não carregada por ora: rastro da origem: preco_diaria_taxa.criado_em é o relógio da carga (motor); data nula recusaria a linha (NOT NULL sem padrão)
+TBTABDTH	DATA_HORA_ULTIMA_ATUALIZACAO					L8-05: não carregada por ora: rastro da origem: só serve ao diferencial (coluna de alteração no mapa); alterado_em é do destino
+TBTISSTERMO_TBTPLANC	ID_TBTISSTERMO					L8-05: não carregada por ora: destino previsto terminologia_tipo_lancamento.terminologia_id: terminologia é catálogo oficial (oficiais.tsv), a origem só traz o id interno da terminologia (tabela fora do mapa, L4); pede de-para pelo código oficial
+TBTISSTERMO_TBTPLANC	ID_TBTPLANC					L8-05: não carregada por ora: destino previsto terminologia_tipo_lancamento.tipo_lancamento_id (TBTPLANC, L8 ordem 719), junto com a terminologia
+TBTPOBRIGAMAT	DESCRICAO					L8-05: não carregada por ora: destino previsto domínio fixo do modelo: é o tipo_regra (CHECK) de regra_consistencia_lancamento, não uma linha por fonte pagadora; vira de-para de valores quando as regras por fonte forem carregadas
+TBTPPERFILUNIBH	NOME					L8-05: não carregada por ora: destino previsto atributo_guia_opcao.descricao: atributo_guia_fonte_pagadora exige fonte_pagadora_id (NOT NULL) e a origem não diz a operadora; pedido de fonte por parâmetro do cliente
+TBTPTRATUNIBH	NOME					L8-05: não carregada por ora: destino previsto atributo_guia_opcao.descricao: mesmo bloqueio (fonte pagadora do atributo)
+TBTPCLASSIFUNIBH	NOME					L8-05: não carregada por ora: destino previsto atributo_guia_opcao.descricao: mesmo bloqueio (fonte pagadora do atributo)
+TBTPCLASSIFUNIBH	CLASSIFICACAO					L8-05: não carregada por ora: destino previsto atributo_guia_opcao.classificacao
+TBTPCLASSIFUNIBH	ID_TBTPFASEUNIBH					L8-05: não carregada por ora: destino previsto atributo_guia_opcao.opcao_pai_id
+TBVERSAOBRASIN	VERSAO					L8-05: não carregada por ora: destino previsto edicao_referencia_matmed.numero_edicao: referência de mat/med licenciada (regra 7) só entra com licença comprovada do cliente; além disso fonte_referencia_matmed_id e vigencia_inicio (NOT NULL) não vêm da origem
+TBVLRMEM	VALOR_PFB_BRASINDICE					L8-05: não carregada por ora: destino previsto preco_referencia_matmed.preco_fabrica: preço da referência licenciada (regra 7), depende da edição (TBVERSAOBRASIN, bloqueada)
+TBVLRMEM	VALOR_PMC_BRASINDICE					L8-05: não carregada por ora: destino previsto preco_referencia_matmed.preco_maximo_consumidor: idem
+TBVLRMEM	ID_TBMATMED					L8-05: não carregada por ora: destino previsto preco_referencia_matmed.item_referencia_matmed_id (TBMATMED, L8 ordem 693)
+TBCODATI	CONV					L8-05: não carregada por ora: destino previsto codigo_prestador_fonte_pagadora.fonte_pagadora_id (ref TBCONVEN); vigencia_inicio (NOT NULL) não vem da origem: pede literal presumido de data (data da migração)
+TBCODATI	COD_CONV					L8-05: não carregada por ora: destino previsto codigo_prestador_fonte_pagadora.codigo_operadora
+TBCODATI	LOGIN_PRESTADOR					L8-05: não carregada por ora: destino previsto credencial_fonte_pagadora.login; senhas (SENHA_PRESTADOR) vão para o cofre, nunca para coluna
+TBCODATI_TBUSERS	ID_TBCODATI					L8-05: não carregada por ora: destino previsto usuario_codigo_prestador.codigo_prestador_fonte_pagadora_id: pai TBCODATI bloqueado
+TBCODATI_TBUSERS	USUARIO					L8-05: não carregada por ora: destino previsto usuario_codigo_prestador.usuario_id (ref:TBUSERS)
+TBCONVEN_TBTISSPARDEF	VALOR_DEFAULT					L8-05: não carregada por ora: destino previsto valor_padrao_campo_tiss.valor_padrao: campo_tiss (NOT NULL) vem do pai TBTISSPARDEF (coluna derivada da linha referenciada, pedido) e vigencia_inicio não vem da origem
+TBEMIREF	COD_DESC					L8-05: não carregada por ora: destino previsto referencia_emissao_matmed.origem_codigo/origem_descricao: de-para de valores pedido
+TBEMIREF	REF_VALOR_PMC					L8-05: não carregada por ora: destino previsto referencia_emissao_matmed.preco_base: duas colunas S/N da origem viram um domínio; pedido de regra de combinação
+TBEMIREFMATMED	ID_TBMATMED					L8-05: não carregada por ora: destino previsto referencia_emissao_matmed_excecao.item_faturavel_id: TBMATMED carrega item_referencia_matmed, não item_faturavel; pedido de ligação
+TBENTCON	ENTREGA					L8-05: não carregada por ora: destino previsto calendario_entrega_fatura.entrega_inicio/entrega_fim; competencia (primeiro dia do mês, NOT NULL) não vem da origem: pedido de regra
+TBENTCON	PAGAMENTO					L8-05: não carregada por ora: destino previsto calendario_entrega_fatura.pagamento_previsto
+TBPERMEM	PERC					L8-05: não carregada por ora: destino previsto regra_percentual_cobranca.percentual: tabela_preco_id (NOT NULL) e componente (CHECK) não vêm da origem; preco_negociado_matmed exige item_faturavel (TBMATMED carrega item_referencia_matmed)
+TBSEGUIA	TIPO_GUIA					L8-05: não carregada por ora: destino previsto sequencial_guia.tipo_guia: código numérico sem de-para de valores revisado (pedido)
+TBSEGUIA	NUM_LOTE					L8-05: não carregada por ora: destino previsto sequencial_guia.proximo_numero_lote: último número da origem (+1, regra pedida)
+TBTIPPLCONV	ID_TBTABDTH					L8-05: não carregada por ora: destino previsto diaria_por_plano_local.preco_diaria_taxa_id: contrato_fonte_pagadora_id e categoria_acomodacao_id (NOT NULL) não vêm da origem
+TBTISS	VERSAO_TISS					L8-05: não carregada por ora: destino previsto configuracao_tiss_fonte_pagadora.versao_padrao_tiss_id (catálogo oficial, NOT NULL): de-para pelo código da versão pedido; demais parâmetros pedem de-para de valores; certificado e senha vão para o cofre
+TBVLRDTH	VALOR					L8-05: não carregada por ora: destino previsto preco_diaria_taxa_valor.valor: o pai (preco_diaria_taxa) é achado por TAB+OPE, e o motor só referencia por uma coluna; pedido de referência por chave composta
+TBVLRTHM	VALOR_CH					L8-05: não carregada por ora: destino previsto preco_procedimento_valor: o pai TBTABTHM tem chave TAB+COD (referência por chave composta pedida)
+TBINTCRC	CTA_CONTABIL					L8-05: não carregada por ora: destino previsto regra_contabil_receita.conta_receita_id (NOT NULL): plano de contas por código ainda não carregado; pedido

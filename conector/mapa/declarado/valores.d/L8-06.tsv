@@ -1,0 +1,4 @@
+tabela	coluna	destino	valor_origem	valor_destino	motivo
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	1	basica	L8-06: booleano_sn verdadeiro (S ou s): autenticação básica
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao	0	nenhuma	L8-06: booleano_sn falso (N ou n): sem autenticação básica
+TBTISSWEBSERV	CTR_AUT_TP_BASIC	endpoint_tiss_fonte_pagadora.tipo_autenticacao		nenhuma	L8-06: nulo: sem autenticação básica
