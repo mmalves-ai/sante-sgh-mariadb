@@ -110,7 +110,7 @@ async function atender(): Promise<void> {
   try {
     const x = await atenderRequisicao(
       {
-        requisicao: r.chave,
+        requisicao: r.id,
         itens: r.itens.map((i) => ({
           seq: i.seq,
           item: i.item,

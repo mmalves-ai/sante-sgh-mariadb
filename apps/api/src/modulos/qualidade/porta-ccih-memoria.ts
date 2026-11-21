@@ -792,10 +792,10 @@ export class PortaCcihMemoria implements PortaCcih {
         };
         if (x) {
           Object.assign(x, linha);
-          return { criado: false };
+          return { id: s.itens.indexOf(x) + 1, criado: false };
         }
         s.itens.push(linha);
-        return { criado: true };
+        return { id: s.itens.length, criado: true };
       },
       liberarAntimicrobiano: async (x) => {
         if (s.liberacoes.some((y) => y.itemPrescricao === x.itemPrescricao))

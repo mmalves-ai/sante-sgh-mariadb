@@ -3653,3 +3653,11 @@ integracao_folha_financeiro	RH	configuracao	F3	Vigência da integração da folh
 integracao_folha_financeiro_destino	RH	item	F3	Destino da folha com credor, classificação e vencimento do título	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
 lancamento_titulos_folha	RH	principal	F7	Lançamento dos títulos a pagar de uma competência da folha	F2.4 volta 2: pedido do lote 01-pessoas-1 (f22 03-07)	07	0
 cadastro_empregador_motivo_afastamento	RH	configuracao	F3	De-para do motivo de afastamento para o código oficial do eSocial, por vigência do cadastro do empregador	F2.4 etapa 3: pedido do lote 03-pessoas	07	0
+exame_oftalmologico_item	PEP	item	F8	Itens do exame oftalmológico consolidado: um resultado por tipo de exame e olho	F2.4 etapa 3 (4ª leva): pedido do lote p-especialidades-nutricao	03	0
+plano_refeicao_acompanhante_evento	HOT	historico	F3	Histórico de alterações e cancelamentos do plano de refeição do acompanhante	F2.4 etapa 3 (4ª leva): pedido do lote p-especialidades-nutricao	04	0
+contato_fonte_pagadora	CAD	item	F3	Contato da fonte pagadora por área (convênio, credenciamento, contas médicas, recurso de glosa, autorização)	F2.4 etapa 3 (4ª leva): pedido do lote p-operadora-portal-precos	02	0
+protocolo_acesso_portal	INTG	principal	F3	Protocolo de uso por atendimento para o paciente consultar os resultados no portal	F2.4 etapa 3 (4ª leva): pedido do lote p-sadt	08	0
+decisao_antimicrobiano	QUA	principal	F7	Decisão da CCIH sobre o antimicrobiano restrito prescrito	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-ccih	10	0
+revisao_decisao_antimicrobiano	QUA	historico	F7	Revisões do 3º e do 7º dia da terapia antimicrobiana decidida pela CCIH	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-ccih	10	0
+configuracao_antimicrobiano_insumo	QUA	configuracao	F7	Configuração do insumo antimicrobiano pela CCIH (restrito, ATC, DDD e gramas por unidade)	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-ccih	10	0
+envio_regulatorio_qualidade	QUA	principal	F7	Envios regulatórios da qualidade por competência, com revisão	F2.4 etapa 3 (4ª leva): pedido do lote p-qualidade-gestao	10	0

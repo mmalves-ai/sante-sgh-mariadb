@@ -102,3 +102,15 @@
 | `folha/porta-calculo-propria.ts` | correção do DDL do processamento (pedido); depois, férias e rescisão ligam por ele; obrigações a conferir |
 | `folha/porta-integracao-propria.ts` | gravador do título a pagar do financeiro (composição) e coluna da conta contábil sugerida (DDL) |
 | `folha/porta-folha-propria.ts`, `esocial/`, `escala/`, `sesmt/`, `autoatendimento/`, `banco-apoio.ts` | sem mudança: os mesmos bloqueios da 2ª volta |
+
+## Correção da revisão (estorno do realizado no repasse)
+- **Ligar o estorno:** o negativo cancelado não liga mais o plantão (`n.situacao <> 'cancelado'`, como já valia na
+  conciliação e no repasse). Teste: negativo cancelado responde `estorno-inexistente`.
+- **Valor do negativo:** passa a ser conferido contra o lançamento original, lido na mesma transação.
+  - Original de um plantão só: o negativo tem de devolver o valor lançado inteiro, seja qual for a tarifa de hoje.
+  - Original de vários plantões: o recálculo de todos eles pela tarifa vigente tem de fechar com o valor lançado;
+    se não fecha (tarifa incluída ou alterada depois), recusa `tarifa-alterada-depois-do-lancamento` e o estorno é feito
+    pelo repasse. Teste: tarifa alterada recusa; restaurada, lança.
+- **Decisão pela melhor prática:** não há estorno parcial silencioso. Para estornar um plantão de lançamento com vários
+  depois de mudar a tarifa, falta o valor lançado por plantão: pedido de DDL `plantao.valor_lancado DECIMAL(15,2) NULL`
+  (gravado no lançamento) em `03-pessoas.json`.

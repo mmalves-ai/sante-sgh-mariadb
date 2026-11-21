@@ -19,8 +19,9 @@
 // diagnóstico (orcamento_particular com itens de exame) e a conversão, o catálogo de apoio, os parâmetros `sadt.*`, os
 // indicadores agregados no banco, os laudos publicados no portal (liberacao_resultado_portal, a leitura no portal em
 // acesso_resultado_portal) e os autocadastros de médicos externos (pedido_vinculo_profissional_externo) com a decisão.
-// Pendências (a tela recebe o motivo, nada em silêncio): as operações do executor (OPERACOES_SADT_PENDENTES: contrato
-// novo da tela) e o que falta no modelo em LEITURAS_PENDENTES e GRAVACOES_PENDENTES (pedido p-sadt).
+// O portal de resultados lê e grava o protocolo do paciente (protocolo_acesso_portal) e a credencial do médico externo
+// (pedido e conta do portal). Pendência (a tela recebe o motivo, nada em silêncio): as operações do executor
+// (OPERACOES_SADT_PENDENTES: contrato novo da tela, pedido p-sadt).
 import {
   type AmostraDetalhe,
   type AvisoCritico,
@@ -61,6 +62,7 @@ import { type LiberacaoGravacao, portaIndisponivel, type TrilhaDaGravacao } from
 import { FUSO_PADRAO, relogioNoFuso } from '../exames/relogio.js';
 import { OPERACOES_SADT_PENDENTES } from './operacoes.js';
 import {
+  type AcessoPortalLido,
   type ApoioSadtLido,
   type AtendimentoParaLancamento,
   type AutocadastroPortalLido,
@@ -102,29 +104,10 @@ const TABELAS_GRAVACAO = [
   'orcamento_particular',
   'pedido_vinculo_profissional_externo',
   'conta_portal_profissional_externo',
+  'protocolo_acesso_portal',
   'liberacao_resultado_portal',
   'acesso_resultado_portal',
 ] as const;
-
-/** Leituras que o modelo ainda não atende, com o que falta (pedido p-sadt). */
-export const LEITURAS_PENDENTES: Readonly<Record<string, string>> = {
-  acessoPorProtocolo:
-    'o acesso do paciente ao portal por protocolo (falta no modelo o protocolo de acesso do atendimento, com o resumo e as tentativas)',
-  acessoDoMedico:
-    'o acesso do médico externo ao portal (a senha e o segundo fator da conta do portal ainda não têm lugar no modelo)',
-  acessoPorId: 'o acesso ao portal (o protocolo do paciente e a credencial do médico externo ainda não estão no modelo)',
-};
-
-/** Gravações diretas que o modelo ou o contrato ainda não atendem (pedido p-sadt). */
-export const GRAVACOES_PENDENTES: Readonly<Record<string, string>> = {
-  registrarOrcamento:
-    'o orçamento do diagnóstico por esta gravação (a entrada traz só a quantidade de itens; o orçamento com os exames vai pela operação de criar orçamento, no contrato novo)',
-  criarProtocoloPortal: 'o protocolo de acesso do paciente ao portal (falta no modelo o protocolo de acesso do atendimento)',
-  registrarAutocadastro:
-    'o autocadastro do médico externo no portal (o pedido exige o CPF, e a senha e o segundo fator ainda não têm lugar no modelo)',
-  registrarTentativaPortal:
-    'as tentativas de acesso ao portal (dependem do protocolo do paciente e da credencial do médico externo, ainda fora do modelo)',
-};
 
 const pendente = (o: string): ErroOperacao =>
   new ErroOperacao(
@@ -138,6 +121,102 @@ type Linha = Record<string, unknown>;
 const n = (v: unknown) => Number(v ?? 0);
 const nn = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const texto = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+
+/**
+ * O acesso ao portal tem duas origens: o protocolo do paciente (protocolo_acesso_portal, id positivo) e o médico
+ * externo (id negativo): a conta do portal (-id da conta) ou, antes da aprovação, o autocadastro (-(BASE + id do
+ * pedido)). A tentativa e a releitura voltam pela mesma chave.
+ */
+const BASE_PEDIDO_PORTAL = 1_000_000_000_000;
+type ChaveAcessoPortal = { tipo: 'protocolo' | 'conta' | 'pedido'; id: number };
+export function chaveAcessoPortal(id: number): ChaveAcessoPortal {
+  if (id > 0) return { tipo: 'protocolo', id };
+  return -id > BASE_PEDIDO_PORTAL ? { tipo: 'pedido', id: -id - BASE_PEDIDO_PORTAL } : { tipo: 'conta', id: -id };
+}
+/** conta_portal_profissional_externo.situacao → a situação do acesso que o portal confere. */
+const SITUACAO_ACESSO_CONTA: Readonly<Record<string, string>> = {
+  ativa: 'ativo',
+  bloqueada: 'bloqueado',
+  suspensa: 'bloqueado',
+  encerrada: 'encerrado',
+  pendente: 'pendente',
+};
+/** pedido_vinculo_profissional_externo.situacao (sem conta) → a situação do acesso. */
+const SITUACAO_ACESSO_PEDIDO: Readonly<Record<string, string>> = {
+  pendente: 'pendente',
+  em_conferencia: 'pendente',
+  recusado: 'recusado',
+  aprovado: 'pendente',
+};
+const SQL_ACESSO_MEDICO = `
+  SELECT pv.id AS pedido, pv.nome, pv.situacao AS situacao_pedido, pv.resumo_senha AS senha_pedido,
+         pv.segredo_segundo_fator_cifrado AS fator_pedido, pv.tentativas_falhas AS tentativas_pedido,
+         pv.bloqueado_ate AS bloqueado_pedido, cc.sigla AS conselho, uf.sigla AS uf, pv.numero_conselho,
+         cp.id AS conta, cp.situacao AS situacao_conta, cp.profissional_id, cp.resumo_senha AS senha_conta,
+         cp.segredo_segundo_fator_cifrado AS fator_conta, cp.tentativas_falhas, cp.bloqueada_ate
+    FROM pedido_vinculo_profissional_externo pv
+    JOIN conselho_classe cc ON cc.id = pv.conselho_classe_id
+    JOIN unidade_federativa uf ON uf.id = pv.conselho_unidade_federativa_id
+    LEFT JOIN conta_portal_profissional_externo cp ON cp.id = pv.conta_portal_profissional_externo_id AND cp.excluido_em IS NULL
+   WHERE pv.estabelecimento_id = ? AND pv.excluido_em IS NULL AND pv.situacao <> 'cancelado'`;
+function acessoDoMedicoLido(r: Linha): AcessoPortalLido {
+  const conta = nn(r['conta']);
+  const base = {
+    perfil: 'medicoExterno' as const,
+    paciente: null,
+    reg: null,
+    conselho: texto(r['conselho']),
+    uf: texto(r['uf']),
+    numero: texto(r['numero_conselho']),
+    nome: texto(r['nome']),
+  };
+  if (conta !== null)
+    return {
+      ...base,
+      id: -conta,
+      solicitante: nn(r['profissional_id']),
+      senhaResumo: r['senha_conta'] === null || r['senha_conta'] === undefined ? null : texto(r['senha_conta']),
+      segundoFator: r['fator_conta'] === null || r['fator_conta'] === undefined ? null : texto(r['fator_conta']),
+      situacao: SITUACAO_ACESSO_CONTA[texto(r['situacao_conta'])] ?? 'encerrado',
+      tentativas: n(r['tentativas_falhas']),
+      bloqueadoAte: r['bloqueada_ate'] ? new Date(r['bloqueada_ate'] as string) : null,
+    };
+  return {
+    ...base,
+    id: -(BASE_PEDIDO_PORTAL + n(r['pedido'])),
+    solicitante: null,
+    senhaResumo: r['senha_pedido'] === null || r['senha_pedido'] === undefined ? null : texto(r['senha_pedido']),
+    segundoFator: r['fator_pedido'] === null || r['fator_pedido'] === undefined ? null : texto(r['fator_pedido']),
+    situacao: SITUACAO_ACESSO_PEDIDO[texto(r['situacao_pedido'])] ?? 'recusado',
+    // O autocadastro conta as falhas e bloqueia como a conta: a senha do pedido passa à conta na aprovação.
+    tentativas: n(r['tentativas_pedido']),
+    bloqueadoAte: r['bloqueado_pedido'] ? new Date(r['bloqueado_pedido'] as string) : null,
+  };
+}
+const SQL_ACESSO_PROTOCOLO = `
+  SELECT pa.id, pa.paciente_id, pa.atendimento_id, pa.situacao, pa.tentativas_falhas, pa.bloqueado_ate, pf.nome
+    FROM protocolo_acesso_portal pa
+    JOIN paciente p ON p.id = pa.paciente_id
+    JOIN pessoa_fisica pf ON pf.id = p.pessoa_fisica_id
+   WHERE pa.estabelecimento_id = ? AND pa.excluido_em IS NULL`;
+function acessoDoProtocoloLido(r: Linha): AcessoPortalLido {
+  return {
+    id: n(r['id']),
+    perfil: 'paciente',
+    paciente: n(r['paciente_id']),
+    reg: n(r['atendimento_id']),
+    conselho: null,
+    uf: null,
+    numero: null,
+    solicitante: null,
+    nome: texto(r['nome']),
+    senhaResumo: null,
+    segundoFator: null,
+    situacao: texto(r['situacao']),
+    tentativas: n(r['tentativas_falhas']),
+    bloqueadoAte: r['bloqueado_ate'] ? new Date(r['bloqueado_ate'] as string) : null,
+  };
+}
 const verdadeiro = (v: unknown) => v === true || v === 1 || v === '1' || v === 1n;
 const lista = (k: number) => Array.from({ length: k }, () => '?').join(', ');
 /** DATETIME do banco → "AAAA-MM-DDTHH:MM:SS". */
@@ -1877,14 +1956,35 @@ export class PortaSadtPropria implements PortaSadt {
     });
   }
 
-  acessoPorProtocolo(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['acessoPorProtocolo']!));
+  acessoPorProtocolo(c: ContextoSadt, resumo: string): Promise<AcessoPortalLido | null> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma(`${SQL_ACESSO_PROTOCOLO} AND pa.resumo_protocolo = ?`, [est, resumo]);
+      return r ? acessoDoProtocoloLido(r) : null;
+    });
   }
-  acessoDoMedico(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['acessoDoMedico']!));
+  /** A conta do médico externo pela inscrição (conselho, UF e número); sem conta, o autocadastro mais recente. */
+  acessoDoMedico(c: ContextoSadt, m: { conselho: string; uf: string; numero: string }): Promise<AcessoPortalLido | null> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma(
+        `${SQL_ACESSO_MEDICO} AND cc.sigla = ? AND uf.sigla = ? AND pv.numero_conselho = ?
+          ORDER BY cp.id IS NULL, pv.solicitado_em DESC, pv.id DESC LIMIT 1`,
+        [est, m.conselho, m.uf, m.numero],
+      );
+      return r ? acessoDoMedicoLido(r) : null;
+    });
   }
-  acessoPorId(): Promise<never> {
-    return Promise.reject(pendente(LEITURAS_PENDENTES['acessoPorId']!));
+  acessoPorId(c: ContextoSadt, id: number): Promise<AcessoPortalLido | null> {
+    const k = chaveAcessoPortal(id);
+    return this.ler(c, async (l, est) => {
+      const r =
+        k.tipo === 'protocolo'
+          ? await l.uma(`${SQL_ACESSO_PROTOCOLO} AND pa.id = ?`, [est, k.id])
+          : await l.uma(`${SQL_ACESSO_MEDICO} AND ${k.tipo === 'conta' ? 'cp.id' : 'pv.id'} = ? LIMIT 1`, [est, k.id]);
+      if (!r) return null;
+      if (k.tipo === 'protocolo') return acessoDoProtocoloLido(r);
+      const a = acessoDoMedicoLido(r);
+      return a.id === id ? a : null;
+    });
   }
   /**
    * Os autocadastros de médicos externos (pedido_vinculo_profissional_externo) do estabelecimento desde a data, com a
@@ -1992,7 +2092,6 @@ function estadoDoEvento(evento: string): EstadoAmostra {
 function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
   const usuario = tx.contexto.usuario;
   const agora = () => new Date();
-  const nao = (o: string) => () => Promise.reject(pendente(GRAVACOES_PENDENTES[o]!));
   /** A data de hoje na hora do estabelecimento (as colunas DATE da gravação). */
   const hojeDoEstabelecimento = async () => {
     const f = await tx.uma('SELECT fuso_horario FROM estabelecimento WHERE id = ?', [est]);
@@ -2310,8 +2409,6 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       });
     },
 
-    registrarOrcamento: nao('registrarOrcamento'),
-
     async marcarOrcamentoConvertido(r) {
       const hoje = await hojeDoEstabelecimento();
       const [o] = await tx.consultarParaAtualizar(
@@ -2402,12 +2499,71 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
       return id;
     },
 
-    criarProtocoloPortal: nao('criarProtocoloPortal'),
-    registrarAutocadastro: nao('registrarAutocadastro'),
+    /** Um protocolo ativo por atendimento: o novo revoga o anterior (o código impresso antes deixa de valer). */
+    async criarProtocoloPortal(r) {
+      const at = await tx.uma('SELECT id FROM atendimento WHERE id = ? AND estabelecimento_id = ? AND paciente_id = ?', [
+        r.reg,
+        est,
+        r.paciente,
+      ]);
+      if (!at) throw recusa('atendimento-inexistente', 'O atendimento não existe neste estabelecimento para este paciente.');
+      if (!/^[0-9a-f]{64}$/.test(r.protocoloResumo)) throw recusa('protocolo-invalido', 'O resumo do protocolo é inválido.');
+      const quando = agora();
+      for (const v of await tx.consultarParaAtualizar(
+        `SELECT id, versao FROM protocolo_acesso_portal
+          WHERE atendimento_id = ? AND estabelecimento_id = ? AND situacao = 'ativo' AND excluido_em IS NULL`,
+        [r.reg, est],
+      ))
+        await tx.alterar('protocolo_acesso_portal', n(v['id']), n(v['versao']), { situacao: 'revogado', revogado_em: quando });
+      return tx.incluir('protocolo_acesso_portal', {
+        estabelecimento_id: est,
+        paciente_id: r.paciente,
+        atendimento_id: r.reg,
+        resumo_protocolo: r.protocoloResumo,
+        situacao: 'ativo',
+        tentativas_falhas: 0,
+        emitido_em: quando,
+        emitido_por_usuario_id: usuario,
+        origem: 'sistema',
+      });
+    },
+
+    /** O autocadastro do portal: um pedido em aberto por inscrição no estabelecimento; a senha e o fator já chegam protegidos. */
+    async registrarAutocadastro(r) {
+      const cc = await tx.uma('SELECT id FROM conselho_classe WHERE sigla = ? LIMIT 1', [r.conselho]);
+      const uf = await tx.uma('SELECT id FROM unidade_federativa WHERE sigla = ? LIMIT 1', [r.uf]);
+      if (!cc || !uf) throw recusa('inscricao-invalida', 'O conselho ou a UF da inscrição não existem no cadastro.');
+      const [aberto] = await tx.consultarParaAtualizar(
+        `SELECT pv.id FROM pedido_vinculo_profissional_externo pv
+           LEFT JOIN conta_portal_profissional_externo cp ON cp.id = pv.conta_portal_profissional_externo_id AND cp.excluido_em IS NULL
+          WHERE pv.estabelecimento_id = ? AND pv.conselho_classe_id = ? AND pv.conselho_unidade_federativa_id = ?
+            AND pv.numero_conselho = ? AND pv.excluido_em IS NULL
+            AND (pv.situacao IN ('pendente', 'em_conferencia') OR (pv.situacao = 'aprovado' AND cp.situacao IN ('pendente', 'ativa')))
+          LIMIT 1`,
+        [est, cc['id'], uf['id'], r.numero],
+        { teto: 1 },
+      );
+      if (aberto) throw recusa('autocadastro-repetido', 'Já há um cadastro em análise ou ativo para esta inscrição.');
+      return tx.incluir('pedido_vinculo_profissional_externo', {
+        estabelecimento_id: est,
+        nome: r.nome.slice(0, 150),
+        cpf: r.cpf,
+        email: r.email.slice(0, 254),
+        conselho_classe_id: n(cc['id']),
+        numero_conselho: r.numero.slice(0, 20),
+        conselho_unidade_federativa_id: n(uf['id']),
+        situacao: 'pendente',
+        solicitado_em: agora(),
+        resumo_senha: r.senhaResumo,
+        segredo_segundo_fator_cifrado: r.segundoFator,
+        origem: 'sistema',
+      });
+    },
 
     async decidirAutocadastro(r) {
       const [pv] = await tx.consultarParaAtualizar(
-        `SELECT id, versao, situacao, email, conselho_classe_id, conselho_unidade_federativa_id, numero_conselho
+        `SELECT id, versao, situacao, email, conselho_classe_id, conselho_unidade_federativa_id, numero_conselho,
+                resumo_senha, segredo_segundo_fator_cifrado
            FROM pedido_vinculo_profissional_externo WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
         [r.id, est],
         { teto: 1 },
@@ -2448,6 +2604,9 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
             situacao: 'ativa',
             autorizada_em: quando,
             autorizada_por_usuario_id: usuario,
+            // A credencial do pedido aprovado passa à conta (resumo e segredo cifrado, nunca em claro).
+            resumo_senha: pv['resumo_senha'] ?? null,
+            segredo_segundo_fator_cifrado: pv['segredo_segundo_fator_cifrado'] ?? null,
           });
       } else {
         const email = texto(pv['email']);
@@ -2462,6 +2621,8 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
           situacao: 'ativa',
           autorizada_em: quando,
           autorizada_por_usuario_id: usuario,
+          resumo_senha: pv['resumo_senha'] ?? null,
+          segredo_segundo_fator_cifrado: pv['segredo_segundo_fator_cifrado'] ?? null,
           origem: 'sistema',
         });
       }
@@ -2472,7 +2633,50 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorSghSadt {
         conta_portal_profissional_externo_id: conta,
       });
     },
-    registrarTentativaPortal: nao('registrarTentativaPortal'),
+    /**
+     * A tentativa de entrada: o protocolo, a conta e o autocadastro ainda sem conta guardam as falhas e o bloqueio. O
+     * pedido conta também porque a senha dele passa à conta na aprovação: sem o contador, ela poderia ser testada sem
+     * limite enquanto o pedido espera.
+     */
+    async registrarTentativaPortal(r) {
+      const k = chaveAcessoPortal(r.id);
+      const [a] =
+        k.tipo === 'pedido'
+          ? await tx.consultarParaAtualizar(
+              `SELECT id, versao FROM pedido_vinculo_profissional_externo
+                WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND conta_portal_profissional_externo_id IS NULL`,
+              [k.id, est],
+              { teto: 1 },
+            )
+          : k.tipo === 'protocolo'
+          ? await tx.consultarParaAtualizar(
+              'SELECT id, versao FROM protocolo_acesso_portal WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+              [k.id, est],
+              { teto: 1 },
+            )
+          : await tx.consultarParaAtualizar(
+              `SELECT cp.id, cp.versao FROM conta_portal_profissional_externo cp
+                 JOIN pedido_vinculo_profissional_externo pv ON pv.conta_portal_profissional_externo_id = cp.id
+                WHERE cp.id = ? AND pv.estabelecimento_id = ? AND cp.excluido_em IS NULL LIMIT 1`,
+              [k.id, est],
+              { teto: 1 },
+            );
+      if (!a) throw recusa('acesso-inexistente', 'O acesso ao portal não existe neste estabelecimento.');
+      const tentativas = Math.max(0, Math.min(65_535, Math.trunc(r.tentativas)));
+      if (k.tipo === 'protocolo')
+        await tx.alterar('protocolo_acesso_portal', k.id, n(a['versao']), { tentativas_falhas: tentativas, bloqueado_ate: r.bloqueadoAte });
+      else if (k.tipo === 'pedido')
+        await tx.alterar('pedido_vinculo_profissional_externo', k.id, n(a['versao']), {
+          tentativas_falhas: tentativas,
+          bloqueado_ate: r.bloqueadoAte,
+        });
+      else
+        await tx.alterar('conta_portal_profissional_externo', k.id, n(a['versao']), {
+          tentativas_falhas: tentativas,
+          bloqueada_ate: r.bloqueadoAte,
+          ...(r.acertou ? { ultimo_acesso_em: agora() } : {}),
+        });
+    },
   };
 }
 

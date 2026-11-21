@@ -83,24 +83,43 @@ describe.skipIf(SEM_BANCO_MAN)(`tecnovigilância na porta própria (cliente ${CL
     expect(await porta.acoesDoAlerta(c, al.id)).toMatchObject([{ equipamento: eq.id, os: { id: os }, queixa: null }]);
     expect(await porta.vinculosTecnovigDaOs(c, os)).toEqual({ queixa: null, alerta: { id: al.id, numero: 'L0303-AL1' } });
 
+    // A OS da ação de campo abre a queixa como alerta sanitário, ligada ao alerta que a gerou.
     const q = await porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-      g.abrirQueixaDaOs({ os, tipo: 'queixaTecnica', descricao: 'Cabo com defeito (teste)', conduta: 'segregado', usuario: M.loginUsuario, agora }),
+      g.abrirQueixaDaOs({ os, tipo: 'alertaSanitario', descricao: 'Cabo com defeito (teste)', conduta: 'segregado', usuario: M.loginUsuario, agora }),
     );
     expect(q).toMatchObject({ versao: 1, os });
-    expect(await lerBanco(M, 'SELECT situacao, lote_segregado, equipamento_saude_id FROM queixa_tecnica_produto WHERE id = ?', [q.id])).toMatchObject({ situacao: 'lote_segregado', equipamento_saude_id: eq.id });
+    expect(await lerBanco(M, 'SELECT situacao, lote_segregado, equipamento_saude_id, natureza, alerta_sanitario_id FROM queixa_tecnica_produto WHERE id = ?', [q.id])).toMatchObject({ situacao: 'lote_segregado', equipamento_saude_id: eq.id, natureza: 'alerta_sanitario', alerta_sanitario_id: al.id });
     expect((await porta.vinculosTecnovigDaOs(c, os)).queixa).toBe(q.id);
-    await expect(
-      porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-        g.abrirQueixaDaOs({ os, tipo: 'queixaTecnica', descricao: 'de novo', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
-      ),
-    ).rejects.toSatisfy((e) => codigoDe(e) === 'queixa-ja-aberta');
-    // Evento adverso e alerta sanitário não viram queixa de falha de funcionamento: recusam até o modelo os distinguir.
-    for (const tipo of ['eventoAdverso', 'alertaSanitario'] as const)
+    for (const tipo of ['queixaTecnica', 'eventoAdverso'] as const)
       await expect(
         porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
-          g.abrirQueixaDaOs({ os, tipo, descricao: 'Paciente atingido (teste)', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+          g.abrirQueixaDaOs({ os, tipo, descricao: 'de novo', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
         ),
-      ).rejects.toSatisfy((e) => codigoDe(e) === 'modelo-pendente');
+      ).rejects.toSatisfy((e) => codigoDe(e) === 'queixa-ja-aberta');
+
+    // Numa OS comum (sem ação de campo): o alerta sanitário recusa sem o alerta; o evento adverso recusa e manda à
+    // notificação de incidente (nada é gravado); a queixa técnica abre sem alerta nem notificação.
+    const os2 = (
+      await porta.gravarSgh(c, trilhaMan(M, 'ordem_servico_manutencao'), (g) =>
+        g.abrirOs({
+          natureza: 'corretiva', equipamento: eq.id, centroCusto: M.centro, local: null, descricao: 'Falha (teste)', contato: null,
+          prioridadeSugerida: 'media', prioridade: 'media', solicitante: M.loginUsuario, registro: agora, parado: false, plano: null, nota: null,
+        }),
+      )
+    ).id;
+    expect(await porta.vinculosTecnovigDaOs(c, os2)).toEqual({ queixa: null, alerta: null });
+    for (const [tipo, codigo] of [['alertaSanitario', 'os-sem-alerta'], ['eventoAdverso', 'evento-adverso-pela-notificacao']] as const)
+      await expect(
+        porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
+          g.abrirQueixaDaOs({ os: os2, tipo, descricao: 'Falha (teste)', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+        ),
+      ).rejects.toSatisfy((e) => codigoDe(e) === codigo);
+    expect(await lerBanco(M, 'SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [os2])).toBeNull();
+    const q2 = await porta.gravarSgh(c, trilhaMan(M, 'queixa_tecnica_produto'), (g) =>
+      g.abrirQueixaDaOs({ os: os2, tipo: 'queixaTecnica', descricao: 'Falha (teste)', conduta: 'nenhuma', usuario: M.loginUsuario, agora }),
+    );
+    expect(await lerBanco(M, 'SELECT situacao, natureza, alerta_sanitario_id, notificacao_incidente_id FROM queixa_tecnica_produto WHERE id = ?', [q2.id])).toMatchObject({ situacao: 'aberta', natureza: 'queixa_tecnica', alerta_sanitario_id: null, notificacao_incidente_id: null });
+    expect(await porta.vinculosTecnovigDaOs(c, os2)).toEqual({ queixa: q2.id, alerta: null });
 
     await expect(
       porta.gravarSgh(c, trilhaMan(M, 'alerta_sanitario', al.id), (g) => g.excluirAlerta({ id: al.id, versaoVista: 3, motivo: 'Lançado por engano', usuario: M.loginUsuario })),

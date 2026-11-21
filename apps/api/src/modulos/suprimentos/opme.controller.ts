@@ -477,7 +477,20 @@ export class OpmeController {
         chave: `${e.solicitacao}:${e.etapa}`,
       }),
       async (g) => {
-        const ja = await g.etapaPelaChave(chave);
+        const pedido = {
+          solicitacao: e.solicitacao,
+          etapa: e.etapa,
+          em: e.em,
+          quantidade: e.quantidade,
+          fornecedor: e.fornecedor,
+          senha: e.senha,
+          guia: e.guia,
+          validade: e.validade,
+          pedido: e.pedido,
+          nf: e.nf,
+          observacao: e.observacao,
+        };
+        const ja = await g.etapaPelaChave(chave, pedido);
         if (ja) {
           if (ja.solicitacao !== e.solicitacao)
             throw recusaOpme('chave-reutilizada', 'A chave do pedido já foi usada.');
@@ -515,18 +528,9 @@ export class OpmeController {
         );
         const situacao = situacaoDepoisDaEtapa(sol.situacao, e.etapa, sol);
         return g.avancar({
+          ...pedido,
           solicitacao: sol.id,
           versaoVista: sol.versao,
-          etapa: e.etapa,
-          em: e.em,
-          quantidade: e.quantidade,
-          fornecedor: e.fornecedor,
-          senha: e.senha,
-          guia: e.guia,
-          validade: e.validade,
-          pedido: e.pedido,
-          nf: e.nf,
-          observacao: e.observacao,
           usuario: s.login,
           chave,
           mudanca: {
@@ -798,7 +802,7 @@ export class OpmeController {
       s,
       'suprimentos.registrarDevolucao',
       {
-        saida: c.saida,
+        saida: c.saida.id,
         local,
         itens: [{ lancamentoSaida: c.lancamento, item: c.item, quantidade: e.quantidade, lotes: [] }],
         opme: { consumo: c.id, motivo: e.motivo, chave },

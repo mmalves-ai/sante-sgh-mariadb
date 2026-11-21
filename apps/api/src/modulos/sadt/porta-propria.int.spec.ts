@@ -1,4 +1,4 @@
-// Integração da porta própria do SADT contra o MariaDB real (cliente f22_o2; massa SINTÉTICA, nenhuma pessoa real).
+// Integração da porta própria do SADT contra o MariaDB real (cliente de teste do lote, SGH_CLIENTE_TESTE; massa SINTÉTICA, nenhuma pessoa real).
 // Leituras: a lista do setor com filtro e contagens, o exame e o estado derivado, o isolamento por estabelecimento, os
 // analitos do exame e a liberação vigente. Contrato de efeito: o laudo emitido (emissão, exames, número de negócio, o
 // item marcado como emitido e a trilha), a validação pública pelo código, a segunda via com motivo e a leitura do
@@ -17,11 +17,11 @@ import {
   SEM_BANCO,
 } from './aplicacao/copia.spec-util.js';
 import { garantir } from '../enfermagem/massa-enfermagem.spec-util.js';
-import { LEITURAS_PENDENTES, PortaSadtPropria } from './porta-propria.js';
+import { chaveAcessoPortal, PortaSadtPropria } from './porta-propria.js';
 
 const codigoDe = (e: unknown) => (e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : String(e));
 
-describe.skipIf(SEM_BANCO)('porta própria do SADT (MariaDB, cliente f22_o2)', () => {
+describe.skipIf(SEM_BANCO)(`porta própria do SADT (MariaDB, cliente ${CLIENTE})`, () => {
   let nucleo: NucleoProprio;
   let porta: PortaSadtPropria;
   let m: MassaSadt | null = null;
@@ -32,6 +32,7 @@ describe.skipIf(SEM_BANCO)('porta própria do SADT (MariaDB, cliente f22_o2)', (
   let publicacao: number | null = null;
   let pedidos: readonly [number, number] | null = null;
   let inscricao: number | null = null;
+  let autocadastro: number | null = null;
 
   beforeAll(async () => {
     nucleo = new NucleoProprio();
@@ -54,6 +55,8 @@ describe.skipIf(SEM_BANCO)('porta própria do SADT (MariaDB, cliente f22_o2)', (
         await e.executar('DELETE FROM pedido_vinculo_profissional_externo WHERE id IN (?, ?)', [...pedidos]);
       }
       if (inscricao) await e.executar('DELETE FROM inscricao_conselho WHERE id = ?', [inscricao]);
+      if (autocadastro) await e.executar('DELETE FROM pedido_vinculo_profissional_externo WHERE id = ?', [autocadastro]);
+      await e.executar('DELETE FROM protocolo_acesso_portal WHERE atendimento_id = ?', [m?.base.atendimento ?? 0]);
     });
     await limparMassaSadt(nucleo, m);
     await nucleo.encerrar();
@@ -517,15 +520,65 @@ describe.skipIf(SEM_BANCO)('porta própria do SADT (MariaDB, cliente f22_o2)', (
       pedidos![0],
     ]);
     expect([Number(conta?.['profissional_id']), conta?.['situacao']]).toEqual([m!.base.profissional2, 'ativa']);
+
+    // Acesso do médico pela inscrição: a conta aprovada (id negativo), com o profissional ligado; a tentativa grava na conta.
+    const medico = await porta.acessoDoMedico(c, { conselho: 'CRM', uf: 'MG', numero });
+    expect(medico).toMatchObject({ perfil: 'medicoExterno', situacao: 'ativo', solicitante: m!.base.profissional2, tentativas: 0 });
+    expect(chaveAcessoPortal(medico!.id).tipo).toBe('conta');
+    expect(await porta.acessoDoMedico({ ...c, estabelecimento: m!.base.outroEst }, { conselho: 'CRM', uf: 'MG', numero })).toBeNull();
+    const bloqueio = new Date(Date.now() + 15 * 60_000);
+    await porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.tentativa', 'conta_portal_profissional_externo', -medico!.id), (g) =>
+      g.registrarTentativaPortal({ id: medico!.id, tentativas: 3, bloqueadoAte: bloqueio, acertou: false }),
+    );
+    expect(await porta.acessoPorId(c, medico!.id)).toMatchObject({ tentativas: 3, perfil: 'medicoExterno' });
+
+    // Autocadastro pelo portal: grava o pedido com o resumo da senha e o segredo cifrado; o repetido recusa.
+    const numero2 = `8${Date.now() % 10_000_000}`;
+    const cad = { nome: 'MEDICO SINTETICO DOIS', conselho: 'CRM', uf: 'MG', numero: numero2, cpf: '00000000191', email: `${m!.marca.toLowerCase()}9@teste.invalido`, senhaResumo: 'resumo-sintetico', segundoFator: 'envelope-sintetico' };
+    autocadastro = await porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.autocadastro', 'pedido_vinculo_profissional_externo', null), (g) => g.registrarAutocadastro(cad));
+    expect(codigoDe(await porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.autocadastro', 'pedido_vinculo_profissional_externo', null), (g) => g.registrarAutocadastro(cad)).catch((x: unknown) => x))).toBe('autocadastro-repetido');
+    const pendenteLido = await porta.acessoDoMedico(c, { conselho: 'CRM', uf: 'MG', numero: numero2 });
+    expect(pendenteLido).toMatchObject({ situacao: 'pendente', senhaResumo: 'resumo-sintetico', segundoFator: 'envelope-sintetico', solicitante: null });
+    expect(chaveAcessoPortal(pendenteLido!.id)).toEqual({ tipo: 'pedido', id: autocadastro });
+    // O pedido sem conta conta as falhas e bloqueia como a conta (a senha dele passa à conta na aprovação).
+    expect(pendenteLido).toMatchObject({ tentativas: 0, bloqueadoAte: null });
+    const bloqueioPedido = new Date(Date.now() + 15 * 60_000);
+    for (const [tentativas, ate] of [[1, null], [5, bloqueioPedido]] as const)
+      await porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.tentativa', 'pedido_vinculo_profissional_externo', autocadastro), (g) =>
+        g.registrarTentativaPortal({ id: pendenteLido!.id, tentativas, bloqueadoAte: ate, acertou: false }),
+      );
+    const bloqueado = await porta.acessoPorId(c, pendenteLido!.id);
+    expect(bloqueado).toMatchObject({ situacao: 'pendente', tentativas: 5 });
+    expect(Math.abs(bloqueado!.bloqueadoAte!.getTime() - bloqueioPedido.getTime())).toBeLessThan(1_000);
+    expect(await um('SELECT tentativas_falhas FROM pedido_vinculo_profissional_externo WHERE id = ?', [autocadastro])).toMatchObject({ tentativas_falhas: 5 });
   });
 
-  it('o que falta no modelo: 409 com o motivo (nada em silêncio)', async () => {
+  it('protocolo do portal: grava só o resumo, o novo revoga o anterior, tentativas e isolamento por estabelecimento', async () => {
     const c = contexto(m!);
-    const e = await porta.acessoPorProtocolo().catch((x: unknown) => x);
-    expect((e as ErroOperacao).problema).toMatchObject({ status: 409, codigo: 'modelo-pendente' });
-    expect(String((e as ErroOperacao).problema['detail'])).toContain(LEITURAS_PENDENTES['acessoPorProtocolo']!.slice(1, 20));
-    expect(codigoDe(await porta.gravarSgh(c, linhaTela(m!, 'x', 'x', null), (g) => g.registrarOrcamento({} as never)).catch((x: unknown) => x))).toBe(
-      'modelo-pendente',
+    const resumo = (k: string) => k.repeat(64).slice(0, 64);
+    const criar = (r: string) =>
+      porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.protocolo', 'protocolo_acesso_portal', null), (g) =>
+        g.criarProtocoloPortal({ paciente: m!.base.paciente, reg: m!.base.atendimento, protocoloResumo: r, usuario: m!.base.login }),
+      );
+    const p1 = await criar(resumo('a'));
+    expect(await porta.acessoPorProtocolo(c, resumo('a'))).toMatchObject({ id: p1, perfil: 'paciente', paciente: m!.base.paciente, reg: m!.base.atendimento, situacao: 'ativo', tentativas: 0 });
+    expect(await porta.acessoPorProtocolo({ ...c, estabelecimento: m!.base.outroEst }, resumo('a'))).toBeNull();
+    const p2 = await criar(resumo('b'));
+    expect((await porta.acessoPorId(c, p1))?.situacao).toBe('revogado');
+    expect(codigoDe(await criar('nao-hex').catch((x: unknown) => x))).toBe('protocolo-invalido');
+    expect(
+      codigoDe(
+        await porta
+          .gravarSgh({ ...c, estabelecimento: m!.base.outroEst }, linhaTela(m!, 'sadt.portal.protocolo', 'protocolo_acesso_portal', null), (g) =>
+            g.criarProtocoloPortal({ paciente: m!.base.paciente, reg: m!.base.atendimento, protocoloResumo: resumo('c'), usuario: m!.base.login }),
+          )
+          .catch((x: unknown) => x),
+      ),
+    ).toBe('atendimento-inexistente');
+    await porta.gravarSgh(c, linhaTela(m!, 'sadt.portal.tentativa', 'protocolo_acesso_portal', p2), (g) =>
+      g.registrarTentativaPortal({ id: p2, tentativas: 1, bloqueadoAte: null, acertou: false }),
     );
+    expect(await porta.acessoPorId(c, p2)).toMatchObject({ tentativas: 1, situacao: 'ativo' });
+    expect(await um('SELECT COUNT(*) AS q FROM protocolo_acesso_portal WHERE atendimento_id = ?', [m!.base.atendimento])).toMatchObject({ q: 2 });
   });
 });

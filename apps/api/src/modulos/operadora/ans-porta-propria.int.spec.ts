@@ -382,6 +382,49 @@ describe.skipIf(SEM_BANCO)('porta própria das obrigações com a ANS (MariaDB, 
     expect(await porta.envio(contexto(m, m.outroEst), r.id)).toBeNull();
   });
 
+  it('TPS: a GRU e o pagamento ficam no próprio envio, uma vez só', async () => {
+    const r = await porta.gravar(contexto(m), trilhaTela(m, 'envio_ans', 'operadora.ans.gerado'), (g) =>
+      g.gerar({
+        operadora: m.operadora,
+        obrigacao: 'TPS',
+        competencia: '2026-07',
+        sequencial: 1,
+        retificador: false,
+        destino: 'simulador',
+        leiaute: 'TPS-1',
+        registros: 0,
+        valorTotal: 950,
+        quadros: '{}',
+        arquivo: null,
+        aviso: null,
+        substituir: [],
+        itens: [],
+        usuario: 'l0209.teste',
+      }),
+    );
+    const pagar = (versao: number) =>
+      porta.gravar(contexto(m), trilhaTela(m, 'envio_ans', 'operadora.ans.pago'), (g) =>
+        g.pagar({
+          id: r.id,
+          versao,
+          gru: 'GRU-TPS-L0209',
+          valor: 950,
+          data: '2026-11-19',
+          usuario: 'l0209.teste',
+        }),
+      );
+    const p = await pagar(r.versao);
+    expect(await porta.envio(contexto(m), r.id)).toMatchObject({
+      gru: 'GRU-TPS-L0209',
+      pagoEm: '2026-11-19',
+      valorPago: 950,
+    });
+    const [e] = await ler('SELECT valor_gru, valor_pago_gru FROM envio_ans WHERE id = ?', [r.id]);
+    expect(Number(e!['valor_gru'])).toBe(950);
+    expect(await pagar(p.versao).catch((x: unknown) => codigoDe(x))).toBe('situacao-nao-permite');
+    expect(await porta.envio(contexto(m, m.outroEst), r.id)).toBeNull();
+  });
+
   it('bases e domínios: beneficiário da operadora, ativos, planos, motivos; o que falta responde 501', async () => {
     expect(await porta.beneficiarioDaOperadora(contexto(m), m.beneficiario)).toMatchObject({
       operadora: m.operadora,

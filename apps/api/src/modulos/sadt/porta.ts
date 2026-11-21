@@ -219,17 +219,6 @@ export interface GravadorSghSadt {
   escalonarAviso(r: { aviso: number; nivel: number }): Promise<boolean>;
   /** A primeira abertura do resultado do exame pedido (exame_item) pelo usuário; a repetida não grava de novo. */
   registrarLeitura(r: { exameItem: number; origem: 'pep' | 'portal'; usuario: string }): Promise<void>;
-  registrarOrcamento(o: {
-    nome: string;
-    ato: number;
-    data: Date;
-    paciente: number | null;
-    convenio: number;
-    itens: number;
-    total: number;
-    validade: Date;
-    usuario: string;
-  }): Promise<number>;
   marcarOrcamentoConvertido(r: { orcamento: number; atendimento: number; usuario: string }): Promise<void>;
   registrarLaudoEmitido(r: {
     impressao: number;
@@ -252,6 +241,8 @@ export interface GravadorSghSadt {
     conselho: string;
     uf: string;
     numero: string;
+    /** CPF do médico (11 dígitos, verificadores conferidos no contrato). */
+    cpf: string;
     email: string;
     senhaResumo: string;
     segundoFator: string;

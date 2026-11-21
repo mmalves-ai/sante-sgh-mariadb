@@ -893,7 +893,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
         );
         const doc = this.numerar(s, 'movimento', r.ano, r.mes);
         for (const it of e.itens) this.baixar(s, it.item, e.local, it.quantidade, []);
-        return { id: e.atendimento ?? 0, doc, itens: e.itens.length };
+        return { id: doc, doc, itens: e.itens.length, ...(e.atendimento ? { atendimento: e.atendimento } : {}) };
       }
       case 'suprimentos.registrarBalanco': {
         const inv = s.inventarios.find((x) => x.id === e.inventario);
@@ -978,10 +978,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
       case 'suprimentos.desconsolidarDocumento': {
         const d = s.documentos.find(
           (x) =>
-            x.tipo === e.tipo &&
-            x.ano === e.documento.ano &&
-            x.mes === e.documento.mes &&
-            x.doc === e.documento.doc,
+            x.tipo === e.tipo && x.id === e.documento,
         );
         if (!d) throw recusa('documento-inexistente', 'O documento não existe.');
         if (e.tipo !== 'nota')
@@ -1096,7 +1093,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
     if (chaveReq) {
       req =
         s.documentos.find(
-          (d) => d.requisicao && d.ano === chaveReq.ano && d.mes === chaveReq.mes && d.doc === chaveReq.doc,
+          (d) => d.requisicao && d.id === chaveReq,
         ) ?? null;
       if (!req)
         throw recusa('requisicao-atendida', 'A requisição já foi atendida ou não existe mais.', {
@@ -1186,9 +1183,7 @@ export class PortaSuprimentosMemoria implements PortaSuprimentos {
       (d) =>
         d.tipo === 'saida' &&
         !d.requisicao &&
-        d.ano === e.saida.ano &&
-        d.mes === e.saida.mes &&
-        d.doc === e.saida.doc,
+        d.id === e.saida,
     );
     if (!saida || !saida.consolidado)
       throw recusa('saida-inexistente', 'A saída não existe ou não foi consolidada.', { campos: ['saida'] });

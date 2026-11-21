@@ -1,13 +1,12 @@
 // Integração das portas próprias do OPME e da manipulação contra o MariaDB real (cliente f22_o3; massa SINTÉTICA,
 // nenhuma pessoa real): a marca de OPME e de consignado do cadastro, o local sugerido com saldo de OPME (próprio ou
-// consignado) só no estabelecimento da sessão, e as capelas com os grupos e a situação. Pendências: 409
-// modelo-pendente com o motivo. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
+// consignado) só no estabelecimento da sessão, e as capelas com os grupos e a situação. As gravações estão em
+// opme-manipulacao-propria.int.spec.ts. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { CLASSE_OPME } from '@sgh/contratos';
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PortaManipulacaoPropria } from './manipulacao-porta-propria.js';
 import {
-  codigoDe,
   contexto,
   limparMassa,
   type MassaSuprimentos,
@@ -44,8 +43,12 @@ describe.skipIf(SEM_BANCO)('portas próprias do OPME e da manipulação (MariaDB
     expect(await opme.localComSaldo(c, [m.localA])).toBeNull();
     // O local de A não existe para B.
     expect(await opme.localComSaldo(contexto(m, m.estB), [m.localA2])).toBeNull();
-    expect(await codigoDe(opme.solicitacoesDoPeriodo())).toBe('modelo-pendente');
-    expect(await opme.podeGravar()).toMatchObject({ pode: false });
+    // Leituras reais, restritas ao estabelecimento da sessão (sem solicitação no período, lista vazia).
+    expect(await opme.solicitacoesDoPeriodo(c, '2000-01-01', '2000-01-02')).toEqual({
+      itens: [],
+      cortada: false,
+    });
+    expect(await opme.podeGravar(c, 'opme.desconhecida')).toMatchObject({ pode: false });
   });
 
   it('manipulação: capelas do estabelecimento com grupos e situação', async () => {
@@ -67,7 +70,10 @@ describe.skipIf(SEM_BANCO)('portas próprias do OPME e da manipulação (MariaDB
     const deB = await manipulacao.capelas(contexto(m, m.estB));
     expect(deB.map((x) => x.nome)).toContain('CAPELA CB');
     expect(deB.map((x) => x.id)).not.toContain(m.capelaA);
-    expect(await codigoDe(manipulacao.ordens())).toBe('modelo-pendente');
+    expect(await manipulacao.ordens(contexto(m), '2000-01-01', '2000-01-02')).toEqual({
+      itens: [],
+      cortada: false,
+    });
     // A avaliação farmacêutica do item prescrito lê avaliacao_farmaceutica(_item): item sem avaliação, null.
     expect(await manipulacao.avaliacao(contexto(m), 999_999_999)).toBeNull();
   });

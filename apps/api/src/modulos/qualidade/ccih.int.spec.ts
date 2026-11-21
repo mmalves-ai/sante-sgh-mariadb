@@ -3,7 +3,7 @@
 // unidade de internação com bloco, acomodação e três leitos, uma internação, os cadastros da CCIH (tipo de dispositivo,
 // sítio, bundle, categoria profissional, tipo de surto), a numeração do surto e um dia de censo fechado. Confere as
 // leituras restritas ao estabelecimento, as gravações pelo Executor com a trilha (versão anterior, estorno, conflito de
-// versão) e as partes que aguardam estrutura falhando fechadas.
+// versão), a ficha de IRAS, a configuração e a decisão do antimicrobiano e a precaução com o bloqueio do quarto.
 import { ErroOperacao, type Escritor } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TrilhaDaGravacao } from '../exames/public-api.js';
@@ -46,6 +46,20 @@ async function limparCcih(e: Escritor, ests: readonly number[]): Promise<void> {
   const em = ests.map(() => '?').join(', ');
   const q = (sql: string) => e.executar(sql, ests);
   await q(
+    `DELETE ps FROM periodo_situacao_leito ps JOIN leito_hospitalar lh ON lh.id = ps.leito_hospitalar_id WHERE lh.estabelecimento_id IN (${em})`,
+  );
+  await q(`DELETE FROM isolamento_paciente WHERE estabelecimento_id IN (${em})`);
+  await q(
+    `DELETE r FROM revisao_decisao_antimicrobiano r JOIN decisao_antimicrobiano d ON d.id = r.decisao_antimicrobiano_id WHERE d.estabelecimento_id IN (${em})`,
+  );
+  await q(`DELETE FROM decisao_antimicrobiano WHERE estabelecimento_id IN (${em})`);
+  await q(`DELETE FROM configuracao_antimicrobiano_insumo WHERE estabelecimento_id IN (${em})`);
+  for (const t of ['caso_infeccao_criterio', 'caso_infeccao_microrganismo'])
+    await q(
+      `DELETE x FROM ${t} x JOIN caso_infeccao ci ON ci.id = x.caso_infeccao_id WHERE ci.estabelecimento_id IN (${em})`,
+    );
+  await q(`DELETE FROM caso_infeccao WHERE estabelecimento_id IN (${em})`);
+  await q(
     `DELETE i FROM verificacao_bundle_item i JOIN verificacao_bundle v ON v.id = i.verificacao_bundle_id WHERE v.estabelecimento_id IN (${em})`,
   );
   await q(`DELETE FROM verificacao_bundle WHERE estabelecimento_id IN (${em})`);
@@ -67,7 +81,9 @@ async function limparCcih(e: Escritor, ests: readonly number[]): Promise<void> {
   await q(`DELETE FROM prescricao WHERE estabelecimento_id IN (${em})`);
   await q(`DELETE FROM internacao WHERE estabelecimento_id IN (${em})`);
   await q(`DELETE FROM atendimento WHERE estabelecimento_id IN (${em})`);
-  await q(`DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em}) AND tipo = 'surto_infeccao'`);
+  await q(
+    `DELETE FROM sequencia_negocio WHERE estabelecimento_id IN (${em}) AND tipo IN ('surto_infeccao', 'caso_infeccao')`,
+  );
 }
 
 describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => {
@@ -325,58 +341,82 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
 
   it('o antimicrobiano em curso (sem fim) segue nas leituras; o suspenso sai a partir da suspensão', async () => {
     const dia = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
-    const itens = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'preparo-f24-ccih-atm' }, async (e) => {
-      const agora = new Date();
-      const g = (sel: string, p: unknown[], ins: string, pi: unknown[]) => garantir(e, sel, p, ins, pi);
-      const tipoItem = await g(
-        'SELECT id FROM tipo_item_prescricao WHERE codigo = ?',
-        [`${P}-ATM`],
-        "INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, 'MEDICAMENTO SINTETICO', 'medicamento', ?)",
-        [`${P}-ATM`, agora],
-      );
-      const grupo = await g(
-        'SELECT id FROM grupo_insumo WHERE codigo = ?',
-        [`${P}-ATM`],
-        "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'ANTIMICROBIANOS SINTETICOS', 'medicamento', ?)",
-        [`${P}-ATM`, agora],
-      );
-      const um = await g(
-        'SELECT id FROM unidade_medida WHERE codigo = ?',
-        [`${P}-FA`],
-        "INSERT INTO unidade_medida (codigo, descricao, sigla, uso_estoque, criado_em) VALUES (?, 'FRASCO SINTETICO', ?, TRUE, ?)",
-        [`${P}-FA`, `${P}FA`.slice(0, 10), agora],
-      );
-      const ins = await g(
-        'SELECT id FROM insumo WHERE codigo = ?',
-        [`${P}-ATM`],
-        "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, antimicrobiano, criado_em) VALUES (?, 'ANTIMICROBIANO SINTETICO', 'medicamento', ?, ?, TRUE, ?)",
-        [`${P}-ATM`, grupo, um, agora],
-      );
-      const ip = await g(
-        'SELECT id FROM item_prescritivel WHERE codigo = ?',
-        [`${P}-ATM`],
-        "INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, insumo_id, criado_em) VALUES (?, 'ANTIMICROBIANO SINTETICO', ?, ?, ?)",
-        [`${P}-ATM`, tipoItem, ins, agora],
-      );
-      // Prescrição vigente de 10 dias atrás a 10 dias à frente; dois itens começados antes de "desde", sem fim:
-      // um em curso e um suspenso 5 dias atrás.
-      const pr = await e.inserir(
-        `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id, situacao,
-           prescrito_em, vigencia_inicio_em, vigencia_fim_em, criado_em) VALUES (?, 924101, ?, ?, ?, 'vigente', ?, ?, ?, ?)`,
-        [m.est, ids.paciente, ids.atendimento, ids.prof, `${dia(-10)} 08:00:00`, `${dia(-10)} 08:00:00`, `${dia(10)} 08:00:00`, agora],
-      );
-      const item = (seq: number, suspenso: string | null) =>
-        e.inserir(
-          `INSERT INTO prescricao_item (prescricao_id, sequencia, tipo_item_prescricao_id, item_prescritivel_id, inicio_em,
-             situacao, suspenso_em, lancamento_profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [pr, seq, tipoItem, ip, `${dia(-10)} 08:00:00`, suspenso ? 'suspenso' : 'ativo', suspenso, ids.prof, agora],
+    const itens = await m.nucleo.escrever(
+      { cliente: CLIENTE_QUA, correlacao: 'preparo-f24-ccih-atm' },
+      async (e) => {
+        const agora = new Date();
+        const g = (sel: string, p: unknown[], ins: string, pi: unknown[]) => garantir(e, sel, p, ins, pi);
+        const tipoItem = await g(
+          'SELECT id FROM tipo_item_prescricao WHERE codigo = ?',
+          [`${P}-ATM`],
+          "INSERT INTO tipo_item_prescricao (codigo, descricao, categoria, criado_em) VALUES (?, 'MEDICAMENTO SINTETICO', 'medicamento', ?)",
+          [`${P}-ATM`, agora],
         );
-      return { emCurso: await item(1, null), suspenso: await item(2, `${dia(-5)} 08:00:00`) };
-    });
+        const grupo = await g(
+          'SELECT id FROM grupo_insumo WHERE codigo = ?',
+          [`${P}-ATM`],
+          "INSERT INTO grupo_insumo (codigo, descricao, natureza, criado_em) VALUES (?, 'ANTIMICROBIANOS SINTETICOS', 'medicamento', ?)",
+          [`${P}-ATM`, agora],
+        );
+        const um = await g(
+          'SELECT id FROM unidade_medida WHERE codigo = ?',
+          [`${P}-FA`],
+          "INSERT INTO unidade_medida (codigo, descricao, sigla, uso_estoque, criado_em) VALUES (?, 'FRASCO SINTETICO', ?, TRUE, ?)",
+          [`${P}-FA`, `${P}FA`.slice(0, 10), agora],
+        );
+        const ins = await g(
+          'SELECT id FROM insumo WHERE codigo = ?',
+          [`${P}-ATM`],
+          "INSERT INTO insumo (codigo, nome, tipo, grupo_insumo_id, estoque_unidade_medida_id, antimicrobiano, criado_em) VALUES (?, 'ANTIMICROBIANO SINTETICO', 'medicamento', ?, ?, TRUE, ?)",
+          [`${P}-ATM`, grupo, um, agora],
+        );
+        const ip = await g(
+          'SELECT id FROM item_prescritivel WHERE codigo = ?',
+          [`${P}-ATM`],
+          "INSERT INTO item_prescritivel (codigo, descricao, tipo_item_prescricao_id, insumo_id, criado_em) VALUES (?, 'ANTIMICROBIANO SINTETICO', ?, ?, ?)",
+          [`${P}-ATM`, tipoItem, ins, agora],
+        );
+        // Prescrição vigente de 10 dias atrás a 10 dias à frente; dois itens começados antes de "desde", sem fim:
+        // um em curso e um suspenso 5 dias atrás.
+        const pr = await e.inserir(
+          `INSERT INTO prescricao (estabelecimento_id, numero, paciente_id, atendimento_id, prescritor_profissional_id, situacao,
+           prescrito_em, vigencia_inicio_em, vigencia_fim_em, criado_em) VALUES (?, 924101, ?, ?, ?, 'vigente', ?, ?, ?, ?)`,
+          [
+            m.est,
+            ids.paciente,
+            ids.atendimento,
+            ids.prof,
+            `${dia(-10)} 08:00:00`,
+            `${dia(-10)} 08:00:00`,
+            `${dia(10)} 08:00:00`,
+            agora,
+          ],
+        );
+        const item = (seq: number, suspenso: string | null) =>
+          e.inserir(
+            `INSERT INTO prescricao_item (prescricao_id, sequencia, tipo_item_prescricao_id, item_prescritivel_id, inicio_em,
+             situacao, suspenso_em, lancamento_profissional_id, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              pr,
+              seq,
+              tipoItem,
+              ip,
+              `${dia(-10)} 08:00:00`,
+              suspenso ? 'suspenso' : 'ativo',
+              suspenso,
+              ids.prof,
+              agora,
+            ],
+          );
+        return { emCurso: await item(1, null), suspenso: await item(2, `${dia(-5)} 08:00:00`) };
+      },
+    );
     const desde = dia(-2);
     const lidos = (await porta.antimicrobianos(c, [ids.reg], desde)).itens.map((x) => x.itemPrescricao);
     expect(lidos).toEqual([itens.emCurso]);
-    expect((await porta.vigencias(c, desde, hoje())).itens.map((x) => x.itemPrescricao)).toEqual([itens.emCurso]);
+    expect((await porta.vigencias(c, desde, hoje())).itens.map((x) => x.itemPrescricao)).toEqual([
+      itens.emCurso,
+    ]);
     // Antes da suspensão, os dois valem.
     expect(
       (await porta.vigencias(c, dia(-7), dia(-6))).itens.map((x) => x.itemPrescricao).sort((a, b) => a - b),
@@ -628,8 +668,13 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
       'bundle-ja-registrado',
     );
     // A revisão da indicação não vira decisão de manter o dispositivo no banco.
-    const linha = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'confere-f24-ccih-bundle' }, (e) =>
-      e.uma<{ manter: unknown }>('SELECT manter_dispositivo AS manter FROM verificacao_bundle WHERE id = ?', [id]),
+    const linha = await m.nucleo.escrever(
+      { cliente: CLIENTE_QUA, correlacao: 'confere-f24-ccih-bundle' },
+      (e) =>
+        e.uma<{ manter: unknown }>(
+          'SELECT manter_dispositivo AS manter FROM verificacao_bundle WHERE id = ?',
+          [id],
+        ),
     );
     expect(linha?.manter ?? null).toBeNull();
   });
@@ -732,19 +777,22 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
         }),
       ),
     ).toMatchObject({ criado: true });
-    const consumo = await m.nucleo.escrever({ cliente: CLIENTE_QUA, correlacao: 'confere-f24-ccih-consumo' }, async (e) => ({
-      linhas: await e.consultar<{ competencia: unknown; taxa: unknown; calculo: string }>(
-        `SELECT DATE_FORMAT(competencia, '%Y-%m') AS competencia, ml_por_paciente_dia AS taxa, calculo
+    const consumo = await m.nucleo.escrever(
+      { cliente: CLIENTE_QUA, correlacao: 'confere-f24-ccih-consumo' },
+      async (e) => ({
+        linhas: await e.consultar<{ competencia: unknown; taxa: unknown; calculo: string }>(
+          `SELECT DATE_FORMAT(competencia, '%Y-%m') AS competencia, ml_por_paciente_dia AS taxa, calculo
            FROM consumo_preparacao_alcoolica WHERE estabelecimento_id = ? ORDER BY competencia`,
-        [m.est],
-      ),
-      anterior: await e.uma<{ q: unknown }>(
-        `SELECT COUNT(*) AS q FROM trilha_auditoria WHERE estabelecimento_id = ?
+          [m.est],
+        ),
+        anterior: await e.uma<{ q: unknown }>(
+          `SELECT COUNT(*) AS q FROM trilha_auditoria WHERE estabelecimento_id = ?
             AND JSON_UNQUOTE(JSON_EXTRACT(dados_depois, '$.dados.versaoAnterior.tabela')) = 'consumo_preparacao_alcoolica'
             AND JSON_EXTRACT(dados_depois, '$.dados.versaoAnterior.dados.quantidade_ml') = 500 AND ocorrido_em >= ?`,
-        [m.est, inicioTeste],
-      ),
-    }));
+          [m.est, inicioTeste],
+        ),
+      }),
+    );
     expect(consumo.linhas.map((l) => [l.competencia, l.taxa === null ? null : Number(l.taxa)])).toEqual([
       ['2020-01', null],
       [competencia(), 150],
@@ -840,19 +888,255 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
     ]);
   });
 
-  it('o que aguarda estrutura (IRAS, liberação, configuração e precaução) falha fechado e não grava nada', async () => {
-    for (const leitura of [
-      porta.iras(c, 1),
-      porta.irasDas(c, [ids.reg]),
-      porta.irasNoPeriodo(c, hoje(), hoje()),
-      porta.itensConfigurados(c),
-      porta.liberacao(c, 1),
-      porta.liberacoesDos(c, [1]),
-      porta.precaucao(c, 1),
-      porta.precaucoesAbertas(c),
-      porta.precaucoesDa(c, ids.reg),
-    ])
-      await expect(leitura).rejects.toMatchObject({ problema: { status: 503, codigo: 'modelo-pendente' } });
+  it('a ficha de IRAS, a configuração e a decisão do antimicrobiano e a precaução com o bloqueio do quarto', async () => {
+    const cad = await m.nucleo.escrever(
+      { cliente: CLIENTE_QUA, correlacao: 'preparo-f24-ccih-iras' },
+      async (e) => {
+        const agora = new Date();
+        const sitio = await garantir(
+          e,
+          "SELECT id FROM sitio_infeccao WHERE codigo = 'ipcs'",
+          [],
+          "INSERT INTO sitio_infeccao (codigo, descricao, versao_criterio, criado_em) VALUES ('ipcs', 'CORRENTE SANGUINEA SINTETICA', 'SINT', ?)",
+          [agora],
+        );
+        for (const cod of ['febre', 'calafrios'])
+          await garantir(
+            e,
+            'SELECT id FROM criterio_infeccao WHERE sitio_infeccao_id = ? AND codigo = ?',
+            [sitio, cod],
+            `INSERT INTO criterio_infeccao (sitio_infeccao_id, codigo, descricao, tipo_criterio, versao_criterio, vigencia_inicio,
+             criado_em) VALUES (?, ?, 'CRITERIO SINTETICO', 'sinal_clinico', 'SINT', '2020-01-01', ?)`,
+            [sitio, cod, agora],
+          );
+        await garantir(
+          e,
+          "SELECT id FROM tipo_precaucao WHERE codigo = 'contato'",
+          [],
+          "INSERT INTO tipo_precaucao (codigo, descricao, criado_em) VALUES ('contato', 'CONTATO', ?)",
+          [agora],
+        );
+        await garantir(
+          e,
+          "SELECT id FROM situacao_leito WHERE situacao_base = 'bloqueado' AND ativo = TRUE LIMIT 1",
+          [],
+          "INSERT INTO situacao_leito (codigo, descricao, situacao_base, criado_em) VALUES (?, 'BLOQUEADO SINTETICO', 'bloqueado', ?)",
+          [`${P}-BLQ`, agora],
+        );
+        await garantir(
+          e,
+          "SELECT id FROM motivo_bloqueio_leito WHERE codigo = 'isolamento'",
+          [],
+          "INSERT INTO motivo_bloqueio_leito (codigo, descricao, criado_em) VALUES ('isolamento', 'ISOLAMENTO', ?)",
+          [agora],
+        );
+        await garantir(
+          e,
+          "SELECT id FROM sequencia_negocio WHERE estabelecimento_id = ? AND tipo = 'caso_infeccao'",
+          [m.est],
+          "INSERT INTO sequencia_negocio (estabelecimento_id, tipo, prefixo, proximo_valor, criado_em) VALUES (?, 'caso_infeccao', 'I', 1, ?)",
+          [m.est, agora],
+        );
+        const it = await e.uma<{ id: number; pr: number; ins: number }>(
+          `SELECT pi.id, pr.id AS pr, ip.insumo_id AS ins FROM prescricao_item pi JOIN prescricao pr ON pr.id = pi.prescricao_id
+           JOIN item_prescritivel ip ON ip.id = pi.item_prescritivel_id
+          WHERE pr.estabelecimento_id = ? AND pi.sequencia = 1 ORDER BY pi.id DESC LIMIT 1`,
+          [m.est],
+        );
+        return { item: Number(it?.id), pr: Number(it?.pr), ins: Number(it?.ins) };
+      },
+    );
+    const g = <T>(fn: Parameters<PortaCcihPropria['gravarSgh']>[2]) =>
+      porta.gravarSgh(c, T, fn) as Promise<T>;
+    const ficha = {
+      reg: ids.reg,
+      paciente: ids.paciente,
+      setor: 'UTI',
+      sitio: 'ipcs',
+      dataInfeccao: hoje(),
+      criterios: ['febre'],
+      nivelIsc: null,
+      cirurgia: null,
+      implante: false,
+      exame: null,
+      microrganismo: 'GERME SINTETICO',
+      multirresistente: false,
+      dispositivo: null,
+      descricao: 'FICHA SINTETICA',
+      usuario: m.login,
+    };
+    // IRAS: registra, lê só no estabelecimento, corrige (critérios trocados, versão anterior na trilha) e descarta.
+    const { id } = await g<{ id: number }>((x) => x.registrarIras(ficha));
+    expect(await porta.iras(c, id)).toMatchObject({
+      reg: ids.reg,
+      setor: 'UTI',
+      sitio: 'ipcs',
+      criterios: ['febre'],
+      microrganismo: 'GERME SINTETICO',
+      situacao: 'confirmada',
+      registradoPor: m.login,
+      versao: 1,
+    });
+    expect(await porta.iras(outro, id)).toBeNull();
+    expect((await porta.irasNoPeriodo(c, hoje(), hoje())).itens.map((x) => x.id)).toEqual([id]);
+    expect((await porta.irasDas(c, [ids.reg])).map((x) => x.id)).toEqual([id]);
+    expect(await codigo(g((x) => x.registrarIras({ ...ficha, multirresistente: true })))).toBe(
+      'microrganismo-nao-cadastrado',
+    );
+    expect(await codigo(g((x) => x.registrarIras({ ...ficha, criterios: ['tosseDispneia'] })))).toBe(
+      'criterio-nao-cadastrado',
+    );
+    const agora = `${hoje()}T09:00:00`;
+    const v2 = await g<{ versao: number }>((x) =>
+      x.corrigirIras({
+        id,
+        versao: 1,
+        agora,
+        usuario: m.login,
+        justificativa: 'AJUSTE SINTETICO',
+        dataInfeccao: hoje(),
+        criterios: ['calafrios'],
+        microrganismo: null,
+        multirresistente: false,
+        descricao: null,
+      }),
+    );
+    expect(v2.versao).toBe(2);
+    expect(await porta.iras(c, id)).toMatchObject({
+      criterios: ['calafrios'],
+      microrganismo: null,
+      versao: 2,
+    });
+    const versoes = await porta.versoes(c, 'caso_infeccao', id);
+    expect(versoes.map((x) => x.acao)).toContain('correcao');
+    const v3 = await g<{ versao: number }>((x) =>
+      x.descartarIras({ id, versao: 2, agora, usuario: m.login, justificativa: 'DESCARTE SINTETICO' }),
+    );
+    expect(await porta.iras(c, id)).toMatchObject({
+      situacao: 'descartada',
+      motivoDescarte: 'DESCARTE SINTETICO',
+    });
+    expect(
+      await codigo(
+        g((x) => x.descartarIras({ id, versao: v3.versao, agora, usuario: m.login, justificativa: 'X' })),
+      ),
+    ).not.toBe('ok');
+
+    // Configuração do antimicrobiano por insumo (insere e depois atualiza) e a decisão com a revisão do 3º dia.
+    const cfg = {
+      item: cad.ins,
+      restrito: true,
+      atc: 'J01DD04',
+      dddGramas: 2,
+      gramasPorUnidade: 1,
+      agora,
+      usuario: m.login,
+    };
+    const c1 = (await g((x) => x.configurarAntimicrobiano(cfg))) as { id: number; criado: boolean };
+    expect(c1).toMatchObject({ criado: true });
+    expect(c1.id).toBeGreaterThan(0);
+    expect(await g((x) => x.configurarAntimicrobiano({ ...cfg, dddGramas: 4 }))).toEqual({ id: c1.id, criado: false });
+    expect(await porta.itensConfigurados(c)).toEqual([
+      expect.objectContaining({
+        item: cad.ins,
+        restrito: true,
+        atc: 'J01DD04',
+        dddGramas: 4,
+        atualizadoPor: m.login,
+      }),
+    ]);
+    expect(await porta.itensConfigurados(outro)).toEqual([]);
+    expect(await codigo(g((x) => x.configurarAntimicrobiano({ ...cfg, atc: 'XYZ' })))).toBe('atc-invalido');
+    const decisao = {
+      itemPrescricao: cad.item,
+      prescricao: cad.pr,
+      reg: ids.reg,
+      paciente: ids.paciente,
+      item: cad.ins,
+      ficha: null,
+      prescritoEm: `${hoje()}T08:00:00`,
+      inicioTratamento: `${hoje()}T08:00:00`,
+      decisao: 'liberado',
+      diasAutorizados: 7,
+      justificativa: null,
+      noPrazo: true,
+      agora,
+      usuario: m.login,
+    };
+    const lib = await g<{ id: number }>((x) => x.liberarAntimicrobiano(decisao));
+    expect(await codigo(g((x) => x.liberarAntimicrobiano(decisao)))).toBe('ja-decidido');
+    expect(await porta.liberacao(c, lib.id)).toMatchObject({
+      decisao: 'liberado',
+      diasAutorizados: 7,
+      versao: 1,
+    });
+    expect(await porta.liberacao(outro, lib.id)).toBeNull();
+    await g((x) =>
+      x.revisarAntimicrobiano({
+        id: lib.id,
+        versao: 1,
+        agora,
+        usuario: m.login,
+        marco: 'd3',
+        conduta: 'ajustarDose',
+        observacao: null,
+      }),
+    );
+    const [lida] = await porta.liberacoesDos(c, [cad.item]);
+    expect(lida?.revisoes.d3).toMatchObject({ conduta: 'ajustarDose', por: m.login });
+    expect(lida?.revisoes.d7).toBeNull();
+    expect(lida?.versao).toBe(2);
+
+    // Precaução: abre no leito A, bloqueia o vizinho B (período do leito ligado a ela) e o libera no encerramento.
+    const A = { bloco: 'UTI', acomodacao: '01', leito: 'A' };
+    const B = { bloco: 'UTI', acomodacao: '01', leito: 'B' };
+    const p = await g<{ id: number; bloqueados: number; leito: string }>((x) =>
+      x.definirPrecaucao({
+        reg: ids.reg,
+        paciente: ids.paciente,
+        leito: A,
+        motivo: 'mrsa',
+        motivoOutro: null,
+        tipo: 'contato',
+        tipoDoLeito: 'contato',
+        origem: 'manual',
+        exame: null,
+        multirresistente: true,
+        bloquear: [B],
+        observacao: null,
+        agora: `${hoje()}T10:00:00`,
+        usuario: m.login,
+      }),
+    );
+    expect(p).toMatchObject({ bloqueados: 1, leito: 'abriu' });
+    expect((await porta.precaucoesAbertas(c)).find((x) => x.id === p.id)).toMatchObject({
+      leito: A,
+      motivo: 'mrsa',
+      tipo: 'contato',
+      multirresistente: true,
+      bloqueios: [B],
+      fimEm: null,
+    });
+    expect(await porta.precaucoesDa(outro, ids.reg)).toEqual([]);
+    const fim = await g<{ versao: number; liberados: number }>((x) =>
+      x.encerrarPrecaucao({
+        id: p.id,
+        versao: 1,
+        agora: `${hoje()}T11:00:00`,
+        usuario: m.login,
+        leito: A,
+        tipoDoLeito: null,
+        bloqueios: [B],
+        motivo: 'reavaliacao',
+        observacao: null,
+      }),
+    );
+    expect(fim).toEqual({ versao: 2, liberados: 1 });
+    expect(await porta.precaucao(c, p.id)).toMatchObject({ motivoFim: 'reavaliacao', bloqueios: [B] });
+    expect((await porta.precaucoesAbertas(c)).map((x) => x.id)).not.toContain(p.id);
+  });
+
+  it('a recusa no meio da operação desfaz tudo; sem estabelecimento, recusa', async () => {
     const antes = (await porta.dispositivosDas(c, [ids.reg])).length;
     expect(
       await codigo(
@@ -868,10 +1152,26 @@ describe.skipIf(SEM_BANCO_QUA)('porta própria da CCIH contra o MariaDB', () => 
             observacao: null,
             usuario: m.login,
           });
-          return g.definirPrecaucao({} as never);
+          return g.registrarIras({
+            reg: ids.reg,
+            paciente: null,
+            setor: 'UTI',
+            sitio: 'sitio-inexistente',
+            dataInfeccao: hoje(),
+            criterios: [],
+            nivelIsc: null,
+            cirurgia: null,
+            implante: false,
+            exame: null,
+            microrganismo: null,
+            multirresistente: false,
+            dispositivo: null,
+            descricao: null,
+            usuario: m.login,
+          });
         }),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('sitio-nao-cadastrado');
     expect((await porta.dispositivosDas(c, [ids.reg])).length).toBe(antes);
     expect(await codigo(porta.relogio({ ...c, estabelecimento: null }))).toBe('sem-estabelecimento');
   });

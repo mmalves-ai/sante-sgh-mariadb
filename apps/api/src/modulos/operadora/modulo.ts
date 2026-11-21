@@ -9,7 +9,7 @@
 import { randomBytes } from 'node:crypto';
 import { type DynamicModule, Module } from '@nestjs/common';
 import { chaveMestra } from '@sgh/dominio-acesso';
-import { ambienteDe } from '@sgh/nucleo';
+import { ambienteDe, ErroOperacao } from '@sgh/nucleo';
 import { fontesSinteticas } from '../../sessao/montar.js';
 import { ligarMapaEstabelecimentos } from '../cadastro/contexto-nucleo.js';
 import {
@@ -63,7 +63,6 @@ import { RedeOperadoraController } from './rede.controller.js';
 import { PORTA_REDE_OPERADORA, type PortaRedeOperadora, portaRedeOperadoraIndisponivel } from './rede-porta.js';
 import { PortaRedeOperadoraMemoria } from './rede-porta-memoria.js';
 import { PortaRedeOperadoraPropria } from './rede-porta-propria.js';
-import { modeloPendente } from './apoio-banco.js';
 import { portaIndisponivel } from '../exames/public-api.js';
 
 /** As portas da operadora (cada uma pode vir pronta nas opções: testes). */
@@ -88,13 +87,22 @@ type BuscaPorSenha = Pick<PortaContasOperadora, 'autorizacoesPorSenha'>;
 const temBuscaPorSenha = (x: object): x is BuscaPorSenha =>
   typeof (x as Partial<BuscaPorSenha>).autorizacoesPorSenha === 'function';
 
-/** A busca das autorizações pela senha (as contas conferem a guia): a da porta da autorização, ou 501 sem ela. */
+/** A porta da autorização montada sem a busca pela senha (configuração do módulo): 503, nada lido. */
+const semBuscaPorSenha = (): ErroOperacao =>
+  new ErroOperacao(
+    503,
+    'porta-indisponivel',
+    'Busca indisponível',
+    'A busca da autorização pela senha não está ligada nesta instalação. Nada foi lido.',
+  );
+
+/** A busca das autorizações pela senha (as contas conferem a guia): a da porta da autorização, ou 503 sem ela. */
 function buscaPorSenha(a: PortaAutorizacaoOperadora): BuscaPorSenha & Pick<PortaAutorizacaoOperadora, 'designacoes'> {
   return {
     designacoes: (c, login) => a.designacoes(c, login),
     autorizacoesPorSenha: temBuscaPorSenha(a)
       ? (c, senhas) => a.autorizacoesPorSenha(c, senhas)
-      : () => Promise.reject(modeloPendente('A busca da autorização pela senha')),
+      : () => Promise.reject(semBuscaPorSenha()),
   };
 }
 

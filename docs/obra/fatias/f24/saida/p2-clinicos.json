@@ -1,0 +1,49 @@
+{
+  "lote": "p2-clinicos",
+  "pedidos": [
+    {
+      "tipo": "lote",
+      "modulo": "api/sadt",
+      "motivo": "As 10 operações de OPERACOES_SADT_PENDENTES dependem do contrato novo (exame por id e versão, setor executante no lugar de prestador e local). Mudança de contrato, web, memória e porta: lote próprio com dois agentes (comum-v4, item 1). Enquanto isso, sadt/porta-propria.ts segue com modelo-pendente só nessas operações."
+    },
+    {
+      "tipo": "lote",
+      "modulo": "api/sus",
+      "motivo": "Faltam cerca de 40 métodos da porta própria sobre a estrutura que já existe (sem DDL): arquivo gerado (proximoArquivo, gravarArquivo, gravarArquivoBpa, gravarArquivoApac, gravarArquivoSisaih, arquivos, arquivo, linhasBpa, linhasApac, linhaBpaDaCompetencia), APAC (incluirApac, mudarApac, apac, paginaApacs, apacsDaCompetencia, atendimentoLaudoApac), AIH (inserirAih, autorizarAih, negarAih, reabrirAih, cancelarAih, fecharAih, aih, aihPorNumero, aihsDasInternacoes, aihsParaApresentar, paginaAihs, itensAih) e retorno do gestor (inserirRetornoSus, aplicarRetornoNaAih, tratarRetornoSus, paginaRetornos, retornoSus, ultimoRetornoDaAih). Não coube no teto deste lote: pede lote próprio (um agente por bloco: arquivo, APAC, AIH, retorno)."
+    },
+    {
+      "tipo": "lote",
+      "modulo": "api/enfermagem",
+      "motivo": "SAE (sae-porta-propria.ts): as 7 gravações (prescrever, suspender, checar e estornar a atividade; terminologia licenciada; receita do enfermeiro e a inativação) seguem com modelo-pendente. O desenho sobre as tabelas existentes está em p-enfermagem.json. Não coube no teto deste lote."
+    },
+    {
+      "tipo": "lote",
+      "modulo": "api/especialidades",
+      "motivo": "Oncologia: publicarProtocolo (protocolo_quimioterapia_droga já tem nome_generico, unidade_dose e administracao), registrarCiclo (tratamento_oncologico com diagnóstico e intenção, já no contrato), validarCiclo, vincularPrescricao, registrarEventoOnco, revogarVersao, mudarAndamentoCiclo, ajustarCiclo, desligarPrescricao e as 8 leituras. Falta também a tela escolher diagnóstico e intenção (comum-v4, item 3). Não coube no teto deste lote."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "pedido_vinculo_profissional_externo",
+      "colunas": [
+        "tentativas_falhas SMALLINT UNSIGNED NOT NULL DEFAULT 0",
+        "bloqueado_ate DATETIME(3) NULL"
+      ],
+      "motivo": "Aplicado em db/migracoes/17_INTG/23_tabelas.sql (fora da lista do lote; ADD COLUMN IF NOT EXISTS): o autocadastro sem conta conta as tentativas e bloqueia, porque a senha do pedido passa à conta na aprovação. Os clientes já criados precisam reaplicar o arquivo.",
+      "situacao": "aplicado"
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "exame_oftalmologico",
+      "colunas": [
+        "conduta VARCHAR(2000) NULL",
+        "medida 'gonioscopia' no CHECK de exame_oftalmologico_valor.medida"
+      ],
+      "motivo": "Hoje a classificação visual vai em achados, a conduta em conclusao e o grau da gonioscopia como medida 'outro' com método 'gonioscopia'. Colunas próprias deixam a leitura sem convenção. Opcional."
+    },
+    {
+      "tipo": "lote",
+      "modulo": "api/manutencao",
+      "motivo": "Contrato: expor a natureza da queixa em vinculosTecnovigDaOs e aceitar a notificação de incidente (id) na abertura pela OS, para o evento adverso ligar a notificação em vez de recusar ('evento-adverso-pela-notificacao'). Paridade da porta em memória: recusar evento adverso e 'os-sem-alerta' como a própria."
+    }
+  ]
+}

@@ -135,9 +135,8 @@ const comAlerta = async (s: ApoiosSuprimentos, sess: SessaoCadastro) =>
 
 const esquemaAtender = z
   .object({
-    requisicao: z
-      .object({ ano: z.number().int(), mes: z.number().int(), doc: z.number().int().positive() })
-      .strict(),
+    /** O id da requisição (requisicao_material). */
+    requisicao: z.number().int().positive().max(2_147_483_647),
     itens: z
       .array(
         z
@@ -468,10 +467,7 @@ export class SuprimentosController {
     const r = await this.porta.relogio(ctx(s));
     const fila = await this.porta.requisicoes(ctx(s), { hoje: r.hoje });
     const x = fila.itens.find(
-      (y) =>
-        y.chave.ano === e.requisicao.ano &&
-        y.chave.mes === e.requisicao.mes &&
-        y.chave.doc === e.requisicao.doc,
+      (y) => y.id === e.requisicao,
     );
     if (!x)
       throw new ErroProblema(

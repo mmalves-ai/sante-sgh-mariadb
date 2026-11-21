@@ -37,7 +37,7 @@ export interface GravadorCcih {
     readonly gramasPorUnidade: number | null;
     readonly agora: string;
     readonly usuario: string;
-  }): Promise<{ criado: boolean }>;
+  }): Promise<{ id: number; criado: boolean }>;
   liberarAntimicrobiano(x: SemHospital<LiberacaoAntimicrobianoNova>): Promise<{ id: number }>;
   revisarAntimicrobiano(
     r: Versionada & {

@@ -1,0 +1,274 @@
+{
+ "tipo_dispositivo_invasivo": [
+  {
+   "codigo": "cvc",
+   "descricao": "Cateter venoso central",
+   "conta_vigilancia_infeccao": true
+  },
+  {
+   "codigo": "sonda_vesical",
+   "descricao": "Sonda vesical de demora",
+   "conta_vigilancia_infeccao": true
+  },
+  {
+   "codigo": "ventilacao_mecanica",
+   "descricao": "Tubo e ventilação mecânica",
+   "conta_vigilancia_infeccao": true
+  }
+ ],
+ "categoria_profissional": [
+  {
+   "codigo": "medico",
+   "descricao": "Médico",
+   "grupo": "medico"
+  },
+  {
+   "codigo": "enfermeiro",
+   "descricao": "Enfermeiro",
+   "grupo": "enfermagem"
+  },
+  {
+   "codigo": "tecnico_enfermagem",
+   "descricao": "Técnico ou auxiliar de enfermagem",
+   "grupo": "enfermagem",
+   "tecnico": true
+  },
+  {
+   "codigo": "fisioterapeuta",
+   "descricao": "Fisioterapeuta",
+   "grupo": "multiprofissional"
+  },
+  {
+   "codigo": "outro",
+   "descricao": "Outro profissional",
+   "grupo": "multiprofissional"
+  }
+ ],
+ "tipo_precaucao": [
+  {
+   "codigo": "contato",
+   "descricao": "Precaução de contato",
+   "exige_avental": true,
+   "exige_luvas": true
+  },
+  {
+   "codigo": "goticulas",
+   "descricao": "Precaução para gotículas",
+   "exige_mascara_cirurgica": true
+  },
+  {
+   "codigo": "aerossois",
+   "descricao": "Precaução para aerossóis",
+   "exige_quarto_privativo": true,
+   "exige_mascara_n95": true,
+   "exige_pressao_negativa": true
+  }
+ ],
+ "motivo_bloqueio_leito": [
+  {
+   "codigo": "isolamento",
+   "descricao": "Isolamento de paciente vizinho",
+   "exige_previsao_fim": false
+  }
+ ],
+ "categoria_risco_institucional": [
+  {
+   "codigo": "assistencial",
+   "descricao": "Assistencial"
+  },
+  {
+   "codigo": "ocupacional",
+   "descricao": "Ocupacional"
+  },
+  {
+   "codigo": "ambiental",
+   "descricao": "Ambiental e predial"
+  },
+  {
+   "codigo": "tecnologico",
+   "descricao": "Tecnologia e equipamentos"
+  },
+  {
+   "codigo": "financeiro",
+   "descricao": "Financeiro"
+  },
+  {
+   "codigo": "legal",
+   "descricao": "Legal e regulatório"
+  },
+  {
+   "codigo": "imagem",
+   "descricao": "Imagem institucional"
+  }
+ ],
+ "canal_ouvidoria": [
+  {
+   "codigo": "presencial",
+   "descricao": "Presencial",
+   "tipo_canal": "presencial",
+   "ordem": 1
+  },
+  {
+   "codigo": "telefone",
+   "descricao": "Telefone",
+   "tipo_canal": "telefone",
+   "ordem": 2
+  },
+  {
+   "codigo": "email",
+   "descricao": "E-mail",
+   "tipo_canal": "email",
+   "ordem": 3
+  },
+  {
+   "codigo": "site",
+   "descricao": "Site ou portal",
+   "tipo_canal": "site",
+   "ordem": 4
+  },
+  {
+   "codigo": "caixa",
+   "descricao": "Caixa de sugestões",
+   "tipo_canal": "urna",
+   "ordem": 5
+  },
+  {
+   "codigo": "pesquisa",
+   "descricao": "Pesquisa de satisfação",
+   "tipo_canal": "outro",
+   "ordem": 6
+  },
+  {
+   "codigo": "rede_social",
+   "descricao": "Rede social",
+   "tipo_canal": "rede_social",
+   "ordem": 7
+  },
+  {
+   "codigo": "portal",
+   "descricao": "Portal do paciente",
+   "tipo_canal": "site",
+   "ordem": 8
+  },
+  {
+   "codigo": "halai",
+   "descricao": "Atendimento digital",
+   "tipo_canal": "mensagem",
+   "ordem": 9
+  }
+ ],
+ "tipo_manifestacao_ouvidoria": [
+  {
+   "codigo": "reclamacao",
+   "descricao": "Reclamação",
+   "natureza": "reclamacao"
+  },
+  {
+   "codigo": "elogio",
+   "descricao": "Elogio",
+   "natureza": "elogio"
+  },
+  {
+   "codigo": "sugestao",
+   "descricao": "Sugestão",
+   "natureza": "sugestao"
+  },
+  {
+   "codigo": "solicitacao",
+   "descricao": "Solicitação",
+   "natureza": "solicitacao"
+  },
+  {
+   "codigo": "informacao",
+   "descricao": "Pedido de informação",
+   "natureza": "informacao"
+  },
+  {
+   "codigo": "denuncia",
+   "descricao": "Denúncia",
+   "natureza": "denuncia"
+  }
+ ],
+ "motivo_encerramento_manifestacao": [
+  {
+   "codigo": "resolvida",
+   "descricao": "Resolvida",
+   "resultado": "resolvida"
+  },
+  {
+   "codigo": "improcedente",
+   "descricao": "Improcedente",
+   "resultado": "improcedente"
+  },
+  {
+   "codigo": "sem_retorno",
+   "descricao": "Sem retorno do manifestante",
+   "resultado": "sem_retorno"
+  },
+  {
+   "codigo": "encaminhada_externo",
+   "descricao": "Encaminhada a órgão externo",
+   "resultado": "encaminhada_externo"
+  },
+  {
+   "codigo": "outro",
+   "descricao": "Outro",
+   "resultado": "outro"
+  }
+ ],
+ "fator_contribuinte": [
+  {
+   "codigo": "paciente",
+   "descricao": "Fatores do paciente",
+   "categoria": "paciente"
+  },
+  {
+   "codigo": "tarefa",
+   "descricao": "Fatores da tarefa e da tecnologia",
+   "categoria": "tarefa"
+  },
+  {
+   "codigo": "profissional",
+   "descricao": "Fatores individuais do profissional",
+   "categoria": "profissional"
+  },
+  {
+   "codigo": "equipe",
+   "descricao": "Fatores da equipe",
+   "categoria": "equipe"
+  },
+  {
+   "codigo": "ambiente",
+   "descricao": "Ambiente de trabalho",
+   "categoria": "ambiente"
+  },
+  {
+   "codigo": "organizacao",
+   "descricao": "Fatores organizacionais e de gestão",
+   "categoria": "organizacao"
+  },
+  {
+   "codigo": "externo",
+   "descricao": "Contexto institucional externo",
+   "categoria": "externo"
+  }
+ ],
+ "categoria_auditoria_interna": [
+  {
+   "codigo": "ona",
+   "descricao": "Acreditação (Manual OPSS)"
+  },
+  {
+   "codigo": "rdc",
+   "descricao": "Norma sanitária (RDC)"
+  },
+  {
+   "codigo": "interno",
+   "descricao": "Padrão interno"
+  },
+  {
+   "codigo": "outro",
+   "descricao": "Outro referencial"
+  }
+ ]
+}

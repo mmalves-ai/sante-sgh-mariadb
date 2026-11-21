@@ -162,6 +162,9 @@ export interface NovoCicloOncologico extends PacienteInternado, Autoria {
   /** O tratamento (curso) do ciclo; 1 no primeiro; o curso novo leva o motivo. */
   readonly curso?: number;
   readonly motivoCurso?: string | null;
+  /** O diagnóstico oncológico e a intenção que abrem o tratamento (exigidos quando o ciclo abre um tratamento). */
+  readonly diagnostico?: number | null;
+  readonly intencao?: number | null;
 }
 
 export interface VinculoPrescricaoCiclo extends Autoria {

@@ -89,6 +89,10 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
         [ids.est, ids.outroEst],
       );
       await e.executar(
+        'DELETE v FROM plano_refeicao_acompanhante_evento v JOIN plano_refeicao_acompanhante p ON p.id = v.plano_refeicao_acompanhante_id WHERE p.estabelecimento_id IN (?, ?)',
+        [ids.est, ids.outroEst],
+      );
+      await e.executar(
         'DELETE r FROM plano_refeicao_acompanhante_refeicao r JOIN plano_refeicao_acompanhante p ON p.id = r.plano_refeicao_acompanhante_id WHERE p.estabelecimento_id IN (?, ?)',
         [ids.est, ids.outroEst],
       );
@@ -423,10 +427,14 @@ describe.skipIf(SEM_BANCO)('porta própria da nutrição (MariaDB, cliente f22_o
   it('recusas: outro estabelecimento, sem usuário e modelo pendente (nada gravado)', async () => {
     expect(await recusada(porta.gravarSgh(outro, trilha('triagem_nutricional'), (g) => g.triar(triagem(ids.internacao))))).toBe('internacao-inexistente');
     expect(await recusada(porta.gravarSgh({ ...ctx, usuario: null }, trilha('triagem_nutricional'), (g) => g.triar(triagem(ids.internacao))))).toBe('sem-usuario');
-    // O histórico de alteração do plano do acompanhante aguarda a tabela de eventos (pedido do lote).
-    expect(await recusada(porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante'), (g) => g.registrarAlteracao({
-      tabela: 'plano_refeicao_acompanhante', id: 1, evento: 'alterada', antes: null, depois: null, motivo: 'x', usuario: 'x',
-    })))).toBe('modelo-pendente');
+    // O histórico do plano do acompanhante grava no estabelecimento do plano; de outro estabelecimento, recusa.
+    const plano = await contar('SELECT MAX(id) AS q FROM plano_refeicao_acompanhante WHERE estabelecimento_id = ?', [ids.est]);
+    expect(plano).toBeGreaterThan(0);
+    const alt = { tabela: 'plano_refeicao_acompanhante' as const, id: plano, evento: 'alterada' as const, antes: '{"dieta":"A"}', depois: '{"dieta":"B"}', motivo: 'troca', usuario: 'x' };
+    expect(await recusada(porta.gravarSgh(outro, trilha('plano_refeicao_acompanhante_evento'), (g) => g.registrarAlteracao(alt)))).toBe('acompanhante-inexistente');
+    expect(await recusada(porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante_evento'), (g) => g.registrarAlteracao({ ...alt, evento: 'etiqueta-emitida' })))).toBe('evento-invalido');
+    const ev = await porta.gravarSgh(ctx, trilha('plano_refeicao_acompanhante_evento'), (g) => g.registrarAlteracao(alt));
+    expect(await contar("SELECT COUNT(*) AS q FROM plano_refeicao_acompanhante_evento WHERE id = ? AND evento = 'alterado' AND motivo = 'troca' AND usuario_id IS NOT NULL", [ev])).toBe(1);
     expect(await contar('SELECT COUNT(*) AS q FROM triagem_nutricional WHERE estabelecimento_id = ?', [ids.outroEst])).toBe(0);
   });
 });

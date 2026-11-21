@@ -286,6 +286,7 @@ export const mensagensSadt = {
     conselho: 'Conselho',
     uf: 'UF',
     numero: 'Número no conselho',
+    cpf: 'CPF',
     senha: 'Senha',
     codigo: 'Código do aplicativo autenticador',
     laudos: 'Laudos liberados',

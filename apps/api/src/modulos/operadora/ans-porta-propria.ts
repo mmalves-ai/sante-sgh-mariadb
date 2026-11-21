@@ -21,7 +21,8 @@
 // Ressarcimento ao SUS: o aviso gera a cobrança (cobranca_ressarcimento_sus: ofício, prazo da impugnação) e um
 // atendimento por item (ressarcimento_sus_atendimento), ligados ao envio e aos itens; a GRU paga fica na cobrança; a
 // decisão de cada atendimento marca o atendimento (impugnado ou devido) e abre a impugnação em elaboração.
-// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos), GRU da TPS,
+// A GRU da TPS (Taxa de Saúde Suplementar) fica no próprio envio da obrigação `tps` (número, valor, pagamento).
+// Pendente (pedido ao orquestrador, ver a saída do lote): arquivo do envio (armazenamento de arquivos),
 // identificação dos beneficiários do aviso, pendências do SIB, bases do SIP, das contraprestações do DIOPS e do
 // monitoramento respondem 501 (falha fechada).
 import { MOTIVOS_IMPUGNACAO_SUS, type MotivoImpugnacaoSus } from '@sgh/contratos';
@@ -200,7 +201,8 @@ const SELECT_ENVIO = `
            AS retorno_resumo,
          a.nome_original AS arquivo_nome, a.tamanho_bytes AS arquivo_bytes, a.hash_sha256 AS arquivo_hash,
          cr.numero_oficio AS aviso_numero, cr.oficio_em AS aviso_recebido_em, cr.prazo_impugnacao AS aviso_prazo,
-         cr.numero_gru AS gru_numero, cr.pago_em AS gru_pago_em, cr.valor_pago AS gru_valor_pago
+         COALESCE(cr.numero_gru, e.numero_gru) AS gru_numero, COALESCE(cr.pago_em, e.gru_paga_em) AS gru_pago_em,
+         COALESCE(cr.valor_pago, e.valor_pago_gru) AS gru_valor_pago
     FROM envio_ans e
     JOIN operadora_saude o ON o.id = e.operadora_saude_id
     LEFT JOIN usuario u ON u.id = COALESCE(e.gerado_por_usuario_id, e.criado_por)
@@ -1051,7 +1053,7 @@ async function envioDoRessarcimento(tx: TxOperacao, est: number, id: number, ver
 
 /**
  * O pagamento da GRU: no ressarcimento ao SUS, a cobrança do aviso guarda a GRU, o valor e a data do pagamento (paga);
- * a GRU da TPS ainda não tem onde ficar no modelo (pedido registrado).
+ * na TPS, o próprio envio da obrigação guarda a GRU e o pagamento (uma vez só).
  */
 async function pagarGru(
   tx: TxOperacao,
@@ -1059,7 +1061,19 @@ async function pagarGru(
   a: { id: number; versao: number; gru: string; valor: number; data: string },
 ): Promise<{ id: number; versao: number }> {
   const e = await envioDoRessarcimento(tx, est, a.id, a.versao);
-  if (txt(e['obrigacao']) !== 'ressarcimento_sus') return pendente('Pagamento da GRU da TPS');
+  if (txt(e['obrigacao']) === 'tps') {
+    if (e['numero_gru'] !== null && e['numero_gru'] !== undefined)
+      throw recusa('situacao-nao-permite', 'A GRU desta TPS já foi registrada.');
+    const versao = await tx.alterar('envio_ans', a.id, a.versao, {
+      numero_gru: caber(a.gru, 30, 'gru'),
+      valor_gru: a.valor,
+      gru_paga_em: a.data,
+      valor_pago_gru: a.valor,
+    });
+    return { id: a.id, versao };
+  }
+  if (txt(e['obrigacao']) !== 'ressarcimento_sus')
+    throw recusa('situacao-nao-permite', 'Só a TPS e o ressarcimento ao SUS têm GRU.');
   const cobranca = numOuNulo(e['cobranca_ressarcimento_sus_id']);
   if (cobranca === null)
     throw recusa('aviso-sem-cobranca', 'O envio do ressarcimento não tem o aviso registrado.');

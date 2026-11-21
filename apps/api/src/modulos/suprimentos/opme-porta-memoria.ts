@@ -91,7 +91,7 @@ const NFS_SINTETICAS = new Map<string, number>([['2026/10/55', 7001]]);
 /** Uma saída sintética do lote L-77 feita por outro caminho do estoque (o recall tem de achá-la). */
 const SAIDAS_LOTE_SINTETICAS: readonly (SaidaLoteOpme & { lote: string })[] = [
   {
-    saida: { ano: 2026, mes: 10, doc: 7_001 },
+    saida: { id: 7_001, ano: 2026, mes: 10, doc: 7_001 },
     data: '2026-10-20',
     item: 950001,
     lote: 'L-77',
@@ -229,7 +229,7 @@ export class PortaOpmeMemoria implements PortaOpme {
       itemNome: item.nome,
       quantidade: it.quantidade,
       devolvida: 0,
-      saida: { ano, mes, doc },
+      saida: { id: doc, ano, mes, doc },
       lancamento: 900_000 + doc,
       conta,
       lote: o.lote,
@@ -265,7 +265,8 @@ export class PortaOpmeMemoria implements PortaOpme {
     if (!c)
       throw recusa('consumo-inexistente', 'O consumo de OPME não existe mais.', { campos: ['consumo'] });
     // A mesma conferência do executor (M28): a devolução volta ao local de onde a saída partiu.
-    if (c.saida.ano !== e.saida.ano || c.saida.mes !== e.saida.mes || c.saida.doc !== e.saida.doc)
+    // Na memória, o id do documento da saída é o próprio número (registrarSaida devolve id = doc).
+    if (c.saida.id !== e.saida)
       throw recusa('saida-inexistente', 'A saída a devolver não existe ou não foi consolidada.', {
         campos: ['saida'],
       });

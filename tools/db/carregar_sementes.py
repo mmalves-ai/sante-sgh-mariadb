@@ -24,6 +24,12 @@ RAIZ = Path(__file__).resolve().parents[2]
 SQL = RAIZ / "tools/db/sql.sh"
 PASTA = RAIZ / "db/sementes"
 NOME = re.compile(r"[a-z][a-z0-9_]{0,63}")
+# Chave natural das tabelas que não usam `codigo` (o padrão).
+CHAVE = {"graduacao_oftalmologica": "sigla"}
+
+
+def chave(tabela: str) -> str:
+    return CHAVE.get(tabela, "codigo")
 
 
 def q(texto: str) -> str:
@@ -55,7 +61,7 @@ def ler_sementes() -> list[tuple[str, str, list[dict]]]:
             if not NOME.fullmatch(tabela) or tabela in vistas:
                 raise SystemExit(f"sementes: {arq.name}: tabela inválida ou repetida: {tabela}")
             vistas.add(tabela)
-            codigos = [l.get("codigo") for l in linhas]
+            codigos = [l.get(chave(tabela)) for l in linhas]
             if not linhas or any(not isinstance(c, str) or not c for c in codigos) or len(set(codigos)) != len(codigos):
                 raise SystemExit(f"sementes: {arq.name}: {tabela}: linha sem código ou código repetido")
             for l in linhas:
@@ -88,8 +94,8 @@ def conferir_modelo(banco: str, sementes) -> None:
         sobra = sorted({c for l in linhas for c in l} - cols[t])
         if sobra:
             erros.append(f"{arq}: {t}: colunas fora do modelo: {', '.join(sobra)}")
-        if not {"codigo", "criado_em"} <= cols[t]:
-            erros.append(f"{arq}: {t}: sem codigo ou criado_em")
+        if not {chave(t), "criado_em"} <= cols[t]:
+            erros.append(f"{arq}: {t}: sem {chave(t)} ou criado_em")
     if erros:
         raise SystemExit("sementes: " + "; ".join(erros))
 
@@ -108,7 +114,7 @@ def montar_sql(sementes) -> str:
 def contar(banco: str, sementes) -> dict[str, int]:
     """Por tabela, quantos códigos das sementes existem no banco."""
     consulta = " union all ".join(
-        f"select {q(t)}, count(*) from {t} where codigo in ({','.join(q(l['codigo']) for l in linhas)})"
+        f"select {q(t)}, count(*) from {t} where {chave(t)} in ({','.join(q(l[chave(t)]) for l in linhas)})"
         for _, t, linhas in sementes)
     r = sql(banco, None, "-N", "-e", consulta)
     if r.returncode:

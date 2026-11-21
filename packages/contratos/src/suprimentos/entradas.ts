@@ -33,11 +33,6 @@ export const esquemaMotivoSuprimentos = textoCp1252(250)
   .overwrite((t) => t.replace(/\s+/g, ' ').trim())
   .pipe(z.string().min(10, 'Escreva o motivo (ao menos 10 caracteres).'));
 
-/** Um documento de estoque pela chave natural (ano, mês e número). */
-export const esquemaChaveDocumento = z
-  .object({ ano: z.number().int().min(2000).max(2100), mes: z.number().int().min(1).max(12), doc: id })
-  .strict();
-export type ChaveDocumento = z.infer<typeof esquemaChaveDocumento>;
 
 /** O lote de um item rastreável (lote e validade; a quantidade daquele lote). */
 export const esquemaLoteItem = z
@@ -75,8 +70,8 @@ export const esquemaRegistrarSaida = z
     /** Destino 5: o terceiro do cadastro de terceiros (código). */
     terceiro: id.optional(),
     observacao: livre(60).optional(),
-    /** Atendimento de requisição: o documento da requisição (as quantidades atendidas nos itens). */
-    requisicao: esquemaChaveDocumento.optional(),
+    /** Atendimento de requisição: o id da requisição (as quantidades atendidas nos itens). */
+    requisicao: id.optional(),
     itens: z.array(esquemaItemSaida).min(1, 'Inclua ao menos um item.').max(200),
     /** M46 (etapa 3): o consumo de OPME em sala (o rastreio vai na mesma transação; só a paciente internado, um item). */
     opme: esquemaOpmeNaSaida.optional(),
@@ -133,7 +128,8 @@ export const esquemaItemDevolucao = z
 
 export const esquemaRegistrarDevolucao = z
   .object({
-    saida: esquemaChaveDocumento,
+    /** O id do documento da saída devolvida. */
+    saida: id,
     /** Local de estoque que recebe a devolução. */
     local,
     observacao: livre(60).optional(),
@@ -335,8 +331,8 @@ export type ReabrirMesEntrada = z.infer<typeof esquemaReabrirMes>;
 export const esquemaReporKit = z
   .object({
     kit: id,
-    /** A saída de reposição já gravada (o documento) e os itens do kit repostos. */
-    saida: esquemaChaveDocumento,
+    /** A saída de reposição já gravada (o id do documento) e os itens do kit repostos. */
+    saida: id,
     itens: z
       .array(z.object({ itemKit: id, lancamentoSaida: id }).strict())
       .min(1)
@@ -348,7 +344,8 @@ export type ReporKitEntrada = z.infer<typeof esquemaReporKit>;
 export const esquemaDesconsolidar = z
   .object({
     tipo: z.enum(['saida', 'devolucao', 'transferencia', 'nota']),
-    documento: esquemaChaveDocumento,
+    /** O id do documento (na nota, o id da nota de entrada). */
+    documento: id,
     motivo: esquemaMotivoSuprimentos,
   })
   .strict();

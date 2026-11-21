@@ -21,7 +21,7 @@ export interface EtapaOpmeLida {
   readonly validade: string | null;
   readonly pedido: { ano: number; doc: number } | null;
   readonly nf: { ano: number; mes: number; doc: number } | null;
-  readonly saida: { ano: number; mes: number; doc: number } | null;
+  readonly saida: { id: number; ano: number; mes: number; doc: number } | null;
   readonly lancamento: number | null;
   readonly consumo: number | null;
   readonly observacao: string | null;
@@ -80,7 +80,7 @@ export interface ConsumoOpme {
   readonly itemNome: string | null;
   readonly quantidade: number;
   readonly devolvida: number;
-  readonly saida: { ano: number; mes: number; doc: number };
+  readonly saida: { id: number; ano: number; mes: number; doc: number };
   readonly lancamento: number;
   readonly conta: number;
   readonly lote: string | null;
@@ -105,7 +105,7 @@ export interface EtiquetaOpme {
 
 export interface ConsumoOpmeRegistrado {
   readonly consumo: number;
-  readonly saida: { ano: number; mes: number; doc: number };
+  readonly saida: { id: number; ano: number; mes: number; doc: number };
   readonly lancamento: number;
   readonly etiqueta: EtiquetaOpme;
   readonly repetida: boolean;
@@ -172,7 +172,7 @@ export interface ExpostoOpme {
   readonly cirurgiao: number | null;
   readonly quantidade: number;
   readonly devolvida: number;
-  readonly saida: { ano: number; mes: number; doc: number };
+  readonly saida: { id: number; ano: number; mes: number; doc: number };
   readonly lote: string | null;
   readonly serie: string | null;
   readonly registroAnvisa: string;
@@ -184,7 +184,7 @@ export interface ExpostoOpme {
  * do estoque durante a coexistência: o atendimento e o paciente da saída, para o recall.
  */
 export interface SaidaLoteOpme {
-  readonly saida: { ano: number; mes: number; doc: number };
+  readonly saida: { id: number; ano: number; mes: number; doc: number };
   readonly data: string | null;
   readonly item: number;
   /** O atendimento da saída (0: a saída não é a paciente). */

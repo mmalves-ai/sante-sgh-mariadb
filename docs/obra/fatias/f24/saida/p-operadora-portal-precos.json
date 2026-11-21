@@ -59,6 +59,11 @@
    "tipo": "implementacao",
    "arquivo": "apps/api/src/modulos/sadt/porta-propria.ts (acessoPorId)",
    "motivo": "Ligar acessoPorId (login e conferência da senha atual do médico externo) à credencial_usuario do usuário da conta (conta_portal_profissional_externo.usuario_id), para o login enxergar a senha trocada pelo portal. Hoje recusa como pendente e a gravação não tem leitor no banco próprio."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "apps/api/src/modulos/precos/importacoes.controller.ts (aprovar, linhas 258-283) e apps/api/src/modulos/precos/servico.ts (aplicarReajuste)",
+   "motivo": "A publicação da carga roda em duas transações: aplicarReajuste grava o lote e os preços, e só depois fonte.mudarSituacaoCarga marca a carga 'publicada'. A segunda pode recusar (conflito-concorrente numa aprovação simultânea, sem-usuario, lote-inexistente) com o reajuste já gravado; a carga fica 'comparada' e nova aprovação reaplica o reajuste. O controller já confere situação e versão antes, mas não sob trava. Correção: aplicar o reajuste e marcar a carga na mesma transação do Executor (aplicarReajuste aceitar o escritor aberto, opção `escritor` do Executor, e a marcação da carga rodar sob o mesmo SAVEPOINT), ou travar a carga (SELECT ... FOR UPDATE da versão) dentro da transação do reajuste. A porta (fonte-propria.ts) já expõe mudarSituacaoCarga pela versão; falta o lado do servico/controller, fora deste lote."
   }
  ]
 }

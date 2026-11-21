@@ -71,15 +71,6 @@ export const marcadores = (n: number): string => Array.from({ length: n }, () =>
 export const trechoLike = (t: string): string => `%${t.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
 export const inicioLike = (t: string): string => `${t.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
 
-/** Recurso sem modelo no banco do cliente (pedido registrado): 501, nada lido nem gravado. */
-export const modeloPendente = (oque: string): ErroOperacao =>
-  new ErroOperacao(
-    501,
-    'modelo-pendente',
-    'Recurso em construção',
-    `${oque}: o modelo do banco ainda não tem onde gravar. Nada foi gravado.`,
-  );
-
 /** Cadastro básico do cliente que falta (domínio sem a linha pedida): 409 com o motivo. */
 export const dominioAusente = (dominio: string, campo: string): ErroOperacao =>
   recusa('dominio-nao-cadastrado', `O cadastro de ${dominio} do cliente não tem o código informado.`, {

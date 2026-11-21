@@ -3,7 +3,7 @@
 // outra cancelada, e os cadastros (tipo de parto, tipo de protocolo, exames oftalmológicos).
 // Contrato de efeito do partograma: o primeiro registro abre o partograma do atendimento (com o responsável) e numera
 // o registro; o segundo usa o mesmo partograma; a trilha vai na mesma transação. Recusas: outro estabelecimento,
-// paciente divergente, valor fora da faixa (CHECK do banco) e as gravações que esperam o modelo ('modelo-pendente').
+// paciente divergente, valor fora da faixa (CHECK do banco) e as gravações que ainda esperam o modelo.
 // A mesma bateria de leitura do partograma roda na memória e no banco. SGH_NUCLEO_SEM_BANCO=1 pula este arquivo.
 import { type ContextoNucleo, type Escritor, ErroOperacao, NucleoProprio } from '@sgh/nucleo';
 import { conferirPartograma } from '@sgh/dominio-pep';
@@ -80,6 +80,12 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
   const limpar = (e: Escritor) =>
     (async () => {
       await e.executar('DELETE FROM registro_nascimento WHERE estabelecimento_id = ?', [ids.est]);
+      for (const t of ['exame_oftalmologico_valor', 'exame_oftalmologico_item'])
+        await e.executar(
+          `DELETE x FROM ${t} x JOIN exame_oftalmologico o ON o.id = x.exame_oftalmologico_id WHERE o.estabelecimento_id IN (?, ?)`,
+          [ids.est, ids.outroEst],
+        );
+      await e.executar('DELETE FROM exame_oftalmologico WHERE estabelecimento_id IN (?, ?)', [ids.est, ids.outroEst]);
       await e.executar(
         'DELETE r FROM partograma_registro r JOIN partograma p ON p.id = r.partograma_id WHERE p.estabelecimento_id = ?',
         [ids.est],
@@ -394,27 +400,40 @@ describe.skipIf(SEM_BANCO)('porta própria das especialidades (MariaDB, cliente 
     expect(lidos[1]!.liquido).toBe('meconial');
     expect(lidos[1]!.alertas.join(' ')).toMatch(/bradicardia/);
     expect(lidos[0]!.por).toBe('l0206.teste');
-    // Recusas: outro estabelecimento, paciente divergente, valor fora da faixa (CHECK), modelo pendente.
+    // Recusas: outro estabelecimento, paciente divergente, valor fora da faixa (CHECK).
     const recusa = async (c: ContextoNucleo, x: NovoPontoPartograma) =>
       codigoDe(await porta.gravarSgh(c, trilha, (g) => g.registrarPartograma(x)).catch((e: unknown) => e));
     expect(await recusa({ ...ctx, estabelecimento: ids.outroEst }, ponto())).toBe('registro-inexistente');
     expect(await recusa(ctx, ponto({ paciente: ids.paciente + 999_999 }))).toBe('paciente-divergente');
     expect(await recusa(ctx, ponto({ dilatacaoCm: 12 }))).not.toBe('');
-    const pend = await porta
-      .gravarSgh(ctx, trilha, (g) =>
-        g.registrarExame({
-          ...ponto(),
-          od: { avSc: null, avCc: null, pio: null, gonio: null },
-          oe: { avSc: null, avCc: null, pio: null, gonio: null },
-          metodoPio: null,
-          classificacao: 'normal',
-          alertas: [],
-          conduta: null,
-          itens: [],
-        }),
-      )
-      .catch((e: unknown) => e);
-    expect(codigoDe(pend)).toBe('modelo-pendente');
+    // Exame oftalmológico consolidado: cabeçalho, medidas por olho e itens por tipo; lido pela internação e só no
+    // estabelecimento dela.
+    const exame = {
+      ...ponto(),
+      od: { avSc: 0.5, avCc: 1, pio: 14, gonio: 3 },
+      oe: { avSc: null, avCc: 0.8, pio: 22, gonio: null },
+      metodoPio: null,
+      classificacao: 'normal' as const,
+      alertas: ['PIO elevada no olho esquerdo'],
+      conduta: 'Retorno em 30 dias',
+      itens: [{ exame: ids.exameOft, lado: 'ao' as const, resultado: 'Sem alterações (sintético)' }],
+    };
+    const ex = await porta.gravarSgh(ctx, trilha, (g) => g.registrarExame(exame));
+    expect(await porta.exames(ctx, ids.internacao)).toMatchObject([
+      {
+        id: ex,
+        internacao: ids.internacao,
+        od: { avSc: 0.5, avCc: 1, pio: 14, gonio: 3 },
+        oe: { avSc: null, avCc: 0.8, pio: 22, gonio: null },
+        classificacao: 'normal',
+        alertas: ['PIO elevada no olho esquerdo'],
+        conduta: 'Retorno em 30 dias',
+        itens: [{ exame: ids.exameOft, lado: 'ao', resultado: 'Sem alterações (sintético)' }],
+      },
+    ]);
+    expect(await porta.exames({ ...ctx, estabelecimento: ids.outroEst }, ids.internacao)).toEqual([]);
+    expect(codigoDe(await porta.gravarSgh({ ...ctx, estabelecimento: ids.outroEst }, trilha, (g) => g.registrarExame(exame)).catch((e: unknown) => e))).toBe('registro-inexistente');
+    expect(codigoDe(await porta.gravarSgh(ctx, trilha, (g) => g.registrarExame({ ...exame, itens: [{ exame: ids.exameOft + 999_999, lado: 'od', resultado: 'x' }] })).catch((e: unknown) => e))).toBe('tipo-exame-inexistente');
     expect((await porta.partograma(ctx, ids.internacao)).length).toBe(2);
   });
 

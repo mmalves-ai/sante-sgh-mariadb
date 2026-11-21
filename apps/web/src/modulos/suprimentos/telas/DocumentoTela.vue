@@ -34,7 +34,7 @@ async function desfazer(): Promise<void> {
   erro.value = null;
   try {
     const r = await desconsolidar(
-      { tipo: tipo.value, documento: chave.value, motivo: motivo.value },
+      { tipo: tipo.value, documento: doc.data.value?.id, motivo: motivo.value },
       novaChave('desconsolidar'),
     );
     mensagem.value = r.mensagem;

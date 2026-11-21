@@ -1,0 +1,30 @@
+{
+ "lote": "p2-operadora-precos",
+ "pedidos": [
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "packages/nucleo (porta de armazenamento de arquivos, ADR 0004)",
+   "motivo": "Não existe ainda a porta de armazenamento (guardar, ler, existe, reter até, verificar) nem o adaptador local (ARQUIVOS_RAIZ). Sem ela seguem 501: arquivo do envio à ANS (ans-porta-propria.ts), anexos da resposta do prestador (autorizacao-porta-propria.ts: anexoDoComplemento e responderComplementoPortal; atendimento-porta-propria.ts: anexo e responderInteracaoPrestador). As tabelas arquivo e pedido_autorizacao_plano_anexo já existem."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/operadora/atendimento-porta-propria.ts (portal do prestador)",
+   "motivo": "Entrada, criação, alteração, reemissão, ativação, troca de credencial e tentativas do portal do prestador dependem da identidade no módulo de administração (credencial_usuario pela conta do portal). Lote próprio."
+  },
+  {
+   "tipo": "implementacao",
+   "arquivo": "apps/api/src/modulos/operadora/ans-porta-propria.ts (bases das obrigações)",
+   "motivo": "Construção de leituras não feita nesta etapa por teto de turnos: pendências do SIB (complemento_sib_beneficiario já existe), base do SIP e vigência dos procedimentos, base do DIOPS (contraprestações), base do monitoramento TISS e identificação dos beneficiários do ressarcimento ao SUS. Cada uma pede um agente com a fatia das tabelas de origem (contas recebidas, eventos, envio_ans_item_procedimento)."
+  },
+  {
+   "tipo": "decisao",
+   "campo": "senhaObrigatoria (contrato do convênio)",
+   "motivo": "Recusa agora 409 decisao-pendente (DP-33: significado dos valores 1 e 4). Ao decidir, vira coluna booleana ou domínio em fonte_pagadora."
+  },
+  {
+   "tipo": "codigo-compartilhado",
+   "arquivo": "apps/api/src/modulos/precos/fonte-propria.ts (preco.reajustar)",
+   "motivo": "A aprovação da importação chama servico.aplicarReajuste (operação preco.reajustar), que a fonte própria ainda não libera (operacao-nao-liberada). A carga já grava, lê, rejeita e publica com o lote; falta o reajuste pelo Executor para a aprovação fechar de ponta a ponta. Fora do modelo-pendente; etapa do reajuste."
+  }
+ ]
+}

@@ -5,6 +5,7 @@
 // dele); o exame do catálogo é o ID do cadastro de exames. Data e hora gravadas vêm do relógio do banco.
 import { z } from 'zod';
 import { textoCp1252 } from '../texto-cp1252.js';
+import { cpfValido, somenteDigitos } from '../validacao/cpf.js';
 import { CODIGOS_ESTADO_AMOSTRA, CODIGOS_MOTIVO_REJEICAO, CODIGOS_SETOR_SADT } from './vocabulario.js';
 
 const id = z.number().int().positive().max(2_147_483_647);
@@ -384,6 +385,11 @@ export const esquemaAutocadastroMedico = z
     conselho: z.enum(['CRM']),
     uf: z.string().regex(/^[A-Z]{2}$/),
     numero: z.string().regex(/^\d{1,10}$/),
+    /** CPF do médico (com ou sem máscara; vira 11 dígitos com os verificadores conferidos). */
+    cpf: z
+      .string()
+      .transform((v) => somenteDigitos(v))
+      .refine((v) => cpfValido(v), 'CPF inválido.'),
     email: z.string().trim().toLowerCase().email().max(100),
     senha: z.string().min(10).max(128),
     aceiteTermo: z.literal(true),

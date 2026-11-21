@@ -224,7 +224,7 @@ describe('requisição, saída, devolução e transferência', () => {
     expect(autorizada.autorizacao).toMatchObject({ por: 'SINT.SUPERVISOR.ESTOQUE' });
     expect((await post(sup, rota, {})).json().detail).toMatch(/já foi autorizada/);
     const at = await post(s, '/suprimentos/requisicoes/atender', {
-      requisicao: req.chave,
+      requisicao: req.id,
       itens: [
         { seq: 1, item: 5001, quantidade: 2 },
         { seq: 2, item: 5002, quantidade: 0 },
@@ -303,7 +303,7 @@ describe('requisição, saída, devolução e transferência', () => {
     expect(pac.itens[0].lote).toBe(lotes[0].lote);
     const l = det.itensDetalhe[0];
     const maior = await post(s, '/suprimentos/devolucoes', {
-      saida: { ano, mes, doc },
+      saida: r.json().ids.id,
       local: 15,
       itens: [
         {
@@ -316,7 +316,7 @@ describe('requisição, saída, devolução e transferência', () => {
     });
     expect(maior.json().detail).toMatch(/Devolução maior que a saída/);
     const dev = await post(s, '/suprimentos/devolucoes', {
-      saida: { ano, mes, doc },
+      saida: r.json().ids.id,
       local: 15,
       itens: [
         {

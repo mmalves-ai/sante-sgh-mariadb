@@ -50,7 +50,6 @@ import {
 } from '@sgh/contratos';
 import {
   type ContextoNucleo,
-  ErroOperacao,
   type Executor,
   garantirSequencia,
   type Leitor,
@@ -93,6 +92,13 @@ export type NucleoManutencao = Pick<NucleoProprio, 'lerSomente' | 'criarExecutor
 
 type Linha = Record<string, unknown>;
 type L = Pick<Leitor, 'consultar' | 'uma'>;
+
+/** Natureza da queixa no modelo próprio, pelo tipo escolhido na OS. */
+const NATUREZA_QUEIXA = {
+  queixaTecnica: 'queixa_tecnica',
+  eventoAdverso: 'evento_adverso',
+  alertaSanitario: 'alerta_sanitario',
+} as const;
 
 const TETO = 500;
 const TETO_LISTA = 200;
@@ -1766,15 +1772,6 @@ function gravador(
       return { versao, geradas };
     },
     abrirQueixaDaOs: async (x) => {
-      // Evento adverso e alerta sanitário têm notificação e prazo próprios: sem estrutura que os distinga da queixa
-      // técnica no banco, recusam em vez de virar "falha de funcionamento" (pedido de DDL do lote).
-      if (x.tipo !== 'queixaTecnica')
-        throw new ErroOperacao(
-          409,
-          'modelo-pendente',
-          'Recurso aguardando o modelo do banco',
-          `A abertura de ${x.tipo === 'eventoAdverso' ? 'evento adverso' : 'alerta sanitário'} pela OS aguarda o mapeamento para o modelo próprio do banco.`,
-        );
       const [o] = await tx.consultarParaAtualizar(
         `SELECT o.id, o.equipamento_saude_id, e.fabricante_id, e.setor_funcional_id
            FROM ordem_servico_manutencao o LEFT JOIN equipamento_saude e ON e.id = o.equipamento_saude_id
@@ -1787,6 +1784,26 @@ function gravador(
       // A queixa é única por OS (a UNIQUE do banco conta a excluída também).
       if (await tx.uma('SELECT id FROM queixa_tecnica_produto WHERE ordem_servico_manutencao_id = ?', [x.os]))
         throw recusaAlerta('queixa-ja-aberta');
+      // A natureza separa a queixa técnica do evento adverso e do alerta sanitário. O evento adverso (dano ou risco ao
+      // paciente) nasce da notificação de incidente da gestão de riscos, com tipo, dano percebido e prazo próprios, que
+      // a OS não traz nem liga: aberto pela OS, viraria uma queixa comum sem notificação nem prazo. Por isso recusa e
+      // orienta notificar o incidente (a queixa ligada à notificação guarda notificacao_incidente_id). O alerta é o da
+      // ação de campo que gerou a OS; sem ele, a abertura como alerta sanitário recusa.
+      const natureza = NATUREZA_QUEIXA[x.tipo];
+      if (natureza === 'evento_adverso')
+        throw recusa(
+          'evento-adverso-pela-notificacao',
+          'O evento adverso com equipamento é aberto pela notificação de incidente (gestão de riscos), que registra o dano e o prazo: notifique o incidente; pela OS, abra como queixa técnica.',
+        );
+      const acao = await tx.uma(
+        `SELECT ae.alerta_sanitario_id FROM alerta_sanitario_equipamento ae
+           JOIN alerta_sanitario a ON a.id = ae.alerta_sanitario_id AND a.estabelecimento_id = ?
+          WHERE ae.ordem_servico_manutencao_id = ? ORDER BY ae.id LIMIT 1`,
+        [est, x.os],
+      );
+      const alertaId = acao ? n(acao['alerta_sanitario_id']) : null;
+      if (natureza === 'alerta_sanitario' && alertaId === null)
+        throw recusa('os-sem-alerta', 'Esta OS não foi gerada pela ação de campo de um alerta sanitário: abra como queixa técnica ou evento adverso.');
       const f = await fuso();
       const em = paraInstante(x.agora, f);
       const segregado = x.conduta !== 'nenhuma';
@@ -1800,6 +1817,8 @@ function gravador(
         fabricante_id: nn(o['fabricante_id']),
         setor_funcional_id: nn(o['setor_funcional_id']),
         tipo_desvio: 'falha_funcionamento',
+        natureza,
+        alerta_sanitario_id: alertaId,
         descricao: x.descricao.slice(0, 65_000),
         identificada_em: em,
         lote_segregado: segregado,

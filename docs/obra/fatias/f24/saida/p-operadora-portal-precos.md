@@ -51,3 +51,12 @@
 - **Troca de senha do portal (portal-medico/porta-propria.ts):** a porta recebe só o resumo, então não confere reuso;
   o comentário que dizia "a mesma política do produto" foi corrigido. Pedidos no `.json`: conferência de reuso no
   serviço/porta (fora da lista) e `acessoPorId` do sadt ligado à `credencial_usuario`.
+
+## Correção pelos achados da revisão
+- Contato por área do convênio (`precos/fonte-propria.ts`, OP_CONTRATO): o achado partia de exclusão lógica, mas
+  `tx.excluir` do Executor apaga a linha (DELETE), então limpar e preencher de novo não quebrava. Mesmo assim a chave
+  única (fonte pagadora, área) não considera `excluido_em`: a linha excluída logicamente por outro caminho (importação)
+  agora é lida e reativada (`excluido_em`/`excluido_por` nulos) no lugar de nova inclusão. Comentário corrigido. Teste
+  int: área esvaziada volta a ter contato, e linha excluída logicamente é reativada.
+- Publicação da carga em duas transações (controller + servico, fora do lote): pedido em
+  `p-operadora-portal-precos.json` (tipo codigo-compartilhado).

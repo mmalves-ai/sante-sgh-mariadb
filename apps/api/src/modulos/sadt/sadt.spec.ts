@@ -398,6 +398,7 @@ describe('portal de resultados', () => {
         conselho: 'CRM',
         uf: 'SP',
         numero: '12345',
+        cpf: '12345678909',
         email: 'medica@exemplo.invalid',
         senha: 'senha-longa-sintetica',
         aceiteTermo: true,

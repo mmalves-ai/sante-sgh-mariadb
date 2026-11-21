@@ -21,6 +21,7 @@ const validacao = computed(() => (typeof rota.params['codigo'] === 'string' ? ro
 const nome = ref('');
 const uf = ref('');
 const numero = ref('');
+const cpf = ref('');
 const email = ref('');
 const senha = ref('');
 const aceite = ref(false);
@@ -71,6 +72,7 @@ async function enviar(): Promise<void> {
       conselho: 'CRM',
       uf: uf.value.toUpperCase(),
       numero: numero.value,
+      cpf: cpf.value,
       email: email.value,
       senha: senha.value,
       aceiteTermo: aceite.value,
@@ -118,6 +120,10 @@ async function enviar(): Promise<void> {
         <span class="campo">
           <label for="medico-numero">{{ t('sadt.portal.numero') }}</label>
           <input id="medico-numero" v-model="numero" inputmode="numeric" data-testid="medico-numero" />
+        </span>
+        <span class="campo">
+          <label for="medico-cpf">{{ t('sadt.portal.cpf') }}</label>
+          <input id="medico-cpf" v-model="cpf" inputmode="numeric" maxlength="14" autocomplete="off" data-testid="medico-cpf" />
         </span>
         <span class="campo">
           <label for="medico-email">{{ t('sadt.portal.email') }}</label>

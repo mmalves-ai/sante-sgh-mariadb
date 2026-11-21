@@ -66,6 +66,9 @@ export interface NovaEtapaOpme {
   readonly chave: string | null;
 }
 
+/** O pedido da etapa como a tela o manda (o que o reenvio com a mesma chave repete). */
+export type PedidoEtapaOpme = Omit<NovaEtapaOpme, 'usuario' | 'chave' | 'seq'>;
+
 /** O que a etapa muda na solicitação. */
 export interface MudancaSolicitacaoOpme {
   readonly situacao: SituacaoOpme;
@@ -83,8 +86,11 @@ export interface MudancaSolicitacaoOpme {
 export interface GravadorOpme {
   /** A solicitação relida na transação (travada até o fim), ou null. */
   solicitacao(id: number): Promise<SolicitacaoOpme | null>;
-  /** A etapa já gravada pela chave do pedido (o reenvio da tela), ou null. */
-  etapaPelaChave(chave: string): Promise<{ id: number; solicitacao: number } | null>;
+  /**
+   * A etapa já gravada pela chave do pedido (o reenvio da tela), ou null; a chave com outro pedido, de outro usuário ou
+   * de outro estabelecimento recusa (idempotência divergente).
+   */
+  etapaPelaChave(chave: string, pedido: PedidoEtapaOpme): Promise<{ id: number; solicitacao: number } | null>;
   solicitar(s: NovaSolicitacaoOpme): Promise<{ id: number; versao: number; repetida: boolean }>;
   avancar(
     x: NovaEtapaOpme & { readonly versaoVista: number; readonly mudanca: MudancaSolicitacaoOpme },

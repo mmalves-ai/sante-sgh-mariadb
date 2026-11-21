@@ -13,14 +13,13 @@
 // por paciente (preparo_lactario, com a fórmula do cadastro e o manipulador do cadastro de colaboradores) e uma porção
 // por horário (preparo_lactario_item), com a conferência por outra pessoa, o cancelamento, a etiqueta e o histórico
 // (preparo_lactario_evento); a acuidade visual e a graduação vêm dos cadastros.
-// Pendências (pedido em docs/obra/fatias/f24/saida/p-especialidades-nutricao.json): o exame oftalmológico consolidado
-// (o item por tipo de exame com o resultado longo e os alertas não cabem em exame_oftalmologico_valor), a criação do
-// protocolo oncológico (o fármaco por nome genérico, sem o item prescritível) e do ciclo (o tratamento oncológico exige
-// o diagnóstico e a intenção, que a tela não traz), e por isso as operações sobre o ciclo e o protocolo. Essas leituras
-// voltam vazias (nada foi gravado por esta porta) e as gravações recusam com 'modelo-pendente' (409), dizendo o que
-// falta; nada é gravado pela metade.
+// O exame oftalmológico consolidado grava e lê em exame_oftalmologico (tipo nulo), exame_oftalmologico_valor e
+// exame_oftalmologico_item.
+// Pendências (pedido em docs/obra/fatias/f24/saida/p2-clinicos.json): a oncologia (publicação do protocolo, o ciclo
+// com o tratamento oncológico e as operações sobre eles). Essas leituras voltam vazias (nada foi gravado por esta
+// porta) e as gravações recusam com 'modelo-pendente' (409), dizendo o que falta; nada é gravado pela metade.
 import { randomUUID } from 'node:crypto';
-import type { CicloDependente, LiquidoAmniotico } from '@sgh/contratos';
+import type { CicloDependente, LadoExame, LiquidoAmniotico } from '@sgh/contratos';
 import {
   alertasDoRegistro,
   classificarApgar,
@@ -66,6 +65,9 @@ import type {
   PontoPartograma,
   PrescricaoDoCiclo,
   RecemNascidoRegistrado,
+  ExameOftalmologicoRegistrado,
+  MedidasOlho,
+  NovoExameOftalmologico,
 } from './tipos.js';
 
 /** O mínimo do núcleo que a porta usa. */
@@ -87,6 +89,9 @@ const TABELAS_GRAVACAO = [
   'preparo_lactario',
   'preparo_lactario_item',
   'preparo_lactario_evento',
+  'exame_oftalmologico',
+  'exame_oftalmologico_valor',
+  'exame_oftalmologico_item',
 ] as const;
 
 /** Evento do histórico do lactário (tela) ↔ evento do modelo. */
@@ -623,10 +628,86 @@ export class PortaEspecialidadesPropria implements PortaEspecialidades {
     });
   }
 
-  // Leituras do exame consolidado e da oncologia: nada foi gravado por esta porta (as gravações recusam com
-  // 'modelo-pendente'); as linhas que vierem da migração entram com o pedido de modelo.
-  async exames() {
-    return [];
+  // Leituras da oncologia: nada foi gravado por esta porta (as gravações recusam com 'modelo-pendente'); as linhas
+  // que vierem da migração entram com o pedido de modelo.
+  /** Os exames oftalmológicos consolidados da internação (tipo nulo: os tipos estão nos itens), o mais recente primeiro. */
+  exames(c: ContextoEspecialidades, internacao: number): Promise<ExameOftalmologicoRegistrado[]> {
+    return this.ler(c, async (l, est) => {
+      const fuso = await this.fuso(l, est);
+      const cab = await l.consultar(
+        `SELECT e.id, e.achados, e.conclusao, e.alertas, e.realizado_em, i.id AS internacao, u.login
+           FROM internacao i
+           JOIN exame_oftalmologico e ON e.atendimento_id = i.atendimento_id AND e.estabelecimento_id = i.estabelecimento_id
+           LEFT JOIN usuario u ON u.id = e.criado_por
+          WHERE i.id = ? AND i.estabelecimento_id = ? AND e.excluido_em IS NULL AND e.situacao <> 'cancelado'
+            AND e.tipo_exame_oftalmologico_id IS NULL
+          ORDER BY e.realizado_em DESC, e.id DESC LIMIT 500`,
+        [internacao, est],
+        { teto: 500 },
+      );
+      if (cab.length === 0) return [];
+      const ids = cab.map((r) => n(r['id']));
+      const marcas = ids.map(() => '?').join(', ');
+      const valores = await l.consultar(
+        `SELECT exame_oftalmologico_id, olho, medida, correcao, valor_numerico, metodo FROM exame_oftalmologico_valor
+          WHERE exame_oftalmologico_id IN (${marcas}) AND excluido_em IS NULL ORDER BY exame_oftalmologico_id, sequencia`,
+        ids,
+        { teto: 5000 },
+      );
+      const itens = await l.consultar(
+        `SELECT exame_oftalmologico_id, tipo_exame_oftalmologico_id, olho, resultado FROM exame_oftalmologico_item
+          WHERE exame_oftalmologico_id IN (${marcas}) AND excluido_em IS NULL ORDER BY exame_oftalmologico_id, sequencia`,
+        ids,
+        { teto: 5000 },
+      );
+      return cab.map((r) => {
+        const id = n(r['id']);
+        const meus = valores.filter((v) => n(v['exame_oftalmologico_id']) === id);
+        const olho = (o: 'direito' | 'esquerdo'): MedidasOlho => {
+          // O grau da gonioscopia é a medida 'outro' com o método 'gonioscopia'.
+          const v = (medida: string, correcao?: string) => {
+            const x = meus.find(
+              (y) =>
+                texto(y['olho']) === o &&
+                (medida === 'gonioscopia_grau'
+                  ? texto(y['medida']) === 'outro' && texto(y['metodo']) === 'gonioscopia'
+                  : texto(y['medida']) === medida) &&
+                (!correcao || texto(y['correcao']) === correcao),
+            );
+            return x && x['valor_numerico'] !== null ? Number(x['valor_numerico']) : null;
+          };
+          return {
+            avSc: v('acuidade_visual', 'sem_correcao'),
+            avCc: v('acuidade_visual', 'com_correcao'),
+            pio: v('pressao_intraocular'),
+            gonio: v('gonioscopia_grau'),
+          };
+        };
+        const pio = meus.find((y) => texto(y['medida']) === 'pressao_intraocular' && y['metodo'] !== null);
+        let alertas: string[];
+        try {
+          const a = JSON.parse(texto(r['alertas']) || '[]') as unknown;
+          alertas = Array.isArray(a) ? a.map(String) : [];
+        } catch {
+          alertas = [];
+        }
+        return {
+          id,
+          internacao: n(r['internacao']),
+          od: olho('direito'),
+          oe: olho('esquerdo'),
+          metodoPio: pio ? texto(pio['metodo']) : null,
+          classificacao: texto(r['achados']),
+          alertas,
+          conduta: textoOuNulo(r['conclusao']),
+          itens: itens
+            .filter((x) => n(x['exame_oftalmologico_id']) === id)
+            .map((x) => ({ exame: n(x['tipo_exame_oftalmologico_id']), lado: LADO_DO_OLHO[texto(x['olho'])] ?? 'ao', resultado: texto(x['resultado']) })),
+          por: texto(r['login']),
+          em: minutoCivil(r['realizado_em'], fuso),
+        };
+      });
+    });
   }
   async protocolos() {
     return [];
@@ -668,7 +749,7 @@ function gravadorSobre(tx: TxOperacao, est: number): GravadorEspecialidades {
     cancelarOrdem: (x) => cancelarOrdemLactario(tx, est, x),
     marcarEtiqueta: (x) => marcarEtiquetaLactario(tx, est, x.id),
     registrarAlteracao: (x) => registrarAlteracaoLactario(tx, est, x),
-    registrarExame: pendente('O exame oftalmológico'),
+    registrarExame: (x) => registrarExameOftalmologico(tx, est, x),
     publicarProtocolo: pendente('O protocolo oncológico versionado'),
     registrarCiclo: pendente('O ciclo oncológico'),
     validarCiclo: pendente('A validação do ciclo oncológico'),
@@ -747,6 +828,74 @@ async function internacaoAberta(
   if (!['ativa', 'alta_medica'].includes(texto(i['situacao'])))
     throw recusa('internacao-encerrada', `A internação não está aberta: ${efeito}.`);
   return n(i['atendimento_id']);
+}
+
+/** Lado do exame na tela ↔ olho no modelo. */
+const OLHO_DO_LADO = { od: 'direito', oe: 'esquerdo', ao: 'ambos' } as const;
+const LADO_DO_OLHO: Readonly<Record<string, LadoExame>> = { direito: 'od', esquerdo: 'oe', ambos: 'ao' };
+
+/**
+ * O exame oftalmológico consolidado da internação aberta: o cabeçalho (tipo nulo; a classificação visual nos achados,
+ * a conduta na conclusão e os alertas calculados), as medidas por olho em exame_oftalmologico_valor (acuidade sem e
+ * com correção, pressão intraocular com o método e o grau da gonioscopia) e um item por tipo de exame e lado.
+ */
+async function registrarExameOftalmologico(tx: TxOperacao, est: number, x: NovoExameOftalmologico): Promise<number> {
+  const atendimento = await internacaoAberta(tx, est, x, 'o exame não é registrado');
+  const tipos = [...new Set(x.itens.map((i) => i.exame))];
+  if (tipos.length) {
+    const achados = await tx.consultar(
+      `SELECT id FROM tipo_exame_oftalmologico WHERE id IN (${tipos.map(() => '?').join(', ')})`,
+      tipos,
+    );
+    if (achados.length !== tipos.length) throw recusa('tipo-exame-inexistente', 'Um dos tipos de exame não existe no cadastro.');
+  }
+  const id = await tx.incluir('exame_oftalmologico', {
+    estabelecimento_id: est,
+    paciente_id: x.paciente,
+    atendimento_id: atendimento,
+    tipo_exame_oftalmologico_id: null,
+    profissional_id: x.vinculo,
+    realizado_em: new Date(),
+    olho: 'ambos',
+    achados: x.classificacao,
+    conclusao: x.conduta === null ? null : x.conduta.slice(0, 2000),
+    alertas: JSON.stringify([...x.alertas]),
+    situacao: 'concluido',
+    origem: 'sistema',
+  });
+  let seq = 0;
+  for (const [olho, m] of [['direito', x.od], ['esquerdo', x.oe]] as const) {
+    const medidas: [string, string, number | null, string | null, string | null][] = [
+      ['acuidade_visual', 'sem_correcao', m.avSc, null, null],
+      ['acuidade_visual', 'com_correcao', m.avCc, null, null],
+      ['pressao_intraocular', 'nao_se_aplica', m.pio, 'mmHg', x.metodoPio],
+      ['gonioscopia_grau', 'nao_se_aplica', m.gonio, 'grau', null],
+    ];
+    for (const [medida, correcao, valor, unidade, metodo] of medidas) {
+      if (valor === null) continue;
+      await tx.incluir('exame_oftalmologico_valor', {
+        exame_oftalmologico_id: id,
+        sequencia: ++seq,
+        olho,
+        medida: medida === 'gonioscopia_grau' ? 'outro' : medida,
+        correcao,
+        valor_numerico: valor,
+        unidade,
+        metodo: medida === 'gonioscopia_grau' ? 'gonioscopia' : metodo,
+        origem: 'sistema',
+      });
+    }
+  }
+  seq = 0;
+  for (const i of x.itens)
+    await tx.incluir('exame_oftalmologico_item', {
+      exame_oftalmologico_id: id,
+      sequencia: ++seq,
+      tipo_exame_oftalmologico_id: i.exame,
+      olho: OLHO_DO_LADO[i.lado],
+      resultado: i.resultado.slice(0, 500),
+    });
+  return id;
 }
 
 async function fusoTx(tx: TxOperacao, est: number): Promise<string> {

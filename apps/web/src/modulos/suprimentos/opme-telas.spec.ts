@@ -93,7 +93,7 @@ describe('a tela própria do rastreio reverso', () => {
       saidasDoLote: 0,
       saidasEstoque: [
         {
-          saida: { ano: 2026, mes: 10, doc: 7001 },
+          saida: { id: 7001, ano: 2026, mes: 10, doc: 7001 },
           data: '2026-10-20',
           item: 950001,
           atendimento: 77999,

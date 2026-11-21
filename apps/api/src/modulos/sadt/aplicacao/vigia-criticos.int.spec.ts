@@ -1,12 +1,9 @@
 // Ciclo da vigia do valor crítico sobre a porta própria do SADT, no MariaDB real (cliente f22_o2; massa SINTÉTICA).
 // Contrato de efeito: um resultado crítico liberado sem aviso (o que chega pela interface ou pela autoliberação) ganha o
-// aviso em aviso_valor_critico; o aviso vencido sobe de nível. Enquanto a porta própria não cria o aviso
-// (GRAVACOES_PENDENTES.avisarCriticos, pedido ao 02-09), o teste prova que a falha fica contada com o código, que o
-// escalonamento segue e que o exame volta no ciclo seguinte. Quando o 02-09 ligar a operação, o mesmo teste passa a
-// exigir a linha do aviso.
+// aviso em aviso_valor_critico; o aviso vencido sobe de nível.
 import { NucleoProprio } from '@sgh/nucleo';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { GRAVACOES_PENDENTES, PortaSadtPropria } from '../porta-propria.js';
+import { PortaSadtPropria } from '../porta-propria.js';
 import {
   CLIENTE,
   contexto,
@@ -76,16 +73,8 @@ describe.skipIf(SEM_BANCO)('vigia do valor crítico (MariaDB, cliente f22_o2)', 
     const novo = await um('SELECT COUNT(*) AS n FROM aviso_valor_critico WHERE resultado_exame_id = ?', [
       resultadoSemAviso,
     ]);
-    if (GRAVACOES_PENDENTES['avisarCriticos']) {
-      expect(r).toMatchObject({ avisos: 0, semAviso: 1, codigos: ['modelo-pendente'] });
-      expect(Number(novo?.['n'])).toBe(0);
-      expect(log.join('\n')).toMatch(/1 exame\(s\) sem aviso/);
-      // O exame volta no ciclo seguinte (o cursor não andou) e o aviso já escalonado não sobe de novo.
-      expect(await v.ciclo(hospital)).toMatchObject({ avisos: 0, escalonados: 0, semAviso: 1 });
-    } else {
-      expect(r).toMatchObject({ avisos: 1 });
-      expect(Number(novo?.['n'])).toBe(1);
-      expect(await v.ciclo(hospital)).toEqual({ avisos: 0, escalonados: 0 });
-    }
+    expect(r).toMatchObject({ avisos: 1 });
+    expect(Number(novo?.['n'])).toBe(1);
+    expect(await v.ciclo(hospital)).toEqual({ avisos: 0, escalonados: 0 });
   });
 });

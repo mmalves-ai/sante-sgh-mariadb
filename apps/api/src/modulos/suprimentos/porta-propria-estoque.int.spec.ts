@@ -144,7 +144,7 @@ describe.skipIf(SEM_BANCO)('estoque na porta própria (MariaDB, cliente de teste
       local: m.localA,
       centroCusto: m.centroCusto,
       localConsumo: 1,
-      requisicao: chaveReq,
+      requisicao: Number(req.resultado['id']),
       itens: [{ item: m.insumo, quantidade: 3 }],
     });
     expect(s.repetida).toBe(false);
@@ -168,7 +168,7 @@ describe.skipIf(SEM_BANCO)('estoque na porta própria (MariaDB, cliente de teste
     expect(Number(tri?.n)).toBe(1);
     // Devolução de 1 pelo custo e pelo lote da saída.
     const dv = await op('registrarDevolucao', {
-      saida: chave,
+      saida: Number(s.resultado['id']),
       local: m.localA,
       itens: [
         {
@@ -184,7 +184,7 @@ describe.skipIf(SEM_BANCO)('estoque na porta própria (MariaDB, cliente de teste
     expect(
       await codigoDe(
         op('registrarDevolucao', {
-          saida: chave,
+          saida: Number(s.resultado['id']),
           local: m.localA,
           itens: [
             {
@@ -299,7 +299,7 @@ describe.skipIf(SEM_BANCO)('estoque na porta própria (MariaDB, cliente de teste
     });
     await op('desconsolidarDocumento', {
       tipo: 'nota',
-      documento: chave,
+      documento: Number(nf.resultado['id']),
       motivo: 'Nota lançada no local errado',
     });
     expect(await saldo(m.localA)).toBe(antes);

@@ -18,11 +18,12 @@
 // e o registro estornado fica visível como inativo.
 // Melhoria: o setor do consumo, da observação e do surto é o bloco de internação da unidade ligada ao setor funcional
 // (o mesmo código do censo e do leito), e não um texto solto.
-// Pendente (pedido em docs/obra/fatias/f24/saida/p-qualidade-ccih.json): a ficha de IRAS (caso_infeccao sem implante nem
-// a cultura do caso), a decisão e as revisões D3/D7 do antimicrobiano (liberacao_antimicrobiano exige a ficha completa),
-// a configuração do antimicrobiano por item do cadastro e a precaução (isolamento_paciente sem o motivo, a origem, a
-// cultura e o multirresistente). Essas leituras falham fechadas (503 `modelo-pendente`) e essas gravações recusam com
-// `modelo-pendente` (409), sem gravar nada pela metade.
+// Melhoria: a ficha de IRAS é o caso de infecção (caso_infeccao, com os critérios do cadastro do sítio e o isolado do
+// cadastro de microrganismos, que leva a marca de multirresistente); a decisão da CCIH sobre o antimicrobiano e as revisões
+// D3/D7 ficam em decisao_antimicrobiano e revisao_decisao_antimicrobiano; a configuração do antimicrobiano por insumo, em
+// configuracao_antimicrobiano_insumo; a precaução, em isolamento_paciente, e o bloqueio dos vizinhos é o período do leito
+// (periodo_situacao_leito, motivo `isolamento`) ligado a ela. O bloqueio é do quarto: a precaução aberta mostra os
+// bloqueios por isolamento abertos no quarto dela.
 import type { ChaveLeito, UnidadeNotificacao } from '@sgh/contratos';
 import { type Executor, recusa, type TxOperacao } from '@sgh/nucleo';
 import { type AnotacaoGravacao, gravacaoDireta } from '../enfermagem/gravacao-direta.js';
@@ -36,11 +37,9 @@ import {
   instanteN,
   json,
   type L,
-  leituraPendente,
   lerNoEstabelecimento,
   type Linha,
   marcas,
-  modeloPendente,
   n,
   nn,
   type NucleoQualidade,
@@ -61,6 +60,9 @@ import {
   type DependentesRegistro,
   type DispositivoInvasivoRegistrado,
   type InternadoCcih,
+  type IrasRegistrada,
+  type LiberacaoAntimicrobianoRegistrada,
+  type PrecaucaoRegistrada,
   type ObservacaoMaosRegistrada,
   recusaVersaoCcih,
   type SurtoRegistrado,
@@ -79,12 +81,15 @@ export const TABELAS_CCIH = [
   'consumo_preparacao_alcoolica',
   'surto_infeccao',
   'fechamento_vigilancia_iras',
+  'caso_infeccao',
+  'caso_infeccao_criterio',
+  'caso_infeccao_microrganismo',
+  'configuracao_antimicrobiano_insumo',
+  'decisao_antimicrobiano',
+  'revisao_decisao_antimicrobiano',
+  'isolamento_paciente',
+  'periodo_situacao_leito',
 ] as const;
-
-const IRAS = 'A ficha de IRAS (infecção relacionada à assistência)';
-const LIBERACAO = 'A liberação e as revisões D3/D7 do antimicrobiano';
-const CONFIGURACAO = 'A configuração do antimicrobiano por item do cadastro';
-const PRECAUCAO = 'A precaução (isolamento) e o bloqueio dos leitos vizinhos';
 
 const TETO = 2000;
 const TETO_PERIODO = 5000;
@@ -335,6 +340,41 @@ function retrato(r: Linha): Record<string, unknown> {
   return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v instanceof Date ? instante(v) : v]));
 }
 
+const SITUACAO_IRAS: Record<string, string> = {
+  confirmado: 'confirmada',
+  descartado: 'descartada',
+  suspeito: 'suspeita',
+};
+
+function irasDe(r: Linha): IrasRegistrada {
+  const crit = texto(r['criterios']);
+  return {
+    id: n(r['id']),
+    reg: n(r['internacao_id']),
+    paciente: nn(r['paciente_id']),
+    setor: texto(r['setor']),
+    sitio: camelo(r['sitio_codigo']),
+    dataInfeccao: dataIso(r['data_infeccao']) ?? '',
+    criterios: crit ? crit.split(',').map((x) => camelo(x)) : [],
+    nivelIsc:
+      r['nivel_cirurgico'] === null || r['nivel_cirurgico'] === undefined
+        ? null
+        : camelo(r['nivel_cirurgico']),
+    cirurgia: nn(r['ato_cirurgico_id']),
+    implante: verdadeiro(r['implante']),
+    exame: nn(r['exame_item_id']),
+    microrganismo: textoN(r['microrganismo_descricao']),
+    multirresistente: verdadeiro(r['mr']),
+    dispositivo: nn(r['dispositivo_invasivo_paciente_id']),
+    descricao: textoN(r['observacao']),
+    situacao: SITUACAO_IRAS[texto(r['situacao'])] ?? texto(r['situacao']),
+    motivoDescarte: textoN(r['descarte_motivo']),
+    registradoPor: texto(r['registrado_por']),
+    registradoEm: instante(r['confirmado_em'] ?? r['criado_em']),
+    versao: n(r['versao']),
+  };
+}
+
 const filtroVersao = (campo: string) => `JSON_VALUE(t.dados_depois, '$.dados.versaoAnterior.${campo}')`;
 
 /** Os motivos do estorno gravados na trilha (versão anterior com a ação `estorno`), por id. */
@@ -403,7 +443,7 @@ export class PortaCcihPropria implements PortaCcih {
   /** Trava a linha do estabelecimento e confere a versão vista e o estado (outra pessoa agiu nela: recusa). */
   private async travar(
     tx: TxOperacao,
-    tabela: TabelaCorrigivel | 'surto_infeccao',
+    tabela: TabelaCorrigivel | 'surto_infeccao' | 'decisao_antimicrobiano',
     est: number,
     id: number,
     versao: number,
@@ -643,7 +683,231 @@ export class PortaCcihPropria implements PortaCcih {
       );
       return { pacientesDia: n(r?.['pd']), dias: n(r?.['dias']) };
     };
-    const pendente = (o: string) => () => Promise.reject(modeloPendente(o));
+    /** O leito pela chave (bloco, acomodação e leito), exigido: o bloqueio e a precaução nunca gravam leito solto. */
+    const leitoExigido = async (l: ChaveLeito) => {
+      const id = await leitoPelaChave(l);
+      if (id === null)
+        throw recusa('leito-inexistente', 'O leito informado não existe neste estabelecimento.');
+      return id;
+    };
+    const tipoPrecaucao = async (tipo: string) => {
+      const r = await tx.uma<Linha>('SELECT id FROM tipo_precaucao WHERE codigo = ? AND ativo = TRUE', [
+        cobra(tipo),
+      ]);
+      if (!r)
+        throw recusa(
+          'tipo-precaucao-nao-cadastrado',
+          `O tipo de precaução "${tipo}" não está no cadastro do cliente.`,
+        );
+      return n(r['id']);
+    };
+    /** A situação "bloqueado" e o motivo "isolamento" do cadastro de leitos (sem eles, o bloqueio é recusado). */
+    const bloqueioIsolamento = async () => {
+      const s = await tx.uma<Linha>(
+        "SELECT id FROM situacao_leito WHERE situacao_base = 'bloqueado' AND ativo = TRUE ORDER BY ordem_exibicao, id LIMIT 1",
+        [],
+      );
+      const m = await tx.uma<Linha>(
+        "SELECT id FROM motivo_bloqueio_leito WHERE codigo = 'isolamento' AND ativo = TRUE",
+        [],
+      );
+      if (!s || !m)
+        throw recusa(
+          'bloqueio-nao-cadastrado',
+          'A situação "bloqueado" ou o motivo de bloqueio "isolamento" não está no cadastro de leitos do cliente.',
+        );
+      return { situacao: n(s['id']), motivo: n(m['id']) };
+    };
+    /** Bloqueia os vizinhos livres pela precaução (período aberto do leito ligado a ela); o leito já em período fica. */
+    const bloquearVizinhos = async (
+      iso: number,
+      leitos: readonly ChaveLeito[],
+      agora: string,
+      usuario: number,
+    ) => {
+      if (!leitos.length) return 0;
+      const b = await bloqueioIsolamento();
+      let feitos = 0;
+      for (const v of leitos) {
+        const lh = await leitoExigido(v);
+        const [aberto] = await tx.consultarParaAtualizar(
+          'SELECT id FROM periodo_situacao_leito WHERE leito_hospitalar_id = ? AND data_hora_fim IS NULL',
+          [lh],
+          { teto: 1 },
+        );
+        if (aberto) continue;
+        await tx.incluir('periodo_situacao_leito', {
+          leito_hospitalar_id: lh,
+          situacao_leito_id: b.situacao,
+          motivo_bloqueio_leito_id: b.motivo,
+          data_hora_inicio: agora,
+          isolamento_paciente_id: iso,
+          observacao: 'Bloqueio por precaução de isolamento do quarto',
+          operacao: 'inclusao',
+          ocorrido_em: agora,
+          usuario_id: usuario,
+        });
+        feitos++;
+      }
+      return feitos;
+    };
+    /** Libera os vizinhos: encerra o período aberto de bloqueio por isolamento (o de outro motivo não é tocado). */
+    const liberarVizinhos = async (leitos: readonly ChaveLeito[], agora: string) => {
+      let feitos = 0;
+      for (const v of leitos) {
+        const lh = await leitoPelaChave(v);
+        if (lh === null) continue;
+        const [p] = await tx.consultarParaAtualizar(
+          `SELECT ps.id, ps.versao FROM periodo_situacao_leito ps
+             JOIN motivo_bloqueio_leito mb ON mb.id = ps.motivo_bloqueio_leito_id AND mb.codigo = 'isolamento'
+            WHERE ps.leito_hospitalar_id = ? AND ps.data_hora_fim IS NULL`,
+          [lh],
+          { teto: 1 },
+        );
+        if (!p) continue;
+        await tx.alterar('periodo_situacao_leito', n(p['id']), n(p['versao']), {
+          data_hora_fim: agora,
+          operacao: 'alteracao',
+        });
+        feitos++;
+      }
+      return feitos;
+    };
+    /** O tipo que o leito mostra hoje: o mais restritivo das precauções abertas nele (null: nenhuma). */
+    const tipoAtualDoLeito = async (lh: number) => {
+      const r = await tx.consultar(
+        `SELECT tp.codigo FROM isolamento_paciente ip JOIN tipo_precaucao tp ON tp.id = ip.tipo_precaucao_id
+          WHERE ip.estabelecimento_id = ? AND ip.leito_hospitalar_id = ? AND ip.situacao = 'ativo'
+            AND ip.data_hora_fim IS NULL AND ip.excluido_em IS NULL`,
+        [est, lh],
+        { teto: 100 },
+      );
+      const ordem = ['aerossois', 'goticulas', 'contato'];
+      const tipos = r.map((x) => texto(x['codigo']));
+      return ordem.find((t) => tipos.includes(t)) ?? (tipos[0] || null);
+    };
+    const sitioInfeccao = async (codigo: string) => {
+      const r = await tx.uma<Linha>('SELECT id FROM sitio_infeccao WHERE codigo = ? AND ativo = TRUE', [
+        cobra(codigo),
+      ]);
+      if (!r)
+        throw recusa('sitio-nao-cadastrado', `O sítio de IRAS "${codigo}" não está no cadastro do cliente.`);
+      return n(r['id']);
+    };
+    /** A unidade de internação do "setor" (o código do bloco), e o setor funcional ligado a ela. */
+    const unidadeDoSetor = async (setor: string) => {
+      if (!setor.trim()) return { unidade: null, setor: null };
+      const r = await tx.uma<Linha>(
+        `SELECT u.id, u.setor_funcional_id FROM unidade_internacao u JOIN bloco_internacao b ON b.id = u.bloco_internacao_id
+          WHERE u.estabelecimento_id = ? AND u.excluido_em IS NULL AND b.codigo = ? ORDER BY u.id LIMIT 1`,
+        [est, setor],
+      );
+      if (!r)
+        throw recusa(
+          'setor-inexistente',
+          `O setor "${setor}" não é uma unidade de internação deste estabelecimento.`,
+        );
+      return { unidade: n(r['id']), setor: nn(r['setor_funcional_id']) };
+    };
+    const dispositivoAtivo = async (id: number | null) => {
+      if (id === null) return null;
+      const r = await tx.uma<Linha>(
+        'SELECT id, cancelado_em FROM dispositivo_invasivo_paciente WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+        [id, est],
+      );
+      if (!r)
+        throw recusa(
+          'dispositivo-inexistente',
+          'O dispositivo associado à ficha não é deste estabelecimento.',
+        );
+      if (r['cancelado_em'] !== null && r['cancelado_em'] !== undefined)
+        throw recusa(
+          'dispositivo-cancelado',
+          'O dispositivo associado à ficha foi cancelado nesse meio-tempo.',
+        );
+      return id;
+    };
+    /**
+     * Os critérios marcados: o código do contrato em snake_case é o do cadastro de critérios do sítio (vigente). Os que
+     * saem ficam como não atendidos (a linha não é apagada); os que voltam são reativados.
+     */
+    const gravarCriterios = async (
+      caso: number,
+      sitio: number,
+      data: string,
+      criterios: readonly string[],
+    ) => {
+      const atuais = await tx.consultarParaAtualizar(
+        'SELECT id, versao, criterio_infeccao_id, sequencia, atendido FROM caso_infeccao_criterio WHERE caso_infeccao_id = ? AND excluido_em IS NULL',
+        [caso],
+        { teto: 200 },
+      );
+      const ids = new Set<number>();
+      for (const c of [...new Set(criterios)]) {
+        const r = await tx.uma<Linha>(
+          `SELECT id FROM criterio_infeccao WHERE sitio_infeccao_id = ? AND codigo = ? AND ativo = TRUE
+              AND vigencia_inicio <= ? AND (vigencia_fim IS NULL OR vigencia_fim >= ?)
+            ORDER BY vigencia_inicio DESC, id DESC LIMIT 1`,
+          [sitio, cobra(c), data, data],
+        );
+        if (!r)
+          throw recusa(
+            'criterio-nao-cadastrado',
+            `O critério "${c}" não está no cadastro de critérios deste sítio.`,
+          );
+        ids.add(n(r['id']));
+      }
+      let seq = atuais.reduce((m, a) => Math.max(m, n(a['sequencia'])), 0);
+      for (const a of atuais) {
+        const quer = ids.has(n(a['criterio_infeccao_id']));
+        if (quer !== verdadeiro(a['atendido']))
+          await tx.alterar('caso_infeccao_criterio', n(a['id']), n(a['versao']), { atendido: quer });
+        ids.delete(n(a['criterio_infeccao_id']));
+      }
+      for (const id of ids)
+        await tx.incluir('caso_infeccao_criterio', {
+          caso_infeccao_id: caso,
+          sequencia: ++seq,
+          criterio_infeccao_id: id,
+          atendido: true,
+          data_evidencia: data,
+        });
+    };
+    /**
+     * O microrganismo da ficha: o texto fica na ficha; quando ele está no cadastro de microrganismos, o isolado vai ligado
+     * ao caso com a marca de multirresistente. Multirresistente sem microrganismo cadastrado é recusado (a marca é do
+     * isolado, nunca solta).
+     */
+    const gravarMicrorganismo = async (caso: number, texto_: string | null, mr: boolean, data: string) => {
+      const ant = await tx.consultarParaAtualizar(
+        'SELECT id, versao FROM caso_infeccao_microrganismo WHERE caso_infeccao_id = ? AND excluido_em IS NULL',
+        [caso],
+        { teto: 50 },
+      );
+      for (const a of ant) await tx.excluir('caso_infeccao_microrganismo', n(a['id']), n(a['versao']));
+      const t = (texto_ ?? '').trim();
+      const m = t
+        ? await tx.uma<Linha>(
+            `SELECT id FROM microrganismo WHERE ativo = TRUE AND (UPPER(descricao) = UPPER(?) OR UPPER(codigo) = UPPER(?)
+                OR UPPER(mnemonico) = UPPER(?)) ORDER BY id LIMIT 1`,
+            [t, t, t],
+          )
+        : null;
+      if (!m) {
+        if (mr)
+          throw recusa(
+            'microrganismo-nao-cadastrado',
+            'Para marcar multirresistente, informe um microrganismo do cadastro de microrganismos.',
+          );
+        return;
+      }
+      await tx.incluir('caso_infeccao_microrganismo', {
+        caso_infeccao_id: caso,
+        microrganismo_id: n(m['id']),
+        isolado_em: data,
+        multirresistente: mr,
+      });
+    };
 
     return {
       registrarDispositivo: async (d) => {
@@ -1035,16 +1299,265 @@ export class PortaCcihPropria implements PortaCcih {
           }),
         };
       },
-      // Pendentes de estrutura (pedido em saida/p-qualidade-ccih.json): recusam antes de gravar qualquer coisa.
-      registrarIras: pendente(IRAS),
-      descartarIras: pendente(IRAS),
-      corrigirIras: pendente(IRAS),
-      configurarAntimicrobiano: pendente(CONFIGURACAO),
-      liberarAntimicrobiano: pendente(LIBERACAO),
-      revisarAntimicrobiano: pendente(LIBERACAO),
-      definirPrecaucao: pendente(PRECAUCAO),
-      encerrarPrecaucao: pendente(PRECAUCAO),
-      alterarPrecaucao: pendente(PRECAUCAO),
+      registrarIras: async (i) => {
+        const usuario = await exigirUsuario(tx, i.usuario);
+        const int = await internacao(i.reg, i.paciente);
+        const sitio = await sitioInfeccao(i.sitio);
+        const u = await unidadeDoSetor(i.setor);
+        const disp = await dispositivoAtivo(i.dispositivo);
+        const agora = paraBanco(await relogioDoEstabelecimento(tx, est));
+        const numero = await tx.proximoNumero('caso_infeccao');
+        const id = await tx.incluir('caso_infeccao', {
+          estabelecimento_id: est,
+          numero: numero.formatado,
+          paciente_id: n(int['paciente_id']),
+          atendimento_id: n(int['atendimento_id']),
+          internacao_id: i.reg,
+          data_infeccao: i.dataInfeccao.slice(0, 10),
+          natureza: 'infeccao',
+          origem_aquisicao: 'hospitalar',
+          sitio_infeccao_id: sitio,
+          nivel_cirurgico: i.nivelIsc === null ? null : cobra(i.nivelIsc),
+          implante: i.implante,
+          setor_funcional_id: u.setor,
+          unidade_internacao_id: u.unidade,
+          leito_hospitalar_id: nn(int['leito_hospitalar_id']),
+          dispositivo_invasivo_paciente_id: disp,
+          ato_cirurgico_id: i.cirurgia,
+          exame_item_id: i.exame,
+          microrganismo_descricao: i.microrganismo,
+          situacao: 'confirmado',
+          confirmado_em: agora,
+          confirmador_usuario_id: usuario,
+          observacao: i.descricao,
+        });
+        await gravarCriterios(id, sitio, i.dataInfeccao.slice(0, 10), i.criterios);
+        await gravarMicrorganismo(id, i.microrganismo, i.multirresistente, i.dataInfeccao.slice(0, 10));
+        return { id };
+      },
+      descartarIras: async (d) => {
+        await exigirUsuario(tx, d.usuario);
+        const x = await this.travar(
+          tx,
+          'caso_infeccao',
+          est,
+          d.id,
+          d.versao,
+          (y) => texto(y['situacao']) === 'confirmado',
+        );
+        versionar('caso_infeccao', x, 'cancelamento', d.justificativa);
+        const versao = await tx.alterar('caso_infeccao', d.id, n(x['versao']), {
+          situacao: 'descartado',
+          descarte_motivo: d.justificativa,
+        });
+        return { versao };
+      },
+      corrigirIras: async (c) => {
+        await exigirUsuario(tx, c.usuario);
+        const x = await this.travar(
+          tx,
+          'caso_infeccao',
+          est,
+          c.id,
+          c.versao,
+          (y) => texto(y['situacao']) === 'confirmado',
+        );
+        const crit = await tx.consultar(
+          `SELECT cr.codigo FROM caso_infeccao_criterio cc JOIN criterio_infeccao cr ON cr.id = cc.criterio_infeccao_id
+            WHERE cc.caso_infeccao_id = ? AND cc.atendido = TRUE AND cc.excluido_em IS NULL ORDER BY cc.sequencia`,
+          [c.id],
+          { teto: 200 },
+        );
+        versionar(
+          'caso_infeccao',
+          x,
+          'correcao',
+          c.justificativa,
+          crit.map((r) => camelo(r['codigo'])),
+        );
+        const disp = c.dispositivo === undefined ? undefined : await dispositivoAtivo(c.dispositivo);
+        const data = c.dataInfeccao.slice(0, 10);
+        const versao = await tx.alterar('caso_infeccao', c.id, n(x['versao']), {
+          data_infeccao: data,
+          microrganismo_descricao: c.microrganismo,
+          observacao: c.descricao,
+          ...(disp === undefined ? {} : { dispositivo_invasivo_paciente_id: disp }),
+        });
+        await gravarCriterios(c.id, n(x['sitio_infeccao_id']), data, c.criterios);
+        await gravarMicrorganismo(c.id, c.microrganismo, c.multirresistente, data);
+        return { versao };
+      },
+      configurarAntimicrobiano: async (c) => {
+        await exigirUsuario(tx, c.usuario);
+        const ins = await tx.uma<Linha>('SELECT id FROM insumo WHERE id = ? AND antimicrobiano = TRUE', [
+          c.item,
+        ]);
+        if (!ins) throw recusa('item-inexistente', 'O item não é um antimicrobiano do cadastro de insumos.');
+        const atc = c.atc === null ? null : c.atc.trim().toUpperCase();
+        if (atc !== null && !/^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$/.test(atc))
+          throw recusa(
+            'atc-invalido',
+            'O código ATC tem o formato letra, 2 dígitos, 2 letras e 2 dígitos (ex.: J01DD04).',
+          );
+        const valores = {
+          restrito: c.restrito,
+          codigo_atc: atc,
+          ddd_gramas: c.dddGramas,
+          gramas_por_unidade: c.gramasPorUnidade,
+        };
+        const [x] = await tx.consultarParaAtualizar(
+          'SELECT * FROM configuracao_antimicrobiano_insumo WHERE estabelecimento_id = ? AND insumo_id = ? AND excluido_em IS NULL',
+          [est, c.item],
+          { teto: 1 },
+        );
+        if (x) {
+          anotacao.dados = { ...(anotacao.dados ?? {}), anterior: retrato(x) };
+          await tx.alterar('configuracao_antimicrobiano_insumo', n(x['id']), n(x['versao']), valores);
+          return { id: n(x['id']), criado: false };
+        }
+        const id = await tx.incluir('configuracao_antimicrobiano_insumo', {
+          estabelecimento_id: est,
+          insumo_id: c.item,
+          ...valores,
+        });
+        return { id, criado: true };
+      },
+      liberarAntimicrobiano: async (x) => {
+        const usuario = await exigirUsuario(tx, x.usuario);
+        const int = await internacao(x.reg, x.paciente);
+        const pi = await tx.uma<Linha>(
+          `SELECT pi.id FROM prescricao_item pi JOIN prescricao pr ON pr.id = pi.prescricao_id
+            WHERE pi.id = ? AND pr.id = ? AND pr.estabelecimento_id = ? AND pr.atendimento_id = ? AND pi.excluido_em IS NULL`,
+          [x.itemPrescricao, x.prescricao, est, n(int['atendimento_id'])],
+        );
+        if (!pi) throw recusa('item-prescricao-inexistente', 'O item não é da prescrição desta internação.');
+        const [ja] = await tx.consultarParaAtualizar(
+          'SELECT id FROM decisao_antimicrobiano WHERE prescricao_item_id = ?',
+          [x.itemPrescricao],
+          { teto: 1 },
+        );
+        if (ja)
+          throw recusa('ja-decidido', 'A CCIH já decidiu sobre este item da prescrição: recarregue a fila.');
+        const decisao = cobra(x.decisao);
+        if (decisao !== 'nao_liberado' && x.diasAutorizados === null)
+          throw recusa('dias-obrigatorios', 'Informe os dias autorizados na liberação.');
+        if (decisao !== 'liberado' && (x.justificativa === null || !x.justificativa.trim()))
+          throw recusa('justificativa-obrigatoria', 'Informe a justificativa do ajuste ou da não liberação.');
+        const id = await tx.incluir('decisao_antimicrobiano', {
+          estabelecimento_id: est,
+          prescricao_item_id: x.itemPrescricao,
+          prescricao_id: x.prescricao,
+          internacao_id: x.reg,
+          paciente_id: n(int['paciente_id']),
+          insumo_id: x.item,
+          ficha_antimicrobiano_id: x.ficha,
+          prescrito_em: comSegundos(x.prescritoEm),
+          inicio_tratamento_em: comSegundos(x.inicioTratamento),
+          decisao,
+          dias_autorizados: x.diasAutorizados,
+          justificativa: x.justificativa,
+          no_prazo: x.noPrazo,
+          decidido_em: comSegundos(x.agora),
+          decidido_por_usuario_id: usuario,
+        });
+        return { id };
+      },
+      revisarAntimicrobiano: async (r) => {
+        const usuario = await exigirUsuario(tx, r.usuario);
+        const x = await this.travar(tx, 'decisao_antimicrobiano', est, r.id, r.versao);
+        const ja = await tx.uma<Linha>(
+          'SELECT id FROM revisao_decisao_antimicrobiano WHERE decisao_antimicrobiano_id = ? AND marco = ? AND excluido_em IS NULL',
+          [r.id, r.marco],
+        );
+        if (ja) throw recusaVersaoCcih();
+        await tx.incluir('revisao_decisao_antimicrobiano', {
+          decisao_antimicrobiano_id: r.id,
+          marco: r.marco,
+          conduta: cobra(r.conduta),
+          observacao: r.observacao,
+          revisado_em: comSegundos(r.agora),
+          revisado_por_usuario_id: usuario,
+        });
+        // A revisão faz parte da decisão: a versão dela sobe (outra tela que a viu antes é recusada).
+        const versao = await tx.alterar('decisao_antimicrobiano', r.id, n(x['versao']), {
+          no_prazo: verdadeiro(x['no_prazo']),
+        });
+        return { versao };
+      },
+      definirPrecaucao: async (p) => {
+        const usuario = await exigirUsuario(tx, p.usuario);
+        const int = await internacao(p.reg, p.paciente);
+        const lh = (await leitoPelaChave(p.leito)) ?? nn(int['leito_hospitalar_id']);
+        if (lh === null) throw recusa('leito-inexistente', 'A internação não tem leito para a precaução.');
+        const tipo = await tipoPrecaucao(p.tipo);
+        const agora = comSegundos(p.agora);
+        const antes = await tipoAtualDoLeito(lh);
+        const id = await tx.incluir('isolamento_paciente', {
+          estabelecimento_id: est,
+          paciente_id: n(int['paciente_id']),
+          atendimento_id: n(int['atendimento_id']),
+          internacao_id: p.reg,
+          tipo_precaucao_id: tipo,
+          motivo_precaucao: cobra(p.motivo),
+          motivo_outro: p.motivoOutro,
+          origem_indicacao: p.origem,
+          exame_item_id: p.exame,
+          multirresistente: p.multirresistente,
+          leito_hospitalar_id: lh,
+          data_hora_inicio: agora,
+          situacao: 'ativo',
+          observacao: p.observacao,
+        });
+        const bloqueados = await bloquearVizinhos(id, p.bloquear, agora, usuario);
+        const leito = antes === null ? 'abriu' : antes === p.tipoDoLeito ? 'manteve' : 'trocou';
+        return { id, bloqueados, leito };
+      },
+      encerrarPrecaucao: async (r) => {
+        await exigirUsuario(tx, r.usuario);
+        const x = await this.travar(
+          tx,
+          'isolamento_paciente',
+          est,
+          r.id,
+          r.versao,
+          (y) =>
+            texto(y['situacao']) === 'ativo' &&
+            (y['data_hora_fim'] === null || y['data_hora_fim'] === undefined),
+        );
+        const agora = comSegundos(r.agora);
+        anotacao.motivo = r.observacao ?? r.motivo;
+        const versao = await tx.alterar('isolamento_paciente', r.id, n(x['versao']), {
+          data_hora_fim: agora,
+          situacao: 'encerrado',
+          motivo_encerramento: cobra(r.motivo),
+        });
+        const liberados = await liberarVizinhos(r.bloqueios, agora);
+        return { versao, liberados };
+      },
+      alterarPrecaucao: async (c) => {
+        const usuario = await exigirUsuario(tx, c.usuario);
+        const x = await this.travar(
+          tx,
+          'isolamento_paciente',
+          est,
+          c.id,
+          c.versao,
+          (y) =>
+            texto(y['situacao']) === 'ativo' &&
+            (y['data_hora_fim'] === null || y['data_hora_fim'] === undefined),
+        );
+        versionar('isolamento_paciente', x, 'correcao', c.justificativa);
+        const versao = await tx.alterar('isolamento_paciente', c.id, n(x['versao']), {
+          tipo_precaucao_id: await tipoPrecaucao(c.tipo),
+          motivo_precaucao: cobra(c.motivo),
+          motivo_outro: c.motivoOutro,
+          multirresistente: c.multirresistente,
+        });
+        const agora = paraBanco(await relogioDoEstabelecimento(tx, est));
+        const bloqueados = await bloquearVizinhos(c.id, c.bloquear, agora, usuario);
+        const liberados = await liberarVizinhos(c.liberar, agora);
+        return { versao, bloqueados, liberados };
+      },
     };
   }
 
@@ -1635,50 +2148,225 @@ export class PortaCcihPropria implements PortaCcih {
     });
   }
 
-  // ── Leituras que aguardam a estrutura (pedido em saida/p-qualidade-ccih.json): falham fechadas, nunca vazio ──
+  // ── IRAS, antimicrobiano (configuração e decisão) e precaução ──
 
-  iras(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(IRAS));
+  private lerIras(c: ContextoCcih, filtro: string, p: unknown[], teto: number) {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar(
+        `SELECT ci.*, si.codigo AS sitio_codigo, COALESCE(b.codigo, '') AS setor, u.login AS registrado_por,
+                (SELECT GROUP_CONCAT(cr.codigo ORDER BY cc.sequencia SEPARATOR ',') FROM caso_infeccao_criterio cc
+                   JOIN criterio_infeccao cr ON cr.id = cc.criterio_infeccao_id
+                  WHERE cc.caso_infeccao_id = ci.id AND cc.atendido = TRUE AND cc.excluido_em IS NULL) AS criterios,
+                EXISTS (SELECT 1 FROM caso_infeccao_microrganismo cm WHERE cm.caso_infeccao_id = ci.id
+                           AND cm.multirresistente = TRUE AND cm.excluido_em IS NULL) AS mr
+           FROM caso_infeccao ci
+           JOIN sitio_infeccao si ON si.id = ci.sitio_infeccao_id
+           LEFT JOIN unidade_internacao un ON un.id = ci.unidade_internacao_id
+           LEFT JOIN bloco_internacao b ON b.id = un.bloco_internacao_id
+           LEFT JOIN usuario u ON u.id = COALESCE(ci.confirmador_usuario_id, ci.criado_por)
+          WHERE ci.estabelecimento_id = ? AND ci.excluido_em IS NULL AND ci.internacao_id IS NOT NULL ${filtro}
+          ORDER BY ci.data_infeccao, ci.id`,
+        [est, ...p],
+        { teto: teto + 1 },
+      );
+      return r.map(irasDe);
+    });
   }
 
-  irasDas(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(IRAS));
+  iras(c: ContextoCcih, id: number) {
+    return this.lerIras(c, 'AND ci.id = ?', [id], 1).then((r) => r[0] ?? null);
   }
 
-  irasNoPeriodo(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(IRAS));
+  irasDas(c: ContextoCcih, regs: readonly number[]) {
+    const u = [...new Set(regs)];
+    if (!u.length) return Promise.resolve([]);
+    return this.lerIras(c, `AND ci.internacao_id IN (${marcas(u.length)})`, u, TETO);
   }
 
-  itensConfigurados(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(CONFIGURACAO));
+  irasNoPeriodo(c: ContextoCcih, de: string, ate: string) {
+    return this.lerIras(
+      c,
+      'AND ci.data_infeccao >= ? AND ci.data_infeccao <= ?',
+      [de.slice(0, 10), ate.slice(0, 10)],
+      TETO_PERIODO,
+    ).then((r) => ({ itens: r.slice(0, TETO_PERIODO), cortada: r.length > TETO_PERIODO }));
   }
 
-  liberacao(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(LIBERACAO));
+  itensConfigurados(c: ContextoCcih) {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar(
+        `SELECT cfg.insumo_id, cfg.restrito, cfg.codigo_atc, cfg.ddd_gramas, cfg.gramas_por_unidade,
+                COALESCE(cfg.alterado_em, cfg.criado_em) AS em, COALESCE(ua.login, uc.login) AS por
+           FROM configuracao_antimicrobiano_insumo cfg
+           LEFT JOIN usuario ua ON ua.id = cfg.alterado_por
+           LEFT JOIN usuario uc ON uc.id = cfg.criado_por
+          WHERE cfg.estabelecimento_id = ? AND cfg.excluido_em IS NULL
+          ORDER BY cfg.insumo_id`,
+        [est],
+        { teto: TETO },
+      );
+      return r.map((x) => ({
+        item: n(x['insumo_id']),
+        restrito: verdadeiro(x['restrito']),
+        atc: textoN(x['codigo_atc']),
+        dddGramas: nn(x['ddd_gramas']),
+        gramasPorUnidade: nn(x['gramas_por_unidade']),
+        atualizadoPor: texto(x['por']),
+        atualizadoEm: instante(x['em']),
+      }));
+    });
   }
 
-  liberacoesDos(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(LIBERACAO));
+  private lerDecisoes(c: ContextoCcih, filtro: string, p: unknown[], teto: number) {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar(
+        `SELECT d.*, u.login AS decidido_por FROM decisao_antimicrobiano d
+           LEFT JOIN usuario u ON u.id = d.decidido_por_usuario_id
+          WHERE d.estabelecimento_id = ? AND d.excluido_em IS NULL ${filtro} ORDER BY d.id`,
+        [est, ...p],
+        { teto },
+      );
+      if (!r.length) return [];
+      const ids = r.map((x) => n(x['id']));
+      const rev = await l.consultar(
+        `SELECT rv.decisao_antimicrobiano_id, rv.marco, rv.conduta, rv.observacao, rv.revisado_em, u.login AS por
+           FROM revisao_decisao_antimicrobiano rv LEFT JOIN usuario u ON u.id = rv.revisado_por_usuario_id
+          WHERE rv.excluido_em IS NULL AND rv.decisao_antimicrobiano_id IN (${marcas(ids.length)})`,
+        ids,
+        { teto: ids.length * 2 },
+      );
+      const revisao = (id: number, marco: string) => {
+        const x = rev.find((y) => n(y['decisao_antimicrobiano_id']) === id && texto(y['marco']) === marco);
+        return x
+          ? {
+              em: instante(x['revisado_em']),
+              por: texto(x['por']),
+              conduta: camelo(x['conduta']),
+              observacao: textoN(x['observacao']),
+            }
+          : null;
+      };
+      return r.map((x): LiberacaoAntimicrobianoRegistrada => ({
+        id: n(x['id']),
+        itemPrescricao: n(x['prescricao_item_id']),
+        prescricao: n(x['prescricao_id']),
+        reg: n(x['internacao_id']),
+        paciente: nn(x['paciente_id']),
+        item: n(x['insumo_id']),
+        ficha: nn(x['ficha_antimicrobiano_id']),
+        prescritoEm: instante(x['prescrito_em']),
+        inicioTratamento: instante(x['inicio_tratamento_em']),
+        decisao: camelo(x['decisao']),
+        diasAutorizados: nn(x['dias_autorizados']),
+        justificativa: textoN(x['justificativa']),
+        noPrazo: verdadeiro(x['no_prazo']),
+        decididoEm: instante(x['decidido_em']),
+        decididoPor: texto(x['decidido_por']),
+        revisoes: { d3: revisao(n(x['id']), 'd3'), d7: revisao(n(x['id']), 'd7') },
+        versao: n(x['versao']),
+      }));
+    });
   }
 
-  precaucao(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(PRECAUCAO));
+  liberacao(c: ContextoCcih, id: number) {
+    return this.lerDecisoes(c, 'AND d.id = ?', [id], 1).then((r) => r[0] ?? null);
   }
 
-  precaucoesAbertas(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(PRECAUCAO));
+  liberacoesDos(c: ContextoCcih, itensPrescricao: readonly number[]) {
+    const u = [...new Set(itensPrescricao)];
+    if (!u.length) return Promise.resolve([]);
+    return this.lerDecisoes(c, `AND d.prescricao_item_id IN (${marcas(u.length)})`, u, u.length);
   }
 
-  precaucoesDa(..._a: unknown[]): Promise<never> {
-    void _a;
-    return Promise.reject(leituraPendente(PRECAUCAO));
+  /**
+   * As precauções, com os vizinhos bloqueados: a aberta mostra os bloqueios por isolamento abertos no mesmo quarto (o
+   * bloqueio é do quarto, partilhado pelas precauções abertas dele); a encerrada, os que ela mesma abriu.
+   */
+  private lerPrecaucoes(c: ContextoCcih, filtro: string, p: unknown[], teto: number) {
+    return this.ler(c, async (l, est) => {
+      const r = await l.consultar(
+        `SELECT ip.*, tp.codigo AS tipo, lh.acomodacao_id AS quarto, COALESCE(b.codigo, '') AS bloco,
+                COALESCE(ac.codigo, '') AS acomodacao, COALESCE(lh.codigo, '') AS leito_codigo, u.login AS inicio_por
+           FROM isolamento_paciente ip
+           JOIN tipo_precaucao tp ON tp.id = ip.tipo_precaucao_id
+           LEFT JOIN leito_hospitalar lh ON lh.id = ip.leito_hospitalar_id
+           ${JUNTAR_LEITO}
+           LEFT JOIN usuario u ON u.id = ip.criado_por
+          WHERE ip.estabelecimento_id = ? AND ip.excluido_em IS NULL AND ip.situacao <> 'cancelado' ${filtro}
+          ORDER BY ip.data_hora_inicio, ip.id`,
+        [est, ...p],
+        { teto },
+      );
+      if (!r.length) return [];
+      const ids = r.map((x) => n(x['id']));
+      const quartos = [...new Set(r.map((x) => nn(x['quarto'])).filter((x): x is number => x !== null))];
+      const bl = await l.consultar(
+        `SELECT ps.isolamento_paciente_id, ps.data_hora_fim, lh.id AS leito_id, lh.acomodacao_id,
+                COALESCE(b.codigo, '') AS bloco, COALESCE(ac.codigo, '') AS acomodacao, COALESCE(lh.codigo, '') AS leito
+           FROM periodo_situacao_leito ps
+           JOIN motivo_bloqueio_leito mb ON mb.id = ps.motivo_bloqueio_leito_id AND mb.codigo = 'isolamento'
+           JOIN leito_hospitalar lh ON lh.id = ps.leito_hospitalar_id
+           ${JUNTAR_LEITO}
+          WHERE lh.estabelecimento_id = ?
+            AND (ps.isolamento_paciente_id IN (${marcas(ids.length)})
+                 ${quartos.length ? `OR (ps.data_hora_fim IS NULL AND lh.acomodacao_id IN (${marcas(quartos.length)}))` : ''})
+          ORDER BY lh.codigo, ps.id`,
+        [est, ...ids, ...quartos],
+        { teto: TETO },
+      );
+      return r.map((x): PrecaucaoRegistrada => {
+        const aberta = x['data_hora_fim'] === null || x['data_hora_fim'] === undefined;
+        const vistos = new Set<number>();
+        const bloqueios = bl
+          .filter((y) =>
+            aberta
+              ? (y['data_hora_fim'] === null || y['data_hora_fim'] === undefined) &&
+                nn(y['acomodacao_id']) === nn(x['quarto']) &&
+                n(y['leito_id']) !== n(x['leito_hospitalar_id'])
+              : n(y['isolamento_paciente_id']) === n(x['id']),
+          )
+          .filter((y) => !vistos.has(n(y['leito_id'])) && vistos.add(n(y['leito_id'])) !== undefined)
+          .map((y) => ({
+            bloco: texto(y['bloco']),
+            acomodacao: texto(y['acomodacao']),
+            leito: texto(y['leito']),
+          }));
+        return {
+          id: n(x['id']),
+          reg: n(x['internacao_id']),
+          paciente: nn(x['paciente_id']),
+          leito: {
+            bloco: texto(x['bloco']),
+            acomodacao: texto(x['acomodacao']),
+            leito: texto(x['leito_codigo']),
+          },
+          motivo: camelo(x['motivo_precaucao']),
+          motivoOutro: textoN(x['motivo_outro']),
+          tipo: texto(x['tipo']),
+          origem: texto(x['origem_indicacao']),
+          exame: nn(x['exame_item_id']),
+          multirresistente: verdadeiro(x['multirresistente']),
+          bloqueios,
+          observacao: textoN(x['observacao']),
+          inicioEm: instante(x['data_hora_inicio']),
+          inicioPor: texto(x['inicio_por']),
+          fimEm: instanteN(x['data_hora_fim']),
+          motivoFim: x['motivo_encerramento'] === null ? null : camelo(x['motivo_encerramento']),
+          versao: n(x['versao']),
+        };
+      });
+    });
+  }
+
+  precaucao(c: ContextoCcih, id: number) {
+    return this.lerPrecaucoes(c, 'AND ip.id = ?', [id], 1).then((r) => r[0] ?? null);
+  }
+
+  precaucoesAbertas(c: ContextoCcih) {
+    return this.lerPrecaucoes(c, "AND ip.situacao = 'ativo' AND ip.data_hora_fim IS NULL", [], TETO);
+  }
+
+  precaucoesDa(c: ContextoCcih, reg: number) {
+    return this.lerPrecaucoes(c, 'AND ip.internacao_id = ?', [reg], TETO);
   }
 }

@@ -940,7 +940,9 @@ export class CcihController {
 
   @Post('antimicrobianos/itens')
   @Permissao(P.antimicrobianoLiberar)
-  @AuditadoNoHandler('qualidade.configurarAntimicrobiano: antimicrobiano com a trilha_auditoria')
+  @AuditadoNoHandler(
+    'qualidade.configurarAntimicrobiano: configuracao_antimicrobiano_insumo (uma por insumo) com a trilha_auditoria',
+  )
   async configurar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
     const e = corpo(esquemaConfigurarAntimicrobiano, b);
@@ -952,7 +954,7 @@ export class CcihController {
       s,
       E.qualidadeAntimicrobianoConfigurado.codigo,
       P.antimicrobianoLiberar,
-      { tabela: 'antimicrobiano', id: String(e.item) },
+      (x: { id: number }) => ({ tabela: 'configuracao_antimicrobiano_insumo', id: String(x.id) }),
       (g) => g.configurarAntimicrobiano({ ...e, agora, usuario: s.login }),
     );
   }
@@ -961,7 +963,7 @@ export class CcihController {
   @HttpCode(201)
   @Permissao(P.antimicrobianoLiberar)
   @AuditadoNoHandler(
-    'qualidade.liberarAntimicrobiano: liberacao_antimicrobiano (uma decisão por item) com a trilha_auditoria',
+    'qualidade.liberarAntimicrobiano: decisao_antimicrobiano (uma decisão por item) com a trilha_auditoria',
   )
   async liberar(@Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -996,7 +998,7 @@ export class CcihController {
       E.qualidadeAntimicrobianoLiberado.codigo,
       P.antimicrobianoLiberar,
       (x: { id: number }) => ({
-        tabela: 'liberacao_antimicrobiano',
+        tabela: 'decisao_antimicrobiano',
         id: String(x.id),
         paciente: i?.paciente ?? null,
       }),
@@ -1024,7 +1026,7 @@ export class CcihController {
   @Post('antimicrobianos/liberacoes/:id/revisar')
   @Permissao(P.antimicrobianoLiberar)
   @AuditadoNoHandler(
-    'qualidade.revisarAntimicrobiano: liberacao_antimicrobiano (versão conferida) com a trilha_auditoria',
+    'qualidade.revisarAntimicrobiano: decisao_antimicrobiano (versão conferida) e revisao_decisao_antimicrobiano com a trilha_auditoria',
   )
   async revisar(@Param('id') id: string, @Body() b: unknown, @Req() req: RequisicaoAutorizada) {
     const s = sessaoDe(req);
@@ -1045,7 +1047,7 @@ export class CcihController {
       s,
       E.qualidadeAntimicrobianoRevisado.codigo,
       P.antimicrobianoLiberar,
-      { tabela: 'liberacao_antimicrobiano', id: String(l.id), paciente: l.paciente },
+      { tabela: 'decisao_antimicrobiano', id: String(l.id), paciente: l.paciente },
       (g) =>
         g.revisarAntimicrobiano({
           id: l.id,

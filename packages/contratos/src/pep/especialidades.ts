@@ -296,6 +296,13 @@ export const esquemaRegistrarCicloOncologico = z
     justificativaIntervalo: livre(200).optional(),
     /** Iniciar um tratamento novo com este protocolo (recaída, nova linha): o motivo; só no ciclo 1. */
     novoTratamento: livre(200).optional(),
+    /**
+     * O diagnóstico oncológico do paciente (id) e a intenção do tratamento (id do cadastro de intenções) que abrem o
+     * tratamento do ciclo: exigidos quando o ciclo abre um tratamento (ciclo 1 sem tratamento aberto, ou tratamento
+     * novo); nos ciclos seguintes valem os do tratamento aberto. A API recusa `tratamento-sem-diagnostico` sem eles.
+     */
+    diagnostico: id.optional(),
+    intencao: id.optional(),
   })
   .strict();
 export type RegistrarCicloOncologicoEntrada = z.infer<typeof esquemaRegistrarCicloOncologico>;

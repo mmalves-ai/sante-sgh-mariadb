@@ -19,7 +19,7 @@
 // (dimensões, base, adicional e pendência; item sem profissional), o resumo da apuração (itens, pendentes e
 // pendências) e quem conferiu, o título a pagar e as retenções do RPA ligadas ao contas a pagar, o valor recebido da
 // produção e o adiantamento ao prestador. Até lá, essas partes respondem zero ou vazio.
-import type { ItemProducao, RegraRepasse } from '@sgh/contratos';
+import { esquemaLancarEventoRepasse, type ItemProducao, type RegraRepasse } from '@sgh/contratos';
 import {
   type ContextoNucleo,
   type ContextoOperacao,
@@ -670,6 +670,97 @@ async function aplicarOperacao(tx: TxOperacao, op: string, e: Record<string, unk
     default:
       throw recusa('operacao-desconhecida', `Operação ${op} não existe no repasse.`);
   }
+}
+
+// ── Gravador do lançamento do repasse sobre a transação de outra operação (escala: plantão realizado) ─────────────
+
+/** Tabelas que o gravador do lançamento grava (quem compõe o gravador na própria operação as declara). */
+export const TABELAS_EVENTO_REPASSE: readonly string[] = ['lancamento_repasse'];
+
+/** A entrada do lançamento composto: a de repasse.lancarEvento, sem a origem (sempre `plantao`) e sem o estorno. */
+export type EntradaEventoRepasseComposto = Omit<z.input<typeof esquemaLancarEventoRepasse>, 'origem' | 'estornaDe'>;
+
+/** O estorno composto: o lançamento original e a data, a competência e a justificativa do lançamento negativo. */
+export interface EntradaEstornoRepasseComposto {
+  readonly lancamento: number;
+  /** Data do lançamento negativo (AAAA-MM-DD) e a competência (AAAA-MM) em que ele entra. */
+  readonly data: string;
+  readonly competencia: string;
+  readonly justificativa: string;
+  /** Valor positivo a estornar; sem ele, o saldo ainda não estornado do original. */
+  readonly valor?: number;
+}
+
+const esquemaEstornoComposto = z
+  .object({
+    lancamento: z.number().int().positive(),
+    data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    competencia: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    justificativa: z.string().trim().min(10).max(400),
+    valor: z.number().positive().max(99_999_999).optional(),
+  })
+  .strict();
+
+/** Gravador do lançamento do repasse sobre a transação de outra operação do Executor (escala → repasse). */
+export interface GravadorEventoRepasse {
+  /**
+   * Inclui o lançamento de origem `plantao` com as mesmas validações e recusas de repasse.lancarEvento (evento ativo,
+   * favorecido vigente), no estabelecimento e com o usuário do contexto da transação.
+   */
+  incluir(entrada: EntradaEventoRepasseComposto): Promise<{ lancamento: number }>;
+  /** Lança o estorno (valor negativo ligado ao original), recusando o que passa do valor do original. */
+  estornar(entrada: EntradaEstornoRepasseComposto): Promise<{ lancamento: number }>;
+}
+
+export function gravadorEventoRepasse(tx: TxOperacao): GravadorEventoRepasse {
+  return {
+    async incluir(entrada) {
+      const analise = esquemaLancarEventoRepasse.safeParse({ ...entrada, origem: 'plantao' });
+      if (!analise.success)
+        throw recusa('lancamento-invalido', 'O lançamento composto do repasse não passou na validação do contrato.');
+      const r = await aplicarOperacao(tx, 'repasse.lancarEvento', analise.data as Record<string, unknown>, tx.contexto);
+      return { lancamento: n((r as Record<string, unknown>)['lancamento']) };
+    },
+    async estornar(entrada) {
+      const analise = esquemaEstornoComposto.safeParse(entrada);
+      if (!analise.success)
+        throw recusa('estorno-invalido', 'O estorno composto do repasse não passou na validação.');
+      const e = analise.data;
+      const est = exigirEstabelecimento(tx.contexto.estabelecimento);
+      const orig = await tx.uma(
+        `SELECT l.id, l.valor, l.profissional_id, l.evento_repasse_id, l.tipo_favorecido, l.referente,
+                (SELECT COALESCE(SUM(-x.valor), 0) FROM lancamento_repasse x
+                  WHERE x.estornado_lancamento_repasse_id = l.id AND x.excluido_em IS NULL AND x.situacao <> 'cancelado') AS estornado
+           FROM lancamento_repasse l
+          WHERE l.id = ? AND l.estabelecimento_id = ? AND l.excluido_em IS NULL AND l.tipo_lancamento <> 'estorno'`,
+        [e.lancamento, est],
+      );
+      if (!orig) throw recusa('original-inexistente', 'O lançamento original não existe neste estabelecimento.');
+      const saldo = centavos(n(orig['valor'])) - centavos(n(orig['estornado']));
+      const valor = e.valor ?? saldo / 100;
+      if (valor <= 0) throw recusa('estorno-excede', 'O lançamento original já foi todo estornado.');
+      const r = await aplicarOperacao(
+        tx,
+        'repasse.lancarEvento',
+        {
+          origem: 'estorno',
+          estornaDe: e.lancamento,
+          prestador: n(orig['profissional_id']),
+          evento: n(orig['evento_repasse_id']),
+          tipo: orig['tipo_favorecido'] === 'medico' ? 'M' : 'E',
+          competencia: e.competencia,
+          data: e.data,
+          previsao: null,
+          apuracao: null,
+          valor: -valor,
+          referente: textoN(orig['referente']),
+          justificativa: e.justificativa,
+        },
+        tx.contexto,
+      );
+      return { lancamento: n((r as Record<string, unknown>)['lancamento']) };
+    },
+  };
 }
 
 export class PortaRepassePropria implements PortaRepasse {

@@ -1769,18 +1769,17 @@ async function totalizarDocumento(tx: TxOperacao, documento: number, valor: numb
   await tx.alterar('documento_estoque', documento, n(r?.['versao']), { valor_total: reais2(valor) });
 }
 
-/** O documento do estoque pela chave de negócio (número e mês), travado. */
-async function documentoPelaChave(
+/** O documento do estoque pelo id, no estabelecimento e nos tipos pedidos, travado. */
+async function documentoPorId(
   tx: TxOperacao,
   est: number,
-  chave: Chave,
+  documento: number,
   tipos: readonly string[],
 ): Promise<Linha> {
   const [d] = await tx.consultarParaAtualizar<Linha>(
     `SELECT * FROM documento_estoque
-      WHERE estabelecimento_id = ? AND numero = ? AND YEAR(movimentado_em) = ? AND MONTH(movimentado_em) = ?
-        AND tipo IN (${lista(tipos.length)}) AND excluido_em IS NULL`,
-    [est, chave.doc, chave.ano, chave.mes, ...tipos],
+      WHERE id = ? AND estabelecimento_id = ? AND tipo IN (${lista(tipos.length)}) AND excluido_em IS NULL`,
+    [documento, est, ...tipos],
   );
   if (!d) throw recusa('documento-inexistente', 'O documento não existe neste estabelecimento.');
   return d;
@@ -1850,9 +1849,6 @@ async function registrarSaida(
   e: RegistrarSaidaEntrada,
   hoje: string,
 ): Promise<Ids> {
-  if (e.opme) throw modeloPendente('o consumo de OPME na saída (consumo_opme ligado ao movimento)');
-  if (e.manipulacao)
-    throw modeloPendente('a baixa do insumo da manipulação na saída (ordem_manipulacao_insumo)');
   recusar(conferirCabecalhoSaida({ centroCusto: e.centroCusto, local: e.local })[0] ?? null);
   await exigirMesAberto(tx, est, hoje);
   await localDoEstabelecimento(tx, est, e.local);
@@ -1884,8 +1880,8 @@ async function registrarSaida(
       (
         await tx.consultarParaAtualizar<Linha>(
           `SELECT id, versao, situacao FROM requisicao_material
-        WHERE estabelecimento_id = ? AND numero = ? AND YEAR(solicitado_em) = ? AND MONTH(solicitado_em) = ? AND excluido_em IS NULL`,
-          [est, e.requisicao.doc, e.requisicao.ano, e.requisicao.mes],
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+          [e.requisicao, est],
         )
       )[0] ?? null;
     if (
@@ -1923,6 +1919,7 @@ async function registrarSaida(
     observacao: e.observacao ?? null,
   });
   let total = 0;
+  let ultimo: SaidaFeita | null = null;
   for (const [k, it] of e.itens.entries()) {
     const insumo = await insumoAtivo(tx, it.item);
     await exigirSaldo(tx, est, e.local, insumo, it.quantidade);
@@ -1959,6 +1956,7 @@ async function registrarSaida(
     });
     await fecharItem(tx, item, mov, it.quantidade);
     total += mov.valor;
+    ultimo = { mov, item, lotes, insumo: it.item, quantidade: it.quantidade };
     if (ri) {
       const atendida = qtd(n(ri['quantidade_atendida']) + it.quantidade);
       const pedida = n(ri['quantidade_solicitada']) - n(ri['quantidade_cancelada']);
@@ -1980,8 +1978,173 @@ async function registrarSaida(
       atendido_em: new Date(),
     });
   }
+  const extra: Ids = {};
+  // O OPME e a manipulação saem com um item só (o contrato confere): o registro deles aponta o movimento da saída.
+  if (e.opme && ultimo) extra['consumo'] = await gravarConsumoOpme(tx, est, e, ultimo);
+  if (e.manipulacao && ultimo)
+    extra['ordem'] = await baixarInsumoManipulacao(tx, est, e.manipulacao, e.local, ultimo);
   const c = chaveLida(doc.numero, doc.em);
-  return { id: doc.id, ano: c.ano, mes: c.mes, doc: c.doc, itens: e.itens.length };
+  return { id: doc.id, ano: c.ano, mes: c.mes, doc: c.doc, itens: e.itens.length, ...extra };
+}
+
+/** O que a saída de um item gravou (o OPME e a manipulação apontam o movimento e o item do documento). */
+interface SaidaFeita {
+  readonly mov: { id: number; custo: number; valor: number };
+  readonly item: number;
+  readonly lotes: readonly LoteUsado[];
+  readonly insumo: number;
+  readonly quantidade: number;
+}
+
+/**
+ * O consumo de OPME em sala, ligado ao movimento da saída a paciente: lote, série, registro Anvisa, etiqueta lida,
+ * fornecedor e a exceção sem autorização. Com a solicitação, confere a versão vista e marca o item e a solicitação
+ * como utilizados quando já autorizados (o consumo sem autorização fica só no consumo, com o motivo).
+ */
+async function gravarConsumoOpme(
+  tx: TxOperacao,
+  est: number,
+  e: RegistrarSaidaEntrada,
+  u: SaidaFeita,
+): Promise<number> {
+  const o = e.opme!;
+  if (o.modelo) throw modeloPendente('o modelo do OPME no consumo (coluna de modelo em consumo_opme)');
+  const fab = await tx.uma<Linha>(
+    `SELECT id FROM fabricante WHERE UPPER(nome) = UPPER(?) AND ativo = TRUE AND excluido_em IS NULL
+      ORDER BY id LIMIT 1`,
+    [o.fabricante],
+  );
+  if (!fab)
+    throw recusa('fabricante-nao-cadastrado', 'O fabricante não está no cadastro de fabricantes.', {
+      campos: ['fabricante'],
+    });
+  // A cirurgia é do estabelecimento da sessão; a sala gravada é a do agendamento (cadastro), não a da tela.
+  const ag = await tx.uma<Linha>(
+    `SELECT sala_cirurgica_id, atendimento_id, paciente_id FROM agendamento_cirurgico
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [o.agendamento, est],
+  );
+  if (!ag)
+    throw recusa('agendamento-inexistente', 'A cirurgia não é deste estabelecimento.', {
+      campos: ['agendamento'],
+    });
+  // A cirurgia é do mesmo atendimento (e do mesmo paciente) da saída: o rastreio reverso e a conta dependem disso.
+  const pacienteSaida = e.atendimento ? await pacienteDoAtendimento(tx, est, e.atendimento) : null;
+  if (
+    (ag['atendimento_id'] != null && n(ag['atendimento_id']) !== e.atendimento) ||
+    (ag['paciente_id'] != null && pacienteSaida !== null && n(ag['paciente_id']) !== pacienteSaida)
+  )
+    throw recusa(
+      'agendamento-de-outro-atendimento',
+      'A cirurgia é de outro atendimento ou de outro paciente.',
+      {
+        campos: ['agendamento'],
+      },
+    );
+  let item: Linha | null = null;
+  if (o.solicitacao !== null) {
+    item =
+      (
+        await tx.consultarParaAtualizar<Linha>(
+          `SELECT s.id, s.versao, s.situacao, s.autorizado_em, s.agendamento_cirurgico_id, i.id AS item_id, i.versao AS item_versao,
+                  i.insumo_id, i.quantidade_autorizada, i.empresa_fornecedora_id
+             FROM solicitacao_opme s
+             JOIN solicitacao_opme_item i ON i.solicitacao_opme_id = s.id AND i.excluido_em IS NULL
+            WHERE s.id = ? AND s.estabelecimento_id = ? AND s.excluido_em IS NULL
+            ORDER BY i.sequencia LIMIT 1`,
+          [o.solicitacao, est],
+        )
+      )[0] ?? null;
+    if (!item || n(item['agendamento_cirurgico_id']) !== o.agendamento || n(item['insumo_id']) !== u.insumo)
+      throw recusa('solicitacao-inexistente', 'A solicitação não é desta cirurgia nem deste item.', {
+        campos: ['solicitacao'],
+      });
+    if (o.versaoVista !== null && n(item['versao']) !== o.versaoVista)
+      throw recusa('opme-mudou', 'A solicitação de OPME mudou em outra tela: recarregue e confira.');
+  }
+  const id = await tx.incluir('consumo_opme', {
+    estabelecimento_id: est,
+    atendimento_id: e.atendimento ?? null,
+    solicitacao_opme_item_id: item ? n(item['item_id']) : null,
+    agendamento_cirurgico_id: o.agendamento,
+    sala_cirurgica_id: numeroOuNulo(ag['sala_cirurgica_id']),
+    insumo_id: u.insumo,
+    fabricante_id: n(fab['id']),
+    empresa_fornecedora_id: o.fornecedor,
+    lote_insumo_id: u.lotes.length === 1 ? u.lotes[0]!.id : null,
+    numero_lote: o.lote,
+    numero_serie: o.serie,
+    registro_anvisa: o.registroAnvisa,
+    validade: o.validade,
+    etiqueta_rastreabilidade: o.codigoLido,
+    quantidade: u.quantidade,
+    local_estoque_id: e.local,
+    movimento_estoque_id: u.mov.id,
+    consignado: o.consignado,
+    sem_autorizacao: o.semAutorizacao !== null,
+    motivo_sem_autorizacao: o.semAutorizacao?.motivo ?? null,
+    registrado_por_usuario_id: usuarioDe(tx),
+    registrado_em: new Date(),
+    situacao: 'consumido',
+  });
+  if (item && item['quantidade_autorizada'] !== null && item['empresa_fornecedora_id'] !== null)
+    await tx.alterar('solicitacao_opme_item', n(item['item_id']), n(item['item_versao']), {
+      situacao: 'utilizado',
+    });
+  if (item && item['autorizado_em'] !== null)
+    await tx.alterar('solicitacao_opme', n(item['id']), n(item['versao']), { situacao: 'utilizada' });
+  // Sem autorização (a exceção registrada): a situação fica, mas a versão muda (o consumo mudou o que a tela leu).
+  else if (item)
+    await tx.alterar('solicitacao_opme', n(item['id']), n(item['versao']), {
+      situacao: String(item['situacao']),
+    });
+  return id;
+}
+
+/**
+ * A baixa do insumo da ordem de manipulação conferida: o insumo da ordem aponta o movimento da saída, com o lote, o
+ * custo e o valor; a ordem passa a baixada com o custo total. A versão vista e o local da ordem são conferidos.
+ */
+async function baixarInsumoManipulacao(
+  tx: TxOperacao,
+  est: number,
+  m: NonNullable<RegistrarSaidaEntrada['manipulacao']>,
+  local: number,
+  u: SaidaFeita,
+): Promise<number> {
+  const [o] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT id, versao, situacao, local_estoque_id FROM ordem_manipulacao
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [m.ordem, est],
+  );
+  if (!o) throw recusa('ordem-inexistente', 'A ordem de manipulação não existe.', { campos: ['ordem'] });
+  if (n(o['versao']) !== m.versaoVista)
+    throw recusa('ordem-mudou', 'A ordem de manipulação mudou em outra tela: recarregue e confira.');
+  if (String(o['situacao']) !== 'conferida')
+    throw recusa('ordem-nao-conferida', 'Só a ordem conferida tem o insumo baixado.', { campos: ['ordem'] });
+  if (n(o['local_estoque_id']) !== local)
+    throw recusa('local-da-ordem', 'O insumo sai do local de estoque da ordem.', { campos: ['local'] });
+  const [oi] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT id, versao, insumo_id, lote_insumo_id, quantidade_utilizada, movimento_estoque_id
+       FROM ordem_manipulacao_insumo
+      WHERE ordem_manipulacao_id = ? AND excluido_em IS NULL ORDER BY sequencia LIMIT 1`,
+    [m.ordem],
+  );
+  if (!oi || n(oi['insumo_id']) !== u.insumo || oi['movimento_estoque_id'] !== null)
+    throw recusa('insumo-fora-da-ordem', 'O item baixado não é o insumo da ordem.', { campos: ['itens'] });
+  if (qtd(n(oi['quantidade_utilizada'])) !== qtd(u.quantidade))
+    throw recusa('quantidade-da-ordem', 'A baixa é da quantidade usada na ordem.', { campos: ['itens'] });
+  await tx.alterar('ordem_manipulacao_insumo', n(oi['id']), n(oi['versao']), {
+    movimento_estoque_id: u.mov.id,
+    lote_insumo_id: u.lotes.length === 1 ? u.lotes[0]!.id : numeroOuNulo(oi['lote_insumo_id']),
+    custo_unitario: u.mov.custo,
+    valor_total: u.mov.valor,
+  });
+  await tx.alterar('ordem_manipulacao', n(o['id']), n(o['versao']), {
+    situacao: 'baixada',
+    valor_custo_total: u.mov.valor,
+  });
+  return n(o['id']);
 }
 
 /** A requisição de material ao local que atende (setor ou paciente), com os itens. */
@@ -2037,11 +2200,10 @@ async function registrarDevolucao(
   e: RegistrarDevolucaoEntrada,
   hoje: string,
 ): Promise<Ids> {
-  if (e.opme) throw modeloPendente('a devolução do OPME (consumo_opme ligado ao movimento)');
   await exigirMesAberto(tx, est, hoje);
   await localDoEstabelecimento(tx, est, e.local);
   recusar(conferirLocal(await escopoDaOperacao(tx, est), e.local, 'devolucao'));
-  const saida = await documentoPelaChave(tx, est, e.saida, TIPOS_SAIDA);
+  const saida = await documentoPorId(tx, est, e.saida, TIPOS_SAIDA);
   const tipoMov = await tipoMovimentoId(tx, TIPO_MOVIMENTO.devolucao);
   const doc = await novoDocumento(tx, est, {
     tipo: 'devolucao_interna',
@@ -2077,8 +2239,10 @@ async function registrarDevolucao(
         GROUP BY ml.lote_insumo_id`,
       [n(orig['movimento_estoque_id'])],
     );
+    // O OPME volta pelos lotes da saída, sem a tela escolher: o que saiu de cada lote e ainda não voltou.
+    const lotesDv = it.lotes.length || !e.opme ? it.lotes : lotesQueVoltam(saiu, jaVoltou, it.quantidade);
     const pedidoPorLote = new Map<number, number>();
-    for (const l of it.lotes)
+    for (const l of lotesDv)
       pedidoPorLote.set(l.loteSaida, (pedidoPorLote.get(l.loteSaida) ?? 0) + l.quantidade);
     for (const [lote, q] of pedidoPorLote) {
       const saiuDoLote = saiu
@@ -2092,7 +2256,7 @@ async function registrarDevolucao(
           campos: ['lotes'],
         });
     }
-    if (saiu.length && qtd(it.lotes.reduce((s, l) => s + l.quantidade, 0)) !== qtd(it.quantidade))
+    if (saiu.length && qtd(lotesDv.reduce((s, l) => s + l.quantidade, 0)) !== qtd(it.quantidade))
       throw recusa('lotes-diferem', 'Informe os lotes devolvidos (a soma é a quantidade).', {
         campos: ['lotes'],
       });
@@ -2105,7 +2269,7 @@ async function registrarDevolucao(
       natureza: 'entrada',
       tipoMovimento: tipoMov,
       valorEntrada: reais2(it.quantidade * n(orig['custo_unitario'])),
-      lotes: it.lotes.map((l) => ({ id: l.loteSaida, quantidade: l.quantidade })),
+      lotes: lotesDv.map((l) => ({ id: l.loteSaida, quantidade: l.quantidade })),
       hoje,
       documento: doc.id,
       documentoItem: item,
@@ -2116,10 +2280,62 @@ async function registrarDevolucao(
     });
     await fecharItem(tx, item, mov, it.quantidade);
     total += mov.valor;
+    if (e.opme) await devolverConsumoOpme(tx, est, e.opme, n(orig['movimento_estoque_id']));
   }
   await totalizarDocumento(tx, doc.id, total);
   const c = chaveLida(doc.numero, doc.em);
   return { id: doc.id, ano: c.ano, mes: c.mes, doc: c.doc, itens: e.itens.length };
+}
+
+/** Os lotes que voltam: de cada lote da saída, o que saiu menos o que já voltou, até a quantidade devolvida. */
+function lotesQueVoltam(
+  saiu: readonly Linha[],
+  jaVoltou: readonly Linha[],
+  quantidade: number,
+): { loteSaida: number; quantidade: number }[] {
+  const r: { loteSaida: number; quantidade: number }[] = [];
+  let falta = quantidade;
+  for (const s of saiu) {
+    if (falta <= 0) break;
+    const lote = n(s['lote_insumo_id']);
+    const livre = qtd(
+      n(s['quantidade']) - n(jaVoltou.find((v) => n(v['lote_insumo_id']) === lote)?.['quantidade']),
+    );
+    const q = qtd(Math.min(livre, falta));
+    if (q > 0) {
+      r.push({ loteSaida: lote, quantidade: q });
+      falta = qtd(falta - q);
+    }
+  }
+  return r;
+}
+
+/** A devolução do consumo de OPME: o consumo é o do movimento devolvido; devolvido por inteiro, muda de situação. */
+async function devolverConsumoOpme(
+  tx: TxOperacao,
+  est: number,
+  o: NonNullable<RegistrarDevolucaoEntrada['opme']>,
+  movimentoSaida: number,
+): Promise<void> {
+  const [c] = await tx.consultarParaAtualizar<Linha>(
+    `SELECT id, versao, quantidade, movimento_estoque_id, situacao FROM consumo_opme
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [o.consumo, est],
+  );
+  if (!c || n(c['movimento_estoque_id']) !== movimentoSaida || String(c['situacao']) !== 'consumido')
+    throw recusa('consumo-fora-da-saida', 'O consumo de OPME não é deste item da saída.', {
+      campos: ['consumo'],
+    });
+  const [v] = await tx.consultar<Linha>(
+    `SELECT COALESCE(SUM(quantidade), 0) AS q FROM movimento_estoque
+      WHERE estorno_movimento_estoque_id = ? AND excluido_em IS NULL`,
+    [movimentoSaida],
+  );
+  const tudo = qtd(n(v?.['q'])) >= qtd(n(c['quantidade']));
+  await tx.alterar('consumo_opme', n(c['id']), n(c['versao']), {
+    motivo_devolucao: o.motivo,
+    ...(tudo ? { situacao: 'devolvido' } : {}),
+  });
 }
 
 /**
@@ -2856,7 +3072,7 @@ async function reporKitRastreavel(tx: TxOperacao, est: number, e: ReporKitEntrad
     [e.kit, est],
   );
   if (!kit) throw recusa('kit-inexistente', 'O carrinho não existe.');
-  const saida = await documentoPelaChave(tx, est, e.saida, TIPOS_SAIDA);
+  const saida = await documentoPorId(tx, est, e.saida, TIPOS_SAIDA);
   const agora = new Date();
   for (const i of e.itens) {
     const [it] = await tx.consultarParaAtualizar<Linha>(
@@ -2899,8 +3115,8 @@ async function desconsolidarDocumento(
   await exigirMesAberto(tx, est, hoje);
   const [nota] = await tx.consultarParaAtualizar<Linha>(
     `SELECT id, versao, situacao, local_estoque_id, empresa_fornecedora_id FROM nota_entrada
-      WHERE estabelecimento_id = ? AND numero = ? AND YEAR(data_entrada) = ? AND MONTH(data_entrada) = ? AND excluido_em IS NULL`,
-    [est, e.documento.doc, e.documento.ano, e.documento.mes],
+      WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+    [e.documento, est],
   );
   if (!nota) throw recusa('documento-inexistente', 'O documento não existe.');
   if (nota['situacao'] !== 'confirmada') throw recusa('nao-consolidado', 'O documento não está consolidado.');
@@ -3044,6 +3260,11 @@ export const TABELAS_OPERACOES_SUPRIMENTOS = [
   'saldo_estoque_mensal',
   'kit_rastreavel_item',
   'movimento_kit_rastreavel',
+  'consumo_opme',
+  'solicitacao_opme',
+  'solicitacao_opme_item',
+  'ordem_manipulacao',
+  'ordem_manipulacao_insumo',
 ] as const;
 
 /** O nome da operação no núcleo (minúsculas com sublinhado: suprimentos.registrar_saida). */

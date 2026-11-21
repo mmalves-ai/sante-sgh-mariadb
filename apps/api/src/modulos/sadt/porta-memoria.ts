@@ -1189,7 +1189,6 @@ export class PortaSadtMemoria implements PortaSadt {
         return true;
       },
       registrarLeitura: async () => undefined,
-      registrarOrcamento: async () => s.proximo++,
       marcarOrcamentoConvertido: async (r) => {
         const o = s.orcamentos.find((x) => x.id === r.orcamento);
         if (!o || o.convertido) throw recusa('orcamento-convertido', 'O orçamento já foi convertido.');

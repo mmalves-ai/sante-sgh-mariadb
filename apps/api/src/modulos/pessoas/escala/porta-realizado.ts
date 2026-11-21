@@ -1,8 +1,8 @@
 // Porta do plantão realizado, fatia F6 (M52.6; ficha, seções 5 e 6; DP-33): os plantões das escalas publicadas, o
 // realizado com a decisão por outra pessoa, as tarifas por hora e o lançamento no repasse:
 //   - `banco`: a porta própria sobre o MariaDB do cliente (porta-realizado-propria.ts): o realizado é o próprio plantão
-//     (horário real, revisado_* e aprovado_*) e a tarifa é a de valor_hora_plantao; o lançamento no repasse, o estorno
-//     e a inclusão de tarifa por tipo de plantão aguardam o modelo (pedido do lote 03-04) e respondem 409 com o motivo;
+//     (horário real, revisado_* e aprovado_*) e a tarifa é a de valor_hora_plantao; o lançamento no repasse e o
+//     negativo do estorno vão pelo gravador do repasse numa operação do Executor, com o plantão ligado ao lançamento;
 //   - `memoria`: a sessão sintética de dev/ci (E2E), com o lançamento simulado;
 //   - indisponível: fora de dev/ci sem o núcleo, 503 em tudo (falha fechada).
 import {

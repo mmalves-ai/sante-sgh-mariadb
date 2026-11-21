@@ -1,0 +1,22 @@
+[
+  {
+    "tipo": "sementes",
+    "arquivo": "db/sementes/18_qualidade.json",
+    "tabelas": {
+      "sitio_infeccao": "os 6 sítios do contrato em snake_case: ipcs, pav, itu, isc, pneumonia, outra (versao_criterio da publicação vigente)",
+      "criterio_infeccao": "os 21 critérios do contrato (CRITERIOS_IRAS) em snake_case, sob cada sítio em que valem (grupos do @sgh/dominio-qualidade), com vigencia_inicio"
+    },
+    "motivo": "A ficha de IRAS agora grava em caso_infeccao e caso_infeccao_criterio; sítio e critério fora do cadastro são recusados (sitio-nao-cadastrado, criterio-nao-cadastrado). Sem a semente, o cliente novo não registra IRAS."
+  },
+  {
+    "tipo": "sementes",
+    "arquivo": "db/sementes/07_internacao.json",
+    "tabelas": { "situacao_leito": "uma situação com situacao_base = 'bloqueado' (codigo bloqueado), se ainda não houver" },
+    "motivo": "O bloqueio dos vizinhos pela precaução abre um periodo_situacao_leito na situação 'bloqueado' com o motivo 'isolamento'; sem a situação, recusa bloqueio-nao-cadastrado."
+  },
+  {
+    "tipo": "construcao",
+    "arquivos": ["apps/api/src/modulos/qualidade/porta-gestao-propria.ts", "apps/api/src/modulos/qualidade/porta-propria.ts", "apps/api/src/modulos/qualidade/apoio-propria.ts", "apps/api/src/modulos/qualidade/seguranca.controller.ts"],
+    "motivo": "Não coube nesta volta (teto de turnos): gestão (documentos, indicadores, auditorias, comissões, pesquisas, contagem, envios, versões, protocolos, revisão de prontuário e cancelamento da não conformidade; controles do risco em texto já têm a coluna controles_descricao), etapa 2 do incidente (gravações, queixa técnica, sugestão e 7 leituras de outros módulos). Depois disso saem leituraPendente/modeloPendente do apoio-propria.ts e o 'indisponiveis' do seguranca.controller.ts."
+  }
+]

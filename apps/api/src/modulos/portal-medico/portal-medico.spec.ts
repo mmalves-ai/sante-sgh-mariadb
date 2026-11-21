@@ -153,6 +153,7 @@ describe('portal do médico externo (M50, etapa 3)', () => {
         conselho: 'CRM',
         uf: 'SP',
         numero: '54321',
+        cpf: '52998224725',
         email: 'cirurgiao@exemplo.invalid',
         senha: 'senha-longa-sintetica',
         aceiteTermo: true,

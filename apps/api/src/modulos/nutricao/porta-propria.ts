@@ -21,10 +21,10 @@
 // (registro_social, com a barreira social em barreira_alta), a correção (correcao_registro_nutricao, uma por
 // registro), a avaliação farmacêutica da NPT (avaliacao_nutricao_parenteral, uma por formulação), o plano de refeição
 // do acompanhante (plano_refeicao_acompanhante + as refeições) e o histórico da ordem do lactário
-// (preparo_lactario_evento) gravam e leem no modelo próprio.
-// Pendências (pedido em docs/obra/fatias/f24/saida/p-especialidades-nutricao.json): o histórico de alteração do plano
-// de refeição do acompanhante (sem tabela de eventos: a gravação recusa com "modelo-pendente" e nada é gravado), o hash
-// do mapa, os exames com jejum da agenda e o volume parenteral do balanço.
+// (preparo_lactario_evento) e o do plano de refeição do acompanhante (plano_refeicao_acompanhante_evento) gravam e
+// leem no modelo próprio.
+// Pendências (pedido em docs/obra/fatias/f24/saida/p-especialidades-nutricao.json): o hash do mapa, os exames com
+// jejum da agenda e o volume parenteral do balanço.
 import {
   type AvaliacaoNptLida,
   CODIGOS_TIPO_BARREIRA,
@@ -38,7 +38,6 @@ import {
 import {
   type ContextoNucleo,
   definirOperacao,
-  ErroOperacao,
   type Executor,
   type Leitor,
   type NucleoProprio,
@@ -132,6 +131,7 @@ const TABELAS_GRAVACAO = [
   'plano_refeicao_acompanhante',
   'plano_refeicao_acompanhante_refeicao',
   'preparo_lactario_evento',
+  'plano_refeicao_acompanhante_evento',
 ] as const;
 
 /** Estado da gravação: os acompanhamentos marcados 'retificado' à espera da correção (anterior → novo). */
@@ -171,13 +171,6 @@ function listaJson(v: unknown): string[] {
   }
 }
 
-export const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a tabela ou coluna no modelo do banco (pedido registrado): nada foi gravado.`,
-  );
 
 const SQL_INTERNADOS = `
   SELECT i.id, i.paciente_id, i.atendimento_id, pf.nome, pf.data_nascimento, i.data_hora_entrada, i.situacao,
@@ -769,7 +762,22 @@ function gravadorSobre(
       };
     },
     async registrarAlteracao(a) {
-      if (a.tabela !== 'ordem_lactario') throw modeloPendente('O histórico de alteração da refeição do acompanhante');
+      if (a.tabela !== 'ordem_lactario') {
+        // Histórico do plano de refeição do acompanhante: só 'alterado' e 'cancelado' (CHECK da tabela).
+        if (a.evento === 'etiqueta-emitida')
+          throw recusa('evento-invalido', 'O plano de refeição do acompanhante não emite etiqueta.');
+        const p = await tx.uma('SELECT id FROM plano_refeicao_acompanhante WHERE id = ? AND estabelecimento_id = ?', [a.id, est]);
+        if (!p) throw recusa('acompanhante-inexistente', 'O plano de refeição do acompanhante não existe neste estabelecimento.');
+        return tx.incluir('plano_refeicao_acompanhante_evento', {
+          plano_refeicao_acompanhante_id: a.id,
+          evento: EVENTO_DO_MODELO[a.evento],
+          dados_antes: jsonDoTexto(a.antes),
+          dados_depois: jsonDoTexto(a.depois),
+          motivo: a.motivo,
+          ocorrido_em: new Date(),
+          usuario_id: usuario,
+        });
+      }
       const o = await tx.uma('SELECT id FROM preparo_lactario WHERE id = ? AND estabelecimento_id = ?', [a.id, est]);
       if (!o) throw recusa('ordem-inexistente', 'A ordem do lactário não existe neste estabelecimento.');
       return tx.incluir('preparo_lactario_evento', {

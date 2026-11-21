@@ -1,0 +1,40 @@
+{
+  "lote": "p2-suprimentos-farmacia",
+  "pedidos": [
+    {
+      "tipo": "ddl",
+      "tabela": "solicitacao_opme_etapa (nova)",
+      "colunas": "solicitacao_opme_id FK, etapa (pedido, consignacao, cme, nf), ocorrido_em, usuario_id FK, pedido_compra_id FK nulo, nota_entrada_id FK nulo, remessa_consignada_id FK nulo, empresa_fornecedora_id FK nulo, observacao VARCHAR(500); auditoria padrão",
+      "motivo": "As etapas de pedido de compra, consignação, esterilização e nota fiscal da solicitação de OPME não têm onde ficar ligadas à solicitação: a porta recusa essas quatro etapas com modelo-pendente (opme-porta-propria.ts, ETAPA_PENDENTE)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "consumo_opme",
+      "colunas": "modelo VARCHAR(80) NULL",
+      "motivo": "O modelo do implante informado no consumo em sala não tem coluna; com modelo preenchido a saída recusa com modelo-pendente (porta-propria.ts, gravarConsumoOpme)."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "autorizacao_opme",
+      "colunas": "numero_guia VARCHAR(30) NULL",
+      "motivo": "O número da guia da operadora vai hoje na primeira linha da observação (prefixo 'guia:'), lido e escrito só pela porta; a coluna própria tira esse arranjo."
+    },
+    {
+      "tipo": "ddl",
+      "tabela": "ordem_manipulacao",
+      "colunas": "dose VARCHAR(60) NULL",
+      "motivo": "A dose da ordem vai hoje na observação da ordem (a observação da tela é a da conferência)."
+    },
+    {
+      "tipo": "numeracao",
+      "arquivo": "tools/db/configurar_numeracoes.py",
+      "valores": ["solicitacao_opme", "ordem_manipulacao"],
+      "motivo": "A solicitação de OPME e a ordem de manipulação pedem número de negócio (sequencia_negocio); sem a numeração o criar cliente deixa as duas gravações recusando."
+    },
+    {
+      "tipo": "codigo",
+      "arquivo": "apps/api/src/modulos/suprimentos/porta-propria.ts:criarPedido",
+      "motivo": "Último uso de modeloPendente fora do OPME: o vínculo do pedido de compra ao contrato do fornecedor. Enquanto ele e as etapas acima existirem, operacoes.ts mantém modeloPendente (dívida 1 arquivo)."
+    }
+  ]
+}

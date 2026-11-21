@@ -74,6 +74,14 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
     usuario,
     correlacao: `t-${MARCA}`,
   });
+  const ctxOp = (est = m.est) => ({
+    ...ctx(est),
+    chaveIdempotencia: `${MARCA}-${Math.random().toString(36).slice(2)}`,
+  });
+  const extras: { profissional: number | null; colaborador: number | null } = {
+    profissional: null,
+    colaborador: null,
+  };
   const um = (sql: string, p: unknown[]) =>
     nucleo.lerSomente({ cliente: CLIENTE, correlacao: `t-${MARCA}` }, (l) => l.uma(sql, p));
 
@@ -176,6 +184,17 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
           `DELETE pe FROM publicacao_escala pe JOIN escala x ON x.id = pe.escala_id WHERE x.${em}`,
           ests,
         );
+        await e.executar(
+          `UPDATE plantao SET lancamento_repasse_id = NULL, estorno_lancamento_repasse_id = NULL WHERE ${em}`,
+          ests,
+        );
+        await e.executar(
+          `DELETE FROM lancamento_repasse WHERE ${em} AND estornado_lancamento_repasse_id IS NOT NULL`,
+          ests,
+        );
+        await e.executar(`DELETE FROM lancamento_repasse WHERE ${em}`, ests);
+        await e.executar(`DELETE FROM favorecido_repasse WHERE ${em}`, ests);
+        await e.executar(`DELETE FROM evento_repasse WHERE ${em}`, ests);
         await e.executar(`DELETE FROM plantao WHERE ${em}`, ests);
         await e.executar(`DELETE FROM valor_hora_plantao WHERE ${em}`, ests);
         await e.executar(`DELETE FROM escala WHERE ${em}`, ests);
@@ -187,6 +206,16 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
         await e.executar('DELETE FROM cargo WHERE codigo = ?', [`${MARCA}-CG`]);
         await e.executar('DELETE FROM regime_jornada WHERE codigo LIKE ?', [`${MARCA}%`]);
         await e.executar('DELETE FROM colaborador WHERE id IN (?, ?)', [m.colab, m.colab2]);
+        if (extras.colaborador !== null)
+          await e.executar('DELETE FROM colaborador WHERE id = ?', [extras.colaborador]);
+        if (extras.profissional !== null) {
+          const pf = await e.uma<{ pessoa_fisica_id: number }>(
+            'SELECT pessoa_fisica_id FROM profissional WHERE id = ?',
+            [extras.profissional],
+          );
+          await e.executar('DELETE FROM profissional WHERE id = ?', [extras.profissional]);
+          if (pf) await e.executar('DELETE FROM pessoa_fisica WHERE id = ?', [pf.pessoa_fisica_id]);
+        }
         await e.executar(`DELETE FROM setor_funcional WHERE ${em}`, ests);
       });
     await nucleo?.encerrar();
@@ -246,21 +275,26 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
 
   it('escala, plantões, publicação (outbox) e cancelamento, isolados por estabelecimento', async () => {
     const competencia = '2031-03';
-    // A cobertura mínima ainda não tem coluna: informada acima de zero, a criação recusa (nunca finge gravar).
+    // A cobertura mínima é coluna da escala: informada na criação, grava e volta na leitura.
+    const comCobertura = await porta.gravarSgh(
+      ctx(),
+      (r: number) => linha('pessoas.escala.criada', 'escala', r),
+      (g) =>
+        g.incluirEscala({
+          unidade: m.setor,
+          setor: '',
+          competencia: '2031-02',
+          tipo: 'enfermagem',
+          cobertura: { manha: 1, tarde: 1, noite: 1 },
+          por: 'x',
+        }),
+    );
     expect(
-      await codigoDe(
-        porta.gravarSgh(ctx(), linha('pessoas.escala.criada', 'escala'), (g) =>
-          g.incluirEscala({
-            unidade: m.setor,
-            setor: '',
-            competencia,
-            tipo: 'enfermagem',
-            cobertura: { manha: 1, tarde: 1, noite: 1 },
-            por: 'x',
-          }),
-        ),
+      await um(
+        'SELECT cobertura_minima_manha, cobertura_minima_tarde, cobertura_minima_noite FROM escala WHERE id = ?',
+        [comCobertura],
       ),
-    ).toBe('modelo-pendente');
+    ).toMatchObject({ cobertura_minima_manha: 1, cobertura_minima_tarde: 1, cobertura_minima_noite: 1 });
     const escala = await porta.gravarSgh(
       ctx(),
       (r: number) => linha('pessoas.escala.criada', 'escala', r),
@@ -285,13 +319,19 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
           }),
         ),
       ),
-    ).toBe('modelo-pendente');
-    expect(porta.coberturaRegistrada).toBe(false);
+    ).toBe('ok');
+    expect(porta.coberturaRegistrada).toBe(true);
+    expect(
+      await um('SELECT cobertura_minima_manha, versao FROM escala WHERE id = ?', [escala]),
+    ).toMatchObject({
+      cobertura_minima_manha: 2,
+      versao: 2,
+    });
     expect(await porta.escala(ctx(), escala)).toMatchObject({
       estado: 'rascunho',
       competencia,
       unidade: m.setor,
-      versao: 1,
+      versao: 2,
       plantoes: 0,
     });
     expect(await porta.escala(ctx(m.outroEst), escala)).toBeNull();
@@ -542,7 +582,7 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
     ).toMatchObject({ n: 1 });
   });
 
-  it('realizado sobre o plantão: informa, recusa, informa de novo e aprova por outra pessoa; valor pela tarifa; repasse aguarda o modelo', async () => {
+  it('realizado sobre o plantão: informa, recusa, informa de novo e aprova por outra pessoa; valor pela tarifa; tarifa por tipo grava', async () => {
     const escala = await porta.gravarSgh(
       ctx(),
       (r: number) => linha('pessoas.escala.criada', 'escala', r),
@@ -655,26 +695,311 @@ describe.skipIf(SEM_BANCO)('portas próprias da escala e do realizado (MariaDB, 
       [p],
     );
     expect(await realizado.realizado(ctx(m.outroEst), p)).toBeNull();
-    // Lançamento, estorno e inclusão de tarifa aguardam o modelo: 409 com o motivo, nunca sucesso falso.
-    expect(await realizado.podeGravar(ctx(), 'repasse.lancarEvento')).toMatchObject({
-      pode: false,
-      codigo: 'modelo-pendente',
-    });
-    expect(await codigoDe(realizado.executar())).toBe('modelo-pendente');
+    // A inclusão de tarifa por tipo de plantão grava (a tarifa sem tipo valia para todos).
+    const tarifa = await realizado.gravarSgh(
+      ctx(),
+      (r: number) => linha('pessoas.tarifa_plantao.gravada', 'valor_hora_plantao', r),
+      (g) =>
+        g.incluirTarifa({
+          tipo: 'sobreaviso',
+          unidade: null,
+          inicio: '2031-07-01',
+          fim: null,
+          valorHora: 50,
+          por: 'x',
+        }),
+    );
     expect(
-      await codigoDe(
-        realizado.gravarSgh(ctx(), linha('pessoas.tarifa_plantao.gravada', 'valor_hora_plantao'), (g) =>
-          g.incluirTarifa({
-            tipo: 'sobreaviso',
-            unidade: null,
-            inicio: '2031-07-01',
-            fim: null,
-            valorHora: 50,
+      await um('SELECT tipo_plantao, valor_hora, estabelecimento_id FROM valor_hora_plantao WHERE id = ?', [
+        tarifa,
+      ]),
+    ).toMatchObject({ tipo_plantao: 'sobreaviso', estabelecimento_id: m.est });
+    // O vínculo CLT não é prestador: o lançamento no repasse recusa sem gravar nada.
+    expect(await realizado.podeGravar(ctx(), 'repasse.lancarEvento')).toMatchObject({ pode: true });
+    expect(await codigoDe(realizado.executar(ctx(), 'outra.operacao', {}, ctxOp()))).toBe(
+      'operacao-desconhecida',
+    );
+  });
+
+  it('lançamento do plantão no repasse e estorno: liga o plantão ao lançamento, lança o negativo e liga o estorno', async () => {
+    // Prestador terceiro: colaborador sem vínculo no estabelecimento, com o profissional do plantão, evento e favorecido.
+    const agora = new Date();
+    const x = await nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-repasse` }, async (e) => {
+      const pf = await e.inserir('INSERT INTO pessoa_fisica (nome, criado_em) VALUES (?, ?)', [
+        `MEDICO ${MARCA} SINTETICO`,
+        agora,
+      ]);
+      const prof = await e.inserir(
+        "INSERT INTO profissional (pessoa_fisica_id, tipo, criado_em) VALUES (?, 'corpo_clinico', ?)",
+        [pf, agora],
+      );
+      const sexo = Number((await e.uma<{ id: number }>("SELECT id FROM sexo WHERE sigla = 'F'"))?.id ?? 0);
+      const colab = await e.inserir(
+        "INSERT INTO colaborador (nome, cpf, data_nascimento, sexo_id, grau_instrucao, profissional_id, criado_em) VALUES (?, ?, '1980-01-01', ?, '07', ?, ?)",
+        [`PRESTADOR ${MARCA} SINTETICO`, `7${String(Date.now()).slice(-10)}`, sexo, prof, agora],
+      );
+      const evento = await e.inserir(
+        "INSERT INTO evento_repasse (estabelecimento_id, codigo, nome, natureza, tipo_lancamento, vigencia_inicio, criado_em) VALUES (?, ?, 'PLANTAO SINTETICO', 'rendimento', 'credito', '2030-01-01', ?)",
+        [m.est, `${MARCA}EV`, agora],
+      );
+      await e.inserir(
+        "INSERT INTO favorecido_repasse (estabelecimento_id, profissional_id, tipo_favorecido, vigencia_inicio, criado_em) VALUES (?, ?, 'proprio_profissional', '2030-01-01', ?)",
+        [m.est, prof, agora],
+      );
+      return { prof, colab, evento };
+    });
+    extras.profissional = x.prof;
+    extras.colaborador = x.colab;
+    const escala = await porta.gravarSgh(
+      ctx(),
+      (r: number) => linha('pessoas.escala.criada', 'escala', r),
+      (g) =>
+        g.incluirEscala({
+          unidade: m.setor,
+          setor: '',
+          competencia: '2031-10',
+          tipo: 'medica',
+          cobertura: { manha: 0, tarde: 0, noite: 0 },
+          por: 'x',
+        }),
+    );
+    const plantao = (dia: string) =>
+      porta.gravarSgh(
+        ctx(),
+        (r: number) => linha('pessoas.plantao.gravado', 'plantao', r),
+        (g) =>
+          g.incluirPlantao({
+            escala,
+            vinculo: 0,
+            pessoa: x.colab,
+            profissional: x.prof,
+            registro: x.prof,
+            tipo: 'presencial',
+            inicio: `2031-10-${dia}T07:00`,
+            fim: `2031-10-${dia}T13:00`,
+            chegadaMin: null,
+            alertaConselho: null,
+            redeNaoConferida: false,
+            motivo: null,
             por: 'x',
           }),
+      );
+    const p1 = await plantao('04');
+    const p2 = await plantao('05');
+    await porta.gravarSgh(ctx(), linha('pessoas.escala.publicada', 'escala', escala), (g) =>
+      g.publicarEscala({ id: escala, versao: 1, justificativaFuro: null, por: 'x' }),
+    );
+    for (const p of [p1, p2]) {
+      await realizado.gravarSgh(
+        ctx(),
+        (r: number) => linha('pessoas.realizado.registrado', 'plantao', r),
+        (g) =>
+          g.incluirRealizado({
+            plantao: p,
+            vinculo: 0,
+            inicio: `2031-10-0${p === p1 ? 4 : 5}T07:00`,
+            fim: `2031-10-0${p === p1 ? 4 : 5}T13:00`,
+            minutos: 0,
+            origem: 'informado',
+            observacao: null,
+            por: 'x',
+          }),
+      );
+      const r = (await realizado.realizado(ctx(), p))!;
+      await realizado.gravarSgh(
+        ctx(m.est, m.decisor),
+        linha('pessoas.realizado.decidido', 'plantao', p),
+        (g) =>
+          g.decidirRealizado({
+            id: p,
+            versao: r.versao,
+            situacao: 'aprovado',
+            motivo: null,
+            tarifa: null,
+            valorHora: null,
+            valor: null,
+            por: 'x',
+          }),
+      );
+    }
+    expect((await realizado.plantao(ctx(), p1))!).toMatchObject({
+      tipoVinculo: 'terceiro',
+      registro: x.prof,
+    });
+    const base = {
+      origem: 'plantao',
+      empresa: 1,
+      competencia: '2031-10',
+      data: '2031-10-31',
+      previsao: null,
+      evento: x.evento,
+      tipo: 'M',
+      prestador: x.prof,
+      profissional: x.prof,
+      referente: 'PLANTOES 2031-10',
+      justificativa: 'Plantões realizados e aprovados (2): 720,00 + 720,00',
+      apuracao: null,
+      estornaDe: null,
+      plantoes: [p1, p2],
+    };
+    // Valor diferente da soma: recusa sem gravar o lançamento nem ligar os plantões.
+    expect(
+      await codigoDe(realizado.executar(ctx(), 'repasse.lancarEvento', { ...base, valor: 1000 }, ctxOp())),
+    ).toBe('valor-diferente-dos-plantoes');
+    expect(
+      await um('SELECT COUNT(*) AS n FROM lancamento_repasse WHERE evento_repasse_id = ?', [x.evento]),
+    ).toMatchObject({ n: 0 });
+    const feito = await realizado.executar(ctx(), 'repasse.lancarEvento', { ...base, valor: 1440 }, ctxOp());
+    const lanc = Number((feito.resultado as Record<string, unknown>)['lancamento']);
+    expect(lanc).toBeGreaterThan(0);
+    expect(feito.trilha).not.toBeNull();
+    expect(
+      await um(
+        'SELECT tipo_lancamento, valor, profissional_id, competencia, estabelecimento_id FROM lancamento_repasse WHERE id = ?',
+        [lanc],
+      ),
+    ).toMatchObject({
+      tipo_lancamento: 'plantao',
+      valor: '1440.00',
+      profissional_id: x.prof,
+      estabelecimento_id: m.est,
+    });
+    expect(
+      await um('SELECT lancamento_repasse_id, lancado_por_usuario_id FROM plantao WHERE id = ?', [p1]),
+    ).toMatchObject({
+      lancamento_repasse_id: lanc,
+      lancado_por_usuario_id: m.usuario,
+    });
+    expect(await realizado.realizado(ctx(), p2)).toMatchObject({
+      situacao: 'aprovado',
+      lancamento: lanc,
+      valor: 720,
+    });
+    // Lançar de novo o mesmo plantão: recusa (já lançado).
+    expect(
+      await codigoDe(realizado.executar(ctx(), 'repasse.lancarEvento', { ...base, valor: 1440 }, ctxOp())),
+    ).toBe('plantao-nao-lancavel');
+    // Estorno do p1: sem o realizado estornado, o negativo é recusado.
+    const negativo = {
+      ...base,
+      origem: 'estorno',
+      competencia: '2031-11',
+      data: '2031-11-30',
+      valor: -720,
+      referente: `ESTORNO PLANTAO ${p1}`,
+      justificativa: `Estorno do plantão realizado ${p1} (lançamento ${lanc}): Plantão não aconteceu`,
+      estornaDe: lanc,
+      plantoes: [],
+    };
+    expect(await codigoDe(realizado.executar(ctx(), 'repasse.lancarEvento', negativo, ctxOp()))).toBe(
+      'sem-estorno-pendente',
+    );
+    const r1 = (await realizado.realizado(ctx(), p1))!;
+    const estornado = linha('pessoas.realizado.estornado', 'plantao', p1);
+    await realizado.gravarSgh(ctx(), estornado, (g) =>
+      g.estornarRealizado({ id: p1, versao: r1.versao, motivo: 'Plantão não aconteceu', por: 'x' }),
+    );
+    expect(await realizado.realizado(ctx(), p1)).toMatchObject({
+      situacao: 'estornado',
+      lancamento: lanc,
+      estorno: { motivo: 'Plantão não aconteceu', lancamento: null },
+    });
+    expect((await realizado.realizadosAprovados(ctx(), '2031-10-01', '2031-10-31')).map((r) => r.id)).toEqual(
+      [p2],
+    );
+    // Tarifa alterada depois do lançamento: o recálculo não fecha com o original e o negativo é recusado.
+    const tarifaMais = (d: number) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-tarifa` }, (e) =>
+        e.executar(
+          'UPDATE valor_hora_plantao SET valor_hora = valor_hora + ?, valor_plantao = valor_plantao + ? WHERE estabelecimento_id = ?',
+          [d, d, m.est],
+        ),
+      );
+    await tarifaMais(10);
+    expect(await codigoDe(realizado.executar(ctx(), 'repasse.lancarEvento', negativo, ctxOp()))).toBe(
+      'tarifa-alterada-depois-do-lancamento',
+    );
+    await tarifaMais(-10);
+    const neg = Number(
+      (
+        (await realizado.executar(ctx(), 'repasse.lancarEvento', negativo, ctxOp())).resultado as Record<
+          string,
+          unknown
+        >
+      )['lancamento'],
+    );
+    expect(
+      await um(
+        'SELECT tipo_lancamento, valor, estornado_lancamento_repasse_id FROM lancamento_repasse WHERE id = ?',
+        [neg],
+      ),
+    ).toMatchObject({ tipo_lancamento: 'estorno', valor: '-720.00', estornado_lancamento_repasse_id: lanc });
+    // O negativo já lançado e não ligado: a conciliação o acha; lançar de novo é recusado.
+    expect(await codigoDe(realizado.executar(ctx(), 'repasse.lancarEvento', negativo, ctxOp()))).toBe(
+      'estorno-ja-lancado',
+    );
+    expect(
+      await realizado.gravarSgh(ctx(), estornado, (g) => g.estornoLancado({ id: p1, original: lanc })),
+    ).toBe(neg);
+    // O negativo cancelado não liga o estorno.
+    const situacaoNeg = String((await um('SELECT situacao FROM lancamento_repasse WHERE id = ?', [neg]))!['situacao']);
+    const situacaoDoNeg = (v: string) =>
+      nucleo.escrever({ cliente: CLIENTE, correlacao: `${MARCA}-cancela` }, (e) =>
+        e.executar('UPDATE lancamento_repasse SET situacao = ? WHERE id = ?', [v, neg]),
+      );
+    await situacaoDoNeg('cancelado');
+    expect(
+      await codigoDe(
+        realizado.gravarSgh(ctx(), estornado, (g) => g.ligarEstorno({ id: p1, lancamento: neg })),
+      ),
+    ).toBe('estorno-inexistente');
+    await situacaoDoNeg(situacaoNeg);
+    // Desfazer o estorno com o negativo ainda não ligado volta o realizado a aprovado; estorna de novo e liga.
+    expect(
+      await codigoDe(
+        realizado.gravarSgh(ctx(), estornado, (g) => g.ligarEstorno({ id: p2, lancamento: neg })),
+      ),
+    ).toBe('conflito-versao');
+    await realizado.gravarSgh(ctx(), estornado, (g) => g.ligarEstorno({ id: p1, lancamento: neg }));
+    expect(
+      await um('SELECT estorno_lancamento_repasse_id, estornado_por_usuario_id FROM plantao WHERE id = ?', [
+        p1,
+      ]),
+    ).toMatchObject({
+      estorno_lancamento_repasse_id: neg,
+      estornado_por_usuario_id: m.usuario,
+    });
+    expect((await realizado.realizado(ctx(), p1))!.estorno).toMatchObject({ lancamento: neg });
+    expect(
+      await realizado.gravarSgh(ctx(), estornado, (g) => g.estornoLancado({ id: p1, original: lanc })),
+    ).toBeNull();
+    expect(await codigoDe(realizado.gravarSgh(ctx(), estornado, (g) => g.desfazerEstorno(p1)))).toBe(
+      'conflito-versao',
+    );
+    // Outro estabelecimento não vê nem lança.
+    expect(await realizado.realizado(ctx(m.outroEst), p1)).toBeNull();
+    expect(
+      await codigoDe(
+        realizado.executar(
+          ctx(m.outroEst),
+          'repasse.lancarEvento',
+          { ...base, valor: 720, plantoes: [p2] },
+          ctxOp(m.outroEst),
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('plantao-inexistente');
+    // A trilha da operação do lançamento está no banco.
+    expect(
+      await um(
+        'SELECT entidade, entidade_id, estabelecimento_id, usuario_id FROM trilha_auditoria WHERE id = ?',
+        [feito.trilha],
+      ),
+    ).toMatchObject({
+      entidade: 'lancamento_repasse',
+      entidade_id: lanc,
+      estabelecimento_id: m.est,
+      usuario_id: m.usuario,
+    });
   });
 
   it('vigências de regime: retroativa termina na véspera da seguinte, anulação reabre a anterior, mesma data reativa a anulada', async (t) => {

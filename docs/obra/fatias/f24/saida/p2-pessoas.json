@@ -1,0 +1,10 @@
+{
+  "lote": "p2-pessoas",
+  "pedidos": [
+    {"tipo": "construcao", "arquivo": "apps/api/src/modulos/pessoas/folha/porta-calculo-propria.ts:13,101,248", "motivo": "Processamento da folha (37 operações: emVigorComTrava, incluirProcesso, incluirLinhas, situacaoProcesso, processo, resumoVinculos, férias, rescisão, processosCalculados, obrigações e as 17 leituras da porta) sobre processamento_folha/_linha, recibo de férias, rescisão e obrigações. O DDL v3 já cabe (p-folha). É construção de porta inteira, do tamanho de um lote próprio: não coube nesta volta."},
+    {"tipo": "contrato", "arquivos": ["apps/api/src/modulos/pessoas/esocial/porta-esocial.ts", "servico-esocial.ts", "porta-esocial-memoria.ts"], "motivo": "Mantido p-pessoas-esocial: ficha do eSocial cifrada inteira -> FichaEsocialVinculo estruturada; depende da decisão do dono (a tela do eSocial pode alterar o cadastro da pessoa?). Até lá porta-esocial-propria.ts:38,111,117 segue modelo-pendente."},
+    {"tipo": "contrato", "arquivos": ["packages/contratos/src/pessoas/sesmt-entradas.ts", "apps/api/src/modulos/pessoas/sesmt/porta-sesmt.ts", "web do SESMT"], "motivo": "Mantido 02-pessoas-2: registro de proteção (EPI, dosímetro, quimioterápico) endereçado por tipo + id. Sem isso porta-sesmt-propria.ts:239,1400 segue modelo-pendente."},
+    {"tipo": "composicao", "arquivos": ["apps/api/src/modulos/pessoas/ponto/porta-ponto-propria.ts", "folha/porta-calculo-propria.ts", "pessoas/porta-propria.ts", "pessoas/modulo.ts"], "motivo": "Mantido 01/03-pessoas: gravadores do ponto, das férias e do cadastro sobre a mesma TxOperacao para o efeito da aprovação do autoatendimento (autoatendimento/porta-propria.ts:17,73). As férias dependem do item da folha acima."},
+    {"tipo": "limpeza", "arquivo": "apps/api/src/modulos/pessoas/banco-apoio.ts:95", "motivo": "O auxiliar modeloPendente sai quando pessoas/porta-propria.ts (535,653,765) e autoatendimento/porta-propria.ts deixarem de usá-lo."}
+  ]
+}

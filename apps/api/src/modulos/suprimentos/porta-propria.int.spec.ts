@@ -356,7 +356,7 @@ describe.skipIf(SEM_BANCO)('porta própria do estoque (MariaDB, cliente f22_o3)'
     await decidir(como(m.usuario), id, 'cancelado', 'Fim do teste HTTP');
   });
 
-  it('recursos ainda fora do banco: OPME na saída responde 409 com o motivo, nada gravado', async () => {
+  it('OPME na saída com atendimento e cirurgia de fora: recusa com código, nada gravado (o caminho feliz está em opme-manipulacao-propria.int.spec)', async () => {
     const c = contexto(m);
     const gravados = async () =>
       (
@@ -377,10 +377,10 @@ describe.skipIf(SEM_BANCO)('porta própria do estoque (MariaDB, cliente f22_o3)'
             local: m.localA,
             centroCusto: m.centroCusto,
             localConsumo: 1,
-            atendimento: 1,
+            atendimento: 999_999_999,
             itens: [{ item: m.insumoOpme, quantidade: 1 }],
             opme: {
-              agendamento: 1,
+              agendamento: 999_999_999,
               sala: 1,
               dataHora: '2026-01-15T10:00',
               solicitacao: 1,
@@ -393,7 +393,7 @@ describe.skipIf(SEM_BANCO)('porta própria do estoque (MariaDB, cliente f22_o3)'
           { ...c, chaveIdempotencia: `k-${RODADA}` },
         ),
       ),
-    ).toBe('modelo-pendente');
+    ).toBe('atendimento-inexistente');
     expect(Number(await gravados())).toBe(antes);
     expect(await porta.podeGravar(c, 'suprimentos.inexistente')).toMatchObject({
       pode: false,

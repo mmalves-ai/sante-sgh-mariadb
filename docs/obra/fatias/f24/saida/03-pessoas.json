@@ -82,6 +82,12 @@
    "tipo": "teste",
    "arquivo": "apps/api/src/modulos/pessoas/aplicacao/folha.int.spec.ts:581-584 (fora de lote)",
    "motivo": "Ajustei só as linhas que conferiam a gravação desligada: podeGravar agora é true, e a chamada sem argumentos de gravarSgh saiu (o processamento segue recusando em processos e rescisoes). A massa desse arquivo falha no cliente f24_03pessoas antes dos testes (Duplicate entry 'I' for key 'uq_sexo_sigla'), um problema que já existia e não vem desta volta."
+  },
+  {
+   "tipo": "ddl",
+   "tabela": "plantao",
+   "colunas": "valor_lancado DECIMAL(15,2) NULL, gravado no lançamento do realizado no repasse",
+   "motivo": "escala/porta-realizado-propria.ts (lancarNoRepasse, origem estorno): o estorno de um plantão de lançamento com vários plantões depende do recálculo pela tarifa vigente; com a tarifa alterada depois, a porta recusa (tarifa-alterada-depois-do-lancamento). Com o valor lançado guardado, o negativo seria conferido contra ele. Prioridade baixa."
   }
  ]
 }

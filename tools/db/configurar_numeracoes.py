@@ -36,7 +36,10 @@ NUMERACOES = (
     "inventario_estoque",
     "junta",
     "laudo_exame",
+    "nota_entrada",
+    "ordem_manipulacao",
     "ordem_servico_manutencao",
+    "pedido_compra",
     "pedido_leito",
     "plano_preventivo",
     "prontuario",
@@ -47,10 +50,12 @@ NUMERACOES = (
     "recurso_glosa",
     "remessa_consignada",
     "reposicao_consignada",
+    "requisicao_material",
     "requisicao_transfusao",
     "senha_autorizacao",
     "sessao_caixa",
     "solicitacao_limpeza",
+    "solicitacao_opme",
     "surto_infeccao",
 )
 

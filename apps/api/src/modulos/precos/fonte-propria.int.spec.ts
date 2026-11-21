@@ -72,6 +72,12 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
   const limpar = (e: Escritor) =>
     (async () => {
       await e.executar(
+        'DELETE li FROM carga_tabela_preco_linha li JOIN carga_tabela_preco ct ON ct.id = li.carga_tabela_preco_id WHERE ct.tabela_preco_id = ?',
+        [ids.tabela],
+      );
+      await e.executar('DELETE FROM carga_tabela_preco WHERE tabela_preco_id = ?', [ids.tabela]);
+      await e.executar('DELETE FROM contato_fonte_pagadora WHERE fonte_pagadora_id = ?', [ids.fonte]);
+      await e.executar(
         `DELETE pe FROM plano_fonte_pagadora_estabelecimento pe JOIN plano_fonte_pagadora p ON p.id = pe.plano_fonte_pagadora_id
           WHERE p.fonte_pagadora_id = ?`,
         [ids.fonte],
@@ -410,7 +416,7 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     expect((await fonte.convenio(c, ids.fonte))?.situacao).toBe('A');
   });
 
-  it('contrato: altera o que o modelo tem pela leitura da tela; o campo sem coluna aguarda o modelo', async () => {
+  it('contrato: altera o que o modelo tem pela leitura da tela; o campo da pessoa jurídica fica no cadastro dela', async () => {
     const alterar = (
       valores: Record<string, string | number | null>,
       lidos: Record<string, string | number | null>,
@@ -432,7 +438,61 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     );
     expect(depois?.nome).toBe('OPERADORA L0212P RENOMEADA');
     expect(Number(depois?.versao)).toBe(Number(antes?.versao) + 1);
-    expect(await recusada(alterar({ bairro: 'CENTRO' }, { bairro: null }))).toBe('modelo-pendente');
+    // Endereço e nota fiscal são da pessoa jurídica; a senha de autorização aguarda a decisão (DP-33).
+    expect(await recusada(alterar({ bairro: 'CENTRO' }, { bairro: null }))).toBe('campo-do-cadastro');
+    expect(await recusada(alterar({ nfRazaoSocial: 'X' }, { nfRazaoSocial: null }))).toBe(
+      'campo-do-cadastro',
+    );
+    expect(
+      await recusada(
+        fonte.executar(
+          'convenio.alterarContrato',
+          c,
+          {
+            convenio: ids.fonte,
+            aba: 'faturabilidade',
+            valores: { senhaObrigatoria: '1' },
+            lidos: { senhaObrigatoria: null },
+            justificativa: 'Teste sintético L0212P',
+          },
+          gravacao(),
+        ),
+      ),
+    ).toBe('decisao-pendente');
+    // Contatos por área: inclui na primeira vez, altera pela leitura e sai quando fica vazio.
+    await alterar(
+      { credenciamentoEmail: 'credenciamento@l0212p.invalid', convenioContato: 'CONTATO L0212P' },
+      { credenciamentoEmail: null, convenioContato: null },
+    );
+    expect(await fonte.valoresContrato(c, ids.fonte)).toMatchObject({
+      credenciamentoEmail: 'credenciamento@l0212p.invalid',
+      credenciamentoContato: null,
+      convenioContato: 'CONTATO L0212P',
+    });
+    expect(await recusada(alterar({ convenioContato: 'OUTRO' }, { convenioContato: 'LIDO ERRADO' }))).toBe(
+      'conflito-versao',
+    );
+    await alterar({ convenioContato: null }, { convenioContato: 'CONTATO L0212P' });
+    const areas = await ler<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM contato_fonte_pagadora WHERE fonte_pagadora_id = ? AND excluido_em IS NULL',
+      [ids.fonte],
+    );
+    expect(Number(areas?.n)).toBe(1);
+    expect((await fonte.valoresContrato(c, ids.fonte))?.['convenioContato']).toBeNull();
+    // A área esvaziada volta a ter contato (a chave única é fonte pagadora + área).
+    await alterar({ convenioContato: 'DE NOVO L0212P' }, { convenioContato: null });
+    expect((await fonte.valoresContrato(c, ids.fonte))?.['convenioContato']).toBe('DE NOVO L0212P');
+    // A linha da área excluída logicamente (pela importação, por exemplo) é reativada, sem quebrar a chave única.
+    await nucleo.escrever({ cliente: CLIENTE, correlacao: 'preparo-teste-02-12-contato' }, (e) =>
+      e.executar(
+        "UPDATE contato_fonte_pagadora SET excluido_em = NOW(3), versao = versao + 1 WHERE fonte_pagadora_id = ? AND area = 'convenio'",
+        [ids.fonte],
+      ),
+    );
+    expect((await fonte.valoresContrato(c, ids.fonte))?.['convenioContato']).toBeNull();
+    await alterar({ convenioContato: 'REATIVADO L0212P' }, { convenioContato: null });
+    expect((await fonte.valoresContrato(c, ids.fonte))?.['convenioContato']).toBe('REATIVADO L0212P');
+    await alterar({ convenioContato: null }, { convenioContato: 'REATIVADO L0212P' });
     // UF pela sigla (a FK da unidade federativa) e o telefone da fonte pagadora.
     const lidos = await fonte.valoresContrato(c, ids.fonte);
     // A massa é reaproveitada entre execuções: os valores novos sempre diferem dos lidos.
@@ -477,6 +537,123 @@ describe.skipIf(SEM_BANCO)('fonte própria de preços (MariaDB, cliente f22_o2)'
     expect(await recusada(fonte.executar('preco.reajustar', c, {}, gravacao()))).toBe(
       'operacao-nao-liberada',
     );
+  });
+
+  it('importação: carga e linhas num passo, o arquivo uma vez por tabela, rejeição pela versão; outro estabelecimento não vê', async () => {
+    const sha = `${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '')}`;
+    const nova = {
+      hospital: P,
+      catalogo: 'honorarios',
+      tabela: ids.tabela,
+      arquivo: 'honorarios-l0212p.csv',
+      sha256: sha,
+      bytes: 321,
+      situacao: 'comparada' as const,
+      responsavel: 'l0212.teste',
+      motivo: null,
+      totais: { linhas: 2, validas: 1, erros: 1, novos: 0, removidos: 1, alterados: 1, iguais: 0 },
+      linhas: [
+        {
+          linha: 1,
+          codigo: ids.preco,
+          valores: { ch: 120, co: 10, filme: 0, anes: 5, outros: 0 },
+          anteriores: { ch: 100, co: 10, filme: 0, anes: 5, outros: 0 },
+          nome: 'ITEM L0212P',
+          resultado: 'valida' as const,
+          comparacao: 'alterado' as const,
+          motivo: null,
+        },
+        {
+          linha: 2,
+          codigo: null,
+          valores: null,
+          nome: null,
+          resultado: 'erro' as const,
+          comparacao: null,
+          motivo: 'Código ilegível.',
+        },
+        {
+          linha: 1_000_000,
+          codigo: 999_999_999,
+          valores: { ch: 50 },
+          anteriores: { ch: 50 },
+          nome: 'REMOVIDO L0212P',
+          resultado: 'valida' as const,
+          comparacao: 'removido' as const,
+          motivo: 'Item ativo ausente do arquivo.',
+        },
+      ],
+    };
+    const { id } = await fonte.gravarCarga(c, nova, trilha);
+    const k = await fonte.carga(c, id);
+    expect(k).toMatchObject({
+      catalogo: 'honorarios',
+      tabela: ids.tabela,
+      arquivo: 'honorarios-l0212p.csv',
+      bytes: 321,
+      situacao: 'comparada',
+      aprovador: null,
+      lote: null,
+      totais: { linhas: 2, validas: 1, erros: 1, alterados: 1, removidos: 1, novos: 0, iguais: 0 },
+      versao: 1,
+    });
+    expect((await fonte.cargas(c, 'honorarios'))?.map((x) => x.id)).toContain(id);
+    expect(await fonte.carga(outro, id)).toBeNull();
+    const l = await fonte.linhasDaCarga(c, id, 0, 10, null);
+    expect(l.total).toBe(3);
+    expect(l.itens[0]).toMatchObject({
+      linha: 1,
+      codigo: ids.preco,
+      valores: { ch: 120, co: 10, filme: 0, anes: 5, outros: 0 },
+      anteriores: { ch: 100, co: 10, filme: 0, anes: 5, outros: 0 },
+      resultado: 'valida',
+      comparacao: 'alterado',
+    });
+    expect(l.itens[1]).toMatchObject({
+      codigo: null,
+      valores: null,
+      resultado: 'erro',
+      motivo: 'Código ilegível.',
+    });
+    expect((await fonte.linhasDaCarga(c, id, 0, 10, 'alterado')).total).toBe(1);
+    expect(await recusada(fonte.gravarCarga(c, nova, trilha))).toBe('carga-repetida');
+    expect(
+      await recusada(
+        fonte.gravarCarga(
+          c,
+          { ...nova, sha256: sha.replace(/.$/, 'f'), linhas: [{ ...nova.linhas[0]!, valores: { xx: 1 } }] },
+          trilha,
+        ),
+      ),
+    ).toBe('componente-desconhecido');
+    const mudar = (versao: number) =>
+      fonte.mudarSituacaoCarga(
+        c,
+        {
+          hospital: P,
+          id,
+          versao,
+          de: ['comparada'],
+          para: 'rejeitada',
+          aprovador: 'l0212.teste',
+          lote: null,
+          motivo: 'Arquivo errado',
+        },
+        trilha,
+      );
+    await expect(mudar(9)).rejects.toMatchObject({ codigo: 'conflito-concorrente' });
+    await mudar(1);
+    expect(await fonte.carga(c, id)).toMatchObject({
+      situacao: 'rejeitada',
+      motivo: 'Arquivo errado',
+      versao: 2,
+    });
+    await expect(mudar(2)).rejects.toMatchObject({ codigo: 'situacao-invalida' });
+    const tr = await ler<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM trilha_auditoria WHERE entidade = 'carga_tabela_preco' AND entidade_id = ?",
+      [id],
+    );
+    expect(Number(tr?.n)).toBeGreaterThanOrEqual(2);
   });
 
   it('plano: inclui com a vigência no estabelecimento, corrige pela versão; outro estabelecimento não vê', async () => {

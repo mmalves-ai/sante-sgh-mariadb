@@ -15,8 +15,11 @@
 // Melhoria: a gravação direta (planos) usa a Idempotency-Key do pedido: o reenvio devolve o mesmo resultado.
 // Pendência (pedido do lote 02-12): nome, classificação, ANS, contato, e-mail, prazo de pagamento e validade da
 // carteira são da rede inteira; hoje a permissão de editar o contrato os altera, falta a permissão própria de rede.
-// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, a importação de tabela
-// (falta a linha da importação), os modificadores, os índices, o credenciamento, o de-para, os portes e as
+// Melhoria: a importação de tabela grava a carga e as linhas (os cinco componentes e os vigentes antes) num passo só;
+// o mesmo arquivo entra uma vez por tabela; a publicação aponta o lote do reajuste e a rejeição exige o motivo.
+// Melhoria: os contatos do convênio por área ficam em contato_fonte_pagadora; o CNPJ, o endereço e a nota fiscal são
+// os da pessoa jurídica (a do convênio ou a tomadora) e se editam no cadastro dela.
+// Pendências (pedidos do lote 02-12, saida/02-12.json): o reajuste e o desfazer pelo lote, os modificadores, os índices, o credenciamento, o de-para, os portes e as
 // referências de terceiros ainda não são lidos do modelo (a tela mostra vazio e as gravações ficam não liberadas).
 import { randomUUID } from 'node:crypto';
 import type {
@@ -52,13 +55,16 @@ import { type NomeOperacaoPreco, OPERACOES_PRECO } from './operacoes.js';
 import {
   type AlteracaoPlano,
   type CabecalhoTabela,
+  type CargaImportacao,
   type ConvenioPreco,
+  ErroCarga,
   ErroPlano,
   type FiltroConvenio,
   type ImpactoSituacaoConvenio,
   type ItemDiariaPreco,
   type ItemHonorarioPreco,
   type ItemParaReajuste,
+  type LinhaCargaImportacao,
   type LinhaDoLote,
   type LoteReajuste,
   type NovaCarga,
@@ -121,6 +127,57 @@ const COLUNA_FONTE: Readonly<Record<string, string>> = {
   uf: 'unidade_federativa_id',
   nfUf: 'nota_fiscal_unidade_federativa_id',
 };
+/** Contatos por área (contato_fonte_pagadora): campo → [área, coluna]. */
+const CONTATO_AREA: Readonly<Record<string, readonly [string, 'nome' | 'telefone' | 'email']>> = {
+  convenioTelefone: ['convenio', 'telefone'],
+  convenioContato: ['convenio', 'nome'],
+  credenciamentoTelefone: ['credenciamento', 'telefone'],
+  credenciamentoEmail: ['credenciamento', 'email'],
+  credenciamentoContato: ['credenciamento', 'nome'],
+  contasMedicasTelefone: ['contas_medicas', 'telefone'],
+  contasMedicasEmail: ['contas_medicas', 'email'],
+  contasMedicasContato: ['contas_medicas', 'nome'],
+  recursoGlosaTelefone: ['recurso_glosa', 'telefone'],
+  recursoGlosaEmail: ['recurso_glosa', 'email'],
+  recursoGlosaContato: ['recurso_glosa', 'nome'],
+  autorizacaoTelefone: ['autorizacao', 'telefone'],
+  autorizacaoContato: ['autorizacao', 'nome'],
+};
+/** Campos da pessoa jurídica (a do convênio ou a tomadora da nota): leitura aqui, edição no cadastro dela. */
+const DA_PESSOA_JURIDICA: ReadonlySet<string> = new Set([
+  'cnpj',
+  'endereco',
+  'numero',
+  'complemento',
+  'bairro',
+  'cidade',
+  'cep',
+  'ibge',
+  'nfRazaoSocial',
+  'nfCnpj',
+  'nfEndereco',
+  'nfNumero',
+  'nfBairro',
+  'nfCidade',
+  'nfCep',
+  'nfTelefone',
+  'nfInscricaoMunicipal',
+  'nfIbge',
+]);
+/** A inscrição estadual é da pessoa jurídica do próprio convênio e se edita aqui. */
+const CAMPO_INSCRICAO = 'inscricaoEstadual';
+
+/** Endereço principal da pessoa jurídica (o vigente de menor sequência). */
+const SQL_ENDERECO_PJ = `
+  SELECT e.logradouro, e.numero, e.complemento, COALESCE(b.descricao, e.bairro_nome) AS bairro, m.nome AS cidade,
+         e.cep, m.codigo_ibge
+    FROM endereco_pessoa e
+    LEFT JOIN bairro b ON b.id = e.bairro_id
+    LEFT JOIN municipio_ibge m ON m.id = e.municipio_ibge_id
+   WHERE e.pessoa_juridica_id = ? AND e.excluido_em IS NULL
+     AND (e.vigencia_fim IS NULL OR e.vigencia_fim >= CURRENT_DATE)
+   ORDER BY e.principal DESC, e.sequencia, e.id LIMIT 1`;
+
 /** Campos de UF: a tela fala a sigla, o banco guarda a unidade federativa (FK). */
 const CAMPOS_UF: ReadonlySet<string> = new Set(['uf', 'nfUf']);
 
@@ -245,6 +302,104 @@ function itemDiariaDe(r: Linha): ItemDiariaPreco {
   };
 }
 
+/** Os cinco componentes do valor da linha da carga: ch (o `valor`), co, filme, anes e outros. */
+const COMPONENTES_CARGA = ['ch', 'co', 'filme', 'anes', 'outros'] as const;
+
+function componentesParaGravar(
+  v: Readonly<Record<string, number>> | null | undefined,
+  linha: number,
+): Record<(typeof COMPONENTES_CARGA)[number], number | null> | null {
+  if (!v) return null;
+  const fora = Object.keys(v).filter((k) => !(COMPONENTES_CARGA as readonly string[]).includes(k));
+  if (fora.length)
+    throw recusa('componente-desconhecido', `Linha ${linha}: componente sem coluna (${fora.join(', ')}).`);
+  const r = Object.fromEntries(
+    COMPONENTES_CARGA.map((k) => [k, typeof v[k] === 'number' ? v[k] : null]),
+  ) as Record<(typeof COMPONENTES_CARGA)[number], number | null>;
+  for (const k of COMPONENTES_CARGA)
+    if (r[k] !== null && !(r[k]! >= 0))
+      throw recusa('valor-invalido', `Linha ${linha}: ${k} negativo ou inválido.`);
+  return r;
+}
+
+function componentesLidos(r: Linha, prefixo: 'valor' | 'anterior'): Record<string, number> | null {
+  const col = (k: string) => (prefixo === 'valor' ? `valor_${k}` : `anterior_${k}`);
+  const base = prefixo === 'valor' ? r['valor'] : r['anterior_valor'];
+  if (base === null || base === undefined) return null;
+  const o: Record<string, number> = { ch: Number(base) };
+  for (const [k, c] of [
+    ['co', 'custo_operacional'],
+    ['filme', 'filme'],
+    ['anes', 'anestesista'],
+    ['outros', 'outros'],
+  ] as const) {
+    const x = r[col(c)];
+    if (x !== null && x !== undefined) o[k] = Number(x);
+  }
+  return o;
+}
+
+const SQL_CARGA = `
+  SELECT ct.id, ct.catalogo, ct.tabela_preco_id, ct.arquivo_nome, ct.fonte, ct.arquivo_sha256, ct.arquivo_bytes,
+         ct.situacao, ct.total_linhas, ct.linhas_erro, ct.motivo, ct.versao, ct.criado_em, ur.login AS responsavel,
+         CASE WHEN ct.situacao = 'publicada' THEN up.login WHEN ct.situacao = 'rejeitada' THEN ua.login END AS aprovador,
+         lr.identificador AS lote,
+         (SELECT COUNT(*) FROM carga_tabela_preco_linha x WHERE x.carga_tabela_preco_id = ct.id AND x.excluido_em IS NULL AND x.situacao = 'novo') AS novos,
+         (SELECT COUNT(*) FROM carga_tabela_preco_linha x WHERE x.carga_tabela_preco_id = ct.id AND x.excluido_em IS NULL AND x.situacao = 'removido') AS removidos,
+         (SELECT COUNT(*) FROM carga_tabela_preco_linha x WHERE x.carga_tabela_preco_id = ct.id AND x.excluido_em IS NULL AND x.situacao = 'alterado') AS alterados,
+         (SELECT COUNT(*) FROM carga_tabela_preco_linha x WHERE x.carga_tabela_preco_id = ct.id AND x.excluido_em IS NULL AND x.situacao = 'igual') AS iguais
+    FROM carga_tabela_preco ct
+    LEFT JOIN usuario ur ON ur.id = ct.criado_por
+    LEFT JOIN usuario up ON up.id = ct.publicada_por_usuario_id
+    LEFT JOIN usuario ua ON ua.id = ct.alterado_por
+    LEFT JOIN lote_reajuste lr ON lr.id = ct.lote_reajuste_id
+   WHERE ct.estabelecimento_id = ? AND ct.excluido_em IS NULL`;
+
+function cargaDe(r: Linha, fuso: string): CargaImportacao {
+  const linhas = n(r['total_linhas']);
+  const erros = n(r['linhas_erro']);
+  return {
+    id: n(r['id']),
+    catalogo: texto(r['catalogo']),
+    tabela: nn(r['tabela_preco_id']),
+    arquivo: texto(r['arquivo_nome'] ?? r['fonte']),
+    sha256: texto(r['arquivo_sha256']),
+    bytes: n(r['arquivo_bytes']),
+    situacao: texto(r['situacao']) as CargaImportacao['situacao'],
+    responsavel: texto(r['responsavel']),
+    aprovador: textoN(r['aprovador']),
+    criadaEm: localDe(r['criado_em'], fuso),
+    totais: {
+      linhas,
+      validas: linhas - erros,
+      erros,
+      novos: n(r['novos']),
+      removidos: n(r['removidos']),
+      alterados: n(r['alterados']),
+      iguais: n(r['iguais']),
+    },
+    lote: textoN(r['lote']),
+    motivo: textoN(r['motivo']),
+    versao: n(r['versao']),
+  };
+}
+
+function linhaDaCargaDe(r: Linha): LinhaCargaImportacao {
+  const sit = texto(r['situacao']);
+  const erro = sit === 'erro';
+  const cod = texto(r['codigo_item']);
+  return {
+    linha: n(r['sequencia']),
+    codigo: cod === '' || !/^\d+$/.test(cod) ? null : Number(cod),
+    valores: erro ? null : componentesLidos(r, 'valor'),
+    anteriores: componentesLidos(r, 'anterior'),
+    nome: textoN(r['nome_item']),
+    resultado: erro ? 'erro' : 'valida',
+    comparacao: erro ? null : sit,
+    motivo: textoN(r['divergencia']),
+  };
+}
+
 const naoLido = <T>(v: T) => Promise.resolve(v);
 
 export class FontePrecosPropria implements FontePrecos {
@@ -316,6 +471,7 @@ export class FontePrecosPropria implements FontePrecos {
         `SELECT f.nome, f.registro_ans, f.classe_fonte_pagadora_id, f.contato_nome, f.email, f.exige_validade_carteira,
                 f.telefone, ufp.sigla AS uf_sigla, ufn.sigla AS nf_uf_sigla,
                 COALESCE(fe.dias_retorno, f.dias_retorno) AS dias_retorno, f.dias_pagamento_remessa, pj.cnpj, pj.inscricao_estadual,
+                f.pessoa_juridica_id, f.nota_fiscal_pessoa_juridica_id,
                 k.situacao AS situacao_acordo, k.vigencia_inicio, k.vigencia_fim, k.prazo_apresentacao_dias,
                 k.dia_corte_faturamento, k.exige_guia, k.cobra_insumos, k.fatura_pela_data_alta, k.abate_devolucao,
                 k.exige_auditoria_interna, k.iss_retido_pela_fonte AS iss_acordo, k.percentual_iss AS iss_pct,
@@ -334,6 +490,32 @@ export class FontePrecosPropria implements FontePrecos {
         [est, est, cod],
       );
       if (!f) return null;
+      const contatos = await l.consultar(
+        'SELECT area, nome, telefone, email FROM contato_fonte_pagadora WHERE fonte_pagadora_id = ? AND excluido_em IS NULL',
+        [cod],
+      );
+      const porArea = new Map(contatos.map((x) => [texto(x['area']), x]));
+      const doContato = Object.fromEntries(
+        Object.entries(CONTATO_AREA).map(([k, [area, col]]) => [k, textoN(porArea.get(area)?.[col])]),
+      );
+      const pjId = nn(f['pessoa_juridica_id']);
+      const nfId = nn(f['nota_fiscal_pessoa_juridica_id']) ?? pjId;
+      const end = pjId === null ? null : await l.uma(SQL_ENDERECO_PJ, [pjId]);
+      const nf = nfId === null ? null : await l.uma('SELECT * FROM pessoa_juridica WHERE id = ?', [nfId]);
+      const nfEnd = nfId === null ? null : nfId === pjId ? end : await l.uma(SQL_ENDERECO_PJ, [nfId]);
+      // Endereço da pessoa jurídica pelas chaves do contrato (as da nota fiscal com o prefixo nf).
+      const endereco = (e: Linha | null, nfe: boolean) => {
+        const k = (c: string) => (nfe ? `nf${c[0]!.toUpperCase()}${c.slice(1)}` : c);
+        return {
+          [k('endereco')]: textoN(e?.['logradouro']),
+          [k('numero')]: numeroDeTexto(e?.['numero']),
+          ...(nfe ? {} : { complemento: textoN(e?.['complemento']) }),
+          [k('bairro')]: textoN(e?.['bairro']),
+          [k('cidade')]: textoN(e?.['cidade']),
+          [k('cep')]: numeroDeTexto(e?.['cep']),
+          [k('ibge')]: numeroDeTexto(e?.['codigo_ibge']),
+        };
+      };
       const sim = (v: unknown) => (v === null || v === undefined ? null : verdadeiro(v) ? 'sim' : 'não');
       const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
       return {
@@ -365,6 +547,13 @@ export class FontePrecosPropria implements FontePrecos {
         percentualIss: num(f['iss_pct']),
         percentualIr: num(f['ir_pct']),
         percentualCustoFinanceiro: num(f['percentual_custo_financeiro']),
+        ...doContato,
+        ...endereco(end, false),
+        ...endereco(nfEnd, true),
+        nfRazaoSocial: textoN(nf?.['razao_social']),
+        nfCnpj: numeroDeTexto(nf?.['cnpj']),
+        nfTelefone: textoN(nf?.['telefone']),
+        nfInscricaoMunicipal: textoN(nf?.['inscricao_municipal']),
       } as Record<string, string | number | null>;
     });
   }
@@ -842,26 +1031,189 @@ export class FontePrecosPropria implements FontePrecos {
 
   // ── Importação e planos ───────────────────────────────────────────────────────────────────────────
 
-  cargas() {
-    return naoLido(null);
+  /** As importações do catálogo no estabelecimento da sessão (as contagens saem das linhas). */
+  cargas(c: CtxPrecos, catalogo: string): Promise<CargaImportacao[] | null> {
+    return this.ler(c, async (l, est) => {
+      const fuso = await fusoDe(l, est);
+      const ls = await l.consultar(
+        `${SQL_CARGA} AND ct.catalogo = ? ORDER BY ct.criado_em DESC, ct.id DESC`,
+        [est, catalogo],
+        {
+          teto: 1_000,
+        },
+      );
+      return ls.map((r) => cargaDe(r, fuso));
+    });
   }
 
-  carga() {
-    return naoLido(null);
+  carga(c: CtxPrecos, id: number): Promise<CargaImportacao | null> {
+    return this.ler(c, async (l, est) => {
+      const r = await l.uma(`${SQL_CARGA} AND ct.id = ?`, [est, id]);
+      return r ? cargaDe(r, await fusoDe(l, est)) : null;
+    });
   }
 
-  linhasDaCarga() {
-    return naoLido({ itens: [], total: 0 });
+  linhasDaCarga(
+    c: CtxPrecos,
+    id: number,
+    pagina: number,
+    porPagina: number,
+    comparacao: string | null,
+  ): Promise<{ itens: LinhaCargaImportacao[]; total: number }> {
+    return this.ler(c, async (l, est) => {
+      const filtro = comparacao ? ' AND li.situacao = ?' : '';
+      const p = [id, est, ...(comparacao ? [comparacao] : [])];
+      const de = `FROM carga_tabela_preco_linha li JOIN carga_tabela_preco ct ON ct.id = li.carga_tabela_preco_id
+         WHERE li.carga_tabela_preco_id = ? AND ct.estabelecimento_id = ? AND li.excluido_em IS NULL
+           AND ct.excluido_em IS NULL${filtro}`;
+      const t = await l.uma<{ total: unknown }>(`SELECT COUNT(*) AS total ${de}`, p);
+      const ls = await l.consultar(`SELECT li.* ${de} ORDER BY li.sequencia LIMIT ? OFFSET ?`, [
+        ...p,
+        porPagina,
+        pagina * porPagina,
+      ]);
+      return { itens: ls.map(linhaDaCargaDe), total: n(t?.total) };
+    });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async gravarCarga(_c: CtxPrecos, _n: NovaCarga, _t: TrilhaPreco): Promise<{ id: number }> {
-    throw modeloPendente('A importação de tabela (as linhas da carga)');
+  /** A carga e as linhas num passo só (Executor, com a trilha): a tabela é do estabelecimento; o arquivo, uma vez por tabela. */
+  async gravarCarga(c: CtxPrecos, nova: NovaCarga, t: TrilhaPreco): Promise<{ id: number }> {
+    if (nova.tabela === null) throw recusa('tabela-obrigatoria', 'Escolha a tabela de preço da importação.');
+    const tab = nova.tabela;
+    return this.direta(
+      c,
+      'preco.importacao.preparar',
+      ['carga_tabela_preco_linha', 'carga_tabela_preco'],
+      t,
+      async (tx, est) => {
+        const tb = await tx.uma(
+          'SELECT id FROM tabela_preco WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+          [tab, est],
+        );
+        if (!tb) throw recusa('nao-encontrado', 'Tabela de preço não encontrada neste estabelecimento.');
+        const rep = await tx.uma<{ id: unknown }>(
+          'SELECT id FROM carga_tabela_preco WHERE tabela_preco_id = ? AND arquivo_sha256 = ?',
+          [tab, nova.sha256],
+        );
+        if (rep)
+          throw recusa(
+            'carga-repetida',
+            `Este arquivo já foi importado nesta tabela (importação ${n(rep.id)}).`,
+          );
+        for (const li of nova.linhas) componentesParaGravar(li.valores, li.linha);
+        const hoje = relogioNoFuso(await fusoDe(tx, est)).hoje;
+        const id = await tx.incluir('carga_tabela_preco', {
+          estabelecimento_id: est,
+          tabela_preco_id: tab,
+          fonte: 'arquivo',
+          arquivo_nome: nova.arquivo.slice(0, 120),
+          arquivo_bytes: nova.bytes > 0 ? nova.bytes : null,
+          catalogo: nova.catalogo,
+          arquivo_sha256: nova.sha256,
+          situacao: nova.situacao,
+          vigencia_inicio: hoje,
+          total_linhas: nova.totais.linhas,
+          linhas_erro: nova.totais.erros,
+          motivo: nova.motivo,
+        });
+        for (const li of nova.linhas) {
+          const v = componentesParaGravar(li.valores, li.linha);
+          const a = componentesParaGravar(li.anteriores ?? null, li.linha);
+          const item =
+            li.codigo === null
+              ? null
+              : await tx.uma<{ item_faturavel_id: unknown }>(
+                  'SELECT item_faturavel_id FROM preco_procedimento WHERE id = ? AND tabela_preco_id = ? AND excluido_em IS NULL',
+                  [li.codigo, tab],
+                );
+          await tx.incluir('carga_tabela_preco_linha', {
+            carga_tabela_preco_id: id,
+            sequencia: li.linha,
+            // Linha sem código legível (só na linha com erro): o código fica vazio e o motivo diz por quê.
+            codigo_item: li.codigo === null ? '' : String(li.codigo),
+            nome_item: li.nome ? li.nome.slice(0, 300) : null,
+            item_faturavel_id: nn(item?.item_faturavel_id),
+            valor: v?.ch ?? 0,
+            valor_custo_operacional: v?.co ?? null,
+            valor_filme: v?.filme ?? null,
+            valor_anestesista: v?.anes ?? null,
+            valor_outros: v?.outros ?? null,
+            anterior_valor: a?.ch ?? null,
+            anterior_custo_operacional: a?.co ?? null,
+            anterior_filme: a?.filme ?? null,
+            anterior_anestesista: a?.anes ?? null,
+            anterior_outros: a?.outros ?? null,
+            situacao: li.resultado === 'erro' ? 'erro' : (li.comparacao ?? 'novo'),
+            divergencia: li.motivo
+              ? li.motivo.slice(0, 500)
+              : li.resultado === 'erro'
+                ? 'Linha inválida.'
+                : null,
+          });
+        }
+        return { id };
+      },
+    );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- assinatura da porta
-  async mudarSituacaoCarga(_c: CtxPrecos, _m: MudancaCarga, _t: TrilhaPreco): Promise<void> {
-    throw modeloPendente('A importação de tabela (as linhas da carga)');
+  /** Publica (com o lote do reajuste) ou rejeita (com o motivo) a carga, pela versão lida. */
+  async mudarSituacaoCarga(c: CtxPrecos, m: MudancaCarga, t: TrilhaPreco): Promise<void> {
+    try {
+      await this.direta(
+        c,
+        `preco.importacao.${m.para === 'publicada' ? 'publicar' : 'rejeitar'}`,
+        ['lote_reajuste', 'carga_tabela_preco'],
+        t,
+        async (tx, est) => {
+          const [k] = await tx.consultarParaAtualizar(
+            'SELECT * FROM carga_tabela_preco WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL',
+            [m.id, est],
+          );
+          if (!k) throw recusa('nao-encontrado', 'Importação não encontrada.');
+          if (n(k['versao']) !== m.versao)
+            throw new ErroOperacao(409, 'conflito-concorrente', 'Importação', 'A importação mudou. Releia.');
+          if (!m.de.includes(texto(k['situacao'])))
+            throw new ErroOperacao(
+              409,
+              'situacao-invalida',
+              'Importação',
+              'A situação da importação não permite a ação.',
+            );
+          const valores: Record<string, unknown> = { situacao: m.para };
+          if (m.para === 'publicada') {
+            if (tx.contexto.usuario === null)
+              throw recusa('sem-usuario', 'A publicação exige o usuário da sessão.');
+            let lote: number | null = null;
+            if (m.lote !== null) {
+              const lr = await tx.uma<{ id: unknown }>(
+                'SELECT id FROM lote_reajuste WHERE identificador = ? AND tabela_preco_id = ? AND excluido_em IS NULL',
+                [m.lote, k['tabela_preco_id']],
+              );
+              if (!lr) throw recusa('lote-inexistente', `O lote ${m.lote} não é desta tabela.`);
+              lote = n(lr.id);
+            }
+            Object.assign(valores, {
+              publicada_em: new Date(),
+              publicada_por_usuario_id: tx.contexto.usuario,
+              lote_reajuste_id: lote,
+            });
+          } else {
+            if (!m.motivo?.trim()) throw recusa('motivo-obrigatorio', 'Diga o motivo da rejeição.');
+            valores['motivo'] = m.motivo.slice(0, 500);
+          }
+          await tx.alterar('carga_tabela_preco', m.id, m.versao, valores);
+          return { id: m.id };
+        },
+      );
+    } catch (e) {
+      // A tela conhece as recusas da importação pelo código da carga.
+      if (e instanceof ErroPlano && e.codigo === 'conflito-concorrente')
+        throw new ErroCarga('conflito-concorrente', e.message);
+      const codigo = e instanceof ErroOperacao ? String(e.problema['codigo'] ?? '') : '';
+      if (codigo === 'conflito-concorrente' || codigo === 'situacao-invalida')
+        throw new ErroCarga(codigo, String((e as ErroOperacao).problema.detail ?? ''));
+      throw e;
+    }
   }
 
   async gravarPlano(c: CtxPrecos, p: NovoPlano, t: TrilhaPreco): Promise<{ id: number }> {
@@ -1038,14 +1390,56 @@ const OP_SITUACAO = definirOperacao<
 /** Campos do contrato que o modelo tem, pela comparação com o que a tela leu. */
 const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: number; campos: number }>({
   nome: 'convenio.alterar-contrato',
-  tabelas: ['fonte_pagadora', 'fonte_pagadora_estabelecimento', 'fonte_pagadora_versao'],
+  tabelas: [
+    'fonte_pagadora',
+    'fonte_pagadora_estabelecimento',
+    'fonte_pagadora_versao',
+    'contato_fonte_pagadora',
+    'pessoa_juridica',
+  ],
   entrada: OPERACOES_PRECO['convenio.alterarContrato'].entrada as z.ZodType<AlterarContratoConvenioEntrada>,
   critica: true,
   async gravar(tx, e) {
     const campos = Object.keys(e.valores).sort();
-    const semColuna = campos.filter((k) => !COLUNA_FONTE[k]);
-    if (semColuna.length) throw modeloPendente(`Os campos ${semColuna.join(', ')} do contrato`);
+    const doCadastro = campos.filter((k) => DA_PESSOA_JURIDICA.has(k));
+    if (doCadastro.length)
+      throw recusa(
+        'campo-do-cadastro',
+        `Os campos ${doCadastro.join(', ')} são da pessoa jurídica (a do convênio ou a tomadora da nota fiscal): altere no cadastro dela.`,
+      );
+    if (campos.includes('senhaObrigatoria'))
+      throw new ErroOperacao(
+        409,
+        'decisao-pendente',
+        'Campo aguardando decisão',
+        'A senha de autorização aguarda a decisão do significado dos valores (DP-33): nada foi gravado.',
+      );
+    const semColuna = campos.filter((k) => !COLUNA_FONTE[k] && !CONTATO_AREA[k] && k !== CAMPO_INSCRICAO);
+    if (semColuna.length)
+      throw recusa('campo-desconhecido', `Campos desconhecidos no contrato: ${semColuna.join(', ')}.`);
     const { f, fe } = await travarNoEstabelecimento(tx, e.convenio);
+    // A chave única é (fonte pagadora, área), sem a exclusão lógica: a linha excluída (pela importação, por exemplo)
+    // é lida também e reativada quando a área volta a ter contato, no lugar de incluir outra.
+    const contatos = new Map<string, Record<string, unknown>>();
+    const excluidos = new Map<string, Record<string, unknown>>();
+    for (const x of await tx.consultarParaAtualizar(
+      'SELECT * FROM contato_fonte_pagadora WHERE fonte_pagadora_id = ?',
+      [e.convenio],
+    ))
+      (x['excluido_em'] === null || x['excluido_em'] === undefined ? contatos : excluidos).set(
+        texto(x['area']),
+        x,
+      );
+    const pjId = nn(f['pessoa_juridica_id']);
+    const [pj] =
+      campos.includes(CAMPO_INSCRICAO) && pjId !== null
+        ? await tx.consultarParaAtualizar('SELECT * FROM pessoa_juridica WHERE id = ?', [pjId])
+        : [];
+    if (campos.includes(CAMPO_INSCRICAO) && !pj)
+      throw recusa(
+        'sem-pessoa-juridica',
+        'O convênio não tem pessoa jurídica: a inscrição estadual fica no cadastro dela.',
+      );
     // As siglas das UFs gravadas (a tela compara e grava pela sigla).
     const siglas = new Map<number, string>();
     for (const k of campos.filter((x) => CAMPOS_UF.has(x))) {
@@ -1055,6 +1449,9 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
       if (u) siglas.set(idUf, texto(u.sigla));
     }
     const atual = (k: string) => {
+      const ct = CONTATO_AREA[k];
+      if (ct) return textoN(contatos.get(ct[0])?.[ct[1]]);
+      if (k === CAMPO_INSCRICAO) return textoN(pj?.['inscricao_estadual']);
       if (CAMPOS_UF.has(k)) {
         const idUf = nn(f[COLUNA_FONTE[k]!]);
         return idUf === null ? null : (siglas.get(idUf) ?? null);
@@ -1070,7 +1467,17 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
       throw recusa('sem-efeito', 'Nenhum campo muda de valor.');
     const valores: Record<string, unknown> = {};
     const daUnidade: Record<string, unknown> = {};
+    const porArea = new Map<string, Record<string, unknown>>();
+    const daPessoa: Record<string, unknown> = {};
     for (const k of campos) {
+      const ct = CONTATO_AREA[k];
+      if (ct || k === CAMPO_INSCRICAO) {
+        const v = valorParaGravar(k, e.valores[k] ?? null);
+        const g = v === '' || v === null ? null : String(v);
+        if (ct) porArea.set(ct[0], { ...(porArea.get(ct[0]) ?? {}), [ct[1]]: g });
+        else daPessoa['inscricao_estadual'] = g;
+        continue;
+      }
       const v = valorParaGravar(k, e.valores[k] ?? null);
       const gravar =
         k === 'validaCarteira'
@@ -1090,6 +1497,33 @@ const OP_CONTRATO = definirOperacao<AlterarContratoConvenioEntrada, { convenio: 
     if (Object.keys(valores).length) await tx.alterar('fonte_pagadora', e.convenio, n(f['versao']), valores);
     if (Object.keys(daUnidade).length)
       await tx.alterar('fonte_pagadora_estabelecimento', n(fe['id']), n(fe['versao']), daUnidade);
+    if (pj && Object.keys(daPessoa).length)
+      await tx.alterar('pessoa_juridica', n(pj['id']), n(pj['versao']), daPessoa);
+    // Contato por área: inclui na primeira vez (ou reativa a linha excluída da área); sem nome, telefone nem e-mail,
+    // a linha da área sai (o Executor apaga a linha; a trilha guarda a alteração).
+    for (const [area, mud] of porArea) {
+      const x = contatos.get(area);
+      const depois = {
+        nome: x ? (x['nome'] ?? null) : null,
+        telefone: x ? (x['telefone'] ?? null) : null,
+        email: x ? (x['email'] ?? null) : null,
+        ...mud,
+      };
+      const vazio = depois.nome === null && depois.telefone === null && depois.email === null;
+      if (x && vazio) await tx.excluir('contato_fonte_pagadora', n(x['id']), n(x['versao']));
+      else if (x) await tx.alterar('contato_fonte_pagadora', n(x['id']), n(x['versao']), mud);
+      else if (vazio) continue;
+      else {
+        const ex = excluidos.get(area);
+        if (ex)
+          await tx.alterar('contato_fonte_pagadora', n(ex['id']), n(ex['versao']), {
+            ...depois,
+            excluido_em: null,
+            excluido_por: null,
+          });
+        else await tx.incluir('contato_fonte_pagadora', { fonte_pagadora_id: e.convenio, area, ...depois });
+      }
+    }
     if (campos.includes('nome') || campos.includes('classificacao'))
       await retrato(tx, { ...f, ...valores }, { ...fe, ...daUnidade }, 'alteracao');
     return { convenio: e.convenio, campos: campos.length };
@@ -1157,14 +1591,6 @@ async function retrato(
     dados: jsonDoRegistro({ ...f, estabelecimento: fe }),
   });
 }
-
-const modeloPendente = (o: string) =>
-  new ErroOperacao(
-    409,
-    'modelo-pendente',
-    'Recurso aguardando o modelo do banco',
-    `${o} aguarda a coluna ou tabela no modelo do banco (pedido registrado): nada foi gravado.`,
-  );
 
 async function fusoDe(l: Leitor, est: number): Promise<string> {
   const r = await l.uma<{ fuso_horario: string | null }>(

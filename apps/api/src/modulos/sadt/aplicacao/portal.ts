@@ -358,6 +358,7 @@ export class ServicoPortal {
           conselho: e.conselho,
           uf: e.uf,
           numero: e.numero,
+          cpf: e.cpf,
           email: e.email,
           senhaResumo,
           segundoFator: cifrarSegredo(segredo, this.chaveMestra as Buffer),

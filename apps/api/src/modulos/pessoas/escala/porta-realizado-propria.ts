@@ -13,21 +13,37 @@
 // Melhoria: o tipo de vínculo vem do vínculo de trabalho (regime trabalhista) ou do profissional (pessoa jurídica ou
 // terceiro); o prestador do repasse é o profissional do plantão (id), como no repasse; os instantes ficam em UTC e
 // voltam no fuso do estabelecimento; a regra dos quatro olhos vale também na transação (nunca decide quem registrou).
-// Pendências de modelo (pedido em docs/obra/fatias/f22/saida/03-04.json), com as operações indisponíveis até o DDL:
-//   - lançar no repasse e estornar: o plantão não guarda o lançamento (lancamento_repasse não tem o plantão) nem o
-//     estorno; `repasse.lancarEvento` e o estorno respondem 409 `modelo-pendente`;
+// Lançamento no repasse (`repasse.lancarEvento`, origem `plantao`): uma operação própria do Executor
+// (`pessoas.realizado.lancar_repasse`) que, na mesma transação, confere os realizados (aprovados, com valor, não lançados,
+// do mesmo profissional e da competência, soma igual ao valor), inclui o lançamento pelo gravador do repasse
+// (gravadorEventoRepasse, mesmas validações de evento e favorecido) e liga cada plantão a ele (lancamento_repasse_id e
+// lancado_por_usuario_id). Ou tudo, ou nada.
+// Estorno do realizado aprovado: o plantão guarda quem estornou, quando e o motivo (estornado_*, motivo_estorno). O
+// lançamento negativo (origem `estorno`) é feito pela mesma operação, pelo gravador do repasse (que recusa o que passa do
+// original), só quando há realizado estornado e ainda sem o negativo para aquele lançamento; a ligação do negativo ao
+// realizado (estorno_lancamento_repasse_id) é a ação do estorno, e o negativo já lançado e não ligado é achado pelo
+// original e pela justificativa (conciliação).
 // A tarifa incluída grava o tipo de plantão (valor_hora_plantao.tipo_plantao); a tarifa sem tipo vale para todos os
 // tipos (lida uma vez por tipo). A fonte do realizado (informado ou ponto) e o motivo da recusa ficam no plantão
 // (fonte_realizado e motivo_recusa_realizado) e voltam na leitura.
+import {
+  esquemaLancarEventoRepasse,
+  type LancarEventoRepasseEntrada,
+  VINCULOS_PRESTADOR,
+} from '@sgh/contratos';
 import { tarifaVigente, valorRealizado } from '@sgh/dominio-pessoas';
 import {
+  type ContextoOperacao,
+  definirOperacao,
   ErroOperacao,
   type Executor,
   type Leitor,
   recusa,
   erroConflitoVersao,
+  type ResultadoOperacao,
   type TxOperacao,
 } from '@sgh/nucleo';
+import { gravadorEventoRepasse, TABELAS_EVENTO_REPASSE } from '../../repasse/public-api.js';
 import type { GravacaoFeita, LiberacaoGravacao, TrilhaDaGravacao } from '../../exames/public-api.js';
 import {
   type AcaoGravacao,
@@ -50,11 +66,9 @@ import {
 import type { ContextoRealizado, GravadorRealizado, PortaRealizado } from './porta-realizado.js';
 import type { RegistroPlantaoParaRealizado, RegistroRealizado, RegistroTarifaPlantao } from './tipos.js';
 
-const pendente = (titulo: string, motivo: string) => new ErroOperacao(409, 'modelo-pendente', titulo, motivo);
-const MOTIVO_LANCAMENTO =
-  'O lançamento do plantão no repasse aguarda a ligação ao módulo do repasse (favorecido e evento do lançamento): o realizado aprovado fica no relatório, sem lançar.';
-const MOTIVO_ESTORNO =
-  'O estorno do realizado aguarda a ligação ao módulo do repasse (o lançamento negativo do estorno), que vem junto com o lançamento.';
+/** A receita do repasse que a porta do realizado executa (o lançamento do plantão e o negativo do estorno). */
+const OPERACAO_REPASSE = 'repasse.lancarEvento';
+const centavos = (v: number) => Math.round(v * 100);
 
 /** Uma operação do Executor por ação da tela do realizado. */
 export const ACOES_REALIZADO: Readonly<Record<string, AcaoGravacao>> = {
@@ -86,10 +100,13 @@ const SQL_PLANTAO = `SELECT p.id, p.escala_id, e.situacao AS estado_escala, e.se
 const SQL_REALIZADO = `SELECT p.id, p.colaborador_id, p.setor_funcional_id, p.tipo, p.entrada_registrada_em,
   p.saida_registrada_em, p.observacao, p.revisado_em, ur.login AS informado_por, p.revisado_por_usuario_id,
   p.aprovado, p.aprovado_em, ua.login AS decidido_por, p.versao, v.id AS vinculo, p.fonte_realizado,
-  p.motivo_recusa_realizado
+  p.motivo_recusa_realizado, p.lancamento_repasse_id, ul.login AS lancado_por, p.estornado_em,
+  ue.login AS estornado_por, p.motivo_estorno, p.estorno_lancamento_repasse_id
   FROM plantao p
   LEFT JOIN usuario ur ON ur.id = p.revisado_por_usuario_id
   LEFT JOIN usuario ua ON ua.id = p.aprovado_por_usuario_id
+  LEFT JOIN usuario ul ON ul.id = p.lancado_por_usuario_id
+  LEFT JOIN usuario ue ON ue.id = p.estornado_por_usuario_id
   ${SQL_VINCULO}
   WHERE p.estabelecimento_id = ? AND p.excluido_em IS NULL AND p.situacao <> 'cancelado' AND p.revisado = TRUE
     AND p.entrada_registrada_em IS NOT NULL AND p.saida_registrada_em IS NOT NULL`;
@@ -161,11 +178,14 @@ function realizadoDe(
   );
   const decidido = r['aprovado_em'] !== null && r['aprovado_em'] !== undefined;
   const aprovado = decidido && verdadeiro(r['aprovado']);
+  const estornado = aprovado && r['estornado_em'] !== null && r['estornado_em'] !== undefined;
   const situacao: RegistroRealizado['situacao'] = !decidido
     ? 'informado'
-    : aprovado
-      ? 'aprovado'
-      : 'recusado';
+    : estornado
+      ? 'estornado'
+      : aprovado
+        ? 'aprovado'
+        : 'recusado';
   const t = aprovado
     ? tarifaVigente(tarifas, texto(r['tipo']), num(r['setor_funcional_id']), inicio.slice(0, 10))
     : null;
@@ -189,10 +209,17 @@ function realizadoDe(
     tarifa: t?.id ?? null,
     valorHora: t?.valorHora ?? null,
     valor: v?.valor ?? null,
-    lancamento: null,
-    lancadoPor: null,
+    lancamento: numOuNulo(r['lancamento_repasse_id']),
+    lancadoPor: numOuNulo(r['lancamento_repasse_id']) === null ? null : textoOuNulo(r['lancado_por']),
     versao: num(r['versao']),
-    estorno: null,
+    estorno: estornado
+      ? {
+          por: texto(r['estornado_por']),
+          em: civilDoUtc(r['estornado_em'], fuso),
+          motivo: texto(r['motivo_estorno']),
+          lancamento: numOuNulo(r['estorno_lancamento_repasse_id']),
+        }
+      : null,
   };
 }
 
@@ -255,6 +282,184 @@ const leitura = {
     return r ? { id: num(r['id']), estado: texto(r['situacao']) } : null;
   },
 };
+
+/** A linha do plantão travada para a gravação (estabelecimento da sessão). */
+async function travar(tx: TxOperacao, est: number, id: number): Promise<Record<string, unknown> | null> {
+  return (
+    (
+      await tx.consultarParaAtualizar(
+        `SELECT id, versao, situacao, aprovado, aprovado_em, lancamento_repasse_id, estornado_em,
+                estorno_lancamento_repasse_id
+           FROM plantao WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL`,
+        [id, est],
+      )
+    )[0] ?? null
+  );
+}
+
+/** Justificativa do negativo que o serviço lança no estorno: identifica o realizado na conciliação. */
+const prefixoEstorno = (id: number) => `Estorno do plantão realizado ${id} (`;
+
+/** O negativo já lançado para o realizado (pelo original e pela justificativa) e ainda não ligado a nenhum plantão. */
+async function negativoNaoLigado(
+  l: Leitor,
+  est: number,
+  id: number,
+  original: number,
+): Promise<number | null> {
+  const r = await l.uma(
+    `SELECT n.id FROM lancamento_repasse n
+      WHERE n.estabelecimento_id = ? AND n.excluido_em IS NULL AND n.situacao <> 'cancelado'
+        AND n.tipo_lancamento = 'estorno' AND n.estornado_lancamento_repasse_id = ? AND n.justificativa LIKE ?
+        AND NOT EXISTS (SELECT 1 FROM plantao o WHERE o.estorno_lancamento_repasse_id = n.id)
+      ORDER BY n.id LIMIT 1`,
+    [est, original, `${prefixoEstorno(id).replace(/[%_\\]/g, (c) => `\\${c}`)}%`],
+  );
+  return r ? num(r['id']) : null;
+}
+
+/**
+ * O lançamento no repasse sobre a transação do Executor:
+ *   - origem `plantao`: confere os realizados e o valor, inclui o lançamento pelo gravador do repasse e liga os plantões;
+ *   - origem `estorno`: só quando um realizado estornado do original ainda não tem o negativo; o gravador do repasse
+ *     recusa o que passa do original. A ligação ao realizado é a ação seguinte do estorno (ligarEstorno).
+ */
+async function lancarNoRepasse(tx: TxOperacao, e: LancarEventoRepasseEntrada): Promise<ResultadoOperacao> {
+  const est = tx.contexto.estabelecimento;
+  const usuario = tx.contexto.usuario;
+  if (est === null || est === undefined)
+    throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+  if (usuario === null || usuario === undefined)
+    throw recusa('sem-usuario', 'A gravação exige o usuário da sessão.');
+  const repasse = gravadorEventoRepasse(tx);
+  const fuso = await fusoDe(tx, est);
+  if (e.origem === 'estorno') {
+    const pend = await tx.consultarParaAtualizar(
+      `SELECT id FROM plantao
+        WHERE estabelecimento_id = ? AND excluido_em IS NULL AND lancamento_repasse_id = ?
+          AND estornado_em IS NOT NULL AND estorno_lancamento_repasse_id IS NULL`,
+      [est, e.estornaDe],
+    );
+    // O plantão não guarda o valor lançado: o valor do negativo é conferido contra o lançamento original, e não só
+    // contra o realizado recalculado pela tarifa vigente (que muda se a tarifa for incluída ou alterada depois).
+    const original = await tx.uma(
+      `SELECT valor FROM lancamento_repasse
+        WHERE id = ? AND estabelecimento_id = ? AND excluido_em IS NULL AND situacao <> 'cancelado'`,
+      [e.estornaDe, est],
+    );
+    if (!original)
+      throw recusa('sem-estorno-pendente', 'O lançamento original não existe neste estabelecimento.');
+    const doOriginal = await leitura.realizados(tx, est, fuso, 'AND p.lancamento_repasse_id = ?', [e.estornaDe]);
+    const valorOriginal = centavos(Number(original['valor']));
+    // Original de um plantão só: o negativo devolve o valor lançado inteiro. De vários: o recálculo de todos tem de
+    // fechar com o lançado, senão a tarifa mudou e o valor de cada plantão no lançamento não é mais conhecido.
+    const lancadoDe = (r: RegistroRealizado): number | null =>
+      doOriginal.length === 1 ? valorOriginal : r.valor === null ? null : centavos(r.valor);
+    if (
+      doOriginal.length > 1 &&
+      doOriginal.reduce((t, r) => t + centavos(r.valor ?? 0), 0) !== valorOriginal
+    )
+      throw recusa(
+        'tarifa-alterada-depois-do-lancamento',
+        'O valor recalculado dos plantões não fecha com o lançamento original: estorne pelo repasse.',
+      );
+    const rs = await leitura.realizados(
+      tx,
+      est,
+      fuso,
+      `AND p.id IN (${marcas(Math.max(pend.length, 1))})`,
+      pend.length > 0 ? pend.map((r) => num(r['id'])) : [0],
+    );
+    const alvo = rs.find(
+      (r) =>
+        lancadoDe(r) !== null &&
+        lancadoDe(r) === centavos(-e.valor) &&
+        e.justificativa.startsWith(prefixoEstorno(r.id)),
+    );
+    if (!alvo)
+      throw recusa(
+        'sem-estorno-pendente',
+        'Nenhum realizado estornado deste lançamento espera o negativo com este valor.',
+      );
+    if ((await negativoNaoLigado(tx, est, alvo.id, e.estornaDe!)) !== null)
+      throw recusa(
+        'estorno-ja-lancado',
+        'O negativo deste realizado já foi lançado: peça o estorno de novo para ligá-lo.',
+      );
+    const r = await repasse.estornar({
+      lancamento: e.estornaDe!,
+      data: e.data,
+      competencia: e.competencia,
+      justificativa: e.justificativa,
+      valor: -e.valor,
+    });
+    return { lancamento: r.lancamento, valor: e.valor, realizado: alvo.id };
+  }
+  if (e.origem !== 'plantao')
+    throw recusa('origem-invalida', 'A porta do realizado só lança plantões e o estorno deles.');
+  const ids = [...new Set(e.plantoes)];
+  const travados = await tx.consultarParaAtualizar(
+    `SELECT id, versao FROM plantao WHERE estabelecimento_id = ? AND excluido_em IS NULL AND id IN (${marcas(ids.length)})`,
+    [est, ...ids],
+  );
+  if (travados.length !== ids.length)
+    throw recusa('plantao-inexistente', 'Um dos plantões realizados não existe neste estabelecimento.');
+  const rs = await leitura.realizados(tx, est, fuso, `AND p.id IN (${marcas(ids.length)})`, ids);
+  const ps = new Map((await leitura.plantoesPorIds(tx, est, fuso, ids)).map((p) => [p.plantao, p]));
+  if (rs.length !== ids.length)
+    throw recusa('plantao-nao-lancavel', 'Um dos plantões não tem o realizado registrado.');
+  for (const r of rs) {
+    if (r.situacao !== 'aprovado' || r.lancamento !== null || r.valor === null)
+      throw recusa(
+        'plantao-nao-lancavel',
+        'Um dos plantões realizados não está aprovado, está sem valor ou já foi lançado.',
+      );
+    const p = ps.get(r.plantao);
+    if (
+      !p ||
+      !(VINCULOS_PRESTADOR as readonly string[]).includes(p.tipoVinculo) ||
+      p.registro !== e.profissional
+    )
+      throw recusa(
+        'plantao-de-outro-prestador',
+        'Um dos plantões é de outro profissional ou de vínculo que não é de prestador.',
+      );
+    if (r.inicio.slice(0, 7) !== e.competencia)
+      throw recusa('plantao-fora-da-competencia', 'Um dos plantões realizados começa fora da competência.');
+  }
+  if (rs.reduce((t, r) => t + centavos(r.valor ?? 0), 0) !== centavos(e.valor))
+    throw recusa('valor-diferente-dos-plantoes', 'O valor não é a soma dos plantões realizados.');
+  const { lancamento } = await repasse.incluir({
+    empresa: e.empresa,
+    competencia: e.competencia,
+    data: e.data,
+    previsao: e.previsao,
+    evento: e.evento,
+    tipo: e.tipo,
+    prestador: e.prestador,
+    profissional: e.profissional,
+    valor: e.valor,
+    referente: e.referente,
+    justificativa: e.justificativa,
+    apuracao: e.apuracao,
+    plantoes: e.plantoes,
+  });
+  const versoes = new Map(travados.map((t) => [num(t['id']), num(t['versao'])]));
+  for (const id of ids)
+    await tx.alterar('plantao', id, versoes.get(id)!, {
+      lancamento_repasse_id: lancamento,
+      lancado_por_usuario_id: usuario,
+    });
+  return { lancamento, valor: e.valor, realizados: ids.length };
+}
+
+const operacaoLancarRepasse = definirOperacao<LancarEventoRepasseEntrada, ResultadoOperacao>({
+  nome: 'pessoas.realizado.lancar_repasse',
+  tabelas: ['plantao', ...TABELAS_EVENTO_REPASSE],
+  entrada: esquemaLancarEventoRepasse as never,
+  gravar: (tx, e) => lancarNoRepasse(tx, e),
+  alvo: (_e, r) => ({ tabela: 'lancamento_repasse', id: num(r['lancamento']) || null }),
+});
 
 function gravadorSobre(
   tx: TxOperacao,
@@ -381,16 +586,61 @@ function gravadorSobre(
     plantoesPorIds: (ids) => leitura.plantoesPorIds(tx, est, fuso, ids),
     valorarRealizado: async () => false,
     apuracaoRepasse: (comp) => leitura.apuracao(tx, est, comp),
-    async estornarRealizado() {
-      throw pendente('Estorno indisponível', MOTIVO_ESTORNO);
+    async estornarRealizado(e) {
+      const l = await travar(tx, est, e.id);
+      if (
+        !l ||
+        l['aprovado_em'] === null ||
+        !verdadeiro(l['aprovado']) ||
+        l['estornado_em'] !== null ||
+        num(l['versao']) !== e.versao
+      )
+        throw erroConflitoVersao(['versao', 'situacao']);
+      await tx.alterar('plantao', e.id, e.versao, {
+        estornado_em: agora(),
+        estornado_por_usuario_id: usuario,
+        motivo_estorno: e.motivo,
+      });
+      x.dados['estorno'] = { motivo: e.motivo, lancamento: numOuNulo(l['lancamento_repasse_id']) };
     },
-    async ligarEstorno() {
-      throw pendente('Estorno indisponível', MOTIVO_ESTORNO);
+    async ligarEstorno(e) {
+      const l = await travar(tx, est, e.id);
+      if (
+        !l ||
+        l['estornado_em'] === null ||
+        l['lancamento_repasse_id'] === null ||
+        l['estorno_lancamento_repasse_id'] !== null
+      )
+        throw erroConflitoVersao(['situacao']);
+      // O negativo tem de estornar o lançamento deste plantão, no mesmo estabelecimento, não estar cancelado nem
+      // ligado a outro.
+      const neg = await tx.uma(
+        `SELECT n.id FROM lancamento_repasse n
+          WHERE n.id = ? AND n.estabelecimento_id = ? AND n.excluido_em IS NULL AND n.situacao <> 'cancelado'
+            AND n.tipo_lancamento = 'estorno' AND n.estornado_lancamento_repasse_id = ?
+            AND NOT EXISTS (SELECT 1 FROM plantao o WHERE o.estorno_lancamento_repasse_id = n.id)`,
+        [e.lancamento, est, num(l['lancamento_repasse_id'])],
+      );
+      if (!neg)
+        throw recusa(
+          'estorno-inexistente',
+          'O lançamento negativo não estorna o lançamento deste plantão ou já está ligado a outro.',
+        );
+      await tx.alterar('plantao', e.id, num(l['versao']), { estorno_lancamento_repasse_id: e.lancamento });
+      x.dados['estorno'] = { lancamento: e.lancamento };
     },
-    async desfazerEstorno() {
-      throw pendente('Estorno indisponível', MOTIVO_ESTORNO);
+    async desfazerEstorno(id) {
+      const l = await travar(tx, est, id);
+      if (!l || l['estornado_em'] === null || l['estorno_lancamento_repasse_id'] !== null)
+        throw erroConflitoVersao(['situacao']);
+      await tx.alterar('plantao', id, num(l['versao']), {
+        estornado_em: null,
+        estornado_por_usuario_id: null,
+        motivo_estorno: null,
+      });
+      x.dados['estorno'] = { desfeito: true };
     },
-    estornoLancado: async () => null,
+    estornoLancado: (e) => negativoNaoLigado(tx, est, e.id, e.original),
   };
 }
 
@@ -414,14 +664,24 @@ export class PortaRealizadoPropria implements PortaRealizado {
     );
   }
 
-  /** O lançamento no repasse (`repasse.lancarEvento`) aguarda o modelo; as ações da tela gravam. */
+  /** As ações da tela e o lançamento no repasse (`repasse.lancarEvento`) gravam. */
   async podeGravar(_c: ContextoRealizado, operacao: string): Promise<LiberacaoGravacao> {
-    return operacao === 'repasse.lancarEvento'
-      ? { pode: false, codigo: 'modelo-pendente', motivo: MOTIVO_LANCAMENTO }
-      : { pode: true, codigo: null, motivo: null };
+    void operacao;
+    return { pode: true, codigo: null, motivo: null };
   }
-  async executar(): Promise<GravacaoFeita> {
-    throw pendente('Lançamento no repasse indisponível', MOTIVO_LANCAMENTO);
+  /** O lançamento no repasse (plantões ou o negativo do estorno), numa operação própria do Executor. */
+  async executar(
+    c: ContextoRealizado,
+    operacao: string,
+    entrada: unknown,
+    ctx: ContextoOperacao,
+  ): Promise<GravacaoFeita> {
+    if (operacao !== OPERACAO_REPASSE)
+      throw recusa('operacao-desconhecida', 'A porta do realizado só executa o lançamento no repasse.');
+    if (c.estabelecimento === null)
+      throw recusa('sem-estabelecimento', 'Escolha o estabelecimento da sessão.');
+    const r = await this.executor.executar(operacaoLancarRepasse, c.cliente, entrada, ctx);
+    return { resultado: r.resultado, repetida: r.repetida, trilha: r.trilha };
   }
   async gravarSgh<T>(
     c: ContextoRealizado,
@@ -489,7 +749,7 @@ export class PortaRealizadoPropria implements PortaRealizado {
         l,
         est,
         fuso,
-        'AND p.aprovado = TRUE AND p.aprovado_em IS NOT NULL AND p.entrada_registrada_em >= ? AND p.entrada_registrada_em < ?',
+        'AND p.aprovado = TRUE AND p.aprovado_em IS NOT NULL AND p.estornado_em IS NULL AND p.entrada_registrada_em >= ? AND p.entrada_registrada_em < ?',
         [utcDoCivil(`${dataIso(de)}T00:00`, fuso), utcDoCivil(`${proximoDia(ate)}T00:00`, fuso)],
       ),
     );

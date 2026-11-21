@@ -1,0 +1,9 @@
+# lote p2-clinicos (F2.4, 3ª etapa): modelo-pendente de sadt, sus, manutencao, especialidades, nutricao, enfermagem
+# cliente_teste: f24q_clinicos
+apps/api/src/modulos/sadt/porta-propria.ts
+apps/api/src/modulos/sadt/aplicacao/vigia-criticos.int.spec.ts
+apps/api/src/modulos/sus/porta-propria.ts
+apps/api/src/modulos/manutencao/porta-propria.ts
+apps/api/src/modulos/especialidades/porta-propria.ts
+apps/api/src/modulos/nutricao/porta-propria.ts
+apps/api/src/modulos/enfermagem/sae-porta-propria.ts
