@@ -6,7 +6,14 @@ Saída: JSON só com metadados, contagens e hashes; nunca valores de linha.
   sintetica <arquivo.fdb> [--versao N]    gera a imagem sintética do cliente de exemplo (no trabalho)
   registrar <relativo> [--modo snapshot|copia] [--sem-gstat] [--sha256] [--saida ARQ]
   ler-faixa <relativo> --tabela T [--inicio I --fim F]   linhas e hash agregado da faixa (sem valores)
-  testes                                  suíte unittest (precisa de --privileged)
+  testes                                  suíte unittest (precisa de --privileged e do MariaDB)
+Fila e motor (L2; banco plataforma em CONECTOR_PLATAFORMA_BANCO):
+  vincular <codigo> <relativo>            valida o .fdb, registra a origem ativa do cliente (evento conector_vinculo)
+  enfileirar <codigo> importar|sincronizar   põe na fila (erro 409 se já há execução ativa do cliente)
+  cancelar <id>                           cancela execução ainda na fila
+  execucao <id>                           estado, etapa, % e contadores
+  fila [--limite N]                       últimas execuções
+  worker [--uma] [--espera S]             trabalhador (com --uma: no máximo uma execução)
 """
 import argparse
 import json
@@ -39,7 +46,42 @@ def main(argv=None):
     p = sub.add_parser("ler-faixa"); p.add_argument("relativo"); p.add_argument("--tabela", required=True)
     p.add_argument("--inicio", type=int); p.add_argument("--fim", type=int); p.add_argument("--modo", default="snapshot", choices=("snapshot", "copia"))
     sub.add_parser("testes")
+    p = sub.add_parser("vincular"); p.add_argument("codigo"); p.add_argument("relativo")
+    p = sub.add_parser("enfileirar"); p.add_argument("codigo"); p.add_argument("tipo", choices=("importar", "sincronizar"))
+    p = sub.add_parser("cancelar"); p.add_argument("id", type=int)
+    p = sub.add_parser("execucao"); p.add_argument("id", type=int)
+    p = sub.add_parser("fila"); p.add_argument("--limite", type=int, default=20)
+    p = sub.add_parser("worker"); p.add_argument("--uma", action="store_true"); p.add_argument("--espera", type=float, default=5)
     a = ap.parse_args(argv)
+
+    if a.cmd in ("vincular", "enfileirar", "cancelar", "execucao", "fila"):
+        from . import banco, caminho, plataforma
+        conn = banco.conectar(banco.plataforma_banco())
+        try:
+            if a.cmd == "vincular":
+                return _json(plataforma.vincular_origem(conn, a.codigo, a.relativo))
+            if a.cmd == "enfileirar":
+                try:
+                    return _json({"execucao_id": plataforma.enfileirar(conn, a.codigo, a.tipo)})
+                except plataforma.ExecucaoAtiva as e:
+                    _json({"erro": 409, "motivo": str(e)}); return 3
+            if a.cmd == "cancelar":
+                plataforma.cancelar(conn, a.id); return _json(plataforma.consultar(conn, a.id))
+            if a.cmd == "execucao":
+                return _json(plataforma.consultar(conn, a.id))
+            return _json(plataforma.listar(conn, a.limite))
+        except (plataforma.PlataformaErro, caminho.OrigemRecusada) as e:
+            _json({"erro": 422, "motivo": str(e)}); return 3
+        finally:
+            conn.close()
+    if a.cmd == "worker":
+        from .trabalhador import Trabalhador
+        t = Trabalhador()
+        try:
+            r = t.laco(uma=a.uma, espera=a.espera)
+            return _json(r)
+        finally:
+            t.fechar()
 
     from . import caminho
     if a.cmd == "listar":

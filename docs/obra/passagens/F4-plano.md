@@ -324,3 +324,32 @@ do cliente de exemplo, container privilegiado sem rede). Prova real: `conector/p
   - confronto com o gstat conta como divergência a tabela que só um dos lados vê; total do gstat soma todas.
 - **Para o L2:** separar o abridor privilegiado do worker (hoje o comando inteiro roda privilegiado);
   limpeza de órfãos `sscon-*` após queda do container.
+
+## 10. Estado do L2 (2026-11-21): concluído, prova verde
+
+Código em `conector/` (README, seção "Fila, plataforma e motor"). Autoconferência: `conector/conector.sh testes`
+(14 testes: 9 do L1 + 5 do L2, imagem sintética, banco de plataforma de teste `plataforma_teste_conector`, tudo
+apagado no fim).
+
+- **Migração `db/plataforma/0003_conector_fila.sql`** (`cliente_origem`, `conector_execucao`): idempotente
+  (validador da plataforma, duas rodadas, 0 erros). **Aplicada no banco `plataforma` real** (127.0.0.1:3410) duas
+  vezes e conferida: 2 tabelas, 18 e 24 colunas, 3 e 7 CHECKs, 2 e 3 FKs, os dois índices únicos de trava; 0 linhas.
+- **Trava por cliente** no banco (índice único sobre coluna gerada nos estados ativos; MariaDB não tem índice
+  parcial): o segundo enfileirar do mesmo cliente dá 409; outro cliente segue livre; trocar a origem durante uma
+  execução ativa é recusado.
+- **Trabalhador:** `SKIP LOCKED` provado com outra sessão segurando a primeira execução; limite de paralelo por
+  vagas `GET_LOCK` (o servidor solta se o processo cair); execução rodando sem trava viva vira `falhou`; snapshot
+  `sscon-e<id>-<ficha>` órfão é desmontado no início do laço.
+- **Isolamento provado:** o usuário da execução só vê `information_schema`, o banco do cliente e
+  `conector_ctl_<codigo>`; leitura de outro cliente, da plataforma, de `mysql.user`, `CREATE DATABASE` e
+  `CREATE USER` são recusados; o usuário é removido no fim.
+- **Eventos:** `conector_vinculo`, `conector_carga` (fila → abrindo → lendo → gravando → conciliando → concluida)
+  e `conector_diferencial`, cada um na transação da mudança de estado.
+- **Guarda de disco:** recusa com `falhou` e motivo "guarda de disco" (provado com reserva inalcançável).
+- **Ponta a ponta na sintética:** importar e sincronizar concluídos; contagem lida = gravada na base de controle =
+  manifesto; banco somente leitura na abertura; sha256 do arquivo igual antes e depois.
+- **Rede:** rede Docker interna `sante-sgh-conector-int` (`--internal`, sem saída; conferido: resolução externa
+  falha); o `sante-sgh-mariadb` é ligado a ela com alias `mariadb`.
+- **Para o L3:** o trabalhador ainda roda privilegiado inteiro (o abridor não foi separado num processo à parte);
+  a conta de controle do motor é a `root` do MariaDB de dev (produção pede conta própria com CREATE USER/GRANT
+  OPTION só nos bancos `cliente_*`/`conector_ctl_*`); a carga das entidades, as rotas e as telas do painel.

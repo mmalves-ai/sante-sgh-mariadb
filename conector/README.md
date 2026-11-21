@@ -30,7 +30,7 @@ daqui é só ferramenta interna de teste.
 ## Uso interno
 
 ```bash
-conector/conector.sh testes                       # autoconferência L1 sobre a imagem sintética (ok ou erros)
+conector/conector.sh testes                       # autoconferência L1+L2 sobre a imagem sintética (ok ou erros)
 conector/conector.sh listar                       # .fdb da pasta autorizada, com aceite e motivo
 conector/conector.sh validar pc-AAAAMMDD.fdb
 conector/conector.sh registrar pc-AAAAMMDD.fdb --saida /saida/registro.json   # contagens + gstat
@@ -40,6 +40,40 @@ conector/provar-l1-real.sh pc-AAAAMMDD.fdb        # prova: sha256/mtime antes e 
 
 Variáveis: `CONECTOR_ORIGENS_DIR`, `CONECTOR_SAIDA_DIR` (padrão `.tmp/conector`, fora do git),
 `CONECTOR_COW_MB` (padrão 2048), `CONECTOR_RESERVA_GB` (padrão 100).
+
+## Fila, plataforma e motor (L2)
+
+- **Banco `plataforma`, migração `db/plataforma/0003_conector_fila.sql`:** `cliente_origem` (arquivo vinculado:
+  caminho relativo, tamanho, sha256, cabeçalho; uma origem ativa por cliente) e `conector_execucao` (fila e
+  histórico: tipo `importar|sincronizar`, estado `fila|abrindo|lendo|gravando|conciliando|concluida|falhou|cancelada`,
+  etapa, %, contadores, sha256 da imagem). **Uma execução ativa por cliente** pelo índice único
+  `uq_conector_execucao_cliente_ativo` (coluna gerada só nos estados ativos); o enfileirar devolve 409.
+- **Eventos:** toda mudança de estado grava em `cliente_evento` na mesma transação (`conector_vinculo`,
+  `conector_carga` para importar, `conector_diferencial` para sincronizar), só com ids, estados e contagens.
+- **Trabalhador** (`trabalhador.py`): `CONECTOR_MAX_PARALELO` vagas (padrão 1) por trava nomeada `GET_LOCK`;
+  retirada por `SELECT ... FOR UPDATE SKIP LOCKED`; trava nomeada por execução enquanto roda; execução rodando
+  sem trava viva vira `falhou` (órfã), e snapshot `sscon-e<id>-<ficha>` sem dono é desmontado.
+- **Isolamento:** base de controle `conector_ctl_<codigo>` (`imagem`, `imagem_tabela`, `conector_origem`,
+  `pendencia`, `conciliacao`) e um usuário MariaDB **por execução** (`sscon_e<id>_<ficha>`, senha aleatória em
+  memória, só do endereço do motor) com GRANT só no banco do cliente e na base de controle dele; removido no fim.
+- **Guarda de disco** (`disco.py`): recusa (estado `falhou`) se o livre depois da carga estimada (tamanho da
+  origem × 1,6 para importar, × 0,2 para sincronizar) ficar abaixo de `CONECTOR_RESERVA_GB` (100).
+- **Motor** (`motor.py`, L2): confere tamanho e sha256 contra o vínculo, abre por snapshot, conta as tabelas em
+  READ ONLY com progresso, grava a imagem pela conta restrita, concilia e confere o sha256 depois. A carga das
+  entidades entra no L3.
+- **Rede:** os comandos da fila e o trabalhador rodam só na rede Docker interna `sante-sgh-conector-int`
+  (`--internal`, sem saída); o `conector.sh` liga o `sante-sgh-mariadb` a ela (alias `mariadb`) se preciso.
+
+```bash
+conector/conector.sh vincular <codigo> <relativo.fdb>      # origem ativa do cliente
+conector/conector.sh enfileirar <codigo> importar          # 409 se já há execução ativa
+conector/conector.sh worker --uma                          # processa no máximo uma
+conector/conector.sh execucao <id> | fila | cancelar <id>
+```
+
+Variáveis L2: `CONECTOR_PLATAFORMA_BANCO` (padrão `plataforma`; os testes usam `plataforma_teste_conector`),
+`CONECTOR_MAX_PARALELO`, `CONECTOR_SHA256` (`sim`; `nao` só para teste), `CONECTOR_FATOR_DISCO_IMPORTAR`,
+`CONECTOR_FATOR_DISCO_SINCRONIZAR`.
 
 ## Módulos
 
@@ -51,4 +85,10 @@ Variáveis: `CONECTOR_ORIGENS_DIR`, `CONECTOR_SAIDA_DIR` (padrão `.tmp/conector
 | `imagem.py` | registro da imagem (contagens por tabela, corte = mtime) e confronto com o gstat |
 | `texto.py` | CP1252 → Unicode determinístico (0x81/0x8D/0x8F/0x90/0x9D viram o controle C1) |
 | `sintetica.py` | gerador da imagem sintética do cliente de exemplo (dados falsos, semente fixa) |
+| `banco.py` | conexão com o MariaDB (rede interna), nomes seguros, ficha da plataforma |
+| `plataforma.py` | vincular origem, enfileirar, transições de estado com evento, progresso, cancelar |
+| `controle.py` | base `conector_ctl_<codigo>` e usuário restrito por execução |
+| `disco.py` | guarda de disco (< 100 GB depois da carga recusa) |
+| `trabalhador.py` | vagas, `SKIP LOCKED`, travas, órfãs e snapshots órfãos |
+| `motor.py` | uma execução de `abrindo` a `concluida`/`falhou` |
 | `cli.py` | ferramenta interna de teste |

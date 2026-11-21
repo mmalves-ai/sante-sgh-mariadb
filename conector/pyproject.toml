@@ -3,7 +3,7 @@ name = "sante-conector"
 version = "0.1.0"
 description = "Conector F4: lê bases Firebird de origem (só leitura) para o banco próprio do cliente"
 requires-python = ">=3.10"
-dependencies = ["firebird-driver==1.10.10"]
+dependencies = ["firebird-driver==1.10.10", "PyMySQL==1.1.1"]
 
 [tool.setuptools]
 packages = ["sante_conector"]
