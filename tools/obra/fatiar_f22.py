@@ -21,7 +21,7 @@ SAIDA = os.path.join(RAIZ, 'docs/obra/fatias/f22')
 API = 'apps/api/src'
 MOD = 'apps/api/src/modulos'
 WORKER = 'apps/worker/src'
-LOTE_MIN, LOTE_MAX = 15, 40
+LOTE_MIN, LOTE_MAX = 8, 20  # regra 22 do protocolo (2026-11-21)
 DDL_COMPLETO, DDL_NOMES = 14, 30
 SEMENTES = ['cadastro', 'recepcao', 'atendimento', 'agenda']  # portão: paciente -> atendimento
 

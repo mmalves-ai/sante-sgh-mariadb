@@ -153,3 +153,33 @@ Só se para por bloqueio real (decisão do dono, disco abaixo de 100 GB ou pausa
 **Termos da área da saúde (dono, 2026-11-20).** Nos relatórios, todo termo técnico ou sigla da área médica
 ou hospitalar vem explicado em poucas palavras no primeiro uso. Exemplos: CID, CBO, SIGTAP, TUSS, TISS, CNES,
 AIH, BPA, OPME.
+
+## Regras 20 a 22 (2026-11-21, medição da F2.2)
+
+**O que a medição mostrou:**
+
+| Agente | Custo equivalente por agente | Turnos por agente |
+|---|---|---|
+| Construtor da F2.2 | 9,5 milhões | 256 |
+| Revisor | 1,25 milhão | 64 |
+| Corretor | 1,9 milhão | 84 |
+| Rodadas anteriores | 0,9 a 1,5 milhão | — |
+
+- **Causa:** cada turno grava um arquivo ou roda uma compilação e relê o contexto acumulado. O custo cresce de
+  forma quadrática.
+- **Cache:** funcionou, com 99% do contexto lido do cache. O problema era o número de turnos.
+
+20. **Construtor em blocos.**
+    - Lê de uma vez os trechos de todos os arquivos do lote.
+    - Grava vários arquivos numa só chamada, por script.
+    - Roda a autoconferência no máximo 3 vezes.
+    - Meta: até cerca de 80 turnos.
+21. **Teto com continuação.** Passou de cerca de 100 turnos:
+    - o construtor grava o que fez e devolve a lista exata do que falta;
+    - o corretor continua com contexto limpo.
+
+    Nada se perde.
+22. **Lotes de no máximo cerca de 20 arquivos.** No fatiador, `LOTE_MAX` caiu de 40 para 20.
+
+**Mantidos:** revisão adversarial em todo lote, conferência estrita na integração e conferência final
+independente.

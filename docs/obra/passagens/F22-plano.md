@@ -149,3 +149,9 @@ Lote de **limpeza da coexistência**, na onda 5, junto com o 05-04:
     por setor);
   - `dist/` versionado;
 - registrar a remoção no `ESTADO.md`.
+
+## Regra 22 (2026-11-21)
+
+O `LOTE_MAX` caiu para 20. As fatias das ondas 5 a 8 são geradas de novo **depois que a onda 4 fechar**, porque
+o fatiador mede o estado atual. Não rode o `fatiar_f22.py` enquanto as ondas 1 a 4 estiverem em execução: ele
+reescreveria as fatias em uso.
