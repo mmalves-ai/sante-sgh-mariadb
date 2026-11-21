@@ -33,7 +33,7 @@ class L6_10(unittest.TestCase):
         self.assertEqual(sem["PRPARAMSUMARIOALTA"]["causa"], "sem_valor")
         causas = {t: (sem[t]["situacao"], sem[t]["causa"]) for t in l6_10.BLOQUEADAS}
         self.assertEqual(causas, {"PRPERGUNTA": ("bloqueada", "depende_de_fatia:L6-11"),
-                                  "TBTPSITUACAOMP": ("bloqueada", "modelo_sem_destino"),
+                                  "TBTPSITUACAOMP": ("bloqueada", "destino_decidido"),
                                   "PRRESPOSTA": ("bloqueada", "pai_nao_carregado:PRPADEVOL")})
         texto = (mapa.DIR_PACOTE / "declarado" / FATIA).read_text(encoding="utf-8")
         for t in COMENTADAS:

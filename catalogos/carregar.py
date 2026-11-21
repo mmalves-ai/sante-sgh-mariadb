@@ -1,7 +1,7 @@
 """Carrega os catálogos públicos no banco de um cliente (F1.4; ADR 0002, item 9).
 
 uso: python3 -I catalogos/carregar.py <codigo_cliente> [fonte ...]
-     fontes, na ordem de dependência: ibge, bcb, cid10, sigtap   (sem argumento: todas)
+     fontes, na ordem de dependência: ibge, bcb, cid10, sigtap, cfop   (sem argumento: todas)
 
 Cada fonte é um módulo em catalogos/carregadores/<fonte>.py com a função carregar(banco: str) -> dict
 {tabela: linhas}; a lista AVISOS do módulo, se houver, é impressa e gravada no evento. Os carregadores são idempotentes (rodar de novo não duplica). A carga fica registrada
@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parents[1]
-ORDEM = ["ibge", "bcb", "cid10", "sigtap"]
+ORDEM = ["ibge", "bcb", "cid10", "sigtap", "cfop"]
 
 
 def sql(banco, entrada=None, *args):

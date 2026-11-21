@@ -8,7 +8,8 @@
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS) + fatia L7-07",
    "mudanca": "pedido B (SDGELANNFS): regra nova do motor: o CFOP do produto pelo código (acrescentar 'cfop' em depara.CATALOGOS: tabela cfop, coluna codigo_cfop, 4 dígitos, código ausente = catalogo_codigo_cfop). Com ela, e com GELANNFS carregada pela L7-07, a fatia declara: ID_GELANNFS -> nota_entrada_item.id via 'ref:GELANNFS' com a opção de UPDATE da linha do pai; ID_SDCFOP -> nota_entrada_item.cfop_id, depara 'cfop', pelo CODIGO de SDCFOP. GELANNFS (593) já vem antes de SDGELANNFS (804)",
-   "motivo": "o CFOP do item é atributo do item da nota (nota_entrada_item.cfop_id); escrituracao_item_entrada é gerada pelo produto. Destino decidido em F4-decisoes-destino.md"
+   "motivo": "o CFOP do item é atributo do item da nota (nota_entrada_item.cfop_id); escrituracao_item_entrada é gerada pelo produto. Destino decidido em F4-decisoes-destino.md",
+   "atendido": "rodada 3, grupo 3: de-para oficial cfop em depara.CATALOGOS e carregador oficial catalogos/carregadores/cfop.py; refazer a fatia"
   },
   {
    "arquivo": "conector/mapa (origem do historico_padrao) + decisão do integrador",

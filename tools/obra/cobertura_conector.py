@@ -119,13 +119,15 @@ def _indice():
 
 
 def _pedidos(fatias):
-    """{fatia: [texto do pedido]} (mudança + motivo), em minúsculas."""
+    """{fatia: [texto do pedido]} (mudança + motivo) dos pedidos ainda não atendidos."""
     saida = {}
     for f in fatias:
         p = RAIZ / ("docs/obra/fatias/f4/saida/%s.json" % f)
         if p.exists():
             d = json.loads(p.read_text(encoding="utf-8"))
-            saida[f] = [(x.get("mudanca", "") + " " + x.get("motivo", "")) for x in d.get("pedidos", [])]
+            # pedido atendido (campo `atendido`: mecanismo ou modelo entregue) não bloqueia mais: a fatia é refeita
+            saida[f] = [(x.get("mudanca", "") + " " + x.get("motivo", "")) for x in d.get("pedidos", [])
+                        if not x.get("atendido")]
     return saida
 
 
@@ -171,7 +173,10 @@ def avaliar(raiz=RAIZ):
     pedidos = _pedidos(sorted(set(fat.values())))
     coment = _comentadas()
     dec = Path(raiz) / DECISOES
-    decididas = set(re.findall(r"^\| `?([A-Z0-9_]+)`? \|", dec.read_text(encoding="utf-8"), re.M)) if dec.exists() else set()
+    # primeira célula da linha da tabela: um nome ou vários separados por vírgula ("GELANSAI, GELANSAIREQ, ...")
+    decididas = {n for cel in re.findall(r"^\| ((?:`?[A-Z0-9_]+`?)(?:, `?[A-Z0-9_]+`?)*) \|",
+                                         dec.read_text(encoding="utf-8"), re.M)
+                 for n in re.findall(r"[A-Z0-9_]+", cel)} if dec.exists() else set()
     pais = {}
     for x in d["deps"]:
         if not x.get("quebra"):

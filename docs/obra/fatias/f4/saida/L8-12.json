@@ -23,7 +23,8 @@
   {
    "arquivo": "conector/sante_conector/depara.py",
    "mudanca": "De-para oficial 'cfop' em depara.CATALOGOS (tabela cfop do catálogo oficial, coluna do código de 4 dígitos; código ausente: catalogo_codigo_*), o mesmo pedido B da L8-10",
-   "motivo": "16: SDGECADNFS.ID_SDCFOP (13.794/13.794 com CFOP na imagem de referência) vai a nota_entrada.cfop_id por ref:SDCFOP>CODIGO com depara cfop; sem o de-para a coluna fica sem destino nesta rodada"
+   "motivo": "16: SDGECADNFS.ID_SDCFOP (13.794/13.794 com CFOP na imagem de referência) vai a nota_entrada.cfop_id por ref:SDCFOP>CODIGO com depara cfop; sem o de-para a coluna fica sem destino nesta rodada",
+   "atendido": "rodada 3, grupo 3: de-para oficial cfop em depara.CATALOGOS e carregador oficial catalogos/carregadores/cfop.py; refazer a fatia"
   },
   {
    "arquivo": "conector/mapa/declarado/colunas.d/L7-08.tsv",

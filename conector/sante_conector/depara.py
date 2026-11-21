@@ -59,6 +59,34 @@ def norm_banco(v):
     return d.zfill(3) if 0 < len(d) <= 3 else None
 
 
+def norm_cfop(v):
+    """CFOP (Convênio SINIEF s/n.º de 1970): 4 dígitos, o 1.º de 1 a 7 (entrada 1-3, saída 5-7). A origem guarda
+    ora o número (1102), ora o texto com ponto ('1.102'); pontuação e espaços não contam. Outro tamanho ou 1.º dígito
+    fora de 1-3 e 5-7: inválido (pendência `catalogo_codigo_invalido`)."""
+    s = re.sub(r"[\s.\-/]", "", _s(v))
+    return s if re.fullmatch(r"[1235-7][0-9]{3}", s) else None
+
+
+def norm_versao_tiss(v):
+    """Versão do padrão TISS (ex.: 4.03.00): a origem guarda '04.03.00', '4.3.0' ou '040300'; vira 'M.mm.pp'."""
+    s = _s(v)
+    m = re.fullmatch(r"(\d{1,2})\.(\d{1,2})\.(\d{1,2})", s) or re.fullmatch(r"(\d{2})(\d{2})(\d{2})", s)
+    return "%d.%02d.%02d" % tuple(int(x) for x in m.groups()) if m else None
+
+
+def _chave_versao_tiss(c):
+    return norm_versao_tiss(c) or c
+
+
+def norm_esocial(v):
+    """Código de tabela oficial trabalhista (eSocial): texto aparado em maiúsculas; código só de dígitos sem os zeros
+    à esquerda (a origem guarda 1 e o catálogo '01')."""
+    s = _s(v).upper()
+    if not s or len(s) > 20 or not re.fullmatch(r"[0-9A-Z.\-]+", s):
+        return None
+    return s.lstrip("0") or "0" if s.isdigit() else s
+
+
 # catálogo -> tabela e coluna de código do destino (conferidas no DDL pelo verificador), normalização da origem e
 # como a chave do catálogo é reduzida para casar com a normalização
 CATALOGOS = {
@@ -75,23 +103,24 @@ CATALOGOS = {
                     filtro=None, descricao="unidade federativa pela sigla"),
     "banco": dict(tabela="banco", coluna="codigo_compensacao", normalizar=norm_banco, chave=lambda c: c,
                   filtro=None, descricao="banco pelo código de compensação (COMPE), 3 dígitos"),
+    "cfop": dict(tabela="cfop", coluna="codigo_cfop", normalizar=norm_cfop, chave=lambda c: c, filtro=None,
+                 descricao="CFOP pelo código de 4 dígitos (ponto e espaços não contam)"),
+    "versao_tiss": dict(tabela="versao_padrao_tiss", coluna="codigo_tiss", normalizar=norm_versao_tiss,
+                        chave=_chave_versao_tiss, filtro="componente = 'troca'",
+                        descricao="versão do padrão TISS de troca com a operadora (ex.: 4.03.00; zeros não contam)"),
+    "terminologia": dict(tabela="terminologia", coluna="numero_tabela_tiss", normalizar=norm_esocial,
+                         chave=norm_esocial, filtro=None,
+                         descricao="terminologia pelo número da tabela no padrão TISS (ex.: 18, 22; zeros não contam)"),
     "conselho_classe": dict(tabela="conselho_classe", coluna="sigla", normalizar=norm_conselho,
                             chave=lambda c: c.upper(), filtro=None,
                             descricao="conselho profissional pela sigla (CRM, COREN...)"),
 }
 
 
-def norm_esocial(v):
-    """Código de tabela oficial trabalhista (eSocial): texto aparado em maiúsculas; código só de dígitos sem os zeros
-    à esquerda (a origem guarda 1 e o catálogo '01')."""
-    s = _s(v).upper()
-    if not s or len(s) > 20 or not re.fullmatch(r"[0-9A-Z.\-]+", s):
-        return None
-    return s.lstrip("0") or "0" if s.isdigit() else s
-
-
 # catálogos com parâmetro (`nome:<parâmetro>` no mapa): codigo_esocial:<código oficial da tabela> (ex.: 18, motivo de
-# afastamento). O parâmetro só aceita [0-9A-Za-z_] (entra no filtro do SQL).
+# afastamento); codigo_fiscal:<tabela fiscal oficial> (ex.: modelo_documento, cst_pis: código fiscal oficial de outra
+# tabela da escrituração, pela tabela e pelo código); tiss:<número da tabela TISS> (ex.: 61, termo da terminologia
+# pelo código). O parâmetro só aceita [0-9A-Za-z_] (entra no filtro do SQL).
 CATALOGOS_PARAMETRO = {
     "codigo_esocial": dict(tabela="codigo_esocial", coluna="codigo_esocial", normalizar=norm_esocial,
                            chave=norm_esocial, pai="tabela_esocial",
@@ -99,6 +128,19 @@ CATALOGOS_PARAMETRO = {
                                   " OR codigo_oficial = LPAD('{p}', 2, '0') LIMIT 1)",
                            descricao="código de uma tabela oficial trabalhista (eSocial), pela tabela e pelo código; "
                                      "zeros à esquerda não contam"),
+    "tiss": dict(tabela="termo_terminologia", coluna="codigo_termo", normalizar=norm_esocial, chave=norm_esocial,
+                 pai="terminologia",
+                 filtro="terminologia_id IN (SELECT id FROM terminologia WHERE numero_tabela_tiss = '{p}'"
+                        " OR numero_tabela_tiss = LPAD('{p}', 2, '0'))",
+                 descricao="termo de uma terminologia do padrão TISS pelo número da tabela e pelo código do termo; "
+                           "zeros à esquerda não contam"),
+    "codigo_fiscal": dict(tabela="codigo_fiscal_oficial", coluna="codigo_oficial", normalizar=norm_esocial,
+                          chave=norm_esocial, pai="tabela_fiscal_oficial",
+                          filtro="tabela_fiscal_oficial_id IN (SELECT id FROM tabela_fiscal_oficial"
+                                 " WHERE tabela = '{p}') ORDER BY vigencia_fim IS NULL DESC, vigencia_inicio DESC",
+                          descricao="código de uma tabela fiscal oficial (escrituração), pela tabela e pelo código; "
+                                    "zeros à esquerda não contam; o código repetido por vigência casa com o vigente "
+                                    "(o histórico revogado também casa: a nota antiga usa o código da época)"),
 }
 
 

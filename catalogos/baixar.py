@@ -2,6 +2,9 @@
 
 uso: python3 -I catalogos/baixar.py [fonte ...]       (sem argumento: todas as fontes pequenas)
      python3 -I catalogos/baixar.py --listar
+     python3 -I catalogos/baixar.py --registrar <fonte> <arquivo> [versão]
+       (fonte oficial sem endereço fixo de download, ex.: a tabela de CFOP do convênio SINIEF: o arquivo obtido da
+       publicação oficial é copiado para catalogos/cache/<fonte>/ e registrado com o SHA-256, como um download)
 
 Cada fonte grava catalogos/cache/<fonte>/<arquivo> e uma linha em catalogos/cache/registro.tsv:
 fonte, url, arquivo, bytes, sha256, baixado_em, versao. Antes de baixar, confere o tamanho anunciado
@@ -76,10 +79,44 @@ def baixar(nome: str) -> dict:
     return reg
 
 
+# fontes oficiais sem endereço fixo: só por --registrar (o carregador lê o arquivo registrado)
+MANUAIS = {"cfop"}
+
+
+def registrar(nome: str, origem: str, versao: str | None = None) -> dict:
+    if nome not in MANUAIS:
+        raise SystemExit(f"{nome}: fonte não é de registro manual ({', '.join(sorted(MANUAIS))})")
+    org = Path(origem)
+    if not org.is_file() or org.stat().st_size > 20 * 1024 * 1024:
+        raise SystemExit(f"{origem}: arquivo ausente ou maior que 20 MB")
+    pasta = CACHE / nome
+    pasta.mkdir(parents=True, exist_ok=True)
+    arq = pasta / org.name
+    dados = org.read_bytes()
+    arq.write_bytes(dados)
+    reg = {"fonte": nome, "url": "registro_manual", "arquivo": str(arq.relative_to(RAIZ)), "bytes": len(dados),
+           "sha256": hashlib.sha256(dados).hexdigest(),
+           "baixado_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "versao": versao or datetime.now(timezone.utc).strftime("%Y-%m-%d")}
+    with open(CACHE / "registro.tsv", "a", encoding="utf-8") as f:
+        f.write("\t".join(str(reg[k]) for k in reg) + "\n")
+    return reg
+
+
 def main() -> None:
+    if "--registrar" in sys.argv:
+        a = sys.argv[sys.argv.index("--registrar") + 1:]
+        if len(a) < 2:
+            raise SystemExit(__doc__)
+        CACHE.mkdir(exist_ok=True)
+        r = registrar(a[0], a[1], a[2] if len(a) > 2 else None)
+        print(json.dumps({k: r[k] for k in ("fonte", "bytes", "versao")}, ensure_ascii=False))
+        return
     if "--listar" in sys.argv:
         for k, (u, lim, v) in FONTES.items():
             print(f"{k}\t{lim} MB\t{u if isinstance(u, str) else '(dinâmica)'}")
+        for k in sorted(MANUAIS):
+            print(f"{k}\t-\t(registro manual da publicação oficial: --registrar)")
         return
     nomes = [a for a in sys.argv[1:] if not a.startswith("-")] or list(FONTES)
     CACHE.mkdir(exist_ok=True)

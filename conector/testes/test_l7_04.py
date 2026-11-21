@@ -15,7 +15,7 @@ CARREGADAS = ["SIWSETIQUETA", "TBFATORRH", "TBTPSANGUINEO", "SICADATE", "SIRES01
               "SIASSLAUDO_IMP_SILANEXA", "SILIBERACAOEXAME", "SIRES01", "SIRESOBS", "HTNOTEXAMESEXO",
               "SIKITHISTEXA", "SIKITHISTITE"]
 # vínculo exame -> documento assinado: decisão registrada, espera o documento (L6-11) e a coluna do DDL (pedido)
-BLOQUEADAS = {"PREXAMEASSINATURA": "depende_documento_assinado"}
+BLOQUEADAS = {"PREXAMEASSINATURA": "destino_decidido"}
 DESCARTES = {"SHBOLSAHIST": "sem_valor", "SIHISTVLREF": "duplicado",
              "SIHISTVLREFEXAME": "duplicado", "SIHISTVLREFELEMENTO": "duplicado", "SIRESVAR": "duplicado"}
 # NOT NULL sem padrão de cada destino (db/migracoes), menos id, origem e criado_em

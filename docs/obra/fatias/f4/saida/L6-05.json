@@ -53,7 +53,8 @@
   {
    "arquivo": "conector/sante_conector/depara.py (CATALOGOS_PARAMETRO) + carregador oficial TISS (F3) + colunas das tabelas TISS da origem em conector/mapa/colunas.tsv",
    "mudanca": "de-para `tiss:<código da terminologia>` (termo_terminologia filtrado pela terminologia) e as colunas de TBTISSVIAADMIN e TBTISSFINTRAT no mapa, para a ref encadeada ler o código do termo",
-   "motivo": "GETABVIA.ID_TBTISSVIAADMIN -> via_de_uso.via_tiss_termo_terminologia_id e PRFINALIDADETRAT.ID_TBTISSFINTRAT -> intencao_tratamento_oncologico.codigo_tiss/termo_terminologia_id ficam declaradas sem destino até lá (código ausente vira catalogo_codigo_*, não omissão)"
+   "motivo": "GETABVIA.ID_TBTISSVIAADMIN -> via_de_uso.via_tiss_termo_terminologia_id e PRFINALIDADETRAT.ID_TBTISSFINTRAT -> intencao_tratamento_oncologico.codigo_tiss/termo_terminologia_id ficam declaradas sem destino até lá (código ausente vira catalogo_codigo_*, não omissão)",
+   "atendido": "rodada 3, grupo 3: de-para tiss:<número da tabela> em depara.CATALOGOS_PARAMETRO; refazer a fatia"
   },
   {
    "arquivo": "tools/obra/cobertura_conector.py e tools/obra/conferir-fatia-f4.sh",

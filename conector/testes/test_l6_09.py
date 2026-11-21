@@ -33,7 +33,7 @@ class L609(unittest.TestCase):
             sc = {r["tabela"]: r for r in csv.DictReader(f, delimiter="\t")}
         for t in l6_09.NAO_CARREGADAS:  # o que não carrega é descarte com causa de produto ou bloqueio por modelo
             if t == "TBHORMED_TBUNIDAD":  # dado do cliente: nunca descarte (falta coluna no modelo, pedido F2.2)
-                self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "modelo_sem_destino"))
+                self.assertEqual((sc[t]["situacao"], sc[t]["causa"]), ("bloqueada", "destino_decidido"))
             else:
                 self.assertEqual(sc[t]["situacao"], "descarte", t)
                 self.assertIn(sc[t]["causa"], {"sem_valor", "duplicado", "mecanismo_do_produto"}, t)

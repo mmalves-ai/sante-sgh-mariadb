@@ -3,15 +3,15 @@
 | Item | Valor |
 |---|---:|
 | banco | validacao |
-| tabelas_criadas | 3604 |
-| catalogo | 3598 |
+| tabelas_criadas | 3605 |
+| catalogo | 3599 |
 | faltam | 0 |
 | fora_catalogo | 0 |
 | arquivos_com_erro | 0 |
 | erros_sql | 0 |
 | tabelas_com_erro | 0 |
 | colunas_id_sem_fk | 72 |
-| fks | 13798 |
+| fks | 13804 |
 | gatilhos | 0 |
 | plataforma_erros | 0 |
 | total_erros | 0 |

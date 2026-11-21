@@ -157,3 +157,24 @@ pendências por regra, linhas por segundo da conferência). Logs longos em `/tmp
   `grupo_divergente_aguarda_sincronizar`. Só um destino agrupado por tabela; não combina com `adotar`, `desdobrar`,
   `complementa` nem `opcional`. Ex.: MFCONPAG (`titulo_pagar` agrupado por EMPRESA, FORN, DOC, SERIE, TIPO;
   `parcela_pagar` principal), MFCTAREC.
+
+## Mecanismos da rodada 3, grupo 3: catálogos e modelo (integrador; prova em `sintetica_d/exemplo_r3c.py`, `testes/test_carga_mapa_r3c.py`)
+- De-para oficial `cfop` (`depara=cfop`): CFOP de 4 dígitos com ou sem ponto ('1.102' = 1102), 1.º dígito 1-3 ou 5-7;
+  inválido `catalogo_codigo_invalido`, ausente `catalogo_codigo_inexistente`. Pelo código guardado na tabela de CFOP
+  da origem: `via=ref:SDCFOP>CODIGO` com `depara=cfop` (encadeada terminada em coluna). O catálogo vem do carregador
+  oficial `catalogos/carregadores/cfop.py` (anexo do Convênio SINIEF s/n.º de 1970, registrado por
+  `catalogos/baixar.py --registrar cfop <arquivo>`); a tabela da origem nunca é gravada.
+- Códigos fiscais afins com FK para `codigo_fiscal_oficial`: `depara=codigo_fiscal:<tabela fiscal>` (ex.:
+  `codigo_fiscal:modelo_documento`), zeros à esquerda não contam, o vigente vence o revogado. CST/NCM guardados como
+  texto no modelo seguem com a encadeada ao código e `inteiro_zeros_esquerda:n`.
+- Padrão TISS: `depara=versao_tiss` (versão de troca pelo código: '04.03.00', '4.3.0' ou '040300' = 4.03.00),
+  `depara=terminologia` (terminologia pelo número da tabela TISS, ex. 18, 22) e `depara=tiss:<número da tabela>`
+  (termo da terminologia TISS pelo código, ex. `tiss:61`; zeros à esquerda não contam).
+- Modelo (DDL proposto para a trilha F2.2, já no banco descartável da conferência): `grade_horario_unidade.
+  unidade_assistencial_id` (06_PEP/16; TBHORMED_TBUNIDAD por `complementa`); `regra_transicao_situacao_prescricao.
+  qualquer_origem` (06_PEP/16; TBTPSITUACAOMP com `=1` e origem nula); vínculo `exame_item_assinatura`
+  (10_SADT/08; PREXAMEASSINATURA: exame por `ref:SILANEXA`, documento pelo cabeçalho da assinatura, local);
+  `diaria_por_plano_local` com fonte obrigatória, acordo opcional e `plano_fonte_pagadora_id` (12_FAT/11;
+  TBTIPPLCONV); tipos NATIVOS de migração `tipo_movimento_estoque` `migracao_entrada`/`migracao_saida` e
+  `tipo_entrada_estoque` `migracao` (11_SUP/07_chaves.sql; por `cod:<tabela>.codigo` com `=migracao_entrada`).
+- Pedido atendido: campo `atendido` no pedido de `saida/<fatia>.json`; a cobertura deixa de contá-lo como bloqueio.

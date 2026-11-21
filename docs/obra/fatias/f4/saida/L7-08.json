@@ -18,7 +18,8 @@
   {
    "arquivo": "modelo (F2.2) + conector/sante_conector/carga_mapa.py",
    "mudanca": "cadastro do destino por código em coluna obrigatória: semente do produto para os tipos da migração (tipo_movimento_estoque 'migracao_entrada'/'migracao_saida', tipo_entrada_estoque 'migracao') e especial genérica '=@<tabela>.<coluna>:<valor>' que grava o id da linha do destino com aquele código (ausente: recusa com cadastro_destino_ausente)",
-   "motivo": "movimento_estoque.tipo_movimento_estoque_id e nota_entrada.tipo_entrada_estoque_id são NOT NULL e a origem não tem coluna de tipo: GELANSAI, GERASVALDEVLOTE (movimento de devolução) e GECADNFS ficam bloqueadas. Decisão registrada em F4-decisoes-destino.md (L7-08)"
+   "motivo": "movimento_estoque.tipo_movimento_estoque_id e nota_entrada.tipo_entrada_estoque_id são NOT NULL e a origem não tem coluna de tipo: GELANSAI, GERASVALDEVLOTE (movimento de devolução) e GECADNFS ficam bloqueadas. Decisão registrada em F4-decisoes-destino.md (L7-08)",
+   "atendido": "rodada 3, grupo 3: semente nativa em db/migracoes/11_SUP/07_chaves.sql (tipo_movimento_estoque migracao_entrada/migracao_saida, tipo_entrada_estoque migracao), achada por cod: (rodada 2); refazer a fatia"
   },
   {
    "arquivo": "modelo (F2.2) + fatia dona dos locais de consumo",

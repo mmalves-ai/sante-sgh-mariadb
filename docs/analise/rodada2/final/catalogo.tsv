@@ -44,6 +44,7 @@ evento_auditoria	ADM	principal	F3	Evento da trilha única: quem, quando, de onde
 evento_auditoria_alerta	ADM	item	F3	Alerta gerado por um evento da trilha (ação crítica, acesso fora do padrão), com nível e quem tratou	SPDATA TBLANTRALERTA (1001)	01	1
 evento_auditoria_registro	ADM	item	F3	Registro afetado por cada evento, com tabela, chave e valores antes e depois	SPDATA TBLANTRILHASGH (1001); DBAMV AUDIT_COLUNA*, HIST_*	01	1
 evento_sessao	ADM	historico	F3	Entradas, saídas, falhas de login, expirações e trocas de estabelecimento, com origem e estação	DBASGU LOG_ACESSO_MV2000, MOD_LOG_ACESSO_MV2000, ESTAT_*; DBAMV LOG_ACESSO_PEP, LOG_CONTAGEM_USUARIO; SPDATA FPCON	01	8
+exame_item_assinatura	SADT	item	F3	Exames cobertos por cada assinatura de documento do prontuário (exames assinados em conjunto)	F4 conector L7-04 (pedido de modelo, rodada 3 de cobertura)	05	0
 exportacao_documento	ADM	historico	F3	Cada impressão ou exportação de documento do prontuário, com justificativa, usuário, formato e destino	SPDATA PRJUSTIF_IMP_EXPORTACAO (1001); DBAMV ACESSO_DOCUMENTO	01	1
 favorito_usuario	ADM	vinculo	F3	Telas marcadas como favoritas pelo usuário, com ordem	DBASGU USUARIO_MENU_FAVORITO	01	4
 finalidade_email	ADM	dominio	F3	Finalidades que enviam e-mail (laudo, relatório agendado, convite de conta, assinatura, notificação)	SPDATA PREMAILMODULO (4); DBASGU TIPO_EMAIL; DBAMV PROCESSO_EMAIL	01	5

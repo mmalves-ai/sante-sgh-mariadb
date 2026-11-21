@@ -8,7 +8,8 @@
   {
    "arquivo": "conector/sante_conector/depara.py",
    "mudanca": "dois catálogos novos em depara.CATALOGOS: `versao_tiss` (versao_padrao_tiss pelo código da versão, ex. 04.03.00) e `terminologia` (terminologia pelo código da tabela da terminologia, ex. 18, 19, 20, 22); falta a regra no motor",
-   "motivo": "TBTISS (76 linhas: cerca de 130 parâmetros por fonte pagadora) não carrega: os dois destinos exigem versao_padrao_tiss_id (NOT NULL) e não há como achar a versão pelo código. TBTISSTERMO_TBTPLANC (24 linhas, configuração do cliente) não carrega: terminologia_tipo_lancamento exige a terminologia. O cadastro do padrão nunca é gravado pelo conector: só o de-para pelo código"
+   "motivo": "TBTISS (76 linhas: cerca de 130 parâmetros por fonte pagadora) não carrega: os dois destinos exigem versao_padrao_tiss_id (NOT NULL) e não há como achar a versão pelo código. TBTISSTERMO_TBTPLANC (24 linhas, configuração do cliente) não carrega: terminologia_tipo_lancamento exige a terminologia. O cadastro do padrão nunca é gravado pelo conector: só o de-para pelo código",
+   "atendido": "rodada 3, grupo 3: de-para versao_tiss e terminologia em depara.CATALOGOS; refazer a fatia"
   },
   {
    "arquivo": "conector/sante_conector/mapa.py + carga_mapa.py",
@@ -43,7 +44,8 @@
   {
    "arquivo": "db/migracoes/12_FAT (trilha F2.2: modelo)",
    "mudanca": "mudança de modelo: diaria_por_plano_local: fonte_pagadora_id NOT NULL; contrato_fonte_pagadora_id NULL (nulo = qualquer contrato da fonte); plano_fonte_pagadora_id NULL ao lado de categoria_acomodacao_id NULL, com CHECK de um dos dois; chave única ajustada",
-   "motivo": "TBTIPPLCONV (76 linhas: fonte + tipo de plano -> diária e local de cobrança). Nenhuma tabela da origem carrega contrato; criar contrato padrão no conector inventaria contrato. Decisão em F4-decisoes-destino.md"
+   "motivo": "TBTIPPLCONV (76 linhas: fonte + tipo de plano -> diária e local de cobrança). Nenhuma tabela da origem carrega contrato; criar contrato padrão no conector inventaria contrato. Decisão em F4-decisoes-destino.md",
+   "atendido": "rodada 3, grupo 3: DDL proposto em db/migracoes/12_FAT/11 (fonte obrigatória, acordo opcional, plano da fonte ao lado da categoria, CHECK de um dos dois); refazer a fatia"
   },
   {
    "arquivo": "db/migracoes/14_FIN (trilha F2.2: modelo)",

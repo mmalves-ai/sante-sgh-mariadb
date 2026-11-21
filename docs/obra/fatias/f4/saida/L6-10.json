@@ -63,7 +63,8 @@
   {
    "arquivo": "F2.2 (modelo): db/migracoes 06_PEP regra_transicao_situacao_prescricao",
    "mudanca": "Distinguir 'qualquer situação de origem' de 'criação' (ex.: qualquer_origem BOOLEAN NOT NULL DEFAULT FALSE, com CHECK: qualquer_origem só com origem nula). Depois, a L6-10 descomenta TBTPSITUACAOMP com '=1' em qualquer_origem (dado da origem, não presumido).",
-   "motivo": "TBTPSITUACAOMP (6 linhas) está bloqueada por modelo_sem_destino: gravar com origem nula trocaria o significado da regra."
+   "motivo": "TBTPSITUACAOMP (6 linhas) está bloqueada por modelo_sem_destino: gravar com origem nula trocaria o significado da regra.",
+   "atendido": "rodada 3, grupo 3: DDL proposto em db/migracoes/06_PEP/16 (regra_transicao_situacao_prescricao.qualquer_origem, CHECK com origem nula); refazer a fatia"
   },
   {
    "arquivo": "conector/mapa (L6-11: colunas.d/L6-11.tsv)",

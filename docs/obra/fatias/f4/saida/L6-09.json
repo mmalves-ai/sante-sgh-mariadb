@@ -8,7 +8,8 @@
   {
    "arquivo": "modelo (F2.2): grade_horario_unidade",
    "mudanca": "coluna grade_horario_unidade.unidade_assistencial_id (FK unidade_assistencial, na chave única de escopo); com ela TBHORMED_TBUNIDAD entra por `complementa` (como TBHORMED_RIBLOCOS)",
-   "motivo": "TBHORMED_TBUNIDAD está BLOQUEADA (modelo_sem_destino), não descartada: a ligação é dado do cliente; a grade só referencia unidade_internacao, que nenhuma tabela da origem carrega (L6-15). Sem ela, grades com o mesmo tipo de atendimento ficam todas no escopo do estabelecimento"
+   "motivo": "TBHORMED_TBUNIDAD está BLOQUEADA (modelo_sem_destino), não descartada: a ligação é dado do cliente; a grade só referencia unidade_internacao, que nenhuma tabela da origem carrega (L6-15). Sem ela, grades com o mesmo tipo de atendimento ficam todas no escopo do estabelecimento",
+   "atendido": "rodada 3, grupo 3: DDL proposto em db/migracoes/06_PEP/16 (grade_horario_unidade.unidade_assistencial_id na chave de escopo); refazer a fatia"
   },
   {
    "arquivo": "modelo (F2.2): gravidade_interacao.acao_gravidade_interacao_id",

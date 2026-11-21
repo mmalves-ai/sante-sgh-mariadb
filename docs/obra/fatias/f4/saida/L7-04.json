@@ -46,7 +46,8 @@
    "arquivo": "db/migracoes/02_ADM ou 06_PEP (trilha F2.2)",
    "mudanca": "vínculo exame_item -> documento_prontuario (coluna exame_item.documento_prontuario_id ou tabela de vínculo documento_prontuario_exame)",
    "motivo": "PREXAMEASSINATURA (1,5 milhão de linhas) liga cada exame ao grupo de assinatura; sem o vínculo, perde-se quais exames cada assinatura cobriu (decisão em F4-decisoes-destino.md)",
-   "gravidade": "media"
+   "gravidade": "media",
+   "atendido": "rodada 3, grupo 3: DDL proposto em db/migracoes/10_SADT/08 (tabela de vínculo exame_item_assinatura); refazer a fatia quando o documento (PRASSINATURA_CAB) carregar"
   },
   {
    "arquivo": "conector/sante_conector/carga_mapa.py",
