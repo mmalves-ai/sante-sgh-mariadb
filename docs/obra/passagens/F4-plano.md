@@ -190,7 +190,10 @@ sobre a cópia `redesante-fb-pc`, transação READ ONLY). Resultado por tabela: 
   toda execução seguinte. É o caminho preferido.
 - **Edição manual no banco novo durante a avaliação:** o motor detecta quando uma linha foi alterada no destino
   depois da última execução, pela `versao` e pelo `alterado_em` do próprio sistema.
-  - Se a mesma linha também mudou na origem, ela vira **conflito** e aparece no painel para decisão.
+  - Se a mesma linha também mudou na origem, ela vira **conflito**.
+  - **Padrão: a origem vence** (dono, 2026-11-21). Durante a avaliação, o Firebird ainda é a produção.
+  - A edição do destino fica guardada no conflito e aparece no painel, para conferência e, se for o caso, para
+    reaplicar.
   - Nunca há sobrescrita silenciosa.
 
 **Prova (lote L9):**
